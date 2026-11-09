@@ -144,6 +144,7 @@ func assertPersonalDelegatedCredentialContinuation(t *testing.T, ctx context.Con
 	}
 	configureSyntheticRuntimeComponentRepository(t, restartedRepository)
 	configureComponentArtifactScanner(t, restartedRepository)
+	restartedRepository.integrationDefinitions["gitlab"] = repository.integrationDefinitions["gitlab"]
 	if err := restartedRepository.Bootstrap(ctx); err != nil {
 		t.Fatal("repeat owner startup on durable personal state", err)
 	}

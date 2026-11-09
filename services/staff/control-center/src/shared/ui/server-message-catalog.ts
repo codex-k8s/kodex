@@ -6,6 +6,14 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  INTEGRATION_APPROVAL_REVOKED: [
+    "Временное разрешение отозвано; новые действия требуют согласования",
+    "Temporary approval revoked; new actions require consent",
+  ],
+  INTEGRATION_APPROVAL_EXPIRED: [
+    "Срок временного разрешения истёк; действие не началось",
+    "Temporary approval expired; the action has not started",
+  ],
   WORKFLOW_EVIDENCE_DELIVERY_LIMIT: [
     "Запуск остановлен: полный результат интеграций не помещается в продолжение либо исчерпан предел технических продолжений. Квитанции и файлы сохранены; внешнее действие не повторялось.",
     "The run stopped because its complete integration outcome exceeds the continuation budget or its technical continuation limit. Receipts and files are retained; no external operation was repeated.",

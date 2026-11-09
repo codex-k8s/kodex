@@ -1714,6 +1714,9 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	if err := repository.expireQueuedIntegrationApprovalsTx(ctx, tx, scope, principal.CallerWorkload, route, sshLane); err != nil {
+		return nil, err
+	}
 	candidateLimit := limit
 	if sshLane {
 		candidateLimit = sshComposeAdmissionScanLimit

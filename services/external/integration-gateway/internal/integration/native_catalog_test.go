@@ -82,7 +82,7 @@ func TestAllNativeCapabilitiesUseSelectedTransport(t *testing.T) {
 // TestNativePersonalCredentialProbeUsesTheSameSelectedPeer сохраняет health и последующие
 // scope observations на native client без подстановки общего ключа либо другого transport.
 func TestNativePersonalCredentialProbeUsesTheSameSelectedPeer(t *testing.T) {
-	adapter := testAdapter(t)
+	adapter := legacyGitLabTestAdapter(t)
 	credential := testCredential(t, adapter, "synthetic-gitlab-scope-key")
 	definition := adapter.definitions["gitlab"]
 	request := invocationRequest(t, definition, "gitlab.project.metadata.read", map[string]any{}, credential)

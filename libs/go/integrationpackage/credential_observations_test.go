@@ -15,6 +15,9 @@ func TestCredentialObservationRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key, definition := range definitions {
+		if key == "gitlab" {
+			definition = legacyGitLabPackage(t)
+		}
 		profiles, keys := CredentialObservationRequests(definition)
 		if key != "gitlab" {
 			if len(profiles) != 0 || len(keys) != 0 {

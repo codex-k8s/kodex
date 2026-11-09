@@ -60,6 +60,7 @@ const (
 	PlatformQueryService_GetRunGraph_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetRunGraph"
 	PlatformQueryService_ListRunEvents_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListRunEvents"
 	PlatformQueryService_ListOwnerGates_FullMethodName                                = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListIntegrationApprovalConsents"
 	PlatformQueryService_GetOwnerGate_FullMethodName                                  = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
 	PlatformQueryService_ListArtifacts_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListArtifacts"
 	PlatformQueryService_GetArtifact_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetArtifact"
@@ -169,6 +170,7 @@ type PlatformQueryServiceClient interface {
 	GetRunGraph(ctx context.Context, in *GetRunGraphRequest, opts ...grpc.CallOption) (*GetRunGraphResponse, error)
 	ListRunEvents(ctx context.Context, in *ListRunEventsRequest, opts ...grpc.CallOption) (*ListRunEventsResponse, error)
 	ListOwnerGates(ctx context.Context, in *ListOwnerGatesRequest, opts ...grpc.CallOption) (*ListOwnerGatesResponse, error)
+	ListIntegrationApprovalConsents(ctx context.Context, in *ListIntegrationApprovalConsentsRequest, opts ...grpc.CallOption) (*ListIntegrationApprovalConsentsResponse, error)
 	GetOwnerGate(ctx context.Context, in *GetOwnerGateRequest, opts ...grpc.CallOption) (*GetOwnerGateResponse, error)
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
 	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
@@ -643,6 +645,16 @@ func (c *platformQueryServiceClient) ListOwnerGates(ctx context.Context, in *Lis
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListOwnerGatesResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_ListOwnerGates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListIntegrationApprovalConsents(ctx context.Context, in *ListIntegrationApprovalConsentsRequest, opts ...grpc.CallOption) (*ListIntegrationApprovalConsentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListIntegrationApprovalConsentsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1287,6 +1299,7 @@ type PlatformQueryServiceServer interface {
 	GetRunGraph(context.Context, *GetRunGraphRequest) (*GetRunGraphResponse, error)
 	ListRunEvents(context.Context, *ListRunEventsRequest) (*ListRunEventsResponse, error)
 	ListOwnerGates(context.Context, *ListOwnerGatesRequest) (*ListOwnerGatesResponse, error)
+	ListIntegrationApprovalConsents(context.Context, *ListIntegrationApprovalConsentsRequest) (*ListIntegrationApprovalConsentsResponse, error)
 	GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error)
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
 	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
@@ -1479,6 +1492,9 @@ func (UnimplementedPlatformQueryServiceServer) ListRunEvents(context.Context, *L
 }
 func (UnimplementedPlatformQueryServiceServer) ListOwnerGates(context.Context, *ListOwnerGatesRequest) (*ListOwnerGatesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOwnerGates not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListIntegrationApprovalConsents(context.Context, *ListIntegrationApprovalConsentsRequest) (*ListIntegrationApprovalConsentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListIntegrationApprovalConsents not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOwnerGate not implemented")
@@ -2412,6 +2428,24 @@ func _PlatformQueryService_ListOwnerGates_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).ListOwnerGates(ctx, req.(*ListOwnerGatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListIntegrationApprovalConsents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListIntegrationApprovalConsentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListIntegrationApprovalConsents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListIntegrationApprovalConsents(ctx, req.(*ListIntegrationApprovalConsentsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3650,6 +3684,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListOwnerGates_Handler,
 		},
 		{
+			MethodName: "ListIntegrationApprovalConsents",
+			Handler:    _PlatformQueryService_ListIntegrationApprovalConsents_Handler,
+		},
+		{
 			MethodName: "GetOwnerGate",
 			Handler:    _PlatformQueryService_GetOwnerGate_Handler,
 		},
@@ -3977,6 +4015,7 @@ const (
 	PlatformCommandService_CancelRun_FullMethodName                                 = "/controlplane.v1.PlatformCommandService/CancelRun"
 	PlatformCommandService_RetryRun_FullMethodName                                  = "/controlplane.v1.PlatformCommandService/RetryRun"
 	PlatformCommandService_ResolveOwnerGate_FullMethodName                          = "/controlplane.v1.PlatformCommandService/ResolveOwnerGate"
+	PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName          = "/controlplane.v1.PlatformCommandService/RevokeIntegrationApprovalConsent"
 	PlatformCommandService_UploadAgentAvatar_FullMethodName                         = "/controlplane.v1.PlatformCommandService/UploadAgentAvatar"
 	PlatformCommandService_UploadArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UploadArtifact"
 	PlatformCommandService_UploadOrganizationArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
@@ -4162,6 +4201,7 @@ type PlatformCommandServiceClient interface {
 	CancelRun(ctx context.Context, in *CancelRunRequest, opts ...grpc.CallOption) (*CancelRunResponse, error)
 	RetryRun(ctx context.Context, in *RetryRunRequest, opts ...grpc.CallOption) (*RetryRunResponse, error)
 	ResolveOwnerGate(ctx context.Context, in *ResolveOwnerGateRequest, opts ...grpc.CallOption) (*ResolveOwnerGateResponse, error)
+	RevokeIntegrationApprovalConsent(ctx context.Context, in *RevokeIntegrationApprovalConsentRequest, opts ...grpc.CallOption) (*RevokeIntegrationApprovalConsentResponse, error)
 	// UploadAgentAvatar резервирует object key до materialization и атомарно
 	// публикует Artifact, binding и новую версию Agent либо компенсирует object.
 	UploadAgentAvatar(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadAgentAvatarRequest, UploadAgentAvatarResponse], error)
@@ -5118,6 +5158,16 @@ func (c *platformCommandServiceClient) ResolveOwnerGate(ctx context.Context, in 
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveOwnerGateResponse)
 	err := c.cc.Invoke(ctx, PlatformCommandService_ResolveOwnerGate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformCommandServiceClient) RevokeIntegrationApprovalConsent(ctx context.Context, in *RevokeIntegrationApprovalConsentRequest, opts ...grpc.CallOption) (*RevokeIntegrationApprovalConsentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeIntegrationApprovalConsentResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6135,6 +6185,7 @@ type PlatformCommandServiceServer interface {
 	CancelRun(context.Context, *CancelRunRequest) (*CancelRunResponse, error)
 	RetryRun(context.Context, *RetryRunRequest) (*RetryRunResponse, error)
 	ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error)
+	RevokeIntegrationApprovalConsent(context.Context, *RevokeIntegrationApprovalConsentRequest) (*RevokeIntegrationApprovalConsentResponse, error)
 	// UploadAgentAvatar резервирует object key до materialization и атомарно
 	// публикует Artifact, binding и новую версию Agent либо компенсирует object.
 	UploadAgentAvatar(grpc.ClientStreamingServer[UploadAgentAvatarRequest, UploadAgentAvatarResponse]) error
@@ -6494,6 +6545,9 @@ func (UnimplementedPlatformCommandServiceServer) RetryRun(context.Context, *Retr
 }
 func (UnimplementedPlatformCommandServiceServer) ResolveOwnerGate(context.Context, *ResolveOwnerGateRequest) (*ResolveOwnerGateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveOwnerGate not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) RevokeIntegrationApprovalConsent(context.Context, *RevokeIntegrationApprovalConsentRequest) (*RevokeIntegrationApprovalConsentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeIntegrationApprovalConsent not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) UploadAgentAvatar(grpc.ClientStreamingServer[UploadAgentAvatarRequest, UploadAgentAvatarResponse]) error {
 	return status.Error(codes.Unimplemented, "method UploadAgentAvatar not implemented")
@@ -8328,6 +8382,24 @@ func _PlatformCommandService_ResolveOwnerGate_Handler(srv interface{}, ctx conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformCommandServiceServer).ResolveOwnerGate(ctx, req.(*ResolveOwnerGateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformCommandService_RevokeIntegrationApprovalConsent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeIntegrationApprovalConsentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).RevokeIntegrationApprovalConsent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).RevokeIntegrationApprovalConsent(ctx, req.(*RevokeIntegrationApprovalConsentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -10237,6 +10309,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResolveOwnerGate",
 			Handler:    _PlatformCommandService_ResolveOwnerGate_Handler,
+		},
+		{
+			MethodName: "RevokeIntegrationApprovalConsent",
+			Handler:    _PlatformCommandService_RevokeIntegrationApprovalConsent_Handler,
 		},
 		{
 			MethodName: "ChangeArtifactBinding",

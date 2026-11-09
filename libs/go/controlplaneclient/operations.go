@@ -44,6 +44,9 @@ func STTPolicyProjectionOperations() map[string]string {
 // ControlAPIGatewayOperations возвращает закрытое соответствие операций владельца и RPC для control API gateway.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.integration-approval-consents.list":   controlplanev1.PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName,
+		"platform.integration-approval-consents.revoke": controlplanev1.PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName,
+
 		"platform.personal-integrations.test":                               controlplanev1.PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName,
 		"platform.personal-integrations.list":                               controlplanev1.PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName,
 		"platform.integrations.credential-policy.set":                       controlplanev1.PersonalIntegrationCredentialService_SetIntegrationCredentialPolicy_FullMethodName,

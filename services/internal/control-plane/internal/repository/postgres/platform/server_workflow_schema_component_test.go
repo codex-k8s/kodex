@@ -87,12 +87,17 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 					filename = "personal-credentials-migration-postcondition.sql"
 				case 20261107000100:
 					filename = "jira-create-fields-migration-postcondition.sql"
+				case 20261109000100:
+					filename = "integration-resource-policies-migration-postcondition.sql"
 				case 20261108000100:
 					filename = "authority-proof-counter-migration-postcondition.sql"
 				}
 				message := "workflow PDLC schema catalog changed"
 				if personalRejection {
 					message = "personal integration schema catalog changed"
+					if version == 20261109000100 {
+						message = "integration resource policy schema catalog changed"
+					}
 				}
 				source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 				if err != nil {

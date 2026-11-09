@@ -177,7 +177,7 @@ func managedMCPPendingGrantPair(grants []runtimecontract.RunnerIntegrationGrant)
 			continue
 		}
 		count++
-		if grant.Risk != "READ" || grant.ApprovalPolicy != "NONE" || grant.Ref == "" || grant.GrantVersion < 1 || grant.ConnectionVersion < 1 {
+		if grant.Risk != "READ" || !validIntegrationApprovalPolicy(grant.ApprovalPolicy) || grant.Ref == "" || grant.GrantVersion < 1 || grant.ConnectionVersion < 1 {
 			return resolve, query, false
 		}
 		switch {

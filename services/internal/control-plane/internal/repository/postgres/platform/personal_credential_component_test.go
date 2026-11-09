@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"strconv"
 	"strings"
 	"testing"
@@ -99,7 +100,9 @@ func TestPersonalIntegrationCredentialsComponent(t *testing.T) {
 		t.Fatal("open isolated personal credential database")
 	}
 	defer pool.Close()
-	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool, func(repository *Repository) {
+		repository.integrationDefinitions["gitlab"] = historicalGitLabPersonalFixture(t, repository.integrationDefinitions["gitlab"])
+	})
 	owner := resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create"}, "control-api-gateway")
@@ -388,4 +391,15 @@ func assertPersonalCredentialCatalog(t *testing.T, ctx context.Context, pool *pg
 	if _, err := service.GetPersonalIntegrationCredential(ctx, second, connection.Ref); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatal("addressed self read retained revoked Connection access", err)
 	}
+}
+
+// historicalGitLabPersonalFixture keeps legacy self-credential regression on its full pinned single-project adapter, independently of newly opt-in scopes.
+// historicalGitLabPersonalFixture сохраняет legacy self-credential regression на полном pinned single-project adapter независимо от новых opt-in scopes.
+func historicalGitLabPersonalFixture(t *testing.T, current integrationpackage.Package) integrationpackage.Package {
+	t.Helper()
+	previous, ok := integrationpackage.ResolveShippedRevision(current, "1.2.1", "1662b4b83b9a6b62c13ed448e8457ba547eb743f9c296349a4389c8ac1909062")
+	if !ok {
+		t.Fatal("historical GitLab fixture unavailable")
+	}
+	return previous
 }

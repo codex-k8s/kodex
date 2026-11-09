@@ -4930,6 +4930,59 @@ paths:
               schema: { $ref: "#/components/schemas/IntegrationConnection" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /api/v1/me/integration-approval-consents:
+    get:
+      tags: [Integrations]
+      operationId: listIntegrationApprovalConsents
+      description: Только согласования текущего инициатора с повторной проверкой видимости Run и Connection.
+      parameters:
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Собственные ограниченные согласования
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/IntegrationApprovalConsentList" }
+        default: { $ref: "#/components/responses/Problem" }
+
+  /api/v1/me/integration-approval-consents/{consentRef}/revoke:
+    post:
+      tags: [Integrations]
+      operationId: revokeIntegrationApprovalConsent
+      description: Отзыв собственного согласования; начатые действия сохраняют отдельные receipts и reconciliation.
+      parameters:
+        - name: consentRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              pattern: "^ias_[a-f0-9]{32}$",
+              minLength: 36,
+              maxLength: 36,
+            }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialRevokeInput",
+              }
+      responses:
+        "200":
+          description: Состояние собственного согласования
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/IntegrationApprovalConsent" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /api/v1/me/integration-connections:
     get:
       tags: [Integrations]
@@ -5029,13 +5082,17 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/PersonalIntegrationCredentialCreateInput" }
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialCreateInput",
+              }
       responses:
         "200":
           description: Проверка поставлена в очередь; результат читается собственной безопасной проекцией
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+              schema:
+                { $ref: "#/components/schemas/PersonalIntegrationCredential" }
         default: { $ref: "#/components/responses/Problem" }
 
   /api/v1/me/integration-connections/{connectionRef}/credential/revoke:
@@ -9612,7 +9669,8 @@ components:
           minItems: 1
           maxItems: 256
           description: Полный список проблем личных подключений при INTEGRATION_CREDENTIALS_REQUIRED; отказ предшествует созданию session/run и не разрешает повтор внешнего действия.
-          items: { $ref: "#/components/schemas/IntegrationCredentialPreflightIssue" }
+          items:
+            { $ref: "#/components/schemas/IntegrationCredentialPreflightIssue" }
         diagnostics:
           {
             type: array,
@@ -9626,10 +9684,27 @@ components:
       properties:
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         connectionName: { type: string, maxLength: 200 }
-        capabilityKey: { type: string, minLength: 1, maxLength: 256, pattern: "^[A-Za-z0-9_.:-]+$" }
+        capabilityKey:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9_.:-]+$",
+          }
         problem:
           type: string
-          enum: [CREDENTIAL_MISSING, CREDENTIAL_CHECK_REQUIRED, CREDENTIAL_INVALID, CREDENTIAL_INSUFFICIENT, CREDENTIAL_PERMISSION_UNCONFIRMED, CREDENTIAL_EXPIRED, CREDENTIAL_REVOKED, CREDENTIAL_INITIATOR_REQUIRED, CREDENTIAL_CONNECTION_UNAVAILABLE]
+          enum:
+            [
+              CREDENTIAL_MISSING,
+              CREDENTIAL_CHECK_REQUIRED,
+              CREDENTIAL_INVALID,
+              CREDENTIAL_INSUFFICIENT,
+              CREDENTIAL_PERMISSION_UNCONFIRMED,
+              CREDENTIAL_EXPIRED,
+              CREDENTIAL_REVOKED,
+              CREDENTIAL_INITIATOR_REQUIRED,
+              CREDENTIAL_CONNECTION_UNAVAILABLE,
+            ]
     SpeechRateLimitProblem:
       allOf:
         - { $ref: "#/components/schemas/Problem" }
@@ -17546,6 +17621,16 @@ components:
         effectPreview:
           { type: object, maxProperties: 32, additionalProperties: true }
         effectKey: { type: string, pattern: "^[a-f0-9]{64}$" }
+    IntegrationApprovalConsentSelection:
+      description: Явный выбор человека только для APPROVE/HUMAN_SCOPED; identity и объект определяет сервер.
+      type: object
+      additionalProperties: false
+      required: [durationSeconds, maxEffects, lifetime]
+      properties:
+        durationSeconds:
+          { type: integer, format: int64, minimum: 1, maximum: 604800 }
+        maxEffects: { type: integer, format: int64, minimum: 1, maximum: 10000 }
+        lifetime: { type: string, enum: [ROOT_RUN, INITIATOR_RESOURCE] }
     GateResolution:
       type: object
       additionalProperties: false
@@ -17555,6 +17640,8 @@ components:
           { type: string, enum: [APPROVE, REJECT, REQUEST_CHANGES, CANCEL] }
         comment: { type: string, maxLength: 4000 }
         attachmentSetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        integrationApproval:
+          { $ref: "#/components/schemas/IntegrationApprovalConsentSelection" }
     GateResolutionReceipt:
       type: object
       additionalProperties: false
@@ -19051,6 +19138,34 @@ components:
         context:
           { $ref: "#/components/schemas/IntegrationGrantCandidateContext" }
         pins: { $ref: "#/components/schemas/IntegrationGrantCandidatePins" }
+    IntegrationApprovalScopeContract:
+      description: Предметная identity и верхние границы human consent; не сохранённое разрешение.
+      type: object
+      additionalProperties: false
+      required:
+        [
+          name,
+          requiredInputPaths,
+          maxDurationSeconds,
+          maxEffects,
+          allowedLifetimes,
+        ]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        requiredInputPaths:
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items: { type: string, minLength: 2, maxLength: 256, pattern: "^/" }
+        maxDurationSeconds:
+          { type: integer, format: int64, minimum: 1, maximum: 604800 }
+        maxEffects: { type: integer, format: int64, minimum: 1, maximum: 10000 }
+        allowedLifetimes:
+          type: array
+          minItems: 1
+          maxItems: 2
+          uniqueItems: true
+          items: { type: string, enum: [ROOT_RUN, INITIATOR_RESOURCE] }
     IntegrationCapability:
       type: object
       additionalProperties: false
@@ -19082,6 +19197,8 @@ components:
           maxItems: 3
           uniqueItems: true
           items: { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
+        approvalScope:
+          { $ref: "#/components/schemas/IntegrationApprovalScopeContract" }
         resourceKind:
           {
             type: string,
@@ -19091,6 +19208,7 @@ components:
                 GITHUB_REPOSITORY,
                 MATTERMOST_CHANNEL,
                 GITLAB_PROJECT,
+                GITLAB_SCOPE,
                 JIRA_PROJECT,
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
@@ -19271,6 +19389,7 @@ components:
                 GITHUB_REPOSITORY,
                 MATTERMOST_CHANNEL,
                 GITLAB_PROJECT,
+                GITLAB_SCOPE,
                 JIRA_PROJECT,
                 CONFLUENCE_SPACE,
                 EMAIL_SENDER,
@@ -19771,6 +19890,56 @@ components:
         available:
           type: boolean
           description: Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+    IntegrationApprovalConsent:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          ref,
+          version,
+          connectionRef,
+          connectionName,
+          capabilityKey,
+          agentRef,
+          rootRunRef,
+          lifetime,
+          state,
+          scopePaths,
+          scopeValuesJSON,
+          maxEffects,
+          reservedEffects,
+          createdAt,
+          expiresAt,
+        ]
+      properties:
+        ref: { type: string, pattern: "^ias_[a-f0-9]{32}$" }
+        version: { type: integer, format: int64, minimum: 1 }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionName: { type: string, maxLength: 160 }
+        capabilityKey: { type: string, maxLength: 100 }
+        agentRef: { $ref: "#/components/schemas/OpaqueRef" }
+        rootRunRef: { $ref: "#/components/schemas/OpaqueRef" }
+        lifetime: { type: string, enum: [ROOT_RUN, INITIATOR_RESOURCE] }
+        state: { type: string, enum: [ACTIVE, EXPIRED, EXHAUSTED, REVOKED] }
+        scopePaths:
+          { type: array, maxItems: 16, items: { type: string, maxLength: 256 } }
+        scopeValuesJSON: { type: string, maxLength: 65536 }
+        maxEffects: { type: integer, format: int64, minimum: 1, maximum: 10000 }
+        reservedEffects:
+          { type: integer, format: int64, minimum: 1, maximum: 10000 }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+    IntegrationApprovalConsentList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: "#/components/schemas/IntegrationApprovalConsent" }
+        nextPageToken: { type: string, maxLength: 512 }
     PersonalIntegrationConnectionList:
       type: object
       additionalProperties: false

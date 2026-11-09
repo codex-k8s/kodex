@@ -75,6 +75,24 @@ func (adapter *Adapter) executeGitLab(
 	configuration map[string]string,
 	canonicalInput []byte,
 ) (Result, error) {
+	if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+		if request.Operation == "gitlab.scope.health.read" || request.Operation == "gitlab.project.list" {
+			return adapter.executeGitLabScopeCatalog(ctx, request, capability, configuration, canonicalInput)
+		}
+		var err error
+		configuration, canonicalInput, err = adapter.resolveGitLabScopedProject(ctx, request, capability, configuration, canonicalInput)
+		if err != nil {
+			return Result{}, err
+		}
+		if request.Operation == "gitlab.repository.search" {
+			return adapter.searchGitLabScopedRepository(ctx, request, capability, configuration, canonicalInput)
+		}
+		if capability.Risk != "READ" && request.Operation != "gitlab.issue.create" && request.Operation != "gitlab.branch.create" && request.Operation != "gitlab.merge_request.create" {
+			if err := adapter.requireGitLabScopedCatalogWrite(ctx, request, capability, configuration, canonicalInput); err != nil {
+				return Result{}, err
+			}
+		}
+	}
 	projectPath := adapter.gitLabProjectPath(configuration)
 	switch request.Operation {
 	case "gitlab.issue.list":
@@ -247,7 +265,7 @@ func (adapter *Adapter) executeGitLab(
 		}
 		return providerResult(request, "gitlab-pipeline:"+strconv.FormatInt(provider.ID, 10), projection)
 	default:
-		return adapter.executeGitLabCatalog(ctx, request, providerCall{BaseURL: configuration["base_url"], Path: projectPath, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient}, canonicalInput)
+		return adapter.executeGitLabCatalog(ctx, request, providerCall{BaseURL: configuration["base_url"], Path: projectPath, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient, permissionEffect: request.permissionEffect}, canonicalInput)
 	}
 }
 
@@ -461,5 +479,8 @@ func (adapter *Adapter) gitLabJSON(ctx context.Context, request Request, capabil
 // gitLabProjectPath escapes the configured namespace/project as one GitLab API path component; it does not take a project identifier from model input.
 // gitLabProjectPath экранирует заданные пространство имён и проект как один компонент пути GitLab API; идентификатор проекта из входа модели не берётся.
 func (adapter *Adapter) gitLabProjectPath(configuration map[string]string) string {
+	if resolved := configuration[gitLabResolvedProjectKey]; resolved != "" {
+		return "/api/v4/projects/" + resolved
+	}
 	return "/api/v4/projects/" + url.PathEscape(configuration["project_path"])
 }

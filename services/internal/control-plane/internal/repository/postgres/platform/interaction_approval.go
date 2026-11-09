@@ -125,7 +125,7 @@ func (repository *Repository) resolveInteractionDeliveryGate(ctx context.Context
 	if gateVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, true, errs.ErrVersionMismatch
 	}
-	if !contains(allowed, payload.Decision) || payload.AttachmentSetRef != "" {
+	if !contains(allowed, payload.Decision) || payload.AttachmentSetRef != "" || payload.IntegrationApproval != nil {
 		return commandOutcome{}, true, errs.ErrInvalid
 	}
 	if deliveryState != "WAITING_APPROVAL" {

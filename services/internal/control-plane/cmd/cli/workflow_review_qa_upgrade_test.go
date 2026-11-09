@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "integration-resource-policies":
+		verifier = "validIntegrationResourcePoliciesMigration"
+	case "integration-resource-policies-backup":
+		verifier = "validIntegrationResourcePoliciesBackupMigration"
 	case "authority-proof-counter":
 		verifier = "validAuthorityProofCounterMigration"
 	case "authority-proof-counter-backup":

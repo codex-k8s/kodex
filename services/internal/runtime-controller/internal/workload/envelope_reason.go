@@ -200,8 +200,7 @@ func diagnosticIntegrationGrants(grants []runtimecontract.RunnerIntegrationGrant
 		if !diagnosticOpaque.MatchString(grant.Ref) || !diagnosticOpaque.MatchString(grant.ConnectionRef) || grant.GrantVersion < 1 || grant.ConnectionVersion < 1 {
 			return "ENVELOPE_INTEGRATION_REFS"
 		}
-		if !diagnosticContains([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, grant.ApprovalPolicy) ||
-			grant.Risk == "READ" && grant.ApprovalPolicy != "NONE" {
+		if !diagnosticContains([]string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"}, grant.ApprovalPolicy) {
 			return "ENVELOPE_INTEGRATION_APPROVAL"
 		}
 		if grant.DefinitionKey == "" || len(grant.DefinitionKey) > 128 ||

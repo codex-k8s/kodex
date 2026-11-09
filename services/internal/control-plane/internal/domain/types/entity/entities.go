@@ -1213,17 +1213,18 @@ type ScheduleRunOccurrence struct {
 // предлагаемой операции; декларация каталога не выдаёт grant и не заменяет подтверждение конкретного
 // эффекта.
 type IntegrationCapability struct {
-	Key                     string                          `json:"key"`
-	Name                    string                          `json:"name"`
-	Description             string                          `json:"description"`
-	Operation               string                          `json:"operation"`
-	Risk                    string                          `json:"risk"`
-	ApprovalPolicy          string                          `json:"approvalPolicy"`
-	AllowedApprovalPolicies []string                        `json:"allowedApprovalPolicies"`
-	ResourceKind            string                          `json:"resourceKind"`
-	InputFields             []IntegrationConfigurationField `json:"inputFields"`
-	InputSchema             string                          `json:"inputSchema"`
-	InputSchemaSHA256       string                          `json:"inputSchemaSha256"`
+	Key                     string                            `json:"key"`
+	Name                    string                            `json:"name"`
+	Description             string                            `json:"description"`
+	Operation               string                            `json:"operation"`
+	Risk                    string                            `json:"risk"`
+	ApprovalPolicy          string                            `json:"approvalPolicy"`
+	AllowedApprovalPolicies []string                          `json:"allowedApprovalPolicies"`
+	ApprovalScope           *IntegrationApprovalScopeContract `json:"approvalScope,omitempty"`
+	ResourceKind            string                            `json:"resourceKind"`
+	InputFields             []IntegrationConfigurationField   `json:"inputFields"`
+	InputSchema             string                            `json:"inputSchema"`
+	InputSchemaSHA256       string                            `json:"inputSchemaSha256"`
 }
 
 // IntegrationConfigurationField supplies form/schema metadata including optional numeric/string limits

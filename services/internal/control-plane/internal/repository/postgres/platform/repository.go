@@ -430,19 +430,11 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 		}
 		capabilities := make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 		for _, capability := range definition.Spec.Capabilities {
-			inputSchema, schemaErr := capability.InputSchema()
-			inputSchemaDigest, digestErr := capability.InputSchemaDigest()
-			if schemaErr != nil || digestErr != nil {
-				return errors.New("encode integration capability input schema")
+			projection, err := integrationCapabilityProjection(capability)
+			if err != nil {
+				return errors.New("encode integration capability contract")
 			}
-			capabilities = append(capabilities, entity.IntegrationCapability{
-				Key: capability.Key, Name: capability.Name, Description: capability.Description,
-				Operation: capability.Operation, Risk: capability.Risk,
-				ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
-				AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...),
-				InputFields:             integrationConfigurationFields(capability.InputFields),
-				InputSchema:             string(inputSchema), InputSchemaSHA256: inputSchemaDigest,
-			})
+			capabilities = append(capabilities, projection)
 		}
 		fields := integrationConfigurationFields(definition.Spec.ConfigurationFields)
 		capabilityJSON, capabilityErr := json.Marshal(capabilities)

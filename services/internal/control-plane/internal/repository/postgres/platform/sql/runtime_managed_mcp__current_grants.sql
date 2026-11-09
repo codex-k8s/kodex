@@ -10,8 +10,8 @@ WHERE binding.organization_id=@organization_id::uuid AND connection.ref=@connect
   AND connection.definition_key='context7' AND definition.enabled AND definition.adapter_readiness='READY'
   AND definition.adapter_owner='integration-gateway' AND definition.execution_route='MANAGED_MCP'
   AND connection.definition_version=@definition_version AND connection.definition_digest=@definition_digest
-  AND definition.definition_version=connection.definition_version AND definition.digest=connection.definition_digest
-  AND binding.enabled AND binding.target_kind='AGENT' AND binding.risk='READ' AND binding.approval_policy='NONE'
+  AND control_plane.integration_pinned_capabilities(connection.id) IS NOT NULL
+  AND binding.enabled AND binding.target_kind='AGENT' AND binding.risk='READ' AND binding.approval_policy IN ('NONE','HUMAN_EACH_EFFECT','HUMAN_SCOPED')
   AND binding.definition_version=@definition_version AND binding.definition_digest=@definition_digest
   AND ((binding.ref=@resolve_ref AND binding.version=@resolve_version AND binding.capability_key='context7.library.resolve')
        OR (binding.ref=@query_ref AND binding.version=@query_version AND binding.capability_key='context7.docs.query'));

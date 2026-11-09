@@ -93,6 +93,9 @@ useCursorInfiniteScroll({
 const availableApprovalScopePaths = computed(() =>
   approvalScopeOptions(capabilityCandidate.value?.capability.inputSchema),
 );
+const requiredApprovalScopePaths = computed(
+  () => capabilityCandidate.value?.capability.approvalScope?.requiredInputPaths,
+);
 const currentGrant = computed(() => {
   const candidate = capabilityCandidate.value;
   return props.selectedConnection?.grants.find(
@@ -235,6 +238,7 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
     !validApprovalScopeSelection(
       approvalScopePaths.value,
       availableApprovalScopePaths.value,
+      requiredApprovalScopePaths.value,
     )
   )
     return undefined;
@@ -253,6 +257,7 @@ const selection = computed<IntegrationGrantSelection | undefined>(() => {
 });
 function toggleApprovalScopePath(path: string, checked: boolean): void {
   if (!availableApprovalScopePaths.value.includes(path)) return;
+  if (!checked && requiredApprovalScopePaths.value?.includes(path)) return;
   approvalScopePaths.value = checked
     ? [...new Set([...approvalScopePaths.value, path])].sort()
     : approvalScopePaths.value.filter((candidate) => candidate !== path);
@@ -261,7 +266,10 @@ function changeApprovalPolicy(value: string): void {
   selectedApprovalPolicy.value = availableApprovalPolicies.value.find(
     (policy) => policy === value,
   );
-  approvalScopePaths.value = [];
+  approvalScopePaths.value =
+    selectedApprovalPolicy.value === "HUMAN_SCOPED"
+      ? [...(requiredApprovalScopePaths.value ?? [])].sort()
+      : [];
 }
 function submit(): void {
   if (selection.value && !props.busy) emit("save", selection.value);
@@ -329,15 +337,30 @@ function chooseCapability(option: AsyncEntityOption): void {
   )
     ? preferred
     : undefined;
+  if (selectedApprovalPolicy.value === "HUMAN_SCOPED")
+    approvalScopePaths.value = [
+      ...(requiredApprovalScopePaths.value ?? []),
+    ].sort();
   if (
     selectedApprovalPolicy.value === "HUMAN_SCOPED" &&
     existing?.approvalPolicy === "HUMAN_SCOPED"
   ) {
     const previous = existing.approvalScopePaths ?? [];
+    const merged = [
+      ...new Set([...previous, ...(requiredApprovalScopePaths.value ?? [])]),
+    ].sort();
     if (
-      previous.every((path) => availableApprovalScopePaths.value.includes(path))
+      validApprovalScopeSelection(
+        merged,
+        availableApprovalScopePaths.value,
+        requiredApprovalScopePaths.value,
+      )
     )
-      approvalScopePaths.value = [...previous];
+      approvalScopePaths.value = merged;
+    else {
+      selectedApprovalPolicy.value = undefined;
+      approvalScopePaths.value = [];
+    }
   }
   chosenCapability.value = option;
   emit("update:capabilityKey", option.ref);
@@ -856,8 +879,16 @@ const canManageSelected = computed(
           >
             <legend>{{ t("integrations.approvalScopeTitle") }}</legend>
             <p>{{ t("integrations.approvalScopeHelp") }}</p>
-            <p v-if="!availableApprovalScopePaths.length">
+            <p
+              v-if="
+                !availableApprovalScopePaths.length &&
+                requiredApprovalScopePaths === undefined
+              "
+            >
               {{ t("integrations.approvalScopeUnavailable") }}
+            </p>
+            <p v-else-if="!availableApprovalScopePaths.length">
+              {{ t("integrations.approvalScopeConnectionOnly") }}
             </p>
             <label
               v-for="path in availableApprovalScopePaths"
@@ -872,6 +903,7 @@ const canManageSelected = computed(
                 :disabled="
                   busy ||
                   !canManageSelected ||
+                  requiredApprovalScopePaths?.includes(path) ||
                   (!approvalScopePaths.includes(path) &&
                     approvalScopePaths.length >= 16)
                 "

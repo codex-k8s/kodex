@@ -15,7 +15,7 @@ func TestGitHubBundleRollingCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := definitions["github"]
-	if current.Metadata.Version != "6.3.0" {
+	if current.Metadata.Version != "6.4.0" {
 		t.Fatal("new bundle release missing from generated shipped catalog")
 	}
 	if _, found := current.Capability("github.repository.bundle.publish"); !found {
@@ -103,7 +103,7 @@ func TestGitHubSixTwoCompatibilityKeepsClosedPRAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if definitions["github"].Digest != "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5" {
+	if legacyPolicyPackage(t, "github", "6.3.0").Digest != "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5" {
 		t.Fatal("PR admission release pins changed")
 	}
 	previous, ok := ResolveShippedRevision(definitions["github"], "6.2.0", "96809e1f78320bc5788eb0e39c672818d8b37d03efbf91f1f083936161eb7a13")

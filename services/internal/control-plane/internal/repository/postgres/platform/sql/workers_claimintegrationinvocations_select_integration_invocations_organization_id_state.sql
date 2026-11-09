@@ -99,24 +99,20 @@ WHERE i.organization_id=$1::uuid
 	  AND binding->>'grantVersion'=g.version::text
       AND binding->>'approvalPolicy'=g.approval_policy
   )
-  AND (((i.risk='READ' OR c.definition_key='email' OR
-          (c.definition_key='github' AND i.risk='WRITE' AND i.operation=i.capability_key AND
-           i.operation IN ('github.issue.comment.create','github.issue.comment.update','github.pull_request.create',
-                           'github.pull_request.update','github.pull_request.review.create',
-                           'github.issue.create','github.issue.update',
-                           'github.repository.content.create','github.repository.content.update',
-                           'github.pull_request.comment.create','github.pull_request.comment.update',
-                           'github.pull_request.ready'))) AND i.approval_policy='NONE'
-        AND NOT i.mailbox_gate_required) OR
+  AND control_plane.integration_declared_policy_allowed(c.id,i.capability_key,i.operation,i.risk,i.resource_kind,i.approval_policy,i.bounded_input)
+  AND ((i.approval_policy='NONE' AND NOT i.mailbox_gate_required) OR
     (i.approval_policy='HUMAN_SCOPED' AND approval.id IS NOT NULL
       AND i.grant_version=g.version AND i.approval_scope_paths=g.approval_scope_paths
       AND approval.organization_id=i.organization_id AND approval.project_id IS NOT DISTINCT FROM r.project_id
-      AND approval.root_run_id=r.root_run_id AND approval.agent_id=n.agent_id
+      AND (approval.root_run_id=r.root_run_id OR (approval.scope_lifetime='INITIATOR_RESOURCE'
+        AND approval.initiator_id=root.initiated_by AND initiator.kind='USER' AND initiator.active))
+      AND approval.agent_id=n.agent_id
       AND approval.connection_id=c.id AND approval.grant_id=g.id
       AND approval.grant_version=g.version AND approval.capability_key=i.capability_key
       AND approval.definition_digest=i.definition_digest
       AND approval.scope_paths=g.approval_scope_paths
-      AND approval.revoked_at IS NULL AND approval.expires_at>clock_timestamp()
+      AND ((approval.revoked_at IS NULL AND approval.expires_at>clock_timestamp())
+        OR i.state='UNKNOWN_OUTCOME' OR (i.state='RUNNING' AND i.claimed_recovery_read_only))
       AND root.state IN ('RUNNING','WAITING_HUMAN')) OR
     (i.approval_policy='NONE' AND c.definition_key='email' AND i.mailbox_gate_required AND EXISTS(
       SELECT 1 FROM control_plane.owner_gates gate

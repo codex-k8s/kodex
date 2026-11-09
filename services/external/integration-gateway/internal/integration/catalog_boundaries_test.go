@@ -186,7 +186,7 @@ func TestProviderFilesAreBoundedBeforeDecoding(t *testing.T) {
 func TestGitLabPaginationUsesExactProviderCursor(t *testing.T) {
 	for _, next := range []string{"", "3", "1", "10001", "opaque"} {
 		t.Run("next="+next, func(t *testing.T) {
-			adapter := testAdapter(t)
+			adapter := legacyGitLabTestAdapter(t)
 			credential := testCredential(t, adapter, "test-token")
 			adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				return &http.Response{Request: r, StatusCode: 200, Header: http.Header{"X-Next-Page": {next}}, Body: io.NopCloser(strings.NewReader(`[{"name":"main","commit":{"id":"abc"}}]`))}, nil

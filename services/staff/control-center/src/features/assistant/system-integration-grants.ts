@@ -166,6 +166,7 @@ export function validSystemGrantSelection(
         approvalScopeOptions(candidate.capability.inputSchema).filter(
           (path) => path.length <= 160,
         ),
+        candidate.capability.approvalScope?.requiredInputPaths,
       )
     : paths.length === 0;
 }

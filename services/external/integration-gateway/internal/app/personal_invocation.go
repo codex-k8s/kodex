@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -137,10 +138,11 @@ func admitPersonalInvocation(ctx context.Context, client personalInvocationAdmis
 // зарегистрированных object READ/записей. Shared сохраняет контракт; version skew не отбрасывает проверку.
 func validPersonalResourcePermissionProfile(claim *cp.IntegrationInvocationClaim) bool {
 	expected := cp.IntegrationCredentialResourcePermissionProfile_INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_UNSPECIFIED
-	contract, registered := integrationpackage.CredentialResourcePermissionContractFor(claim.GetDefinitionKey(), claim.GetCapabilityKey())
+	profile := strings.TrimPrefix(claim.GetResourcePermissionProfile().String(), "INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_")
+	contract, registered := integrationpackage.CredentialResourcePermissionContractForProfile(claim.GetDefinitionKey(), claim.GetCapabilityKey(), profile)
 	if claim.GetCredentialAdmissionRequired() && registered {
 		if claim.GetOperation() != contract.Operation || strings.TrimPrefix(claim.GetRisk().String(), "INTEGRATION_RISK_") != contract.Risk ||
-			strings.TrimPrefix(claim.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_") != contract.ApprovalPolicy ||
+			!personalContractAllowsClaimPolicy(contract, claim) ||
 			strings.TrimPrefix(claim.GetResourceScope().GetKind().String(), "INTEGRATION_RESOURCE_KIND_") != contract.ResourceKind {
 			return false
 		}
@@ -151,4 +153,26 @@ func validPersonalResourcePermissionProfile(claim *cp.IntegrationInvocationClaim
 		expected = cp.IntegrationCredentialResourcePermissionProfile(value)
 	}
 	return claim.GetResourcePermissionProfile() == expected
+}
+
+// personalContractAllowsClaimPolicy retains exact legacy policy while the scoped successor accepts a known selected policy later verified against the exact package/grant.
+// personalContractAllowsClaimPolicy сохраняет exact legacy policy, а scoped successor допускает известную selected policy с последующей проверкой exact package/grant.
+func personalContractAllowsClaimPolicy(contract integrationpackage.CredentialResourcePermissionContract, claim *cp.IntegrationInvocationClaim) bool {
+	policy := strings.TrimPrefix(claim.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_")
+	if policy == contract.ApprovalPolicy {
+		return true
+	}
+	if policy != "NONE" && policy != "HUMAN_EACH_EFFECT" && policy != "HUMAN_SCOPED" {
+		return false
+	}
+	definition, err := integrationpackage.Parse(claim.GetDefinitionPackage())
+	if err != nil || definition.Metadata.Key != claim.GetDefinitionKey() || definition.Metadata.Version != claim.GetDefinitionVersion() || definition.Digest != claim.GetDefinitionDigest() {
+		return false
+	}
+	capability, ok := definition.Capability(claim.GetCapabilityKey())
+	if !ok || capability.ApprovalScope == nil || integrationpackage.CredentialResourcePermissionProfile(definition, capability) != contract.Profile {
+		return false
+	}
+	raw, err := json.Marshal(claim.GetBoundedInput().AsMap())
+	return err == nil && definition.ValidateInvocationApprovalPolicy(capability, policy, raw) == nil
 }

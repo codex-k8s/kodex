@@ -25,6 +25,8 @@ var errPublicIntegrationShape = errors.New("public integration response is inval
 func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor) (any, error) {
 	prefix := ""
 	switch descriptor.FullName() {
+	case "controlplane.v1.IntegrationApprovalConsentState":
+		prefix = "INTEGRATION_APPROVAL_CONSENT_STATE_"
 	case "controlplane.v1.IntegrationCredentialPolicy":
 		prefix = "INTEGRATION_CREDENTIAL_POLICY_"
 	case "controlplane.v1.PersonalIntegrationCredentialState":
@@ -35,6 +37,8 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 		prefix = "INTEGRATION_RISK_"
 	case "controlplane.v1.IntegrationApprovalPolicy":
 		prefix = "INTEGRATION_APPROVAL_POLICY_"
+	case "controlplane.v1.IntegrationApprovalScopeLifetime":
+		prefix = "INTEGRATION_APPROVAL_SCOPE_LIFETIME_"
 	case "controlplane.v1.IntegrationResourceKind":
 		prefix = "INTEGRATION_RESOURCE_KIND_"
 	case "controlplane.v1.IntegrationDefinitionOrigin":
@@ -69,6 +73,37 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 // capabilities.
 func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
 	switch descriptor.FullName() {
+	case "controlplane.v1.IntegrationApprovalConsent":
+		raw, ok := value["scopeValuesJson"].(string)
+		if !ok || len(raw) > 65536 || !json.Valid([]byte(raw)) {
+			return errPublicIntegrationShape
+		}
+		var scopeValues []map[string]any
+		if json.Unmarshal([]byte(raw), &scopeValues) != nil || scopeValues == nil || len(scopeValues) > 16 {
+			return errPublicIntegrationShape
+		}
+		value["scopeValuesJSON"] = raw
+		delete(value, "scopeValuesJson")
+		for _, key := range []string{"version", "maxEffects", "reservedEffects"} {
+			number, ok := value[key].(float64)
+			if !ok || number < 1 || number > float64(maximumSafeJSONInteger) || number != float64(int64(number)) {
+				return errPublicIntegrationShape
+			}
+		}
+		maxEffects := value["maxEffects"].(float64)
+		reserved := value["reservedEffects"].(float64)
+		if maxEffects > 10000 || reserved > maxEffects {
+			return errPublicIntegrationShape
+		}
+	case "controlplane.v1.ListIntegrationApprovalConsentsResponse":
+		items, ok := value["consents"].([]any)
+		if !ok || len(items) > 100 {
+			return errPublicIntegrationShape
+		}
+	case "controlplane.v1.IntegrationApprovalScopeContract":
+		if !validApprovalScopeContractProjection(value) {
+			return errPublicIntegrationShape
+		}
 	case "controlplane.v1.ListPersonalIntegrationConnectionsResponse":
 		items, ok := value["connections"].([]any)
 		page, pageOK := value["page"].(map[string]any)
@@ -229,4 +264,39 @@ func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.Mes
 		}
 	}
 	return nil
+}
+
+// validApprovalScopeContractProjection rejects malformed owner metadata before it can render an incomplete or misleading human-consent selector.
+// validApprovalScopeContractProjection отклоняет malformed owner metadata до отображения неполного либо вводящего в заблуждение human-consent selector.
+func validApprovalScopeContractProjection(value map[string]any) bool {
+	if !gateText(value["name"], 1, 128) {
+		return false
+	}
+	duration, durationOK := value["maxDurationSeconds"].(float64)
+	effects, effectsOK := value["maxEffects"].(float64)
+	if !durationOK || duration < 1 || duration > 604800 || duration != float64(int64(duration)) || !effectsOK || effects < 1 || effects > 10000 || effects != float64(int64(effects)) {
+		return false
+	}
+	paths, pathsOK := value["requiredInputPaths"].([]any)
+	lifetimes, lifetimesOK := value["allowedLifetimes"].([]any)
+	if !pathsOK || len(paths) > 16 || !lifetimesOK || len(lifetimes) < 1 || len(lifetimes) > 2 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, raw := range paths {
+		path, ok := raw.(string)
+		if !ok || len(path) < 2 || len(path) > 256 || path[0] != '/' || seen[path] {
+			return false
+		}
+		seen[path] = true
+	}
+	seen = map[string]bool{}
+	for _, raw := range lifetimes {
+		lifetime, ok := raw.(string)
+		if !ok || lifetime != "ROOT_RUN" && lifetime != "INITIATOR_RESOURCE" || seen[lifetime] {
+			return false
+		}
+		seen[lifetime] = true
+	}
+	return true
 }

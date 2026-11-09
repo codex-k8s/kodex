@@ -48,6 +48,8 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 		profile, filename = "JIRA_CREATE_FIELDS_V1", "jira-create-fields-migration-postcondition.sql"
 	case 20261108000100:
 		profile, filename = "AUTHORITY_PROOF_COUNTER_V1", "authority-proof-counter-migration-postcondition.sql"
+	case 20261109000100:
+		profile, filename = "INTEGRATION_RESOURCE_POLICIES_V1", "integration-resource-policies-migration-postcondition.sql"
 	}
 	source, err := os.ReadFile("../../../../../../../tools/release/" + filename)
 	if err != nil {
@@ -96,7 +98,7 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 	}
 	switch version {
 	case 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100,
-		20261105000100, 20261106000100, 20261107000100, 20261108000100:
+		20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100:
 	default:
 		t.Fatal("unregistered disposable workspace schema")
 	}
@@ -109,9 +111,12 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 // Counterfactual callers проверяют свой false predicate до этой проверки исключительно canonical schema.
 func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 	t.Helper()
+	if actual["profile"] == "INTEGRATION_RESOURCE_POLICIES_V1" && actual["integrationResourcePoliciesCatalog"] != true {
+		t.Error("actual integration resource policies catalog is unconfirmed")
+	}
 	nodes, edges := float64(109), float64(303)
 	switch actual["profile"] {
-	case "AUTHORITY_PROOF_COUNTER_V1", "JIRA_CREATE_FIELDS_V1", "PERSONAL_INTEGRATION_CREDENTIALS_V1", "PLATFORM_OIDC_IDENTITY_V1":
+	case "INTEGRATION_RESOURCE_POLICIES_V1", "AUTHORITY_PROOF_COUNTER_V1", "JIRA_CREATE_FIELDS_V1", "PERSONAL_INTEGRATION_CREDENTIALS_V1", "PLATFORM_OIDC_IDENTITY_V1":
 		for _, field := range []string{"restoreCatalog", "githubPRCatalog", "githubAutonomousWrites", "workflowPDLCCatalog", "workflowContentPageCatalog", "platformOIDCCatalog"} {
 			if actual[field] != true {
 				t.Errorf("actual successor workspace catalog is unconfirmed: field=%s", field)
@@ -123,7 +128,7 @@ func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 				t.Error("actual personal credentials catalog or graph is unconfirmed")
 			}
 		}
-		if actual["profile"] == "AUTHORITY_PROOF_COUNTER_V1" && actual["authorityProofCounterCatalog"] != true {
+		if (actual["profile"] == "AUTHORITY_PROOF_COUNTER_V1" || actual["profile"] == "INTEGRATION_RESOURCE_POLICIES_V1") && actual["authorityProofCounterCatalog"] != true {
 			t.Error("actual authority proof counter catalog is unconfirmed")
 		}
 	}

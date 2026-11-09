@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
 
@@ -383,6 +384,12 @@ func (server *Server) RetryRun(ctx context.Context, request *controlplanev1.Retr
 // возвращает gate, run и graph результата.
 func (server *Server) ResolveOwnerGate(ctx context.Context, request *controlplanev1.ResolveOwnerGateRequest) (*controlplanev1.ResolveOwnerGateResponse, error) {
 	payload := command.GateResolutionInput{GateRef: request.GetGateRef(), Decision: enumSuffix(request.GetDecision(), "OWNER_GATE_DECISION_"), Comment: request.GetComment(), AttachmentSetRef: request.GetAttachmentSetRef()}
+	if selection := request.GetIntegrationApproval(); selection != nil {
+		if len(selection.ProtoReflect().GetUnknown()) != 0 {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		payload.IntegrationApproval = &command.IntegrationApprovalSelection{DurationSeconds: selection.GetDurationSeconds(), MaxEffects: selection.GetMaxEffects(), Lifetime: enumSuffix(selection.GetLifetime(), "INTEGRATION_APPROVAL_SCOPE_LIFETIME_")}
+	}
 	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_ResolveOwnerGate_FullMethodName, command.ResolveOwnerGate, request.GetMutation(), payload, func(result command.Result) *controlplanev1.ResolveOwnerGateResponse {
 		return &controlplanev1.ResolveOwnerGateResponse{Gate: castGate(*result.Gate), Run: castRun(*result.Run), Graph: castGraph(*result.Graph)}
 	})

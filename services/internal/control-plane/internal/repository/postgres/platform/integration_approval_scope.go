@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"sort"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -22,18 +24,19 @@ func sortedApprovalScopePaths(paths []string) []string {
 }
 
 // approveIntegrationScope loads and locks an exact waiting invocation/grant/connection tied to the
-// owner gate and root run, requiring HUMAN_SCOPED non-READ capability and matching
+// owner gate and root run, requiring a declared HUMAN_SCOPED capability and matching
 // package/input/schema pins. It derives scope values from canonical bounded input, limits encoded
 // values to 65536 bytes, inserts the bounded approval scope and binds exactly one invocation.
 // Caller authorization and outer commit remain separate; payload paths do not create authority.
 // approveIntegrationScope загружает и блокирует точные ожидающие invocation, grant и подключение,
-// связанные с owner gate и корневым запуском, требуя HUMAN_SCOPED, риск не READ и совпадение
+// связанные с owner gate и корневым запуском, требуя объявленную HUMAN_SCOPED capability и совпадение
 // пакета, входа и схемы. Выводит значения области из канонического ограниченного ввода,
 // ограничивает JSON 65536 байтами, записывает ограниченную область одобрения и связывает ровно
 // одну invocation. Авторизация вызывающего кода и внешний Commit отдельны; пути из payload не
 // создают полномочий.
 func (repository *Repository) approveIntegrationScope(
 	ctx context.Context, tx pgx.Tx, current scope, gateID, invocationID, rootRunID, projectID string,
+	requested *command.IntegrationApprovalSelection,
 ) error {
 	var policy, capabilityKey, definitionVersion, definitionDigest, connectionRef, definitionKey string
 	var organizationID, resolvedProjectID, resolvedRootRunID, agentID, connectionID, grantID string
@@ -41,12 +44,14 @@ func (repository *Repository) approveIntegrationScope(
 	var boundedInput []byte
 	var grantVersion int64
 	var paths []string
+	var initiatorID, initiatorKind string
+	var initiatorActive bool
 	err := tx.QueryRow(ctx, queryCommandsResolvegateSelectScopedIntegrationInvocation,
 		invocationID, current.organizationID, rootRunID, projectID, gateID,
 	).Scan(&policy, &boundedInput, &inputDigest, &capabilityKey,
 		&definitionVersion, &definitionDigest, &connectionRef, &definitionKey,
 		&organizationID, &resolvedProjectID, &resolvedRootRunID,
-		&agentID, &connectionID, &grantID, &grantVersion, &paths)
+		&agentID, &connectionID, &grantID, &grantVersion, &paths, &initiatorID, &initiatorKind, &initiatorActive)
 	if err != nil || policy != "HUMAN_SCOPED" || agentID == "" ||
 		organizationID != current.organizationID || resolvedProjectID != projectID || resolvedRootRunID != rootRunID {
 		return errs.ErrConflict
@@ -57,9 +62,20 @@ func (repository *Repository) approveIntegrationScope(
 		return err
 	}
 	capability, ok := definition.Capability(capabilityKey)
-	if !ok || !capability.AllowsApprovalPolicy(policy) || capability.Risk == "READ" ||
+	if !ok || !capability.AllowsApprovalPolicy(policy) ||
 		definition.Digest != definitionDigest {
 		return errs.ErrConflict
+	}
+	var proposed *integrationpackage.ApprovalScopeConsent
+	if requested != nil {
+		proposed = &integrationpackage.ApprovalScopeConsent{DurationSeconds: requested.DurationSeconds, MaxEffects: requested.MaxEffects, Lifetime: requested.Lifetime}
+	}
+	consent, err := capability.ResolveApprovalScopeConsent(proposed)
+	if err != nil {
+		return errs.ErrInvalid
+	}
+	if consent.Lifetime == "INITIATOR_RESOURCE" && (initiatorID == "" || initiatorKind != "USER" || !initiatorActive) {
+		return errs.ErrForbidden
 	}
 	approvalScope, err := capability.ResolveApprovalScope(paths, boundedInput)
 	if err != nil {
@@ -86,6 +102,7 @@ func (repository *Repository) approveIntegrationScope(
 		organizationID, projectID, connectionID, grantID, rootRunID, agentID, gateID,
 		capabilityKey, grantVersion, definitionDigest, schemaDigest,
 		sortedApprovalScopePaths(paths), encodedValues, approvalScope.Digest,
+		consent.MaxEffects, consent.DurationSeconds, consent.Lifetime, initiatorID,
 	).Scan(&approvalScopeID)
 	if err != nil {
 		return serializableTransactionError(err, errs.ErrConflict)

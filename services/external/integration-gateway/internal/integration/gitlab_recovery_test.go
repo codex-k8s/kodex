@@ -23,7 +23,7 @@ func TestGitLabReadOnlyCreateRecovery(t *testing.T) {
 		for _, personal := range []bool{false, true} {
 			for _, scenario := range []string{"allow", "second page", "empty", "duplicate marker", "foreign author", "foreign project", "wrong title", "wrong description", "missing author", "wrong branches", "detail changed", "detail ID changed", "duplicate JSON", "page exhausted", "repeated row", "401", "403", "404", "429", "timeout", "old version"} {
 				t.Run(operation+"/"+strconv.FormatBool(personal)+"/"+scenario, func(t *testing.T) {
-					adapter := testAdapter(t)
+					adapter := legacyGitLabTestAdapter(t)
 					credential := testCredential(t, adapter, "synthetic-gitlab-personal-key")
 					var input map[string]any
 					if json.Unmarshal([]byte(catalogInputs()[operation]), &input) != nil {
@@ -170,7 +170,7 @@ func TestGitLabReadOnlyCreateRecovery(t *testing.T) {
 // TestGitLabBranchRecoveryRemainsUnproven не выводит создание ветки из её существования.
 // Unsupported recovery не обращается к provider и не повторяет первоначальный branch POST.
 func TestGitLabBranchRecoveryRemainsUnproven(t *testing.T) {
-	adapter := testAdapter(t)
+	adapter := legacyGitLabTestAdapter(t)
 	credential := testCredential(t, adapter, "synthetic-gitlab-personal-key")
 	request := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.branch.create", map[string]any{"branch": "feature", "ref": "main"}, credential)
 	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
@@ -189,7 +189,7 @@ func TestGitLabBranchRecoveryRemainsUnproven(t *testing.T) {
 // Execute path для shared и personal keys; известный marker не приводит к повторному POST.
 func TestGitLabMarkerRequiresReadOnlyReconciliation(t *testing.T) {
 	for _, personal := range []bool{false, true} {
-		adapter := testAdapter(t)
+		adapter := legacyGitLabTestAdapter(t)
 		credential := testCredential(t, adapter, "synthetic-gitlab-personal-key")
 		request := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.issue.create", map[string]any{"title": "Synthetic issue", "description": "Synthetic body"}, credential)
 		if personal {

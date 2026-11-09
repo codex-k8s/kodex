@@ -5,11 +5,11 @@ import "testing"
 // TestGitHubAutonomousPDLCRequiresExplicitGrantPolicy permits the closed intermediate write set while preserving human defaults and destructive boundaries.
 // TestGitHubAutonomousPDLCRequiresExplicitGrantPolicy разрешает закрытый набор промежуточных записей, сохраняя default согласования и границы разрушительных действий.
 func TestGitHubAutonomousPDLCRequiresExplicitGrantPolicy(t *testing.T) {
-	definitions, err := LoadShipped()
+	_, err := LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	github := definitions["github"]
+	github := legacyPolicyPackage(t, "github", "6.3.0")
 	for _, key := range []string{"github.issue.create", "github.issue.update", "github.issue.comment.create", "github.issue.comment.update", "github.pull_request.create", "github.pull_request.update", "github.pull_request.review.create", "github.repository.content.create", "github.repository.content.update"} {
 		t.Run(key, func(t *testing.T) {
 			capability, found := github.Capability(key)

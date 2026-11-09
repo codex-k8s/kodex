@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: jira-server-dc
-  version: 1.1.0
+  version: 1.2.0
   origin: SHIPPED
 spec:
   name: Jira Server / Data Center
@@ -73,8 +73,12 @@ spec:
     operation: jira.identity.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -109,8 +113,12 @@ spec:
     operation: jira.project.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -145,8 +153,12 @@ spec:
     operation: jira.issue.search
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -196,8 +208,12 @@ spec:
     operation: jira.issue.read
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Задача"
+      requiredInputPaths: ["/issue_key"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -245,8 +261,12 @@ spec:
     operation: jira.issue.create
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
-    allowedApprovalPolicies:
-    - HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Область подключения"
+      requiredInputPaths: []
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -294,8 +314,12 @@ spec:
     operation: jira.issue.comment.write
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
-    allowedApprovalPolicies:
-    - HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Задача"
+      requiredInputPaths: ["/issue_key"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -336,8 +360,12 @@ spec:
     operation: jira.issue.transition.list
     risk: READ
     approvalPolicy: NONE
-    allowedApprovalPolicies:
-    - NONE
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Задача"
+      requiredInputPaths: ["/issue_key"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:
@@ -378,8 +406,12 @@ spec:
     operation: jira.issue.transition.apply
     risk: WRITE
     approvalPolicy: HUMAN_EACH_EFFECT
-    allowedApprovalPolicies:
-    - HUMAN_EACH_EFFECT
+    allowedApprovalPolicies: ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]
+    approvalScope:
+      name: "Задача"
+      requiredInputPaths: ["/issue_key", "/transition_id"]
+      limits: {"durationSeconds": 604800, "maxEffects": 10000}
+      allowedLifetimes: ["ROOT_RUN", "INITIATOR_RESOURCE"]
     resourceScope:
       kind: JIRA_PROJECT
       connectionFields:

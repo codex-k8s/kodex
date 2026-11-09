@@ -2,663 +2,3488 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: gitlab
-  version: 1.2.1
+  version: 2.0.0
   origin: SHIPPED
 spec:
   name: GitLab
-  description: Чтение проекта, репозитория, merge requests и pipelines, а также ограниченные изменения в одном exact project.
+  description: Настраиваемая область одного проекта, группы с optional подгруппами либо всех доступных credential проектов; typed repository/MR/CI tools и отдельная approval policy.
   category: source-control
   adapter: GITLAB
   adapterOwner: integration-gateway
   executionRoute: MANAGED_MCP
   readiness: READY
-  credential: {secretKey: token, kind: TOKEN}
+  credential: { secretKey: token, kind: TOKEN }
   configurationFields:
-    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048}
-    - {key: project_path, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+    - {
+        key: base_url,
+        type: STRING,
+        format: HTTPS_ORIGIN,
+        required: true,
+        maximumLength: 2048,
+      }
+    - {
+        key: scope_kind,
+        type: STRING,
+        format: IDENTIFIER,
+        required: true,
+        maximumLength: 16,
+        allowedValues: [PROJECT, GROUP, INSTANCE],
+      }
+    - {
+        key: project_path,
+        type: STRING,
+        format: IDENTIFIER,
+        required: false,
+        maximumLength: 255,
+      }
+    - {
+        key: group_path,
+        type: STRING,
+        format: IDENTIFIER,
+        required: false,
+        maximumLength: 255,
+      }
+    - {
+        key: include_subgroups,
+        type: STRING,
+        format: IDENTIFIER,
+        required: false,
+        maximumLength: 5,
+        allowedValues: ["true", "false"],
+      }
   networkDestinations:
-    - {key: gitlab_api, source: CONFIGURATION, configurationField: base_url, port: 443, tls: REQUIRED}
-  healthCheck: {operation: gitlab.project.metadata.read, timeoutSeconds: 15, maxAttempts: 3}
+    - {
+        key: gitlab_api,
+        source: CONFIGURATION,
+        configurationField: base_url,
+        port: 443,
+        tls: REQUIRED,
+      }
+  healthCheck:
+    { operation: gitlab.scope.health.read, timeoutSeconds: 15, maxAttempts: 3 }
   capabilities:
+    - key: gitlab.scope.health.read
+      name: Проверить identity и область GitLab
+      description: Проверяет текущую identity и configured root; не подтверждает WRITE или доступ ко всем объектам.
+      operation: gitlab.scope.health.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Область подключения,
+          requiredInputPaths: [],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
+      inputFields: []
+      outputFields:
+        - {
+            key: scope_kind,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 16,
+            allowedValues: [PROJECT, GROUP, INSTANCE],
+          }
+        - {
+            key: identity_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
+    - key: gitlab.project.list
+      name: Найти доступные проекты
+      description: Одна bounded страница проектов в configured scope; GROUP исключает shared foreign projects, INSTANCE не сужается до membership-only.
+      operation: gitlab.project.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Область подключения,
+          requiredInputPaths: [],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
+      inputFields:
+        - {
+            key: search,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 255,
+          }
+        - {
+            key: limit,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 100,
+          }
+        - {
+            key: cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      outputFields:
+        - {
+            key: items,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 262144,
+          }
+        - {
+            key: count,
+            type: INTEGER,
+            required: true,
+            minimum: 0,
+            maximum: 100,
+          }
+        - {
+            key: next_cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
+    - key: gitlab.repository.search
+      name: Поиск содержимого в выбранном репозитории
+      description: Одна bounded страница basic blobs search точного проекта/ref; не заявляет полное глобальное покрытие поиска.
+      operation: gitlab.repository.search
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Репозиторий и ref,
+          requiredInputPaths: [/project_id, /project_path, /ref],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
+      inputFields:
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: ref,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: search,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: limit,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 100,
+          }
+        - {
+            key: cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      outputFields:
+        - {
+            key: items,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 262144,
+          }
+        - {
+            key: count,
+            type: INTEGER,
+            required: true,
+            minimum: 0,
+            maximum: 100,
+          }
+        - {
+            key: next_cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.project.metadata.read
       name: Прочитать метаданные проекта
       description: Возвращает безопасную проекцию одного разрешённого GitLab project.
       operation: gitlab.project.metadata.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
-      inputFields: []
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
+      inputFields:
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
       outputFields:
-        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
-        - {key: path_with_namespace, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: default_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: visibility, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: archived, type: BOOLEAN, required: true}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
+        - {
+            key: path_with_namespace,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: default_branch,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 255,
+            allowEmpty: true,
+          }
+        - {
+            key: visibility,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - { key: archived, type: BOOLEAN, required: true }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.repository.file.read
       name: Прочитать файл репозитория
       description: Читает один файл exact revision с ограничением размера ответа.
       operation: gitlab.repository.file.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Файл и revision,
+          requiredInputPaths: [/project_id, /project_path, /ref, /file_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
-        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: file_path,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 1024,
+          }
+        - {
+            key: ref,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
       outputFields:
-        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
-        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: blob_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
-        - {key: encoding, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [base64]}
-        - {key: content, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: file_path,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 1024,
+          }
+        - {
+            key: ref,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: blob_id,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 128,
+          }
+        - {
+            key: encoding,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 16,
+            allowedValues: [base64],
+          }
+        - {
+            key: content,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 65536,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.read
       name: Прочитать issue
       description: Возвращает безопасную проекцию одного issue по IID.
       operation: gitlab.issue.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Задача,
+          requiredInputPaths: [/project_id, /project_path, /issue_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: issue_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: issue_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
       outputFields:
-        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: description,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 65536,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.list
       name: Получить список issue
       description: Возвращает одну bounded страницу issue с server-scoped search внутри exact project.
       operation: gitlab.issue.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: state, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [opened, closed, all]}
-        - {key: search, type: STRING, format: PLAIN, required: false, maximumLength: 512}
-        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
-        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: false,
+            maximumLength: 16,
+            allowedValues: [opened, closed, all],
+          }
+        - {
+            key: search,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 512,
+          }
+        - {
+            key: limit,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 100,
+          }
+        - {
+            key: cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
       outputFields:
-        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
-        - {key: issues, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: count,
+            type: INTEGER,
+            required: true,
+            minimum: 0,
+            maximum: 100,
+          }
+        - {
+            key: issues,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 65536,
+          }
+        - {
+            key: next_cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.create
       name: Создать issue
-      description: Создаёт issue с effect marker после Human Gate.
+      description: Создаёт issue с effect marker с настроенным режимом подтверждения.
       operation: gitlab.issue.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: description,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 65536,
+          }
       outputFields:
-        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+        - {
+            key: iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 2,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.issue.update
       name: Обновить issue
-      description: Изменяет только title, description или state одного issue после Human Gate.
+      description: Изменяет только title, description или state одного issue с настроенным режимом подтверждения.
       operation: gitlab.issue.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Задача,
+          requiredInputPaths: [/project_id, /project_path, /issue_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: issue_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: false, maximumLength: 512}
-        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
-        - {key: state_event, type: STRING, format: IDENTIFIER, required: false, maximumLength: 16, allowedValues: [close, reopen]}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: issue_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 512,
+          }
+        - {
+            key: description,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 65536,
+          }
+        - {
+            key: state_event,
+            type: STRING,
+            format: IDENTIFIER,
+            required: false,
+            maximumLength: 16,
+            allowedValues: [close, reopen],
+          }
       outputFields:
-        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+        - {
+            key: iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.merge_request.read
       name: Прочитать merge request
       description: Возвращает безопасную проекцию одного merge request по IID.
       operation: gitlab.merge_request.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: merge_request_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
       outputFields:
-        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: source_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: target_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: source_branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: target_branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.discussion.create
       name: Добавить комментарий к merge request
-      description: Публикует один идемпотентный комментарий после Human Gate.
+      description: Публикует один идемпотентный комментарий с настроенным режимом подтверждения.
       operation: gitlab.merge_request.discussion.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: body, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: merge_request_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: body,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 65536,
+          }
       outputFields:
-        - {key: note_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
-        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+        - {
+            key: note_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
+        - {
+            key: merge_request_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 2,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.branch.create
       name: Создать ветку
-      description: Создаёт exact branch от заданной revision после Human Gate.
+      description: Создаёт exact branch от заданной revision с настроенным режимом подтверждения.
       operation: gitlab.branch.create
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Ветка,
+          requiredInputPaths: [/project_id, /project_path, /branch],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: ref,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
       outputFields:
-        - {key: name, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: commit_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+        - {
+            key: name,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: commit_id,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 128,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 2,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.commit.create
       name: Создать commit с одним файлом
-      description: Создаёт один commit с create/update одного файла после Human Gate.
+      description: Создаёт один commit с create/update одного файла с настроенным режимом подтверждения.
       operation: gitlab.commit.create
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Ветка для коммита,
+          requiredInputPaths: [/project_id, /project_path, /branch],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: action, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [create, update]}
-        - {key: file_path, type: STRING, format: PLAIN, required: true, maximumLength: 1024}
-        - {key: content, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-        - {key: commit_message, type: STRING, format: PLAIN, required: true, maximumLength: 2048}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: action,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 16,
+            allowedValues: [create, update],
+          }
+        - {
+            key: file_path,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 1024,
+          }
+        - {
+            key: content,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 65536,
+          }
+        - {
+            key: commit_message,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 2048,
+          }
       outputFields:
-        - {key: id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
-        - {key: short_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 45, maxAttempts: 2, retryBackoffMilliseconds: 500}
+        - {
+            key: id,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 128,
+          }
+        - {
+            key: short_id,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 45,
+          maxAttempts: 2,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.merge_request.create
       name: Создать merge request
-      description: Создаёт merge request между exact branches после Human Gate.
+      description: Создаёт merge request между exact branches с настроенным режимом подтверждения.
       operation: gitlab.merge_request.create
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Исходная и целевая ветки,
+          requiredInputPaths:
+            [/project_id, /project_path, /source_branch, /target_branch],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: source_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: target_branch, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: description, type: STRING, format: PLAIN, required: false, maximumLength: 65536}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: source_branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: target_branch,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: description,
+            type: STRING,
+            format: PLAIN,
+            required: false,
+            maximumLength: 65536,
+          }
       outputFields:
-        - {key: iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 512}
-        - {key: state, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 2, retryBackoffMilliseconds: 500}
+        - {
+            key: iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 512,
+          }
+        - {
+            key: state,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 2,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.pipeline.read
       name: Прочитать pipeline
       description: Возвращает безопасную проекцию одного pipeline.
       operation: gitlab.pipeline.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Pipeline,
+          requiredInputPaths: [/project_id, /project_path, /pipeline_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: pipeline_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: pipeline_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
       outputFields:
-        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
-        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 255}
-        - {key: sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 128}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
+        - {
+            key: status,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: ref,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: sha,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 128,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 20,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.pipeline.retry
       name: Повторить pipeline
-      description: Запрашивает повтор одного pipeline после Human Gate.
+      description: Запрашивает повтор одного pipeline с настроенным режимом подтверждения.
       operation: gitlab.pipeline.retry
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Pipeline,
+          requiredInputPaths: [/project_id, /project_path, /pipeline_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: pipeline_id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: pipeline_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
       outputFields:
-        - {key: id, type: INTEGER, required: true, minimum: 1, maximum: 9223372036854775807}
-        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32}
-        - {key: web_url, type: STRING, format: HTTPS_URL, required: true, maximumLength: 2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 500}
+        - {
+            key: id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9223372036854775807,
+          }
+        - {
+            key: status,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 32,
+          }
+        - {
+            key: web_url,
+            type: STRING,
+            format: HTTPS_URL,
+            required: true,
+            maximumLength: 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 500,
+        }
     - key: gitlab.branch.list
       name: Получить ветки
       description: Получить ветки в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.branch.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.branch.read
       name: Прочитать ветку
       description: Прочитать ветку в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.branch.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Ветка,
+          requiredInputPaths: [/project_id, /project_path, /branch],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
       outputFields:
-        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"protected","type":"BOOLEAN","required":true}
-        - {"key":"default","type":"BOOLEAN","required":true}
-        - {"key":"commit_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "name",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - { "key": "protected", "type": "BOOLEAN", "required": true }
+        - { "key": "default", "type": "BOOLEAN", "required": true }
+        - {
+            "key": "commit_id",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.branch.delete
       name: Удалить ветку
       description: Удалить ветку в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.branch.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Ветка,
+          requiredInputPaths: [/project_id, /project_path, /branch],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
       outputFields:
-        - {"key":"accepted","type":"BOOLEAN","required":true}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - { "key": "accepted", "type": "BOOLEAN", "required": true }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.commit.list
       name: Получить коммиты
       description: Получить коммиты в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.commit.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
-        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "path",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 1024,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.commit.read
       name: Прочитать коммит
       description: Прочитать коммит в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.commit.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Commit/ref,
+          requiredInputPaths: [/project_id, /project_path, /ref],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
       outputFields:
-        - {"key":"id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"short_id","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {key: title, type: STRING, format: PLAIN, required: true, maximumLength: 256, allowEmpty: true}
-        - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 32768, allowEmpty: true}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "short_id",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            key: title,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 256,
+            allowEmpty: true,
+          }
+        - {
+            key: message,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 32768,
+            allowEmpty: true,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.commit.diff
       name: Прочитать изменения коммита
       description: Прочитать изменения коммита в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.commit.diff
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Commit/ref,
+          requiredInputPaths: [/project_id, /project_path, /ref],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.repository.tree.list
       name: Получить дерево репозитория
       description: Получить дерево репозитория в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.repository.tree.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
-        - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "path",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 1024,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.note.list
       name: Получить заметки issue
       description: Получить заметки issue в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.issue.note.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Задача,
+          requiredInputPaths: [/project_id, /project_path, /issue_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "issue_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.note.read
       name: Прочитать заметку issue
       description: Прочитать заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.issue.note.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Заметка задачи,
+          requiredInputPaths:
+            [/project_id, /project_path, /issue_iid, /note_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "issue_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "note_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"system","type":"BOOLEAN","required":true}
-        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "body",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - { "key": "system", "type": "BOOLEAN", "required": true }
+        - {
+            "key": "noteable_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "noteable_type",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.note.create
       name: Создать заметку issue
       description: Создать заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.issue.note.create
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Задача,
+          requiredInputPaths: [/project_id, /project_path, /issue_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "issue_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "body",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"system","type":"BOOLEAN","required":true}
-        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "body",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - { "key": "system", "type": "BOOLEAN", "required": true }
+        - {
+            "key": "noteable_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "noteable_type",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.note.update
       name: Обновить заметку issue
       description: Обновить заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.issue.note.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Заметка задачи,
+          requiredInputPaths:
+            [/project_id, /project_path, /issue_iid, /note_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "issue_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "note_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "body",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"body","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"system","type":"BOOLEAN","required":true}
-        - {"key":"noteable_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"noteable_type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "body",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - { "key": "system", "type": "BOOLEAN", "required": true }
+        - {
+            "key": "noteable_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "noteable_type",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.issue.note.delete
       name: Удалить заметку issue
       description: Удалить заметку issue в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.issue.note.delete
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Заметка задачи,
+          requiredInputPaths:
+            [/project_id, /project_path, /issue_iid, /note_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"issue_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"note_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "issue_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "note_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"accepted","type":"BOOLEAN","required":true}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - { "key": "accepted", "type": "BOOLEAN", "required": true }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.list
       name: Получить merge requests
       description: Получить merge requests в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.merge_request.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["opened","closed","locked","merged","all"]}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "state",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 16,
+            "allowedValues": ["opened", "closed", "locked", "merged", "all"],
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.update
       name: Обновить merge request
       description: Обновить merge request в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.merge_request.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"title","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
-        - {"key":"description","type":"STRING","format":"PLAIN","required":false,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":16,"allowedValues":["close","reopen"]}
-        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "merge_request_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "title",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "description",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - {
+            "key": "state",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 16,
+            "allowedValues": ["close", "reopen"],
+          }
+        - {
+            "key": "target_branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 256,
+          }
       outputFields:
-        - {"key":"iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"description","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"source_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "title",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "state",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "description",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - {
+            "key": "source_branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "target_branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.merge
       name: Слить merge request
       description: Слить merge request в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.merge_request.merge
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"squash","type":"BOOLEAN","required":false}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "merge_request_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "sha",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - { "key": "squash", "type": "BOOLEAN", "required": false }
       outputFields:
-        - {"key":"iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"title","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"description","type":"STRING","format":"PLAIN","required":true,"maximumLength":32768,"allowEmpty":true}
-        - {"key":"source_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"target_branch","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "title",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "state",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "description",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768,
+            "allowEmpty": true,
+          }
+        - {
+            "key": "source_branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "target_branch",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.discussion.list
       name: Получить обсуждения merge request
       description: Получить обсуждения merge request в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.merge_request.discussion.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"merge_request_iid","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "merge_request_iid",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.pipeline.list
       name: Получить pipelines
       description: Получить pipelines в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.pipeline.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Проект,
+          requiredInputPaths: [/project_id, /project_path],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
-        - {"key":"state","type":"STRING","format":"PLAIN","required":false,"maximumLength":32,"allowedValues":["created","waiting_for_resource","preparing","pending","running","success","failed","canceled","skipped","manual","scheduled"]}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "state",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 32,
+            "allowedValues":
+              [
+                "created",
+                "waiting_for_resource",
+                "preparing",
+                "pending",
+                "running",
+                "success",
+                "failed",
+                "canceled",
+                "skipped",
+                "manual",
+                "scheduled",
+              ],
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.pipeline.cancel
       name: Отменить pipeline
       description: Отменить pipeline в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.pipeline.cancel
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Pipeline,
+          requiredInputPaths: [/project_id, /project_path, /pipeline_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "pipeline_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "status",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "sha",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.job.list
       name: Получить jobs
       description: Получить jobs в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.job.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Pipeline,
+          requiredInputPaths: [/project_id, /project_path, /pipeline_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"pipeline_id","type":"INTEGER","required":false,"minimum":1,"maximum":2147483647}
-        - {"key":"limit","type":"INTEGER","required":false,"minimum":1,"maximum":100}
-        - {"key":"cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "pipeline_id",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 100,
+          }
+        - {
+            "key": "cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
       outputFields:
-        - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":100}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "items",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+          }
+        - {
+            "key": "count",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 0,
+            "maximum": 100,
+          }
+        - {
+            "key": "next_cursor",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.job.read
       name: Прочитать job
       description: Прочитать job в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.job.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: CI job,
+          requiredInputPaths: [/project_id, /project_path, /job_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "job_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "name",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "stage",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "status",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+        - {
+            "key": "pipeline_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.job.retry
       name: Повторно запустить job
       description: Повторно запустить job в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.job.retry
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: CI job,
+          requiredInputPaths: [/project_id, /project_path, /job_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "job_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "name",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "stage",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "status",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+        - {
+            "key": "pipeline_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.job.cancel
       name: Отменить job
       description: Отменить job в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.job.cancel
       risk: DESTRUCTIVE
       approvalPolicy: HUMAN_EACH_EFFECT
-      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: CI job,
+          requiredInputPaths: [/project_id, /project_path, /job_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "job_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"name","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"stage","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"status","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"web_url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
-        - {"key":"pipeline_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+        - {
+            "key": "id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "name",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "stage",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "status",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "ref",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+          }
+        - {
+            "key": "web_url",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+          }
+        - {
+            "key": "pipeline_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+      execution:
+        {
+          idempotency: EFFECT_KEY,
+          timeoutSeconds: 30,
+          maxAttempts: 1,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.job.trace.read
       name: Прочитать журнал job
       description: Прочитать журнал job в одном разрешённом проекте с ограниченным результатом и receipt.
       operation: gitlab.job.trace.read
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: CI job,
+          requiredInputPaths: [/project_id, /project_path, /job_id],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            "key": "job_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
       outputFields:
-        - {"key":"job_id","type":"INTEGER","required":true,"minimum":1,"maximum":2147483647}
-        - {"key":"trace","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536,"allowEmpty":true}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            "key": "job_id",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 2147483647,
+          }
+        - {
+            "key": "trace",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "allowEmpty": true,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }
     - key: gitlab.merge_request.diff.list
       name: Прочитать изменения файлов merge request
       description: Возвращает страницу типизированных изменений файлов без произвольных download URL.
       operation: gitlab.merge_request.diff.list
       risk: READ
       approvalPolicy: NONE
-      allowedApprovalPolicies: [NONE]
-      resourceScope: {kind: GITLAB_PROJECT, connectionFields: [base_url, project_path]}
+      allowedApprovalPolicies: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED]
+      resourceScope:
+        {
+          kind: GITLAB_SCOPE,
+          connectionFields:
+            [base_url, scope_kind, project_path, group_path, include_subgroups],
+        }
+      approvalScope:
+        {
+          name: Merge request,
+          requiredInputPaths: [/project_id, /project_path, /merge_request_iid],
+          limits: { durationSeconds: 604800, maxEffects: 10000 },
+          allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE],
+        }
       inputFields:
-        - {key: merge_request_iid, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
-        - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+        - {
+            key: project_path,
+            type: STRING,
+            format: IDENTIFIER,
+            required: true,
+            maximumLength: 255,
+          }
+        - {
+            key: project_id,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        - {
+            key: merge_request_iid,
+            type: INTEGER,
+            required: true,
+            minimum: 1,
+            maximum: 2147483647,
+          }
+        - {
+            key: limit,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 100,
+          }
+        - {
+            key: cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
       outputFields:
-        - {key: items, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
-        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
-      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}
+        - {
+            key: items,
+            type: STRING,
+            format: PLAIN,
+            required: true,
+            maximumLength: 65536,
+          }
+        - {
+            key: count,
+            type: INTEGER,
+            required: true,
+            minimum: 0,
+            maximum: 100,
+          }
+        - {
+            key: next_cursor,
+            type: INTEGER,
+            required: false,
+            minimum: 1,
+            maximum: 10000,
+          }
+      execution:
+        {
+          idempotency: READ_ONLY,
+          timeoutSeconds: 30,
+          maxAttempts: 3,
+          retryBackoffMilliseconds: 250,
+        }

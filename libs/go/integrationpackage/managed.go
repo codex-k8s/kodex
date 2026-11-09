@@ -58,6 +58,20 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 	if shipped.Spec.Adapter == string(AdapterOpenAPIMCP) {
 		return validateOpenAPIManagedRevision(candidate, shipped)
 	}
+	if err := validateManagedAdapterRevision(candidate, shipped); err == nil {
+		return nil
+	}
+	for _, previous := range trustedHistoricalPolicyPackages(shipped) {
+		if validateManagedAdapterRevision(candidate, previous) == nil {
+			return nil
+		}
+	}
+	return errExecutableRevision
+}
+
+// validateManagedAdapterRevision checks one complete trusted baseline; fields, identities and policies from different historical releases cannot be mixed.
+// validateManagedAdapterRevision проверяет один полный trusted baseline; поля, identities и policies разных historical releases нельзя смешивать.
+func validateManagedAdapterRevision(candidate, shipped Package) error {
 	c, s := candidate.Spec, shipped.Spec
 	if c.Adapter != s.Adapter || c.AdapterOwner != s.AdapterOwner || c.ExecutionRoute != s.ExecutionRoute ||
 		c.Readiness != s.Readiness || !reflect.DeepEqual(c.Credential, s.Credential) ||
@@ -71,6 +85,7 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 		if !exists || capability.Operation != base.Operation || capability.Risk != base.Risk ||
 			!narrowApprovalPolicies(capability.AllowedApprovalPolicies, base.AllowedApprovalPolicies) ||
 			!reflect.DeepEqual(capability.ResourceScope, base.ResourceScope) ||
+			!narrowApprovalScopeContract(capability, base) ||
 			!narrowFields(capability.InputFields, base.InputFields) || !reflect.DeepEqual(capability.OutputFields, base.OutputFields) ||
 			capability.Execution.Idempotency != base.Execution.Idempotency ||
 			capability.Execution.LeaseProfile != base.Execution.LeaseProfile ||

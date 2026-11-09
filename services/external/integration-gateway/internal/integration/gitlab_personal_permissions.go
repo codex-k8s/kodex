@@ -32,6 +32,18 @@ func (adapter *Adapter) requireGitLabPersonalWritePermission(ctx context.Context
 		return nil
 	}
 	permission := ""
+	if request.ResourcePermissionProfile == integrationpackage.CredentialResourcePermissionGitLabScopedV2 {
+		switch request.Operation {
+		case "gitlab.issue.create":
+			request.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionGitLabIssueCreateV1
+		case "gitlab.branch.create":
+			request.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionGitLabBranchCreateV1
+		case "gitlab.merge_request.create":
+			request.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionGitLabMergeRequestCreateV1
+		default:
+			return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+	}
 	switch request.ResourcePermissionProfile {
 	case integrationpackage.CredentialResourcePermissionGitLabIssueCreateV1:
 		permission = "create_issue"
@@ -181,7 +193,8 @@ func (adapter *Adapter) readGitLabWriteMetadata(ctx context.Context, request Req
 	}
 	projectID, valid := gitLabPermissionID(project, "id")
 	projectName, _ := gitLabPermissionString(project, "path_with_namespace")
-	if !valid || projectName != configuration["project_path"] || (!gitLabPermissionBool(project, "archived", false) && !gitLabPermissionBool(project, "archived", true)) {
+	if !valid || projectName != configuration["project_path"] || configuration[gitLabResolvedProjectKey] != "" && configuration[gitLabResolvedProjectKey] != strconv.FormatInt(projectID, 10) ||
+		(!gitLabPermissionBool(project, "archived", false) && !gitLabPermissionBool(project, "archived", true)) {
 		return gitLabWriteMetadata{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 

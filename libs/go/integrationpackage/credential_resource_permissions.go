@@ -91,6 +91,13 @@ func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string
 // CredentialResourcePermissionProfile выбирает только зарегистрированные проверки typed consumer
 // из executable package. Identity, grants, key pins и launch policy по-прежнему разрешает owner.
 func CredentialResourcePermissionProfile(definition Package, capability Capability) string {
+	if definition.Metadata.Key == "gitlab" && definition.Spec.Adapter == string(AdapterGitLab) && capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+		contract, exists := CredentialResourcePermissionContractForProfile("gitlab", capability.Key, CredentialResourcePermissionGitLabScopedV2)
+		if exists && capability.Operation == contract.Operation && capability.Risk == contract.Risk && (capability.ApprovalPolicy == contract.ApprovalPolicy || capability.ApprovalScope != nil && capability.AllowsApprovalPolicy(capability.ApprovalPolicy)) {
+			return contract.Profile
+		}
+		return ""
+	}
 	contract, exists := CredentialResourcePermissionContractFor(definition.Metadata.Key, capability.Key)
 	adapter := "CONFLUENCE"
 	if definition.Metadata.Key == "jira-server-dc" {
@@ -100,7 +107,7 @@ func CredentialResourcePermissionProfile(definition Package, capability Capabili
 		adapter = "GITLAB"
 	}
 	if exists && definition.Spec.Adapter == adapter && capability.Operation == contract.Operation &&
-		capability.Risk == contract.Risk && capability.ApprovalPolicy == contract.ApprovalPolicy &&
+		capability.Risk == contract.Risk && (capability.ApprovalPolicy == contract.ApprovalPolicy || capability.ApprovalScope != nil && capability.AllowsApprovalPolicy(capability.ApprovalPolicy)) &&
 		capability.ResourceScope.Kind == contract.ResourceKind {
 		return contract.Profile
 	}

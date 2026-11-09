@@ -41,6 +41,31 @@ function writeCandidate(): SystemAssistantIntegrationGrantCandidate {
 }
 
 describe("Общие поля политики SYSTEM и PROJECT grant plan", () => {
+  it("автоматически выбирает обязательную identity и не разрешает снять её флажок", () => {
+    const candidate = writeCandidate();
+    candidate.capability.approvalScope = {
+      name: "Синтетический объект",
+      requiredInputPaths: ["/field-0"],
+      maxDurationSeconds: 86400,
+      maxEffects: 100,
+      allowedLifetimes: ["ROOT_RUN"],
+    };
+    const changed = vi.fn();
+    const state = useIntegrationGrantPlanPolicy(
+      ref(candidate),
+      () => ["/field-0"],
+      changed,
+    );
+    state.changePolicy("HUMAN_SCOPED");
+    expect(changed.mock.calls).toEqual([
+      ["approvalScopePaths", ["/field-0"]],
+      ["approvalPolicy", "HUMAN_SCOPED"],
+    ]);
+    changed.mockClear();
+    state.togglePath("/field-0", false);
+    expect(changed).not.toHaveBeenCalled();
+    expect(state.fields.value.requiredPaths).toEqual(["/field-0"]);
+  });
   it("не подставляет default, реактивно сужает policy и отделяет состояние соседних форм", () => {
     const candidate = ref<SystemAssistantIntegrationGrantCandidate>();
     const parameters = ref<Record<string, unknown>>({

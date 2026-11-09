@@ -37,4 +37,30 @@ describe("область повторного согласования", () => {
     );
     expect(validApprovalScopeSelection(["/secret"], choices)).toBe(false);
   });
+
+  it("сохраняет обязательный объект инструмента и отдельно поддерживает область самого подключения", () => {
+    const choices = ["/project_id", "/merge_request_iid", "/body"];
+    const required = ["/project_id", "/merge_request_iid"];
+    expect(validApprovalScopeSelection(required, choices, required)).toBe(true);
+    expect(
+      validApprovalScopeSelection([...required, "/body"], choices, required),
+    ).toBe(true);
+    expect(validApprovalScopeSelection(["/body"], choices, required)).toBe(
+      false,
+    );
+    expect(
+      validApprovalScopeSelection(["/project_id"], choices, required),
+    ).toBe(false);
+    expect(validApprovalScopeSelection(required, choices, ["/unknown"])).toBe(
+      false,
+    );
+    expect(
+      validApprovalScopeSelection(required, choices, [
+        "/project_id",
+        "/project_id",
+      ]),
+    ).toBe(false);
+    expect(validApprovalScopeSelection([], [], [])).toBe(true);
+    expect(validApprovalScopeSelection([], [])).toBe(false);
+  });
 });

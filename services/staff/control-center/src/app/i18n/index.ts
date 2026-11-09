@@ -1,3 +1,4 @@
+import { approvalConsentMessages } from "@/features/integrations/approval-consent-messages";
 import { createI18n } from "vue-i18n";
 import { promptContextMessages } from "@/features/agents/detail/prompt-context-messages";
 import { writeBackMessages } from "@/features/managed-configurations/writeback/messages";
@@ -18,6 +19,7 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  integrationConsents: approvalConsentMessages.ru,
   credentialPolicy: {
     title: "Чей ключ использовать",
     choose: "Выбрать режим ключа",
@@ -730,6 +732,12 @@ const ru = {
     selectField: "Выбрать",
     packageFields: {
       apiVersion: "Версия API",
+      approvalScope: "Объект временного разрешения",
+      requiredInputPaths: "Обязательные поля объекта",
+      limits: "Пределы разрешения",
+      durationSeconds: "Срок в секундах",
+      maxEffects: "Максимум действий",
+      allowedLifetimes: "Разрешённые области действия",
       kind: "Вид",
       metadata: "Метаданные",
       spec: "Спецификация",
@@ -2761,13 +2769,14 @@ const ru = {
     approvalPolicies: {
       NONE: "без согласования",
       HUMAN_EACH_EFFECT: "подтверждать каждое действие",
-      HUMAN_SCOPED: "один раз для выбранных параметров запуска",
+      HUMAN_SCOPED: "временное разрешение для выбранного объекта",
     },
     integrationResourceKinds: {
       SYNTHETIC_JOURNAL: "Запись проверочного журнала",
       GITHUB_REPOSITORY: "Репозиторий GitHub",
       MATTERMOST_CHANNEL: "Канал Mattermost",
       GITLAB_PROJECT: "Проект GitLab",
+      GITLAB_SCOPE: "Настроенная область GitLab",
       JIRA_PROJECT: "Проект Jira",
       CONFLUENCE_SPACE: "Пространство Confluence",
       EMAIL_SENDER: "Почтовый ящик",
@@ -2776,7 +2785,9 @@ const ru = {
     },
     approvalScopeTitle: "Какие параметры связывает одно согласование",
     approvalScopeHelp:
-      "Выберите от 1 до 16 полей запроса. После вашего подтверждения повторные действия с теми же значениями этих полей в рамках одного запуска не потребуют нового согласования. Остальные поля могут меняться.",
+      "Согласование распространяется на выбранные значения. Обязательные поля объекта сохраняются; дополнительные поля сужают разрешение. Срок действия задаётся при подтверждении.",
+    approvalScopeConnectionOnly:
+      "Разрешение ограничено настроенной областью этого подключения.",
     approvalScopeUnavailable:
       "Для этой возможности нет доступных типизированных полей. Выдать разрешение с повторным согласованием нельзя.",
     revoke: "Отозвать",
@@ -4848,6 +4859,7 @@ const ru = {
 
 const en = {
   ...ru,
+  integrationConsents: approvalConsentMessages.en,
   credentialPolicy: {
     title: "Whose key to use",
     choose: "Choose credential mode",
@@ -5498,6 +5510,12 @@ const en = {
     selectField: "Select",
     packageFields: {
       apiVersion: "API version",
+      approvalScope: "Temporary approval object",
+      requiredInputPaths: "Required object fields",
+      limits: "Approval bounds",
+      durationSeconds: "Duration in seconds",
+      maxEffects: "Maximum actions",
+      allowedLifetimes: "Allowed approval lifetimes",
       kind: "Kind",
       metadata: "Metadata",
       spec: "Specification",
@@ -7598,13 +7616,14 @@ const en = {
     approvalPolicies: {
       NONE: "no approval",
       HUMAN_EACH_EFFECT: "approve every action",
-      HUMAN_SCOPED: "once for selected run parameters",
+      HUMAN_SCOPED: "temporary approval for the selected object",
     },
     integrationResourceKinds: {
       SYNTHETIC_JOURNAL: "Synthetic journal entry",
       GITHUB_REPOSITORY: "GitHub repository",
       MATTERMOST_CHANNEL: "Mattermost channel",
       GITLAB_PROJECT: "GitLab project",
+      GITLAB_SCOPE: "Configured GitLab scope",
       JIRA_PROJECT: "Jira project",
       CONFLUENCE_SPACE: "Confluence space",
       EMAIL_SENDER: "Email mailbox",
@@ -7613,7 +7632,9 @@ const en = {
     },
     approvalScopeTitle: "Parameters covered by one approval",
     approvalScopeHelp:
-      "Select 1 to 16 request fields. After your approval, repeated actions with the same values in one run will not need another approval. Other fields may change.",
+      "Approval covers the selected values. Required object fields are preserved; additional fields narrow the permission. Choose its duration when approving the action.",
+    approvalScopeConnectionOnly:
+      "Approval is limited to the configured scope of this connection.",
     approvalScopeUnavailable:
       "This capability has no eligible typed fields. A reusable approval grant cannot be issued.",
     revoke: "Revoke",

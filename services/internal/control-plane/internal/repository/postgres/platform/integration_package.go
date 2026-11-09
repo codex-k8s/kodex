@@ -118,21 +118,11 @@ func projectConnectionPackage(ctx context.Context, querier connectionQuerier, cu
 	}
 	item.Capabilities = make([]entity.IntegrationCapability, 0, len(definition.Spec.Capabilities))
 	for _, capability := range definition.Spec.Capabilities {
-		schema, err := capability.InputSchema()
+		projection, err := integrationCapabilityProjection(capability)
 		if err != nil {
-			return errs.ErrUnavailable
+			return err
 		}
-		digest, err := capability.InputSchemaDigest()
-		if err != nil {
-			return errs.ErrUnavailable
-		}
-		item.Capabilities = append(item.Capabilities, entity.IntegrationCapability{
-			Key: capability.Key, Name: capability.Name, Description: capability.Description,
-			Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
-			AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...),
-			ResourceKind:            capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields),
-			InputSchema: string(schema), InputSchemaSHA256: digest,
-		})
+		item.Capabilities = append(item.Capabilities, projection)
 		if capability.Operation == definition.Spec.HealthCheck.Operation {
 			item.TestRequiresApproval = capability.ApprovalPolicy != "NONE"
 		}

@@ -3713,10 +3713,20 @@ export type IntegrationIntent = {
     effectKey: string;
 };
 
+/**
+ * Явный выбор человека только для APPROVE/HUMAN_SCOPED; identity и объект определяет сервер.
+ */
+export type IntegrationApprovalConsentSelection = {
+    durationSeconds: number;
+    maxEffects: number;
+    lifetime: 'ROOT_RUN' | 'INITIATOR_RESOURCE';
+};
+
 export type GateResolution = {
     decision: 'APPROVE' | 'REJECT' | 'REQUEST_CHANGES' | 'CANCEL';
     comment?: string;
     attachmentSetRef?: OpaqueRef;
+    integrationApproval?: IntegrationApprovalConsentSelection;
 };
 
 export type GateResolutionReceipt = {
@@ -4360,6 +4370,17 @@ export type IntegrationGrantCapabilityCandidatePage = {
     pins: IntegrationGrantCandidatePins;
 };
 
+/**
+ * Предметная identity и верхние границы human consent; не сохранённое разрешение.
+ */
+export type IntegrationApprovalScopeContract = {
+    name: string;
+    requiredInputPaths: Array<string>;
+    maxDurationSeconds: number;
+    maxEffects: number;
+    allowedLifetimes: Array<'ROOT_RUN' | 'INITIATOR_RESOURCE'>;
+};
+
 export type IntegrationCapability = {
     key: string;
     name: string;
@@ -4369,7 +4390,8 @@ export type IntegrationCapability = {
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    approvalScope?: IntegrationApprovalScopeContract;
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -4422,7 +4444,7 @@ export type IntegrationDefinition = {
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     values: {
         [key: string]: string;
     };
@@ -4631,6 +4653,30 @@ export type PersonalIntegrationConnection = {
      * Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
      */
     available: boolean;
+};
+
+export type IntegrationApprovalConsent = {
+    ref: string;
+    version: number;
+    connectionRef: OpaqueRef;
+    connectionName: string;
+    capabilityKey: string;
+    agentRef: OpaqueRef;
+    rootRunRef: OpaqueRef;
+    lifetime: 'ROOT_RUN' | 'INITIATOR_RESOURCE';
+    state: 'ACTIVE' | 'EXPIRED' | 'EXHAUSTED' | 'REVOKED';
+    scopePaths: Array<string>;
+    scopeValuesJSON: string;
+    maxEffects: number;
+    reservedEffects: number;
+    createdAt: string;
+    expiresAt: string;
+    revokedAt?: string;
+};
+
+export type IntegrationApprovalConsentList = {
+    items: Array<IntegrationApprovalConsent>;
+    nextPageToken?: string;
 };
 
 export type PersonalIntegrationConnectionList = {
@@ -11773,6 +11819,66 @@ export type SetIntegrationCredentialPolicyResponses = {
 };
 
 export type SetIntegrationCredentialPolicyResponse = SetIntegrationCredentialPolicyResponses[keyof SetIntegrationCredentialPolicyResponses];
+
+export type ListIntegrationApprovalConsentsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/me/integration-approval-consents';
+};
+
+export type ListIntegrationApprovalConsentsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListIntegrationApprovalConsentsError = ListIntegrationApprovalConsentsErrors[keyof ListIntegrationApprovalConsentsErrors];
+
+export type ListIntegrationApprovalConsentsResponses = {
+    /**
+     * Собственные ограниченные согласования
+     */
+    200: IntegrationApprovalConsentList;
+};
+
+export type ListIntegrationApprovalConsentsResponse = ListIntegrationApprovalConsentsResponses[keyof ListIntegrationApprovalConsentsResponses];
+
+export type RevokeIntegrationApprovalConsentData = {
+    body: PersonalIntegrationCredentialRevokeInputWritable;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        consentRef: string;
+    };
+    query?: never;
+    url: '/api/v1/me/integration-approval-consents/{consentRef}/revoke';
+};
+
+export type RevokeIntegrationApprovalConsentErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type RevokeIntegrationApprovalConsentError = RevokeIntegrationApprovalConsentErrors[keyof RevokeIntegrationApprovalConsentErrors];
+
+export type RevokeIntegrationApprovalConsentResponses = {
+    /**
+     * Состояние собственного согласования
+     */
+    200: IntegrationApprovalConsent;
+};
+
+export type RevokeIntegrationApprovalConsentResponse = RevokeIntegrationApprovalConsentResponses[keyof RevokeIntegrationApprovalConsentResponses];
 
 export type ListPersonalIntegrationConnectionsData = {
     body?: never;

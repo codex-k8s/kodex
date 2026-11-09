@@ -493,7 +493,13 @@ func (server *Server) ResolveOwnerGate(w http.ResponseWriter, r *http.Request, r
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), AttachmentSetRef: stringValue(body.AttachmentSetRef)})
+	var approval *controlplanev1.IntegrationApprovalConsentSelection
+	if body.IntegrationApproval != nil {
+		choice := body.IntegrationApproval
+		approval = &controlplanev1.IntegrationApprovalConsentSelection{DurationSeconds: choice.DurationSeconds, MaxEffects: choice.MaxEffects,
+			Lifetime: controlplanev1.IntegrationApprovalScopeLifetime(controlplanev1.IntegrationApprovalScopeLifetime_value["INTEGRATION_APPROVAL_SCOPE_LIFETIME_"+string(choice.Lifetime)])}
+	}
+	response, err := server.control.Command.ResolveOwnerGate(r.Context(), &controlplanev1.ResolveOwnerGateRequest{Mutation: m, GateRef: ref, Decision: gateDecision(string(body.Decision)), Comment: stringValue(body.Comment), AttachmentSetRef: stringValue(body.AttachmentSetRef), IntegrationApproval: approval})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

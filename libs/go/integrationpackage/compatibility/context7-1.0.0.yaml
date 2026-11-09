@@ -1,0 +1,54 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: context7
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Context7
+  description: Актуальная документация библиотек через два разрешённых инструмента Context7.
+  category: documentation
+  adapter: CONTEXT7
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential:
+    secretKey: api_key
+    kind: TOKEN
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 2048, allowedValues: ["https://mcp.context7.com"]}
+  networkDestinations:
+    - {key: context7_mcp, source: STATIC, hostname: mcp.context7.com, port: 443, tls: REQUIRED}
+  healthCheck:
+    operation: context7.library.resolve
+    timeoutSeconds: 15
+    maxAttempts: 1
+  capabilities:
+    - key: context7.library.resolve
+      name: Найти библиотеку
+      description: Находит идентификатор библиотеки по названию и задаче.
+      operation: context7.library.resolve
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url]}
+      inputFields:
+        - {key: library_name, type: STRING, format: PLAIN, required: true, maximumLength: 200}
+        - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
+      outputFields:
+        - {key: text, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: context7.docs.query
+      name: Прочитать документацию
+      description: Возвращает документацию указанной библиотеки по конкретному вопросу.
+      operation: context7.docs.query
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url]}
+      inputFields:
+        - {key: library_id, type: STRING, format: PLAIN, required: true, maximumLength: 512}
+        - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 4096}
+      outputFields:
+        - {key: text, type: STRING, format: PLAIN, required: true, maximumLength: 32768}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 1, retryBackoffMilliseconds: 250}

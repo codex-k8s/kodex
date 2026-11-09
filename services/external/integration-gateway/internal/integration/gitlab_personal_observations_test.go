@@ -21,7 +21,7 @@ import (
 func TestGitLabPersonalScopeObservation(t *testing.T) {
 	for _, scenario := range []string{"allow", "read only", "fine project", "fine missing action", "fine wrong project", "fine group", "fine missing detail", "fine changed token", "reporter", "archived", "deleting", "disabled feature", "missing role", "old version", "missing granular", "missing expiry", "inactive", "revoked", "expired", "foreign user", "wrong project", "duplicate", "401", "403", "404", "429", "timeout", "unrequested", "unknown profile", "extra key", "duplicate profile"} {
 		t.Run(scenario, func(t *testing.T) {
-			adapter := testAdapter(t)
+			adapter := legacyGitLabTestAdapter(t)
 			credential := testCredential(t, adapter, "synthetic-gitlab-scope-key")
 			definition := adapter.definitions["gitlab"]
 			request := invocationRequest(t, definition, "gitlab.project.metadata.read", map[string]any{}, credential)

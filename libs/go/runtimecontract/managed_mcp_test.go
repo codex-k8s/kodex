@@ -82,7 +82,7 @@ func TestManagedMCPExactPinsScopeAndReadiness(t *testing.T) {
 		"connection version": func(i *RunnerInput) { i.IntegrationGrants[0].ConnectionVersion++ },
 		"grant zero":         func(i *RunnerInput) { i.IntegrationGrants[0].GrantVersion = 0 },
 		"connection zero":    func(i *RunnerInput) { i.IntegrationGrants[0].ConnectionVersion = 0 },
-		"approval":           func(i *RunnerInput) { i.IntegrationGrants[0].ApprovalPolicy = "HUMAN_EACH_EFFECT" },
+		"approval":           func(i *RunnerInput) { i.IntegrationGrants[0].ApprovalPolicy = "" },
 		"unknown approval":   func(i *RunnerInput) { i.IntegrationGrants[0].ApprovalPolicy = "AUTO" },
 		"health config":      func(i *RunnerInput) { i.ManagedMCPProfiles[0].Health.ConfigurationSHA256 = strings.Repeat("d", 64) },
 		"health credential":  func(i *RunnerInput) { i.ManagedMCPProfiles[0].Health.CredentialRevision++ },
@@ -180,5 +180,26 @@ func TestManagedMCPCatalogAndCanonicalSchema(t *testing.T) {
 	}
 	if strings.Contains(string(raw), "CONTEXT7_API_KEY") || strings.Contains(string(raw), "https://mcp.context7.com") {
 		t.Fatal("raw provider configuration leaked")
+	}
+}
+
+// TestManagedMCPDeclaredHumanPoliciesRetainReadOnlyOwnerRoute accepts the three typed policy values while preserving exact grants, schema and health pins; only the owner admits each real call.
+// TestManagedMCPDeclaredHumanPoliciesRetainReadOnlyOwnerRoute допускает три typed policy values с exact grants, schema и health pins; каждый реальный вызов допускается только owner.
+func TestManagedMCPDeclaredHumanPoliciesRetainReadOnlyOwnerRoute(t *testing.T) {
+	for _, policy := range []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"} {
+		input := managedMCPFixture(t)
+		for index := range input.IntegrationGrants {
+			input.IntegrationGrants[index].ApprovalPolicy = policy
+		}
+		previous := input.ManagedMCPProfiles[0]
+		profile, err := DeriveContext7ManagedMCPProfile(previous.ScopeKind, previous.ScopeRef, input.IntegrationGrants, previous.Health)
+		if err != nil {
+			t.Fatal("derive fresh human-policy profile", err)
+		}
+		input.ManagedMCPProfiles = []ManagedMCPProfile{profile}
+		refreshRunnerInputBindings(&input)
+		if !validIntegrationGrants(input.IntegrationGrants) || ValidateManagedMCPProfiles(input) != nil {
+			t.Fatal("typed human policy rejected before owner admission", policy)
+		}
 	}
 }

@@ -166,7 +166,7 @@ func TestGitLabPersonalWritePermissions(t *testing.T) {
 				continue
 			}
 			t.Run(operation+"/"+scenario, func(t *testing.T) {
-				adapter := testAdapter(t)
+				adapter := legacyGitLabTestAdapter(t)
 				credential := testCredential(t, adapter, "synthetic-gitlab-personal-key")
 				var input map[string]any
 				if json.Unmarshal([]byte(catalogInputs()[operation]), &input) != nil {

@@ -28,7 +28,7 @@ type gitLabRecoveryInput struct {
 // authenticated author/project, unique marker и canonical payload. Отсутствующие, изменённые,
 // duplicate, truncated либо unsupported evidence сохраняют UNKNOWN; Execute/POST не вызываются.
 func (adapter *Adapter) recoverGitLabCreate(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
-	contract, exists := integrationpackage.CredentialResourcePermissionContractFor("gitlab", request.CapabilityKey)
+	contract, exists := integrationpackage.CredentialResourcePermissionContractForProfile("gitlab", request.CapabilityKey, request.ResourcePermissionProfile)
 	if !exists || (request.Operation != "gitlab.issue.create" && request.Operation != "gitlab.merge_request.create") ||
 		request.PersonalCredentialAdmission && request.ResourcePermissionProfile != contract.Profile {
 		return Result{}, &UnknownOutcomeError{}

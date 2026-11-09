@@ -67,7 +67,20 @@ func integrationCapabilityProjection(capability integrationpackage.Capability) (
 	if err != nil {
 		return entity.IntegrationCapability{}, errs.ErrUnavailable
 	}
-	return entity.IntegrationCapability{Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...), ResourceKind: capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: schemaDigest}, nil
+	result := entity.IntegrationCapability{Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...), ResourceKind: capability.ResourceScope.Kind, InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: schemaDigest}
+	if capability.ApprovalScope != nil {
+		limits, err := capability.ResolvedApprovalScopeLimits()
+		if err != nil {
+			return entity.IntegrationCapability{}, errs.ErrUnavailable
+		}
+		lifetimes, err := capability.ApprovalScopeLifetimes()
+		if err != nil {
+			return entity.IntegrationCapability{}, errs.ErrUnavailable
+		}
+		result.ApprovalScope = &entity.IntegrationApprovalScopeContract{Name: capability.ApprovalScope.Name,
+			RequiredInputPaths: append([]string{}, capability.ApprovalScope.RequiredInputPaths...), MaxDurationSeconds: limits.DurationSeconds, MaxEffects: limits.MaxEffects, AllowedLifetimes: lifetimes}
+	}
+	return result, nil
 }
 
 // assistantIntegrationCandidatePage sorts eligible items, keeps the pre-cursor total and emits

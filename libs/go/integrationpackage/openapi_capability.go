@@ -46,11 +46,11 @@ func validateOpenAPICapability(definition *Package, capability Capability) error
 	}
 	if binding.Method == http.MethodGet {
 		if capability.Risk != string(RiskRead) || capability.Execution.Idempotency != string(IdempotencyReadOnly) ||
-			capability.ApprovalPolicy != string(ApprovalNone) || binding.IdempotencyHeader != "" {
+			(capability.ApprovalPolicy != string(ApprovalNone) && capability.ApprovalScope == nil) || binding.IdempotencyHeader != "" {
 			return errors.New("OpenAPI read capability policy is invalid")
 		}
 	} else if capability.Risk == string(RiskRead) ||
-		capability.ApprovalPolicy != string(ApprovalHumanEachEffect) && capability.ApprovalPolicy != string(ApprovalHumanScoped) ||
+		(capability.ApprovalPolicy != string(ApprovalHumanEachEffect) && capability.ApprovalPolicy != string(ApprovalHumanScoped) && !(capability.ApprovalScope != nil && capability.ApprovalPolicy == string(ApprovalNone))) ||
 		capability.Execution.MaxAttempts != 1 || binding.IdempotencyHeader == "" && capability.Execution.Idempotency != string(IdempotencyOneAttempt) ||
 		binding.IdempotencyHeader != "" && capability.Execution.Idempotency != string(IdempotencyEffectKey) {
 		return errors.New("OpenAPI write capability policy is invalid")

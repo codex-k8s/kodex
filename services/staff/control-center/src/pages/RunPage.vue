@@ -38,6 +38,9 @@ import {
   runDefaultTaskTitleKey,
 } from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
+import IntegrationApprovalConsentFields from "@/features/workboard/components/IntegrationApprovalConsentFields.vue";
+import { validIntegrationConsent } from "@/features/workboard/integration-approval-consent";
+import type { IntegrationApprovalConsentSelection } from "@/shared/api/generated/openapi/types.gen";
 import IntegrationIntentPreview from "@/features/workboard/components/IntegrationIntentPreview.vue";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
@@ -342,6 +345,9 @@ function delegateDiagnostics(): void {
 }
 
 const turn = ref("");
+const integrationConsents = ref<
+  Record<string, IntegrationApprovalConsentSelection>
+>({});
 const comments = ref<Record<string, string>>({});
 const turnAttachmentComposer = ref<AttachmentComposerHandle>();
 const turnAttachmentState = ref<AttachmentComposerState>({
@@ -645,10 +651,23 @@ async function decide(
   )
     return;
   if (decision === "APPROVE" && !bundleManifestReady(gate)) return;
+  if (
+    decision === "APPROVE" &&
+    !validIntegrationConsent(
+      gate.integrationIntent,
+      integrationConsents.value[gate.ref],
+    )
+  )
+    return;
   const generation = mutationGeneration;
   const project = run.value?.projectRef;
   const scopeRef = runRef.value;
   const rootRun = run.value?.rootRunRef;
+  const selectedIntegrationConsent = integrationConsents.value[gate.ref];
+  const integrationApproval =
+    decision === "APPROVE" && selectedIntegrationConsent
+      ? { ...selectedIntegrationConsent }
+      : undefined;
   const comment = comments.value[gate.ref]?.trim() || undefined;
   const composer = gateAttachmentComposers.get(gate.ref);
   const currentGate = { ...gate };
@@ -661,6 +680,7 @@ async function decide(
       decision,
       comment,
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
+      ...(integrationApproval ? { integrationApproval } : {}),
     });
     if (!mutationCurrent(generation, scopeRef)) return;
     Reflect.deleteProperty(comments.value, gate.ref);
@@ -1143,6 +1163,13 @@ onBeforeUnmount(() => {
                   v-if="gate.integrationIntent"
                   :intent="gate.integrationIntent"
                 />
+                <IntegrationApprovalConsentFields
+                  v-if="gate.integrationIntent && gate.state === 'OPEN'"
+                  :key="`${gate.ref}:${gate.version}`"
+                  v-model="integrationConsents[gate.ref]"
+                  :intent="gate.integrationIntent"
+                  :disabled="busy"
+                />
                 <h3>{{ $t("decisions.consequences") }}</h3>
                 <SafeMarkdown :content="gate.consequencesSummary" />
               </div>
@@ -1185,7 +1212,11 @@ onBeforeUnmount(() => {
                     :disabled="
                       busy ||
                       !gateAttachmentsReady(gate.ref) ||
-                      !bundleManifestReady(gate)
+                      !bundleManifestReady(gate) ||
+                      !validIntegrationConsent(
+                        gate.integrationIntent,
+                        integrationConsents[gate.ref],
+                      )
                     "
                     @click="decide(gate, 'APPROVE')"
                   >

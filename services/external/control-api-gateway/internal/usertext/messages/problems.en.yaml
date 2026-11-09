@@ -861,7 +861,7 @@ PERMISSION_IMAGE_SOURCE_MANAGE_DESCRIPTION:
 SYSTEM_ROLE_IMAGE_SOURCE_ACCESS:
   other: Separate role image source access was added to the system role
 RUNTIME_CLAIM_ELIGIBILITY_CHANGED:
-  other: 'Run stopped: required permissions or dependencies changed'
+  other: "Run stopped: required permissions or dependencies changed"
 PROVIDER_ACCOUNT_DELETION_REQUESTED:
   other: Provider account deletion requested
 PROVIDER_ACCOUNT_VERIFICATION_REQUESTED:
@@ -1067,3 +1067,8 @@ WORKFLOW_GATE_SUPERSEDED:
 
 INTEGRATION_CREDENTIALS_REQUIRED:
   other: Configure all required personal connections before launch
+
+INTEGRATION_APPROVAL_REVOKED:
+  other: Temporary approval revoked; new actions require consent
+INTEGRATION_APPROVAL_EXPIRED:
+  other: Temporary approval expired; the action has not started

@@ -362,6 +362,19 @@ func TestIntegrationHealthSnapshotComponent(t *testing.T) {
 		if err != nil || len(updated) != 1 || updated[0].Digest == profiles[0].Digest {
 			t.Fatal("fresh profile did not bind new grant version")
 		}
+		for _, policy := range []string{"HUMAN_EACH_EFFECT", "HUMAN_SCOPED"} {
+			for _, key := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
+				capability, _ := r.integrationDefinitions["context7"].Capability(key)
+				paths := []string{}
+				if policy == "HUMAN_SCOPED" {
+					paths = capability.ApprovalScope.RequiredInputPaths
+				}
+				c = *execute(command.ChangeIntegrationGrant, policy+key, &c.Version, command.IntegrationGrantInput{ConnectionRef: c.Ref, CapabilityKey: key, AgentRef: agent.Ref, ApprovalPolicy: policy, ApprovalScopePaths: paths, Enabled: true}).Connection
+			}
+			if profiles, err := readProof(c); err != nil || len(profiles) != 1 {
+				t.Fatal("managed MCP selected human policy lost pinned health", policy, err)
+			}
+		}
 		mutateConfig(c.Ref)
 		c.Version++
 		if _, err := readProof(c); err == nil {

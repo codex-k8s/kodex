@@ -403,7 +403,7 @@ func TestEmailReceiptReadByEffectKey(t *testing.T) {
 // RU: TestGitLabMetadataUsesExactProjectScope требует GET настроенному хосту и точно экранированному пути group/project до принятия проекции метаданных.
 func TestGitLabMetadataUsesExactProjectScope(t *testing.T) {
 	t.Parallel()
-	adapter := testAdapter(t)
+	adapter := legacyGitLabTestAdapter(t)
 	credential := testCredential(t, adapter, "gitlab-token")
 	adapter.providerHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		if request.Method != http.MethodGet || request.URL.Host != "gitlab.example.test" ||
@@ -463,6 +463,20 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	switch definition.Metadata.Key {
 	case "gitlab":
 		configuration = map[string]string{"base_url": "https://gitlab.example.test", "project_path": "group/project"}
+		if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+			configuration["scope_kind"] = "PROJECT"
+			for _, field := range capability.InputFields {
+				if field.Key == "project_path" {
+					copy := make(map[string]any, len(input)+2)
+					for key, value := range input {
+						copy[key] = value
+					}
+					copy["project_path"], copy["project_id"] = "group/project", 1
+					input = copy
+					break
+				}
+			}
+		}
 	case "jira":
 		configuration = map[string]string{"base_url": "https://jira.example.test", "auth_scheme": "BEARER", "project_key": "OPS", "issue_type": "Task"}
 	case "confluence":
