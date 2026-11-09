@@ -27,11 +27,6 @@ if [[ "$test_pattern" == --integration-resource-policies-fresh-install ]]; then
   upgrade_test='^TestIntegrationResourcePolicyFreshInstall$'
   test_pattern=--review-qa-upgrade
 fi
-if [[ "$test_pattern" == --integration-resource-policies-schema-capture ]]; then
-  [[ "${KODEX_RESOURCE_POLICY_SCHEMA_CAPTURE:-}" == 1 ]] || fail 'resource policy schema capture requires explicit opt-in'
-  upgrade_test='^TestIntegrationResourcePolicyCatalog$'
-  test_pattern=--review-qa-upgrade
-fi
 if [[ "$test_pattern" == --authority-proof-counter-upgrade ]]; then
   command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
   upgrade_test='^TestAuthorityProofCounterMigration$'

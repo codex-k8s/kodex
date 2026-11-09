@@ -1,4 +1,3 @@
-import { integrationResourcePoliciesCatalog } from './integration-resource-policies-catalog.gen.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -1146,23 +1145,31 @@ export function validAuthorityProofCounterBackupMigrationPrecondition(proof) {
   return validAuthorityProofCounterMigrationPrecondition(proof,true);
 }
 
-// Exact037 проверяет собственный полный catalog до явной projection прежних неизменных036 invariants.
-export function validIntegrationResourcePoliciesMigrationPostcondition(proof,backup=false){
- return proof?.profile==='INTEGRATION_RESOURCE_POLICIES_'+(backup?'BACKUP_':'')+'V1' && proof.gooseVersion===20261109000100 &&
-  proof.integrationResourcePoliciesCatalog===true && proof.integrationResourcePoliciesCatalogDigest===integrationResourcePoliciesCatalog[backup?'backup':'normal'] &&
-  proof.personalCredentialsCatalogDigest===integrationResourcePoliciesCatalog[backup?'backup':'normal'] &&
-  validAuthorityProofCounterMigrationPostcondition({...proof,profile:'AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'V1',gooseVersion:20261108000100,personalCredentialsCatalogDigest:jiraCreateFieldsCatalog[backup?'backup':'normal']},backup);
+// Readback037 проверяет объекты текущей миграции; historical catalog не проецируется.
+export function validIntegrationResourcePoliciesMigrationPostcondition(proof, backup=false) {
+  return proof?.profile === 'INTEGRATION_RESOURCE_POLICIES_' + (backup ? 'BACKUP_' : '') + 'V2' &&
+    proof.readOnly === 'on' && proof.database === 'control_plane' && proof.gooseVersion === 20261109000100 &&
+    ['migrationTablesReady', 'integrationPolicyColumns', 'integrationPolicyConstraints', 'integrationPolicyFunctions',
+      'integrationPolicyGuards', 'integrationPolicyPrivileges', 'authorityProofCounterReady', 'workspaceGuards', 'backupReaderSafe']
+      .every(key => proof[key] === true) &&
+    (!backup || proof.backupReaderConfigured === true && proof.backupReaderReady === true);
 }
 
-// Backup037 требует отдельный SELECT-only catalog и не принимает обычный proof.
-export function validIntegrationResourcePoliciesBackupMigrationPostcondition(proof){return validIntegrationResourcePoliciesMigrationPostcondition(proof,true);}
+// Backup mode дополнительно требует фактический SELECT на ограниченном наборе таблиц.
+export function validIntegrationResourcePoliciesBackupMigrationPostcondition(proof) {
+  return validIntegrationResourcePoliciesMigrationPostcondition(proof, true);
+}
 
-// Нормальное обновление037 требует exact036, полного predecessor catalog и завершённых owner graphs/effects/probes.
-export function validIntegrationResourcePoliciesMigrationPrecondition(proof,backup=false,requireStopped=true){
- return proof?.profile==='INTEGRATION_RESOURCE_POLICIES_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.integrationResourcePoliciesAbsent===true &&
-  Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped || proof.oldClaimSessions===0) &&
-  ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key=>proof[key]===0) &&
-  validAuthorityProofCounterMigrationPostcondition({...proof,profile:'AUTHORITY_PROOF_COUNTER_'+(backup?'BACKUP_':'')+'V1'},backup);
+// Перед037 проверяются его условия и отсутствие активных effects, без проекции каталога036.
+export function validIntegrationResourcePoliciesMigrationPrecondition(proof, backup=false, requireStopped=true) {
+  return proof?.profile === 'INTEGRATION_RESOURCE_POLICIES_' + (backup ? 'BACKUP_' : '') + 'PREDECESSOR_V2' &&
+    proof.readOnly === 'on' && proof.database === 'control_plane' && proof.gooseVersion === 20261108000100 &&
+    ['migrationTablesReady', 'integrationResourcePoliciesAbsent', 'authorityProofCounterReady', 'backupReaderSafe']
+      .every(key => proof[key] === true) && (!backup || proof.backupReaderConfigured === true) &&
+    Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions >= 0 && (!requireStopped || proof.oldClaimSessions === 0) &&
+    ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+      'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations',
+      'activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key => proof[key] === 0);
 }
 
 // Отдельная точка backup precondition сохраняет закрытый ACL profile.

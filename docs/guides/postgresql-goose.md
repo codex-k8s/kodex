@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.15
-updated: 2026-11-08
+version: 1.2.16
+updated: 2026-11-09
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -306,9 +306,13 @@ PostgreSQL проверяются как фактическая семантик
 При `CREATE OR REPLACE FUNCTION` native проверка сравнивает OID, owner, ACL,
 типы и имена аргументов, volatility, security mode и search_path: сохранение
 owner/ACL само по себе не доказывает сохранение остальных атрибутов.
-Старый exact schema verifier не расширяется до новой версии. Новый профиль
-проверяет actual successor до проекции неизменённых исторических частей;
-ожидаемый manifest отдельно сверяется с настоящим disposable каталогом.
+Исторический schema verifier не расширяется до новой версии. Новая миграция
+получает короткую проверку собственных условий и изменяемых объектов, native
+upgrade/fresh/repeat и функциональные регрессии затронутых прав и lifecycle.
+Полные снимки прежних каталогов, тексты всех функций и цепочки inverse
+проекций не копируются в каждый новый verifier. Общие регрессионные проверки
+живут отдельно от installer readback; требования конкретной установки не
+становятся альтернативными публичными schema contracts.
 Необязательные поля producer проверяются в положительных сквозных fixtures:
 default без поля не доказывает совместимость фактически отправляемого поля.
 Пример: `maximum_bytes` в миграции032 и `OPS-DOC-WORKFLOW-REVIEW-QA-1949`.

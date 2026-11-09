@@ -1,20 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/pressly/goose/v3"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/pressly/goose/v3"
 )
 
-// testIntegrationResourcePolicyQualification checks frozen036 and full037 predecessor/successor catalogs, repeat apply, unchanged proof watermark and fail-closed schema drift; backup mode also exercises SELECT-only restore and actual dump/recovery.
-// testIntegrationResourcePolicyQualification проверяет frozen036 и полные037 predecessor/successor catalogs, repeat apply, watermark и закрытый отказ schema drift; backup mode проверяет SELECT-only restore и настоящий dump/recovery.
+// testIntegrationResourcePolicyQualification checks the036→037 migration prerequisites, changed schema objects, repeat apply, unchanged proof watermark and rejected policy drift; backup mode also exercises SELECT-only restore and actual dump/recovery.
+// testIntegrationResourcePolicyQualification проверяет условия036→037, изменённые schema objects, repeat apply, watermark и отказ policy drift; backup mode проверяет SELECT-only restore и настоящий dump/recovery.
 func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 	ctx, database, observer := newWorkflowUpgradeDatabase(t)
 	if err := goose.UpToContext(ctx, database, "migrations", 20261108000100); err != nil {
@@ -38,8 +40,12 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 			t.Fatal(err)
 		}
 		readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
+		// Доступ SELECT может быть выдан любому подмножеству: это не меняет смысл миграции.
+		if _, err := observer.Exec(ctx, "SET ROLE control_plane_owner; REVOKE SELECT ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; RESET ROLE"); err != nil {
+			t.Fatal(err)
+		}
+		readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
 		for _, statement := range []string{
-			"SET ROLE control_plane_owner; REVOKE SELECT ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; RESET ROLE",
 			"SET ROLE control_plane_owner; GRANT SELECT,UPDATE ON control_plane.integration_approval_scopes TO kodex_backup_reader; RESET ROLE",
 			"SET ROLE control_plane_owner; REVOKE UPDATE ON control_plane.integration_approval_scopes FROM kodex_backup_reader RESTRICT; GRANT SELECT ON control_plane.integration_approval_scopes TO kodex_backup_reader WITH GRANT OPTION; RESET ROLE",
 		} {
@@ -54,6 +60,7 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 		readControlPlaneMigrationProof(t, ctx, observer, profile, "precondition")
 	}
 
+	abiBefore := readResourcePolicyFunctionABI(t, ctx, observer)
 	if err := goose.UpToContext(ctx, database, "migrations", 20261109000100); err != nil {
 		t.Fatal("apply resource policy037", err)
 	}
@@ -61,6 +68,9 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 		if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err != nil {
 			t.Fatal("complete schema037 backup ACL handover", err)
 		}
+	}
+	if !bytes.Equal(abiBefore, readResourcePolicyFunctionABI(t, ctx, observer)) {
+		t.Fatal("resource policy migration changed existing function identity, ABI or privileges")
 	}
 	proof := readControlPlaneMigrationProof(t, ctx, observer, profile, "postcondition")
 	if err := goose.UpToContext(ctx, database, "migrations", 20261109000100); err != nil {
@@ -80,9 +90,9 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 	}
 	statement := strings.ReplaceAll(string(sql), "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;", "")
 	statement = strings.TrimSuffix(strings.TrimSpace(statement), "ROLLBACK;")
-	for _, drift := range []string{
+	drifts := []string{
 		"ALTER TABLE control_plane.integration_approval_scopes DISABLE TRIGGER integration_approval_scopes_guard_insert",
-		"ALTER TABLE control_plane.integration_approval_scopes ADD COLUMN unapproved boolean",
+		"ALTER TABLE control_plane.integration_approval_scopes ALTER COLUMN scope_lifetime DROP NOT NULL",
 		"ALTER TABLE control_plane.integration_approval_scopes DROP CONSTRAINT integration_approval_scopes_initiator_check",
 		"GRANT SELECT ON control_plane.integration_approval_scopes TO PUBLIC",
 		"GRANT UPDATE ON control_plane.integration_grants TO kodex_backup_reader",
@@ -90,7 +100,11 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 		"ALTER FUNCTION control_plane.integration_pinned_capabilities(uuid) VOLATILE",
 		"ALTER TABLE control_plane.runs DISABLE TRIGGER workspace_volume_root_closed",
 		"ALTER TABLE control_plane.session_workspace_volumes DROP CONSTRAINT session_workspace_volumes_ready_record_check; ALTER TABLE control_plane.session_workspace_volumes ADD CONSTRAINT session_workspace_volumes_ready_record_check CHECK (ready_record IS NULL OR octet_length(ready_record) BETWEEN 1 AND 4096 AND ready_record IS JSON OBJECT WITH UNIQUE KEYS)",
-	} {
+	}
+	if backup {
+		drifts = append(drifts, "ALTER ROLE kodex_backup_reader SUPERUSER")
+	}
+	for _, drift := range drifts {
 		tx, err := observer.Begin(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -99,11 +113,9 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 			_ = tx.Rollback(ctx)
 			t.Fatal("prepare schema037 counterfactual", err)
 		}
-		_, proofErr := tx.Exec(ctx, statement)
-		rollbackErr := tx.Rollback(ctx)
-		var rejected *pgconn.PgError
-		if !errors.As(proofErr, &rejected) || rejected.Code != "P0001" || rollbackErr != nil {
-			t.Fatal("resource policy037 accepted schema drift", proofErr)
+		assertResourcePolicyStatementRejected(t, ctx, observer, profile, "postcondition", statement)
+		if err := tx.Rollback(ctx); err != nil {
+			t.Fatal("rollback schema037 counterfactual", err)
 		}
 	}
 	if !backup {
@@ -132,12 +144,12 @@ func testIntegrationResourcePolicyQualification(t *testing.T, backup bool) {
 		t.Fatal(err)
 	}
 	assertAuthorityProofCounterBackupRestore(t, ctx, observer, string(allocator), 41)
-	assertRestoredResourcePolicyCatalog(t, ctx, observer, string(sql), proof)
+	assertRestoredResourcePolicyReadback(t, ctx, observer, string(sql), proof)
 }
 
-// assertRestoredResourcePolicyCatalog compares the entire validated source proof with actual dump-restored schema metadata; only the explicitly allocated loopback clone database name differs.
-// assertRestoredResourcePolicyCatalog сравнивает полный validated source proof с actual dump-restored metadata; отличается лишь имя явно созданной loopback clone БД.
-func assertRestoredResourcePolicyCatalog(t *testing.T, ctx context.Context, observer *pgx.Conn, sql string, source []byte) {
+// assertRestoredResourcePolicyReadback compares the migration readback with actual dump-restored schema metadata; only the explicitly allocated loopback clone database name differs.
+// assertRestoredResourcePolicyReadback сравнивает migration readback с actual dump-restored metadata; отличается лишь имя явно созданной loopback clone БД.
+func assertRestoredResourcePolicyReadback(t *testing.T, ctx context.Context, observer *pgx.Conn, sql string, source []byte) {
 	t.Helper()
 	config := observer.Config().Copy()
 	if config.Host != "127.0.0.1" || config.Database != "control_plane" || config.Password != "" || config.TLSConfig != nil {
@@ -169,21 +181,12 @@ func assertRestoredResourcePolicyCatalog(t *testing.T, ctx context.Context, obse
 	if json.Unmarshal(source, &expectedView) != nil || json.Unmarshal(actual, &actualView) != nil {
 		t.Fatal("restored037 proof JSON invalid")
 	}
-	normalizeResourcePolicyCloneDatabase(actualView)
-	if !reflect.DeepEqual(expectedView, actualView) {
-		t.Fatal("dump-restored037 full catalog differs from qualified source")
+	if actualView["database"] != "authority_counter_restore" {
+		t.Fatal("unexpected restored policy database")
 	}
-}
-
-// normalizeResourcePolicyCloneDatabase changes only known database metadata in this synthetic clone comparison; production release validators and SQL remain unchanged.
-// normalizeResourcePolicyCloneDatabase меняет лишь known database metadata при synthetic clone comparison; production release validators и SQL не меняются.
-func normalizeResourcePolicyCloneDatabase(value map[string]any) {
-	for key, item := range value {
-		if key == "database" && item == "authority_counter_restore" {
-			value[key] = "control_plane"
-		} else if object, ok := item.(map[string]any); ok {
-			normalizeResourcePolicyCloneDatabase(object)
-		}
+	actualView["database"] = "control_plane"
+	if !reflect.DeepEqual(expectedView, actualView) {
+		t.Fatal("dump-restored037 policy readback differs from source")
 	}
 }
 
@@ -199,18 +202,78 @@ func TestIntegrationResourcePolicyFreshInstall(t *testing.T) {
 	testIntegrationResourcePolicyQualification(t, false)
 }
 
-// assertResourcePolicyPredecessorRejected requires a closed catalog rejection and rolls back only the read-only proof; caller's synthetic ACL setup remains explicit.
-// assertResourcePolicyPredecessorRejected требует закрытый catalog rejection и откатывает лишь read-only proof; synthetic ACL setup остаётся явным у caller.
+// assertResourcePolicyPredecessorRejected executes the actual precondition after a synthetic privilege mutation; SQL errors are not accepted as permission denial.
+// assertResourcePolicyPredecessorRejected исполняет actual precondition после synthetic изменения прав; ошибка SQL не считается отказом полномочий.
 func assertResourcePolicyPredecessorRejected(t *testing.T, ctx context.Context, observer *pgx.Conn, profile string) {
 	t.Helper()
 	raw, err := os.ReadFile("../../../../../tools/release/" + profile + "-migration-precondition.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, proofErr := observer.PgConn().Exec(ctx, string(raw)).ReadAll()
-	_, rollbackErr := observer.Exec(ctx, "ROLLBACK")
-	var rejected *pgconn.PgError
-	if !errors.As(proofErr, &rejected) || rejected.Code != "P0001" || rollbackErr != nil {
-		t.Fatal("predecessor accepted partial SELECT or backup WRITE/grant option", proofErr, rollbackErr)
+	assertResourcePolicyStatementRejected(t, ctx, observer, profile, "precondition", string(raw))
+}
+
+// assertResourcePolicyStatementRejected requires the shipped validator to reject a successful SQL readback, preserving the caller's transaction.
+// assertResourcePolicyStatementRejected требует отказ shipped validator после успешного SQL readback, сохраняя caller transaction.
+func assertResourcePolicyStatementRejected(t *testing.T, ctx context.Context, observer *pgx.Conn, profile, phase, statement string) {
+	t.Helper()
+	release, err := filepath.Abs("../../../../../tools/release")
+	if err != nil {
+		t.Fatal(err)
 	}
+	results, err := observer.PgConn().Exec(ctx, statement).ReadAll()
+	if err != nil {
+		t.Fatal("execute resource policy check", err)
+	}
+	var proof []byte
+	for _, result := range results {
+		if result.Err != nil {
+			t.Fatal(result.Err)
+		}
+		if len(result.Rows) == 0 {
+			continue
+		}
+		if proof != nil || len(result.Rows) != 1 || len(result.Rows[0]) != 1 {
+			t.Fatal("resource policy check shape invalid")
+		}
+		proof = result.Rows[0][0]
+	}
+	if !json.Valid(proof) {
+		t.Fatal("resource policy check JSON invalid")
+	}
+	function := "validIntegrationResourcePolicies"
+	if strings.HasSuffix(profile, "-backup") {
+		function += "Backup"
+	}
+	if phase == "precondition" {
+		function += "MigrationPrecondition"
+	} else {
+		function += "MigrationPostcondition"
+	}
+	check := exec.CommandContext(ctx, "node", "--input-type=module", "-e", `
+import {pathToFileURL} from 'node:url';
+const module = await import(pathToFileURL(process.argv[1]));
+let raw=''; for await(const chunk of process.stdin) raw+=chunk;
+if(module[process.argv[2]](JSON.parse(raw))) process.exit(1);
+`, filepath.Join(release, "control-plane-immutable-migration.mjs"), function)
+	check.Env = []string{"PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8"}
+	check.Stdin = bytes.NewReader(proof)
+	if _, err := check.CombinedOutput(); err != nil {
+		t.Fatal("resource policy check accepted invalid schema or privileges", err)
+	}
+}
+
+// readResourcePolicyFunctionABI reads only the identity and calling contract of the five replaced functions in the disposable fixture; function bodies and full catalogs are excluded.
+// readResourcePolicyFunctionABI читает identity и контракт вызова пяти заменяемых функций disposable fixture, без тел функций и полного каталога.
+func readResourcePolicyFunctionABI(t *testing.T, ctx context.Context, observer *pgx.Conn) []byte {
+	t.Helper()
+	statement, err := os.ReadFile("testdata/sql/integration_policy_function_abi.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var value []byte
+	if err := observer.QueryRow(ctx, string(statement)).Scan(&value); err != nil || !json.Valid(value) {
+		t.Fatal("resource policy function ABI readback failed", err)
+	}
+	return value
 }

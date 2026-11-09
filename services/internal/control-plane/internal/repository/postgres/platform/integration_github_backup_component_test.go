@@ -60,7 +60,7 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 	case 20261107000100:
 		filename, profile, catalogField = "jira-create-fields-backup-migration-postcondition.sql", "JIRA_CREATE_FIELDS_BACKUP_V1", "githubPRCatalog"
 	case 20261109000100:
-		filename, profile, catalogField = "integration-resource-policies-backup-migration-postcondition.sql", "INTEGRATION_RESOURCE_POLICIES_BACKUP_V1", "githubPRCatalog"
+		filename, profile, catalogField = "integration-resource-policies-backup-migration-postcondition.sql", "INTEGRATION_RESOURCE_POLICIES_BACKUP_V2", "integrationPolicyFunctions"
 	case 20261108000100:
 		filename, profile, catalogField = "authority-proof-counter-backup-migration-postcondition.sql", "AUTHORITY_PROOF_COUNTER_BACKUP_V1", "githubPRCatalog"
 	}
@@ -87,26 +87,33 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		}
 		return proof, nil
 	}
+	backupField := "backupReaderCatalog"
+	currentResourcePolicies := version == 20261109000100
+	if currentResourcePolicies {
+		backupField = "backupReaderReady"
+	}
 	proof, err := read(source)
-	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof["backupReaderCatalog"] != true || version == 20261109000100 && proof["integrationResourcePoliciesCatalog"] != true {
+	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof[backupField] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
 	}
-	if version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
+	if !currentResourcePolicies && version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
 		t.Fatal("native GitHub write guards are unconfirmed")
 	}
-	if version >= 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
+	if !currentResourcePolicies && version >= 20261029000300 && (proof["workflowPDLCCatalog"] != true || proof["workflowPDLCFunctions"] != float64(14)) {
 		t.Fatal("native PDLC owner catalog is unconfirmed")
 	}
-	if version >= 20261030000100 && proof["workflowContentPageCatalog"] != true {
+	if !currentResourcePolicies && version >= 20261030000100 && proof["workflowContentPageCatalog"] != true {
 		t.Fatal("native content page catalog is unconfirmed")
 	}
 	// Каждая мутация живёт в собственной rollback transaction, чтобы старый CHECK не
 	// маскировал следующие ACL/trigger counterfactuals. Полный каталог читается повторно.
 	probes := []struct{ statement, rejectedField string }{
 		{"GRANT EXECUTE ON FUNCTION control_plane.integration_github_legacy_capabilities(text,text,text,text) TO PUBLIC", catalogField},
-		{"REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader", "backupReaderCatalog"},
+		{"REVOKE SELECT ON control_plane.session_workspace_storage FROM kodex_backup_reader", backupField},
 	}
-	if version >= 20261029000200 {
+	if currentResourcePolicies {
+		probes = append(probes, struct{ statement, rejectedField string }{"ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid", "integrationPolicyGuards"}, struct{ statement, rejectedField string }{queryIntegrationGitHubOldWriteConstraint, "integrationPolicyConstraints"})
+	} else if version >= 20261029000200 {
 		probes = append(probes,
 			struct{ statement, rejectedField string }{"ALTER TABLE control_plane.integration_invocations DISABLE TRIGGER email_mailbox_gate_valid", "githubAutonomousWrites"},
 			struct{ statement, rejectedField string }{queryIntegrationGitHubOldWriteConstraint, "githubAutonomousWrites"})
@@ -130,7 +137,7 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 			t.Fatalf("backup schema accepted drift or did not roll back: predicate=%s SQLSTATE=%v rollback=%v", probe.rejectedField, proofErr, rollbackErr)
 		}
 		proof, err = read(source)
-		if err != nil || proof[catalogField] != true || proof["backupReaderCatalog"] != true || version == 20261109000100 && proof["integrationResourcePoliciesCatalog"] != true {
+		if err != nil || proof[catalogField] != true || proof[backupField] != true {
 			t.Fatal("backup counterfactual changed the canonical schema")
 		}
 	}
