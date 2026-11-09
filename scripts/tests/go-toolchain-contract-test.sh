@@ -5,6 +5,7 @@ repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 guard="$repository_root/scripts/check-go-toolchain.sh"
 
 "$guard" >/dev/null
+python3 "$repository_root/scripts/tests/go-toolchain-guard-test.py"
 
 jq -e '
   .schema_version == 2 and
