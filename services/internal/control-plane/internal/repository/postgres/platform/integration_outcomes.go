@@ -124,7 +124,14 @@ func (repository *Repository) executionIntegrationOutcomesOnce(ctx context.Conte
 		return tx.QueryRow(ctx, queryWorkflowEvidenceReadSource, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": input.LeaseRef, "fence_digest": hex.EncodeToString(fence[:]), "generation": input.Generation, "source_invocation_ref": input.SourceInvocationRef}).Scan(&sourceID, &task, &currentTask)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return empty, errs.ErrNotFound
+		result, ordinaryErr := repository.ordinaryIntegrationOutcomesTx(ctx, tx, current, input, hex.EncodeToString(fence[:]))
+		if ordinaryErr != nil {
+			return empty, ordinaryErr
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return empty, assistantLockedReadError(err, errs.ErrUnavailable)
+		}
+		return result, nil
 	}
 	if err != nil {
 		return empty, assistantLockedReadError(err, errs.ErrUnavailable)

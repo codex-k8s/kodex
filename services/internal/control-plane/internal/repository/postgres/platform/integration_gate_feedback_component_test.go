@@ -53,6 +53,7 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 	owner := principal("control-api-gateway", "platform.command.integrations.create", "20000000-0000-4000-8000-000000000001", "20000000-0000-4000-8000-000000000002")
 	worker := principal("runtime-controller", "platform.runtime.execution.claim", "kodex-system-subject", "kodex-installation")
 	gateway := principal("integration-gateway", "platform.runtime.integrations.claim", "kodex-system-subject", "kodex-installation")
+	reader := principal("runtime-controller", "platform.runtime.execution.integration.outcomes.read", "kodex-system-subject", "kodex-installation")
 	service, err := serviceplatform.New(r)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +80,8 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	execute(t, command.ChangeIntegrationGrant, owner, "grant", &currentConnection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "github.pull_request.review.create", AgentRef: agent.Ref, Enabled: true, ApprovalPolicy: "HUMAN_EACH_EFFECT"})
-	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "EMPTY_REJECT", "TERMINAL"} {
+	previousInvocation := ""
+	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "EMPTY_REJECT", "TERMINAL", "APPROVE_LONG_INLINE", "APPROVE_LARGE"} {
 		t.Run(decision, func(t *testing.T) {
 			run := execute(t, command.LaunchRun, owner, decision+"-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Feedback effect", Task: "Preserve canonical input", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
 			claimed := execute(t, command.ClaimExecution, worker, decision+"-origin", nil, command.LeaseInput{WorkloadInstance: "feedback-runtime", Limit: 1}).RuntimeItems
@@ -98,7 +100,7 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			}
 			comment := "Сохранить точные 624B паспорта\nи canonical input. Не повторять WRITE. 🧪 <>&"
 			actualDecision := decision
-			if decision == "APPROVE_FAILED" {
+			if strings.HasPrefix(decision, "APPROVE") {
 				actualDecision = "APPROVE"
 			}
 			if decision == "EMPTY_REJECT" {
@@ -147,14 +149,23 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			if err := mutate(foreign, "feedback-"+decision+"-resolve", gate.Version); !errors.Is(err, errs.ErrNotFound) {
 				t.Fatalf("receipt replay bypassed project boundary: %v", err)
 			}
+			expectedSummary := ""
 			if actualDecision == "APPROVE" {
 				work, err := service.ClaimIntegrationInvocations(ctx, gateway, "feedback-gateway", 1)
 				if err != nil || len(work) != 1 {
 					t.Fatal("approved synthetic effect was not claimed", err)
 				}
 				completion := command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), SafeErrorCode: "INTEGRATION_REQUEST_REJECTED"}
-				if decision == "APPROVE" {
+				if decision != "APPROVE_FAILED" {
 					summary := `{"fixture":"exact provider result, not owner instructions"}`
+					if decision == "APPROVE_LONG_INLINE" || decision == "APPROVE_LARGE" {
+						repeat := 700
+						if decision == "APPROVE_LARGE" {
+							repeat = 5000
+						}
+						summary = string(asJSON(map[string]any{"body": strings.Repeat("Synthetic ", repeat) + "🧪 конец", "object_id": "fixture-tail-after-4000", "version": 2}))
+					}
+					expectedSummary = summary
 					responseDigest := sha256.Sum256([]byte(summary))
 					completion.Success = true
 					completion.SafeErrorCode = ""
@@ -186,11 +197,25 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			if stringMap(lease, "sessionRef") != stringMap(origin, "sessionRef") || stringMap(lease, "turnRef") == stringMap(origin, "turnRef") || stringMap(lease, "runtimeRevisionRef") == stringMap(origin, "runtimeRevisionRef") || runtimeRevisionMapInt64(lease, "attempt") != runtimeRevisionMapInt64(origin, "attempt")+1 {
 				t.Fatal("continuation lost exact session/turn/attempt/revision lineage")
 			}
-			snapshot := decodeIntegrationContinuationTask(t, stringMap(lease, "task"))
+			var snapshot integrationContinuationSnapshot
+			var pagedRequest *query.ExecutionIntegrationOutcomes
+			read := func(input query.ExecutionIntegrationOutcomes) (entity.ExecutionIntegrationOutcomes, error) {
+				return restartedService.GetExecutionIntegrationOutcomes(ctx, reader, input)
+			}
+			if decision == "APPROVE_LARGE" {
+				var request query.ExecutionIntegrationOutcomes
+				snapshot, request = readOrdinaryIntegrationContinuationFixture(t, lease, read, previousInvocation)
+				pagedRequest = &request
+			} else {
+				snapshot = decodeIntegrationContinuationTask(t, stringMap(lease, "task"))
+			}
+			if expectedSummary != "" && snapshot.ResultSummary != expectedSummary {
+				t.Fatal("continuation truncated the complete provider result")
+			}
 			if snapshot.InvocationRef != stringMap(invocation, "invocationRef") || snapshot.OwnerDecision != (integrationContinuationDecision{GateRef: gate.Ref, GateVersion: resolved.Gate.Version, Decision: actualDecision, Comment: comment}) {
 				t.Fatal("claimed immutable task lost authoritative feedback pins")
 			}
-			if decision == "APPROVE" {
+			if actualDecision == "APPROVE" && decision != "APPROVE_FAILED" {
 				readback, err := service.GetIntegrationInvocation(ctx, worker, snapshot.InvocationRef)
 				if err != nil || !strings.HasPrefix(snapshot.ReceiptRef, "erc_") || snapshot.ReceiptRef != stringMap(readback, "effectReceiptRef") {
 					t.Fatal("claimed continuation lost the exact successful effect receipt")
@@ -240,6 +265,14 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 				t.Fatal(err)
 			}
 			execute(t, command.CancelRun, owner, decision+"-cancel", &fresh.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Feedback fixture cleanup"})
+			if pagedRequest != nil {
+				if _, err := read(*pagedRequest); !errors.Is(err, errs.ErrNotFound) {
+					t.Fatal("cancelled continuation still read its result", err)
+				}
+			}
+			if previousInvocation == "" {
+				previousInvocation = snapshot.InvocationRef
+			}
 		})
 	}
 }

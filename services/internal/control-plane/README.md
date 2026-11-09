@@ -248,6 +248,12 @@ claim-ит `runtime-controller`; системный помощник испол�
 revision. Delegation создаёт server-owned child Run/node/edge, callback имеет
 один durable receipt.
 
+Обычное продолжение интеграции после Human Gate получает полный результат.
+Если он не помещается в задачу, owner передаёт manifest, а существующий
+`get_integration_catalog.outcomes_read` читает его по страницам за действующей
+lease. Чтение не создаёт повторного внешнего действия. Границы, совместимость и
+проверки описаны в [runbook #2081](../../../docs/operations/ordinary-integration-result-2081.md).
+
 Каждое изменение execution graph резервирует последовательный номер в пределах
 root Run и одной транзакцией сохраняет RunEvent и outbox envelope. Relay
 публикует bounded события в NATS JetStream:
