@@ -24,7 +24,7 @@ require (
 	k8s.io/client-go v0.36.3
 )
 
-require k8s.io/component-helpers v0.36.3 // indirect
+require k8s.io/component-helpers v0.36.3
 
 require (
 	cel.dev/expr v0.25.2 // indirect
