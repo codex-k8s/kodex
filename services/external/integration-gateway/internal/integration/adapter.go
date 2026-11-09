@@ -124,9 +124,12 @@ type SafeError struct {
 	Code          string
 	HealthSummary string
 	Transient     bool
-	// AuthenticationHTTPStatus is populated only for observed401/403, never provider payload.
-	// AuthenticationHTTPStatus содержит только наблюдённые401/403, без provider payload.
+	// AuthenticationHTTPStatus retains the existing credential classifier, including explicit token metadata refusals.
+	// AuthenticationHTTPStatus сохраняет прежнюю классификацию credential, включая явный отказ по token metadata.
 	AuthenticationHTTPStatus int
+	// ProviderHTTPStatus records only an observed failed HTTP response, never a locally inferred authentication status or provider payload.
+	// ProviderHTTPStatus содержит только наблюдённый HTTP-отказ, без локально выведенного auth-статуса либо provider payload.
+	ProviderHTTPStatus int
 }
 
 // Error exposes only the safe code, keeping auxiliary health metadata and provider details out of ordinary error strings.
@@ -528,7 +531,7 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 		var safe *SafeError
 		if capability.Risk == "READ" && request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" &&
 			errors.As(err, &safe) && safe.Code == "INTEGRATION_AUTH_REJECTED" && safe.AuthenticationHTTPStatus == http.StatusForbidden {
-			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED", ProviderHTTPStatus: safe.ProviderHTTPStatus}
 		}
 		if capability.Risk != "READ" && (request.permissionEffect == nil || request.permissionEffect.mutationAttempted) && errors.As(err, &safe) &&
 			(safe.Code == "INTEGRATION_UNAVAILABLE" || safe.Code == "INTEGRATION_RESPONSE_INVALID") {
@@ -989,16 +992,30 @@ func githubError(response *github.Response, err error) error {
 // statusError maps authentication, throttling and selected invalid-request HTTP statuses to safe integration codes, treating all remaining statuses as unavailable.
 // RU: statusError переводит аутентификацию, лимиты и выбранные HTTP-ошибки запроса в безопасные integration-коды, считая остальные статусы недоступностью.
 func statusError(code int) error {
+	failure := &SafeError{ProviderHTTPStatus: code}
 	switch code {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &SafeError{Code: "INTEGRATION_AUTH_REJECTED", AuthenticationHTTPStatus: code}
+		failure.Code, failure.AuthenticationHTTPStatus = "INTEGRATION_AUTH_REJECTED", code
 	case http.StatusTooManyRequests:
-		return &SafeError{Code: "INTEGRATION_RATE_LIMITED"}
+		failure.Code = "INTEGRATION_RATE_LIMITED"
 	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity:
-		return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		failure.Code = "INTEGRATION_REQUEST_REJECTED"
 	default:
-		return &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+		failure.Code = "INTEGRATION_UNAVAILABLE"
 	}
+	return failure
+}
+
+// ObservedProviderHTTPStatus extracts only a bounded failed HTTP response status from a safe error.
+// A locally rejected request or transport error has no observed status and returns zero; it never inspects provider bodies or changes retry authority.
+// ObservedProviderHTTPStatus извлекает лишь числовой статус неуспешного HTTP-ответа из безопасной ошибки.
+// Локальный отказ либо transport error возвращает ноль; тело провайдера не читается, правила повторов не меняются.
+func ObservedProviderHTTPStatus(err error) int {
+	var safe *SafeError
+	if errors.As(err, &safe) && safe.ProviderHTTPStatus >= 300 && safe.ProviderHTTPStatus <= 599 {
+		return safe.ProviderHTTPStatus
+	}
+	return 0
 }
 
 // readBoundedResponse reads at most one byte beyond the projection budget and rejects both I/O failure and oversize content without returning partial data.
