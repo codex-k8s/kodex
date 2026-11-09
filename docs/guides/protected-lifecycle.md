@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.70
-updated: 2026-11-08
+version: 1.1.71
+updated: 2026-11-10
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Обычное продолжение после Human Gate не усекает завершённый результат интеграции.
+Большой ответ передаётся через owner manifest и reader непосредственного
+`CONTINUES`: действующие lease/RR, actor visibility, исходное решение и receipt,
+точный materialized task и полный digest проверяются при каждом чтении страницы.
+Отказ reader не разрешает повторить внешнее действие. Путь workflow evidence
+сохраняет собственные predicates; полномочия этих путей не объединяются по одному
+source ref. Матрица: [#2081](../operations/ordinary-integration-result-2081.md).
 
 Ресурсное ожидание до claim не создаёт RuntimeRevision, lease либо проекцию
 credentials. Очередь остаётся у владельца, а не в памяти controller; root без

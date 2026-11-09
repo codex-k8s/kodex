@@ -17,7 +17,8 @@ SELECT node.id::text,
        gate.version,
        COALESCE(gate.decision,''),
        gate.decision_comment,
-       COALESCE(receipt.ref,'')
+       COALESCE(receipt.ref,''),
+       root.workflow_version_id IS NULL AND agent.system_key IS NULL AND run.project_id IS NOT NULL
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.run_nodes node ON node.id=invocation.node_id
 JOIN control_plane.runs run ON run.id=node.run_id

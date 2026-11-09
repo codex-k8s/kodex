@@ -2880,12 +2880,12 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	var decision integrationContinuationDecision
 	var attempt int32
 	var legacyReadSnapshot, workflowEvidenceSnapshot []byte
-	var evidenceAuthority, evidenceBudget bool
+	var evidenceAuthority, evidenceBudget, ordinaryResultReader bool
 	err := tx.QueryRow(ctx, queryRuntimeIntegrationResolveContinuation, pgx.StrictNamedArgs{
 		"invocation_id": invocationID, "organization_id": current.organizationID,
 	}).Scan(&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID,
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
-		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef)
+		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef, &ordinaryResultReader)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = withWorkflowEvidenceGenericPlan(ctx, tx, func() error {
 			return tx.QueryRow(ctx, queryWorkflowEvidenceContinuation, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_id": invocationID}).Scan(
@@ -2941,8 +2941,13 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 			return false, repository.closeLegacyReworkReadBudgetTx(ctx, tx, current, rootRunID, parentNodeID, projectID)
 		}
 	} else {
+		if !ordinaryResultReader {
+			// Preserve the legacy assistant/workflow path; its distinct reader authority is not changed here.
+			// Сохраняем прежний путь assistant/workflow: его отдельные полномочия reader здесь не меняются.
+			resultSummary = truncate(resultSummary, 4000)
+		}
 		task, err = integrationContinuationTask(integrationContinuationSnapshot{
-			InvocationRef: invocationRef, State: invocationState, ResultSummary: truncate(resultSummary, 4000),
+			InvocationRef: invocationRef, State: invocationState, ResultSummary: resultSummary,
 			SafeErrorCode: safeErrorCode, OwnerDecision: decision, ReceiptRef: receiptRef,
 		})
 	}
