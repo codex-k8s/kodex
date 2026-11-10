@@ -254,6 +254,54 @@ revision. Delegation создаёт server-owned child Run/node/edge, callback �
 lease. Чтение не создаёт повторного внешнего действия. Границы, совместимость и
 проверки описаны в [runbook #2081](../../../docs/operations/ordinary-integration-result-2081.md).
 
+### Повтор запроса до решения человека
+
+Обычный сотрудник может повторить `invoke_integration` с новым call ID, пока
+исходное действие ожидает согласования. В пределах того же physical node owner
+возвращает существующие invocation и Gate. Новый ключ атомарно связывается с
+ними через существующие `idempotency_receipts`; новой схемы и автоматического
+согласования нет. Повтор alias после решения или рестарта читает исходное
+состояние, даже если оно уже terminal. Намеренный новый вызов с новым ключом
+после terminal остаётся самостоятельным действием.
+
+Сначала заново проверяются текущие run/node, initiator, права, published package,
+grant/version, policy, resource scope и bounded input. Полный intent frame
+сравнивается с исходным, включая SSH/mailbox pins, когда они применимы.
+Первый pending receipt сохраняет только locator и hash несекретной конфигурации,
+credential policy и ссылки на shared revision. Health metadata не входит в hash.
+Новый personal alias дополнительно сравнивает текущую binding generation,
+credential revision и permission profile с исходным immutable pin. Секреты не
+читаются; отдельный допуск непосредственно перед внешним вызовом сохраняется.
+
+| Сценарий | Результат и граница |
+| --- | --- |
+| Новый точный запрос, Gate OPEN | Один invocation/Gate; новый alias receipt, внешних вызовов до решения нет |
+| Конкурентные resolve | Node/Connection/Grant locks и прежний ограниченный Serializable retry; alias сохраняется в той же транзакции |
+| Потерянный ответ или рестарт | Тот же alias возвращает прежний locator/актуальное состояние, без нового invocation |
+| Другой input с прежним alias | Idempotency reuse; новое действие не создаётся |
+| Другая конфигурация либо personal key | Новый alias закрыто отклоняется; прежний pin не заменяется |
+| APPROVE / REJECT / CANCEL | Решение относится к одному исходному действию; alias не открывает Gate и не разрешает другой эффект |
+| Terminal/cancelled root или отозванные права | Обычная native authority закрывает resolve до reuse; история не оживляет граф |
+| NONE / действующий HUMAN_SCOPED consent | Прежняя семантика новых действий и резервов сохраняется |
+| SERVER workflow / bundle / legacy rework | Прежние специализированные ledger и slot правила; generic coalescing туда не добавляется |
+
+Receipt retention остаётся 24 часа, дольше допустимого физического исполнения
+runtime-controller (максимум 4 часа). Истёкшая или повреждённая квитанция — отказ,
+а не отсутствие намерения. Существующие до обновления pending invocations не
+получают выдуманный config pin: точный исходный key сохраняет прежний путь,
+новый alias требует явного завершения старого ожидания. Уже накопленные дубли
+не выбираются произвольно. Обновлять image следует после завершения активных
+ходов; схема и historical inputs не меняются.
+
+Аудит каждого tool call остаётся в существующем `RecordRunToolCall` с исходным
+input commitment и возвращённым invocation ref; alias receipt не изображает
+provider receipt. Полный результат читается прежним invocation reader. Для
+ручной проверки достаточно synthetic READ с HUMAN_EACH_EFFECT: два одинаковых
+вызова в одном ходе → один Gate → одно решение → один результат; затем replay
+того же alias и отдельный новый вызов после terminal. Внешние WRITE для этой
+проверки не нужны. Случаи native PostgreSQL охватывают конкуренцию, restart,
+health/config drift, expiry и personal revoke/rotation.
+
 Каждое изменение execution graph резервирует последовательный номер в пределах
 root Run и одной транзакцией сохраняет RunEvent и outbox envelope. Relay
 публикует bounded события в NATS JetStream:

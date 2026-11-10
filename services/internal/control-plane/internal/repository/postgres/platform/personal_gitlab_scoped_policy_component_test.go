@@ -17,8 +17,8 @@ import (
 // TestPersonalGitLabScopedPolicyComponent proves each resource mode and selected policy through owner verification, launch, immutable personal pin, optional human gate, claim and one-time Begin; provider effects remain synthetic and unexecuted.
 // TestPersonalGitLabScopedPolicyComponent проверяет каждый resource mode и selected policy через owner verification, launch, immutable personal pin, optional human gate, claim и one-time Begin; provider effects остаются synthetic и не исполняются.
 func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
-	for _, scenario := range []struct{ kind, policy string }{{"PROJECT", "NONE"}, {"GROUP", "HUMAN_EACH_EFFECT"}, {"INSTANCE", "HUMAN_SCOPED"}} {
-		t.Run(scenario.kind+"/"+scenario.policy, func(t *testing.T) {
+	for _, scenario := range []struct{ kind, policy, change string }{{"PROJECT", "NONE", ""}, {"GROUP", "HUMAN_EACH_EFFECT", ""}, {"INSTANCE", "HUMAN_SCOPED", ""}, {"GROUP", "HUMAN_EACH_EFFECT", "REVOKE"}, {"GROUP", "HUMAN_EACH_EFFECT", "ROTATE"}} {
+		t.Run(scenario.kind+"/"+scenario.policy+"/"+scenario.change, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 			defer cancel()
 			pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -93,7 +93,9 @@ func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
 			if len(runtime) != 1 {
 				t.Fatal("scoped personal runtime absent")
 			}
-			invocation, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, map[string]string{"run_ref": run.Ref, "node_ref": stringMap(runtime[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": operation, "idempotency_key": "scoped-personal-comment"}, map[string]any{"project_path": "fixture/project", "project_id": 7, "issue_iid": 12, "body": "Synthetic comment"})
+			invokeInput := map[string]string{"run_ref": run.Ref, "node_ref": stringMap(runtime[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": operation, "idempotency_key": "scoped-personal-comment"}
+			boundedInput := map[string]any{"project_path": "fixture/project", "project_id": 7, "issue_iid": 12, "body": "Synthetic comment"}
+			invocation, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, invokeInput, boundedInput)
 			if err != nil {
 				t.Fatal("scoped personal immutable pin rejected", err)
 			}
@@ -105,6 +107,40 @@ func TestPersonalGitLabScopedPolicyComponent(t *testing.T) {
 				t.Fatal("selected scoped personal policy ignored")
 			}
 			if scenario.policy != "NONE" {
+				invokeInput["idempotency_key"] += "-alias"
+				aliased, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, invokeInput, boundedInput)
+				if err != nil || stringMap(aliased, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(aliased, "gateRef") != stringMap(invocation, "gateRef") {
+					t.Fatal("personal pending call did not preserve its immutable credential pin", err)
+				}
+				if scenario.change != "" {
+					current, err := service.GetPersonalIntegrationCredential(ctx, owner, connection.Ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if scenario.change == "REVOKE" {
+						owner.Permission = "platform.personal-integrations.revoke"
+						execute(command.RevokePersonalIntegrationCredential, owner, "revoke-before-alias", &current.Version, command.PersonalIntegrationCredentialInput{ConnectionRef: connection.Ref})
+					} else {
+						owner.Permission = "platform.personal-integrations.configure"
+						if _, err := service.ConfigurePersonalIntegrationCredential(ctx, owner, value.Mutation{IdempotencyKey: "scoped-personal-rotate", ExpectedVersion: &current.Version}, connection.Ref, connection.Version, []byte("synthetic-rotated-key")); err != nil {
+							t.Fatal(err)
+						}
+					}
+					invokeInput["idempotency_key"] += "-after-credential-change"
+					if _, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, invokeInput, boundedInput); err == nil {
+						t.Fatal("new alias accepted a revoked or replaced personal credential")
+					}
+					claims, err := service.ClaimIntegrationInvocations(ctx, gateway, "scoped-personal-denied", 1)
+					if err != nil || len(claims) != 0 {
+						t.Fatal("credential change bypassed approval or fell back to another key", err)
+					}
+					currentRun, err := service.GetRun(ctx, owner, run.Ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					execute(command.CancelRun, owner, "cancel-credential-change", &currentRun.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Close synthetic credential-change case"})
+					return
+				}
 				gate, err := service.GetOwnerGate(ctx, owner, stringMap(invocation, "gateRef"))
 				if err != nil {
 					t.Fatal(err)
