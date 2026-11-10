@@ -194,3 +194,52 @@ func TestWorkspaceBindRejectsLiveSecondConsumer(t *testing.T) {
 		t.Fatal("second PVC consumer accepted")
 	}
 }
+
+// TestWorkspaceBindAcceptsJoinedPreparationWithoutInitContainers exercises the owner observer
+// with a completed preparation Pod still present during acknowledgement cleanup. Every declared
+// container needs positive terminal identity; phase alone and missing statuses remain denied.
+// TestWorkspaceBindAcceptsJoinedPreparationWithoutInitContainers проверяет owner observer,
+// пока завершённый preparation Pod ещё виден при очистке после ACK. Каждый объявленный
+// container требует positive terminal identity; одной phase и неполных statuses недостаточно.
+func TestWorkspaceBindAcceptsJoinedPreparationWithoutInitContainers(t *testing.T) {
+	manager, client, input, pod := workspaceStoragePodFixture(t)
+	ctx := t.Context()
+	if _, err := client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	name, _ := runtimecontract.SessionPVCName(input.SessionRef)
+	helper := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "volume-preparation", Namespace: manager.config.RuntimeNamespace, UID: "40000000-0000-4000-8000-000000000001"},
+		Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "volume"}}, Volumes: []corev1.Volume{{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: name}}}}},
+		Status: corev1.PodStatus{Phase: corev1.PodSucceeded, ContainerStatuses: []corev1.ContainerStatus{{Name: "volume", ContainerID: "containerd://synthetic-preparation", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}}}}}
+	if _, err := client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, helper, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	client.ClearActions()
+	observed, err := manager.ObserveWorkspaceBind(ctx, input)
+	if err != nil || observed.PodUID != string(pod.UID) {
+		t.Fatalf("positively joined preparation blocks BIND: %v", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() != "get" && action.GetVerb() != "list" {
+			t.Fatal("observation mutated physical resources", action.GetVerb())
+		}
+	}
+	for name, change := range map[string]func(*corev1.Pod){
+		"missing status": func(p *corev1.Pod) { p.Status.ContainerStatuses = nil },
+		"waiting": func(p *corev1.Pod) {
+			p.Status.ContainerStatuses[0].State = corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{}}
+		},
+		"missing container identity": func(p *corev1.Pod) { p.Status.ContainerStatuses[0].ContainerID = "" },
+		"prior restart":              func(p *corev1.Pod) { p.Status.ContainerStatuses[0].RestartCount = 1 },
+		"unexpected init status":     func(p *corev1.Pod) { p.Status.InitContainerStatuses = p.Status.ContainerStatuses },
+		"no declared writers":        func(p *corev1.Pod) { p.Spec.Containers = nil; p.Status.ContainerStatuses = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := helper.DeepCopy()
+			change(changed)
+			if workspaceAllContainersTerminated(changed) {
+				t.Fatal("uncertain preparation considered joined")
+			}
+		})
+	}
+}

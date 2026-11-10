@@ -56,6 +56,13 @@ metadata guard снова включён до runtime admission. Повышен�
 | OFF, V2 row существует, scope не совпадает | `Conflict`, без fallback либо записи нового дерева |
 | ON, данных ещё нет | Прежний CREATE/PREPARE до model claim |
 
+Перед BIND завершённый helper подготовки может ещё наблюдаться до удаления его
+Pod после owner ACK. Отсутствие init-контейнеров у такого helper не является
+неизвестным writer: controller требует положительные terminal status, ContainerID
+и отсутствие restart для каждого объявленного контейнера. Одна terminal phase,
+пустой набор main-контейнеров либо неполные статусы по-прежнему закрывают BIND.
+Проверка только читает факты и не удаляет helper для обхода single-writer guard.
+
 ## Authority и жизненный цикл
 
 | Переход | Авторитетное действие |
