@@ -1482,7 +1482,9 @@ onBeforeUnmount(() => {
     <AsyncState
       :loading="initialLoading && items.length === 0"
       :problem="items.length === 0 ? listProblem : undefined"
-      :empty="items.length === 0 && !hasMore && !query.trim()"
+      :empty="
+        items.length === 0 && !hasMore && !query.trim() && !selectedArtifact
+      "
       :empty-title="$t('files.emptyTitle')"
       :empty-text="$t('files.emptyText')"
       @retry="refresh"
