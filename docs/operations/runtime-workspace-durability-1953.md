@@ -779,6 +779,16 @@ Immutable ConfigMap содержит canonical `volume.json` и complete effecti
 неизвестный ответ допускает максимум два одинаковых RPC, без повторения физического
 действия. Подтверждённые Create responses учитываются независимо от исхода ACK.
 
+Файлы входного ConfigMap для first preparation и read-only reconciliation явно
+проектируются с `defaultMode: 0440`. Kubernetes по умолчанию задаёт `0644`;
+read-only mount не убирает write-биты файла, поэтому строгий `securefile.Read`
+отклоняет такой вход. Проверка использует actual producer mode, projection symlinks
+и настоящий reader; ослабления reader либо chmod в helper нет. Observer также
+отклоняет изменение projection mode. Это сверено через Context7 с официальной
+[API-документацией Kubernetes 1.35](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/).
+Прежний failed Job не становится успешным после обновления controller: его
+immutable input, PVC и owner terminal receipt сохраняются для reconciliation.
+
 Для первого init требуется отсутствие competing consumers. Read-only attempt
 проверяет bounded snapshots прежних attempts, exact volume lineage, неизменяемый
 input, helper geometry и terminal Job/all-container join. Отсутствующий первый
