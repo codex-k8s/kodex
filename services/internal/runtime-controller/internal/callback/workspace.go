@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"google.golang.org/grpc/status"
+
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
@@ -16,11 +18,13 @@ import (
 func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http.Request, leaseRef string) {
 	input, ok := server.authorize(request, leaseRef)
 	if !ok || input.WorkspaceStorage == nil {
+		server.logWorkspaceRejection(request.Context(), "AUTHORITY", nil)
 		http.NotFound(writer, request)
 		return
 	}
 	var payload runtimecontract.RunnerWorkspaceObservation
 	if decode(request, &payload, runtimecontract.MaximumWorkspaceObservationBytes) != nil || payload.ValidateForInput(input) != nil {
+		server.logWorkspaceRejection(request.Context(), "INPUT", nil)
 		http.Error(writer, "invalid runtime workspace observation", http.StatusBadRequest)
 		return
 	}
@@ -29,11 +33,13 @@ func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http
 	// QUIESCENT requires the separate finalizer/positive writer-join path; no phase-only fallback is permitted.
 	// QUIESCENT требует отдельный finalizer/positive writer-join path; phase-only fallback запрещён.
 	if payload.Phase != runtimecontract.WorkspaceObserveBind {
+		server.logWorkspaceRejection(request.Context(), "PHASE", nil)
 		http.Error(writer, "runtime workspace quiescence requires controller observation", http.StatusForbidden)
 		return
 	}
 	observation, err := server.manager.ObserveWorkspaceBind(ctx, input)
 	if err != nil {
+		server.logWorkspaceRejection(ctx, "STORAGE_OBSERVATION", nil)
 		http.Error(writer, "runtime workspace owned storage is unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -46,6 +52,7 @@ func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http
 		PodUid: observation.PodUID, PvcUid: observation.PVCUID,
 	})
 	if err != nil {
+		server.logWorkspaceRejection(ctx, "OWNER_RPC", err)
 		writeControlError(writer, err)
 		return
 	}
@@ -53,10 +60,26 @@ func (server *Server) observeWorkspace(writer http.ResponseWriter, request *http
 	ack, err := runtimecontract.DecodeWorkspaceWriterAcknowledgement(raw)
 	if err != nil || !ack.Matches(input) || ack.Writer.PodUID != observation.PodUID || ack.Writer.PVCUID != observation.PVCUID ||
 		!response.GetCurrentTuple() || response.GetStorageState() != "WRITING" || response.GetWriterReleased() || response.GetCommittedPhase() != runtimecontract.WorkspaceObserveBind {
+		server.logWorkspaceRejection(ctx, "OWNER_ACKNOWLEDGEMENT", nil)
 		http.Error(writer, "runtime workspace owner acknowledgement is invalid", http.StatusServiceUnavailable)
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	_, _ = writer.Write(json.RawMessage(raw))
+}
+
+// logWorkspaceRejection records only a fixed call-site class and optional gRPC status code.
+// Request fields, writer identities, credentials, bodies and raw upstream errors never enter the log.
+// logWorkspaceRejection сохраняет только fixed class вызывающей точки и optional gRPC status code.
+// Поля запроса, writer identities, credentials, body и raw upstream errors не журналируются.
+func (server *Server) logWorkspaceRejection(ctx context.Context, class string, rpcError error) {
+	if server.logger == nil {
+		return
+	}
+	fields := []any{"error_class", class}
+	if rpcError != nil {
+		fields = append(fields, "rpc_code", status.Code(rpcError).String())
+	}
+	server.logger.WarnContext(ctx, "runtime workspace observation rejected", fields...)
 }
