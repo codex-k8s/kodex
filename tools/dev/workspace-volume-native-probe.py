@@ -14,7 +14,7 @@ LABEL = 'qa.kodex.dev/workspace-volume-probe'
 
 def request(context, arguments, value=None, check=True):
     """Вызвать bounded kubectl без вывода непроверенных API/driver messages."""
-    result = subprocess.run(['kubectl', '--context', context, *arguments],
+    result = subprocess.run(['kubectl', '--context', context, '--request-timeout=20s', *arguments],
                             input=None if value is None else json.dumps(value), text=True,
                             capture_output=True, timeout=25)
     if check and result.returncode:
@@ -104,6 +104,23 @@ def observe_pod(context, namespace, nonce, node, image, name, uid, fs_group, scr
     raise RuntimeError('PROBE_POD_TIMEOUT')
 
 
+def validate_profile(arguments):
+    """Проверить явные UID и immutable image до обращения к выбранному кластеру."""
+    if (not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,252}', arguments.context)
+            or not re.fullmatch(r'[a-z0-9][a-z0-9._:/-]{0,254}@sha256:[a-f0-9]{64}', arguments.image)
+            or any(value in arguments.image for value in ('://', '//', '..'))):
+        raise RuntimeError('PROBE_PROFILE_INVALID')
+    for value in (arguments.expected_cluster_uid, arguments.expected_staging_uid, arguments.expected_node_uid):
+        try:
+            valid = str(uuid.UUID(value)) == value
+        except (ValueError, AttributeError):
+            valid = False
+        if not valid:
+            raise RuntimeError('PROBE_IDENTITY_INVALID')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,252}', arguments.node):
+        raise RuntimeError('PROBE_NODE_INVALID')
+
+
 def main():
     """Проверить cluster/node/image pins до единственного disposable namespace и сохранить cleanup outcome отдельно от observations."""
     parser = argparse.ArgumentParser()
@@ -111,8 +128,7 @@ def main():
         parser.add_argument('--'+name, required=True)
     arguments = parser.parse_args()
     context = arguments.context
-    if context != 'k3d-kodex' or not re.fullmatch(r'registry\.local\.kodex/kodex/agent-runner@sha256:[a-f0-9]{64}', arguments.image):
-        raise RuntimeError('PROBE_PROFILE_INVALID')
+    validate_profile(arguments)
     if (read(context, 'namespaces', 'kube-system')['metadata']['uid'] != arguments.expected_cluster_uid
             or read(context, 'namespaces', 'kodex-system')['metadata']['uid'] != arguments.expected_staging_uid):
         raise RuntimeError('CLUSTER_IDENTITY_CHANGED')
