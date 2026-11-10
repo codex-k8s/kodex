@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"time"
 
@@ -18,6 +19,35 @@ import (
 // runtimeBindWorkspaceMode — отдельная protected entrypoint: отсутствие input не включает legacy preparation.
 const runtimeBindWorkspaceMode = "runtime-bind-workspace"
 
+// workspaceBindingStage identifies a fixed local rejection boundary, never caller data.
+// workspaceBindingStage обозначает фиксированную точку отказа, не данные вызывающего.
+type workspaceBindingStage uint8
+
+// The stages name only trusted call sites; they never authorize a writer or classify raw errors.
+// Стадии обозначают только trusted call sites; не разрешают writer и не разбирают raw errors.
+const (
+	workspaceBindingUnknown workspaceBindingStage = iota
+	workspaceBindingVolume
+	workspaceBindingInput
+	workspaceBindingContext
+	workspaceBindingClient
+	workspaceBindingOwner
+	workspaceBindingDirectory
+	workspaceBindingGeneration
+)
+
+// logWorkspaceBindingRejection emits only a closed stage without private input or error bytes.
+// It changes neither the returned failure nor writer admission, filesystem state or retry policy.
+// logWorkspaceBindingRejection выводит только закрытую стадию без private input либо error bytes.
+// Возвращаемый отказ, допуск writer, filesystem state и retry policy не меняются.
+func logWorkspaceBindingRejection(ctx context.Context, stage workspaceBindingStage) {
+	labels := [...]string{"UNKNOWN", "VOLUME_VERIFY", "INPUT", "CONTEXT", "CALLBACK_CLIENT", "OWNER_EXCHANGE", "WORKSPACE_DIRECTORY", "GENERATION_PREPARE"}
+	if int(stage) >= len(labels) {
+		stage = workspaceBindingUnknown
+	}
+	slog.WarnContext(ctx, "runtime workspace binding rejected", "binding_stage", labels[stage])
+}
+
 // bindWorkspaceWriter obtains a fresh authenticated owner ACK without modifying the application filesystem.
 // Invalid input, UID or context prevents even the observation; transport failure never permits preparation.
 // bindWorkspaceWriter получает fresh authenticated owner ACK без изменения application filesystem.
@@ -25,21 +55,28 @@ const runtimeBindWorkspaceMode = "runtime-bind-workspace"
 func bindWorkspaceWriter(ctx context.Context, input model.Input) (runtimecontract.WorkspaceWriterAcknowledgement, error) {
 	var empty runtimecontract.WorkspaceWriterAcknowledgement
 	if os.Geteuid() != 10001 || input.WorkspaceStorage == nil || input.WorkspaceStorage.ValidateForInput(input) != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingInput)
 		return empty, errors.New("runtime workspace binding input is invalid")
 	}
 	if _, err := input.RequiredContextSnapshot(time.Now()); err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingContext)
 		return empty, errors.New("runtime workspace binding context is invalid")
 	}
 	client, err := callback.New(input)
 	if err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingClient)
 		return empty, errors.New("create runtime workspace binding client")
 	}
 	defer client.Close()
-	return client.ObserveWorkspace(ctx, input, runtimecontract.RunnerWorkspaceObservation{
+	ack, err := client.ObserveWorkspace(ctx, input, runtimecontract.RunnerWorkspaceObservation{
 		RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 		Phase:                 runtimecontract.WorkspaceObserveBind, WorkspaceRef: input.WorkspaceStorage.WorkspaceRef,
 		Generation: input.WorkspaceStorage.Generation,
 	})
+	if err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingOwner)
+	}
+	return ack, err
 }
 
 // prepareBoundWorkspace is the first V2 initializer and writes only after the exact owner BIND succeeds.
@@ -48,6 +85,7 @@ func bindWorkspaceWriter(ctx context.Context, input model.Input) (runtimecontrac
 // Здесь PVC root подключён privately; последующие containers получают exact work subPath/proofs.
 func prepareBoundWorkspace(ctx context.Context, input model.Input) error {
 	if err := workspacepolicy.VerifyPreparedVolume(ctx, input); err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingVolume)
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	ack, err := bindWorkspaceWriter(ctx, input)
@@ -55,9 +93,11 @@ func prepareBoundWorkspace(ctx context.Context, input model.Input) error {
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", "UNKNOWN", err)
 	}
 	if err := security.EnsureSharedWorkspaceDirectory(".kodex"); err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingDirectory)
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	if err := workspacepolicy.PrepareBoundGeneration(ctx, input, ack); err != nil {
+		logWorkspaceBindingRejection(ctx, workspaceBindingGeneration)
 		return runtimecontract.InitializationError("WORKSPACE_LAYOUT", initializationFilesystemReason(err), err)
 	}
 	return nil
