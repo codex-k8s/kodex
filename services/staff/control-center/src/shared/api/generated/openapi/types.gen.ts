@@ -1734,6 +1734,10 @@ export type RuntimeVolume = {
 };
 
 export type RuntimeEnvironmentPolicyInput = {
+    /**
+     * Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
+     */
+    managedWorkspace?: boolean;
     resources: RuntimeResourcePolicy;
     volumes: Array<RuntimeVolumeInput>;
     networkDestinations: [
@@ -1768,6 +1772,10 @@ export type RuntimeKubernetesAccessProfile = {
 };
 
 export type RuntimeEnvironmentPolicy = {
+    /**
+     * Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
+     */
+    managedWorkspace?: boolean;
     resources: RuntimeResourcePolicy;
     volumes: Array<RuntimeVolume>;
     network: RuntimeNetworkPolicy;

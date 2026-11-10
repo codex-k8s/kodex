@@ -11,6 +11,27 @@ import {
 } from "@/features/runtime/environment-form";
 
 describe("runtime environment form", () => {
+  it("сохраняет явный режим рабочей копии при нормализации и редактировании", () => {
+    const policy = defaultRuntimeEnvironmentPolicy();
+    expect(policy.managedWorkspace).toBeUndefined();
+    const input = {
+      name: " Go ",
+      description: "",
+      imageArtifactRef: "img_fixture",
+      values: [],
+      secretBindings: [],
+      tools: [],
+      policy: { ...policy, managedWorkspace: true },
+    };
+    expect(
+      normalizeRuntimeEnvironmentInput(input).policy.managedWorkspace,
+    ).toBe(true);
+    input.policy.managedWorkspace = false;
+    expect(
+      normalizeRuntimeEnvironmentInput(input).policy.managedWorkspace,
+    ).toBe(false);
+  });
+
   it("сохранение иных полей сохраняет точный Secret pin и отклоняет повреждённую revision", () => {
     const input = {
       name: "Changed",

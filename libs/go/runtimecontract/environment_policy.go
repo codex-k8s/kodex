@@ -92,6 +92,7 @@ var runtimeVolumeNamePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}[a-z0-9]
 var reservedRuntimeVolumeNames = map[string]struct{}{
 	"callback-ca": {}, "callback-client": {}, "kube-api-access": {}, "provider-auth": {},
 	"provider-socket": {}, "provider-tmp": {}, "runtime-input": {}, "session": {}, "tmp": {},
+	"workspace-executor-socket": {}, "workspace-executor-tmp": {},
 }
 
 // RuntimeResourcePolicy uses integer milli-CPU and MiB quantities plus optional narrower workspace
@@ -183,6 +184,7 @@ type RuntimeKubernetesAccess struct {
 // RuntimeEnvironmentPolicy holds normalized resources, volumes, network, and Kubernetes profile with separate digests.
 // RuntimeEnvironmentPolicy хранит нормализованные ресурсы, тома, сеть и профиль Kubernetes с отдельными дайджестами.
 type RuntimeEnvironmentPolicy struct {
+	ManagedWorkspace bool                           `json:"managed_workspace,omitempty"`
 	Resources        RuntimeResourcePolicy          `json:"resources"`
 	Volumes          []RuntimeVolume                `json:"volumes"`
 	Network          RuntimeNetworkPolicy           `json:"network"`
@@ -198,6 +200,7 @@ type RuntimeEnvironmentPolicy struct {
 // RuntimeEnvironmentPolicyInput содержит выбираемые владельцем ресурсы, веб-настройки и закрытые имена назначений,
 // оставляя служебные порты, корни томов и пространство имён Kubernetes платформе.
 type RuntimeEnvironmentPolicyInput struct {
+	ManagedWorkspace    bool                  `json:"managed_workspace,omitempty"`
 	Resources           RuntimeResourcePolicy `json:"resources"`
 	Volumes             []RuntimeVolume       `json:"volumes"`
 	NetworkDestinations []string              `json:"network_destinations"`
@@ -218,7 +221,9 @@ func DefaultRuntimeEnvironmentPolicy() RuntimeEnvironmentPolicy {
 // нормализует порядок и веб-методы и вычисляет отдельные дайджесты компонентов.
 func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeEnvironmentPolicy, error) {
 	if input.Resources == (RuntimeResourcePolicy{}) && len(input.Volumes) == 0 && len(input.Network.Egress) == 0 && input.KubernetesAccess.Kind == "" {
+		managedWorkspace := input.ManagedWorkspace
 		input = DefaultRuntimeEnvironmentPolicyWithoutDigests()
+		input.ManagedWorkspace = managedWorkspace
 	}
 	if err := validateRuntimeResources(input.Resources); err != nil {
 		return RuntimeEnvironmentPolicy{}, err
@@ -276,7 +281,7 @@ func NormalizeRuntimeEnvironmentPolicy(input RuntimeEnvironmentPolicy) (RuntimeE
 	if access.Kind != RuntimeKubernetesAccessNone || access.Namespace != RuntimeKubernetesNamespace {
 		return RuntimeEnvironmentPolicy{}, errors.New("runtime Kubernetes access profile is invalid")
 	}
-	result := RuntimeEnvironmentPolicy{Resources: input.Resources, Volumes: volumes, Network: network, KubernetesAccess: access}
+	result := RuntimeEnvironmentPolicy{ManagedWorkspace: input.ManagedWorkspace, Resources: input.Resources, Volumes: volumes, Network: network, KubernetesAccess: access}
 	result.ResourcesDigest = digestRuntimeResources(result.Resources)
 	result.VolumesDigest = digestRuntimeVolumes(result.Volumes)
 	result.NetworkDigest = digestRuntimeNetwork(result.Network)
@@ -332,19 +337,26 @@ func RuntimeEnvironmentPolicyFromInput(input RuntimeEnvironmentPolicyInput) (Run
 	network := defaultRuntimeNetworkPolicy()
 	network.WebAccess = input.WebAccess
 	return NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{
-		Resources: input.Resources, Volumes: input.Volumes,
+		ManagedWorkspace: input.ManagedWorkspace,
+		Resources:        input.Resources, Volumes: input.Volumes,
 		Network: network, KubernetesAccess: access,
 	})
 }
 
-// RuntimeEnvironmentPolicyDigest hashes the four canonical component digests under the policy version tag.
-// RuntimeEnvironmentPolicyDigest хеширует четыре канонических дайджеста компонентов с версионным тегом политики.
+// RuntimeEnvironmentPolicyDigest preserves the legacy four-component hash when managed workspace
+// is off, and binds its explicit opt-in through a separate versioned suffix when enabled.
+// RuntimeEnvironmentPolicyDigest сохраняет legacy hash четырёх компонентов при выключенном
+// managed workspace и связывает явный opt-in отдельным versioned suffix при включении.
 func RuntimeEnvironmentPolicyDigest(policy RuntimeEnvironmentPolicy) (string, error) {
 	normalized, err := NormalizeRuntimeEnvironmentPolicy(policy)
 	if err != nil {
 		return "", err
 	}
-	return digestParts("runtime-environment-policy-v1", normalized.ResourcesDigest, normalized.VolumesDigest, normalized.NetworkDigest, normalized.RBACDigest), nil
+	parts := []string{"runtime-environment-policy-v1", normalized.ResourcesDigest, normalized.VolumesDigest, normalized.NetworkDigest, normalized.RBACDigest}
+	if normalized.ManagedWorkspace {
+		parts = append(parts, "managed-workspace-v1")
+	}
+	return digestParts(parts...), nil
 }
 
 // RuntimeKubernetesAccessForExecution validates server-assigned names and materializes only NONE access with no rules.

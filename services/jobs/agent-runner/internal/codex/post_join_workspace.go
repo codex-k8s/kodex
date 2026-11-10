@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
@@ -18,6 +19,14 @@ import (
 // провайдера и readers. Ошибка cleanup понижает успех, но не переписывает прежний отказ, usage
 // или source pins; прежний отказ outbox не является основанием пропускать очистку.
 func normalizeCompletedProviderWorkspace(ctx context.Context, input model.Input, result Result, normalize func(context.Context, model.Input) error) Result {
+	// Managed work has a separate writer; the role joins it before owner capture. The provider
+	// receives a read-only work mount and must not mutate or normalize the command tree here.
+	// Managed work имеет отдельный writer: роль ждёт его до owner capture. Provider получает
+	// read-only work mount и здесь не должен менять либо нормализовать дерево команд.
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		return result
+	}
+
 	if result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED" {
 		return result
 	}

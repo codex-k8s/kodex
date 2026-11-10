@@ -17,6 +17,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'managed-workspace': {
+    version:'20261110000200',file:'20261110000200_managed_workspace.sql',
+    annotation:'kodex.dev/cp-managed-workspace-migration-plan',previousVersion:20261110000100,
+    emptyField:'managedWorkspaceAbsent',preconditionFile:'managed-workspace-migration-precondition.sql',
+    postconditionFile:'managed-workspace-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261110000200_managed_workspace.sql']),
+  },
   'artifact-optional-antivirus': {version:'20261110000100',file:'20261110000100_artifact_optional_antivirus.sql',annotation:'kodex.dev/cp-artifact-optional-antivirus-migration-plan',previousVersion:20261109000100,emptyField:'artifactOptionalAntivirusAbsent',preconditionFile:'artifact-optional-antivirus-migration-precondition.sql',postconditionFile:'artifact-optional-antivirus-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261110000100_artifact_optional_antivirus.sql'])},
   'integration-resource-policies': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-migration-precondition.sql',postconditionFile:'integration-resource-policies-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
   'integration-resource-policies-backup': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-backup-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-backup-migration-precondition.sql',postconditionFile:'integration-resource-policies-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
@@ -332,6 +339,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'managed-workspace')
+      ensure(validManagedWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'artifact-optional-antivirus')
       ensure(validArtifactOptionalAntivirusMigrationPrecondition(result,requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'integration-resource-policies' || profile === 'integration-resource-policies-backup')
@@ -981,6 +990,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'managed-workspace': return validManagedWorkspaceMigrationPostcondition(proof);
     case 'artifact-optional-antivirus': return validArtifactOptionalAntivirusMigrationPostcondition(proof);
     case 'integration-resource-policies': return validIntegrationResourcePoliciesMigrationPostcondition(proof);
     case 'integration-resource-policies-backup': return validIntegrationResourcePoliciesBackupMigrationPostcondition(proof);
@@ -1197,4 +1207,17 @@ export function validArtifactOptionalAntivirusMigrationPrecondition(proof, requi
     ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
       'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations',
       'activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key => proof[key] === 0);
+}
+
+// Переход039 расширяет immutable policy при выключенном opt-in и не требует dump либо новых ACL.
+export function validManagedWorkspaceMigrationPrecondition(proof) {
+  return proof?.profile === 'MANAGED_WORKSPACE_PREDECESSOR_V1' && proof.database === 'control_plane' &&
+    proof.readOnly === 'on' && proof.gooseVersion === 20261110000100 &&
+    proof.environmentVersionsReady === true && proof.managedWorkspaceAbsent === true;
+}
+
+// Проверка сохраняет пригодность после включения функции: существующие true-версии не переписываются.
+export function validManagedWorkspaceMigrationPostcondition(proof) {
+  return proof?.profile === 'MANAGED_WORKSPACE_V1' && proof.database === 'control_plane' &&
+    proof.readOnly === 'on' && proof.gooseVersion === 20261110000200 && proof.managedWorkspaceColumnReady === true;
 }

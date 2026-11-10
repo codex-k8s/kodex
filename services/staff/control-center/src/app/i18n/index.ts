@@ -1767,6 +1767,9 @@ const ru = {
     resources: "Запрошенные ресурсы и лимиты",
     resourcesHelp:
       "Значения задаются целыми millicores и MiB в пределах admission policy платформы.",
+    managedWorkspace: "Рабочая копия и команды (OpenCode)",
+    managedWorkspaceHelp:
+      "Для обычных сотрудников с OpenCode: файлы, разрешённые снимки репозиториев и выбранные команды без доступа к секретам. Ресурсы окружения общие для модели и команд.",
     cpuRequest: "CPU request, millicores",
     cpuLimit: "CPU limit, millicores",
     cpuRequestRange: "От 100 до 8 000",
@@ -6736,6 +6739,9 @@ const en = {
     resources: "Requests and limits",
     resourcesHelp:
       "Values use integer millicores and MiB within the platform admission policy.",
+    managedWorkspace: "Managed workspace (OpenCode)",
+    managedWorkspaceHelp:
+      "For ordinary OpenCode employees: files, authorized repository snapshots and selected commands isolated from secrets. The model and commands share the environment resource budget.",
     cpuRequest: "CPU request, millicores",
     cpuLimit: "CPU limit, millicores",
     cpuRequestRange: "100 to 8,000",

@@ -64,6 +64,9 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 		return nil
 	}
 	result := []string{"propose_run_metadata"}
+	if RuntimeWorkspaceToolsAvailable(input) {
+		result = append(result, WorkspacePolicyTool)
+	}
 	if RuntimeExecutionSnapshotAvailable(input) {
 		result = append(result, ExecutionSnapshotTool)
 	}

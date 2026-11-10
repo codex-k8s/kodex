@@ -926,6 +926,11 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 			http.Error(writer, "required MCP authority is unavailable", http.StatusBadGateway)
 		}, FlushInterval: -1}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/workspace/mcp" && runtimecontract.RuntimeWorkspaceToolsAvailable(input) &&
+			request.Method == http.MethodPost && request.URL.RawQuery == "" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
+			reverse.ServeHTTP(writer, request)
+			return
+		}
 		if request.Method == http.MethodGet && request.URL.Path != "/mcp" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
 			if _, err := filetransfer.CatalogRequest(input, request); err != nil {
 				http.NotFound(writer, request)

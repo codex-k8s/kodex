@@ -16,20 +16,21 @@ import (
 // writable-byte maximum.
 func TestWorkspaceLimitsProtoPolicyRoundTripAndBounds(t *testing.T) {
 	base := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	base.ManagedWorkspace = true
 	base.Resources.WorkspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
 	policy, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(base)
 	if err != nil {
 		t.Fatal(err)
 	}
 	read := castRuntimeEnvironmentPolicy(policy)
-	input := &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: read.Resources, WebAccess: read.Network.WebAccess,
+	input := &controlplanev1.RuntimeEnvironmentPolicyInput{ManagedWorkspace: read.ManagedWorkspace, Resources: read.Resources, WebAccess: read.Network.WebAccess,
 		KubernetesAccess: read.KubernetesAccess.Kind, NetworkDestinations: []controlplanev1.RuntimeNetworkDestination{
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_DNS,
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_PROVIDER_PROXY,
 			controlplanev1.RuntimeNetworkDestination_RUNTIME_NETWORK_DESTINATION_RUNTIME_CALLBACK,
 		}}
 	actual, err := domainRuntimeEnvironmentPolicy(input)
-	if err != nil || !reflect.DeepEqual(actual.Resources, policy.Resources) || actual.ResourcesDigest != policy.ResourcesDigest {
+	if err != nil || !actual.ManagedWorkspace || !reflect.DeepEqual(actual.Resources, policy.Resources) || actual.ResourcesDigest != policy.ResourcesDigest {
 		t.Fatal("typed policy transport lost signed quota")
 	}
 	read.Resources.WorkspaceLimits.MaxBytes = runtimecontract.RuntimeWorkspaceWritableBytes + 1

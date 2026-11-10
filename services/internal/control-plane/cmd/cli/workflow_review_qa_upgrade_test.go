@@ -100,6 +100,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "managed-workspace":
+		verifier = "validManagedWorkspaceMigration"
 	case "artifact-optional-antivirus":
 		verifier = "validArtifactOptionalAntivirusMigration"
 	case "integration-resource-policies":
@@ -204,7 +206,7 @@ if (!module[process.argv[2]](proof)) {
   }
   visit(proof,''); console.error(JSON.stringify(failed)); process.exit(1);
 }
-if (process.argv[2].endsWith('Precondition')) {
+if (process.argv[2].endsWith('Precondition') && proof.profile !== 'MANAGED_WORKSPACE_PREDECESSOR_V1') {
   const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases',
     'openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions'];
   if (!fields.every(key => proof[key] === 0)) process.exit(2);

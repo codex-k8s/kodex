@@ -91,9 +91,17 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 		return runtimecontract.RuntimeEnvironmentPolicy{}, true
 	}
 	item, ok := raw.(map[string]any)
-	if !ok || !onlyAssistantFields(item, "resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess") ||
+	if !ok || !onlyAssistantFields(item, "resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess", "managedWorkspace") ||
 		!hasAssistantFields(item, "resources", "volumes", "networkDestinations", "kubernetesAccess") {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	managedWorkspace := false
+	if raw, supplied := item["managedWorkspace"]; supplied {
+		var valid bool
+		managedWorkspace, valid = raw.(bool)
+		if !valid {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
 	}
 	resources, ok := item["resources"].(map[string]any)
 	fields := []string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}
@@ -200,6 +208,7 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 		})
 	}
 	policy, err := runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
+		ManagedWorkspace: managedWorkspace,
 		Resources: runtimecontract.RuntimeResourcePolicy{
 			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: numbers[0], CPULimitMilli: numbers[1], MemoryRequestMiB: numbers[2], MemoryLimitMiB: numbers[3],

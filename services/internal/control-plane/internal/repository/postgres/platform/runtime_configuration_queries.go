@@ -459,6 +459,7 @@ func scanAgentRuntimeConfiguration(scanner rowScanner) (entity.AgentRuntimeConfi
 func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScanner) (entity.AgentRuntimeConfigurationView, error) {
 	var view entity.AgentRuntimeConfigurationView
 	var rawCandidates, rawPublishedProblems, rawDraftProblems, rawValues, rawSecrets, rawTools []byte
+	var managedWorkspace bool
 	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var coreDigest string
 	var draftRef, draftState, draftContent, draftDigest *string
@@ -482,7 +483,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		&view.Environment.CurrentVersion.Image.Digest, &view.Environment.CurrentVersion.Image.RoleRuntimeContractRevision,
 		&view.Environment.CurrentVersion.Image.RoleRuntimeContractSHA256,
 		&view.Environment.CurrentVersion.Image.PlatformOwnedBootstrap, &rawTools, &coreDigest,
-		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&managedWorkspace, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&view.Environment.CurrentVersion.Policy.ResourcesDigest, &view.Environment.CurrentVersion.Policy.VolumesDigest,
 		&view.Environment.CurrentVersion.Policy.NetworkDigest, &view.Environment.CurrentVersion.Policy.RBACDigest,
 		&view.Environment.CurrentVersion.Digest, &view.Environment.CurrentVersion.CreatedAt, &view.AgentVersion, &view.Environment.ScopeKind, &view.Environment.OrganizationRef)
@@ -501,7 +502,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		decodeStrict(rawTools, &view.Environment.CurrentVersion.Tools) != nil {
 		return entity.AgentRuntimeConfigurationView{}, errors.New("decode agent runtime configuration")
 	}
-	view.Environment.CurrentVersion.Policy, err = decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork,
+	view.Environment.CurrentVersion.Policy, err = decodeRuntimeEnvironmentPolicy(managedWorkspace, rawResources, rawVolumes, rawNetwork,
 		rawKubernetesAccess, view.Environment.CurrentVersion.Policy.ResourcesDigest, view.Environment.CurrentVersion.Policy.VolumesDigest,
 		view.Environment.CurrentVersion.Policy.NetworkDigest, view.Environment.CurrentVersion.Policy.RBACDigest)
 	if err != nil {
@@ -550,6 +551,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 // scanRuntimeEnvironment разбирает точную environment/current-version SQL-проекцию, проверяет JSON/policy и оба digest содержимого до вычисления readiness. Очищает внутренние role-contract pins лишь после проверки и возвращает прежние фиксированные ошибки повреждённых данных; видимость строки обеспечивает вызывающий/запрос.
 func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity.RuntimeEnvironmentSet, error) {
 	var item entity.RuntimeEnvironmentSet
+	var managedWorkspace bool
 	var rawValues, rawSecrets, rawTools, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var coreDigest string
 	err := scanner.Scan(&item.Ref, &item.Version, &item.ProjectRef, &item.Name, &item.Description, &item.State,
@@ -559,7 +561,7 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		&item.CurrentVersion.Image.Digest, &item.CurrentVersion.Image.RoleRuntimeContractRevision,
 		&item.CurrentVersion.Image.RoleRuntimeContractSHA256,
 		&item.CurrentVersion.Image.PlatformOwnedBootstrap, &rawTools,
-		&coreDigest, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&coreDigest, &managedWorkspace, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&item.CurrentVersion.Policy.ResourcesDigest, &item.CurrentVersion.Policy.VolumesDigest,
 		&item.CurrentVersion.Policy.NetworkDigest, &item.CurrentVersion.Policy.RBACDigest,
 		&item.CurrentVersion.Digest, &item.CurrentVersion.CreatedAt, &item.ScopeKind, &item.OrganizationRef)
@@ -572,7 +574,7 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 		decodeStrict(rawTools, &item.CurrentVersion.Tools) != nil {
 		return entity.RuntimeEnvironmentSet{}, errors.New("decode runtime environment")
 	}
-	item.CurrentVersion.Policy, err = decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
+	item.CurrentVersion.Policy, err = decodeRuntimeEnvironmentPolicy(managedWorkspace, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
 		item.CurrentVersion.Policy.ResourcesDigest, item.CurrentVersion.Policy.VolumesDigest,
 		item.CurrentVersion.Policy.NetworkDigest, item.CurrentVersion.Policy.RBACDigest)
 	if err != nil {
@@ -594,12 +596,13 @@ func (repository *Repository) scanRuntimeEnvironment(scanner rowScanner) (entity
 // scanRuntimeEnvironmentVersion разбирает неизменяемые значения версии, secret/tool descriptors и policy, проверяет точные core/full digest и сохраняет ревизию как публичный псевдоним версии. Readiness и полномочия не определяет, сохраняя отдельные decode/digest ошибки версии.
 func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmentVersion, error) {
 	var item entity.RuntimeEnvironmentVersion
+	var managedWorkspace bool
 	var rawValues, rawSecrets, rawTools, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var coreDigest string
 	if err := scanner.Scan(&item.Ref, &item.Revision, &rawValues, &rawSecrets,
 		&item.Image.ArtifactRef, &item.Image.RecipeRef, &item.Image.RecipeGeneration,
 		&item.Image.Reference, &item.Image.Digest, &rawTools, &coreDigest,
-		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&managedWorkspace, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&item.Policy.ResourcesDigest, &item.Policy.VolumesDigest, &item.Policy.NetworkDigest, &item.Policy.RBACDigest,
 		&item.Digest, &item.CreatedAt); err != nil {
 		return entity.RuntimeEnvironmentVersion{}, err
@@ -610,7 +613,7 @@ func scanRuntimeEnvironmentVersion(scanner rowScanner) (entity.RuntimeEnvironmen
 		return entity.RuntimeEnvironmentVersion{}, errors.New("decode runtime environment version")
 	}
 	var err error
-	item.Policy, err = decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
+	item.Policy, err = decodeRuntimeEnvironmentPolicy(managedWorkspace, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
 		item.Policy.ResourcesDigest, item.Policy.VolumesDigest, item.Policy.NetworkDigest, item.Policy.RBACDigest)
 	if err != nil {
 		return entity.RuntimeEnvironmentVersion{}, err
@@ -645,10 +648,11 @@ func runtimeEnvironmentVersionDigestsMatch(values []runtimecontract.RuntimeEnvir
 // decodeRuntimeEnvironmentPolicy decodes all four stored policy sections, normalizes them through the shared runtime contract and requires every resource/volume/network/RBAC digest to match. Any malformed section or mismatch returns the existing fixed error without trusting the stored digests as authority.
 // decodeRuntimeEnvironmentPolicy разбирает четыре сохранённые секции policy, нормализует общим runtime-контрактом и требует совпадения каждого resource/volume/network/RBAC digest. Повреждённая секция или несовпадение возвращает прежнюю фиксированную ошибку; сохранённые digest полномочиями не считаются.
 func decodeRuntimeEnvironmentPolicy(
+	managedWorkspace bool,
 	rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte,
 	resourcesDigest, volumesDigest, networkDigest, rbacDigest string,
 ) (runtimecontract.RuntimeEnvironmentPolicy, error) {
-	policy := runtimecontract.RuntimeEnvironmentPolicy{}
+	policy := runtimecontract.RuntimeEnvironmentPolicy{ManagedWorkspace: managedWorkspace}
 	if decodeStrict(rawResources, &policy.Resources) != nil || decodeStrict(rawVolumes, &policy.Volumes) != nil ||
 		decodeStrict(rawNetwork, &policy.Network) != nil || decodeStrict(rawKubernetesAccess, &policy.KubernetesAccess) != nil {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("decode runtime environment policy")

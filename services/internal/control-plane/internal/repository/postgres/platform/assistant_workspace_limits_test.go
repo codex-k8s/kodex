@@ -55,7 +55,7 @@ func TestAssistantWorkspaceLimitsPrepareAndPersistExactPolicy(t *testing.T) {
 	volumeJSON, _ := json.Marshal(policy.Volumes)
 	networkJSON, _ := json.Marshal(policy.Network)
 	accessJSON, _ := json.Marshal(policy.KubernetesAccess)
-	restored, err := decodeRuntimeEnvironmentPolicy(resourceJSON, volumeJSON, networkJSON, accessJSON,
+	restored, err := decodeRuntimeEnvironmentPolicy(false, resourceJSON, volumeJSON, networkJSON, accessJSON,
 		policy.ResourcesDigest, policy.VolumesDigest, policy.NetworkDigest, policy.RBACDigest)
 	if err != nil || !reflect.DeepEqual(restored.Resources, policy.Resources) {
 		t.Fatal("immutable persisted resources lost workspace quota")

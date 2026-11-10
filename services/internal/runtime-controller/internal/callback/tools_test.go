@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -528,9 +529,12 @@ func TestEnvironmentRevisionSchemaIsExactAndSecretValueFree(t *testing.T) {
 	}
 	policy := fields["policy"].(map[string]any)
 	policyFields := policy["properties"].(map[string]any)
-	if policy["additionalProperties"] != false || len(policyFields) != 5 || policyFields["webAccess"] == nil ||
+	if policy["additionalProperties"] != false || len(policyFields) != 6 || policyFields["webAccess"] == nil || policyFields["managedWorkspace"] == nil ||
 		policyFields["hostPath"] != nil || policyFields["serviceAccountName"] != nil || policyFields["secretValue"] != nil {
 		t.Fatalf("environment policy schema escaped its closed boundary: %#v", policy)
+	}
+	if policyFields["managedWorkspace"].(map[string]any)["type"] != "boolean" || slices.Contains(policy["required"].([]string), "managedWorkspace") {
+		t.Fatal("optional workspace flag became mandatory or untyped")
 	}
 	webAccessFields := policyFields["webAccess"].(map[string]any)["properties"].(map[string]any)
 	ruleFields := webAccessFields["rules"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)

@@ -25,6 +25,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/managedworkspace"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
@@ -53,6 +54,8 @@ type MCPProxy struct {
 	socketPath string
 	localToken string
 	files      *callback.Client
+	workspace  *managedworkspace.Handler
+	executor   *managedworkspace.ExecutorClient
 }
 
 // StartMCPProxy validates managed readiness proof and tool bounds, prepares the selected upstream transport, then creates a group-protected peer-checked UDS and fresh local bearer.
@@ -155,7 +158,39 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		},
 		FlushInterval: -1,
 	}
+	localTransport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", mcpAuthoritySocket)
+	}}
+	var workspaceHandler *managedworkspace.Handler
+	var executorClient *managedworkspace.ExecutorClient
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		var execute managedworkspace.ExecutorCall
+		if len(input.EnvironmentTools) > 0 {
+			executorClient = managedworkspace.NewExecutorClient()
+			execute = executorClient.Call
+		}
+		endpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
+		workspaceHandler, err = managedworkspace.NewHandler(input, workspaceOwnerCall(&http.Client{Transport: localTransport, Timeout: time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+5) * time.Second}, endpoint, localToken), execute,
+			func(ctx context.Context, call runtimecontract.NativeToolCall) error {
+				return fileClient.RecordNativeToolCall(ctx, input, call)
+			})
+		if err != nil {
+			fileClient.Close()
+			listener.Close()
+			transport.CloseIdleConnections()
+			localTransport.CloseIdleConnections()
+			if executorClient != nil {
+				executorClient.Close()
+			}
+			return nil, err
+		}
+	}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/workspace/mcp" && workspaceHandler != nil && request.URL.RawQuery == "" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
+			workspaceHandler.ServeHTTP(writer, request)
+			return
+		}
+
 		if request.Method == http.MethodGet && request.URL.Path != "/mcp" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
 			fileClient.ServeCatalogFile(writer, request, input)
 			return
@@ -173,11 +208,8 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		IdleTimeout: 90 * time.Second, MaxHeaderBytes: 16 << 10,
 		BaseContext: func(net.Listener) context.Context { return ctx }}
 	secured := &peerCredentialListener{Listener: listener}
-	localTransport := &http.Transport{DisableCompression: true, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", mcpAuthoritySocket)
-	}}
 	proxy := &MCPProxy{server: server, transport: transport, local: localTransport, done: done,
-		socketPath: mcpAuthoritySocket, localToken: localToken, files: fileClient}
+		socketPath: mcpAuthoritySocket, localToken: localToken, files: fileClient, workspace: workspaceHandler, executor: executorClient}
 	go func() { done <- server.Serve(secured) }()
 	localEndpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
 	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken, requiredTools, input); err != nil {
@@ -187,6 +219,21 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		transport.CloseIdleConnections()
 		_ = os.Remove(mcpAuthoritySocket)
 		return nil, err
+	}
+	if workspaceHandler != nil {
+		if err := workspaceHandler.Ready(ctx); err != nil {
+			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
+			_ = proxy.Close(shutdown)
+			return nil, err
+		}
+		endpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/workspace/mcp")
+		if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, endpoint, localToken, runtimecontract.RuntimeWorkspaceToolNames(input)); err != nil {
+			shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+			defer cancel()
+			_ = proxy.Close(shutdown)
+			return nil, err
+		}
 	}
 	return proxy, nil
 }
@@ -204,6 +251,10 @@ func (proxy *MCPProxy) LocalBearerToken() string { return proxy.localToken }
 // Close закрывает ресурсы файлового клиента, штатно либо принудительно завершает локальный сервер, закрывает простаивающие транспорты и удаляет сокет, затем ожидает результат Serve в пределах ctx.
 // Возвращает фиксированные ошибки завершения или Serve вместо подробностей транспорта; ограниченный контекст завершения задаёт вызывающий.
 func (proxy *MCPProxy) Close(ctx context.Context) error {
+	workspaceErr := proxy.QuiesceWorkspace(ctx)
+	if proxy.executor != nil {
+		defer proxy.executor.Close()
+	}
 	proxy.files.Close()
 	err := proxy.server.Shutdown(ctx)
 	if err != nil {
@@ -217,6 +268,9 @@ func (proxy *MCPProxy) Close(ctx context.Context) error {
 	case serveErr = <-proxy.done:
 	case <-ctx.Done():
 		return errors.New("shutdown MCP authority proxy")
+	}
+	if workspaceErr != nil {
+		return errors.New("managed workspace quiescence unavailable")
 	}
 	if err != nil {
 		return errors.New("shutdown MCP authority proxy")

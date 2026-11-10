@@ -58874,6 +58874,7 @@ type RuntimeEnvironmentPolicyInput struct {
 	NetworkDestinations []RuntimeNetworkDestination `protobuf:"varint,3,rep,packed,name=network_destinations,json=networkDestinations,proto3,enum=controlplane.v1.RuntimeNetworkDestination" json:"network_destinations,omitempty"`
 	KubernetesAccess    RuntimeKubernetesAccessKind `protobuf:"varint,4,opt,name=kubernetes_access,json=kubernetesAccess,proto3,enum=controlplane.v1.RuntimeKubernetesAccessKind" json:"kubernetes_access,omitempty"`
 	WebAccess           *RuntimeWebAccess           `protobuf:"bytes,5,opt,name=web_access,json=webAccess,proto3" json:"web_access,omitempty"`
+	ManagedWorkspace    bool                        `protobuf:"varint,6,opt,name=managed_workspace,json=managedWorkspace,proto3" json:"managed_workspace,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -58941,6 +58942,13 @@ func (x *RuntimeEnvironmentPolicyInput) GetWebAccess() *RuntimeWebAccess {
 		return x.WebAccess
 	}
 	return nil
+}
+
+func (x *RuntimeEnvironmentPolicyInput) GetManagedWorkspace() bool {
+	if x != nil {
+		return x.ManagedWorkspace
+	}
+	return false
 }
 
 type RuntimeNetworkEgress struct {
@@ -59381,6 +59389,7 @@ type RuntimeEnvironmentPolicy struct {
 	VolumesDigest    string                          `protobuf:"bytes,6,opt,name=volumes_digest,json=volumesDigest,proto3" json:"volumes_digest,omitempty"`
 	NetworkDigest    string                          `protobuf:"bytes,7,opt,name=network_digest,json=networkDigest,proto3" json:"network_digest,omitempty"`
 	RbacDigest       string                          `protobuf:"bytes,8,opt,name=rbac_digest,json=rbacDigest,proto3" json:"rbac_digest,omitempty"`
+	ManagedWorkspace bool                            `protobuf:"varint,9,opt,name=managed_workspace,json=managedWorkspace,proto3" json:"managed_workspace,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -59469,6 +59478,13 @@ func (x *RuntimeEnvironmentPolicy) GetRbacDigest() string {
 		return x.RbacDigest
 	}
 	return ""
+}
+
+func (x *RuntimeEnvironmentPolicy) GetManagedWorkspace() bool {
+	if x != nil {
+		return x.ManagedWorkspace
+	}
+	return false
 }
 
 type RuntimeEnvironmentImage struct {
@@ -93172,14 +93188,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04kind\x18\x02 \x01(\x0e2\".controlplane.v1.RuntimeVolumeKindR\x04kind\x12\x19\n" +
 	"\bsize_mib\x18\x03 \x01(\x03R\asizeMib\x12\x1d\n" +
 	"\n" +
-	"mount_path\x18\x04 \x01(\tR\tmountPath\"\xa0\x03\n" +
+	"mount_path\x18\x04 \x01(\tR\tmountPath\"\xcd\x03\n" +
 	"\x1dRuntimeEnvironmentPolicyInput\x12D\n" +
 	"\tresources\x18\x01 \x01(\v2&.controlplane.v1.RuntimeResourcePolicyR\tresources\x12=\n" +
 	"\avolumes\x18\x02 \x03(\v2#.controlplane.v1.RuntimeVolumeInputR\avolumes\x12]\n" +
 	"\x14network_destinations\x18\x03 \x03(\x0e2*.controlplane.v1.RuntimeNetworkDestinationR\x13networkDestinations\x12Y\n" +
 	"\x11kubernetes_access\x18\x04 \x01(\x0e2,.controlplane.v1.RuntimeKubernetesAccessKindR\x10kubernetesAccess\x12@\n" +
 	"\n" +
-	"web_access\x18\x05 \x01(\v2!.controlplane.v1.RuntimeWebAccessR\twebAccess\"\xbd\x01\n" +
+	"web_access\x18\x05 \x01(\v2!.controlplane.v1.RuntimeWebAccessR\twebAccess\x12+\n" +
+	"\x11managed_workspace\x18\x06 \x01(\bR\x10managedWorkspace\"\xbd\x01\n" +
 	"\x14RuntimeNetworkEgress\x12L\n" +
 	"\vdestination\x18\x01 \x01(\x0e2*.controlplane.v1.RuntimeNetworkDestinationR\vdestination\x12C\n" +
 	"\bprotocol\x18\x02 \x01(\x0e2'.controlplane.v1.RuntimeNetworkProtocolR\bprotocol\x12\x12\n" +
@@ -93209,7 +93226,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aprofile\x18\x01 \x01(\v2/.controlplane.v1.RuntimeKubernetesAccessProfileR\aprofile\x120\n" +
 	"\x14service_account_name\x18\x02 \x01(\tR\x12serviceAccountName\x12<\n" +
 	"\x05rules\x18\x03 \x03(\v2&.controlplane.v1.RuntimeKubernetesRuleR\x05rules\x12\x16\n" +
-	"\x06digest\x18\x04 \x01(\tR\x06digest\"\xd3\x03\n" +
+	"\x06digest\x18\x04 \x01(\tR\x06digest\"\x80\x04\n" +
 	"\x18RuntimeEnvironmentPolicy\x12D\n" +
 	"\tresources\x18\x01 \x01(\v2&.controlplane.v1.RuntimeResourcePolicyR\tresources\x128\n" +
 	"\avolumes\x18\x02 \x03(\v2\x1e.controlplane.v1.RuntimeVolumeR\avolumes\x12?\n" +
@@ -93219,7 +93236,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0evolumes_digest\x18\x06 \x01(\tR\rvolumesDigest\x12%\n" +
 	"\x0enetwork_digest\x18\a \x01(\tR\rnetworkDigest\x12\x1f\n" +
 	"\vrbac_digest\x18\b \x01(\tR\n" +
-	"rbacDigest\"\xbe\x01\n" +
+	"rbacDigest\x12+\n" +
+	"\x11managed_workspace\x18\t \x01(\bR\x10managedWorkspace\"\xbe\x01\n" +
 	"\x17RuntimeEnvironmentImage\x12!\n" +
 	"\fartifact_ref\x18\x01 \x01(\tR\vartifactRef\x12\x1d\n" +
 	"\n" +

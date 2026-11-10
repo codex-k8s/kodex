@@ -973,6 +973,7 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 		workspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: limits.GetMaxBytes(), MaxFiles: limits.GetMaxFiles()}
 	}
 	policy := runtimecontract.RuntimeEnvironmentPolicy{
+		ManagedWorkspace: value.GetManagedWorkspace(),
 		Resources: runtimecontract.RuntimeResourcePolicy{
 			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
@@ -1842,6 +1843,11 @@ func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontrac
 		if !warmExecution && runtimePodTerminal(pod, "role-runtime", "provider-runtime", "provider-credential-relay") {
 			return TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}, nil
 		}
+		for _, status := range pod.Status.ContainerStatuses {
+			if status.Name == workspaceExecutorName && status.State.Terminated != nil && status.State.Terminated.ExitCode != 0 {
+				return TurnPodObservation{State: "FAILED", DiagnosticCode: diagnostic, ObservedPodUID: string(pod.UID)}, nil
+			}
+		}
 		if podReady(pod) {
 			return TurnPodObservation{State: "READY"}, nil
 		}
@@ -1874,7 +1880,7 @@ func terminalContainerDiagnostic(pod *corev1.Pod) string {
 				continue
 			}
 			switch status.Name {
-			case "workspace-prepare", "workspace-init", "role-runtime", "provider-runtime", "provider-credential-relay":
+			case "workspace-prepare", "workspace-init", "role-runtime", "provider-runtime", "provider-credential-relay", workspaceExecutorName:
 				return TurnPodMemoryDiagnostic
 			}
 		}
@@ -1911,6 +1917,10 @@ func terminalContainerDiagnostic(pod *corev1.Pod) string {
 			return "PROVIDER_RUNTIME_EXITED"
 		case "provider-credential-relay":
 			return "PROVIDER_CREDENTIAL_RELAY_EXITED"
+		case workspaceExecutorName:
+			if status.State.Terminated.ExitCode != 0 {
+				return "WORKSPACE_EXECUTOR_EXITED_NONZERO"
+			}
 		}
 	}
 	return "POD_FAILED"
@@ -1922,6 +1932,7 @@ func runtimePodMatches(existing, desired *corev1.Pod) bool {
 	if existing == nil || desired == nil || !managedMetadataMatches(existing.ObjectMeta, desired.ObjectMeta) ||
 		existing.Spec.ServiceAccountName != desired.Spec.ServiceAccountName ||
 		existing.Spec.HostNetwork || existing.Spec.HostPID || existing.Spec.HostIPC ||
+		existing.Spec.ShareProcessNamespace != nil && *existing.Spec.ShareProcessNamespace ||
 		!apiequality.Semantic.DeepEqual(existing.Spec.SecurityContext, desired.Spec.SecurityContext) ||
 		!apiequality.Semantic.DeepEqual(existing.Spec.EnableServiceLinks, desired.Spec.EnableServiceLinks) ||
 		existing.Spec.RestartPolicy != desired.Spec.RestartPolicy ||
@@ -2499,7 +2510,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 				{Name: "workspace-init", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile, Args: []string{"runtime-init-workspace"}, SecurityContext: restrictedSecurityContext(10001), VolumeMounts: initMounts, Resources: smallResources()},
 			},
 			Containers: []corev1.Container{role, provider, relay}, Volumes: volumes}}
-	if !configureWorkspaceStoragePod(pod, input) {
+	if !configureWorkspaceStoragePod(pod, input) || !configureManagedWorkspacePod(pod, input) {
 		return nil
 	}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {

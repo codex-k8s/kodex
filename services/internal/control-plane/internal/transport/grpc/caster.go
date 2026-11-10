@@ -362,6 +362,7 @@ func castRuntimeEnvironmentVersion(value entity.RuntimeEnvironmentVersion) *cont
 // castRuntimeEnvironmentPolicy отображает лимиты ресурсов и рабочего каталога, тома, сетевую и Kubernetes-политику с заданными хешами, копируя списки HTTP-методов; политику не допускает и ресурсы кластера не создаёт.
 func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {
 	result := &controlplanev1.RuntimeEnvironmentPolicy{
+		ManagedWorkspace: value.ManagedWorkspace,
 		Resources: &controlplanev1.RuntimeResourcePolicy{
 			CpuRequestMilli: value.Resources.CPURequestMilli, CpuLimitMilli: value.Resources.CPULimitMilli,
 			MemoryRequestMib: value.Resources.MemoryRequestMiB, MemoryLimitMib: value.Resources.MemoryLimitMiB,

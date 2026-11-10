@@ -2,10 +2,10 @@
 id: OPS-OPENCODE-1982
 title: Опциональный OpenCode runtime
 type: operation
-status: draft
+status: approved
 owner: developer
-version: 0.1.1
-updated: 2026-11-07
+version: 0.2.0
+updated: 2026-11-10
 ---
 
 # Опциональный OpenCode runtime
@@ -36,8 +36,8 @@ annotations; sidecars, service account, volumes и replica count сохраня�
 Unit #1982 добавляет engine к существующей job `agent-runner`, сохраняя
 обычный Codex при отсутствии опции. Это полный путь конфигурации, account,
 immutable runtime input, broker, управляемых tools, callback и deployment;
-отдельный автономный orchestration graph не создаётся. Пока статус документа
-draft, перечисленные здесь незавершённые пути не считаются принятыми.
+отдельный автономный orchestration graph не создаётся. Описание контракта
+не заменяет acceptance receipt конкретного установленного source/image/profile.
 
 ## Поддержанный профиль
 
@@ -45,7 +45,8 @@ draft, перечисленные здесь незавершённые пути
 `tool_mode=managed_mcp`. Chat Completions идёт через явно заданный HTTPS
 gateway. Собственные shell/file-write/task/web/skill/plugin tools не доступны.
 Remote MCP `kodex` обслуживается существующим scoped bridge и gateway.
-Выбор native tools или Codex overlay/effort/session несовместим с этим профилем
+Явная опция рабочей копии ниже добавляет управляемые локальные tools.
+Native tools провайдера, Codex overlay/effort/session несовместимы с профилем
 и должен закрыто отклоняться до запуска. Это ограничение профиля, не обход
 допуска workspace или внешних действий. Codex сохраняет собственный профиль.
 
@@ -99,7 +100,7 @@ environment references. Remote MCP не создаёт credential-bearing shell 
 | Переход | Результат и источник истины |
 |---|---|
 | Create/claim | Только прежняя owner transaction создаёт Run/lease/attempt; конфигурация входит в immutable digest |
-| Streaming/tool | Published items bounded; reasoning/raw errors не публикуются. MCP gateway владеет effect audit, adapter не создаёт второй native audit |
+| Streaming/tool | Published items bounded; reasoning/raw errors не публикуются. Gateway владеет внешним effect audit; локальный workspace пишет один redacted native lifecycle без raw argv/файлов |
 | Model error/auth reject | Один существующий failed callback; явная ошибка учётной записи не переключает provider/account/model |
 | Timeout/cancel | Завершается process group и ожидается writer stop; gateway effect может остаться UNKNOWN, повтор не выдаётся за безопасный |
 | Completion | Только реальный terminal stop, process join и workspace проверки; no fabricated archive и no inferred external success |
@@ -171,20 +172,151 @@ standard RoleImage; documents environment закрыт до отдельной �
 этого варианта. Сетевой CA bundle/прокси предоставляет существующий защищённый
 runtime; отдельный сетевой обход для модели не создаётся.
 
-## Текущие доказательства
+## Опциональная рабочая копия
 
-Локально прошли descriptor/auth/input contracts, runner и prompt tests,
-secret-broker gateway catalog failures, CP targeted tests, native disposable
-PostgreSQL bootstrap/restart/endpoint-conflict и полный synthetic render.
-Минимальный `opencode-binary` image собран с проверкой archive SHA и CLI
-версии. Это не полный qualified RoleImage. Native model/tool/continuation,
-отмена и ошибочный ключ в установленном runtime требуют отдельного acceptance
-receipt с source/image/config pins. Независимое review не выполнялось по
-прямому ограничению владельца на субагентов.
+Оператор публикует новую версию окружения с `policy.managedWorkspace=true`;
+в UI это «Рабочая копия и команды (OpenCode)». По умолчанию поле отсутствует
+или равно `false`: Codex и прежний OpenCode MCP-only сохраняют поведение
+и прежние policy digests. Переключатель хранится у владельца версии окружения,
+проходит черновик, OpenAPI/Proto, историю, повторный SSO и immutable input.
+Generated config не является вторым источником настройки.
 
-Обнаруженный существующий встроенный OpenAI capability snapshot истёк
-02.11.2026; production legacy catalog закрыто отклоняет источник. Parser tests теперь
-используют фиксированное время внутри validity window; отдельный negative
-тест проверяет expiry до отправки credential.
-Срок не продлевается без повторной проверки provenance. Это отдельное
-ограничение прежнего каталога; gateway не использует этот capability source.
+Профиль предназначен для обычного сотрудника OpenCode с явным
+`platform.artifact.manage`, `workspace-write` и действующим execution.
+SYSTEM/PROJECT помощники не получают этот доступ неявно. Внешние write grants,
+персональные credentials и Human Gate остаются самостоятельными проверками.
+Например, ревьювер может менять свою локальную копию для теста, имея во внешнем
+репозитории только чтение и согласуемые комментарии к назначенному MR.
+
+Нужен совместимый RoleImage из того же квалифицированного candidate с OpenCode
+и выбранными SDK tools. Обновления одного PWA/control-plane недостаточно.
+Основной MCP-каталог получает `get_workspace_policy`; старый runner отвергает
+несовпадение каталога до запуска модели. Отдельный локальный каталог обслуживает
+`/workspace/mcp`. Native `bash`, `edit`, `task`, plugins и произвольные MCP
+endpoints провайдера по-прежнему запрещены.
+
+| Инструмент | Возможность и ограничение |
+|---|---|
+| `list_workspace_files` | Одна директория `work` либо плоский `outbox`, страницы до200 записей |
+| `read_workspace_file` | UTF-8 chunk до32768байт, полный SHA-256 файла до1МиБ для последующего CAS |
+| `write_workspace_file` | Atomic replace точного предыдущего SHA-256 либо создание с `ABSENT`; это ещё не внешний commit/публикация |
+| `run_workspace_tool` | Только выбранные команды окружения из inventory образа; executable и argv раздельны |
+| `checkout_repository` | Полный ограниченный GitLab API snapshot на точном commit SHA, без передачи PAT в shell |
+
+Лексические пути не дают authority. Каждый вызов требует свежую owner-проверку
+lease/fence/generation, действующих прикладных прав и root initiator до работы
+и перед выдачей результата. Локальный audit содержит имя операции, число полей,
+state/duration; argv, код и file bodies туда не копируются. Повтор RPC ID
+не разрешает повторить effect после потерянного ответа.
+
+Файловые операции используют fd-relative `openat2` с запретом symlinks,
+magic links, выхода из корня и смены mount. Единственный work PVC crossing
+проверяется прежним owner-bound mount proof. Обычные файлы требуют одного
+hardlink и допустимых UID/GID. Логические file/byte quotas проверяются перед
+записью и публикацией; это не обещание мгновенной kernel quota для произвольного
+компилятора. Физические CPU/memory/ephemeral-storage limits принадлежат Pod.
+
+### Команды без секретов
+
+При непустом списке tools появляется один контейнер `workspace-executor`
+внутри execution Pod, а не постоянный сервис. Он получает только свою рабочую
+копию, отдельные tmp/cache и управляющий UDS. Runtime input, provider HOME,
+model/API keys, callback identities, integration credentials, входные VFS
+volumes и Kubernetes token туда не монтируются. Env дочерней команды задаётся
+закрытым списком; role/provider environment не наследуется.
+
+Контейнер работает как непривилегированный PID1 в отдельном PID namespace,
+без host/shared PID, capabilities и записи в root filesystem. Дочерний процесс
+перед exec ставит Landlock ABI>=3: mutation разрешена только в work/tmp и
+`/dev/null`, включая все последующие fork/exec. Репозиторий не может удалить
+и подменить управляющий UDS. Готовность требует реального child sandbox probe;
+недоступный kernel primitive закрывает запуск до модели, без insecure fallback.
+
+Команды сериализованы. Предел45с оставляет место owner-проверкам в существующем
+MCP budget60с; объединённый stdout/stderr ограничен64КиБ и помечает truncation.
+SDK timeout задаётся поддержанным `mcp.<name>.timeout` в миллисекундах.
+Каждая команда заканчивается остановкой и reaping всех descendants, включая
+отделившиеся process groups. Это не выполняется в host/unit-test PID namespace.
+`UNKNOWN`, потерянный ответ или непроверенный cleanup закрывают последующие
+файловые операции; автоматического повторения команды нет.
+
+MCP cancellation отменяет только связанный собственный request. Завершение
+turn закрывает admission, отменяет ожидающие запросы и получает положительную
+quiescence до capture/публикации workspace. V2 Pod/PVC observer учитывает
+четвёртый writer; его отсутствие в status либо running state не доказывает join.
+
+Общий resource budget окружения делится между provider и executor с точной
+суммой requests/limits. Новый full-size container не добавляется поверх
+старого envelope; owner queue продолжает учитывать прежнюю общую заявку.
+При пустом списке commands работают файлы/snapshot без executor и требования
+Landlock. Отдельные runtime budgets и restart/cancel deadlines не отменяются.
+
+### GitLab snapshot
+
+Инструмент выбирает три согласованных READ grants одного Connection:
+`gitlab.commit.read`, `gitlab.repository.tree.list`,
+`gitlab.repository.file.read`. При каждом чтении gateway заново проверяет
+текущую личную credential, project ID/path, PROJECT/GROUP/INSTANCE scope,
+capability и approval policy. Connection из prompt не становится разрешением.
+
+Принимается полный lowercase SHA-1/SHA-256 commit ID. Проверяются все страницы
+дерева, paths/modes, точный ref и Git blob hashes. Пределы:128 файлов,
+128 директорий,384 remote reads,8МиБ суммарно,45с. Файлы дополнительно ограничены
+контрактом существующего gateway. Symlinks, submodules, unsafe paths,
+неполные/повреждённые ответы и неподтверждённые read approvals закрываются.
+Результат сначала собирается полностью, затем атомарно публикуется в новую
+не существующую директорию под `work`; прежняя рабочая копия не заменяется.
+
+`representation=API_SNAPSHOT` сообщает source commit SHA и manifest SHA-256.
+Это не full git clone, локальный HEAD с remote SHA не выдумывается. Git history,
+LFS materialization, submodules и credential-bearing git transport не входят
+в профиль. Commit/MR/comment/merge выполняются отдельными типизированными
+инструментами gateway с их правами и Human Gate. Сетевой allowlist ради checkout
+не расширяется.
+
+## Миграция и проверка
+
+Профиль `managed-workspace` закрепляет переход038→039:
+`20261110000200_managed_workspace.sql`. Это одна NOT NULL boolean колонка
+`runtime_environment_versions.managed_workspace` с default false. Существующие
+окружения не включаются, строки и ACL не переписываются, dump/bootstrap не нужны.
+Pre/postcondition проверяют фактическую схему и no-op replay. Изменение runtime
+images всё равно требует штатного rollout/ownership и точных immutable pins.
+
+После публикации true-версий старый binary может не понимать их digest.
+Отключение — новая false-версия через поддержанный owner command и новый turn;
+возврат старого image не объявляется универсальным DB rollback. `goose down`
+для этого пути не применяется.
+
+Точки воспроизводимых проверок:
+
+- `go test ./...` в runtimecontract, agent-runner, runtime-controller,
+  control-plane и control-api-gateway;
+- `go test -race ./internal/managedworkspace ./internal/security` в agent-runner:
+  file CAS/quotas, traversal/link/FIFO, current-owner refusal, request cancellation,
+  unknown command, exact snapshot/hash и настоящий Landlock в disposable child;
+- `scripts/tests/control-plane-postgres-test.sh --managed-workspace-upgrade`:
+  реальный038→039, postcondition и replay;
+- PostgreSQL `TestOrganizationRuntimeEnvironmentComponent`: true-версия,
+  owner publication/history и прежнее false-окружение;
+- `scripts/tests/managed-workspace-executor-test.sh`: отдельные PID namespaces,
+  отсутствие credential env, запрет подмены UDS, detached-child cleanup, timeout
+  и quiescence на локальном Docker с закреплённым публичным образом;
+- frontend unit/typecheck/lint/build, contract/codegen и actual Pod render;
+- immutable image: реальный executor UID/PID/UDS, detached-child cleanup,
+  pinned CLI MCP initialization/catalog и role→gateway→API;
+- установленная команда: изменения в разрешённой ветке, настоящий pipeline,
+  независимый reviewer checkout/test, scoped comment и отдельный merge gate.
+
+Проверки библиотек: Context7 Go1.26.7 и Vue Composition API; закреплённые
+Go1.26.10/Vue3.5.41 проверяются сборкой. Для x/sysv0.48.0 Context7 не дал
+Landlock API: использованы точный source и системные вызовы установленной версии.
+Официальные источники:
+[Landlock](https://docs.kernel.org/userspace-api/landlock.html),
+[x/sysv0.48.0](https://github.com/golang/sys/blob/v0.48.0/unix/ztypes_linux.go),
+[MCP lifecycle2025-06-18](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle),
+[OpenCode1.19.5 MCP config](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/core/src/v1/config/mcp.ts).
+
+Локальные tests/render и green Pods не означают установленную приёмку.
+Результаты, source/image/schema pins и NOT RUN записываются в конкретный PR
+и deployment receipt. Независимое review нельзя заменять авторским self-review.

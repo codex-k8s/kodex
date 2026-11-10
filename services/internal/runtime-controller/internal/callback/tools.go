@@ -436,7 +436,8 @@ func environmentPolicySchema() map[string]any {
 		"rules": map[string]any{"type": "array", "maxItems": 64, "items": webAccessRule},
 	})
 	return objectSchema([]string{"resources", "volumes", "networkDestinations", "webAccess", "kubernetesAccess"}, map[string]any{
-		"resources": resources,
+		"managedWorkspace": map[string]any{"type": "boolean"},
+		"resources":        resources,
 		"volumes": map[string]any{"type": "array", "maxItems": 16, "items": objectSchema([]string{"name", "kind", "sizeMib"}, map[string]any{
 			"name": stringSchema(1, 32), "kind": enumSchema("EPHEMERAL_DISK", "EPHEMERAL_MEMORY"),
 			"sizeMib": map[string]any{"type": "integer", "minimum": 16, "maximum": 10240},

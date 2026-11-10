@@ -229,8 +229,8 @@ func (manager *Manager) ReleaseWorkspacePod(ctx context.Context, value Workspace
 // workspaceStoppedBeforeMain доказывает остановку deleting owned Pod до первого main start.
 // Обязательны explicit failed init termination и waiting main statuses без IDs, restarts и prior start.
 func workspaceStoppedBeforeMain(pod *corev1.Pod) bool {
-	if pod == nil || pod.DeletionTimestamp == nil || pod.Status.Phase != corev1.PodFailed || len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 ||
-		len(pod.Status.InitContainerStatuses) != 2 || len(pod.Status.ContainerStatuses) != 3 {
+	if pod == nil || pod.DeletionTimestamp == nil || pod.Status.Phase != corev1.PodFailed || len(pod.Spec.InitContainers) != 2 || (len(pod.Spec.Containers) != 3 && (len(pod.Spec.Containers) != 4 || pod.Spec.Containers[3].Name != workspaceExecutorName)) ||
+		len(pod.Status.InitContainerStatuses) != 2 || len(pod.Status.ContainerStatuses) != len(pod.Spec.Containers) {
 		return false
 	}
 	failed := false

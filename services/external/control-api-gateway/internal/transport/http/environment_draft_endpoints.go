@@ -404,7 +404,7 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 		return nil, false
 	}
 	// Отсутствующая policy в сохранённом черновике пока возвращается владельцем как нулевая структура.
-	if proto.Equal(resources, &controlplanev1.RuntimeResourcePolicy{}) && len(input.GetVolumes()) == 0 && len(input.GetNetworkDestinations()) == 0 &&
+	if !input.GetManagedWorkspace() && proto.Equal(resources, &controlplanev1.RuntimeResourcePolicy{}) && len(input.GetVolumes()) == 0 && len(input.GetNetworkDestinations()) == 0 &&
 		(input.GetKubernetesAccess() == controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE || input.GetKubernetesAccess() == controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_UNSPECIFIED) {
 		return nil, true
 	}
@@ -414,7 +414,8 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 		len(input.GetVolumes()) > 16 || len(input.GetNetworkDestinations()) != 3 {
 		return nil, false
 	}
-	result := &generated.RuntimeEnvironmentPolicyInput{Resources: generated.RuntimeResourcePolicy{
+	managedWorkspace := input.GetManagedWorkspace()
+	result := &generated.RuntimeEnvironmentPolicyInput{ManagedWorkspace: &managedWorkspace, Resources: generated.RuntimeResourcePolicy{
 		CpuRequestMilli: resources.GetCpuRequestMilli(), CpuLimitMilli: resources.GetCpuLimitMilli(), MemoryRequestMib: resources.GetMemoryRequestMib(), MemoryLimitMib: resources.GetMemoryLimitMib(),
 		EphemeralStorageRequestMib: resources.GetEphemeralStorageRequestMib(), EphemeralStorageLimitMib: resources.GetEphemeralStorageLimitMib(),
 	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{},

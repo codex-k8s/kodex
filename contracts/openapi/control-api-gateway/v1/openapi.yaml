@@ -13124,6 +13124,10 @@ components:
       required:
         [resources, volumes, networkDestinations, kubernetesAccess, webAccess]
       properties:
+        managedWorkspace:
+          type: boolean
+          default: false
+          description: Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
           {
@@ -13184,6 +13188,10 @@ components:
           rbacDigest,
         ]
       properties:
+        managedWorkspace:
+          type: boolean
+          default: false
+          description: Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
         resources: { $ref: "#/components/schemas/RuntimeResourcePolicy" }
         volumes:
           {

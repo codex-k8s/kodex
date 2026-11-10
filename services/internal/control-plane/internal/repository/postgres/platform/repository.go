@@ -700,12 +700,13 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 	var platformBootstrapImage bool
 	var currentVersion int64
 	var rawValues, rawSecrets, rawTools []byte
+	var managedWorkspace bool
 	var rawResources, rawVolumes, rawNetwork, rawKubernetesAccess []byte
 	var resourcesDigest, volumesDigest, networkDigest, rbacDigest string
 	if err := tx.QueryRow(ctx, queryRepositoryBootstrapSelectAssistantRuntimeEnvironment).Scan(
 		&organizationID, &agentID, &environmentID, &currentVersionID, &createdBy, &imageArtifactID, &platformBootstrapImage, &currentVersion,
 		&rawValues, &rawSecrets, &rawTools, &currentCoreDigest, &currentDigest,
-		&rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
+		&managedWorkspace, &rawResources, &rawVolumes, &rawNetwork, &rawKubernetesAccess,
 		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
 	); err != nil {
 		return bootstrapFailure("read system assistant runtime environment", err)
@@ -724,7 +725,7 @@ func (repository *Repository) reconcileSystemAssistantRuntimeEnvironment(ctx con
 	if err := decodeStrict(rawTools, &tools); err != nil {
 		return bootstrapFailure("decode system assistant runtime tools", err)
 	}
-	policy, err := decodeRuntimeEnvironmentPolicy(rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
+	policy, err := decodeRuntimeEnvironmentPolicy(managedWorkspace, rawResources, rawVolumes, rawNetwork, rawKubernetesAccess,
 		resourcesDigest, volumesDigest, networkDigest, rbacDigest)
 	if err != nil || policy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
 		return bootstrapFailure("verify system assistant runtime policy", err)

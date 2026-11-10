@@ -31,6 +31,7 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/contextfiles"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/imageinventory"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/managedworkspace"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
@@ -61,6 +62,12 @@ type health struct {
 // Run dispatches fixed inventory, workspace, provider, relay and turn/warm modes, validating the relevant invocation, input and UID boundaries before their work. Session modes compose telemetry, health monitoring and callbacks; warm mode serially consumes server-owned turns. Owned clients/monitor/server and independent bounded telemetry shutdown use caller-provided lifecycle/base contexts, without creating root authority.
 // Run выбирает фиксированные режимы inventory, workspace, provider, relay и turn/warm, проверяя соответствующие invocation, input и UID boundaries до работы. Session-режимы собирают telemetry, health monitoring и callbacks; warm последовательно получает серверные ходы. Свои clients/monitor/server и независимый ограниченный telemetry shutdown используют переданные lifecycle/base contexts без создания корневых полномочий.
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
+	if len(args) > 2 && args[1] == managedworkspace.CommandChildMode {
+		if err := security.VerifyInvocation(args[:2], managedworkspace.CommandChildMode); err != nil {
+			return err
+		}
+		return managedworkspace.RunCommandChild(args[2:])
+	}
 	if len(args) > 1 && args[1] == imageinventory.SandboxExecMode {
 		return imageinventory.RunSandboxedTool(args[2:])
 	}
@@ -71,7 +78,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		return errors.New("agent-runner mode is required")
 	}
 	mode := args[1]
-	if mode != "runtime-prepare-workspace" && mode != runtimeBindWorkspaceMode && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode {
+	if mode != "runtime-prepare-workspace" && mode != runtimeBindWorkspaceMode && mode != "runtime-init-workspace" && mode != "runtime-session" && mode != "runtime-warm" && mode != "runtime-provider" && mode != "runtime-provider-credential-relay" && mode != workspaceCanaryMode && mode != managedworkspace.ExecutorMode {
 		return errors.New("agent-runner mode is invalid")
 	}
 	var initializationInput model.Input
@@ -93,6 +100,9 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 	if mode == "runtime-provider" {
 		return codex.ServeProviderBroker(lifecycleContext)
+	}
+	if mode == managedworkspace.ExecutorMode {
+		return managedworkspace.ServeExecutor(lifecycleContext)
 	}
 	input, err := model.DecodeInput(inputPath)
 	if err != nil {
@@ -353,6 +363,18 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	})
 	if executionErr != nil {
 		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
+	}
+	if input.EnvironmentPolicy.ManagedWorkspace {
+		quiescer, ok := prepared.proxy.(interface{ QuiesceWorkspace(context.Context) error })
+		if !ok {
+			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
+		}
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		err := quiescer.QuiesceWorkspace(shutdown)
+		cancel()
+		if err != nil {
+			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
+		}
 	}
 	if err := publishWorkspaceQuiescence(input, result); err != nil {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")

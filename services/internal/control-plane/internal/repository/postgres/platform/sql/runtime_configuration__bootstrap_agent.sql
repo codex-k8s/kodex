@@ -55,12 +55,12 @@ WITH policy AS (
     INSERT INTO control_plane.runtime_environment_versions
         (ref, organization_id, environment_set_id, version_number, non_secret_values,
          secret_descriptors, role_image_artifact_id, selected_tools, core_digest,
-         resource_policy, volume_policy, network_policy, kubernetes_access_profile,
+         managed_workspace, resource_policy, volume_policy, network_policy, kubernetes_access_profile,
          resources_digest, volumes_digest, network_digest, rbac_digest, digest, created_by)
     SELECT @environment_version_ref, @organization_id::uuid, environment.id,
            COALESCE(current_environment_version.version_number, 0) + 1,
            '[]'::jsonb, '[]'::jsonb, NULLIF(@environment_image_artifact_id, '')::uuid,
-           @environment_selected_tools, @environment_core_digest, @environment_resource_policy,
+           @environment_selected_tools, @environment_core_digest, @environment_managed_workspace, @environment_resource_policy,
            @environment_volume_policy, @environment_network_policy, @environment_kubernetes_access_profile,
            @environment_resources_digest, @environment_volumes_digest, @environment_network_digest,
            @environment_rbac_digest, @environment_digest, @created_by::uuid

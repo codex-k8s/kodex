@@ -18,6 +18,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounte
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --managed-workspace-upgrade ]]; then
+  upgrade_test='^TestManagedWorkspaceColumnUpgrade$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --artifact-optional-antivirus-upgrade ]]; then
   upgrade_test='^TestArtifactOptionalAntivirusMigration$'
   test_pattern=--review-qa-upgrade
@@ -367,6 +371,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261110000200) schema_proof=managed-workspace-migration-postcondition.sql; schema_verifier=validManagedWorkspaceMigrationPostcondition ;;
     20261110000100) schema_proof=artifact-optional-antivirus-migration-postcondition.sql; schema_verifier=validArtifactOptionalAntivirusMigrationPostcondition ;;
     20261107000100) schema_proof=jira-create-fields-migration-postcondition.sql; schema_verifier=validJiraCreateFieldsMigrationPostcondition ;;
     20261109000100) schema_proof=integration-resource-policies-migration-postcondition.sql; schema_verifier=validIntegrationResourcePoliciesMigrationPostcondition ;;

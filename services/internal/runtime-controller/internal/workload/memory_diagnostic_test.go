@@ -18,7 +18,7 @@ func TestTerminalContainerMemoryDiagnosticUsesCurrentKnownContainerReason(t *tes
 	terminated := func(name, reason string, exit int32) corev1.ContainerStatus {
 		return corev1.ContainerStatus{Name: name, State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: reason, ExitCode: exit}}}
 	}
-	for _, name := range []string{"workspace-prepare", "workspace-init", "role-runtime", "provider-runtime", "provider-credential-relay"} {
+	for _, name := range []string{"workspace-prepare", "workspace-init", "role-runtime", "provider-runtime", "provider-credential-relay", workspaceExecutorName} {
 		t.Run(name, func(t *testing.T) {
 			pod := &corev1.Pod{Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{terminated("role-runtime", "Error", 1), terminated(name, "OOMKilled", 137)}}}
 			if name == "workspace-prepare" || name == "workspace-init" {

@@ -82,11 +82,11 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 	if pod == nil || !validInitializationPodUID(string(pod.UID)) || pod.Name != runtimecontract.RuntimeTurnPodName(input.LeaseRef) ||
 		pod.Namespace != manager.config.RuntimeNamespace || pod.Spec.ServiceAccountName != input.EffectiveKubernetesAccess.ServiceAccountName ||
 		pod.Spec.HostNetwork || pod.Spec.HostPID || pod.Spec.HostIPC || pod.Spec.AutomountServiceAccountToken == nil || *pod.Spec.AutomountServiceAccountToken ||
-		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != 3 || len(pod.Spec.EphemeralContainers) != 0 ||
+		len(pod.Spec.InitContainers) != 2 || len(pod.Spec.Containers) != workspaceContainerCount(input) || len(pod.Spec.EphemeralContainers) != 0 ||
 		pod.Spec.ShareProcessNamespace != nil && *pod.Spec.ShareProcessNamespace {
 		return false
 	}
-	if !apiequality.Semantic.DeepEqual(pod.Spec.SecurityContext, runtimeWorkloadPodSecurityContext()) {
+	if !managedWorkspacePodMatches(pod, input) || !apiequality.Semantic.DeepEqual(pod.Spec.SecurityContext, runtimeWorkloadPodSecurityContext()) {
 		return false
 	}
 	expected := metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true", modeLabel: "turn", "app.kubernetes.io/name": "agent-runner", "app.kubernetes.io/component": "role-runtime", "kodex.dev/environment": manager.config.Environment, executionHashLabel: shortHash(input.LeaseRef)}, Annotations: runtimeProjectionAnnotations(input, pod.Name)}
@@ -110,7 +110,7 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 			corev1.VolumeMount{Name: "callback-ca", MountPath: "/var/run/config/kodex/runtime/callback", ReadOnly: true},
 			corev1.VolumeMount{Name: "callback-client", MountPath: "/var/run/secrets/kodex/runtime/callback-client", ReadOnly: true})
 	}
-	if !configureWorkspaceStoragePod(template, input) {
+	if !configureWorkspaceStoragePod(template, input) || !configureManagedWorkspacePod(template, input) {
 		return false
 	}
 	expectedInitSecurity := restrictedSecurityContext(10001)
@@ -133,6 +133,8 @@ func (manager *Manager) workspaceStoragePodMatches(input runtimecontract.RunnerI
 			expectedSecurity = providerSandboxSecurityContext(10002, manager.config.ProviderAppArmorProfile)
 		} else if container.Name == "provider-credential-relay" {
 			expectedSecurity = restrictedSecurityContext(10003)
+		} else if container.Name == workspaceExecutorName {
+			expectedSecurity = restrictedSecurityContext(10002)
 		}
 		if container.Name != "provider-credential-relay" {
 			expectedSecurity.RunAsGroup = int64Pointer(29000)

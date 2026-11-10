@@ -264,6 +264,7 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 		})
 	}
 	return runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
+		ManagedWorkspace: input.GetManagedWorkspace(),
 		Resources: runtimecontract.RuntimeResourcePolicy{
 			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),

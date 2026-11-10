@@ -264,6 +264,14 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", eligibleConfigurationAssistant) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if payload.Tool == runtimecontract.WorkspacePolicyTool {
+		if len(payload.SafeParameters) != 0 || payload.GrantRef != "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	previous, err := latestRuntimeActivity(ctx, tx, scope, lease, "TOOL", payload.CallRef)
 	if err != nil {
 		return commandOutcome{}, err
@@ -391,16 +399,17 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		return capability == ""
 	}
 	expected := map[string]string{
-		"get_configuration_catalog":  "platform.configuration.read",
-		"get_integration_catalog":    "platform.integration.catalog",
-		"find_platform_resources":    "platform.resources.search",
-		"read_task_session":          "platform.resources.search",
-		"propose_configuration_plan": "platform.configuration.plan",
-		"propose_assistant_metadata": "platform.presentation.propose",
-		"propose_run_metadata":       "platform.presentation.propose",
-		"delegate_agent":             "platform.run.delegate",
-		"launch_workflow":            "platform.run.launch",
-		"get_workflow_catalog":       "platform.run.launch",
+		runtimecontract.WorkspacePolicyTool: runtimecontract.ArtifactCapability,
+		"get_configuration_catalog":         "platform.configuration.read",
+		"get_integration_catalog":           "platform.integration.catalog",
+		"find_platform_resources":           "platform.resources.search",
+		"read_task_session":                 "platform.resources.search",
+		"propose_configuration_plan":        "platform.configuration.plan",
+		"propose_assistant_metadata":        "platform.presentation.propose",
+		"propose_run_metadata":              "platform.presentation.propose",
+		"delegate_agent":                    "platform.run.delegate",
+		"launch_workflow":                   "platform.run.launch",
+		"get_workflow_catalog":              "platform.run.launch",
 	}
 	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "read_task_session" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
@@ -450,6 +459,7 @@ type claimableExecution struct {
 	rawInput, rawAttachmentSets, rawArtifacts, rawIntegrationGrants, rawDelegationTargets        []byte
 	rawSessionContext                                                                            []byte
 	rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools                              []byte
+	managedWorkspace                                                                             bool
 	rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile             []byte
 	resourcesDigest, volumesDigest, networkDigest, rbacDigest                                    string
 }
@@ -558,7 +568,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.environmentBindingID, &candidate.environmentBindingRef, &candidate.environmentBindingVersion, &candidate.environmentBindingDigest,
 			&candidate.runtimeEnvironmentID, &candidate.runtimeEnvironmentRef, &candidate.runtimeEnvironmentVersion, &candidate.runtimeEnvironmentDigest,
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
-			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
+			&candidate.managedWorkspace, &candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
 			&candidate.codexSessionID, &candidate.schedulingFits, &candidate.schedulingPossible); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
@@ -809,7 +819,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
 			}
-			environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.rawResourcePolicy, candidate.rawVolumePolicy,
+			environmentPolicy, err := decodeRuntimeEnvironmentPolicy(candidate.managedWorkspace, candidate.rawResourcePolicy, candidate.rawVolumePolicy,
 				candidate.rawNetworkPolicy, candidate.rawKubernetesAccessProfile, candidate.resourcesDigest,
 				candidate.volumesDigest, candidate.networkDigest, candidate.rbacDigest)
 			if err != nil {

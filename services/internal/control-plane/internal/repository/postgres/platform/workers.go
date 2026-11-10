@@ -109,6 +109,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	var runtimeEnvironmentRef, runtimeEnvironmentDigest string
 	var environmentBindingRef, environmentBindingDigest string
 	var rawEnvironmentValues, rawSecretProjections, rawEnvironmentTools []byte
+	var managedWorkspace bool
 	var rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy, rawKubernetesAccessProfile []byte
 	var environmentCoreDigest, resourcesDigest, volumesDigest, networkDigest, rbacDigest string
 	var imageArtifactRef, imageRecipeRef, imageReference, imageManifestDigest, imageContractSHA256 string
@@ -132,7 +133,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		&runtimeEnvironmentRef, &runtimeEnvironmentVersion, &runtimeEnvironmentDigest,
 		&environmentBindingRef, &environmentBindingVersion, &environmentBindingDigest,
 		&rawEnvironmentValues, &rawSecretProjections, &rawEnvironmentTools,
-		&environmentCoreDigest, &rawResourcePolicy, &rawVolumePolicy, &rawNetworkPolicy, &rawKubernetesAccessProfile,
+		&environmentCoreDigest, &managedWorkspace, &rawResourcePolicy, &rawVolumePolicy, &rawNetworkPolicy, &rawKubernetesAccessProfile,
 		&resourcesDigest, &volumesDigest, &networkDigest, &rbacDigest,
 		&imageArtifactRef, &imageRecipeRef, &imageRecipeGeneration, &imageReference,
 		&imageManifestDigest, &imageContractRevision, &imageContractSHA256,
@@ -190,7 +191,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		RecipeGeneration: imageRecipeGeneration,
 		Reference:        imageReference, Digest: imageManifestDigest,
 	}
-	environmentPolicy, err := decodeRuntimeEnvironmentPolicy(rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy,
+	environmentPolicy, err := decodeRuntimeEnvironmentPolicy(managedWorkspace, rawResourcePolicy, rawVolumePolicy, rawNetworkPolicy,
 		rawKubernetesAccessProfile, resourcesDigest, volumesDigest, networkDigest, rbacDigest)
 	if err != nil || environmentPolicy.KubernetesAccess.Kind != runtimecontract.RuntimeKubernetesAccessNone {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify runtime environment policy: %w", errs.ErrConflict)

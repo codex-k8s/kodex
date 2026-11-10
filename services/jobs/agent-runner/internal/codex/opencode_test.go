@@ -210,3 +210,53 @@ func TestOpenCodeEnvironmentRetainsManagedTransportOnly(t *testing.T) {
 		t.Fatal("managed environment boundary changed")
 	}
 }
+
+// TestOpenCodeWorkspaceIsExplicitAndKeepsNativeToolsDenied checks the separate loopback catalog,
+// exact local permission names and the shared finite timeout. No SDK or live model is executed.
+// TestOpenCodeWorkspaceIsExplicitAndKeepsNativeToolsDenied проверяет отдельный loopback catalog,
+// exact local permission names и общий конечный timeout без запуска SDK либо живой модели.
+func TestOpenCodeWorkspaceIsExplicitAndKeepsNativeToolsDenied(t *testing.T) {
+	input := openCodeInputFixture()
+	input.Mode = runtimecontract.RunnerModeTurn
+	input.AssistantScope = runtimecontract.AssistantScopeNone
+	input.ProjectRef = "prj_fixture"
+	input.LeaseRef = "lea_fixture"
+	input.LeaseFence = "fixture-fence"
+	input.LeaseGeneration = 1
+	input.InputDigest = strings.Repeat("a", 64)
+	input.RuntimeRevisionDigest = strings.Repeat("b", 64)
+	input.CodexSandbox = "workspace-write"
+	input.Capabilities = []string{runtimecontract.ArtifactCapability}
+	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
+	input.EnvironmentPolicy = runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	input.EnvironmentPolicy.ManagedWorkspace = true
+	input.EnvironmentTools = []runtimecontract.RuntimeEnvironmentTool{{Name: "Go", Command: "go"}}
+	raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if json.Unmarshal(raw, &config) != nil {
+		t.Fatal("invalid config")
+	}
+	workspace := config["mcp"].(map[string]any)["workspace"].(map[string]any)
+	if workspace["url"] != "http://127.0.0.1:12345/workspace/mcp" || workspace["timeout"] != float64(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds*1000) {
+		t.Fatal("local catalog or timeout lost")
+	}
+	permission := config["permission"].(map[string]any)
+	if permission["*"] != "deny" || permission["workspace_*"] != nil || permission["bash"] != nil {
+		t.Fatal("native/wildcard local authority enabled")
+	}
+	for _, name := range runtimecontract.RuntimeWorkspaceToolNames(input) {
+		if permission["workspace_"+name] != "allow" || !allowedOpenCodeTool(input, "workspace_"+name) {
+			t.Fatal("exact local tool missing", name)
+		}
+	}
+	if allowedOpenCodeTool(input, "workspace_unpublished") || allowedOpenCodeTool(input, "bash") {
+		t.Fatal("unpublished tool accepted")
+	}
+	input.EnvironmentPolicy.ManagedWorkspace = false
+	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
+		t.Fatal("unqualified command profile accepted")
+	}
+}

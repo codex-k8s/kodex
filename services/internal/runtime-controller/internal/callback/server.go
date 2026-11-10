@@ -814,6 +814,9 @@ func emptyMCPParams(raw json.RawMessage) bool {
 // вызову по-прежнему нужна owner-side authorization.
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		result = append(result, workspacePolicyTool())
+	}
 	if runtimecontract.RuntimeExecutionSnapshotAvailable(input) {
 		result = append(result, executionSnapshotTool())
 	}
@@ -987,6 +990,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	switch params.Name {
+	case runtimecontract.WorkspacePolicyTool:
+		result, err = workspacePolicy(input, params.Arguments)
 	case runtimecontract.ExecutionSnapshotTool:
 		result, err = server.executionSnapshot(input, params.Arguments)
 	case "get_configuration_catalog":
@@ -2403,6 +2408,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{"purpose": purpose}, "", input.FileCatalog.Ref, true
 	}
 	switch tool {
+	case runtimecontract.WorkspacePolicyTool:
+		return map[string]any{}, runtimecontract.ArtifactCapability, "", len(arguments) == 0 && runtimecontract.RuntimeWorkspaceToolsAvailable(input)
 	case runtimecontract.ExecutionSnapshotTool:
 		return map[string]any{}, "", "", len(arguments) == 0 && runtimecontract.RuntimeExecutionSnapshotAvailable(input)
 	case "get_configuration_catalog":

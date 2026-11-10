@@ -20,6 +20,8 @@ const reservedVolumeNames = new Set([
   "kube-api-access",
   "provider-auth",
   "provider-socket",
+  "workspace-executor-socket",
+  "workspace-executor-tmp",
   "provider-tmp",
   "runtime-input",
   "session",
@@ -116,6 +118,9 @@ export function editableRuntimeEnvironmentPolicy(
   policy: RuntimeEnvironmentPolicy,
 ): RuntimeEnvironmentPolicyInput {
   return {
+    ...(policy.managedWorkspace !== undefined
+      ? { managedWorkspace: policy.managedWorkspace }
+      : {}),
     resources: { ...policy.resources },
     volumes: policy.volumes.map(({ name, kind, sizeMib }) => ({
       name,
@@ -263,6 +268,9 @@ export function normalizeRuntimeEnvironmentInput(
       ...(item.revision !== undefined ? { revision: item.revision } : {}),
     })),
     policy: {
+      ...(input.policy.managedWorkspace !== undefined
+        ? { managedWorkspace: input.policy.managedWorkspace }
+        : {}),
       resources: { ...input.policy.resources },
       volumes: input.policy.volumes.map((item) => ({
         name: item.name.trim(),
