@@ -1377,6 +1377,8 @@ const (
 	ArtifactScanState_ARTIFACT_SCAN_STATE_CLEAN       ArtifactScanState = 3
 	ArtifactScanState_ARTIFACT_SCAN_STATE_QUARANTINED ArtifactScanState = 4
 	ArtifactScanState_ARTIFACT_SCAN_STATE_FAILED      ArtifactScanState = 5
+	// Допуск обычного файла без антивируса по явной политике оператора.
+	ArtifactScanState_ARTIFACT_SCAN_STATE_NOT_SCANNED ArtifactScanState = 6
 )
 
 // Enum value maps for ArtifactScanState.
@@ -1388,6 +1390,7 @@ var (
 		3: "ARTIFACT_SCAN_STATE_CLEAN",
 		4: "ARTIFACT_SCAN_STATE_QUARANTINED",
 		5: "ARTIFACT_SCAN_STATE_FAILED",
+		6: "ARTIFACT_SCAN_STATE_NOT_SCANNED",
 	}
 	ArtifactScanState_value = map[string]int32{
 		"ARTIFACT_SCAN_STATE_UNSPECIFIED": 0,
@@ -1396,6 +1399,7 @@ var (
 		"ARTIFACT_SCAN_STATE_CLEAN":       3,
 		"ARTIFACT_SCAN_STATE_QUARANTINED": 4,
 		"ARTIFACT_SCAN_STATE_FAILED":      5,
+		"ARTIFACT_SCAN_STATE_NOT_SCANNED": 6,
 	}
 )
 
@@ -95875,14 +95879,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1bOWNER_GATE_DECISION_APPROVE\x10\x01\x12\x1e\n" +
 	"\x1aOWNER_GATE_DECISION_REJECT\x10\x02\x12'\n" +
 	"#OWNER_GATE_DECISION_REQUEST_CHANGES\x10\x03\x12\x1e\n" +
-	"\x1aOWNER_GATE_DECISION_CANCEL\x10\x04*\xdf\x01\n" +
+	"\x1aOWNER_GATE_DECISION_CANCEL\x10\x04*\x84\x02\n" +
 	"\x11ArtifactScanState\x12#\n" +
 	"\x1fARTIFACT_SCAN_STATE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bARTIFACT_SCAN_STATE_PENDING\x10\x01\x12 \n" +
 	"\x1cARTIFACT_SCAN_STATE_SCANNING\x10\x02\x12\x1d\n" +
 	"\x19ARTIFACT_SCAN_STATE_CLEAN\x10\x03\x12#\n" +
 	"\x1fARTIFACT_SCAN_STATE_QUARANTINED\x10\x04\x12\x1e\n" +
-	"\x1aARTIFACT_SCAN_STATE_FAILED\x10\x05*\xf1\x01\n" +
+	"\x1aARTIFACT_SCAN_STATE_FAILED\x10\x05\x12#\n" +
+	"\x1fARTIFACT_SCAN_STATE_NOT_SCANNED\x10\x06*\xf1\x01\n" +
 	"\x0eArtifactSource\x12\x1f\n" +
 	"\x1bARTIFACT_SOURCE_UNSPECIFIED\x10\x00\x12\"\n" +
 	"\x1eARTIFACT_SOURCE_CONTROL_CENTER\x10\x01\x12 \n" +

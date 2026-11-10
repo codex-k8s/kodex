@@ -193,6 +193,8 @@ func testArtifactAntivirus(t *testing.T, ctx context.Context, repository *Reposi
 	}
 	download.Reader.Close()
 
+	testArtifactOptionalAntivirus(t, ctx, repository, owner, service)
+
 	// Старое format-only состояние без proof не становится допущенным даже
 	// при наличии сырой CLEAN revision. Данные не переписываются при чтении.
 	principal, err := repository.ResolvePrincipal(ctx, owner)

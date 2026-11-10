@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -177,7 +178,7 @@ func (repository *Repository) decorateVFSSelection(ctx context.Context, tx pgx.T
 		if err := projectArtifactActions(ctx, tx, current, &artifact); err != nil {
 			return err
 		}
-		if node.ScanState != "CLEAN" {
+		if !artifactpolicy.ContentAdmitted(node.ScanState) {
 			artifact.NextActions = slices.DeleteFunc(artifact.NextActions, func(action string) bool { return action == "DOWNLOAD" || action == "BIND" })
 		}
 		node.NextActions = artifact.NextActions

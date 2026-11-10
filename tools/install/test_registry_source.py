@@ -237,13 +237,14 @@ class RegistrySource(unittest.TestCase):
             self.assertTrue(any(c['name']=='skill-scanner'for c in registry.one(resources,'Deployment','control-plane')['spec']['template']['spec']['containers']))
             self.assertFalse(registry.one(resources,'CronJob','clamav-db-updater')['spec'].get('suspend',False))
             disabled=directory/'disabled.yaml'
-            disabled_command=[str(disabled)if arg==str(render)else arg for arg in command]+['--clamav-mode','disabled']
+            disabled_command=[str(disabled)if arg==str(render)else arg for arg in command]+['--clamav-mode','disabled','--artifact-antivirus-mode','disabled']
             disabled_result=subprocess.run(disabled_command,cwd=root,capture_output=True,timeout=150,env={**os.environ,'GOMAXPROCS':'2','GOFLAGS':'-p=1','GOWORK':'off'})
             self.assertEqual(disabled_result.returncode,0,(disabled_result.stdout+disabled_result.stderr).decode()[-1000:])
             disabled_resources=[item for item in registry.yaml.safe_load_all(disabled.read_text())if item]
             disabled_cp=registry.one(disabled_resources,'Deployment','control-plane')
             self.assertFalse(any(c['name']=='skill-scanner'for c in disabled_cp['spec']['template']['spec']['containers']))
             self.assertEqual(disabled_cp['metadata']['annotations']['kodex.dev/clamav-mode'],'disabled')
+            self.assertIn({'name':'CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE','value':'disabled'}, next(c for c in disabled_cp['spec']['template']['spec']['containers'] if c['name']=='control-plane')['env'])
             self.assertTrue(registry.one(disabled_resources,'CronJob','clamav-db-updater')['spec']['suspend'])
             self.assertEqual(registry.one(disabled_resources,'Deployment','clamav-egress-gateway')['spec']['replicas'],0)
             self.assertFalse(any(item['kind']=='PersistentVolumeClaim'and item['metadata']['name']=='clamav-database'for item in disabled_resources))

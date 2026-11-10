@@ -197,7 +197,8 @@ func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 		return preparedContent{}, "", "", err
 	}
 	content.Prepared.Antivirus, err = decodeArtifactAntivirus(scanJSON, content.Prepared.Digest, content.Prepared.SizeBytes)
-	if err != nil || content.Prepared.Antivirus.Infected {
+	if err != nil || content.Prepared.Antivirus.Infected ||
+		content.Prepared.ScanState != artifactAdmissionState("CLEAN", content.Prepared.Antivirus) {
 		return preparedContent{}, "", "", errs.ErrConflict
 	}
 	return content, state, requestDigest, nil
@@ -247,6 +248,7 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	if err != nil {
 		return preparedContent{}, err
 	}
+	request.ScanState = artifactAdmissionState(request.ScanState, scan)
 	b := request.Binding
 	requestDigest := preparedContentRequestDigest(request)
 	artifactRef := b.TargetArtifactRef

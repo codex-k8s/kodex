@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
@@ -181,7 +182,7 @@ func permittedArtifactActions(scanState, lifecycle string, allowed func(string) 
 			actions = append(actions, "PURGE")
 		}
 	case "ACTIVE":
-		if scanState == "CLEAN" {
+		if artifactpolicy.ContentAdmitted(scanState) {
 			if allowed("artifact.download") {
 				actions = append(actions, "DOWNLOAD")
 			}
@@ -248,7 +249,7 @@ func projectArtifactActions(ctx context.Context, runner queryRunner, current sco
 // далее. Deferred filtering удаляет DOWNLOAD/BIND при final scan не CLEAN, включая отказ.
 func projectArtifactRevisionEligibility(ctx context.Context, runner queryRunner, current scope, artifact *entity.Artifact) error {
 	defer func() {
-		if artifact.ScanState != "CLEAN" {
+		if !artifactpolicy.ContentAdmitted(artifact.ScanState) {
 			artifact.NextActions = slices.DeleteFunc(artifact.NextActions, func(action string) bool { return action == "DOWNLOAD" || action == "BIND" })
 		}
 	}()
@@ -270,7 +271,7 @@ func projectArtifactRevisionEligibility(ctx context.Context, runner queryRunner,
 		return nil
 	}
 	artifact.ScanState = revision.ScanState
-	if revision.ScanState == "CLEAN" {
+	if artifactpolicy.ContentAdmitted(revision.ScanState) {
 		artifact.PreviewState = "UNAVAILABLE"
 		if revision.PreviewAvailable {
 			artifact.PreviewState = "AVAILABLE"

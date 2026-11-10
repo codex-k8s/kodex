@@ -68,7 +68,7 @@ func (repository *Repository) UploadAgentAvatar(
 	if reservation.state != "RESERVED" && reservation.state != "MATERIALIZED" {
 		return entity.Agent{}, errs.ErrConflict
 	}
-	scan, err := repository.scanArtifact(ctx, input.Reader, input.Digest, input.SizeBytes)
+	scan, err := repository.scanRequiredArtifact(ctx, input.Reader, input.Digest, input.SizeBytes)
 	if err != nil {
 		return entity.Agent{}, err
 	}

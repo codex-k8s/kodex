@@ -26,6 +26,7 @@ export interface AttachmentUploadQueueItem {
   state: AttachmentUploadState;
   failure?: AttachmentUploadFailure;
   artifactRef?: string;
+  scanState?: string;
   error?: string;
   progress?: AttachmentUploadProgress;
 }
@@ -58,6 +59,7 @@ export interface AttachmentSelectionState extends AttachmentComposerState {
 }
 
 export interface ExistingAttachmentSelection {
+  scanState?: string;
   ref: string;
   name: string;
   mediaType: string;
@@ -73,7 +75,7 @@ export interface AttachmentUploadQueueOptions {
   upload: (
     file: File,
     request: AttachmentUploadRequest,
-  ) => Promise<{ ref: string }>;
+  ) => Promise<{ ref: string; scanState?: string }>;
   disabled: () => boolean;
   classifyFailure?: (error: unknown) => AttachmentUploadFailure;
   formatError: (error: unknown) => string;
@@ -263,6 +265,7 @@ export function createAttachmentUploadQueue(
       current.state = "UPLOADED";
       current.failure = undefined;
       current.artifactRef = artifact.ref;
+      current.scanState = artifact.scanState;
       current.error = undefined;
       current.progress = undefined;
     } catch (error) {

@@ -13,5 +13,5 @@ JOIN control_plane.artifact_revision_content content
   ON content.revision_id = artifact.revision_id AND content.digest = item.digest
  AND content.size_bytes = item.size_bytes
 WHERE item.attachment_set_id = @attachment_set_id::uuid
-  AND artifact.scan_state = 'CLEAN' AND artifact.lifecycle_state = 'ACTIVE'
+  AND artifact.scan_state IN ('CLEAN','NOT_SCANNED') AND artifact.lifecycle_state = 'ACTIVE'
 ORDER BY item.position;

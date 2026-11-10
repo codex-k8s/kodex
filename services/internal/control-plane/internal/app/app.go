@@ -129,6 +129,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureSkillScanner(skillScanner); err != nil {
 		return startupFailure(stageConfigureSkillScanner, err)
 	}
+	if err := repository.ConfigureArtifactAntivirusMode(config.ArtifactAntivirusMode); err != nil {
+		return startupFailure(stageConfigureArtifactScanner, err)
+	}
 	if err := repository.ConfigureArtifactScanner(skillScanner); err != nil {
 		return startupFailure(stageConfigureArtifactScanner, err)
 	}

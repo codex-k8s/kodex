@@ -30,6 +30,7 @@ provider_profile_arguments=()
 previous_arguments=()
 repair_api_endpoints=false
 clamav_mode=enabled
+artifact_antivirus_mode=required
 repair_egress_secret_access=false
 component_image_requested=false
 previous_component_image_requested=false
@@ -54,6 +55,7 @@ while (($# > 0)); do
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
+    --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
     --repair-egress-secret-access) repair_egress_secret_access=true; previous_arguments+=("$1"); shift ;;
     --component-image-profile|--component-image-profile-sha256|--base-release-lock) component_image_requested=true; component_arguments+=("$1" "${2:-}"); previous_arguments+=("$1" "${2:-}"); shift 2 ;;
@@ -77,6 +79,7 @@ case "$mode" in
   *) fail 'mode is invalid' ;;
 esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
+case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antivirus mode is invalid' ;; esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
 if [[ "$component_image_requested" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'component image override requires workload resume' ;; esac
@@ -112,7 +115,7 @@ if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
 fi
 python3 "$repository_root/tools/install/provider_sandbox_profile.py" --check --render "$render_file" "${provider_profile_arguments[@]}"
-python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --render "$render_file"
+python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --render "$render_file"
 python3 "$repository_root/tools/install/native_integration_egress.py" --check --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
@@ -981,7 +984,7 @@ fi
 if [[ "$mode" == resume-workloads ]]; then
   [[ -n "$profile_mode" ]] || fail 'workload resume requires a portable profile'
   python3 "$repository_root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" "${completion_arguments[@]}"
+    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" "${completion_arguments[@]}"
   # Только profile assets/parameters/policy; authority registry и publisher history прежние.
   apply_render bootstrap-observability '
     select(.metadata.labels."kodex.dev/observability-profile" == "disabled" and

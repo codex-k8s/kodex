@@ -12,6 +12,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -177,7 +178,7 @@ func projectFileBindingTarget(artifact fileBindingArtifact, item fileBindingAgen
 	result := item.ArtifactBindingTarget
 	result.BindReason, result.UnbindReason = fileTargetAvailable, fileTargetAvailable
 	switch {
-	case artifact.Lifecycle != "ACTIVE" || artifact.Scan != "CLEAN":
+	case artifact.Lifecycle != "ACTIVE" || !artifactpolicy.ContentAdmitted(artifact.Scan):
 		result.BindReason = fileTargetArtifactUnavailable
 	case item.State == "ARCHIVED":
 		result.BindReason = fileTargetArchived

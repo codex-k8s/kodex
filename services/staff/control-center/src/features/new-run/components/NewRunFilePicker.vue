@@ -110,6 +110,7 @@ function scanTone(
   state: Artifact["scanState"],
 ): "danger" | "neutral" | "success" | "warning" {
   if (state === "CLEAN") return "success";
+  if (state === "NOT_SCANNED") return "warning";
   if (state === "QUARANTINED" || state === "FAILED") return "danger";
   if (state === "SCANNING") return "warning";
   return "neutral";

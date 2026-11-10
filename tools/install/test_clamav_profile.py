@@ -63,6 +63,24 @@ class ClamAVProfile(unittest.TestCase):
         self.assertIn(before[-1],desired)
         with self.assertRaises(Rejected):profile.transform(desired,'enabled')
 
+    def test_artifact_exception_is_explicit_and_does_not_reenable_scanner(self):
+        before=fixture()
+        required=profile.transform(before,'disabled')
+        optional=profile.transform(before,'disabled','disabled')
+        self.assertEqual(profile.transform(optional,'disabled','disabled'),optional)
+        cp=profile.one(optional,'Deployment','control-plane')
+        pod=cp['spec']['template']['spec']
+        self.assertEqual([c['name'] for c in pod['containers']],['control-plane'])
+        modes=[e for e in pod['containers'][0]['env'] if e['name']=='CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE']
+        self.assertEqual(modes,[{'name':'CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE','value':'disabled'}])
+        self.assertNotEqual(optional,required)
+        self.assertEqual(profile.transform(before),before)
+        with self.assertRaises(Rejected):profile.transform(optional,'disabled')
+        with self.assertRaises(Rejected):profile.transform(before,'disabled','auto')
+        duplicate=copy.deepcopy(optional)
+        profile.one(duplicate,'Deployment','control-plane')['spec']['template']['spec']['containers'][0]['env'].append(modes[0])
+        with self.assertRaises(Rejected):profile.transform(duplicate,'disabled','disabled')
+
     def test_foreign_scanner_claim_namespace_and_volume_consumer_are_rejected(self):
         for mode in ['image','claim','namespace','consumer','missing','duplicate','invalid-mode']:
             value=fixture();pod=value[0]['spec']['template']['spec']

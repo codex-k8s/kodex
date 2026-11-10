@@ -76,7 +76,7 @@ WITH catalog AS MATERIALIZED (
       AND artifact.ref=candidates.ref AND artifact.revision=candidates.revision AND artifact.digest=candidates.digest
       AND artifact.media_type=candidates.media_type AND artifact.size_bytes=candidates.size_bytes
       AND artifact.source=candidates.source AND (candidates.purpose='SKILL' OR artifact.file_name=candidates.file_name)
-      AND artifact.scan_state='CLEAN'
+      AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
     JOIN control_plane.artifact_revision_content content ON content.revision_id=artifact.revision_id
       AND content.digest=candidates.digest AND content.size_bytes=candidates.size_bytes
     JOIN control_plane.projects project ON project.id=catalog.project_id

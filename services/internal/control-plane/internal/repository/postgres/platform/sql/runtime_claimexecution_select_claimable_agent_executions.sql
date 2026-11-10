@@ -130,7 +130,7 @@ SELECT n.id::text,
                    AND knowledge_binding.target_ref=a.ref
                    AND knowledge_artifact.organization_id=r.organization_id
                    AND knowledge_artifact.project_id=r.project_id
-                   AND knowledge_artifact.scan_state='CLEAN'
+                   AND knowledge_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                    AND knowledge_artifact.lifecycle_state='ACTIVE'),'{}')
        ELSE '{}'::text[] END,
        r.input || CASE WHEN r.source = 'SCHEDULE' THEN COALESCE((
@@ -207,7 +207,7 @@ SELECT n.id::text,
                      JOIN control_plane.artifact_revision_content AS eligible_content
                        ON eligible_content.revision_id = eligible_artifact.revision_id
                      WHERE eligible_item.attachment_set_id = previous_set.id
-                       AND eligible_artifact.scan_state = 'CLEAN'
+                       AND eligible_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                        AND (
                            eligible_artifact.lifecycle_state = 'ACTIVE'
                            OR (
@@ -267,7 +267,7 @@ SELECT n.id::text,
                    JOIN control_plane.artifact_history AS artifact ON artifact.id = item.artifact_id
                    JOIN control_plane.artifact_revision_content AS content ON content.revision_id = artifact.revision_id
                    WHERE item.attachment_set_id = input_attachment_set.id
-                     AND artifact.scan_state = 'CLEAN'
+                     AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                      AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
                      AND artifact.ref = item.artifact_ref
                      AND artifact.revision = item.artifact_revision
@@ -319,7 +319,7 @@ SELECT n.id::text,
                    JOIN control_plane.artifact_revision_content AS previous_content
                      ON previous_content.revision_id = previous_artifact.revision_id
                    WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
-                     AND previous_artifact.scan_state = 'CLEAN'
+                     AND previous_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                      AND (
                          previous_artifact.lifecycle_state = 'ACTIVE'
                          OR (
@@ -344,7 +344,7 @@ SELECT n.id::text,
                          JOIN control_plane.artifact_revision_content AS eligible_content
                            ON eligible_content.revision_id = eligible_artifact.revision_id
                          WHERE eligible_item.attachment_set_id = previous_set.id
-                           AND eligible_artifact.scan_state = 'CLEAN'
+                           AND eligible_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                            AND (
                                eligible_artifact.lifecycle_state = 'ACTIVE'
                                OR (
@@ -387,7 +387,7 @@ SELECT n.id::text,
                      AND knowledge_binding.target_ref = a.ref
                      AND knowledge_artifact.organization_id = r.organization_id
                      AND knowledge_artifact.project_id = r.project_id
-                     AND knowledge_artifact.scan_state = 'CLEAN'
+                     AND knowledge_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
                      AND knowledge_artifact.lifecycle_state = 'ACTIVE'
            ) AS runtime_artifact
        ), '[]'::jsonb) ELSE '[]'::jsonb END,
@@ -814,7 +814,7 @@ WHERE n.organization_id = $1::uuid
           JOIN control_plane.artifact_history AS input_artifact ON input_artifact.id = input_item.artifact_id
           JOIN control_plane.artifact_revision_content AS input_content ON input_content.revision_id = input_artifact.revision_id
           WHERE input_item.attachment_set_id = input_attachment_set.id
-            AND input_artifact.scan_state = 'CLEAN'
+            AND input_artifact.scan_state IN ('CLEAN','NOT_SCANNED')
             AND input_artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
             AND input_artifact.ref = input_item.artifact_ref
             AND input_artifact.revision = input_item.artifact_revision

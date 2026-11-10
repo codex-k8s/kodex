@@ -10,7 +10,7 @@ SELECT a.ref, p.ref, role.ref, role.name, a.name, a.purpose,
            JOIN control_plane.artifact_history artifact ON artifact.id = binding.artifact_id AND artifact.revision_id=binding.revision_id
            WHERE binding.target_kind = 'KNOWLEDGE'
              AND binding.target_ref = a.ref
-             AND artifact.scan_state = 'CLEAN'
+             AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
              AND artifact.lifecycle_state = 'ACTIVE'
        ), '{}'),
        a.created_at, a.updated_at

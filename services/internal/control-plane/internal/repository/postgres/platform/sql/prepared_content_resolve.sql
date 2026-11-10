@@ -12,7 +12,8 @@ WHERE content.organization_id=@organization_id AND content.ref=@ref
  AND revision.plan_id=binding.plan_id AND revision.revision=binding.plan_revision
  AND content.operation_key=@operation_key AND content.digest=@digest AND content.size_bytes=@size_bytes
  AND content.state='STAGED' AND content.adopted_revision_id IS NULL AND content.available_until>clock_timestamp()
- AND content.antivirus_report->>'verdict'='CLEAN' AND content.antivirus_report->>'policy'='clamav-instream-v1'
+ AND ((content.scan_state='CLEAN' AND content.antivirus_report->>'verdict'='CLEAN' AND content.antivirus_report->>'policy'='clamav-instream-v1')
+ OR (content.scan_state='NOT_SCANNED' AND content.antivirus_report->>'verdict'='NOT_SCANNED' AND content.antivirus_report->>'policy'='artifact-format-only-v1'))
  AND plan.current_revision=binding.plan_revision AND plan.state IN ('DRAFT','VALID','INVALID')
  AND EXISTS (SELECT 1 FROM jsonb_array_elements(revision.operations) operation
    WHERE operation->>'ref'=content.operation_key AND operation->'parameters'->>'contentRef'=content.ref

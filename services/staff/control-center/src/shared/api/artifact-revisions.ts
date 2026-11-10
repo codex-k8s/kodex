@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import { requestSignal } from "./client";
 import {
   downloadArtifactRevision,
@@ -28,9 +29,14 @@ export function assertArtifactRevision(
     value.sizeBytes < 0 ||
     value.sizeBytes > 512 << 20 ||
     !/^sha256:[a-f0-9]{64}$/u.test(value.digest) ||
-    !["PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"].includes(
-      value.scanState,
-    ) ||
+    ![
+      "PENDING",
+      "SCANNING",
+      "CLEAN",
+      "NOT_SCANNED",
+      "QUARANTINED",
+      "FAILED",
+    ].includes(value.scanState) ||
     ![
       "CONTROL_CENTER",
       "AGENT_RESULT",
@@ -138,8 +144,10 @@ export async function downloadRevisionContent(
   signal: AbortSignal,
 ): Promise<Blob> {
   assertArtifactRevision(revision, revision.artifactRef, revision.ref);
-  if (revision.scanState !== "CLEAN")
-    throw new Error("Artifact revision content requires clean scan state");
+  if (!artifactContentAdmitted(revision.scanState))
+    throw new Error(
+      "Artifact revision content requires an admitted content state",
+    );
   const body = await readWithRetry(
     async () =>
       (

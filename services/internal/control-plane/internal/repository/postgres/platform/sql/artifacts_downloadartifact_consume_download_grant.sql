@@ -18,7 +18,7 @@ WHERE g.id = @grant_id::uuid
         AND ar.organization_id = g.organization_id
         AND ar.project_id IS NOT DISTINCT FROM g.project_id
         AND ar.revision_id = g.revision_id
-        AND ar.scan_state = 'CLEAN'
+        AND ar.scan_state IN ('CLEAN','NOT_SCANNED')
         AND ar.lifecycle_state = 'ACTIVE'
         AND EXISTS (
             SELECT 1 FROM control_plane.catalog_access_targets target

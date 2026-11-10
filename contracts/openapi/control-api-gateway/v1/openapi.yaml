@@ -8843,7 +8843,7 @@ components:
       required: false
       schema:
         type: string
-        enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
+        enum: [PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED]
     ArtifactSourceKindQuery:
       name: sourceKind
       in: query
@@ -12283,7 +12283,7 @@ components:
         scanState:
           {
             type: string,
-            enum: ["", PENDING, SCANNING, CLEAN, QUARANTINED, FAILED],
+            enum: ["", PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED],
           }
         resourceKind:
           { type: string, enum: ["", ARTIFACT, SKILL_BUNDLE, MEMORY_RECORD] }
@@ -17695,7 +17695,7 @@ components:
         scanState:
           {
             type: string,
-            enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED],
+            enum: [PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED],
           }
         source:
           {
@@ -17756,7 +17756,7 @@ components:
         scanState:
           {
             type: string,
-            enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED],
+            enum: [PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED],
           }
         source:
           type: string

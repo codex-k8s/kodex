@@ -9,6 +9,6 @@ JOIN control_plane.artifact_revision_content content ON content.revision_id=arti
 WHERE binding.target_kind='KNOWLEDGE' AND binding.target_ref=@agent_ref
   AND agent.organization_id=@organization_id::uuid
   AND artifact.organization_id=agent.organization_id AND artifact.project_id=agent.project_id
-  AND artifact.scan_state='CLEAN' AND artifact.lifecycle_state='ACTIVE'
+  AND artifact.scan_state IN ('CLEAN','NOT_SCANNED') AND artifact.lifecycle_state='ACTIVE'
   AND content.digest=artifact.digest AND content.size_bytes=artifact.size_bytes
 ORDER BY binding.created_at,artifact.ref LIMIT 2049;

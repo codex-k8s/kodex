@@ -18,7 +18,7 @@ JOIN control_plane.artifact_revision_content AS content
  AND content.size_bytes = item.size_bytes
 JOIN control_plane.artifact_heads head ON head.id=artifact.id
 WHERE item.attachment_set_id = @attachment_set_id::uuid
-  AND artifact.scan_state = 'CLEAN'
+  AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
   AND (
       artifact.lifecycle_state = 'ACTIVE'
       OR (@allow_soft_deleted::boolean AND artifact.lifecycle_state = 'DELETED')

@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -2130,7 +2131,7 @@ func (repository *Repository) ListArtifacts(ctx context.Context, principal value
 		return nil, 0, "", errs.ErrInvalid
 	}
 	scanState := strings.TrimSpace(filter.ScanState)
-	if scanState != "" && !contains([]string{"PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"}, scanState) {
+	if scanState != "" && !contains([]string{"PENDING", "SCANNING", "CLEAN", "NOT_SCANNED", "QUARANTINED", "FAILED"}, scanState) {
 		return nil, 0, "", errs.ErrInvalid
 	}
 	sourceKind := strings.TrimSpace(filter.SourceKind)
@@ -2296,7 +2297,7 @@ func artifactActions(scanState, lifecycleState string, canManage bool) []string 
 	case "PURGE_PENDING", "PURGED":
 		return []string{}
 	}
-	if scanState != "CLEAN" {
+	if !artifactpolicy.ContentAdmitted(scanState) {
 		if canManage {
 			return []string{"DELETE"}
 		}

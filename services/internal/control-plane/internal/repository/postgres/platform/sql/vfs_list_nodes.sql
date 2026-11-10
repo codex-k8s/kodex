@@ -53,7 +53,7 @@ WITH projects AS (
       AND artifact.organization_id=agent.organization_id AND artifact.project_id=agent.project_id
     WHERE binding.target_kind='KNOWLEDGE' AND agent.organization_id=@organization_id::uuid
       AND agent.system_key IS NULL AND agent.state<>'ARCHIVED'
-      AND artifact.lifecycle_state=@lifecycle_state AND artifact.scan_state='CLEAN'
+      AND artifact.lifecycle_state=@lifecycle_state AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
       AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'agent.view','AGENT',
           agent.id,agent.project_id,agent.created_by,jsonb_build_object('PROJECT',agent.project_id::text),@evaluated_at,false)
 ), nodes AS (
@@ -187,7 +187,7 @@ WITH projects AS (
      AND artifact.size_bytes = item.size_bytes
      AND artifact.digest = item.digest
      AND artifact.source = item.source
-    WHERE artifact.lifecycle_state = @lifecycle_state AND artifact.scan_state = 'CLEAN'
+    WHERE artifact.lifecycle_state = @lifecycle_state AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
     UNION ALL
     SELECT 'artifact-result:' || run.ref || ':' || artifact.ref,
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/results/' || artifact.ref,
@@ -238,7 +238,7 @@ WITH projects AS (
       AND artifact.organization_id = agent.organization_id AND artifact.project_id = agent.project_id
       AND artifact.revision = agent.avatar_artifact_revision
     WHERE agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
-      AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state = 'CLEAN'
+      AND artifact.lifecycle_state = 'ACTIVE' AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
       AND control_plane.catalog_resource_visible(@organization_id::uuid, @actor_id::uuid, 'agent.view', 'AGENT',
           agent.id, agent.project_id, agent.created_by, jsonb_build_object('PROJECT', agent.project_id::text), @evaluated_at, false)
 ), scoped_nodes AS MATERIALIZED (
@@ -298,7 +298,7 @@ WITH projects AS (
       AND artifact.ref=file.item->>'ArtifactRef' AND to_jsonb(artifact.revision)=file.item->'ArtifactRevision'
       AND artifact.digest=file.item->>'Digest' AND to_jsonb(artifact.size_bytes)=file.item->'SizeBytes'
     JOIN control_plane.catalog_access_targets target ON target.organization_id=artifact.organization_id AND target.kind='ARTIFACT' AND target.id=artifact.id
-    WHERE parent.kind='SKILL' AND artifact.lifecycle_state='ACTIVE' AND artifact.scan_state='CLEAN'
+    WHERE parent.kind='SKILL' AND artifact.lifecycle_state='ACTIVE' AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
       AND control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,'artifact.view','ARTIFACT',
           target.id,target.project_id,target.owner_id,target.related_ids,@evaluated_at)
 ), expanded AS MATERIALIZED (

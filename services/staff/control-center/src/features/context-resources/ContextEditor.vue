@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
+
 import {
   Archive,
   Check,
@@ -383,7 +385,7 @@ async function loadArtifacts(
       title: artifact.fileName,
       description: `${artifact.mediaType} · ${String(artifact.sizeBytes)} B`,
       meta: `${artifact.scanState} · r${String(artifact.revision)}`,
-      disabled: artifact.scanState !== "CLEAN",
+      disabled: !artifactContentAdmitted(artifact.scanState),
     })),
     nextPageToken: page.nextPageToken,
   };

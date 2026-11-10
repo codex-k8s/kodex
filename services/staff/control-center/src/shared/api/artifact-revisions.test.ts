@@ -199,23 +199,31 @@ describe("immutable artifact revision adapter", () => {
         purpose,
         new AbortController().signal,
       ),
-    ).rejects.toThrow("Artifact revision content requires clean scan state");
+    ).rejects.toThrow(
+      "Artifact revision content requires an admitted content state",
+    );
     expect(readWithRetry).not.toHaveBeenCalled();
     expect(sdk.downloadArtifactRevision).not.toHaveBeenCalled();
   });
 
-  it.each(["DOWNLOAD", "PREVIEW"] as const)(
-    "%s pin-ит CLEAN historical revision и проверяет размер",
-    async (purpose) => {
+  it.each(
+    (["CLEAN", "NOT_SCANNED"] as const).flatMap((scanState) =>
+      (["DOWNLOAD", "PREVIEW"] as const).map(
+        (purpose) => [scanState, purpose] as const,
+      ),
+    ),
+  )(
+    "%s %s pin-ит admitted historical revision и проверяет размер",
+    async (scanState, purpose) => {
       const signal = new AbortController().signal;
       const body = new Blob(["old"]);
       sdk.downloadArtifactRevision.mockResolvedValue({
         data: body,
         response: new Response(),
       });
-      expect(await downloadRevisionContent(revision(), purpose, signal)).toBe(
-        body,
-      );
+      expect(
+        await downloadRevisionContent(revision({ scanState }), purpose, signal),
+      ).toBe(body);
       expect(sdk.downloadArtifactRevision).toHaveBeenCalledWith({
         path: { artifactRef: "art_fixture", revisionRef: "arv_fixture" },
         query: { purpose },
@@ -227,7 +235,7 @@ describe("immutable artifact revision adapter", () => {
         response: new Response(),
       });
       await expect(
-        downloadRevisionContent(revision(), purpose, signal),
+        downloadRevisionContent(revision({ scanState }), purpose, signal),
       ).rejects.toThrow();
     },
   );

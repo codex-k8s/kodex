@@ -1236,6 +1236,7 @@ onBeforeUnmount(() => {
           <option value="PENDING">{{ $t("states.PENDING") }}</option>
           <option value="SCANNING">{{ $t("states.SCANNING") }}</option>
           <option value="CLEAN">{{ $t("states.CLEAN") }}</option>
+          <option value="NOT_SCANNED">{{ $t("states.NOT_SCANNED") }}</option>
           <option value="QUARANTINED">{{ $t("states.QUARANTINED") }}</option>
           <option value="FAILED">{{ $t("states.FAILED") }}</option>
         </select>

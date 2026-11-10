@@ -63,7 +63,7 @@ func (repository *Repository) inspectRepositoryBundleFiles(ctx context.Context, 
 		if verdict.ScanState != artifactpolicy.ScanClean {
 			return nil, errs.ErrForbidden
 		}
-		scan, err := repository.scanArtifact(ctx, reader, "sha256:"+file.Entry.SHA256, file.Entry.Bytes)
+		scan, err := repository.scanRequiredArtifact(ctx, reader, "sha256:"+file.Entry.SHA256, file.Entry.Bytes)
 		if err != nil {
 			return nil, err
 		}

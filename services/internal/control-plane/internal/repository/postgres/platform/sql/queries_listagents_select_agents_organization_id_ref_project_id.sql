@@ -2,7 +2,7 @@
 SELECT a.ref,p.ref,role.ref,role.name,COALESCE(a.system_key,''),a.name,a.purpose,a.role_description,a.avatar_url,
 		COALESCE(avatar.ref,''),COALESCE(a.avatar_artifact_revision,0),a.state,a.enabled,a.version,
 		a.runtime_key,r.name,config.provider,config.model,r.runtime_revision,a.capabilities,
-		COALESCE((SELECT array_agg(ar.ref ORDER BY b.created_at) FROM control_plane.artifact_bindings b JOIN control_plane.artifact_history ar ON ar.id=b.artifact_id AND ar.revision_id=b.revision_id WHERE b.target_kind='KNOWLEDGE' AND b.target_ref=a.ref AND ar.scan_state='CLEAN' AND ar.lifecycle_state='ACTIVE'),'{}'),
+		COALESCE((SELECT array_agg(ar.ref ORDER BY b.created_at) FROM control_plane.artifact_bindings b JOIN control_plane.artifact_history ar ON ar.id=b.artifact_id AND ar.revision_id=b.revision_id WHERE b.target_kind='KNOWLEDGE' AND b.target_ref=a.ref AND ar.scan_state IN ('CLEAN','NOT_SCANNED') AND ar.lifecycle_state='ACTIVE'),'{}'),
 		a.created_at,a.updated_at,
 		($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$4::uuid AND m.active AND 'MANAGE_AGENTS'=ANY(m.permissions))),
 		($3 IN ('OWNER','ADMINISTRATOR') OR EXISTS(SELECT 1 FROM control_plane.memberships m WHERE m.project_id=p.id AND m.subject_id=$4::uuid AND m.active AND 'LAUNCH_RUNS'=ANY(m.permissions)))

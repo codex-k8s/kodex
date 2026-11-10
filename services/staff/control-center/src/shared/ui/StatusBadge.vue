@@ -52,6 +52,7 @@ const tone = computed(() => {
       "WAITING_HUMAN",
       "OPEN",
       "NEEDS_ATTENTION",
+      "NOT_SCANNED",
       "CANCELLING",
       "RECOVERING",
       "PROMOTING",

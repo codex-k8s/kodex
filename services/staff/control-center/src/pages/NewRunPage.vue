@@ -331,6 +331,7 @@ const filePickerLabels = computed<NewRunFilePickerLabels>(() => ({
     PENDING: text("states.PENDING"),
     SCANNING: text("states.SCANNING"),
     CLEAN: text("states.CLEAN"),
+    NOT_SCANNED: text("states.NOT_SCANNED"),
     QUARANTINED: text("states.QUARANTINED"),
     FAILED: text("states.FAILED"),
   },

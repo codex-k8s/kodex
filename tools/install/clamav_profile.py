@@ -32,13 +32,21 @@ def validate_scanner(pod):
                     'CANONICAL_SCANNER_CLIENT_MOUNT_REQUIRED')
 
 
-def transform(resources, mode='enabled'):
+def transform(resources, mode='enabled', artifact_mode='required'):
     require(mode in ['enabled', 'disabled'], 'CLAMAV_MODE_REJECTED')
+    require(artifact_mode in ['required', 'disabled'], 'ARTIFACT_ANTIVIRUS_MODE_REJECTED')
     result = copy.deepcopy(resources)
     control = one(result, 'Deployment', 'control-plane')
     updater = one(result, 'CronJob', 'clamav-db-updater')
     gateway = one(result, 'Deployment', 'clamav-egress-gateway')
     pod = control['spec']['template']['spec']
+    clients = [c for c in pod['containers'] if c['name'] == 'control-plane']
+    require(len(clients) == 1, 'EXACT_ARTIFACT_POLICY_OWNER_REQUIRED')
+    entries = [e for e in clients[0].get('env', []) if e['name'] == 'CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE']
+    require(len(entries) <= 1 and (not entries or entries == [{'name':'CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE','value':artifact_mode}]),
+            'ARTIFACT_ANTIVIRUS_MODE_DRIFT')
+    if artifact_mode == 'disabled' and not entries:
+        clients[0].setdefault('env', []).append({'name':'CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE','value':'disabled'})
     scanners = [c for c in pod['containers'] if c['name'] == 'skill-scanner']
     marked = control['metadata'].get('annotations', {}).get(ANNOTATION) == 'disabled'
     if mode == 'enabled':
@@ -73,12 +81,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--render', type=Path, required=True)
     parser.add_argument('--mode', choices=['enabled','disabled'], default='enabled')
+    parser.add_argument('--artifact-antivirus-mode', choices=['required','disabled'], default='required')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)));require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
-    desired = transform(resources, args.mode)
+    desired = transform(resources, args.mode, args.artifact_antivirus_mode)
     if args.check:
         require(desired == resources, 'CLAMAV_PROFILE_NOT_MATERIALIZED')
         return

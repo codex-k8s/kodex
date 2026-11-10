@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import { ref, shallowRef } from "vue";
 import {
   downloadRevisionContent,
@@ -100,7 +101,7 @@ export function createRevisionHistory() {
       scope.aborted ||
       downloading.value ||
       !artifact.nextActions.includes("DOWNLOAD") ||
-      value.scanState !== "CLEAN" ||
+      !artifactContentAdmitted(value.scanState) ||
       !items.value.some(
         (item) => item.ref === value.ref && item.digest === value.digest,
       )
