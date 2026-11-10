@@ -367,12 +367,14 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if input.EnvironmentPolicy.ManagedWorkspace {
 		quiescer, ok := prepared.proxy.(interface{ QuiesceWorkspace(context.Context) error })
 		if !ok {
+			logWorkspaceQuiescenceRejection("EXECUTOR_UNAVAILABLE")
 			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 		}
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		err := quiescer.QuiesceWorkspace(shutdown)
 		cancel()
 		if err != nil {
+			logWorkspaceQuiescenceRejection("EXECUTOR_JOIN")
 			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 		}
 	}

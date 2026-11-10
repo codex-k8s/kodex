@@ -51,3 +51,24 @@ func TestWorkspaceBindingFailureIsClosedBeforeCallback(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkspaceQuiescenceDiagnosticNeverCopiesUnknownData confines post-provider failure logs to fixed stages, without granting a writer or checkpoint.
+// TestWorkspaceQuiescenceDiagnosticNeverCopiesUnknownData ограничивает completion-диагностику fixed stages без выдачи writer или checkpoint.
+func TestWorkspaceQuiescenceDiagnosticNeverCopiesUnknownData(t *testing.T) {
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	logWorkspaceQuiescenceRejection("PROVIDER_JOIN")
+	logWorkspaceQuiescenceRejection("PRIVATE_FIXTURE_PATH_OR_ERROR")
+	decoder := json.NewDecoder(&output)
+	for _, stage := range []string{"PROVIDER_JOIN", "UNKNOWN"} {
+		var row map[string]any
+		if decoder.Decode(&row) != nil || len(row) != 4 || row["quiescence_stage"] != stage || row["msg"] != "runtime workspace quiescence rejected" {
+			t.Fatal("unsafe or missing quiescence diagnostic")
+		}
+	}
+	if strings.Contains(output.String(), "PRIVATE_FIXTURE") {
+		t.Fatal("private quiescence input reached log")
+	}
+}
