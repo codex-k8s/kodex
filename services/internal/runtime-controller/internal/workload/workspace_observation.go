@@ -210,17 +210,20 @@ func workspaceMainWritersUnstarted(pod *corev1.Pod) bool {
 }
 
 // workspaceAllContainersTerminated requires exact positive terminal status for every declared writer container.
-// Missing status, waiting containers and phase-only success cannot prove physical quiescence.
+// An absent init group declares no writers; missing status, waiting containers and phase alone never prove quiescence.
 // workspaceAllContainersTerminated требует exact positive terminal status каждого declared writer container.
-// Missing status, waiting container и одна phase success не доказывают physical quiescence.
+// Отсутствующая init group не объявляет writer; missing status, waiting container и одна phase не доказывают quiescence.
 func workspaceAllContainersTerminated(pod *corev1.Pod) bool {
+	if pod == nil || len(pod.Spec.Containers) == 0 {
+		return false
+	}
 	for _, group := range []struct {
 		specs    []corev1.Container
 		statuses []corev1.ContainerStatus
 	}{
 		{pod.Spec.InitContainers, pod.Status.InitContainerStatuses}, {pod.Spec.Containers, pod.Status.ContainerStatuses},
 	} {
-		if len(group.specs) == 0 || len(group.specs) != len(group.statuses) {
+		if len(group.specs) != len(group.statuses) {
 			return false
 		}
 		for _, container := range group.specs {
