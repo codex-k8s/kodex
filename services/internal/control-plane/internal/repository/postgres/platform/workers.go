@@ -1390,6 +1390,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
 	var definitionKey, definitionVersion, definitionDigest, connectionName, risk, approvalPolicy, resourceKind, resourceScopeDigest string
 	var encodedScope []byte
+	var connectionSnapshot []byte
 	var grantVersion int64
 	var approvalScopePaths []string
 	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef,
@@ -1398,7 +1399,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
 		&definitionKey, &definitionVersion, &definitionDigest, &connectionName, &risk, &approvalPolicy,
 		&resourceKind, &encodedScope, &resourceScopeDigest, &initiatorRef,
-		&grantVersion, &approvalScopePaths, &agentID,
+		&grantVersion, &approvalScopePaths, &agentID, &connectionSnapshot,
 	)
 	if err != nil {
 		if serializableTransactionConflict(err) {
@@ -1542,6 +1543,28 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	if approvalScopeID != "" {
 		approvalScopeBinding = approvalScopeID
 	}
+	nativePending := workflowRootID == "" && !bundle && !legacyRework
+	snapshotDigest := sha256.Sum256(connectionSnapshot)
+	pendingRequest := pendingInvocationRequest{
+		nodeID: nodeID, connectionID: connectionID, grantID: grantID, capability: input["capability_key"],
+		inputDigest: inputDigestHex, definitionDigest: definitionDigest, resourceScopeDigest: resourceScopeDigest,
+		grantVersion: grantVersion, approvalPolicy: approvalPolicy, idempotencyKey: input["idempotency_key"],
+		intentDigest: intentDigestHex, intentParts: intentParts, allowPending: state == "WAITING_APPROVAL",
+		connectionSnapshotDigest: hex.EncodeToString(snapshotDigest[:]),
+	}
+	if nativePending {
+		rejoined, rejoinErr := repository.rejoinPendingInvocationTx(ctx, tx, scope, pendingRequest)
+		if rejoinErr != nil {
+			return nil, rejoinErr
+		}
+		if rejoined != nil {
+			return map[string]any{
+				"invocationRef": rejoined.ref, "grantRef": grantRef, "operation": capability.Operation,
+				"state": rejoined.state, "gateRef": rejoined.gateRef, "risk": risk, "resourceKind": resourceKind,
+				"resourceScope": resourceScope, "resourceScopeDigest": resourceScopeDigest, "projectID": projectID,
+			}, nil
+		}
+	}
 	var invocationID, resolvedRef, resolvedState string
 	if legacyRework {
 		// The native owner selector already holds the exact node FOR UPDATE, serializing this slot with concurrent allocations.
@@ -1635,6 +1658,11 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 			}
 		} else if err != nil {
 			return nil, serializableTransactionError(err, errs.ErrUnavailable)
+		}
+	}
+	if nativePending && resolvedRef == invocationRef && resolvedState == "WAITING_APPROVAL" {
+		if err := storePendingInvocationReceiptTx(ctx, tx, scope, pendingRequest, resolvedRef); err != nil {
+			return nil, err
 		}
 	}
 	return map[string]any{

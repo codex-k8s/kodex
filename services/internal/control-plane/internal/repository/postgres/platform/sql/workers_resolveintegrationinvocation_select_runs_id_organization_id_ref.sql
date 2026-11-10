@@ -2,7 +2,9 @@
 SELECT r.id::text,n.id::text,c.id::text,g.id::text,g.ref,COALESCE(r.project_id::text,''),r.root_run_id::text,
 	c.definition_key,c.definition_version,c.definition_digest,c.name,
 	g.risk,g.approval_policy,g.resource_kind,g.resource_scope,g.resource_scope_digest,initiator.ref,
-	g.version,g.approval_scope_paths,COALESCE(n.agent_id::text,'')
+	g.version,g.approval_scope_paths,COALESCE(n.agent_id::text,''),
+	jsonb_build_object('configuration',c.public_configuration,'credentialPolicy',c.credential_policy,
+	 'credentialRevision',c.credential_revision_id)
 FROM control_plane.runs r
 JOIN control_plane.runs root ON root.id=r.root_run_id
 JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by

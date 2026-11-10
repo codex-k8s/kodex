@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"errors"
+	"maps"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,6 +29,20 @@ import (
 //
 //go:embed testdata/sql/integration_gate_feedback_snapshot.sql
 var integrationGateFeedbackSnapshotQuery string
+
+// integrationPendingConnectionFixture changes only the named synthetic Connection;
+// retaining the same owner models health metadata drift without configuration drift.
+// integrationPendingConnectionFixture меняет лишь названное synthetic Connection;
+// прежний owner моделирует изменение health metadata без изменения конфигурации.
+//
+//go:embed testdata/sql/integration_pending_connection_fixture.sql
+var integrationPendingConnectionFixture string
+
+// integrationPendingExpireFixture expires only receipts of the named synthetic invocation.
+// integrationPendingExpireFixture просрочивает лишь receipts названного synthetic invocation.
+//
+//go:embed testdata/sql/integration_pending_expire_fixture.sql
+var integrationPendingExpireFixture string
 
 // TestIntegrationGateFeedbackComponent exercises owner decisions after the original execution
 // completes, then claims a real immutable continuation with exact feedback and closed replay,
@@ -81,7 +97,7 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 	}
 	execute(t, command.ChangeIntegrationGrant, owner, "grant", &currentConnection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "github.pull_request.review.create", AgentRef: agent.Ref, Enabled: true, ApprovalPolicy: "HUMAN_EACH_EFFECT"})
 	previousInvocation := ""
-	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "EMPTY_REJECT", "TERMINAL", "APPROVE_LONG_INLINE", "APPROVE_LARGE"} {
+	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "EMPTY_REJECT", "TERMINAL", "APPROVE_LONG_INLINE", "APPROVE_LARGE", "APPROVE_EARLY_ALIAS", "APPROVE_NEW_INTENT", "APPROVE_UNKNOWN_ALIAS", "EXPIRED_ALIAS"} {
 		t.Run(decision, func(t *testing.T) {
 			run := execute(t, command.LaunchRun, owner, decision+"-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Feedback effect", Task: "Preserve canonical input", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
 			claimed := execute(t, command.ClaimExecution, worker, decision+"-origin", nil, command.LeaseInput{WorkloadInstance: "feedback-runtime", Limit: 1}).RuntimeItems
@@ -89,11 +105,87 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 				t.Fatal("origin was not claimed")
 			}
 			origin := claimed[0]
-			invocation, err := service.ResolveIntegrationInvocation(ctx, worker, map[string]string{"run_ref": run.Ref, "node_ref": stringMap(origin, "nodeRef"), "connection_ref": connection.Ref, "capability_key": "github.pull_request.review.create", "idempotency_key": "feedback-effect-" + decision}, map[string]any{"pull_request_number": 1, "sha": strings.Repeat("a", 40), "body": "Fixture review", "event": "COMMENT"})
+			request := map[string]string{"run_ref": run.Ref, "node_ref": stringMap(origin, "nodeRef"), "connection_ref": connection.Ref, "capability_key": "github.pull_request.review.create", "idempotency_key": "feedback-effect-" + decision}
+			bounded := map[string]any{"pull_request_number": 1, "sha": strings.Repeat("a", 40), "body": "Fixture review", "event": "COMMENT"}
+			invocation, err := service.ResolveIntegrationInvocation(ctx, worker, request, bounded)
 			if err != nil {
 				t.Fatal(err)
 			}
-			execute(t, command.CompleteExecution, worker, decision+"-complete-origin", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, ResultSummary: "Waiting for owner", Usage: turnUsageFixture()})
+			if previousInvocation != "" && stringMap(invocation, "invocationRef") == previousInvocation {
+				t.Fatal("pending reuse crossed physical run/node boundaries")
+			}
+			request["idempotency_key"] += "-alias"
+			aliased, err := service.ResolveIntegrationInvocation(ctx, worker, request, bounded)
+			if err != nil || stringMap(aliased, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(aliased, "gateRef") != stringMap(invocation, "gateRef") {
+				t.Fatal("identical pending tool call created another invocation or gate", err)
+			}
+			beforeDecision, err := service.ClaimIntegrationInvocations(ctx, gateway, "feedback-before-decision", 1)
+			if err != nil || len(beforeDecision) != 0 {
+				t.Fatal("pending alias admitted an external effect before the owner decision", err)
+			}
+			if decision == "APPROVE_EARLY_ALIAS" {
+				results := make(chan struct {
+					value map[string]any
+					err   error
+				}, 3)
+				for _, key := range []string{"parallel-a", "parallel-b", "parallel-a"} {
+					parallel := maps.Clone(request)
+					parallel["idempotency_key"] += "-" + key
+					go func() {
+						value, err := service.ResolveIntegrationInvocation(ctx, worker, parallel, bounded)
+						results <- struct {
+							value map[string]any
+							err   error
+						}{value, err}
+					}()
+				}
+				for range 3 {
+					result := <-results
+					if result.err != nil || stringMap(result.value, "invocationRef") != stringMap(invocation, "invocationRef") {
+						t.Fatal("concurrent pending calls did not join one intent", result.err)
+					}
+				}
+				if _, err := pool.Exec(ctx, integrationPendingConnectionFixture, pgx.StrictNamedArgs{"connection_ref": connection.Ref, "owner": "fixture"}); err != nil {
+					t.Fatal(err)
+				}
+				healthRequest := maps.Clone(request)
+				healthRequest["idempotency_key"] += "-after-health"
+				result, err := service.ResolveIntegrationInvocation(ctx, worker, healthRequest, bounded)
+				if err != nil || stringMap(result, "invocationRef") != stringMap(invocation, "invocationRef") {
+					t.Fatal("health metadata drift broke pending reuse", err)
+				}
+				if _, err := pool.Exec(ctx, integrationPendingConnectionFixture, pgx.StrictNamedArgs{"connection_ref": connection.Ref, "owner": "changed"}); err != nil {
+					t.Fatal(err)
+				}
+				healthRequest["idempotency_key"] += "-different-configuration"
+				if _, err := service.ResolveIntegrationInvocation(ctx, worker, healthRequest, bounded); !errors.Is(err, errs.ErrConflict) {
+					t.Fatal("new alias accepted a changed Connection configuration", err)
+				}
+				if _, err := pool.Exec(ctx, integrationPendingConnectionFixture, pgx.StrictNamedArgs{"connection_ref": connection.Ref, "owner": "fixture"}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if decision == "EXPIRED_ALIAS" {
+				if _, err := pool.Exec(ctx, integrationPendingExpireFixture, pgx.StrictNamedArgs{"operation": pendingInvocationReceiptOperation, "invocation_ref": stringMap(invocation, "invocationRef")}); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := service.ResolveIntegrationInvocation(ctx, worker, request, bounded); !errors.Is(err, errs.ErrConflict) {
+					t.Fatal("expired alias permitted allocation", err)
+				}
+				current, err := service.GetRun(ctx, owner, run.Ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				execute(t, command.CancelRun, owner, decision+"-cancel", &current.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Close expired synthetic alias"})
+				return
+			}
+			completeOrigin := func() {
+				execute(t, command.CompleteExecution, worker, decision+"-complete-origin", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, ResultSummary: "Waiting for owner", Usage: turnUsageFixture()})
+			}
+			early := decision == "APPROVE_EARLY_ALIAS" || decision == "APPROVE_NEW_INTENT" || decision == "APPROVE_UNKNOWN_ALIAS"
+			if !early {
+				completeOrigin()
+			}
 			gate, err := service.GetOwnerGate(ctx, owner, stringMap(invocation, "gateRef"))
 			if err != nil {
 				t.Fatal(err)
@@ -124,6 +216,9 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 					t.Fatal(err)
 				}
 				execute(t, command.CancelRun, owner, decision+"-cancel", &fresh.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Terminal root fixture"})
+				if _, err := service.ResolveIntegrationInvocation(ctx, worker, request, bounded); err == nil {
+					t.Fatal("alias replay revived a cancelled root")
+				}
 				if err := mutate(owner, "feedback-terminal", gate.Version); err == nil {
 					t.Fatal("terminal root gate reopened")
 				}
@@ -156,7 +251,10 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 					t.Fatal("approved synthetic effect was not claimed", err)
 				}
 				completion := command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), SafeErrorCode: "INTEGRATION_REQUEST_REJECTED"}
-				if decision != "APPROVE_FAILED" {
+				if decision == "APPROVE_UNKNOWN_ALIAS" {
+					completion.UnknownOutcome = true
+					completion.SafeErrorCode = "INTEGRATION_OUTCOME_UNKNOWN"
+				} else if decision != "APPROVE_FAILED" {
 					summary := `{"fixture":"exact provider result, not owner instructions"}`
 					if decision == "APPROVE_LONG_INLINE" || decision == "APPROVE_LARGE" {
 						repeat := 700
@@ -182,6 +280,61 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 				if err != nil || len(work) != 0 {
 					t.Fatal("negative owner decision allowed an effect", err)
 				}
+			}
+			if early {
+				restarted := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
+				replayService, err := serviceplatform.New(restarted)
+				if err != nil {
+					t.Fatal(err)
+				}
+				replayed, err := replayService.ResolveIntegrationInvocation(ctx, worker, request, bounded)
+				expectedState := "SUCCEEDED"
+				if decision == "APPROVE_UNKNOWN_ALIAS" {
+					expectedState = "UNKNOWN_OUTCOME"
+				}
+				if err != nil || stringMap(replayed, "invocationRef") != stringMap(invocation, "invocationRef") || stringMap(replayed, "state") != expectedState {
+					t.Fatal("lost alias response after decision or restart allocated another effect", err)
+				}
+				changed := map[string]any{"pull_request_number": 1, "sha": strings.Repeat("a", 40), "body": "Different intent", "event": "COMMENT"}
+				if _, err := replayService.ResolveIntegrationInvocation(ctx, worker, request, changed); !errors.Is(err, errs.ErrIdempotencyReuse) {
+					t.Fatal("alias accepted changed input", err)
+				}
+				if decision == "APPROVE_UNKNOWN_ALIAS" {
+					current, graph, err := service.GetRunGraph(ctx, owner, run.Ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, edge := range graph.Edges {
+						if edge.Type == "CONTINUES" {
+							t.Fatal("unknown alias fabricated a successful continuation")
+						}
+					}
+					execute(t, command.CancelRun, owner, decision+"-close", &current.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Retain uncertain synthetic outcome without another effect"})
+					return
+				}
+				if decision == "APPROVE_NEW_INTENT" {
+					request["idempotency_key"] += "-intentional-new-call"
+					fresh, err := replayService.ResolveIntegrationInvocation(ctx, worker, request, bounded)
+					if err != nil || stringMap(fresh, "invocationRef") == stringMap(invocation, "invocationRef") || stringMap(fresh, "state") != "WAITING_APPROVAL" {
+						t.Fatal("new intentional call after terminal was silently suppressed", err)
+					}
+					current, err := service.GetRun(ctx, owner, run.Ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					execute(t, command.CancelRun, owner, decision+"-cancel-unapproved", &current.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Close unapproved synthetic new intent"})
+					return
+				}
+				completeOrigin()
+				current, err := service.GetRun(ctx, owner, run.Ref)
+				if err != nil || current.State != "SUCCEEDED" {
+					t.Fatal("same physical turn did not finish after consuming the aliased result", err)
+				}
+				remaining, err := service.ClaimIntegrationInvocations(ctx, gateway, "feedback-after-alias", 1)
+				if err != nil || len(remaining) != 0 {
+					t.Fatal("terminal alias replay queued another external effect", err)
+				}
+				return
 			}
 			// Восстанавливаем adapter перед claim: immutable input не зависит от памяти scheduler.
 			restarted := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
