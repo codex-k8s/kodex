@@ -65,7 +65,6 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 		"small_model": provider.ProviderID + "/" + input.Model, "enabled_providers": []string{provider.ProviderID},
 		"autoupdate": false, "share": "disabled", "snapshot": false, "default_agent": "build",
 		"permission": map[string]string{"*": "deny", "kodex_*": "allow"},
-		"agent":      map[string]any{"build": map[string]any{"steps": 8}},
 		"provider": map[string]any{provider.ProviderID: map[string]any{
 			"npm": "@ai-sdk/openai-compatible", "name": "Kodex managed model gateway",
 			"options": map[string]any{"baseURL": provider.BaseURL, "apiKey": "{env:" + openCodeAPIKeyEnvironment + "}"},
