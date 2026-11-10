@@ -235,7 +235,7 @@ func vfsDescriptor(node *controlplanev1.VFSNode, item *generated.VFSNode) bool {
 		return false
 	}
 	switch node.ScanState {
-	case "", "PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED":
+	case "", "PENDING", "SCANNING", "CLEAN", "NOT_SCANNED", "QUARANTINED", "FAILED":
 	default:
 		return false
 	}

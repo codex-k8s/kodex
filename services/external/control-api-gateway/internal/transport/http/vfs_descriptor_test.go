@@ -1,7 +1,10 @@
 package httptransport
 
 import (
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -67,5 +70,36 @@ func TestVFSDescriptorRejectsUnknownAndContradictoryAuthority(t *testing.T) {
 				t.Fatal("invalid descriptor accepted")
 			}
 		})
+	}
+}
+
+// TestVFSNotScannedFilesRemainVisible exercises list/search HTTP serialization with the
+// explicit disabled-antivirus state, preserving owner selection, actions and scan truth.
+// TestVFSNotScannedFilesRemainVisible проверяет list/search HTTP для явного режима без AV,
+// сохраняя owner selection, действия и честное состояние отсутствующей проверки.
+func TestVFSNotScannedFilesRemainVisible(t *testing.T) {
+	node := &cp.VFSNode{Ref: "art_fixture01", Path: "/projects/prj_fixture01/results/result.md", ParentPath: "/projects/prj_fixture01/results", Name: "result.md", Kind: cp.VFSNodeKind_VFS_NODE_KIND_RESULT, Version: 2, Revision: 1, RevisionRef: "arv_fixture01", LifecycleState: "ACTIVE", ScanState: "NOT_SCANNED", ResourceKind: "ARTIFACT", Selectable: true, SelectionReason: "AVAILABLE", NextActions: []string{"DOWNLOAD", "DELETE"}, ProjectRef: "prj_fixture01", EntityRef: "art_fixture01", SizeBytes: 12, Digest: "sha256:" + strings.Repeat("a", 64)}
+	for _, search := range []bool{false, true} {
+		client := &catalogRPCRecorder{response: &cp.ListVFSNodesResponse{Nodes: []*cp.VFSNode{node}, Total: 1}}
+		path := "/api/v1/vfs/nodes?path=/projects/prj_fixture01/results"
+		if search {
+			client.response = &cp.SearchVFSResponse{Nodes: []*cp.VFSNode{node}, Total: 1}
+			path = "/api/v1/vfs/search?query=result"
+		}
+		recorder := httptest.NewRecorder()
+		catalogTestHandler(client).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+		}
+		var page struct {
+			Items []struct {
+				ScanState   string   `json:"scanState"`
+				Selectable  bool     `json:"selectable"`
+				NextActions []string `json:"nextActions"`
+			} `json:"items"`
+		}
+		if json.Unmarshal(recorder.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].ScanState != "NOT_SCANNED" || !page.Items[0].Selectable || len(page.Items[0].NextActions) != 2 {
+			t.Fatal("scan truth or owner actions changed")
+		}
 	}
 }
