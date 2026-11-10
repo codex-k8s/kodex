@@ -364,3 +364,31 @@ PID isolation, seccomp и прямой защищённый entrypoint закр�
 не заменяют. Native допуск и реальный turn после установки остаются отдельной
 приёмкой. Для квалифицированного policy-only обновления immutable application
 images и RoleImage не пересобираются; source policy фиксируется отдельно.
+
+
+### Рабочая копия и одновременный старт executor
+
+`checkout_repository` читает корневую страницу GitLab без необязательного поля
+`path`. Пустая строка не является валидным путём по опубликованному контракту.
+Проверка использует именно shipped GitLab IntegrationPackage, включая commit,
+tree и file inputs; mock, принимающий любые поля, не доказывает этот путь.
+Непустые дочерние пути сохраняются, partial snapshot не публикуется, grants,
+personal credentials, SHA/blob-проверки и пределы чтения не меняются.
+
+Role и secret-free executor могут стартовать в любом порядке. Установка Unix
+соединения ждёт только ENOENT/ECONNREFUSED и не более3 секунд с отменой caller.
+HTTP bytes до успешного connect не отправляются; сама INITIALIZE/RUN/QUIESCE
+не повторяется. Потерянный ответ команды остаётся ошибкой. Произвольный socket,
+HTTP endpoint, другой UID, дополнительные credentials и fallback не добавляются.
+
+| Сценарий | Ожидаемое поведение |
+| --- | --- |
+| Executor стартует позже роли | Один INITIALIZE после соединения в пределах бюджета |
+| Listener отсутствует / caller отменён | Ошибка без команды и без неограниченного ожидания |
+| Получен RUN, ответ потерян | Один RUN, ошибка, автоматического повтора нет |
+| Корень репозитория | `path` опущен, input проходит реальный shipped контракт |
+| Отказ gateway / неполное дерево | Нет успешного partial checkout и выдуманного HEAD |
+
+Это изменение самостоятельно поставляемой job `agent-runner`; schema,
+RunnerInput, API и admission-профиль не меняются. Для installed проверки нужны
+immutable образ и RoleImage на этом source: локальный тест не заменяет их.
