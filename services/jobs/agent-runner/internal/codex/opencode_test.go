@@ -57,6 +57,9 @@ func TestOpenCodeConfigurationKeepsCredentialsOutOfConfigAndDeniesNativeTools(t 
 	if json.Unmarshal(raw, &config) != nil {
 		t.Fatal("invalid generated config")
 	}
+	if _, boundedByHiddenSteps := config["agent"]; boundedByHiddenSteps {
+		t.Fatal("managed turn acquired a hidden provider step ceiling")
+	}
 	permission := config["permission"].(map[string]any)
 	if permission["*"] != "deny" || permission["kodex_*"] != "allow" || config["share"] != "disabled" || config["autoupdate"] != false {
 		t.Fatal("managed profile enabled an unsupported native capability")
