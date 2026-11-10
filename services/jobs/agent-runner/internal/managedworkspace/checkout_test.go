@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
@@ -22,6 +23,12 @@ import (
 func snapshotFixture(t *testing.T) (*Handler, checkoutRequest) {
 	t.Helper()
 	store := fileStoreFixture(t)
+	packages, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := packages["gitlab"]
+	operations := []string{"gitlab.commit.read", "gitlab.repository.tree.list", "gitlab.repository.file.read"}
 	sha := strings.Repeat("a", 40)
 	content := []byte("stages: [test]\n")
 	object := sha1.Sum(append([]byte(fmt.Sprintf("blob %d\x00", len(content))), content...))
@@ -37,6 +44,23 @@ func snapshotFixture(t *testing.T) (*Handler, checkoutRequest) {
 		fields := args["input"].(map[string]any)
 		if fields["ref"] != sha || fields["project_id"] != int64(1) || fields["project_path"] != request.ProjectPath {
 			t.Fatal("unpinned repository read", fields)
+		}
+		selected := -1
+		for index := range operations {
+			if args["grant_ref"] == fmt.Sprintf("grt_fixture_%d", index) {
+				selected = index
+			}
+		}
+		if selected < 0 {
+			t.Fatal("unexpected grant")
+		}
+		capability, ok := definition.Capability(operations[selected])
+		encoded, marshalErr := json.Marshal(fields)
+		if !ok || marshalErr != nil {
+			t.Fatal("shipped capability unavailable")
+		}
+		if _, validationErr := capability.ValidateInput(encoded); validationErr != nil {
+			return nil, validationErr
 		}
 		var output any
 		switch args["grant_ref"] {

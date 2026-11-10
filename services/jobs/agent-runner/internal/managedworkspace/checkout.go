@@ -155,7 +155,9 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 				return nil, errCheckout
 			}
 			fields := cloneFields(common)
-			fields["path"] = directories[directory]
+			if directories[directory] != "" {
+				fields["path"] = directories[directory]
+			}
 			fields["cursor"] = cursor
 			fields["limit"] = 100
 			page, err := handler.repositoryRead(ctx, fmt.Sprintf("%s-tree-%d", id, calls), grants["gitlab.repository.tree.list"], fields)

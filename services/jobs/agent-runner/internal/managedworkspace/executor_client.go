@@ -4,18 +4,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
+	"syscall"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 )
 
 // ExecutorClient owns one fixed local UDS transport. It has no endpoint parameter, ambient proxy,
-// bearer, redirects or retry loop; unknown write responses must be reconciled by the caller.
+// bearer or redirects. Only connection setup may wait; an HTTP request is never repeated.
 // ExecutorClient владеет одним fixed local UDS transport. Endpoint parameter, ambient proxy,
-// bearer, redirects и retry loop отсутствуют; неизвестный write response сверяет caller.
+// bearer и redirects отсутствуют. Ждать может только установка соединения; HTTP-запрос не повторяется.
 type ExecutorClient struct {
 	transport *http.Transport
 	client    *http.Client
@@ -23,12 +25,43 @@ type ExecutorClient struct {
 
 // NewExecutorClient allocates only the trusted role's fixed local transport without dialing it.
 // NewExecutorClient создаёт лишь fixed local transport доверенной роли без подключения к нему.
-func NewExecutorClient() *ExecutorClient {
+func NewExecutorClient() *ExecutorClient { return newExecutorClient(ExecutorSocket) }
+
+// newExecutorClient keeps the production socket fixed while tests own an isolated Unix listener.
+// newExecutorClient сохраняет fixed production socket; тесты используют собственный Unix listener.
+func newExecutorClient(socket string) *ExecutorClient {
 	transport := &http.Transport{DisableCompression: true, MaxConnsPerHost: 1, MaxResponseHeaderBytes: 8192, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(ctx, "unix", ExecutorSocket)
+		return dialExecutor(ctx, socket)
 	}}
 	client := &http.Client{Transport: transport, Timeout: (maximumCommandSeconds + 10) * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errExecutor }}
 	return &ExecutorClient{transport: transport, client: client}
+}
+
+// dialExecutor waits at most three seconds for an independently starting local listener.
+// Only ENOENT/ECONNREFUSED before a connection are retried; cancellation and other errors stop.
+// No HTTP bytes have been sent, so this cannot replay an INITIALIZE, RUN or QUIESCE operation.
+// dialExecutor ждёт локальный listener не более трёх секунд. Повторяется лишь connect после
+// ENOENT/ECONNREFUSED; отмена и остальные ошибки завершают ожидание. HTTP bytes ещё не отправлены,
+// поэтому повтор INITIALIZE, RUN либо QUIESCE невозможен.
+func dialExecutor(parent context.Context, socket string) (net.Conn, error) {
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
+	defer cancel()
+	for {
+		connection, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		if err == nil {
+			return connection, nil
+		}
+		if !errors.Is(err, syscall.ENOENT) && !errors.Is(err, syscall.ECONNREFUSED) {
+			return nil, err
+		}
+		timer := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // Call sends one request exactly once and accepts a bounded closed result. Cancellation or lost
@@ -44,6 +77,9 @@ func (client *ExecutorClient) Call(ctx context.Context, value ExecutorRequest) (
 	if err != nil {
 		return CommandResult{}, errExecutor
 	}
+	// Transport must not recreate a command body after an uncertain send.
+	// Transport не должен восстанавливать body команды после неопределённой отправки.
+	request.GetBody = nil
 	request.Header.Set("Content-Type", "application/json")
 	response, err := client.client.Do(request)
 	if err != nil {
