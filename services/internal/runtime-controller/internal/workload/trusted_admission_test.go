@@ -68,6 +68,7 @@ func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	var programs []cel.Program
+	var expressions []string
 	for _, validation := range policies[0].Spec.Validations {
 		if validation.Message != "managed role Pod authority mount boundary is invalid" && validation.Message != "managed role Pod contains an unsupported runtime volume source" && validation.Message != "runtime Pod requires the configured trusted cluster profile" {
 			continue
@@ -81,6 +82,7 @@ func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 			t.Fatal(err)
 		}
 		programs = append(programs, program)
+		expressions = append(expressions, validation.Expression)
 	}
 	if len(programs) != 3 {
 		t.Fatal("trusted boundary expressions missing")
@@ -112,7 +114,7 @@ func TestTrustedAdmissionPreservesTicketAndRejectsCallbackKeys(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			activation := runtimeAdmissionActivation(t, environment, policies[0].Spec.Variables, object)
+			activation := runtimeAdmissionActivation(t, environment, policies[0].Spec.Variables, object, expressions...)
 			accepted := true
 			for _, program := range programs {
 				result, _, err := program.Eval(activation)

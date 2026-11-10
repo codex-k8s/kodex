@@ -25,7 +25,11 @@ type runtimePolicy struct {
 	} `json:"metadata"`
 	Spec struct {
 		FailurePolicy string `json:"failurePolicy"`
-		Validations   []struct {
+		Variables     []struct {
+			Name       string `json:"name"`
+			Expression string `json:"expression"`
+		} `json:"variables"`
+		Validations []struct {
 			Expression string `json:"expression"`
 			Message    string `json:"message"`
 		} `json:"validations"`

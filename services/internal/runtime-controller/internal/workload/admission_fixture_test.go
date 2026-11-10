@@ -1,24 +1,40 @@
 package workload
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/cel-go/cel"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 )
 
-// runtimeAdmissionActivation evaluates the real ordered policy variables against the generated Pod, preventing hand-built fixtures from omitting new admission dependencies.
+// runtimeAdmissionActivation evaluates the referenced real ordered policy variables against the generated Pod, preventing hand-built fixtures from omitting new admission dependencies.
 // It supplies test values only and neither installs a policy nor proves cluster admission or execution authority.
-// runtimeAdmissionActivation вычисляет actual ordered policy variables по generated Pod, исключая пропуск новых admission dependencies в ручной fixture.
+// runtimeAdmissionActivation вычисляет используемые actual ordered policy variables по generated Pod, исключая пропуск новых admission dependencies в ручной fixture.
 // Функция задаёт только test values; она не устанавливает policy и не доказывает cluster admission либо execution authority.
-func runtimeAdmissionActivation(t *testing.T, environment *cel.Env, declarations []admissionv1.Variable, object map[string]any) map[string]any {
+func runtimeAdmissionActivation(t *testing.T, environment *cel.Env, declarations []admissionv1.Variable, object map[string]any, expressions ...string) map[string]any {
 	t.Helper()
 	if len(declarations) == 0 {
 		t.Fatal("runtime admission variables are absent")
 	}
+	needed := map[string]bool{}
+	roots := strings.Join(expressions, " ")
+	for changed := true; changed; {
+		changed = false
+		for _, declaration := range declarations {
+			if !needed[declaration.Name] && strings.Contains(roots, "variables."+declaration.Name) {
+				needed[declaration.Name] = true
+				roots += " " + declaration.Expression
+				changed = true
+			}
+		}
+	}
 	variables := make(map[string]any, len(declarations))
 	activation := map[string]any{"object": object, "variables": variables}
 	for _, declaration := range declarations {
+		if !needed[declaration.Name] {
+			continue
+		}
 		if _, duplicate := variables[declaration.Name]; duplicate || declaration.Name == "" {
 			t.Fatal("runtime admission variable name is invalid")
 		}

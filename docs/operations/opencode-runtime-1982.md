@@ -338,3 +338,29 @@ retry и не изменение полномочий, модели или ре�
 
 Проверен закреплённый исходник OpenCode1.19.5:
 `packages/opencode/src/session/prompt.ts` (`agent.steps ?? Infinity`).
+
+## Допуск Pod управляемой среды
+
+Публикация `managedWorkspace` проходит существующий owner environment/version и
+закрепляется в RuntimeRevision вместе с capability и ресурсным бюджетом.
+`runtime-controller` остаётся единственным actor создания Pod. Kubernetes policy
+проверяет фактическую форму: рабочая копия provider read-only, при выбранных
+командах — ровно один `workspace-executor` на том же допущенном образе.
+Без команд сохраняются три контейнера; без опции сохраняется прежний профиль.
+
+Executor получает только свою рабочую копию, приватный socket роли и bounded
+scratch. Provider/relay/init не получают этот socket; credentials, ticket,
+provider state и произвольные mounts/env/commands ему запрещены. UID/GID,
+PID isolation, seccomp и прямой защищённый entrypoint закреплены точно.
+Сумма ресурсов provider/executor остаётся в прежнем диапазоне, а разница
+половин допускает только округление одного milliCPU или byte; новый контейнер
+не удваивает опубликованный бюджет. V2 получает только точное `generation/tree`.
+
+`make test-workspace-policy-contract` проверяет **все** CEL validations по Pods
+реального producer: прежний профиль, файлы, команды, минимальные/нечётные
+ресурсы и V2. Отдельные отрицательные мутации проверяют credential mounts/env,
+другой образ/entrypoint, PID/UID/GID, socket, scratch и ресурсный бюджет.
+Положительный observer или проверка нескольких выбранных выражений этого
+не заменяют. Native допуск и реальный turn после установки остаются отдельной
+приёмкой. Для квалифицированного policy-only обновления immutable application
+images и RoleImage не пересобираются; source policy фиксируется отдельно.

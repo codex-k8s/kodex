@@ -478,6 +478,47 @@ spec:
       expression: >-
         object.spec.containers.filter(container,
           container.name == 'provider-credential-relay')
+    - name: workspaceExecutors
+      expression: >-
+        object.spec.containers.filter(container, container.name == 'workspace-executor')
+    - name: managedWorkspace
+      expression: >-
+        size(variables.providerContainers) == 1 &&
+        variables.providerContainers[0].volumeMounts.exists(mount,
+          mount.name == 'workspace' && mount.mountPath == '/workspace' &&
+          has(mount.readOnly) && mount.readOnly)
+    - name: executionRequests
+      expression: >-
+        {
+          'cpu': quantity(string(variables.providerContainers[0].resources.requests.cpu))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.requests.cpu))
+              : quantity('0')),
+          'memory': quantity(string(variables.providerContainers[0].resources.requests.memory))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.requests.memory))
+              : quantity('0')),
+          'ephemeral-storage': quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage']))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.requests['ephemeral-storage']))
+              : quantity('0'))
+        }
+    - name: executionLimits
+      expression: >-
+        {
+          'cpu': quantity(string(variables.providerContainers[0].resources.limits.cpu))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.limits.cpu))
+              : quantity('0')),
+          'memory': quantity(string(variables.providerContainers[0].resources.limits.memory))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.limits.memory))
+              : quantity('0')),
+          'ephemeral-storage': quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage']))
+            .add(size(variables.workspaceExecutors) == 1
+              ? quantity(string(variables.workspaceExecutors[0].resources.limits['ephemeral-storage']))
+              : quantity('0'))
+        }
     - name: kubeAccessVolumes
       expression: >-
         object.spec.volumes.filter(volume,
@@ -550,12 +591,18 @@ spec:
                ((container.name == 'workspace-prepare' &&
                  mount.mountPath == '/var/run/config/kodex/session-workspace' &&
                  !has(mount.subPath) && (!has(mount.readOnly) || !mount.readOnly)) ||
+                (container.name == 'workspace-executor' &&
+                 mount.mountPath == '/workspace/work' &&
+                 mount.subPath == variables.workspaceStoragePrefix + '/tree' &&
+                 (!has(mount.readOnly) || !mount.readOnly)) ||
                 (container.name in ['role-runtime', 'provider-runtime', 'workspace-init'] &&
                  ((mount.mountPath == '/workspace/.kodex/state' &&
                    mount.subPath == 'provider-state' && (!has(mount.readOnly) || !mount.readOnly)) ||
                   (mount.mountPath == '/workspace/work' &&
                    mount.subPath == variables.workspaceStoragePrefix + '/tree' &&
-                   (!has(mount.readOnly) || !mount.readOnly)) ||
+                   (variables.managedWorkspace && container.name == 'provider-runtime'
+                     ? has(mount.readOnly) && mount.readOnly
+                     : (!has(mount.readOnly) || !mount.readOnly))) ||
                   (mount.mountPath == '/var/run/config/kodex/workspace/mount.json' &&
                    mount.subPath == variables.workspaceStoragePrefix + '/mount.json' &&
                    has(mount.readOnly) && mount.readOnly) ||
@@ -601,7 +648,11 @@ spec:
         object.spec.automountServiceAccountToken == false
       message: managed role Pod service account boundary is invalid
     - expression: >-
-        size(object.spec.containers) == 3 &&
+        size(variables.workspaceExecutors) <= 1 &&
+        (variables.managedWorkspace
+          ? object.metadata.labels['runtime.kodex.dev/mode'] == 'turn'
+          : size(variables.workspaceExecutors) == 0) &&
+        size(object.spec.containers) == 3 + size(variables.workspaceExecutors) &&
         size(variables.roleContainers) == 1 &&
         size(variables.providerContainers) == 1 &&
         size(variables.relayContainers) == 1 &&
@@ -716,25 +767,112 @@ spec:
           'RuntimeDefault'
       message: managed role Pod container securityContext is invalid
     - expression: >-
+        size(variables.workspaceExecutors) == 0 ||
+        (variables.managedWorkspace &&
+         variables.workspaceExecutors[0].image == variables.roleContainers[0].image &&
+         variables.workspaceExecutors[0].imagePullPolicy == 'IfNotPresent' &&
+         variables.workspaceExecutors[0].command == ['/usr/local/bin/kodex-agent-runner'] &&
+         variables.workspaceExecutors[0].args == ['runtime-workspace-executor'] &&
+         variables.workspaceExecutors[0].workingDir == '/workspace/work' &&
+         variables.workspaceExecutors[0].securityContext.runAsUser == 10002 &&
+         variables.workspaceExecutors[0].securityContext.runAsGroup == 29000 &&
+         variables.workspaceExecutors[0].securityContext.seccompProfile.type == 'RuntimeDefault' &&
+         !has(variables.workspaceExecutors[0].securityContext.appArmorProfile) &&
+         !has(variables.workspaceExecutors[0].securityContext.seLinuxOptions) &&
+         !has(variables.workspaceExecutors[0].securityContext.windowsOptions) &&
+         (!has(variables.workspaceExecutors[0].securityContext.procMount) ||
+          variables.workspaceExecutors[0].securityContext.procMount == 'Default') &&
+         (!has(variables.workspaceExecutors[0].envFrom) || size(variables.workspaceExecutors[0].envFrom) == 0) &&
+         size(variables.workspaceExecutors[0].env) == 2 &&
+         variables.workspaceExecutors[0].env.all(item, !has(item.valueFrom)) &&
+         size(variables.workspaceExecutors[0].env.filter(item, item.name == 'HOME' && item.value == '/tmp')) == 1 &&
+         size(variables.workspaceExecutors[0].env.filter(item, item.name == 'OTEL_SDK_DISABLED' && item.value == 'true')) == 1 &&
+         !has(variables.workspaceExecutors[0].lifecycle) &&
+         !has(variables.workspaceExecutors[0].startupProbe) &&
+         !has(variables.workspaceExecutors[0].livenessProbe) &&
+         (!has(variables.workspaceExecutors[0].ports) || size(variables.workspaceExecutors[0].ports) == 0) &&
+         (!has(variables.workspaceExecutors[0].stdin) || !variables.workspaceExecutors[0].stdin) &&
+         (!has(variables.workspaceExecutors[0].tty) || !variables.workspaceExecutors[0].tty) &&
+         (!has(variables.workspaceExecutors[0].volumeDevices) || size(variables.workspaceExecutors[0].volumeDevices) == 0) &&
+         has(variables.workspaceExecutors[0].readinessProbe) &&
+         variables.workspaceExecutors[0].readinessProbe.exec.command ==
+           ['/usr/bin/test', '-S', '/run/kodex/workspace/authority/executor.sock'] &&
+         !has(variables.workspaceExecutors[0].readinessProbe.httpGet) &&
+         !has(variables.workspaceExecutors[0].readinessProbe.tcpSocket) &&
+         !has(variables.workspaceExecutors[0].readinessProbe.grpc) &&
+         variables.workspaceExecutors[0].readinessProbe.periodSeconds == 2 &&
+         variables.workspaceExecutors[0].readinessProbe.timeoutSeconds == 1 &&
+         variables.workspaceExecutors[0].readinessProbe.failureThreshold == 30)
+      message: managed workspace executor process or credential boundary is invalid
+    - expression: >-
+        size(variables.workspaceExecutors) == 0 ||
+        (size(variables.workspaceExecutors[0].volumeMounts) == 3 &&
+         variables.workspaceExecutors[0].volumeMounts.all(mount,
+           !has(mount.subPathExpr) && !has(mount.mountPropagation) &&
+           (!has(mount.readOnly) || !mount.readOnly) &&
+           ((mount.name == (variables.workspaceStorageV2 ? 'session' : 'workspace') &&
+             mount.mountPath == '/workspace/work' &&
+             mount.subPath == (variables.workspaceStorageV2 ? variables.workspaceStoragePrefix + '/tree' : 'work')) ||
+            (mount.name == 'workspace-executor-socket' && mount.mountPath == '/run/kodex/workspace' && !has(mount.subPath)) ||
+            (mount.name == 'workspace-executor-tmp' && mount.mountPath == '/tmp' && !has(mount.subPath)))) &&
+         size(variables.workspaceExecutors[0].volumeMounts.filter(mount, mount.mountPath == '/workspace/work')) == 1 &&
+         size(variables.workspaceExecutors[0].volumeMounts.filter(mount, mount.name == 'workspace-executor-socket')) == 1 &&
+         size(variables.workspaceExecutors[0].volumeMounts.filter(mount, mount.name == 'workspace-executor-tmp')) == 1)
+      message: managed workspace executor mounts are invalid
+    - expression: >-
+        variables.allContainers.all(container,
+          container.volumeMounts.all(mount,
+            (mount.name != 'workspace-executor-socket' ||
+             (size(variables.workspaceExecutors) == 1 && container.name in ['role-runtime', 'workspace-executor'] &&
+              mount.mountPath == '/run/kodex/workspace' && !has(mount.subPath) && !has(mount.subPathExpr) &&
+              !has(mount.mountPropagation) && (!has(mount.readOnly) || !mount.readOnly))) &&
+            (mount.name != 'workspace-executor-tmp' || container.name == 'workspace-executor'))) &&
+        (size(variables.workspaceExecutors) == 0 ||
+         (size(variables.roleContainers[0].volumeMounts.filter(mount, mount.name == 'workspace-executor-socket')) == 1 &&
+          ['workspace-executor-socket', 'workspace-executor-tmp'].all(name,
+            size(object.spec.volumes.filter(volume, volume.name == name && has(volume.emptyDir) &&
+              quantity(string(dyn(volume.emptyDir).sizeLimit)).compareTo(quantity(name == 'workspace-executor-socket' ? '8Mi' : '512Mi')) == 0 &&
+              (!has(volume.emptyDir.medium) || volume.emptyDir.medium == '') &&
+              !has(volume.hostPath) && !has(volume.secret) && !has(volume.configMap) &&
+              !has(volume.persistentVolumeClaim) && !has(volume.projected) && !has(volume.csi) && !has(volume.downwardAPI))) == 1)))
+      message: managed workspace socket and temporary volume boundary is invalid
+    - expression: >-
+        size(variables.workspaceExecutors) == 0 ||
+        (size(variables.workspaceExecutors[0].resources.requests) == 3 &&
+         size(variables.workspaceExecutors[0].resources.limits) == 3 &&
+         quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests.cpu))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests.cpu)).add(quantity('1m'))) <= 0 &&
+         quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests.memory))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests.memory)).add(quantity('1'))) <= 0 &&
+         quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests['ephemeral-storage']))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(quantity(string(variables.workspaceExecutors[0].resources.requests['ephemeral-storage'])).add(quantity('1'))) <= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits.cpu))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits.cpu)).add(quantity('1m'))) <= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits.memory))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits.memory)).add(quantity('1'))) <= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits['ephemeral-storage']))) >= 0 &&
+         quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(quantity(string(variables.workspaceExecutors[0].resources.limits['ephemeral-storage'])).add(quantity('1'))) <= 0)
+      message: managed workspace resource partition is invalid
+    - expression: >-
         size(variables.providerContainers[0].resources.requests) == 3 &&
         size(variables.providerContainers[0].resources.limits) == 3 &&
-        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('100m')) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.requests.cpu)).compareTo(quantity('8')) <= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(
-          quantity(string(variables.providerContainers[0].resources.requests.cpu))) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits.cpu)).compareTo(quantity('16')) <= 0 &&
-        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('128Mi')) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.requests.memory)).compareTo(quantity('32Gi')) <= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(
-          quantity(string(variables.providerContainers[0].resources.requests.memory))) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits.memory)).compareTo(quantity('64Gi')) <= 0 &&
-        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        variables.executionRequests.cpu.compareTo(quantity('100m')) >= 0 &&
+        variables.executionRequests.cpu.compareTo(quantity('8')) <= 0 &&
+        variables.executionLimits.cpu.compareTo(
+          variables.executionRequests.cpu) >= 0 &&
+        variables.executionLimits.cpu.compareTo(quantity('16')) <= 0 &&
+        variables.executionRequests.memory.compareTo(quantity('128Mi')) >= 0 &&
+        variables.executionRequests.memory.compareTo(quantity('32Gi')) <= 0 &&
+        variables.executionLimits.memory.compareTo(
+          variables.executionRequests.memory) >= 0 &&
+        variables.executionLimits.memory.compareTo(quantity('64Gi')) <= 0 &&
+        variables.executionRequests['ephemeral-storage'].compareTo(
           quantity('256Mi')) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage'])).compareTo(
+        variables.executionRequests['ephemeral-storage'].compareTo(
           quantity('20Gi')) <= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
-          quantity(string(variables.providerContainers[0].resources.requests['ephemeral-storage']))) >= 0 &&
-        quantity(string(variables.providerContainers[0].resources.limits['ephemeral-storage'])).compareTo(
+        variables.executionLimits['ephemeral-storage'].compareTo(
+          variables.executionRequests['ephemeral-storage']) >= 0 &&
+        variables.executionLimits['ephemeral-storage'].compareTo(
           quantity('100Gi')) <= 0
       message: managed role Pod resources are outside the approved policy
     - expression: >-
@@ -926,6 +1064,8 @@ spec:
             'runtime-input', 'runtime-ticket', 'callback-ca',
             'callback-client', 'provider-auth', 'runtime-egress-ca', 'runtime-egress-trust', 'provider-socket', 'tmp',
             'provider-tmp', 'provider-credential-relay', 'kube-api-access'] ||
+          (size(variables.workspaceExecutors) == 1 &&
+           volume.name in ['workspace-executor-socket', 'workspace-executor-tmp']) ||
           (volume.name.matches('^environment-[a-f0-9]{16}$') &&
            has(volume.emptyDir) && !has(volume.hostPath) &&
            !has(volume.persistentVolumeClaim) && !has(volume.secret) &&
@@ -1057,7 +1197,8 @@ spec:
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'workspace' && mount.mountPath == '/workspace' &&
-          (!has(mount.readOnly) || mount.readOnly == false))) == 1 &&
+          (variables.managedWorkspace ? has(mount.readOnly) && mount.readOnly
+            : (!has(mount.readOnly) || mount.readOnly == false)))) == 1 &&
         size(variables.providerContainers[0].volumeMounts.filter(mount,
           mount.name == 'session' && mount.mountPath == '/workspace/.kodex/state' &&
           (!has(mount.readOnly) || mount.readOnly == false))) == 1 &&
@@ -1103,6 +1244,7 @@ spec:
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
             'provider-socket', 'tmp', 'kube-api-access'] ||
+          (size(variables.workspaceExecutors) == 1 && mount.name == 'workspace-executor-socket') ||
           mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         ['workspace', 'session'].all(name,
           size(variables.roleContainers[0].volumeMounts.filter(mount,
