@@ -52,7 +52,13 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
       "networkDestinations",
       "webAccess",
       "kubernetesAccess",
+      ...("managedWorkspace" in value ? ["managedWorkspace"] : []),
     ])
+  )
+    return undefined;
+  if (
+    "managedWorkspace" in value &&
+    typeof value.managedWorkspace !== "boolean"
   )
     return undefined;
   const resources = record(value.resources);
@@ -111,6 +117,9 @@ function parsePolicy(raw: unknown): RuntimeEnvironmentPolicyInput | undefined {
   )
     return undefined;
   return {
+    ...("managedWorkspace" in value
+      ? { managedWorkspace: value.managedWorkspace as boolean }
+      : {}),
     resources: {
       cpuRequestMilli: resources.cpuRequestMilli as number,
       cpuLimitMilli: resources.cpuLimitMilli as number,

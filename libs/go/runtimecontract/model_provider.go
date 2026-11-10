@@ -148,6 +148,9 @@ func (config ModelProviderConfiguration) Model(id string) (ModelProviderModel, b
 // validateModelProvider отклоняет alternate engine без exact descriptor и model.
 // Отсутствующий descriptor сохраняет legacy проверку и не включает OpenCode неявно.
 func (input RunnerInput) validateModelProvider() error {
+	if input.EnvironmentPolicy.ManagedWorkspace && !RuntimeWorkspaceToolsAvailable(input) {
+		return ErrModelProviderConfiguration
+	}
 	if input.ModelProvider == nil {
 		if input.Provider == "opencode" {
 			return ErrModelProviderConfiguration
@@ -157,7 +160,7 @@ func (input RunnerInput) validateModelProvider() error {
 	if input.Provider != "opencode" || input.ModelProvider.Validate() != nil {
 		return ErrModelProviderConfiguration
 	}
-	if input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 || input.ConfigOverlay != "" ||
+	if input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 && !RuntimeWorkspaceToolsAvailable(input) || input.ConfigOverlay != "" ||
 		input.EffectiveReasoningEffort != "" || input.ReasoningMode != ReasoningUnsupported {
 		return ErrModelProviderConfiguration
 	}

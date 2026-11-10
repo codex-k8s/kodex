@@ -157,7 +157,7 @@ func castEnvironmentDraft(input *entity.RuntimeEnvironmentDraft) *controlplanev1
 	specification := &controlplanev1.RuntimeEnvironmentDraftSpecification{Name: spec.Name, Description: spec.Description, ImageArtifactRef: spec.ImageArtifactRef}
 	if !reflect.DeepEqual(spec.Policy, runtimecontract.RuntimeEnvironmentPolicy{}) {
 		policy := castRuntimeEnvironmentPolicy(spec.Policy)
-		specification.Policy = &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind, WebAccess: policy.Network.WebAccess}
+		specification.Policy = &controlplanev1.RuntimeEnvironmentPolicyInput{ManagedWorkspace: policy.ManagedWorkspace, Resources: policy.Resources, KubernetesAccess: policy.KubernetesAccess.Kind, WebAccess: policy.Network.WebAccess}
 		for _, volume := range policy.Volumes {
 			specification.Policy.Volumes = append(specification.Policy.Volumes, &controlplanev1.RuntimeVolumeInput{Name: volume.Name, Kind: volume.Kind, SizeMib: volume.SizeMib})
 		}

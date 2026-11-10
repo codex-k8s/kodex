@@ -18,10 +18,14 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 
-const props = defineProps<{
-  policy: RuntimeEnvironmentPolicyInput;
-  disabled: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    policy: RuntimeEnvironmentPolicyInput;
+    disabled: boolean;
+    managedWorkspaceAvailable?: boolean;
+  }>(),
+  { managedWorkspaceAvailable: true },
+);
 const emit = defineEmits<{
   "update:policy": [value: RuntimeEnvironmentPolicyInput];
 }>();
@@ -64,6 +68,17 @@ const resourceFields = [
     step: 256,
   },
 ] as const;
+
+function changeManagedWorkspace(event: Event): void {
+  const target = event.target;
+  if (
+    props.disabled ||
+    !(target instanceof HTMLInputElement) ||
+    (!props.managedWorkspaceAvailable && target.checked)
+  )
+    return;
+  emit("update:policy", { ...props.policy, managedWorkspace: target.checked });
+}
 
 function changeResource(key: keyof RuntimeResourcePolicy, event: Event): void {
   if (props.disabled) return;
@@ -215,6 +230,22 @@ function changeWebRule(index: number, event: Event): void {
 
 <template>
   <div class="runtime-policy-fields">
+    <section
+      v-if="managedWorkspaceAvailable || policy.managedWorkspace"
+      class="policy-group"
+    >
+      <label class="field">
+        <span>{{ $t("runtime.managedWorkspace") }}</span>
+        <input
+          type="checkbox"
+          name="managed-workspace"
+          :checked="policy.managedWorkspace ?? false"
+          :disabled="disabled"
+          @change="changeManagedWorkspace"
+        />
+        <small>{{ $t("runtime.managedWorkspaceHelp") }}</small>
+      </label>
+    </section>
     <section class="policy-group">
       <div class="section-header">
         <div>

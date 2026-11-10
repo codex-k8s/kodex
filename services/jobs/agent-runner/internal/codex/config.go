@@ -41,7 +41,7 @@ func validateRuntimeSelection(input model.Input) error {
 	}
 	if input.Provider == "opencode" {
 		if input.ModelProvider == nil || input.ModelProvider.Validate() != nil || input.ConfigOverlay != "" ||
-			input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 || input.EffectiveReasoningEffort != "" ||
+			input.CodexSessionID != "" || (len(input.EnvironmentTools) != 0 && !runtimecontract.RuntimeWorkspaceToolsAvailable(input)) || input.EffectiveReasoningEffort != "" ||
 			input.ReasoningMode != runtimecontract.ReasoningUnsupported {
 			return ErrRuntimeProfile
 		}

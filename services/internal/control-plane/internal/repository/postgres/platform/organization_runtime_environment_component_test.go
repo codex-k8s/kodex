@@ -131,6 +131,41 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if _, err := service.GetRuntimeEnvironmentDraft(ctx, owner, draft.Ref); err != nil {
 		t.Fatalf("published draft read: %v", err)
 	}
+	t.Run("managed workspace survives owner publication and history read", func(t *testing.T) {
+		selected := spec
+		selected.Name = "Managed source workspace"
+		selected.Policy.ManagedWorkspace = true
+		created, e := invoke(owner, command.CreateOrganizationRuntimeEnvironmentDraft, "managed-workspace-create", nil, command.RuntimeEnvironmentDraftInput{Specification: selected})
+		if e != nil || created.RuntimeEnvironmentDraft == nil {
+			t.Fatal("managed draft create", e)
+		}
+		current := created.RuntimeEnvironmentDraft
+		checked, e := invoke(owner, command.ValidateRuntimeEnvironmentDraft, "managed-workspace-validate", &current.Version, command.RuntimeEnvironmentDraftInput{DraftRef: current.Ref})
+		if e != nil || checked.RuntimeEnvironmentDraft == nil || checked.RuntimeEnvironmentDraft.State != "VALID" {
+			t.Fatal("managed draft validate", e)
+		}
+		current = checked.RuntimeEnvironmentDraft
+		impact, e := invoke(owner, command.PrepareEnvironmentDraftImpact, "managed-workspace-impact", &current.Version, command.RuntimeEnvironmentDraftInput{DraftRef: current.Ref})
+		if e != nil || impact.RevisionImpactPlan == nil {
+			t.Fatal("managed draft impact", e)
+		}
+		published, e := invoke(owner, command.PublishRuntimeEnvironmentDraft, "managed-workspace-publish", &current.Version, command.RuntimeEnvironmentDraftInput{DraftRef: current.Ref, PlanRef: impact.RevisionImpactPlan.Ref})
+		if e != nil || published.RuntimeEnvironment == nil {
+			t.Fatal("managed publication", e)
+		}
+		read, e := service.GetRuntimeEnvironment(ctx, owner, published.RuntimeEnvironment.Ref)
+		if e != nil || !read.CurrentVersion.Policy.ManagedWorkspace || read.CurrentVersion.Digest != published.RuntimeEnvironment.CurrentVersion.Digest {
+			t.Fatal("managed policy not persisted", e)
+		}
+		versions, _, e := service.ListRuntimeEnvironmentVersions(ctx, owner, query.Filter{ResourceRef: read.Ref})
+		if e != nil || len(versions) != 1 || !versions[0].Policy.ManagedWorkspace {
+			t.Fatal("managed history lost opt-in", e)
+		}
+		old, e := service.GetRuntimeEnvironment(ctx, owner, view.Environment.Ref)
+		if e != nil || old.CurrentVersion.Policy.ManagedWorkspace {
+			t.Fatal("unrelated default environment was enabled", e)
+		}
+	})
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "org-env-project"}, Payload: command.ProjectInput{Name: "Environment boundary", Language: "en"}})
 	if err != nil || project.Project == nil {

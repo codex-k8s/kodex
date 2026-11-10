@@ -44,7 +44,7 @@ var errOpenCodeProvider = errors.New("OpenCode provider execution is unavailable
 // Проверяет metadata и exact local bridge, не execution authority или readiness.
 func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) {
 	if input.Provider != "opencode" || input.ModelProvider == nil || input.ModelProvider.Validate() != nil ||
-		input.ConfigOverlay != "" || input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 ||
+		input.ConfigOverlay != "" || input.CodexSessionID != "" || (len(input.EnvironmentTools) != 0 && !runtimecontract.RuntimeWorkspaceToolsAvailable(input)) ||
 		input.EffectiveReasoningEffort != "" || input.ReasoningMode != runtimecontract.ReasoningUnsupported {
 		return nil, ErrRuntimeProfile
 	}
@@ -73,7 +73,16 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 				"limit": map[string]int{"context": selected.ContextWindowTokens, "output": selected.MaximumOutputTokens}}},
 		}},
 		"mcp": map[string]any{"kodex": map[string]any{"type": "remote", "url": bridgeURL, "enabled": true,
-			"oauth": false, "headers": map[string]string{"Authorization": "Bearer {env:KODEX_MCP_PROXY_TOKEN}"}}},
+			"oauth": false, "timeout": runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds * 1000, "headers": map[string]string{"Authorization": "Bearer {env:KODEX_MCP_PROXY_TOKEN}"}}},
+	}
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		permission := configuration["permission"].(map[string]string)
+		for _, name := range runtimecontract.RuntimeWorkspaceToolNames(input) {
+			permission["workspace_"+name] = "allow"
+		}
+		endpoint.Path = "/workspace/mcp"
+		configuration["mcp"].(map[string]any)["workspace"] = map[string]any{"type": "remote", "url": endpoint.String(), "enabled": true, "oauth": false, "timeout": runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds * 1000,
+			"headers": map[string]string{"Authorization": "Bearer {env:KODEX_MCP_PROXY_TOKEN}"}}
 	}
 	raw, err := json.Marshal(configuration)
 	if err != nil {
@@ -277,7 +286,7 @@ func readOpenCodeTurn(reader io.Reader, input model.Input, activity func(runtime
 				return result, errOpenCodeProvider
 			}
 		case "tool_use":
-			if started != finished+1 || part.Type != "tool" || !strings.HasPrefix(part.Tool, "kodex_") ||
+			if started != finished+1 || part.Type != "tool" || !allowedOpenCodeTool(input, part.Tool) ||
 				(part.State.Status != "completed" && part.State.Status != "error") {
 				return result, errOpenCodeProvider
 			}
@@ -333,4 +342,20 @@ func readOpenCodeTurn(reader io.Reader, input model.Input, activity func(runtime
 	}
 	result.Outcome, result.FinalMessage = "SUCCEEDED", text
 	return result, nil
+}
+
+// allowedOpenCodeTool preserves the primary MCP-only profile and admits only the exact opted-in
+// workspace catalog. Native shell/edit tools and unexpected local MCP names remain denied.
+// allowedOpenCodeTool сохраняет primary MCP-only profile и допускает лишь exact opted-in
+// workspace catalog. Native shell/edit tools и неожиданные local MCP names закрыты.
+func allowedOpenCodeTool(input model.Input, name string) bool {
+	if strings.HasPrefix(name, "kodex_") {
+		return true
+	}
+	for _, tool := range runtimecontract.RuntimeWorkspaceToolNames(input) {
+		if name == "workspace_"+tool {
+			return true
+		}
+	}
+	return false
 }

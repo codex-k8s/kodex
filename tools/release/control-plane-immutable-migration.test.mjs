@@ -1425,3 +1425,17 @@ test('038 CLI закрывает активные effects и сверяет по
   f.edit(s=>delete s.postcondition);pass(f,'inspect');pass(f,'resume','RESUMED');
   assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
 });
+
+test('039: managed workspace остаётся опциональным без backup/ACL профиля', async () => {
+  const {validManagedWorkspaceMigrationPrecondition} = await import('./control-plane-immutable-migration.mjs');
+  const profile=immutableMigrationProfile('managed-workspace');
+  assert.equal(profile.version,'20261110000200');assert.equal(profile.previousVersion,20261110000100);
+  const before={profile:'MANAGED_WORKSPACE_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261110000100,environmentVersionsReady:true,managedWorkspaceAbsent:true};
+  assert.equal(validManagedWorkspaceMigrationPrecondition(before),true);
+  for(const key of ['environmentVersionsReady','managedWorkspaceAbsent']) assert.equal(validManagedWorkspaceMigrationPrecondition({...before,[key]:false}),false);
+  const after={profile:'MANAGED_WORKSPACE_V1',database:'control_plane',readOnly:'on',gooseVersion:20261110000200,managedWorkspaceColumnReady:true};
+  assert.equal(validImmutableMigrationPostcondition('managed-workspace',after),true);
+  assert.equal(validImmutableMigrationPostcondition('managed-workspace',{...after,managedWorkspaceColumnReady:false}),false);
+  assert.equal(validImmutableMigrationPostcondition('managed-workspace',{...after,gooseVersion:20261110000100}),false);
+  assert.equal(validImmutableMigrationPostcondition('artifact-optional-antivirus',after),false);
+});

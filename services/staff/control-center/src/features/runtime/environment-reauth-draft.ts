@@ -132,6 +132,7 @@ function parsePolicy(
       "resources",
       "volumes",
       "webAccess",
+      ...("managedWorkspace" in value ? ["managedWorkspace"] : []),
     ]) ||
     value.kubernetesAccess !== "NONE" ||
     !Array.isArray(value.networkDestinations) ||
@@ -154,9 +155,17 @@ function parsePolicy(
     )
   )
     return undefined;
+  if (
+    "managedWorkspace" in value &&
+    typeof value.managedWorkspace !== "boolean"
+  )
+    return undefined;
   const volumes = parseVolumes(value.volumes);
   if (!volumes) return undefined;
   return {
+    ...("managedWorkspace" in value
+      ? { managedWorkspace: value.managedWorkspace as boolean }
+      : {}),
     resources: value.resources as RuntimeEnvironmentPolicyInput["resources"],
     volumes,
     networkDestinations:

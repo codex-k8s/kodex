@@ -210,6 +210,10 @@ onMounted(() => void load());
           </ul>
         </div>
         <dl class="environment-current__meta">
+          <div v-if="view.environment.currentVersion.policy.managedWorkspace">
+            <dt>{{ $t("runtime.managedWorkspace") }}</dt>
+            <dd><StatusBadge state="ACTIVE" /></dd>
+          </div>
           <div>
             <dt>
               {{ $t("common.version", { version: view.environment.version }) }}

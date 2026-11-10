@@ -4,12 +4,24 @@ go 1.26.10
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/google/uuid v1.6.0
 	go.yaml.in/yaml/v2 v2.4.3
 	golang.org/x/sys v0.48.0
+)
+
+require (
+	github.com/gowebpki/jcs v1.0.1 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
+	github.com/lestrrat-go/dsig v1.3.0 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/httprc/v3 v3.0.6 // indirect
+	github.com/lestrrat-go/jwx/v3 v3.2.0 // indirect
+	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
+	github.com/valyala/fastjson v1.6.10 // indirect
 )
 
 require (

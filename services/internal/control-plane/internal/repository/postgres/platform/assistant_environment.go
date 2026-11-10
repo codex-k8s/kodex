@@ -162,7 +162,7 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 	if webRules == nil {
 		webRules = []map[string]any{}
 	}
-	return map[string]any{
+	result := map[string]any{
 		"resources": resourceInput,
 		"volumes":   volumes, "networkDestinations": destinations,
 		"webAccess": map[string]any{
@@ -170,6 +170,10 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 		},
 		"kubernetesAccess": policy.KubernetesAccess.Kind,
 	}
+	if policy.ManagedWorkspace {
+		result["managedWorkspace"] = true
+	}
+	return result
 }
 
 // hydrateAssistantEnvironmentOperation accepts the closed environment proposal shape, requires

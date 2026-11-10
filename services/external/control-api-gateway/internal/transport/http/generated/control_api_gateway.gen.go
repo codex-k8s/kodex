@@ -15201,18 +15201,24 @@ type RuntimeEnvironmentPage struct {
 // RuntimeEnvironmentPolicy defines model for RuntimeEnvironmentPolicy.
 type RuntimeEnvironmentPolicy struct {
 	KubernetesAccess RuntimeKubernetesAccessProfile `json:"kubernetesAccess"`
-	Network          RuntimeNetworkPolicy           `json:"network"`
-	NetworkDigest    string                         `json:"networkDigest"`
-	RbacDigest       string                         `json:"rbacDigest"`
-	Resources        RuntimeResourcePolicy          `json:"resources"`
-	ResourcesDigest  string                         `json:"resourcesDigest"`
-	Volumes          []RuntimeVolume                `json:"volumes"`
-	VolumesDigest    string                         `json:"volumesDigest"`
+
+	// ManagedWorkspace Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
+	ManagedWorkspace *bool                 `json:"managedWorkspace,omitempty"`
+	Network          RuntimeNetworkPolicy  `json:"network"`
+	NetworkDigest    string                `json:"networkDigest"`
+	RbacDigest       string                `json:"rbacDigest"`
+	Resources        RuntimeResourcePolicy `json:"resources"`
+	ResourcesDigest  string                `json:"resourcesDigest"`
+	Volumes          []RuntimeVolume       `json:"volumes"`
+	VolumesDigest    string                `json:"volumesDigest"`
 }
 
 // RuntimeEnvironmentPolicyInput defines model for RuntimeEnvironmentPolicyInput.
 type RuntimeEnvironmentPolicyInput struct {
-	KubernetesAccess    RuntimeKubernetesAccessKind `json:"kubernetesAccess"`
+	KubernetesAccess RuntimeKubernetesAccessKind `json:"kubernetesAccess"`
+
+	// ManagedWorkspace Управляемые файлы, checkout и выбранные команды в изолированной рабочей копии OpenCode; отключено по умолчанию.
+	ManagedWorkspace    *bool                       `json:"managedWorkspace,omitempty"`
 	NetworkDestinations []RuntimeNetworkDestination `json:"networkDestinations"`
 	Resources           RuntimeResourcePolicy       `json:"resources"`
 	Volumes             []RuntimeVolumeInput        `json:"volumes"`

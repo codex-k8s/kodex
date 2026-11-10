@@ -235,3 +235,16 @@ describe("Компактная политика плана окружения", 
     expect(source).not.toContain('v-if="compact"\n      :policy=');
   });
 });
+
+it("сохраняет опциональную рабочую копию в предложении и не принимает строку вместо boolean", async () => {
+  const selected = await state({
+    ...defaultRuntimeEnvironmentPolicy(),
+    managedWorkspace: true,
+  });
+  expect(selected.policy.value.managedWorkspace).toBe(true);
+  const invalid = await state({
+    ...defaultRuntimeEnvironmentPolicy(),
+    managedWorkspace: "true",
+  });
+  expect(invalid.problems.value.length).toBeGreaterThan(0);
+});

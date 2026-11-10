@@ -316,6 +316,7 @@ onBeforeUnmount(reset);
         </summary>
         <RuntimeEnvironmentPolicyFields
           :policy="input.policy"
+          :managed-workspace-available="false"
           :disabled="busy || !canEdit"
           @update:policy="input.policy = $event"
         />

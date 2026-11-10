@@ -6316,6 +6316,7 @@ message RuntimeEnvironmentPolicyInput {
   repeated RuntimeNetworkDestination network_destinations = 3;
   RuntimeKubernetesAccessKind kubernetes_access = 4;
   RuntimeWebAccess web_access = 5;
+  bool managed_workspace = 6;
 }
 
 message RuntimeNetworkEgress {
@@ -6370,6 +6371,7 @@ message RuntimeEnvironmentPolicy {
   string volumes_digest = 6;
   string network_digest = 7;
   string rbac_digest = 8;
+  bool managed_workspace = 9;
 }
 
 message RuntimeEnvironmentImage {

@@ -286,3 +286,40 @@ func TestRuntimeEnvironmentPolicyAllowsExactHTTPMethodSubset(t *testing.T) {
 		t.Fatal("write method was accepted in read-only mode")
 	}
 }
+
+// TestManagedWorkspacePolicyIsExplicitAndDigestBound preserves the legacy default digest and
+// verifies that normalization and typed input retain the opt-in in a distinct policy commitment.
+// TestManagedWorkspacePolicyIsExplicitAndDigestBound сохраняет прежний default digest и проверяет,
+// что normalization и typed input не теряют opt-in и связывают его отдельным policy commitment.
+func TestManagedWorkspacePolicyIsExplicitAndDigestBound(t *testing.T) {
+	legacy := DefaultRuntimeEnvironmentPolicy()
+	oldDigest, err := RuntimeEnvironmentPolicyDigest(legacy)
+	if err != nil || legacy.ManagedWorkspace {
+		t.Fatal("legacy policy changed", err)
+	}
+	expected := digestParts("runtime-environment-policy-v1", legacy.ResourcesDigest, legacy.VolumesDigest, legacy.NetworkDigest, legacy.RBACDigest)
+	if oldDigest != expected {
+		t.Fatal("legacy policy digest changed")
+	}
+	enabled, err := NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{ManagedWorkspace: true})
+	if err != nil || !enabled.ManagedWorkspace {
+		t.Fatal("zero-default normalization lost opt-in", err)
+	}
+	digest, err := RuntimeEnvironmentPolicyDigest(enabled)
+	if err != nil || digest == oldDigest {
+		t.Fatal("opt-in missing from policy commitment", err)
+	}
+	enabled.ManagedWorkspace = false
+	restored, err := RuntimeEnvironmentPolicyDigest(enabled)
+	if err != nil || restored != oldDigest {
+		t.Fatal("default policy cannot be restored", err)
+	}
+	fromInput, err := RuntimeEnvironmentPolicyFromInput(RuntimeEnvironmentPolicyInput{
+		ManagedWorkspace: true, Resources: legacy.Resources,
+		NetworkDestinations: []string{RuntimeEgressDNS, RuntimeEgressProviderProxy, RuntimeEgressRuntimeCallback},
+		KubernetesAccess:    RuntimeKubernetesAccessNone,
+	})
+	if err != nil || !fromInput.ManagedWorkspace {
+		t.Fatal("typed input lost opt-in", err)
+	}
+}

@@ -435,6 +435,9 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
   input.values = value.values.map((item) => ({ ...item }));
   input.secretBindings = value.secretBindings.map((item) => ({ ...item }));
   input.policy = {
+    ...(value.policy.managedWorkspace !== undefined
+      ? { managedWorkspace: value.policy.managedWorkspace }
+      : {}),
     resources: { ...value.policy.resources },
     volumes: value.policy.volumes.map((item) => ({ ...item })),
     networkDestinations: [...value.policy.networkDestinations],

@@ -308,7 +308,7 @@ func runtimeEnvironmentPolicyInput(input generated.RuntimeEnvironmentPolicyInput
 	if !input.KubernetesAccess.Valid() {
 		return nil, false
 	}
-	result := &controlplanev1.RuntimeEnvironmentPolicyInput{Resources: &controlplanev1.RuntimeResourcePolicy{
+	result := &controlplanev1.RuntimeEnvironmentPolicyInput{ManagedWorkspace: input.ManagedWorkspace != nil && *input.ManagedWorkspace, Resources: &controlplanev1.RuntimeResourcePolicy{
 		CpuRequestMilli: input.Resources.CpuRequestMilli, CpuLimitMilli: input.Resources.CpuLimitMilli,
 		MemoryRequestMib: input.Resources.MemoryRequestMib, MemoryLimitMib: input.Resources.MemoryLimitMib,
 		EphemeralStorageRequestMib: input.Resources.EphemeralStorageRequestMib,
