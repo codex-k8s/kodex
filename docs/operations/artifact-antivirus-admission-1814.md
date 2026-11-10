@@ -181,3 +181,11 @@ NOT_SCANNED не превращается в CLEAN после повторног
 Terminal/cancel/lease expiry не дают нового доступа к файлу; прежние bytes и история сохраняются
 по существующему retention. Новый event kind не добавляется: используется ARTIFACT_CHANGED
 с текущим exact revision и явным scan state. Lifecycle остальных агрегатов не меняется.
+
+
+VFS list/search передают существующий `NOT_SCANNED` без подмены на CLEAN.
+HTTP boundary признаёт ровно опубликованные scan states; неизвестное состояние
+по-прежнему закрыто отклоняется. Доступность выбора и действия DOWNLOAD/DELETE
+сохраняются из owner descriptor и не выводятся локально из scan state.
+Regression проходит полную сериализацию обоих HTTP endpoints: одного успешного
+прямого artifact download недостаточно для доказательства работоспособности VFS.
