@@ -225,6 +225,11 @@ model/API keys, callback identities, integration credentials, входные VFS
 volumes и Kubernetes token туда не монтируются. Env дочерней команды задаётся
 закрытым списком; role/provider environment не наследуется.
 
+Для этого контейнера Pod явно задаёт `command=/usr/local/bin/kodex-agent-runner`:
+штатный `kodex-init` остальных контейнеров сделал бы daemon дочерним процессом.
+Здесь protected binary сам проверяет точный invocation и реализует PID1 cleanup;
+допуск образа и проверка root-owned executable сохраняются.
+
 Контейнер работает как непривилегированный PID1 в отдельном PID namespace,
 без host/shared PID, capabilities и записи в root filesystem. Дочерний процесс
 перед exec ставит Landlock ABI>=3: mutation разрешена только в work/tmp и

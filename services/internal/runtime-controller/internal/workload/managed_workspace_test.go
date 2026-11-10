@@ -49,6 +49,9 @@ func TestManagedWorkspaceActualPodRenderSeparatesCredentialsAndPreservesBudget(t
 	}
 	executor := containerByName(t, pod.Spec.Containers, workspaceExecutorName)
 	provider := containerByName(t, pod.Spec.Containers, "provider-runtime")
+	if len(executor.Command) != 1 || executor.Command[0] != "/usr/local/bin/kodex-agent-runner" {
+		t.Fatal("image init would take PID1 away from the executor")
+	}
 	if executor.SecurityContext.RunAsUser == nil || *executor.SecurityContext.RunAsUser != 10002 || executor.SecurityContext.RunAsGroup == nil || *executor.SecurityContext.RunAsGroup != 29000 || len(executor.VolumeMounts) != 3 || len(executor.Env) != 2 || len(executor.EnvFrom) != 0 {
 		t.Fatal("executor boundary incomplete")
 	}
@@ -71,6 +74,8 @@ func TestManagedWorkspaceActualPodRenderSeparatesCredentialsAndPreservesBudget(t
 		}
 	}
 	for _, mutate := range []func(*corev1.Pod){
+		func(p *corev1.Pod) { p.Spec.Containers[3].Command = nil },
+		func(p *corev1.Pod) { p.Spec.Containers[3].Command = []string{"/usr/local/bin/kodex-init"} },
 		func(p *corev1.Pod) {
 			p.Spec.Containers[3].Env = append(p.Spec.Containers[3].Env, corev1.EnvVar{Name: "UNEXPECTED", Value: "synthetic"})
 		},

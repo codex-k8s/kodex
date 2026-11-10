@@ -64,8 +64,10 @@ func workspaceExecutorContainer(input runtimecontract.RunnerInput) (corev1.Conta
 	_, resources := splitManagedWorkspaceResources(input.EnvironmentPolicy.Resources)
 	security := restrictedSecurityContext(10002)
 	security.RunAsGroup = int64Pointer(29000)
+	// This dedicated daemon owns PID-1 reaping itself; the normal image init would make it a child.
+	// Этот отдельный daemon сам собирает потомков как PID1; штатный init образа сделал бы его child.
 	return corev1.Container{Name: workspaceExecutorName, Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent,
-		Args: []string{runtimecontract.WorkspaceExecutorMode}, WorkingDir: runtimecontract.RuntimeWorkspaceWorkingRoot,
+		Command: []string{"/usr/local/bin/kodex-agent-runner"}, Args: []string{runtimecontract.WorkspaceExecutorMode}, WorkingDir: runtimecontract.RuntimeWorkspaceWorkingRoot,
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "OTEL_SDK_DISABLED", Value: "true"}}, SecurityContext: security,
 		VolumeMounts: []corev1.VolumeMount{work, {Name: workspaceExecutorSocketVolume, MountPath: "/run/kodex/workspace"}, {Name: workspaceExecutorTmpVolume, MountPath: "/tmp"}}, Resources: resources,
 		ReadinessProbe: &corev1.Probe{ProbeHandler: corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/usr/bin/test", "-S", runtimecontract.WorkspaceExecutorSocket}}}, PeriodSeconds: 2, TimeoutSeconds: 1, FailureThreshold: 30}}, true

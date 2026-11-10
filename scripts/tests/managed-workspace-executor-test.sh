@@ -20,28 +20,49 @@ socket="${prefix}-socket"
 cleanup() {
   [[ -z "$daemon" ]] || docker rm -f -v "$daemon" >/dev/null 2>&1 || true
   [[ -z "$seed" ]] || docker rm -f -v "$seed" >/dev/null 2>&1 || true
+  docker rm -f -v "${prefix}-inherited-init" >/dev/null 2>&1 || true
   docker image rm "$image" >/dev/null 2>&1 || true
   docker volume rm "$work" "$socket" >/dev/null 2>&1 || true
   rm -rf -- "$fixture_dir"
 }
 trap cleanup EXIT
 chmod 0700 "$fixture_dir"
+# Точный штатный init берётся из Dockerfile; PostgreSQL base не подменяет его поведение.
+python3 - "$root" "$fixture_dir" <<'PYINIT'
+import base64, pathlib, re, sys
+source = (pathlib.Path(sys.argv[1]) / 'services/jobs/agent-runner/Dockerfile').read_text()
+encoded = re.search(r"printf '%s' '([A-Za-z0-9+/=]+)' \| base64 -d", source).group(1)
+(pathlib.Path(sys.argv[2]) / 'init.go').write_bytes(base64.b64decode(encoded, validate=True))
+PYINIT
 (
   cd -- "$root/services/jobs/agent-runner"
+  CGO_ENABLED=0 GOWORK=off GOENV=off go build -o "$fixture_dir/kodex-init" "$fixture_dir/init.go"
   CGO_ENABLED=0 GOWORK=off GOENV=off go build -o "$fixture_dir/kodex-agent-runner" ./cmd/agent-runner
   CGO_ENABLED=0 GOWORK=off GOENV=off go build -o "$fixture_dir/probe" ./testdata/workspace_executor_probe.go
 )
 seed=$(docker run -d --network none --user 0 --entrypoint /bin/sh "$base_id" -c "sleep 120")
+docker cp "$fixture_dir/kodex-init" "$seed:/usr/local/bin/kodex-init"
 docker cp "$fixture_dir/kodex-agent-runner" "$seed:/usr/local/bin/kodex-agent-runner"
 docker cp "$fixture_dir/probe" "$seed:/usr/local/bin/workspace-executor-probe"
-docker exec --user 0 "$seed" /bin/sh -c 'chown 0:0 /usr/local/bin/kodex-agent-runner /usr/local/bin/workspace-executor-probe; chmod 0555 /usr/local/bin/kodex-agent-runner /usr/local/bin/workspace-executor-probe'
-docker commit --change 'ENTRYPOINT ["/usr/local/bin/kodex-agent-runner"]' --change 'USER 10002:29000' --change 'LABEL kodex.dev.test-only=true' "$seed" "$image" >/dev/null
+docker exec --user 0 "$seed" /bin/sh -c 'chown 0:0 /usr/local/bin/kodex-init /usr/local/bin/kodex-agent-runner /usr/local/bin/workspace-executor-probe; chmod 0555 /usr/local/bin/kodex-init /usr/local/bin/kodex-agent-runner /usr/local/bin/workspace-executor-probe'
+docker commit --change 'ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]' --change 'USER 10002:29000' --change 'LABEL kodex.dev.test-only=true' "$seed" "$image" >/dev/null
+# Наследуемый production init оставляет runner дочерним PID: guard обязан это отвергнуть.
+if timeout 10s docker run --rm --name "${prefix}-inherited-init" --network none --read-only \
+  --user 10002:29000 --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 64 --memory 128m "$image" runtime-workspace-executor \
+  >"$fixture_dir/inherited-init.log" 2>&1; then
+  printf 'Inherited init unexpectedly passed the executor PID1 guard\n' >&2; exit 1
+fi
+grep -Fq 'managed workspace command is unavailable' "$fixture_dir/inherited-init.log" || {
+  printf 'Inherited init did not reach the protected PID1 guard\n' >&2; exit 1;
+}
 docker volume create "$work" >/dev/null
 docker volume create "$socket" >/dev/null
 docker run --rm --network none --user 0 --entrypoint /bin/sh \
   --mount "type=volume,src=$work,dst=/fixture/work" --mount "type=volume,src=$socket,dst=/fixture/socket" \
   "$image" -c 'chown 10001:29000 /fixture/work; chmod 2770 /fixture/work; chown 0:29000 /fixture/socket; chmod 2770 /fixture/socket'
 daemon=$(docker run -d --network none --read-only --user 10002:29000 --cap-drop ALL \
+  --entrypoint /usr/local/bin/kodex-agent-runner \
   --security-opt no-new-privileges --pids-limit 256 --memory 256m --cpus 1 \
   --tmpfs /tmp:rw,nosuid,nodev,size=67108864,mode=1777 \
   --mount "type=volume,src=$work,dst=/workspace/work" --mount "type=volume,src=$socket,dst=/run/kodex/workspace" \
