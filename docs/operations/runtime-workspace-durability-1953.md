@@ -573,8 +573,15 @@ EACCES. Это data roundtrip, не принятие owner RESTORED.
 
 ### Нативные права local-path PVC
 
-`tools/dev/workspace-volume-native-probe.py` требует exact context, cluster/
-staging/node UID и уже доступный pinned runner image. Он создаёт только свой
+`tools/dev/workspace-volume-native-probe.py` требует explicit context, cluster/
+namespace/node UID и уже доступный pinned runner image. Context и registry могут
+отличаться между установками; имена сами по себе не подтверждают идентичность.
+`--expected-staging-uid` обозначает UID namespace `kodex-system` и сохраняет
+историческое имя аргумента. Все три UID обязательны; перед первым Create
+проверяются actual UID, cached exact image и профиль `local-path`.
+Image обязан содержать digest; credentials и URL вместо image reference
+отклоняются. Pull не выполняется (`imagePullPolicy: Never`).
+Он создаёт только свой
 одноразовый namespace с restricted Pod Security и deny-all NetworkPolicy,
 два PVC по16MiB и последовательные non-root Pods без capabilities, API token
 или внешней сети. Существующие workloads, namespaces и volumes не меняются.
