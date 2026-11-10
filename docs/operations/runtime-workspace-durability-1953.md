@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.27
+version: 1.0.28
 updated: 2026-11-11
 ---
 
@@ -1075,3 +1075,33 @@ schema, без изменения списка команд, sandbox либо п
 Context7: `/golang/go/go1.26.7`, orphan streams/WaitDelay. Семантика Wait
 и завершения I/O дополнительно проверена через `go doc` закреплённого Go1.26.10;
 локальный Go1.27 и release toolchain проверяются отдельно.
+
+## Необязательный CA архивного S3 worker
+
+`SESSION_ARCHIVE_OBJECT_STORAGE_CA_CONFIG_MAP` — имя ConfigMap с ключом `ca.crt`
+в фиксированном namespace `kodex-runtime`. Пустое значение сохраняет системный
+набор доверия. Настройка принадлежит оператору deployment, не агенту или prompt.
+Она проходит Config → controller → canonical worker Pod; CA монтируется только
+в контейнер `worker`, read-only, с фиксированным `SSL_CERT_FILE`. Подпись сервера,
+hostname и HTTPS проверяются обычным Go/AWS SDK transport. Это не CA для RPC
+и не изменение mTLS/JWS. ConfigMap не содержит private key.
+
+Оператор отдельно материализует S3 Secret с access-key/secret-key в namespace
+worker: имя из `SESSION_ARCHIVE_OBJECT_STORAGE_SECRET` не обозначает Secret
+контроллера в другом namespace. Используется отдельная архивная identity с
+допуском только к настроенному бакету/префиксу. CA и модельные credentials не смешиваются.
+Точные DNS и S3 egress/ingress задаются deployment-профилем; базовый deny сохраняется.
+
+| Сценарий | Поведение и граница |
+| --- | --- |
+| Пустой CA reference | Прежний системный trust, без дополнительного mount/env |
+| Корректный reference | Fixed `ca.crt` только у S3 worker для legacy и V2 snapshot/restore/delete-object |
+| Path, namespace или неверное имя | Configuration отказ до materialization Job |
+| Нет ConfigMap/ключа | Обязательный mount не готов; запуска с ослабленным trust нет |
+| Неподходящий CA/hostname, сеть или credentials | Обычный закрытый storage failure; checkpoint не объявляется принятым |
+| Retry/restart и неизвестная S3 запись | Прежние owner receipts, fencing и reconciliation; эта настройка не разрешает повтор записи |
+
+При смене CA или image уже созданный Job не переписывается и не принимается
+как новый spec. Оператор проверяет исход и штатное завершение прежней попытки;
+новая owner attempt использует новый canonical профиль. Изменение конфигурации
+без принятого manifest не доказывает восстановление workspace.

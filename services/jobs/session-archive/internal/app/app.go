@@ -68,7 +68,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	}
 	kubernetes, err := controller.InCluster(controller.Config{WorkerNamespace: config.WorkerNamespace, Environment: config.Environment,
 		WorkerImage: config.WorkerImage, WorkerServiceAccount: config.WorkerServiceAccount, ObjectStorageSecret: config.ObjectStorageSecret,
-		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize,
+		ObjectStorageCAConfigMap: config.ObjectStorageCAConfigMap,
+		StorageClass:             config.StorageClass, SessionPVCSize: config.SessionPVCSize,
 		ObjectStorageEndpoint: config.ObjectStorageEndpoint, ObjectStorageRegion: config.ObjectStorageRegion,
 		ObjectStorageBucket: config.ObjectStorageBucket, ObjectStorageAllowInsecureLocal: config.ObjectStorageAllowInsecureLocal,
 		WorkerTimeout: config.WorkerTimeout, Logger: logger})

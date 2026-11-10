@@ -40,6 +40,9 @@ const (
 	// defaultPollInterval spaces worker Job and source-volume observations.
 	// RU: defaultPollInterval задаёт интервал наблюдения Job worker и исходного тома.
 	defaultPollInterval = 2 * time.Second
+	// objectStorageCAMountPath isolates optional public trust anchors from task and credential mounts.
+	// RU: objectStorageCAMountPath отделяет необязательные публичные CA от mounts задания и credentials.
+	objectStorageCAMountPath = "/var/run/config/kodex/session-archive/object-storage-ca"
 )
 
 // Config supplies the archive worker's namespace, image, storage, identity and execution limits.
@@ -49,6 +52,7 @@ type Config struct {
 	WorkerNamespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
 	StorageClass, SessionPVCSize                                                         string
 	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                      string
+	ObjectStorageCAConfigMap                                                             string
 	ObjectStorageAllowInsecureLocal                                                      bool
 	WorkerTimeout                                                                        time.Duration
 }
@@ -85,6 +89,7 @@ func New(client kubernetes.Interface, config Config) (*Controller, error) {
 		config.WorkerServiceAccount == "" || config.ObjectStorageSecret == "" || config.ObjectStorageEndpoint == "" ||
 		config.ObjectStorageRegion == "" || config.ObjectStorageBucket == "" || quantityErr != nil || pvcRequest.Sign() <= 0 ||
 		(config.StorageClass != "" && len(utilvalidation.IsDNS1123Subdomain(config.StorageClass)) != 0) ||
+		(config.ObjectStorageCAConfigMap != "" && len(utilvalidation.IsDNS1123Subdomain(config.ObjectStorageCAConfigMap)) != 0) ||
 		config.WorkerTimeout < time.Minute || config.WorkerTimeout > 15*time.Minute {
 		return nil, errors.New("session archive controller configuration is invalid")
 	}
@@ -414,6 +419,13 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 	}
 	mounts := []corev1.VolumeMount{{Name: "task", MountPath: "/var/run/config/kodex/session-archive", ReadOnly: true},
 		{Name: "object-storage", MountPath: "/var/run/secrets/kodex/session-archive/object-storage", ReadOnly: true}, {Name: "tmp", MountPath: "/tmp"}}
+	if controller.config.ObjectStorageCAConfigMap != "" {
+		volumes = append(volumes, corev1.Volume{Name: "object-storage-ca", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: controller.config.ObjectStorageCAConfigMap},
+			Items:                []corev1.KeyToPath{{Key: "ca.crt", Path: "ca.crt"}},
+		}}})
+		mounts = append(mounts, corev1.VolumeMount{Name: "object-storage-ca", MountPath: objectStorageCAMountPath, ReadOnly: true})
+	}
 	if task.Kind == "SNAPSHOT" || task.Kind == "RESTORE" {
 		volumes = append(volumes, corev1.Volume{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: task.PVCName}}})
 		// source_relative_path задан относительно runtime workspace, где PVC
@@ -434,6 +446,9 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
 		SecurityContext: restricted(workerUID)}
+	if controller.config.ObjectStorageCAConfigMap != "" {
+		container.Env = append(container.Env, corev1.EnvVar{Name: "SSL_CERT_FILE", Value: objectStorageCAMountPath + "/ca.crt"})
+	}
 	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: workerDiagnosticAnnotations(task, sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,

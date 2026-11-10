@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -42,6 +43,7 @@ type Config struct {
 	StorageClass                    string        `env:"SESSION_ARCHIVE_STORAGE_CLASS"`
 	SessionPVCSize                  string        `env:"SESSION_ARCHIVE_SESSION_PVC_SIZE"`
 	ObjectStorageSecret             string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_SECRET"`
+	ObjectStorageCAConfigMap        string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_CA_CONFIG_MAP"`
 	ObjectStorageEndpoint           string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT"`
 	ObjectStorageRegion             string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_REGION"`
 	ObjectStorageBucket             string        `env:"SESSION_ARCHIVE_OBJECT_STORAGE_BUCKET"`
@@ -103,6 +105,7 @@ func (value Config) validate() error {
 	}
 	if value.WorkerNamespace != exactWorkerNamespace || value.InstanceID == "" || value.WorkerImage == "" || value.WorkerServiceAccount == "" || value.SessionPVCSize == "" || value.ObjectStorageSecret == "" ||
 		value.ObjectStorageEndpoint == "" || value.ObjectStorageRegion == "" || value.ObjectStorageBucket == "" ||
+		(value.ObjectStorageCAConfigMap != "" && len(utilvalidation.IsDNS1123Subdomain(value.ObjectStorageCAConfigMap)) != 0) ||
 		!validObjectStorageBoundary(value) || strings.ContainsAny(value.ControlPlaneTLSServerName, "*/") ||
 		value.Environment == "production" && value.ObjectStorageAllowInsecureLocal ||
 		value.RPCDeadline < time.Second || value.RPCDeadline > 15*time.Second || value.PollInterval < 250*time.Millisecond ||
