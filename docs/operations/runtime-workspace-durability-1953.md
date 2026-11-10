@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.25
+version: 1.0.26
 updated: 2026-11-11
 ---
 
@@ -1014,3 +1014,29 @@ Forward migration `20261028000100` добавляет отдельный `worksp
 происхождения и отдельной полной проверки; fallback к пустому каталогу не разрешён.
 Context7 для PostgreSQL недоступен: возвращён отказ API key; проверена официальная
 [документация PostgreSQL18 о modifying CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING).
+
+
+## Ожидание TCP-подключения перед BIND
+
+Первый initializer может стартовать до применения разрешающих сетевых правил.
+Runner повторяет только доказанный отказ TCP dial (`net.OpError`, `Op=dial`,
+`ECONNREFUSED`): соединение ещё не установлено, HTTP-запрос владельцу не отправлен.
+Четыре задержки 250/500/1000/2000 мс дают максимум пять подключений в пределах
+прежнего общего бюджета 35 с и более раннего срока caller. Отмена останавливает
+ожидание. Это ожидание сети, без нового run, lease, grant, owner CAS либо события.
+
+| Результат обмена | Поведение runner | Writer и наблюдение |
+| --- | --- | --- |
+| TCP dial refused, попытки остались | Ожидание, затем тот же immutable BIND с прежними ticket и execution headers | Запись запрещена до exact ACK; при восстановлении safe log содержит только число подключений |
+| Предел подключений или отмена | Завершение initializer без нового исполнения | Нет ACK, нет разрешения на private write; fixed diagnostic без адреса и raw error |
+| TLS/auth failure, неизвестный transport outcome | Одна попытка, без повтора | Unknown outcome сохраняется; authority не ослабляется |
+| HTTP error или redirect | Отказ, redirect не выполняется | Request body и bearer не переносятся на другой endpoint; HTTP status остаётся безопасным числовым diagnostic |
+| Lost, malformed или mismatched ACK | Отказ без повторного BIND | Неоднозначный эффект не считается rollback либо разрешением на запись |
+| Exact ACK после current owner CAS | Прежняя повторная проверка тома и подготовка exact generation | Lifecycle владельца, checkpoint и fencing не меняются |
+
+Локальные transport-тесты проверяют реальный HTTP server, отказ до TCP,
+единственный POST, cancellation, exhaustion и запрет replay после lost ACK,
+HTTP 503, redirect и invalid ACK. Они не доказывают причину конкретного сетевого
+отказа либо сквозной запуск сотрудника. Через Context7 проверены
+[Go net/http Transport и Request.Context](https://pkg.go.dev/net/http) и
+[Kubernetes NetworkPolicy: задержка применения](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
