@@ -156,7 +156,7 @@ func TestContextMountAdmissionEvaluatesGeneratedPodAndRejectsDrift(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			activation := runtimeAdmissionActivation(t, env, declarations, object)
+			activation := runtimeAdmissionActivation(t, env, declarations, object, expressions...)
 			accepted := true
 			for _, program := range programs {
 				result, _, err := program.Eval(activation)

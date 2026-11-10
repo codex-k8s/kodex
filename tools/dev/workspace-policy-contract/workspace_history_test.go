@@ -43,7 +43,7 @@ func workspaceHistoryBoundaryFixture() map[string]any {
 	relay := map[string]any{"name": "provider-credential-relay", "securityContext": workspaceHistorySecurity(10003, 10003, "RuntimeDefault")}
 	return map[string]any{"object": map[string]any{"spec": map[string]any{"initContainers": []any{prepare, init}}},
 		"params": map[string]any{"data": map[string]any{"providerAppArmorProfile": ""}},
-		"variables": map[string]any{"workspaceStorageV2": true, "workspaceStoragePrefix": prefix,
+		"variables": map[string]any{"workspaceStorageV2": true, "workspaceStoragePrefix": prefix, "managedWorkspace": false,
 			"allContainers":  []any{prepare, init, role, provider, relay},
 			"roleContainers": []any{role}, "providerContainers": []any{provider}, "relayContainers": []any{relay}}}
 }
