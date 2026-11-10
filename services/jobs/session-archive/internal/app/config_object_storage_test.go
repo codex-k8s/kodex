@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +68,26 @@ func TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	config.WorkerNamespace = "kodex-system"
 	if err := config.validate(); err == nil {
 		t.Fatal("configuration accepted a worker namespace outside kodex-runtime")
+	}
+}
+
+// TestConfigAcceptsOnlyOptionalNamespacedStorageCA rejects paths, namespaces and malformed ConfigMap names before client startup.
+// RU: TestConfigAcceptsOnlyOptionalNamespacedStorageCA отклоняет пути, namespace и неверные имена ConfigMap до запуска client.
+func TestConfigAcceptsOnlyOptionalNamespacedStorageCA(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"", "archive-storage-ca", "archive.storage.ca"} {
+		config := validTestConfig()
+		config.ObjectStorageCAConfigMap = name
+		if err := config.validate(); err != nil {
+			t.Fatalf("valid storage CA reference rejected: %v", err)
+		}
+	}
+	for _, name := range []string{"../ca", "other/ca", "/ca", "ca cert", "CA", strings.Repeat("a", 254)} {
+		config := validTestConfig()
+		config.ObjectStorageCAConfigMap = name
+		if config.validate() == nil {
+			t.Fatal("invalid storage CA reference accepted")
+		}
 	}
 }
 
