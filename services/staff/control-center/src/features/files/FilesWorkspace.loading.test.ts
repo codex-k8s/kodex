@@ -1,6 +1,7 @@
 import { createNoopRenderer } from "@/test-utils/create-noop-renderer";
 import { readFileSync } from "node:fs";
 import {
+  createSSRApp,
   defineComponent,
   reactive,
   ssrContextKey,
@@ -8,6 +9,8 @@ import {
   type SetupContext,
 } from "vue";
 import { createI18n } from "vue-i18n";
+import { renderToString } from "@vue/server-renderer";
+import { createRouter, createMemoryHistory } from "vue-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FilesWorkspace from "./FilesWorkspace.vue";
 import { AppProblem } from "@/shared/api/problem";
@@ -148,6 +151,42 @@ describe("FilesWorkspace initial loading and retry", () => {
       expect(source).toContain("$t(`states.${item.scanState}`)");
     },
   );
+
+  it("показывает настоящую карточку результата, даже если текущий раздел списка пуст", async () => {
+    const result = {
+      ...artifact,
+      source: "AGENT_RESULT" as const,
+      nextActions: ["DOWNLOAD"] as Artifact["nextActions"],
+    };
+    platform.artifacts[artifact.ref] = result;
+    platform.readArtifact.mockResolvedValue(result);
+    platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
+    const app = createSSRApp(FilesWorkspace, {
+      projectRef: "prj_fixture",
+      mode: "ACTIVE",
+      initialArtifactRef: artifact.ref,
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: {} },
+        missingWarn: false,
+        fallbackWarn: false,
+      }),
+    );
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/:pathMatch(.*)*", component: { render: () => null } }],
+    });
+    app.use(router);
+    await router.push("/projects/prj_fixture/files");
+    await router.isReady();
+    const html = await renderToString(app);
+    expect(html).toContain('class="file-details"');
+    expect(html).toContain(result.fileName);
+    expect(html).not.toContain("files.emptyTitle");
+  });
 
   it("сохраняет ссылку до загрузки списка и читает файл отдельно от первой страницы", async () => {
     vi.useFakeTimers();
