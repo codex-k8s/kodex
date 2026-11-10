@@ -110,6 +110,9 @@ func (controller *Controller) workspaceVolumePreparationJob(work runtimecontract
 	annotations := map[string]string{workspaceVolumeTaskAnnotation: work.TaskRef,
 		workspaceVolumeInputAnnotation: work.InputDigest, workspaceVolumeInputUIDAnnotation: string(input.UID),
 		workspaceVolumePVCUIDAnnotation: work.Volume.PVCUID, workspaceVolumeAttemptAnnotation: strconv.FormatInt(int64(work.Attempt), 10)}
+	// The strict reader requires read-only mode bits even on a read-only ConfigMap mount.
+	// Строгому reader нужны read-only биты файла даже при read-only монтировании ConfigMap.
+	inputMode := int32(0o440)
 	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: exactWorkerNamespace,
 		Labels: map[string]string{managedLabel: "true"}, Annotations: annotations},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, Parallelism: &one, Completions: &one, ActiveDeadlineSeconds: &deadline,
@@ -118,7 +121,7 @@ func (controller *Controller) workspaceVolumePreparationJob(work runtimecontract
 				Spec: corev1.PodSpec{ServiceAccountName: controller.config.WorkerServiceAccount, AutomountServiceAccountToken: &falseValue,
 					EnableServiceLinks: &falseValue, RestartPolicy: corev1.RestartPolicyNever, SecurityContext: security,
 					Containers: []corev1.Container{helper}, Volumes: []corev1.Volume{
-						{Name: "task", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: input.Name}}}},
+						{Name: "task", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: input.Name}, DefaultMode: &inputMode}}},
 						{Name: "session", VolumeSource: corev1.VolumeSource{PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvc, ReadOnly: work.ReconcileOnly}}},
 						{Name: "tmp", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{SizeLimit: quantity("4Mi")}}},
 					}},

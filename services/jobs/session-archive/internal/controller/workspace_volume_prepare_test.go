@@ -1,13 +1,58 @@
 package controller
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/libs/go/securefile"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// TestWorkspaceVolumeInputProjectionMatchesStrictReader exercises the rendered mode through the
+// real bounded reader with Kubernetes-style projection links; it neither mounts a PVC nor claims work.
+// TestWorkspaceVolumeInputProjectionMatchesStrictReader проверяет rendered mode настоящим bounded
+// reader через Kubernetes-style symlinks, без PVC и выдачи полномочий на работу.
+func TestWorkspaceVolumeInputProjectionMatchesStrictReader(t *testing.T) {
+	for _, recovery := range []bool{false, true} {
+		_, controller := workspaceVolumeCreateControllerFixture(t)
+		work, input := workspaceVolumePreparationFixture(t, 1, recovery)
+		job, err := controller.workspaceVolumePreparationJob(work, input)
+		if err != nil {
+			t.Fatal("render workspace preparation", err)
+		}
+		projection := job.Spec.Template.Spec.Volumes[0].ConfigMap
+		mode := corev1.ConfigMapVolumeSourceDefaultMode
+		if projection.DefaultMode != nil {
+			mode = *projection.DefaultMode
+		}
+		root := t.TempDir()
+		snapshot := filepath.Join(root, "..snapshot")
+		if os.Mkdir(snapshot, 0o700) != nil ||
+			os.WriteFile(filepath.Join(snapshot, "volume.json"), []byte(input.Data["volume.json"]), os.FileMode(mode)) != nil ||
+			os.Symlink("..snapshot", filepath.Join(root, "..data")) != nil ||
+			os.Symlink("..data/volume.json", filepath.Join(root, "volume.json")) != nil {
+			t.Fatal("create isolated ConfigMap projection")
+		}
+		raw, err := securefile.Read(filepath.Join(root, "volume.json"), runtimecontract.MaximumWorkspaceVolumeReadyBytes)
+		if err != nil || !bytes.Equal(raw, []byte(input.Data["volume.json"])) {
+			t.Fatal("projected workspace volume input is not readable by its strict consumer", err)
+		}
+		if projection.DefaultMode == nil || *projection.DefaultMode != 0o440 {
+			t.Fatal("workspace input projection lost its explicit read-only mode")
+		}
+		changed := job.Spec.Template.Spec.DeepCopy()
+		writable := int32(0o644)
+		changed.Volumes[0].ConfigMap.DefaultMode = &writable
+		if validWorkspaceHelperPod(job.Spec.Template.Spec, *changed) {
+			t.Fatal("observer accepted a writable input projection")
+		}
+	}
+}
 
 // workspaceVolumePreparationFixture supplies an already acknowledged input incarnation for
 // renderer tests; it does not simulate the missing physical Create, owner grant or native join.
