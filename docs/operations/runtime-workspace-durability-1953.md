@@ -4,8 +4,8 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.24
-updated: 2026-10-29
+version: 1.0.25
+updated: 2026-11-11
 ---
 
 # Граница профиля
@@ -68,6 +68,14 @@ Pod после owner ACK. Отсутствие init-контейнеров у т
 `OWNER_ACKNOWLEDGEMENT`. Для owner RPC добавляется только код gRPC; request body,
 реквизиты и исходный текст ошибки не сохраняются. Диагностика не меняет допуск,
 не повторяет BIND и не превращает неопределённый исход в разрешение записи.
+
+Первый initializer отдельно журналирует закрытую `binding_stage` при отказе:
+`VOLUME_VERIFY`, `INPUT`, `CONTEXT`, `CALLBACK_CLIENT`, `OWNER_EXCHANGE`,
+`WORKSPACE_DIRECTORY` либо `GENERATION_PREPARE`. Это различает локальный отказ
+до callback и отказ обмена с owner без публикации input, исходной ошибки либо
+содержимого ответа. Неизвестная стадия нормализуется в `UNKNOWN`. Прежний
+termination record и writer fencing сохраняются; журнал не разрешает повторять
+неопределённую запись или обойти подготовку тома.
 
 ## Authority и жизненный цикл
 
