@@ -94,7 +94,7 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 // Native OpenCode state is ephemeral; it never fabricates a Codex session ID or rollout archive.
 // executeOpenCodeTurn выполняет isolated managed-MCP turn с owner-pinned канонической историей сессии.
 // Native state OpenCode временно; Codex session ID или rollout archive не имитируются.
-func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, bridgeURL, mcpToken string, auth []byte, activity func(runtimecontract.RuntimeActivity) error) (Result, error) {
+func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, bridgeURL, mcpToken string, auth []byte, activity func(runtimecontract.RuntimeActivity) error) (result Result, resultErr error) {
 	if ValidateRuntimeProfile(input) != nil || activity == nil || len(prompt) == 0 || len(prompt) > 1<<20 {
 		return Result{}, ErrRuntimeProfile
 	}
@@ -120,7 +120,12 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if err != nil {
 		return Result{}, errOpenCodeProvider
 	}
-	defer os.RemoveAll(home)
+	removeHome := true
+	defer func() {
+		if removeHome {
+			_ = os.RemoveAll(home)
+		}
+	}()
 	for _, directory := range []string{"config", "cache", "data", "state"} {
 		if os.Mkdir(filepath.Join(home, directory), 0o700) != nil {
 			return Result{}, errOpenCodeProvider
@@ -148,12 +153,18 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if err != nil || command.Start() != nil {
 		return Result{}, errOpenCodeProvider
 	}
-	defer func() { _ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL) }()
-	result, parseErr := readOpenCodeTurn(reader, input, activity, []string{string(key), mcpToken})
+	removeHome = false
+	var waitErr error
+	defer func() {
+		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
+		result, removeHome = finishOpenCodeProcess(input, result, command, waitErr)
+	}()
+	var parseErr error
+	result, parseErr = readOpenCodeTurn(reader, input, activity, []string{string(key), mcpToken})
 	if parseErr != nil {
 		_ = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
 	}
-	waitErr := command.Wait()
+	waitErr = command.Wait()
 	if ctx.Err() != nil {
 		return failedProviderResult(result), ctx.Err()
 	}
@@ -164,6 +175,36 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		return failedProviderResult(result), errOpenCodeProvider
 	}
 	return result, nil
+}
+
+// finishOpenCodeProcess seals storage provenance only after the owned leader and pipe readers have joined and its process group is absent.
+// It reaps only adopted children of this exact group, retains uncertain provider state and never derives authority from a model result.
+// finishOpenCodeProcess создаёт storage provenance лишь после Wait leader/readers и подтверждённого отсутствия его process group.
+// Reap ограничен adopted children этой группы; неизвестное состояние сохраняется, ответ модели не является authority.
+func finishOpenCodeProcess(input model.Input, result Result, command *exec.Cmd, waitErr error) (Result, bool) {
+	result.workspaceJoin = nil
+	if command == nil || command.Process == nil || command.ProcessState == nil || command.SysProcAttr == nil ||
+		!command.SysProcAttr.Setpgid || command.SysProcAttr.Pgid != 0 || errors.Is(waitErr, exec.ErrWaitDelay) {
+		return result, false
+	}
+	deadline := time.Now().Add(terminationGrace)
+	for {
+		if errors.Is(syscall.Kill(-command.Process.Pid, 0), syscall.ESRCH) {
+			result.workspaceJoin = newWorkspaceJoinProof(input)
+			return result, true
+		}
+		if !time.Now().Before(deadline) {
+			return result, false
+		}
+		for {
+			var status syscall.WaitStatus
+			pid, err := syscall.Wait4(-command.Process.Pid, &status, syscall.WNOHANG, nil)
+			if err != nil || pid <= 0 {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // openCodeEnvironment creates an explicit provider-only environment, excluding arbitrary role secrets.

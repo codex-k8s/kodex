@@ -113,18 +113,33 @@ func publishWorkspaceQuiescence(input model.Input, result codex.Result) error {
 	}
 	ack, err := workspacepolicy.ReadBoundWriterAcknowledgement(input)
 	if err != nil {
+		logWorkspaceQuiescenceRejection("WRITER_ACK")
 		return errors.New("runtime workspace writer acknowledgement is unavailable")
 	}
 	record, ok := result.WorkspaceQuiescence(input, ack)
 	if !ok {
+		logWorkspaceQuiescenceRejection("PROVIDER_JOIN")
 		return errors.New("runtime workspace writer join is unconfirmed")
 	}
 	raw, err := runtimecontract.EncodeWorkspaceQuiescence(record)
 	if err != nil {
+		logWorkspaceQuiescenceRejection("RECORD_ENCODE")
 		return errors.New("runtime workspace writer join record is invalid")
 	}
 	if writeInitializationTermination(initializationTerminationPath, raw) != nil {
+		logWorkspaceQuiescenceRejection("RECORD_WRITE")
 		return errors.New("runtime workspace writer join record is unavailable")
 	}
 	return nil
+}
+
+// logWorkspaceQuiescenceRejection reports one closed local stage without error bytes, paths or provider output; it cannot grant a checkpoint.
+// logWorkspaceQuiescenceRejection выводит закрытую local stage без error bytes, paths и provider output; checkpoint этим не разрешается.
+func logWorkspaceQuiescenceRejection(stage string) {
+	switch stage {
+	case "EXECUTOR_UNAVAILABLE", "EXECUTOR_JOIN", "WRITER_ACK", "PROVIDER_JOIN", "RECORD_ENCODE", "RECORD_WRITE":
+	default:
+		stage = "UNKNOWN"
+	}
+	slog.Warn("runtime workspace quiescence rejected", "quiescence_stage", stage)
 }

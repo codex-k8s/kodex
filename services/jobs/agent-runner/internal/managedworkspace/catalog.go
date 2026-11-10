@@ -45,11 +45,13 @@ func Tools(input runtimecontract.RunnerInput) []map[string]any {
 			output = objectSchema([]string{"sha256"}, map[string]any{"sha256": textSchema(64)})
 		case runtimecontract.WorkspaceToolExecute:
 			description = "Run exactly one environment-selected command with separate arguments in work, inside a secret-free container. No personal Git/API/model tokens are supplied. Timeout or unknown outcome must not be automatically retried. This result is local execution, not external CI evidence."
+			directory := textSchema(1024)
+			directory["description"] = "Canonical relative directory: work for the work root, or work/subdirectory. Absolute paths, trailing slashes, dot and parent components are rejected. Command arguments use paths relative to this directory."
 			commands := make([]string, 0, len(input.EnvironmentTools))
 			for _, tool := range input.EnvironmentTools {
 				commands = append(commands, tool.Command)
 			}
-			arguments = objectSchema([]string{"command", "arguments", "directory", "timeout_seconds"}, map[string]any{"command": map[string]any{"type": "string", "enum": commands}, "arguments": map[string]any{"type": "array", "maxItems": 64, "items": textSchema(8192)}, "directory": textSchema(1024), "timeout_seconds": integerSchema(1, maximumCommandSeconds)})
+			arguments = objectSchema([]string{"command", "arguments", "directory", "timeout_seconds"}, map[string]any{"command": map[string]any{"type": "string", "enum": commands}, "arguments": map[string]any{"type": "array", "maxItems": 64, "items": textSchema(8192)}, "directory": directory, "timeout_seconds": integerSchema(1, maximumCommandSeconds)})
 			output = objectSchema([]string{"status", "exit_code", "output", "truncated"}, map[string]any{"status": map[string]any{"type": "string", "enum": []string{"SUCCEEDED", "FAILED", "TIMED_OUT", "CANCELLED", "UNKNOWN"}}, "exit_code": integerSchema(-1, 255), "output": textSchema(maximumCommandOutput), "truncated": map[string]any{"type": "boolean"}})
 		case runtimecontract.WorkspaceToolCheckout:
 			description = "Materialize one complete authorized GitLab source snapshot at an exact commit SHA into a NEW work directory. Uses managed commit/tree/file read grants, never PAT or git transport. Returns API_SNAPSHOT provenance, not a full git clone or fabricated local HEAD. Symlinks, submodules, unsafe paths, partial pages and oversized files are rejected."

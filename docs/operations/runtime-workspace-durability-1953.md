@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.26
+version: 1.0.27
 updated: 2026-11-11
 ---
 
@@ -1040,3 +1040,38 @@ HTTP 503, redirect и invalid ACK. Они не доказывают причин
 отказа либо сквозной запуск сотрудника. Через Context7 проверены
 [Go net/http Transport и Request.Context](https://pkg.go.dev/net/http) и
 [Kubernetes NetworkPolicy: задержка применения](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
+
+
+## Подтверждённая остановка OpenCode перед checkpoint
+
+OpenCode использует тот же закрытый writer-join контракт, что и Codex. Ответ
+модели, событие завершения CLI и нулевой exit сами по себе не создают proof.
+После остановки CLI adapter требует настоящий Wait leader и внутренних readers,
+завершившийся синхронный reader событий и отсутствие exact process group.
+Оставшиеся процессы группы останавливаются, adopted children этой группы
+reap-ятся в пределах фиксированного termination budget 2 с. Неизвестный Wait/readers либо
+оставшаяся группа не разрешают checkpoint; временный provider home сохраняется.
+Процессы вне этой группы helper не reap-ит. Codex archive/session ID не создаются.
+
+| Сценарий | Локальное подтверждение и передача | Owner и следующий шаг |
+| --- | --- | --- |
+| CLI success и positive process join | Private exact-input witness передаётся прежним broker; проверяется peer UID и полный immutable tuple | Role отдельно ждёт managed executor, читает exact writer ACK и публикует quiescence record; controller ещё проверяет owned Pod/PVC и terminal containers |
+| CLI error/cancel при подтверждённой остановке | Past-fact proof не превращает failure в success и сохраняет measured usage | Storage custody может завершиться отдельно от business failure; старые grants не открываются |
+| Missing Wait, reader deadline либо live group | Нет private witness; cleanup uncertain provider home запрещён | Нет checkpoint и continuation; нельзя подставить положительный ACK из ответа модели |
+| Потеря metadata при broker framing или неверный peer/tuple | Прежний strict decoder отвергает proof | Закрытый отказ без перехода owner storage |
+| Уже заблокированный workspace без прежнего proof | Новая версия adapter не создаёт исторический witness задним числом | Сохраняются исходный BLOCKED и данные; автоматический replay либо ручное изменение owner row не разрешены |
+
+Закрытая диагностика завершения различает executor join, writer ACK, provider
+join и запись quiescence record. Она не содержит filesystem paths, upstream
+errors, provider output или credentials. Локальные тесты запускают настоящие
+inert процессы: positive/failed exit, отсутствующий Wait, reader timeout и живой
+потомок. Это не заменяет installed employee write → checkpoint → continuation.
+
+Описание `run_workspace_tool.directory` явно задаёт `work` либо canonical
+`work/subdirectory`. Аргументы команды относительны выбранному каталогу;
+absolute paths и обход каталога остаются запрещены. Это уточнение producer
+schema, без изменения списка команд, sandbox либо прав сотрудника.
+
+Context7: `/golang/go/go1.26.7`, orphan streams/WaitDelay. Семантика Wait
+и завершения I/O дополнительно проверена через `go doc` закреплённого Go1.26.10;
+локальный Go1.27 и release toolchain проверяются отдельно.
