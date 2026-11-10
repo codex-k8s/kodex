@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
+
 import {
   Bot,
   Clock,
@@ -147,7 +149,7 @@ function isWorkspaceReceipt(item: RunActivityItem): boolean {
     artifact?.source === "AGENT_RESULT" &&
     artifact.fileName === "workspace-write-result.json" &&
     artifact.mediaType === "application/json" &&
-    artifact.scanState === "CLEAN" &&
+    artifactContentAdmitted(artifact.scanState) &&
     artifact.runRef &&
     artifact.sessionRef &&
     artifact.runRef === item.execution?.runRef &&

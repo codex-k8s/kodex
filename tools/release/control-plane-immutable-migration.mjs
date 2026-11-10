@@ -17,6 +17,7 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'artifact-optional-antivirus': {version:'20261110000100',file:'20261110000100_artifact_optional_antivirus.sql',annotation:'kodex.dev/cp-artifact-optional-antivirus-migration-plan',previousVersion:20261109000100,emptyField:'artifactOptionalAntivirusAbsent',preconditionFile:'artifact-optional-antivirus-migration-precondition.sql',postconditionFile:'artifact-optional-antivirus-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261110000100_artifact_optional_antivirus.sql'])},
   'integration-resource-policies': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-migration-precondition.sql',postconditionFile:'integration-resource-policies-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
   'integration-resource-policies-backup': {version:'20261109000100',file:'20261109000100_integration_resource_policies.sql',annotation:'kodex.dev/cp-integration-resource-policies-backup-migration-plan',previousVersion:20261108000100,emptyField:'integrationResourcePoliciesAbsent',preconditionFile:'integration-resource-policies-backup-migration-precondition.sql',postconditionFile:'integration-resource-policies-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261109000100_integration_resource_policies.sql'])},
   'authority-proof-counter': {version:'20261108000100',file:'20261108000100_authority_proof_counter.sql',annotation:'kodex.dev/cp-authority-proof-counter-migration-plan',previousVersion:20261107000100,emptyField:'authorityProofCounterAbsent',preconditionFile:'authority-proof-counter-migration-precondition.sql',postconditionFile:'authority-proof-counter-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261108000100_authority_proof_counter.sql'])},
@@ -331,6 +332,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'artifact-optional-antivirus')
+      ensure(validArtifactOptionalAntivirusMigrationPrecondition(result,requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'integration-resource-policies' || profile === 'integration-resource-policies-backup')
       ensure(validIntegrationResourcePoliciesMigrationPrecondition(result,profile==='integration-resource-policies-backup',requireStopped), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'authority-proof-counter' || profile === 'authority-proof-counter-backup')
@@ -978,6 +981,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'artifact-optional-antivirus': return validArtifactOptionalAntivirusMigrationPostcondition(proof);
     case 'integration-resource-policies': return validIntegrationResourcePoliciesMigrationPostcondition(proof);
     case 'integration-resource-policies-backup': return validIntegrationResourcePoliciesBackupMigrationPostcondition(proof);
     case 'authority-proof-counter': return validAuthorityProofCounterMigrationPostcondition(proof);
@@ -1174,3 +1178,23 @@ export function validIntegrationResourcePoliciesMigrationPrecondition(proof, bac
 
 // Отдельная точка backup precondition сохраняет закрытый ACL profile.
 export function validIntegrationResourcePoliciesBackupMigrationPrecondition(proof){return validIntegrationResourcePoliciesMigrationPrecondition(proof,true);}
+
+// Новый ordinary-file профиль не переименовывает отсутствие AV в CLEAN.
+export function validArtifactOptionalAntivirusMigrationPostcondition(proof) {
+  return proof?.profile === 'ARTIFACT_OPTIONAL_ANTIVIRUS_V1' && proof.database === 'control_plane' && proof.readOnly === 'on' &&
+    proof.gooseVersion === 20261110000100 &&
+    ['constraintsValidated','explicitNoScanReceipt','noForgedClean','realScanReceipt','noAbsentReceipt']
+      .every(key => proof[key] === true);
+}
+
+// Переход038 требует exact037 и тишину файловых/runtime effects, без расширения backup grants.
+export function validArtifactOptionalAntivirusMigrationPrecondition(proof, requireStopped=true) {
+  return proof?.profile === 'ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1' &&
+    proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === 20261109000100 &&
+    proof.artifactOptionalAntivirusAbsent === true && proof.receiptConstraintsReady === true &&
+    Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions >= 0 &&
+    (!requireStopped || proof.oldClaimSessions === 0) &&
+    ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
+      'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations',
+      'activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key => proof[key] === 0);
+}

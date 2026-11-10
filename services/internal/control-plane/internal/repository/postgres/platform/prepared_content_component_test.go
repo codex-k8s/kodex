@@ -34,6 +34,15 @@ type preparedObjectsFixture struct {
 // TestPreparedContentBindingComponent проверяет принятие подготовленного содержимого, неизменяемые
 // привязки и ограничения очистки без восстановления удалённых данных и изменения квитанций планов.
 func TestPreparedContentBindingComponent(t *testing.T) {
+	for _, mode := range []string{"required", "disabled"} {
+		t.Run(mode, func(t *testing.T) { testPreparedContentBindingPolicy(t, mode) })
+	}
+}
+
+// testPreparedContentBindingPolicy exercises ownership, revision adoption and cleanup under both explicit AV policies in a disposable database.
+// testPreparedContentBindingPolicy проверяет оба явных режима AV в disposable БД, сохраняя прежние owner/lifecycle границы.
+func testPreparedContentBindingPolicy(t *testing.T, mode string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	pool := newIsolatedAssistantComponentPool(t, ctx)
@@ -129,7 +138,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	var artifactID, revisionID string
-	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'file.txt','text/plain',3,$4,'CONTROL_CENTER','CLEAN','obj_binding_component','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID).Scan(&artifactID, &revisionID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'file.txt','text/plain',3,$4,'CONTROL_CENTER',$6,'obj_binding_component','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID, content.Prepared.ScanState).Scan(&artifactID, &revisionID); err != nil {
 		t.Fatal(err)
 	}
 	insertPreparedContentComponentReceipt(t, ctx, tx, artifactID, content.Prepared)
@@ -428,6 +437,15 @@ func (store *preparedObjectsFixture) Put(ctx context.Context, input objectstorag
 // TestPreparedContentLedgerComponent проверяет повтор операций журнала загрузки и неопределённые
 // исходы без повторного Put, запрещая очистку при действующей аренде записи.
 func TestPreparedContentLedgerComponent(t *testing.T) {
+	for _, mode := range []string{"required", "disabled"} {
+		t.Run(mode, func(t *testing.T) { testPreparedContentLedgerPolicy(t, mode) })
+	}
+}
+
+// testPreparedContentLedgerPolicy exercises upload intent, replay and uncertain outcome under both explicit AV policies in a disposable database.
+// testPreparedContentLedgerPolicy проверяет оба явных режима AV в disposable БД, сохраняя прежние owner/lifecycle границы.
+func testPreparedContentLedgerPolicy(t *testing.T, mode string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	pool := newIsolatedAssistantComponentPool(t, ctx)
@@ -454,6 +472,20 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 	store := &preparedObjectsFixture{Store: objectstoragetest.New()}
 	repository := &Repository{pool: pool, objects: store}
 	configureComponentArtifactScanner(t, repository)
+	if err := repository.ConfigureArtifactAntivirusMode(mode); err != nil {
+		t.Fatal(err)
+	}
+	if mode == "disabled" {
+		repository.artifactScanner = nil
+	}
+
+	if err := repository.ConfigureArtifactAntivirusMode(mode); err != nil {
+		t.Fatal(err)
+	}
+	if mode == "disabled" {
+		repository.artifactScanner = nil
+	}
+
 	binding := preparedContentBinding{ActorID: actor, OrganizationID: org, OrganizationRef: "org_ledger_component", ProjectID: project, ProjectRef: "prj_ledger_component",
 		SourceProfile: "PROJECT", SourceProfileRef: "agent_ledger_component", SourceProfileVersion: 1, SourceContextDigest: strings.Repeat("a", 64),
 		SourceLeaseRef: "lease_ledger_component", SourceLeaseGeneration: 1, SourceFenceDigest: strings.Repeat("b", 64), SourceRunRef: "run_ledger_component",
@@ -462,6 +494,13 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 	staged, err := repository.stagePreparedContent(ctx, request)
 	if err != nil {
 		t.Fatal(err)
+	}
+	expectedState := "CLEAN"
+	if mode == "disabled" {
+		expectedState = "NOT_SCANNED"
+	}
+	if staged.Prepared.ScanState != expectedState || staged.Prepared.Antivirus.NotScanned != (mode == "disabled") {
+		t.Fatal("prepared receipt did not preserve explicit antivirus policy")
 	}
 	request.Body = strings.NewReader("abc")
 	replay, err := repository.stagePreparedContent(ctx, request)

@@ -102,9 +102,15 @@ export function validateVfsPage(
       !Number.isSafeInteger(node.revision) ||
       node.revision < 0 ||
       !["ACTIVE", "DELETED", "ARCHIVED"].includes(node.lifecycleState) ||
-      !["", "PENDING", "SCANNING", "CLEAN", "QUARANTINED", "FAILED"].includes(
-        node.scanState,
-      ) ||
+      ![
+        "",
+        "PENDING",
+        "SCANNING",
+        "CLEAN",
+        "NOT_SCANNED",
+        "QUARANTINED",
+        "FAILED",
+      ].includes(node.scanState) ||
       !["", "ARTIFACT", "SKILL_BUNDLE", "MEMORY_RECORD"].includes(
         node.resourceKind,
       ) ||

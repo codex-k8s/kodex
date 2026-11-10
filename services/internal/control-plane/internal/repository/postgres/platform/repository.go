@@ -63,6 +63,7 @@ type Repository struct {
 	projectPurgeStorageIdentity     string
 	skillScanner                    skillpolicy.Scanner
 	artifactScanner                 artifactpolicy.Scanner
+	artifactAntivirusDisabled       bool
 	integrationDefinitions          map[string]integrationpackage.Package
 	standardOIDCPolicy              *value.OIDCIdentityPolicy
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)

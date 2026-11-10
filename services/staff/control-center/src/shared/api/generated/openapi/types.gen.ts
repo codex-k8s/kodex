@@ -1374,7 +1374,7 @@ export type VfsNode = {
     revisionRef: string;
     revision: number;
     lifecycleState: 'ACTIVE' | 'DELETED' | 'ARCHIVED';
-    scanState: '' | 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+    scanState: '' | 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
     resourceKind: '' | 'ARTIFACT' | 'SKILL_BUNDLE' | 'MEMORY_RECORD';
     selectable: boolean;
     selectionReason: 'AVAILABLE' | 'DIRECTORY' | 'PERMISSION_REQUIRED' | 'IMMUTABLE_CONTEXT' | 'LIFECYCLE_BLOCKED' | 'ARTIFACT_USED_BY_SKILL' | 'ARTIFACT_NOT_ACTIVE' | 'ARTIFACT_NOT_DELETED' | 'ARTIFACT_HAS_BINDINGS' | 'ARTIFACT_HAS_RETAINED_REVISIONS' | 'ACTIVE_RUN_USES_ARTIFACT';
@@ -3753,7 +3753,7 @@ export type Artifact = {
     mediaType: string;
     sizeBytes: number;
     digest: string;
-    scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+    scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;
     currentRevisionRef: OpaqueRef;
@@ -3774,7 +3774,7 @@ export type ArtifactRevision = {
     mediaType: string;
     sizeBytes: number;
     digest: string;
-    scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+    scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     previewAvailable: boolean;
     createdAt: Timestamp;
@@ -5259,7 +5259,7 @@ export type ArtifactLifecycleStateQuery = 'ACTIVE' | 'DELETED' | 'PURGE_PENDING'
 
 export type ArtifactTypeQuery = 'TEXT' | 'DOCUMENT' | 'IMAGE';
 
-export type ArtifactScanStateQuery = 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+export type ArtifactScanStateQuery = 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
 
 export type ArtifactSourceKindQuery = 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
 
@@ -10965,7 +10965,7 @@ export type ListArtifactsData = {
         runRef?: OpaqueRef;
         lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
         type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
-        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
         sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
         /**
          * Группа источников для одного owner-запроса; несовместима с sourceKind. Пустая группа не ограничивает источники.
@@ -11225,7 +11225,7 @@ export type ListOrganizationArtifactsData = {
     query?: {
         lifecycleState?: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
         type?: 'TEXT' | 'DOCUMENT' | 'IMAGE';
-        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+        scanState?: 'PENDING' | 'SCANNING' | 'CLEAN' | 'NOT_SCANNED' | 'QUARANTINED' | 'FAILED';
         sourceKind?: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
         /**
          * Группа источников для одного owner-запроса; несовместима с sourceKind. Пустая группа не ограничивает источники.

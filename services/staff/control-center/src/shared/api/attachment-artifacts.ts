@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import { requestSignal } from "@/shared/api/client";
 import {
   listArtifacts,
@@ -25,7 +26,10 @@ function optionalQuery(query: string): string | undefined {
 }
 
 function isAttachable(artifact: Artifact): boolean {
-  return artifact.lifecycleState === "ACTIVE" && artifact.scanState === "CLEAN";
+  return (
+    artifact.lifecycleState === "ACTIVE" &&
+    artifactContentAdmitted(artifact.scanState)
+  );
 }
 
 function toPickerItem(artifact: Artifact): AttachmentArtifactPickerItem {

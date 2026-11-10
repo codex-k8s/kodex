@@ -8,6 +8,7 @@ const (
 	ArtifactScanStatePending     ArtifactScanState = "PENDING"
 	ArtifactScanStateScanning    ArtifactScanState = "SCANNING"
 	ArtifactScanStateClean       ArtifactScanState = "CLEAN"
+	ArtifactScanStateNotScanned  ArtifactScanState = "NOT_SCANNED"
 	ArtifactScanStateQuarantined ArtifactScanState = "QUARANTINED"
 	ArtifactScanStateFailed      ArtifactScanState = "FAILED"
 )

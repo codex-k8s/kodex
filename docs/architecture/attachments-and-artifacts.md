@@ -4,8 +4,8 @@ title: Вложения и artifacts
 type: architecture
 status: approved
 owner: architect
-version: 2.2.0
-updated: 2026-10-10
+version: 2.3.0
+updated: 2026-11-10
 ---
 
 # Вложения и artifacts
@@ -107,7 +107,7 @@ Upload одного файла проходит следующий lifecycle:
    `ArtifactRevision`, exact content receipt, audit, idempotency receipt и
    обязательное событие. При незавершённой transaction подготовленный object
    удаляется bounded cleanup.
-7. Только revision со scan state `CLEAN` разрешено включать в finalized
+7. Revision со scan state `CLEAN` (либо явным `NOT_SCANNED` в профиле ниже) разрешено включать в finalized
    `AttachmentSet`, knowledge binding, preview или download. `QUARANTINED` и
    `FAILED` не материализуются и не выдаются как готовые.
 
@@ -167,9 +167,9 @@ advance head, ledger adoption, audit, idempotency/application receipt и
 переписываются. Event consumer использует защищённое version-pinned чтение;
 current head не является разрешением читать другое тело.
 
-Metadata history разрешает все пять scan states: `PENDING`, `SCANNING`, `CLEAN`,
-`QUARANTINED`, `FAILED`. Download/preview/materialization по-прежнему разрешены
-только для `CLEAN` и свежей lifecycle/actor/project eligibility. History имеет
+Metadata history разрешает scan states `PENDING`, `SCANNING`, `CLEAN`, `NOT_SCANNED`,
+`QUARANTINED`, `FAILED`. Download/preview/materialization обычных файлов разрешены
+для `CLEAN` либо доказанного `NOT_SCANNED` и свежей lifecycle/actor/project eligibility. History имеет
 bounded pagination в порядке revision DESC; cursor связан с actor, tenant,
 Artifact и head version, head drift возвращает conflict. Exact revision GET и
 content GET требуют явного revision ref и никогда не заменяют его latest.
@@ -439,3 +439,29 @@ Session JSONL не является Artifact body; его S3 archive/restore р�
   MVP.
 - Knowledge/vector projection не расширяется этим контрактом и продолжает
   ссылаться на immutable `ArtifactRevision`.
+
+## Явное отсутствие антивируса для обычных файлов
+
+Оператор может выбрать `CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE=disabled`; по умолчанию
+используется `required`. Это отдельное решение о риске, не fallback после отказа ClamAV.
+Producer по-прежнему проверяет формат, размер и SHA-256; owner связывает точные bytes,
+immutable revision и object receipt. Допущенный таким образом обычный файл получает
+`NOT_SCANNED`, `artifact-format-only-v1` и время `checkedAt`. Поля `scannedAt` и ложного
+ClamAV verdict в таком receipt нет. Форматный карантин этим режимом не снимается.
+
+Обычные upload, runtime completion, assistant prepared content, attachments, knowledge,
+download и lease-bound materialization используют один и тот же effective state и прежние
+ACL/fence/lifecycle checks. Интерфейс показывает «Не проверено антивирусом» с предупреждением,
+а не зелёный badge CLEAN. Неизвестный статус закрыто отклоняется старым клиентом.
+
+Skills, avatars, executable repository bundles и авторитетные структурированные workflow
+review/QA evidence по-прежнему требуют реальный `CLEAN`. Они не получают исключение
+обычного файла. Состояние `NOT_SCANNED` не доказывает отсутствие malware, исполнение тестов
+или успешный PDLC. Admission образов, SBOM, signatures и mTLS/JWS не меняются.
+
+Миграция forward-only: исторические bytes/receipts не переписываются. Старый format-only
+`CLEAN` без AV proof остаётся заблокированным. Возврат `required` закрывает новые приёмы
+без scanner, но ранее принятые `NOT_SCANNED` сохраняют свой честный статус и доступ по ACL.
+Автоматической переаттестации либо фонового rescanning нет. После записи нового состояния
+старый binary не считается совместимым rollback: сохраняют совместимые API/PWA/CP и схему,
+затем включают scanner штатно либо выполняют отдельное проверенное восстановление.

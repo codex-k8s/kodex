@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -236,7 +237,7 @@ func (repository *Repository) hydrateAssistantFileRevision(ctx context.Context, 
 	if err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}
-	if projectRef == "" || item.ProjectRef != projectRef || item.ScanState != "CLEAN" {
+	if projectRef == "" || item.ProjectRef != projectRef || !artifactpolicy.ContentAdmitted(item.ScanState) {
 		return entity.AssistantPlanOperation{}, errs.ErrNotFound
 	}
 	for _, permission := range []string{"artifact.download", "artifact.revision.create"} {
@@ -345,7 +346,7 @@ func (repository *Repository) createProjectFileRevision(ctx context.Context, tx 
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
 	p := payload.Prepared
-	if p.Digest != payload.Digest || p.SizeBytes != payload.SizeBytes || p.MediaType != payload.MediaType || p.ScanState != "CLEAN" {
+	if p.Digest != payload.Digest || p.SizeBytes != payload.SizeBytes || p.MediaType != payload.MediaType || !artifactpolicy.ContentAdmitted(p.ScanState) {
 		return commandOutcome{}, errs.ErrConflict
 	}
 	scanJSON, err := artifactAntivirusJSON(p.Antivirus)

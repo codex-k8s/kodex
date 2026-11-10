@@ -1527,7 +1527,7 @@ components:
           items: { $ref: "#/components/schemas/NextAction" }
     ArtifactScanState:
       type: string
-      enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED]
+      enum: [PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED]
     ArtifactSource:
       type: string
       enum:

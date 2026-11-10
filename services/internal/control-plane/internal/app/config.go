@@ -44,6 +44,7 @@ const (
 type Config struct {
 	SSHComposeSigningKeyFile        string        `env:"CONTROL_PLANE_SSH_COMPOSE_SIGNING_KEY_FILE"`
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
+	ArtifactAntivirusMode           string        `env:"CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE"`
 	SkillScannerSocket              string        `env:"CONTROL_PLANE_SKILL_SCANNER_SOCKET"`
 	SkillScannerTimeout             time.Duration `env:"CONTROL_PLANE_SKILL_SCANNER_TIMEOUT"`
 	GRPCListen                      string        `env:"CONTROL_PLANE_GRPC_LISTEN"`
@@ -161,9 +162,10 @@ type Config struct {
 // При ошибке пригодная конфигурация не возвращается; файлы dotenv не загружаются.
 func loadConfig() (Config, error) {
 	config := Config{
-		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
-		SkillScannerTimeout: time.Minute,
-		GRPCListen:          ":8443", TechnicalListen: ":9090",
+		SkillScannerSocket:    "/run/kodex-skill-scanner/clamd.sock",
+		SkillScannerTimeout:   time.Minute,
+		ArtifactAntivirusMode: "required",
+		GRPCListen:            ":8443", TechnicalListen: ":9090",
 		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
 		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
 		ClientCAFile:                    "/var/run/config/kodex/control-plane/internal-ca/ca.pem",
@@ -257,6 +259,9 @@ func (config Config) validate() error {
 	}
 	if config.RPCProfile != "" && config.RPCProfile != "trusted-cluster" {
 		return startupFailure(stageControlPlaneRPCProfileIsInvalid, nil)
+	}
+	if config.ArtifactAntivirusMode != "required" && config.ArtifactAntivirusMode != "disabled" {
+		return errors.New("artifact antivirus mode is invalid")
 	}
 	if !filepath.IsAbs(config.SkillScannerSocket) || filepath.Clean(config.SkillScannerSocket) != config.SkillScannerSocket || strings.ContainsAny(config.SkillScannerSocket, "\x00\n\r") || config.SkillScannerTimeout < time.Second || config.SkillScannerTimeout > time.Minute {
 		return startupFailure(stageControlPlaneSkillScannerConfigurationIsInvalid, nil)

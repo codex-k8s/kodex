@@ -4,8 +4,8 @@ title: Серверный антивирусный допуск точных б�
 type: operation-plan
 status: approved
 owner: manager
-version: 1.0.1
-updated: 2026-10-16
+version: 1.1.0
+updated: 2026-11-10
 ---
 
 # Допуск файлов — Issue #1814
@@ -161,3 +161,23 @@ VFS DOWNLOAD/изоляция и concurrent-lease reads PASS на исправл
 P0/P1/P2. Итоговая проверка финального commit фиксируется в том же PR#1815.
 Полная HR semantic-admission цепочка, full backup/restore и итоговая ручная
 приёмка MVP не объявляются выполненными этим журналом.
+
+## Явный профиль обычных файлов без AV (#2086)
+
+`required` остаётся default и сохраняет все AV controls этого документа.
+Отдельный `--artifact-antivirus-mode disabled` допускает только обычные файлы с состоянием
+`NOT_SCANNED` и immutable `artifact-format-only-v1` receipt. Это не выполнение критерия
+реальной антивирусной проверки #1814. Формат/размер/хеш, owner/tenant, exact revision,
+ObjectStorage receipt, cancellation и idempotency сохраняются. Skills, avatars,
+executable repository bundles и структурированные workflow review/QA evidence требуют CLEAN.
+Оператор отвечает за явный выбор риска; ошибка scanner никогда не включает этот режим.
+
+Путь: deployment input → CP startup validation/composition → producer format checks →
+exact-byte hash либо real AV → immutable receipt/scan state + существующая owner transaction →
+API/event/read projection → UI warning и owner-checked download/runtime materialization.
+Root actor, current lease/fence и файловая capability остаются серверными.
+
+NOT_SCANNED не превращается в CLEAN после повторного apply или возврата required.
+Terminal/cancel/lease expiry не дают нового доступа к файлу; прежние bytes и история сохраняются
+по существующему retention. Новый event kind не добавляется: используется ARTIFACT_CHANGED
+с текущим exact revision и явным scan state. Lifecycle остальных агрегатов не меняется.

@@ -18,6 +18,6 @@ JOIN control_plane.artifacts AS artifact
   ON artifact.organization_id = @organization_id::uuid
  AND artifact.project_id IS NOT DISTINCT FROM NULLIF(@project_id, '')::uuid
  AND artifact.ref = requested.ref
- AND artifact.scan_state = 'CLEAN'
+ AND artifact.scan_state IN ('CLEAN','NOT_SCANNED')
  AND artifact.lifecycle_state = 'ACTIVE'
 ORDER BY requested.position;

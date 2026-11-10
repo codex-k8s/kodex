@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import {
   File,
   FolderOpen,
@@ -120,6 +121,7 @@ const existingSelections = computed<ExistingAttachmentSelection[]>(() => {
             mediaType: item.artifact.mediaType,
             name: item.artifact.fileName,
             ref: item.artifact.ref,
+            scanState: item.artifact.scanState,
             size: item.artifact.sizeBytes,
           },
         ]
@@ -353,6 +355,10 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
           <File :size="17" aria-hidden="true" />
           <span class="attachment-composer__existing-copy">
             <strong>{{ item.artifact.fileName }}</strong>
+            <StatusBadge
+              v-if="item.artifact.scanState === 'NOT_SCANNED'"
+              state="NOT_SCANNED"
+            />
             <small>
               {{ item.artifact.mediaType }} ·
               {{ formatAttachmentSize(item.artifact.sizeBytes, locale) }}
@@ -374,6 +380,10 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
         <Link2 :size="17" aria-hidden="true" />
         <span class="attachment-composer__copy">
           <strong :title="item.name">{{ item.name }}</strong>
+          <StatusBadge
+            v-if="item.scanState === 'NOT_SCANNED'"
+            state="NOT_SCANNED"
+          />
           <small>
             {{ formatAttachmentSize(item.size, locale) }} ·
             {{ t("attachments.existing.attached") }}
@@ -402,6 +412,10 @@ defineExpose<AttachmentComposerHandle>({ clear, finalize });
         <File :size="17" aria-hidden="true" />
         <span class="attachment-composer__copy">
           <strong :title="item.name">{{ item.name }}</strong>
+          <StatusBadge
+            v-if="item.scanState === 'NOT_SCANNED'"
+            state="NOT_SCANNED"
+          />
           <small>
             {{ formatAttachmentSize(item.size, locale) }} ·
             {{ t(`attachments.states.${item.state}`) }}

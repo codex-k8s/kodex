@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
+
 import { downloadBlob } from "@/shared/ui/download-blob";
 import { Download, RefreshCw } from "@lucide/vue";
 import { onBeforeUnmount, watch } from "vue";
@@ -83,7 +85,7 @@ async function download(value: ArtifactRevision) {
             :title="t('fileRevision.download', { revision: revision.revision })"
             :disabled="
               !!downloading ||
-              revision.scanState !== 'CLEAN' ||
+              !artifactContentAdmitted(revision.scanState) ||
               !artifact.nextActions.includes('DOWNLOAD')
             "
             @click="download(revision)"

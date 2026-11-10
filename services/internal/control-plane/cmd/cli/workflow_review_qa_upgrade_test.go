@@ -100,6 +100,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "artifact-optional-antivirus":
+		verifier = "validArtifactOptionalAntivirusMigration"
 	case "integration-resource-policies":
 		verifier = "validIntegrationResourcePoliciesMigration"
 	case "integration-resource-policies-backup":

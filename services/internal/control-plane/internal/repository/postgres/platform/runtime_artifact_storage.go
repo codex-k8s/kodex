@@ -159,7 +159,7 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 			Ref: ref, ObjectKey: receipt.Key, ObjectVersion: receipt.VersionID,
 			ObjectETag: receipt.ETag, MediaType: verdict.MediaType,
 			Digest: receipt.Digest, SizeBytes: receipt.SizeBytes,
-			ScanState: verdict.ScanState, PreviewState: verdict.PreviewState,
+			ScanState: artifactAdmissionState(verdict.ScanState, scan), PreviewState: verdict.PreviewState,
 			Antivirus: scan,
 		}
 		artifact.Content = nil
@@ -259,11 +259,11 @@ func resultContainsPreparedObjects(result command.Result, prepared []objectstora
 }
 
 // preparedArtifact requires a prepared descriptor without inline content and validates
-// key/digest/size/media, CLEAN policy and matching noninfected antivirus metadata. It returns a
+// key/digest/size/media, admitted state and its matching real AV or explicit no-AV receipt. It returns a
 // descriptor copy or Invalid; object version/ETag and actual stored bytes are not independently
 // read or verified here.
 // preparedArtifact требует подготовленный дескриптор без inline-содержимого и проверяет
-// key/digest/size/media, CLEAN policy и совпадающие незаражённые AV-метаданные. Возвращает копию
+// key/digest/size/media, допущенное состояние и совпадающий реальный AV либо явный no-AV receipt. Возвращает копию
 // дескриптора либо Invalid; версия объекта, ETag и реальные байты здесь независимо не читаются и
 // не проверяются.
 func preparedArtifact(artifact command.CompletedArtifact) (command.PreparedArtifact, error) {
@@ -271,7 +271,8 @@ func preparedArtifact(artifact command.CompletedArtifact) (command.PreparedArtif
 		artifact.Prepared.Ref == "" || !objectstorage.ValidKey(artifact.Prepared.ObjectKey) ||
 		!objectstorage.ValidDigest(artifact.Prepared.Digest) || artifact.Prepared.SizeBytes != artifact.SizeBytes ||
 		artifact.Prepared.Digest != "sha256:"+strings.ToLower(strings.TrimSpace(artifact.SHA256)) ||
-		artifact.Prepared.MediaType == "" || artifact.Prepared.ScanState != artifactpolicy.ScanClean ||
+		artifact.Prepared.MediaType == "" || !artifactpolicy.ContentAdmitted(artifact.Prepared.ScanState) ||
+		artifact.Prepared.ScanState != artifactAdmissionState(artifactpolicy.ScanClean, artifact.Prepared.Antivirus) ||
 		!validArtifactAntivirus(artifact.Prepared.Antivirus) || artifact.Prepared.Antivirus.Infected ||
 		artifact.Prepared.Antivirus.Digest != artifact.Prepared.Digest || artifact.Prepared.Antivirus.SizeBytes != artifact.SizeBytes {
 		return command.PreparedArtifact{}, errs.ErrInvalid

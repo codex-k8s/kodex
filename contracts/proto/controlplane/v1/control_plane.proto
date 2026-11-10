@@ -746,6 +746,8 @@ enum ArtifactScanState {
   ARTIFACT_SCAN_STATE_CLEAN = 3;
   ARTIFACT_SCAN_STATE_QUARANTINED = 4;
   ARTIFACT_SCAN_STATE_FAILED = 5;
+  // Допуск обычного файла без антивируса по явной политике оператора.
+  ARTIFACT_SCAN_STATE_NOT_SCANNED = 6;
 }
 
 enum ArtifactSource {

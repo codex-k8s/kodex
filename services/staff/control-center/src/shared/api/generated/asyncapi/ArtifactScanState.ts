@@ -4,5 +4,6 @@ export type ArtifactScanState =
   | "PENDING"
   | "SCANNING"
   | "CLEAN"
+  | "NOT_SCANNED"
   | "QUARANTINED"
   | "FAILED";

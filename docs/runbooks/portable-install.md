@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.5.8
-updated: 2026-11-09
+version: 1.6.0
+updated: 2026-11-10
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -1098,11 +1098,10 @@ ConfigMap/ServiceAccount/network configuration остаются неактивн
 Текущая короткая updater Job не пересоздаётся/не повторяется; suspend не обещает
 отмену уже начатого эффекта. Режим виден в annotation kodex.dev/clamav-mode.
 
-Это отключение scanner dependency, а не разрешающий scanner stub: существующие
+Это отключение scanner dependency, а не разрешающий scanner stub. По умолчанию
 artifact upload/skill validation paths при недоступном socket возвращают
-Unavailable/ERROR. CLEAN и malware verdict не создаются без проверки. Для сценариев
-с файлами требуется включённый исправный scanner; в disabled пилоте их приёмка
-BLOCKED. SBOM, image vulnerability admission, подписи, mTLS/JWS и остальные gates
+Unavailable/ERROR. CLEAN и malware verdict не создаются без проверки. Без отдельного
+явного режима обычных файлов ниже их приёмка остаётся BLOCKED. SBOM, image vulnerability admission, подписи, mTLS/JWS и остальные gates
 не отключаются этим профилем. Не называть disabled успешным antivirus smoke.
 
 Для включения заново отрендерить canonical source с enabled, обеспечить актуальные
@@ -1280,3 +1279,35 @@ bash scripts/tests/control-plane-postgres-test.sh --integration-resource-policie
 новый immutable image. Прежняя сборка не получает исправление от обновления
 installer scripts. Результат проверок не означает выполненный rollout либо
 безопасность возврата к старому image после forward migration.
+
+### Обычные файлы без антивирусной аттестации
+
+Для явно согласованного профиля без AV передайте `--artifact-antivirus-mode disabled`
+в render, portable release и deploy; у workload-resume тот же параметр. Default `required`
+сохраняет прежний закрытый отказ. `--clamav-mode disabled` самостоятельно никогда не
+разрешает непроверенные файлы. Оба флага независимы: антивирус можно оставить работающим,
+но отключить именно его обязательность для обычных файлов только явным выбором.
+
+Параметр материализуется как `CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE=disabled` у CP.
+Flags/render mismatch, неизвестное значение и повторный/secret-backed env отклоняются.
+Не редактировать работающий Pod вручную. Использовать совместимые pinned CP/API/PWA
+после миграции `20261110000100_artifact_optional_antivirus.sql`.
+
+Проверка: загрузить допустимый текст, получить `NOT_SCANNED`, скачать exact revision с
+исходным SHA-256; закрытый/активный формат не должен стать доступным. Завершить сотрудника
+с обычным result-файлом и передать его следующему execution через finalized AttachmentSet.
+Проверить предупреждение в истории/выборе файла и отсутствие повторного артефакта при replay.
+Skills, avatars, executable bundles и структурированный workflow evidence требуют реальный AV;
+это не полный workflow/PDLC smoke. В required режиме проверить отказ без scanner.
+
+Возврат: canonical render `--artifact-antivirus-mode required` и работающий scanner с
+актуальными подписанными базами. Исторические NOT_SCANNED не меняются и не становятся CLEAN.
+Не выполнять down и не возвращать старый binary после появления новых receipts: безопасный
+вариант — совместимый текущий binary/schema с required policy. Backup/restore определяется
+обычной политикой владельца установки; этот профиль не добавляет постоянных dumps.
+
+Не менять artifact admission policy посреди активных execution/prepared intents: закончить либо
+штатно остановить их до apply. Повтор незавершённого prepared intent после смены policy может
+вернуть conflict, а не переаттестовать или повторно записать объект. Migration profile
+`artifact-optional-antivirus` проверяет exact037 и отсутствие активных effects, применяет только
+forward038 и читает его postcondition. Специальный backup ACL/profile для этой миграции не нужен.

@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import { versionedMutationHeaders } from "@/shared/api/versioned-mutation-headers";
 import { requestSignal } from "@/shared/api/client";
 import {
@@ -92,7 +93,10 @@ export async function waitForCleanAttachmentArtifact(
   let artifact = initial;
   for (let attempt = 0; attempt < artifactScanAttempts; attempt += 1) {
     if (signal.aborted) throw abortError();
-    if (artifact.lifecycleState === "ACTIVE" && artifact.scanState === "CLEAN")
+    if (
+      artifact.lifecycleState === "ACTIVE" &&
+      artifactContentAdmitted(artifact.scanState)
+    )
       return artifact;
     if (
       artifact.lifecycleState !== "ACTIVE" ||
@@ -144,7 +148,7 @@ export async function uploadCleanAttachmentArtifact(
     )
   ).data;
   request.onProgress({ loadedBytes: file.size, totalBytes: file.size });
-  if (uploaded.scanState !== "CLEAN") request.onScanning();
+  if (!artifactContentAdmitted(uploaded.scanState)) request.onScanning();
   return waitForCleanAttachmentArtifact(uploaded, request.signal);
 }
 

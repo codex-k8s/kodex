@@ -443,6 +443,7 @@ func (e ArtifactLifecycleState) Valid() bool {
 const (
 	ArtifactScanStateCLEAN       ArtifactScanState = "CLEAN"
 	ArtifactScanStateFAILED      ArtifactScanState = "FAILED"
+	ArtifactScanStateNOTSCANNED  ArtifactScanState = "NOT_SCANNED"
 	ArtifactScanStatePENDING     ArtifactScanState = "PENDING"
 	ArtifactScanStateQUARANTINED ArtifactScanState = "QUARANTINED"
 	ArtifactScanStateSCANNING    ArtifactScanState = "SCANNING"
@@ -454,6 +455,8 @@ func (e ArtifactScanState) Valid() bool {
 	case ArtifactScanStateCLEAN:
 		return true
 	case ArtifactScanStateFAILED:
+		return true
+	case ArtifactScanStateNOTSCANNED:
 		return true
 	case ArtifactScanStatePENDING:
 		return true
@@ -611,6 +614,7 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 const (
 	ArtifactRevisionScanStateCLEAN       ArtifactRevisionScanState = "CLEAN"
 	ArtifactRevisionScanStateFAILED      ArtifactRevisionScanState = "FAILED"
+	ArtifactRevisionScanStateNOTSCANNED  ArtifactRevisionScanState = "NOT_SCANNED"
 	ArtifactRevisionScanStatePENDING     ArtifactRevisionScanState = "PENDING"
 	ArtifactRevisionScanStateQUARANTINED ArtifactRevisionScanState = "QUARANTINED"
 	ArtifactRevisionScanStateSCANNING    ArtifactRevisionScanState = "SCANNING"
@@ -622,6 +626,8 @@ func (e ArtifactRevisionScanState) Valid() bool {
 	case ArtifactRevisionScanStateCLEAN:
 		return true
 	case ArtifactRevisionScanStateFAILED:
+		return true
+	case ArtifactRevisionScanStateNOTSCANNED:
 		return true
 	case ArtifactRevisionScanStatePENDING:
 		return true
@@ -8799,6 +8805,7 @@ const (
 	VFSNodeScanStateCLEAN       VFSNodeScanState = "CLEAN"
 	VFSNodeScanStateEmpty       VFSNodeScanState = ""
 	VFSNodeScanStateFAILED      VFSNodeScanState = "FAILED"
+	VFSNodeScanStateNOTSCANNED  VFSNodeScanState = "NOT_SCANNED"
 	VFSNodeScanStatePENDING     VFSNodeScanState = "PENDING"
 	VFSNodeScanStateQUARANTINED VFSNodeScanState = "QUARANTINED"
 	VFSNodeScanStateSCANNING    VFSNodeScanState = "SCANNING"
@@ -8812,6 +8819,8 @@ func (e VFSNodeScanState) Valid() bool {
 	case VFSNodeScanStateEmpty:
 		return true
 	case VFSNodeScanStateFAILED:
+		return true
+	case VFSNodeScanStateNOTSCANNED:
 		return true
 	case VFSNodeScanStatePENDING:
 		return true
@@ -9479,6 +9488,7 @@ func (e ArtifactLifecycleStateQuery) Valid() bool {
 const (
 	ArtifactScanStateQueryCLEAN       ArtifactScanStateQuery = "CLEAN"
 	ArtifactScanStateQueryFAILED      ArtifactScanStateQuery = "FAILED"
+	ArtifactScanStateQueryNOTSCANNED  ArtifactScanStateQuery = "NOT_SCANNED"
 	ArtifactScanStateQueryPENDING     ArtifactScanStateQuery = "PENDING"
 	ArtifactScanStateQueryQUARANTINED ArtifactScanStateQuery = "QUARANTINED"
 	ArtifactScanStateQuerySCANNING    ArtifactScanStateQuery = "SCANNING"
@@ -9490,6 +9500,8 @@ func (e ArtifactScanStateQuery) Valid() bool {
 	case ArtifactScanStateQueryCLEAN:
 		return true
 	case ArtifactScanStateQueryFAILED:
+		return true
+	case ArtifactScanStateQueryNOTSCANNED:
 		return true
 	case ArtifactScanStateQueryPENDING:
 		return true
@@ -9764,6 +9776,7 @@ func (e ListOrganizationArtifactsParamsType) Valid() bool {
 const (
 	ListOrganizationArtifactsParamsScanStateCLEAN       ListOrganizationArtifactsParamsScanState = "CLEAN"
 	ListOrganizationArtifactsParamsScanStateFAILED      ListOrganizationArtifactsParamsScanState = "FAILED"
+	ListOrganizationArtifactsParamsScanStateNOTSCANNED  ListOrganizationArtifactsParamsScanState = "NOT_SCANNED"
 	ListOrganizationArtifactsParamsScanStatePENDING     ListOrganizationArtifactsParamsScanState = "PENDING"
 	ListOrganizationArtifactsParamsScanStateQUARANTINED ListOrganizationArtifactsParamsScanState = "QUARANTINED"
 	ListOrganizationArtifactsParamsScanStateSCANNING    ListOrganizationArtifactsParamsScanState = "SCANNING"
@@ -9775,6 +9788,8 @@ func (e ListOrganizationArtifactsParamsScanState) Valid() bool {
 	case ListOrganizationArtifactsParamsScanStateCLEAN:
 		return true
 	case ListOrganizationArtifactsParamsScanStateFAILED:
+		return true
+	case ListOrganizationArtifactsParamsScanStateNOTSCANNED:
 		return true
 	case ListOrganizationArtifactsParamsScanStatePENDING:
 		return true
@@ -10166,6 +10181,7 @@ func (e ListArtifactsParamsType) Valid() bool {
 const (
 	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
 	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStateNOTSCANNED  ListArtifactsParamsScanState = "NOT_SCANNED"
 	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
 	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
 	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
@@ -10177,6 +10193,8 @@ func (e ListArtifactsParamsScanState) Valid() bool {
 	case ListArtifactsParamsScanStateCLEAN:
 		return true
 	case ListArtifactsParamsScanStateFAILED:
+		return true
+	case ListArtifactsParamsScanStateNOTSCANNED:
 		return true
 	case ListArtifactsParamsScanStatePENDING:
 		return true

@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import type {
   AssistantPlan,
   AssistantPlanOperation,
@@ -58,7 +59,7 @@ export function projectFileRevisionSource(
     after.fileName !== before.fileName ||
     after.createsImmutableRevision !== true ||
     before.lifecycleState !== "ACTIVE" ||
-    before.scanState !== "CLEAN" ||
+    !artifactContentAdmitted(before.scanState) ||
     typeof before.digest !== "string" ||
     !/^sha256:[a-f0-9]{64}$/u.test(before.digest) ||
     typeof after.digest !== "string" ||

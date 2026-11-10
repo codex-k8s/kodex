@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -60,6 +61,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	if scan.Infected {
 		input.ScanState, input.PreviewState = "QUARANTINED", "BLOCKED"
 	}
+	input.ScanState = artifactAdmissionState(input.ScanState, scan)
 	scanJSON, err := artifactAntivirusJSON(scan)
 	if err != nil {
 		return entity.Artifact{}, err
@@ -147,7 +149,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	item.SessionRef = sessionRef
 	item.Source = "CONTROL_CENTER"
 	item.LifecycleState = "ACTIVE"
-	if input.ScanState == "CLEAN" {
+	if artifactpolicy.ContentAdmitted(input.ScanState) {
 		item.NextActions = []string{"DOWNLOAD", "BIND"}
 	}
 	auditRef, _ := newRef("aud")
@@ -857,7 +859,7 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
-	if scanState != "CLEAN" {
+	if !artifactpolicy.ContentAdmitted(scanState) {
 		return platformrepo.ArtifactDownload{}, errs.ErrForbidden
 	}
 	tx.stage = artifactread.StageMetadata

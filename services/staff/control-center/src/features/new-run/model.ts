@@ -1,3 +1,4 @@
+import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 import type { Artifact, Run } from "@/shared/api/generated/openapi/types.gen";
 import type { AsyncEntityPickerItem } from "@/shared/ui/async-entity-picker";
 
@@ -93,7 +94,7 @@ export function formatTimestamp(value: string, locale: string): string {
 export function toArtifactPickerItem(artifact: Artifact): ArtifactPickerItem {
   return {
     artifact,
-    disabled: artifact.scanState !== "CLEAN",
+    disabled: !artifactContentAdmitted(artifact.scanState),
     id: artifact.ref,
     label: artifact.fileName,
   };
