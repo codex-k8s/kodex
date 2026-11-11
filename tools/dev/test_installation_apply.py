@@ -195,8 +195,8 @@ class ApplyTests(unittest.TestCase):
 
     def test_object_phase_stops_service_producer_before_derived_endpoints_and_keeps_bootstrap(self):
         baseline = fixture()
-        baseline["objects"] = [item("endpoints", "service", managers=["kodex-install"]),
-                               item("services", "service", managers=["kodex-install"]),
+        baseline["objects"] = [item("endpoints", "service", uid="endpoint-uid", managers=["kodex-install"]),
+                               item("services", "service", uid="service-uid", managers=["kodex-install"]),
                                item("serviceaccounts", "default"), item("configmaps", "kube-root-ca.crt")]
         rows = apply.select_phase(plan(baseline), baseline, "objects")
         self.assertEqual([row["resource"] for row in rows], ["services", "endpoints"])
