@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   indexRunSessionOwnership,
+  runGraphHistoryRoots,
   isRunSessionNode,
   projectRunSessionGraph,
   resolveRunSessionSelection,
@@ -176,5 +177,45 @@ describe("run session graph", () => {
     expect(resolveRunSessionSelection([root, agent], ownership)).toBe(
       agent.ref,
     );
+  });
+});
+
+describe("сворачивание истории запусков", () => {
+  it("сворачивает только пустую успешную обёртку, оставляя ошибки, действия, артефакты и сотрудников", () => {
+    const old = { ...node("old", "ROOT_PROCESS"), state: "SUCCEEDED" as const };
+    const next = {
+      ...node("next", "ROOT_PROCESS"),
+      createdAt: "2026-08-30T08:00:01Z",
+    };
+    const links = [
+      { ...edge("continue", old.ref, next.ref), type: "CONTINUES" as const },
+    ];
+    expect([...runGraphHistoryRoots([old, next], links)]).toEqual([old.ref]);
+    for (const changed of [
+      { ...old, state: "FAILED" as const },
+      { ...old, artifactRefs: ["artifact_example"] },
+      { ...old, nextActions: ["CANCEL" as const] },
+      { ...old, childRunRefs: ["run_child"] },
+    ]) {
+      expect(runGraphHistoryRoots([changed, next], links).size).toBe(0);
+    }
+    const child = node("child", "AGENT_EXECUTION", old.ref);
+    expect(
+      runGraphHistoryRoots(
+        [old, next, child],
+        [...links, edge("delegate", old.ref, child.ref)],
+      ).size,
+    ).toBe(0);
+    expect(
+      runGraphHistoryRoots(
+        [old],
+        [
+          {
+            ...edge("missing_continue", old.ref, "missing"),
+            targetNodeRef: "missing",
+          },
+        ],
+      ).size,
+    ).toBe(0);
   });
 });

@@ -6,7 +6,6 @@ import type {
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
 import {
-  callbackRunEdgePath,
   layoutRunGraph,
   runGraphNodeHeight,
   runGraphNodeWidth,
@@ -343,8 +342,8 @@ describe("layoutRunGraph", () => {
         options.maxZoom ?? runGraphMaximumZoom,
         options.padding,
       );
-      expect(layout.bounds.y).toBeLessThan(
-        Math.min(...layout.nodes.map((item) => item.y)) - 180,
+      expect(layout.bounds.y).toBeGreaterThanOrEqual(
+        Math.min(...layout.nodes.map((item) => item.y)) - 40,
       );
       const points = layout.edges
         .filter((item) => item.edge.type === "CALLBACK_TO")
@@ -387,151 +386,163 @@ describe("layoutRunGraph", () => {
     });
     const paired = runGraphContentBounds(layout, ["manager", "developer"]);
     expect(paired.y).toBe(layout.bounds.y);
-    expect(paired.x + paired.width).toBeGreaterThan(
+    expect(paired.x + paired.width).toBeGreaterThanOrEqual(
       developer.x + runGraphNodeWidth,
     );
   });
 
-  it("возвращает callback над четырьмя карточками без изменения основной цепочки", () => {
+  it("возвращает результат локально рядом с делегированием без обхода всего графа", () => {
     const nodes = [
-      node("root", "2026-01-01T00:00:00Z"),
-      node("manager", "2026-01-01T00:00:01Z"),
-      node("developer", "2026-01-01T00:00:02Z"),
-      node("continuation", "2026-01-01T00:00:03Z"),
+      node("parent", "01"),
+      node("child", "02"),
+      node("unrelated", "03"),
     ];
-    const forward = [
-      edge("root_manager", "root", "manager"),
-      edge("manager_developer", "manager", "developer"),
-      edge("manager_continuation", "manager", "continuation", "CONTINUES"),
-    ];
-    const baseline = layoutRunGraph(nodes, forward);
     const layout = layoutRunGraph(nodes, [
-      ...forward,
-      edge("callback", "developer", "manager", "CALLBACK_TO"),
+      edge("delegate", "parent", "child"),
+      edge("return", "child", "parent", "CALLBACK_TO"),
     ]);
-    expect(layout.nodes).toEqual(baseline.nodes);
-    expect(layout.edges.slice(0, forward.length)).toEqual(baseline.edges);
-    const path = required(layout.edges.at(-1)?.path);
-    const source = required(
-      layout.nodes.find((item) => item.node.ref === "developer"),
+    const parent = required(
+      layout.nodes.find((item) => item.node.ref === "parent"),
     );
-    const target = required(
-      layout.nodes.find((item) => item.node.ref === "manager"),
+    const child = required(
+      layout.nodes.find((item) => item.node.ref === "child"),
     );
+    const returning = required(
+      layout.edges.find((item) => item.edge.ref === "return"),
+    );
+    const points = sampleCurve(required(returning.path));
     expect(
-      path.startsWith(
-        [
-          "M",
-          source.x + runGraphNodeWidth,
-          source.y + runGraphNodeHeight / 2,
-          "C",
-          "",
-        ].join(" "),
+      points.every(
+        (p) => p.x >= parent.x + runGraphNodeWidth - 1 && p.x <= child.x + 1,
       ),
     ).toBe(true);
-    expect(
-      path.endsWith([target.x, target.y + runGraphNodeHeight / 2].join(" ")),
-    ).toBe(true);
-    expect(path).not.toContain(" L ");
-    const points = sampleCurve(path);
-    expect(Math.min(...points.map((point) => point.y))).toBeLessThan(
-      Math.min(...layout.nodes.map((item) => item.y)) - 200,
+    expect(Math.min(...points.map((p) => p.y))).toBeGreaterThanOrEqual(
+      Math.min(parent.y, child.y),
     );
-    for (const point of points) {
-      expect(
-        layout.nodes.some(
-          (item) =>
-            point.x > item.x &&
-            point.x < item.x + runGraphNodeWidth &&
-            point.y > item.y &&
-            point.y < item.y + runGraphNodeHeight,
-        ),
-      ).toBe(false);
-    }
+    expect(returning.path).not.toBe(layout.edges[0]?.path);
+    expect(returning.edge.sourceNodeRef).toBe("child");
+    expect(returning.edge.targetNodeRef).toBe("parent");
   });
 
-  it("разносит callback по стабильным полосам при перестановке snapshot", () => {
+  it("сохраняет локальные параллельные и вложенные возвраты при перестановке снимка", () => {
     const nodes = [
-      node("manager", "2026-01-01T00:00:00Z"),
-      node("developer_a", "2026-01-01T00:00:01Z"),
-      node("developer_b", "2026-01-01T00:00:02Z"),
+      node("parent", "01"),
+      node("child_a", "02"),
+      node("child_b", "03"),
+      node("nested", "04"),
     ];
     const edges = [
-      edge("delegation_a", "manager", "developer_a"),
-      edge("delegation_b", "manager", "developer_b"),
-      edge("callback_a", "developer_a", "manager", "CALLBACK_TO"),
-      edge("callback_b", "developer_b", "manager", "CALLBACK_TO"),
+      edge("a", "parent", "child_a"),
+      edge("b", "parent", "child_b"),
+      edge("nested", "child_a", "nested"),
+      edge("return_a", "child_a", "parent", "CALLBACK_TO"),
+      edge("return_b", "child_b", "parent", "CALLBACK_TO"),
+      edge("return_nested", "nested", "child_a", "CALLBACK_TO"),
     ];
     const layout = layoutRunGraph(nodes, edges);
     const reversed = layoutRunGraph([...nodes].reverse(), [...edges].reverse());
-    const paths = new Map(
-      reversed.edges.map((item) => [item.edge.ref, item.path]),
-    );
-    for (const item of layout.edges)
-      expect(item.path).toBe(paths.get(item.edge.ref));
-    const callbacks = layout.edges.filter(
-      (item) => item.edge.type === "CALLBACK_TO",
-    );
-    const highest = callbacks.map((item) =>
-      Math.min(...sampleCurve(required(item.path)).map((point) => point.y)),
-    );
-    expect(Math.abs(required(highest[0]) - required(highest[1]))).toBeCloseTo(
-      32,
-    );
-  });
-
-  it("сохраняет callback вне колонок при возврате через несколько уровней", () => {
-    const cards = [
-      { x: 0, y: 150 },
-      { x: 344, y: 150 },
-      { x: 688, y: 150 },
-      { x: 1032, y: 150 },
-      { x: 1032, y: -26 },
-    ];
-    const path = callbackRunEdgePath(
-      required(cards[3]),
-      required(cards[0]),
-      cards,
-    );
-    for (const point of sampleCurve(path)) {
-      expect(
-        cards.some(
-          (item) =>
-            point.x > item.x &&
-            point.x < item.x + runGraphNodeWidth &&
-            point.y > item.y &&
-            point.y < item.y + runGraphNodeHeight,
-        ),
-      ).toBe(false);
+    for (const item of layout.edges) {
+      expect(item.path).toBe(
+        reversed.edges.find((other) => other.edge.ref === item.edge.ref)?.path,
+      );
+      for (const point of sampleCurve(required(item.path))) {
+        expect(
+          layout.nodes.some(
+            (card) =>
+              point.x > card.x + 1 &&
+              point.x < card.x + runGraphNodeWidth - 1 &&
+              point.y > card.y + 1 &&
+              point.y < card.y + runGraphNodeHeight - 1,
+          ),
+        ).toBe(false);
+      }
     }
+    expect(layout.bounds.height).toBeLessThan(500);
   });
 
-  it("не сводит дугу callback к петле в зазоре перед продолжением", () => {
-    const cards = [
-      { x: 0, y: 0 },
-      { x: 344, y: 0 },
+  it("показывает завершённого исполнителя до подтверждённого продолжения родителя", () => {
+    const parent = { ...node("parent", "01"), agentRef: "agent_parent" };
+    const child = {
+      ...node("child", "02"),
+      finishedAt: "2026-01-01T01:00:00Z",
+    };
+    const next = {
+      ...node("next", "03"),
+      agentRef: parent.agentRef,
+      parentNodeRef: parent.ref,
+      startedAt: "2026-01-01T01:00:01Z",
+    };
+    const edges = [
+      edge("delegate", parent.ref, child.ref),
+      edge("return", child.ref, parent.ref, "CALLBACK_TO"),
+      edge("next", parent.ref, next.ref, "CONTINUES"),
     ];
-    const path = callbackRunEdgePath(
-      required(cards[0]),
-      required(cards[1]),
-      cards,
+    const layout = layoutRunGraph([parent, child, next], edges);
+    expect(
+      required(layout.nodes.find((item) => item.node.ref === "next")).x,
+    ).toBeGreaterThan(
+      required(layout.nodes.find((item) => item.node.ref === "child")).x,
     );
-    const points = sampleCurve(path);
-    const corridor = points.slice(99, 198);
-    expect(required(corridor.at(-1)).x).toBeGreaterThan(
-      required(corridor[0]).x,
+    expect(layout.edges.map((item) => item.edge)).toEqual(edges);
+    const overlapping = layoutRunGraph(
+      [parent, { ...child, finishedAt: "2026-01-01T02:00:00Z" }, next],
+      edges,
     );
+    expect(
+      required(overlapping.nodes.find((item) => item.node.ref === "next")).x,
+    ).toBe(
+      required(overlapping.nodes.find((item) => item.node.ref === "child")).x,
+    );
+  });
+
+  it("маршрутизирует дальний возврат без пересечения промежуточных карточек", () => {
+    const nodes = Array.from({ length: 6 }, (_, i) =>
+      node(`node_${String(i)}`, String(i)),
+    );
+    const edges = nodes
+      .slice(1)
+      .map((n, i) =>
+        edge(`delegate_${String(i)}`, required(nodes[i]).ref, n.ref),
+      );
+    edges.push(edge("return", "node_5", "node_0", "CALLBACK_TO"));
+    const layout = layoutRunGraph(nodes, edges);
+    const points = sampleCurve(required(layout.edges.at(-1)?.path));
     for (const point of points) {
       expect(
-        cards.some(
-          (item) =>
-            point.x > item.x &&
-            point.x < item.x + runGraphNodeWidth &&
-            point.y > item.y &&
-            point.y < item.y + runGraphNodeHeight,
+        layout.nodes.some(
+          (card) =>
+            point.x > card.x + 1 &&
+            point.x < card.x + runGraphNodeWidth - 1 &&
+            point.y > card.y + 1 &&
+            point.y < card.y + runGraphNodeHeight - 1,
         ),
       ).toBe(false);
     }
+    expect(layout.bounds.height).toBeLessThan(300);
+  });
+
+  it("сохраняет конечные координаты и исходные связи при цикле и неполной истории", () => {
+    const nodes = [
+      node("first", "01"),
+      node("second", "02"),
+      node("third", "03"),
+    ];
+    const edges = [
+      edge("a", "first", "second"),
+      edge("b", "second", "third"),
+      edge("cycle", "third", "first", "CONTINUES"),
+      edge("return", "third", "first", "CALLBACK_TO"),
+    ];
+    const result = layoutRunGraph(nodes, edges);
+    expect(result.edges.map((item) => item.edge)).toEqual(edges);
+    expect(
+      result.nodes.every(
+        (item) => Number.isFinite(item.x) && Number.isFinite(item.y),
+      ),
+    ).toBe(true);
+    expect(
+      result.edges.every((item) => !/NaN|Infinity/.test(item.path ?? "")),
+    ).toBe(true);
   });
 
   it("раскладывает authoritative delegation слева направо", () => {

@@ -4,6 +4,8 @@ import {
   runGraphFitTransform,
   runGraphFitViewOptions,
   runGraphInitialFitOptions,
+  runGraphContinuationTurns,
+  createRunGraphFlowElements,
 } from "@/features/runs/run-graph-flow";
 import {
   layoutRunGraph,
@@ -15,6 +17,11 @@ import type {
   RunEdge,
   RunNode,
 } from "@/shared/api/generated/openapi/types.gen";
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing graph test fixture");
+  return value;
+}
 
 const nodes: RunNode[] = ["original", "retry", "execution"].map(
   (ref, index) => ({
@@ -138,5 +145,97 @@ describe("runGraphInitialFitOptions", () => {
     expect(
       runGraphInitialFitOptions(1920, nodes, edges, "execution", true, 780),
     ).toEqual(runGraphFitViewOptions(1920, true));
+  });
+});
+
+describe("продолжения и возвраты", () => {
+  it("нумерует явные ходы сотрудника, сохраняя раздельные имена, запуски и retry", () => {
+    const first: RunNode = {
+      ...required(nodes[2]),
+      ref: "turn_1",
+      agentRef: "agent_example",
+    };
+    const second: RunNode = {
+      ...first,
+      ref: "turn_2",
+      parentNodeRef: first.ref,
+    };
+    const third: RunNode = {
+      ...first,
+      ref: "turn_3",
+      parentNodeRef: second.ref,
+    };
+    const unrelated: RunNode = {
+      ...first,
+      ref: "other_agent",
+      agentRef: "another_agent",
+      parentNodeRef: first.ref,
+    };
+    const connection = (
+      source: string,
+      target: string,
+      type: RunEdge["type"] = "CONTINUES",
+    ): RunEdge => ({
+      ...required(edges[0]),
+      ref: `${source}_${target}`,
+      sourceNodeRef: source,
+      targetNodeRef: target,
+      type,
+    });
+    const all = [first, second, third, unrelated];
+    const links = [
+      connection(first.ref, second.ref),
+      connection(second.ref, third.ref),
+      connection(first.ref, unrelated.ref),
+    ];
+    expect([...runGraphContinuationTurns(all, links)]).toEqual([
+      [first.ref, 1],
+      [second.ref, 2],
+      [third.ref, 3],
+    ]);
+    expect(
+      runGraphContinuationTurns(all, [
+        connection(first.ref, second.ref, "RETRY_OF"),
+      ]).size,
+    ).toBe(0);
+    expect(
+      runGraphContinuationTurns(
+        [first, { ...second, runRef: "run_other" }],
+        links,
+      ).size,
+    ).toBe(0);
+    const cyclic = [
+      connection(first.ref, second.ref),
+      connection(second.ref, first.ref),
+    ];
+    expect(
+      runGraphContinuationTurns(
+        [{ ...first, parentNodeRef: second.ref }, second],
+        cyclic,
+      ).size,
+    ).toBe(0);
+  });
+
+  it("подключает возврат к ближним сторонам карточек и сохраняет исходную связь", () => {
+    const returning: RunEdge = {
+      ...required(edges[1]),
+      ref: "callback",
+      sourceNodeRef: "execution",
+      targetNodeRef: "retry",
+      type: "CALLBACK_TO",
+    };
+    const result = createRunGraphFlowElements(nodes, [...edges, returning], {
+      futureRefs: new Set(),
+      activeRefs: new Set(),
+      nodeAccessibleLabel: (n) => n.displayName,
+      edgeAccessibleLabel: (e) => e.label,
+    });
+    expect(result.edges.at(-1)).toMatchObject({
+      source: "execution",
+      target: "retry",
+      sourceHandle: "return-source",
+      targetHandle: "return-target",
+      data: { edge: returning },
+    });
   });
 });

@@ -226,6 +226,7 @@ export interface RunGraphNodeData {
   node: RunNode;
   executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   retryAttempt?: number;
+  continuationTurn?: number;
   surface: RunGraphNodeSurface;
   selected: boolean;
   future: boolean;
@@ -276,6 +277,7 @@ export function createRunGraphFlowElements(
 ): RunGraphFlowElements {
   const layout = layoutRunGraph(nodes, edges);
   const retryAttempts = runGraphRetryAttempts(nodes, edges);
+  const continuationTurns = runGraphContinuationTurns(nodes, edges);
 
   return {
     nodes: layout.nodes.map(({ node, x, y }) => {
@@ -321,6 +323,7 @@ export function createRunGraphFlowElements(
           node,
           executionLabel: options.executionLabels?.[node.ref],
           retryAttempt,
+          continuationTurn: continuationTurns.get(node.ref),
           surface,
           selected,
           future,
@@ -336,8 +339,8 @@ export function createRunGraphFlowElements(
         type: "runEdge",
         source: edge.sourceNodeRef,
         target: edge.targetNodeRef,
-        sourceHandle: "source",
-        targetHandle: "target",
+        sourceHandle: edge.type === "CALLBACK_TO" ? "return-source" : "source",
+        targetHandle: edge.type === "CALLBACK_TO" ? "return-target" : "target",
         selectable: false,
         focusable: false,
         deletable: false,
@@ -360,6 +363,61 @@ export function createRunGraphFlowElements(
       };
     }),
   };
+}
+
+// Номер хода относится к явной цепочке CONTINUES одного сотрудника,
+// а не к совпадению имён или роли. Разные запуски и повторы не объединяются.
+export function runGraphContinuationTurns(
+  nodes: RunNode[],
+  edges: RunEdge[],
+): Map<string, number> {
+  const byRef = new Map(nodes.map((node) => [node.ref, node]));
+  const previous = new Map<string, string>();
+  const participants = new Set<string>();
+  for (const edge of edges) {
+    if (edge.type !== "CONTINUES") continue;
+    const source = byRef.get(edge.sourceNodeRef);
+    const target = byRef.get(edge.targetNodeRef);
+    if (
+      !source ||
+      !target ||
+      source.type !== "AGENT_EXECUTION" ||
+      target.type !== "AGENT_EXECUTION" ||
+      !source.agentRef ||
+      source.agentRef !== target.agentRef ||
+      source.runRef !== target.runRef ||
+      target.parentNodeRef !== source.ref
+    )
+      continue;
+    previous.set(target.ref, source.ref);
+    participants.add(source.ref);
+    participants.add(target.ref);
+  }
+  const turns = new Map<string, number>();
+  const cyclic = new Set<string>();
+  for (const ref of participants) {
+    const path: string[] = [];
+    const visited = new Set<string>();
+    let current: string | undefined = ref;
+    while (
+      current &&
+      !turns.has(current) &&
+      !cyclic.has(current) &&
+      !visited.has(current)
+    ) {
+      visited.add(current);
+      path.push(current);
+      current = previous.get(current);
+    }
+    // Повреждённая циклическая lineage не получает выдуманный номер хода.
+    if (current && (visited.has(current) || cyclic.has(current))) {
+      for (const item of path) cyclic.add(item);
+      continue;
+    }
+    let turn = current ? (turns.get(current) ?? 0) : 0;
+    for (const item of path.reverse()) turns.set(item, ++turn);
+  }
+  return turns;
 }
 
 export function runGraphRetryAttempts(
