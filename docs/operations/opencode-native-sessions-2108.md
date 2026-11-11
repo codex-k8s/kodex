@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.0
+version: 1.4.1
 updated: 2026-11-12
 ---
 
@@ -559,3 +559,15 @@ phase/usage/TTFT panels; служебные идентификаторы и зн
 в OpenCode подтверждается отдельным real-binary harness. Штатный
 `make test-opencode-native` также запускает bounded transport tests: все три
 API, fragmentation, отмена, отдельные HTTP attempts и oversized frame.
+
+## Удаление оставшихся диагностик прежнего движка
+
+После переключения native driver удалены неиспользуемые app-server call/stream,
+account/read, rollout-source и token-usage классификаторы, таблица Codex notifications
+и старые process/request quotas. Общий закрытый JSON decoder остаётся только
+транспортом приватного broker, а не reader прежних сессий. Secret-broker больше
+не содержит стадий CLI model/list/cache/process наблюдателя. Capture tool принимает
+текущий producer record с закрытыми stage/class и не декодирует старые записи.
+Сведения native terminal/checkpoint и provenance проходят прежние проверки;
+отказ процесса не становится успешным result. Это не подтверждение кластерной
+приёмки: она записывается отдельно после установки immutable image.

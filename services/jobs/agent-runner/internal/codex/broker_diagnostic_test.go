@@ -27,13 +27,13 @@ func TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements(t *testi
 		var wire bytes.Buffer
 		writer := &brokerFrameWriter{writer: &wire, input: &input}
 		usage := runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}
-		err := atProviderStage(stage, &appServerCallFailure{detail: "STREAM_CLOSED"})
+		err := atProviderStage(stage, errors.New("PRIVATE_NATIVE_SENTINEL"))
 		if writeProviderBrokerResultFailure(writer, Result{Usage: usage}, err) != nil {
 			t.Fatal("write failed")
 		}
 		result, failure := readBoundProviderBrokerResponse(bytes.NewReader(wire.Bytes()), &input, providerWriterUID)
 		diagnostic := result.ProviderDiagnostic(input)
-		if failure == nil || diagnostic == nil || diagnostic.Stage != string(stage) || diagnostic.Detail != "STREAM_CLOSED" || result.Usage != usage || result.Outcome != "" {
+		if failure == nil || diagnostic == nil || diagnostic.Stage != string(stage) || diagnostic.Detail != "NONE" || result.Usage != usage || result.Outcome != "" {
 			t.Fatal("failure diagnostic changed execution outcome or lost binding")
 		}
 		diagnostic.Stage = "PRIVATE_SENTINEL"

@@ -52,23 +52,23 @@ const (
 	// rolloutCaptureSchema pins the private proof envelope relating archive evidence to a single execution.
 	// rolloutCaptureSchema закрепляет формат приватного доказательства связи архива с одним исполнением.
 	rolloutCaptureSchema = "kodex.provider-rollout-capture.v1"
-	// providerSafeFailureLog formats safe stage/category fields and a correlated numeric RPC code;
+	// providerSafeFailureLog formats only closed stage/category fields;
 	// callers must classify first instead of interpolating the original error or provider body.
-	// providerSafeFailureLog форматирует безопасные этапы, категории и числовой код связанного RPC;
+	// providerSafeFailureLog форматирует только закрытые этапы и категории;
 	// вызывающий код сначала классифицирует отказ, не подставляя исходную ошибку или тело провайдера.
-	providerSafeFailureLog = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s; stream_error: %s"
+	providerSafeFailureLog = "Provider request failed at safe stage: %s; class: %s; detail: NONE; rpc_code: 0; notification: NONE; account_read: NONE; notification_error: NONE; stream_error: NONE"
 )
 
 var (
 	// ErrProviderAuthentication is the stable missing/invalid-auth sentinel without credential details.
 	// ErrProviderAuthentication является устойчивым маркером отсутствующих или неверных реквизитов без их деталей.
-	ErrProviderAuthentication = errors.New("Codex provider authentication is unavailable")
+	ErrProviderAuthentication = errors.New("OpenCode provider authentication is unavailable")
 	// errProviderBrokerResponseInvalid marks a rejected response shape or peer without echoing untrusted input.
 	// errProviderBrokerResponseInvalid отмечает отклонённую структуру ответа или peer без вывода недоверенного ввода.
-	errProviderBrokerResponseInvalid = errors.New("isolated Codex provider response is invalid")
+	errProviderBrokerResponseInvalid = errors.New("isolated OpenCode provider response is invalid")
 	// errProviderBrokerFailed represents provider/transport failure separately from a malformed response.
 	// errProviderBrokerFailed обозначает отказ провайдера или транспорта отдельно от повреждённого ответа.
-	errProviderBrokerFailed = errors.New("isolated Codex provider failed")
+	errProviderBrokerFailed = errors.New("isolated OpenCode provider failed")
 )
 
 // brokerRequest transfers one versioned execution snapshot, prompt and local MCP capability over UDS.
@@ -220,7 +220,7 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 		case <-ctx.Done():
 			return Result{}, context.Canceled
 		case <-deadline.C:
-			return Result{}, errors.New("connect isolated Codex provider broker")
+			return Result{}, errors.New("connect isolated OpenCode provider broker")
 		case <-time.After(200 * time.Millisecond):
 		}
 	}
@@ -234,7 +234,7 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	encoder := json.NewEncoder(connection)
 	if err := encoder.Encode(brokerRequest{Version: providerBrokerVersion, Input: input, Prompt: prompt,
 		MCPSocket: mcpSocket, MCPProxyToken: mcpProxyToken}); err != nil {
-		return Result{}, errors.New("send isolated Codex provider request")
+		return Result{}, errors.New("send isolated OpenCode provider request")
 	}
 	return readBoundProviderBrokerResponse(connection, &input, providerWriterUID, onActivity)
 }
@@ -337,74 +337,26 @@ func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 	}
 }
 
-// providerSafeFailureClass preserves the distinct account-response schema class and otherwise returns
-// only the coarse safe broker class, excluding external bodies, account identity and credential values.
-// providerSafeFailureClass сохраняет отдельный класс схемы ответа аккаунта, иначе возвращая лишь
-// безопасный укрупнённый класс broker без внешних тел, идентичности аккаунта и значений реквизитов.
+// providerSafeFailureClass returns the closed broker category without inspecting private upstream text.
+// providerSafeFailureClass возвращает закрытую категорию broker без разбора приватного upstream текста.
 func providerSafeFailureClass(err error) string {
-	if errors.Is(err, errAccountReadResponseInvalid) {
-		return "ACCOUNT_RESPONSE_SCHEMA"
-	}
 	return string(classifyProviderBrokerFailure(err))
 }
 
-// logProviderSafeFailure emits classified stage/detail/notification/stream fields, never err.Error().
-// The numeric code is retained only by the correlated RPC-error projection in providerFailureDetails.
-// logProviderSafeFailure выводит классифицированные stage/detail/notification/stream, но не err.Error().
-// Числовой код сохраняет только проекция связанного RPC-отказа внутри providerFailureDetails.
+// logProviderSafeFailure records only the owner-bound stage and closed category, never the raw cause.
+// logProviderSafeFailure записывает лишь привязанный этап и закрытую категорию, без исходной причины.
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
-	diagnostic, code := providerFailureDetails(stage, err)
-	log.Printf(providerSafeFailureLog, stage, diagnostic.Class, diagnostic.Detail, code, diagnostic.Notification, diagnostic.AccountRead, diagnostic.NotificationError, safeAppServerStreamFailureReason(err))
+	diagnostic, _ := providerFailureDetails(stage, err)
+	log.Printf(providerSafeFailureLog, stage, diagnostic.Class)
 }
 
-// providerFailureDetails projects typed resume/call failures into allowlisted detail, notification and
-// account/token categories, retaining an RPC code only for RPC_ERROR. Returned diagnostics are unbound;
-// bindProviderDiagnostic must add execution pins and validate before wire delivery.
-// providerFailureDetails переводит типизированные resume/call отказы в разрешённые detail, notification
-// и account/token категории, сохраняя RPC-код только для RPC_ERROR. Диагностика ещё не привязана:
-// bindProviderDiagnostic должна добавить привязки исполнения и проверить её перед wire-доставкой.
+// providerFailureDetails creates an unbound coarse observation; native terminal codes remain a separate result.
+// bindProviderDiagnostic assigns execution pins before delivery and does not accept old engine notifications.
+// providerFailureDetails создаёт непривязанное укрупнённое наблюдение; native terminal codes остаются отдельным результатом.
+// bindProviderDiagnostic назначает привязки перед доставкой и не принимает уведомления прежнего движка.
 func providerFailureDetails(stage providerExecutionStage, err error) (runtimecontract.ProviderFailureDiagnostic, int64) {
-	detail, code := "NONE", int64(0)
-	notification := "NONE"
-	notificationError := "NONE"
-	accountRead := "NONE"
-	var resumeFailure *resumeSourceFailure
-	if stage == providerStageThreadRead && providerSafeFailureClass(err) == "PROVIDER" && errors.As(err, &resumeFailure) {
-		switch resumeFailure.detail {
-		case "RESUME_SOURCE_SCHEMA", "RESUME_SOURCE_ID", "RESUME_SOURCE_LOCATOR", "RESUME_SOURCE_OPEN", "RESUME_SOURCE_METADATA", "RESUME_SOURCE_IDENTITY":
-			detail = resumeFailure.detail
-		}
-	}
-	var failure *appServerCallFailure
-	if errors.As(err, &failure) {
-		switch failure.detail {
-		case "REQUEST_WRITE", "CONTEXT_CANCELLED", "STREAM_CLOSED", "STREAM_INVALID",
-			"NOTIFICATION_INVALID", "REQUEST_REJECTED", "RESPONSE_CORRELATION", "MESSAGE_KIND", "RPC_ERROR":
-			detail = failure.detail
-			if detail == "RPC_ERROR" {
-				code = failure.code
-				if stage == providerStageAccountRead && code == -32603 {
-					accountRead = safeAccountReadFailure(failure.accountRead)
-				}
-			}
-			if detail == "NOTIFICATION_INVALID" {
-				notification = safeNotificationMethod(failure.notification)
-				notificationError = "UNKNOWN"
-				switch failure.notificationError {
-				case "METHOD", "ENVELOPE", "TUPLE", "ITEM", "TIMESTAMP", "MESSAGE", "TOKEN_USAGE", "TERMINAL", "LIFECYCLE", "MCP", "PROVIDER_ERROR":
-					notificationError = failure.notificationError
-				}
-				if notification == "thread/tokenUsage/updated" {
-					if reason := safeTokenUsageFailureReason(tokenUsageFailureReason(failure.notificationError)); reason != "UNKNOWN" {
-						notificationError = reason
-					}
-				}
-			}
-		}
-	}
 	return runtimecontract.ProviderFailureDiagnostic{Kind: "REQUEST_FAILURE", Stage: string(stage),
-		Class: providerSafeFailureClass(err), Detail: detail, Notification: notification,
-		AccountRead: accountRead, NotificationError: notificationError}, code
+		Class: providerSafeFailureClass(err), Detail: "NONE", Notification: "NONE", AccountRead: "NONE", NotificationError: "NONE"}, 0
 }
 
 // bindProviderDiagnostic assigns schema and exact execution pins, narrows notification values and
@@ -415,7 +367,7 @@ func bindProviderDiagnostic(input model.Input, value runtimecontract.ProviderFai
 	value.Schema, value.RuntimeRevisionDigest, value.InputDigest = runtimecontract.ProviderFailureDiagnosticSchema, input.RuntimeRevisionDigest, input.InputDigest
 	value.ExecutionBindingDigest, value.SessionRef, value.TurnRef, value.Attempt = input.ExecutionBindingDigest, input.SessionRef, input.TurnRef, input.Attempt
 	switch value.Notification {
-	case "NONE", "UNKNOWN", "thread/tokenUsage/updated", "rawResponse/completed":
+	case "NONE", "UNKNOWN":
 	default:
 		value.Notification = "UNKNOWN"
 	}
@@ -423,26 +375,6 @@ func bindProviderDiagnostic(input model.Input, value runtimecontract.ProviderFai
 		return nil
 	}
 	return &value
-}
-
-// safeNotificationMethod returns registered notification names plus a closed diagnostic-only set;
-// recognizing a name here neither executes it nor expands the protocol's allowed notification methods.
-// safeNotificationMethod возвращает зарегистрированные имена уведомлений и закрытое диагностическое дополнение;
-// узнавание имени не исполняет уведомление и не расширяет методы, разрешённые протоколом.
-func safeNotificationMethod(method string) string {
-	if _, allowed := serverNotificationMethods[method]; allowed {
-		return method
-	}
-	switch method {
-	case "thread/reverted", "thread/attachment/updated", "thread/queue/changed", "project/changed",
-		"thread/project/updated", "thread/environment/connected", "thread/environment/disconnected",
-		"autoApprovalReview/strictReviewRequired", "mcpServer/event/stream/notification", "account/gatewayOAuth/changed",
-		"modelProvider/authRecoveryStarted", "modelProvider/authRecoveryCompleted", "thread/realtime/item/started",
-		"thread/realtime/item/transcript/delta", "thread/realtime/item/completed":
-		return method
-	default:
-		return "UNKNOWN"
-	}
 }
 
 // ServeProviderBroker requires UID10002, disables dumpability, probes bubblewrap and serves the protected
@@ -456,7 +388,7 @@ func safeNotificationMethod(method string) string {
 func ServeProviderBroker(ctx context.Context) error {
 	proofObserver := providerInputProofLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if os.Geteuid() != 10002 {
-		return errors.New("Codex provider broker UID is invalid")
+		return errors.New("OpenCode provider broker UID is invalid")
 	}
 	// Provider-local native logs/cache must remain0600 even when upstream chooses permissive defaults.
 	// Provider-local native logs/cache остаются0600 даже при permissive defaults upstream.
@@ -473,7 +405,7 @@ func ServeProviderBroker(ctx context.Context) error {
 	_ = os.Remove(ProviderSocketPath)
 	listener, err := net.Listen("unix", ProviderSocketPath)
 	if err != nil {
-		return errors.New("listen isolated Codex provider broker")
+		return errors.New("listen isolated OpenCode provider broker")
 	}
 	defer listener.Close()
 	if err := os.Chown(ProviderSocketPath, -1, 29000); err != nil || os.Chmod(ProviderSocketPath, 0o660) != nil {
@@ -486,7 +418,7 @@ func ServeProviderBroker(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return errors.New("accept isolated Codex provider request")
+			return errors.New("accept isolated OpenCode provider request")
 		}
 		if err := serveBrokerRequest(ctx, connection, proofObserver); err != nil {
 			logProviderSafeFailure(providerStageOf(err), err)
@@ -503,7 +435,7 @@ func ServeProviderBroker(ctx context.Context) error {
 // и ограниченным context через переданный executor. Подставленный успешный executor не доказывает живой sandbox.
 func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) error {
 	if execute == nil {
-		return errors.New("Codex provider sandbox probe is unavailable")
+		return errors.New("OpenCode provider sandbox probe is unavailable")
 	}
 	probeContext, cancel := context.WithTimeout(ctx, providerSandboxProbeTimeout)
 	defer cancel()
@@ -513,7 +445,7 @@ func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) e
 	command.Env = []string{"PATH=/usr/local/bin:/usr/bin:/bin"}
 	command.Stdin, command.Stdout, command.Stderr = nil, io.Discard, io.Discard
 	if err := execute(command); err != nil {
-		return errors.New("Codex provider sandbox is unavailable")
+		return errors.New("OpenCode provider sandbox is unavailable")
 	}
 	return nil
 }
@@ -607,7 +539,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	result = normalizeCompletedProviderWorkspace(ctx, request.Input, result, normalizeProviderWorkspaceAccess)
 	result = publishCompletedProviderOutbox(ctx, request.Input, result)
 	if result.Outcome != "SUCCEEDED" {
-		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
+		log.Printf("OpenCode provider turn completed with safe failure code: %s", result.FailureCode)
 	}
 	diagnostic := result.ProviderDiagnostic(request.Input)
 	if result.Outcome != "SUCCEEDED" && diagnostic == nil {

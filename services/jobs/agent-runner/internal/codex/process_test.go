@@ -12,14 +12,14 @@ import (
 // через errors.Is при фиксированном внешнем Error и UNKNOWN без stage wrapper.
 func TestProviderStageErrorKeepsClassificationAndHidesDiagnostic(t *testing.T) {
 	secret := errors.New("provider response with secret diagnostic")
-	err := atProviderStage(providerStageThreadCall, secret)
+	err := atProviderStage(providerStageContext, secret)
 	if !errors.Is(err, secret) {
 		t.Fatal("wrapped failure lost its original classification")
 	}
-	if got := providerStageOf(err); got != providerStageThreadCall {
-		t.Fatalf("providerStageOf() = %q, want %q", got, providerStageThreadCall)
+	if got := providerStageOf(err); got != providerStageContext {
+		t.Fatalf("providerStageOf() = %q, want %q", got, providerStageContext)
 	}
-	if strings.Contains(err.Error(), "secret") || err.Error() != "Codex provider execution stage failed" {
+	if strings.Contains(err.Error(), "secret") || err.Error() != "Provider execution stage failed" {
 		t.Fatalf("provider stage error exposed diagnostic: %q", err.Error())
 	}
 	if got := providerStageOf(errors.New("unclassified")); got != providerStageUnknown {

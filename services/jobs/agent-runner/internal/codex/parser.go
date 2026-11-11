@@ -13,21 +13,9 @@ import (
 )
 
 const (
-	// maximumJSONLLineBytes bounds selected semantic command/diff/result strings, not the larger transport frame.
-	// maximumJSONLLineBytes ограничивает отдельные смысловые строки command/diff/result, а не больший транспортный кадр.
-	maximumJSONLLineBytes = 1 << 20
-	// maximumJSONLMessages limits accepted JSONL event count independently of frame size or tool-call quotas.
-	// maximumJSONLMessages ограничивает число JSONL событий отдельно от размера кадров и квот вызовов инструментов.
-	maximumJSONLMessages = 100_000
 	// maximumFinalBytes caps parsed agent text in UTF-8 bytes; published activity has its own tighter limit.
 	// maximumFinalBytes ограничивает разобранный agent text в UTF-8 байтах; публичное событие имеет отдельный меньший лимит.
 	maximumFinalBytes = 480_000
-	// maximumDiagnosticBytes bounds parsed provider diagnostics without making their original text safe to publish.
-	// maximumDiagnosticBytes ограничивает разобранную диагностику провайдера, не делая её исходный текст безопасным для публикации.
-	maximumDiagnosticBytes = 16 << 10
-	// maximumResponseReceipts caps the in-memory response-ID replay fence for one protocol execution.
-	// maximumResponseReceipts ограничивает хранимые response-ID квитанции защиты от повторов одного исполнения.
-	maximumResponseReceipts = 10_000
 )
 
 // UsageCompleteness aliases the shared wire quality without changing the broker enum layout.
@@ -109,81 +97,6 @@ func schema(required []string, allowed ...string) objectSchema {
 		value.required[field] = struct{}{}
 	}
 	return value
-}
-
-// tokenUsageFailureReason names internal accounting/parser failures; arbitrary strings require
-// normalization before becoming closed diagnostics.
-// tokenUsageFailureReason задаёт внутренние ошибки учёта и разбора; произвольная строка требует
-// нормализации до использования в закрытой диагностике.
-type tokenUsageFailureReason string
-
-const (
-	// tokenUsageStructure marks a rejected object shape rather than a valid partial numeric observation.
-	// tokenUsageStructure отмечает отклонённую структуру объекта, а не корректное частичное числовое наблюдение.
-	tokenUsageStructure tokenUsageFailureReason = "TOKEN_USAGE_STRUCTURE"
-	// tokenUsageRequiredMissing distinguishes an absent required counter from a present zero.
-	// tokenUsageRequiredMissing отличает отсутствующий обязательный счётчик от присутствующего нуля.
-	tokenUsageRequiredMissing tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_MISSING"
-	// tokenUsageRequiredNull rejects explicit null instead of defaulting a required counter to zero.
-	// tokenUsageRequiredNull отвергает явный null вместо обнуления обязательного счётчика.
-	tokenUsageRequiredNull tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_NULL"
-	// tokenUsageRequiredType marks a required counter or response identifier that fails its typed decoder.
-	// tokenUsageRequiredType отмечает обязательный счётчик или response identifier, не прошедший typed decoder.
-	tokenUsageRequiredType tokenUsageFailureReason = "TOKEN_USAGE_REQUIRED_TYPE"
-	// tokenUsageOptionalNull rejects null where only omission gives the optional counter its default.
-	// tokenUsageOptionalNull отвергает null там, где значение optional счётчика по умолчанию даёт лишь отсутствие поля.
-	tokenUsageOptionalNull tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_NULL"
-	// tokenUsageOptionalType records invalid present optional counters, metadata amount or context-window types.
-	// tokenUsageOptionalType фиксирует неверный тип присутствующего optional счётчика, metadata amount или context window.
-	tokenUsageOptionalType tokenUsageFailureReason = "TOKEN_USAGE_OPTIONAL_TYPE"
-	// tokenUsageNegative rejects negative counters/window sizes before accepting an observation.
-	// tokenUsageNegative отвергает отрицательные счётчики или window size до принятия наблюдения.
-	tokenUsageNegative tokenUsageFailureReason = "TOKEN_USAGE_NEGATIVE"
-	// tokenUsageTotalArithmetic marks failed measured total arithmetic, not an approximate display estimate.
-	// tokenUsageTotalArithmetic отмечает неверную арифметику измеренного total, а не приблизительную display оценку.
-	tokenUsageTotalArithmetic tokenUsageFailureReason = "TOKEN_USAGE_TOTAL_ARITHMETIC"
-	// tokenUsageCacheInputBound rejects a cached/write-cache component exceeding its input counter.
-	// tokenUsageCacheInputBound отвергает cached/write-cache компонент выше счётчика input.
-	tokenUsageCacheInputBound tokenUsageFailureReason = "TOKEN_USAGE_CACHE_INPUT_BOUND"
-	// tokenUsageReasoningOutputBound rejects reasoning output exceeding the associated output count.
-	// tokenUsageReasoningOutputBound отвергает reasoning output выше соответствующего output.
-	tokenUsageReasoningOutputBound tokenUsageFailureReason = "TOKEN_USAGE_REASONING_OUTPUT_BOUND"
-	// tokenUsageLastExceedsTotal marks a last display component above its cumulative counterpart.
-	// tokenUsageLastExceedsTotal отмечает last display компонент выше соответствующего накопленного значения.
-	tokenUsageLastExceedsTotal tokenUsageFailureReason = "TOKEN_USAGE_LAST_EXCEEDS_TOTAL"
-	// tokenUsageReceiptConflict rejects reusing one response ID for a changed pinned payload.
-	// tokenUsageReceiptConflict отвергает повторное использование response ID с изменившимся закреплённым payload.
-	tokenUsageReceiptConflict tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_CONFLICT"
-	// tokenUsageReceiptLimit fails closed when the bounded response-receipt ledger is full.
-	// tokenUsageReceiptLimit даёт закрытый отказ при заполнении ограниченного реестра response receipts.
-	tokenUsageReceiptLimit tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_LIMIT"
-	// tokenUsageOverflow rejects int64 arithmetic overflow before committing new measured counters.
-	// tokenUsageOverflow отвергает переполнение int64 до фиксации новых измеренных счётчиков.
-	tokenUsageOverflow tokenUsageFailureReason = "TOKEN_USAGE_OVERFLOW"
-)
-
-// tokenUsageFailure carries only a reason with fixed Error text, never a counter value or provider JSON.
-// The closed diagnostic selector still rejects unregistered reason strings.
-// tokenUsageFailure переносит лишь причину с фиксированным Error без счётчика или provider JSON.
-// Закрытая диагностическая проекция дополнительно отвергает неизвестные строки причины.
-type tokenUsageFailure struct{ reason tokenUsageFailureReason }
-
-// Error emits the constant token-usage failure message without dereferencing or formatting the reason.
-// Error выдаёт постоянное сообщение отказа usage без разыменования или форматирования причины.
-func (*tokenUsageFailure) Error() string { return "Codex app-server token usage is invalid" }
-
-// safeTokenUsageFailureReason maps only registered reason values to public-safe labels, otherwise UNKNOWN.
-// safeTokenUsageFailureReason выдаёт безопасные labels лишь зарегистрированным причинам, иначе UNKNOWN.
-func safeTokenUsageFailureReason(reason tokenUsageFailureReason) string {
-	switch reason {
-	case tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
-		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
-		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal,
-		tokenUsageReceiptConflict, tokenUsageReceiptLimit, tokenUsageOverflow:
-		return string(reason)
-	default:
-		return "UNKNOWN"
-	}
 }
 
 // decodeObject rejects duplicate/unknown immediate keys, missing required keys and trailing JSON,
@@ -322,41 +235,4 @@ func BlockedFailure(code string) bool {
 	default:
 		return false
 	}
-}
-
-// serverNotificationMethods enumerates known notification names; recognition permits outer-schema
-// validation, not execution of nested payload, arbitrary methods or new capabilities.
-// serverNotificationMethods перечисляет известные имена уведомлений; узнавание допускает проверку
-// внешней схемы, не исполнение вложенного payload, произвольные методы или новые capabilities.
-var serverNotificationMethods = stringSet(
-	"error", "thread/started", "thread/status/changed", "thread/archived", "thread/deleted", "thread/unarchived",
-	"thread/closed", "skills/changed", "thread/name/updated", "thread/goal/updated", "thread/goal/cleared",
-	"thread/settings/updated", "thread/tokenUsage/updated", "turn/started", "hook/started", "turn/completed",
-	"hook/completed", "turn/diff/updated", "turn/plan/updated", "item/started", "item/autoApprovalReview/started",
-	"item/autoApprovalReview/completed", "item/completed", "item/agentMessage/delta", "item/plan/delta",
-	"command/exec/outputDelta", "process/outputDelta", "process/exited", "item/commandExecution/outputDelta",
-	"item/commandExecution/terminalInteraction", "item/fileChange/outputDelta", "item/fileChange/patchUpdated",
-	"serverRequest/resolved", "item/mcpToolCall/progress", "mcpServer/oauthLogin/completed",
-	"rawResponseItem/completed", "rawResponse/completed",
-	"mcpServer/startupStatus/updated", "account/updated", "account/rateLimits/updated", "app/list/updated",
-	"remoteControl/status/changed", "externalAgentConfig/import/progress", "externalAgentConfig/import/completed",
-	"fs/changed", "item/reasoning/summaryTextDelta", "item/reasoning/summaryPartAdded", "item/reasoning/textDelta",
-	"thread/compacted", "model/rerouted", "model/verification", "turn/moderationMetadata",
-	"model/safetyBuffering/updated", "warning", "guardianWarning", "deprecationNotice", "configWarning",
-	"fuzzyFileSearch/sessionUpdated", "fuzzyFileSearch/sessionCompleted", "thread/realtime/started",
-	"thread/realtime/itemAdded", "thread/realtime/transcript/delta", "thread/realtime/transcript/done",
-	"thread/realtime/outputAudio/delta", "thread/realtime/sdp", "thread/realtime/error", "thread/realtime/closed",
-	"windows/worldWritableWarning", "windowsSandbox/setupCompleted", "account/login/completed",
-)
-
-// stringSet builds a private membership map from trusted registry literals, silently coalescing duplicates;
-// it is not a validator for caller-owned lists or authorization grants.
-// stringSet строит приватную карту принадлежности из доверенных literals, объединяя повторы;
-// она не проверяет внешние списки и не выдаёт authorization grants.
-func stringSet(values ...string) map[string]struct{} {
-	result := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		result[value] = struct{}{}
-	}
-	return result
 }

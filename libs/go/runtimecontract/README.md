@@ -78,8 +78,8 @@ completion и перед cleanup. Это не durable CP receipt. Публика
 обновлённого runner и callback consumer; Proto/RPC и grants не меняются.
 
 `ProviderProcessObservation` содержит только bounded canonical server package
-version из handshake текущего `codex app-server`, а не `clientInfo.version`,
-`thread.cliVersion` или image inventory. Exact organization/project/run/node/
+version работающего закреплённого OpenCode V1 server. Проверка actual server
+version выполняется native driver; image inventory не заменяет её. Exact organization/project/run/node/
 session/turn/attempt, RuntimeRevision/version/digest, image и input/execution
 binding сверяются повторно на UID10002-checked broker и leased callback.
 Сырой userAgent, OS, terminal и private paths не сохраняются. RuntimeRevision

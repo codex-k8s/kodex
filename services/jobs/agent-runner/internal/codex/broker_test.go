@@ -59,8 +59,7 @@ func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
 		err  error
 		want string
 	}{
-		{name: "account schema", err: atProviderStage(providerStageAccountRead, errAccountReadResponseInvalid), want: "ACCOUNT_RESPONSE_SCHEMA"},
-		{name: "authentication", err: atProviderStage(providerStageAccountRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
+		{name: "authentication", err: atProviderStage(providerStageAuthRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
 		{name: "external diagnostic", err: errors.New("fixture secret and account details must stay private"), want: "PROVIDER"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

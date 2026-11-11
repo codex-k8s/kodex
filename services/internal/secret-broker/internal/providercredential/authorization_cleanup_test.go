@@ -137,9 +137,9 @@ func (session *cleanupDeviceSession) Close() error {
 }
 
 // cleanupCredentialBackend overrides only device-session start to return a supplied synthetic session while
-// inheriting fail-closed defaults for unrelated app-server operations.
+// inheriting fail-closed defaults for unrelated provider operations.
 // cleanupCredentialBackend подменяет только device-session start возвратом переданной synthetic сессии, сохраняя
-// закрытые defaults остальных app-server операций.
+// закрытые defaults остальных provider операций.
 type cleanupCredentialBackend struct {
 	providerCredentialBackendStub
 	session *cleanupDeviceSession

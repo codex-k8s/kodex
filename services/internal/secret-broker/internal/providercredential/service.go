@@ -206,9 +206,9 @@ func New(lifecycle context.Context, store Store, credentialBackend CredentialBac
 	return &Service{lifecycle: lifecycle, store: store, credentialBackend: credentialBackend, deviceTTL: deviceTTL, sessions: map[string]*deviceWorker{}}, nil
 }
 
-// Check joins storage and app-server readiness errors so both dependencies are probed rather than
+// Check joins storage and managed provider readiness errors so both dependencies are probed rather than
 // short-circuiting after the first failure.
-// Check объединяет storage и app-server readiness ошибки, проверяя обе зависимости без остановки после
+// Check объединяет storage и managed provider readiness ошибки, проверяя обе зависимости без остановки после
 // первого отказа.
 func (service *Service) Check(ctx context.Context) error {
 	return errors.Join(service.store.Check(ctx), service.credentialBackend.Check(ctx))

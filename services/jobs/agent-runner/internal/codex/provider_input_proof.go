@@ -20,7 +20,7 @@ import (
 const (
 	// providerInputProofMessage fixes the diagnostic message for an acknowledged turn/start projection.
 	// providerInputProofMessage фиксирует diagnostic message подтверждённой проекции turn/start.
-	providerInputProofMessage = "Codex provider input acknowledged"
+	providerInputProofMessage = "OpenCode provider input acknowledged"
 	// providerInputProofEventKey names the structured event field rather than deriving it from payload.
 	// providerInputProofEventKey задаёт имя структурированного event field, не получая его из payload.
 	providerInputProofEventKey = "event"
