@@ -58,6 +58,20 @@ function nodeIcon(type: RunNode["type"]): Component {
       :position="Position.Left"
       aria-hidden="true"
     />
+    <Handle
+      id="return-source"
+      class="run-node__handle"
+      type="source"
+      :position="Position.Left"
+      aria-hidden="true"
+    />
+    <Handle
+      id="return-target"
+      class="run-node__handle"
+      type="target"
+      :position="Position.Right"
+      aria-hidden="true"
+    />
     <span class="run-node__heading">
       <component
         :is="nodeIcon(data.node.type)"
@@ -75,6 +89,9 @@ function nodeIcon(type: RunNode["type"]): Component {
     </span>
     <strong class="run-node__title" :title="data.node.displayName">
       {{ data.node.displayName }}
+      <span v-if="data.continuationTurn" class="run-node__turn">
+        · {{ t("runs.graphEmployeeTurn", { turn: data.continuationTurn }) }}
+      </span>
     </strong>
     <span
       class="run-node__role"
@@ -204,6 +221,10 @@ function nodeIcon(type: RunNode["type"]): Component {
   white-space: normal;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+.run-node__turn {
+  color: var(--muted);
+  font-weight: 400;
 }
 .run-node__type {
   flex: none;

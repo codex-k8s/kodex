@@ -80,14 +80,27 @@ export function layoutRunGraph(
     });
   }
   for (const edge of [...validEdges].sort(compareEdges)) {
-    // Ответ дочернего запуска возвращается к предку: это обратная связь,
-    // которая не должна переставлять основную цепочку делегирования и повторов.
-    if (edge.type === "CALLBACK_TO") continue;
+    // Для раскладки возврат направлен от родителя к исполнителю. Dagre
+    // выделяет ему отдельный локальный маршрут рядом с делегированием;
+    // при отрисовке точки разворачиваются, исходная связь не изменяется.
+    const returning = edge.type === "CALLBACK_TO";
     graph.setEdge(
-      edge.sourceNodeRef,
-      edge.targetNodeRef,
-      { weight: edge.type === "RETRY_OF" ? 2 : 4 },
+      returning ? edge.targetNodeRef : edge.sourceNodeRef,
+      returning ? edge.sourceNodeRef : edge.targetNodeRef,
+      { weight: returning ? 1 : edge.type === "RETRY_OF" ? 2 : 4 },
       edge.ref,
+    );
+  }
+
+  for (const [child, continuation] of completedReturnContinuations(
+    nodeByRef,
+    validEdges,
+  )) {
+    graph.setEdge(
+      child,
+      continuation,
+      { weight: 2 },
+      `return-order:${child}:${continuation}`,
     );
   }
 
@@ -103,39 +116,18 @@ export function layoutRunGraph(
       y: position.y - runGraphNodeHeight / 2,
     };
   });
-  const positionByRef = new Map(
-    positioned.map((item) => [item.node.ref, item]),
-  );
-  const callbackLanes = new Map(
-    validEdges
-      .filter((edge) => edge.type === "CALLBACK_TO")
-      .sort(compareEdges)
-      .map((edge, index) => [edge.ref, index]),
-  );
   const positionedEdges = validEdges.map((edge) => {
-    if (edge.type === "CALLBACK_TO") {
-      const source = positionByRef.get(edge.sourceNodeRef);
-      const target = positionByRef.get(edge.targetNodeRef);
-      return {
-        edge,
-        ...(source && target
-          ? callbackRunEdgeGeometry(
-              source,
-              target,
-              positioned,
-              callbackLanes.get(edge.ref) ?? 0,
-            )
-          : {}),
-      };
-    }
-    const points = graph.edge({
-      v: edge.sourceNodeRef,
-      w: edge.targetNodeRef,
+    const returning = edge.type === "CALLBACK_TO";
+    const route = graph.edge({
+      v: returning ? edge.targetNodeRef : edge.sourceNodeRef,
+      w: returning ? edge.sourceNodeRef : edge.targetNodeRef,
       name: edge.ref,
     }).points;
+    const points = returning && route ? [...route].reverse() : route;
     return {
       edge,
       path: points ? smoothRunEdgePath(points) : undefined,
+      bounds: points?.length ? pointBounds(points) : undefined,
     };
   });
   const bounds = runGraphContentBounds({
@@ -151,65 +143,61 @@ export function layoutRunGraph(
   };
 }
 
-export function callbackRunEdgePath(
-  source: Pick<PositionedRunNode, "x" | "y">,
-  target: Pick<PositionedRunNode, "x" | "y">,
-  nodes: ReadonlyArray<Pick<PositionedRunNode, "x" | "y">>,
-  lane = 0,
-): string {
-  return callbackRunEdgeGeometry(source, target, nodes, lane).path;
+// Завершённый ребёнок располагается раньше следующего хода того же
+// родителя только при подтверждённой временной последовательности.
+// Это ограничение раскладки, не новая связь или разрешение на исполнение.
+function completedReturnContinuations(
+  nodes: ReadonlyMap<string, RunNode>,
+  edges: RunEdge[],
+): Array<[string, string]> {
+  const continuations = new Map<string, RunNode[]>();
+  for (const edge of edges) {
+    if (edge.type !== "CONTINUES") continue;
+    const previous = nodes.get(edge.sourceNodeRef);
+    const next = nodes.get(edge.targetNodeRef);
+    if (
+      !previous ||
+      !next ||
+      previous.type !== "AGENT_EXECUTION" ||
+      next.type !== "AGENT_EXECUTION" ||
+      !previous.agentRef ||
+      previous.agentRef !== next.agentRef ||
+      previous.runRef !== next.runRef ||
+      next.parentNodeRef !== previous.ref ||
+      !next.startedAt
+    )
+      continue;
+    const items = continuations.get(previous.ref) ?? [];
+    items.push(next);
+    continuations.set(previous.ref, items);
+  }
+  const result: Array<[string, string]> = [];
+  for (const edge of edges) {
+    if (edge.type !== "CALLBACK_TO") continue;
+    const child = nodes.get(edge.sourceNodeRef);
+    if (!child?.finishedAt) continue;
+    const finishedAt = Date.parse(child.finishedAt);
+    const next = continuations
+      .get(edge.targetNodeRef)
+      ?.filter((item) => Date.parse(item.startedAt ?? "") >= finishedAt)
+      .sort(compareNodes)[0];
+    if (next && next.ref !== child.ref) result.push([child.ref, next.ref]);
+  }
+  return result.sort(
+    ([a, b], [c, d]) => a.localeCompare(c) || b.localeCompare(d),
+  );
 }
 
-function callbackRunEdgeGeometry(
-  source: Pick<PositionedRunNode, "x" | "y">,
-  target: Pick<PositionedRunNode, "x" | "y">,
-  nodes: ReadonlyArray<Pick<PositionedRunNode, "x" | "y">>,
-  lane: number,
-): { path: string; bounds: RunGraphBounds } {
-  // Боковые участки остаются в межколоночном зазоре, а обратная дуга
-  // проходит над всеми карточками, включая продолжение в колонке исполнителя.
-  const bend = horizontalGap / (target.x > source.x ? 3 : 2);
-  // Горизонтальный вынос ограничен зазором между колонками, но радиус
-  // верхней дуги независим от него: узкий зазор не сжимает обратную связь.
-  const radius = runGraphNodeHeight * 0.75;
-  const corridorY =
-    Math.min(source.y, target.y, ...nodes.map((node) => node.y)) -
-    radius * 2 -
-    lane * 32;
-  const sourceX = source.x + runGraphNodeWidth;
-  const sourceY = source.y + runGraphNodeHeight / 2;
-  const targetX = target.x;
-  const targetY = target.y + runGraphNodeHeight / 2;
-  const exitX = sourceX + bend;
-  const entryX = targetX - bend;
-  const shoulderY = corridorY + radius;
-
-  const path = [
-    ["M", sourceX, sourceY],
-    ["C", exitX, sourceY, exitX, shoulderY + radius, exitX, shoulderY],
-    [
-      "C",
-      exitX,
-      corridorY - radius,
-      entryX,
-      corridorY - radius,
-      entryX,
-      shoulderY,
-    ],
-    ["C", entryX, targetY - radius, entryX, targetY, targetX, targetY],
-  ]
-    .map((segment) => segment.join(" "))
-    .join(" ");
-  const x = Math.min(sourceX, targetX, exitX, entryX);
-  const y = corridorY - radius / 2;
+function pointBounds(
+  points: ReadonlyArray<{ x: number; y: number }>,
+): RunGraphBounds {
+  const x = Math.min(...points.map((point) => point.x));
+  const y = Math.min(...points.map((point) => point.y));
   return {
-    path,
-    bounds: {
-      x,
-      y,
-      width: Math.max(sourceX, targetX, exitX, entryX) - x,
-      height: Math.max(sourceY, targetY) - y,
-    },
+    x,
+    y,
+    width: Math.max(...points.map((point) => point.x)) - x,
+    height: Math.max(...points.map((point) => point.y)) - y,
   };
 }
 

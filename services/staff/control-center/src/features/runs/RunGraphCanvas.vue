@@ -11,6 +11,7 @@ import {
   Bot,
   ChevronDown,
   Focus,
+  History,
   ListTree,
   Maximize2,
   Minus,
@@ -28,6 +29,7 @@ import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
 import "@vue-flow/minimap/dist/style.css";
 
+import { runGraphHistoryRoots } from "@/features/runs/run-session-graph";
 import RunGraphEdge from "@/features/runs/RunGraphEdge.vue";
 import RunGraphNode from "@/features/runs/RunGraphNode.vue";
 import { runNodePresentationKey } from "@/features/runs/run-owner";
@@ -37,6 +39,7 @@ import {
   runGraphFitTransform,
   runGraphInitialFitOptions,
   runGraphRetryAttempts,
+  runGraphContinuationTurns,
   runGraphMaximumZoom,
   runGraphMinimumZoom,
   type RunGraphNodeData,
@@ -85,6 +88,25 @@ const flowId = "run-session-graph";
 const viewMode = ref<"graph" | "outline">("graph");
 const explicitViewMode = ref(false);
 const legendExpanded = ref(false);
+const historyExpanded = ref(false);
+const historyRoots = computed(() =>
+  runGraphHistoryRoots(props.nodes, props.edges),
+);
+const visibleGraph = computed(() => {
+  const nodes = props.nodes.filter(
+    (node) =>
+      historyExpanded.value ||
+      node.ref === props.selectedRef ||
+      !historyRoots.value.has(node.ref),
+  );
+  const refs = new Set(nodes.map((node) => node.ref));
+  return {
+    nodes,
+    edges: props.edges.filter(
+      (edge) => refs.has(edge.sourceNodeRef) && refs.has(edge.targetNodeRef),
+    ),
+  };
+});
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
@@ -120,22 +142,31 @@ const legendStates = computed(() =>
     ] as const
   ).filter((state) => props.nodes.some((node) => node.state === state)),
 );
-const layout = computed(() => layoutRunGraph(props.nodes, props.edges));
+const layout = computed(() =>
+  layoutRunGraph(visibleGraph.value.nodes, visibleGraph.value.edges),
+);
 const retryAttempts = computed(() =>
   runGraphRetryAttempts(props.nodes, props.edges),
+);
+const continuationTurns = computed(() =>
+  runGraphContinuationTurns(props.nodes, props.edges),
 );
 const { dimensions, getViewport, onInit, setViewport, zoomIn, zoomOut } =
   useVueFlow(flowId);
 
 const flowElements = computed(() =>
-  createRunGraphFlowElements(props.nodes, props.edges, {
-    selectedRef: props.selectedRef,
-    futureRefs: futureRefs.value,
-    activeRefs: activeRefs.value,
-    executionLabels: props.executionLabels,
-    nodeAccessibleLabel,
-    edgeAccessibleLabel,
-  }),
+  createRunGraphFlowElements(
+    visibleGraph.value.nodes,
+    visibleGraph.value.edges,
+    {
+      selectedRef: props.selectedRef,
+      futureRefs: futureRefs.value,
+      activeRefs: activeRefs.value,
+      executionLabels: props.executionLabels,
+      nodeAccessibleLabel,
+      edgeAccessibleLabel,
+    },
+  ),
 );
 const rootIdentity = computed(
   () =>
@@ -234,10 +265,10 @@ const outlineItems = computed(() => {
     ]);
   }
 
-  return layout.value.nodes.map((item) => ({
-    node: item.node,
-    depth: Math.min(depth.get(item.node.ref) ?? 0, 4),
-    incoming: incoming.get(item.node.ref) ?? [],
+  return [...props.nodes].sort(compareNodes).map((node) => ({
+    node,
+    depth: Math.min(depth.get(node.ref) ?? 0, 4),
+    incoming: incoming.get(node.ref) ?? [],
   }));
 });
 
@@ -298,8 +329,8 @@ async function fit(
         ? runGraphFitViewOptions(dimensions.value.width, props.compact)
         : runGraphInitialFitOptions(
             dimensions.value.width,
-            props.nodes,
-            props.edges,
+            visibleGraph.value.nodes,
+            visibleGraph.value.edges,
             props.selectedRef,
             props.compact,
             dimensions.value.height,
@@ -475,6 +506,11 @@ function nodeAccessibleLabel(node: RunNode, retryAttempt?: number): string {
       ? t("runs.graphRunAttempt", { attempt: retryAttempt })
       : nodeKindLabel(node),
     node.displayName,
+    continuationTurns.value.has(node.ref)
+      ? t("runs.graphEmployeeTurn", {
+          turn: continuationTurns.value.get(node.ref),
+        })
+      : "",
     nodeRoleLabel(node),
     t(`states.${node.state}`),
   ].join(" · ");
@@ -581,6 +617,21 @@ function compareNodes(left: RunNode, right: RunNode): number {
         {{ $t("runs.graphNodes", { count: nodes.length }) }} ·
         {{ $t("runs.graphEdges", { count: edges.length }) }}
       </span>
+      <button
+        v-if="historyRoots.size"
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.graphRunHistory', { count: historyRoots.size })"
+        :title="$t('runs.graphRunHistory', { count: historyRoots.size })"
+        :aria-pressed="historyExpanded"
+        :disabled="viewMode !== 'graph'"
+        @click="
+          historyExpanded = !historyExpanded;
+          fit(true);
+        "
+      >
+        <History :size="17" aria-hidden="true" />
+      </button>
       <span class="graph-toolbar__separator" aria-hidden="true" />
       <button
         class="icon-button"
@@ -715,7 +766,17 @@ function compareNodes(left: RunNode, right: RunNode): number {
               :size="17"
               aria-hidden="true"
             />
-            <strong>{{ item.node.displayName }}</strong>
+            <strong
+              >{{ item.node.displayName
+              }}<template v-if="continuationTurns.has(item.node.ref)">
+                ·
+                {{
+                  $t("runs.graphEmployeeTurn", {
+                    turn: continuationTurns.get(item.node.ref),
+                  })
+                }}</template
+              ></strong
+            >
           </span>
           <small>
             {{
