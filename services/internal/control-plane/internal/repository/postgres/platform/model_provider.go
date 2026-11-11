@@ -26,42 +26,68 @@ var (
 	queryModelProviderDisableOtherDefinitions string
 )
 
-// ConfigureModelProvider installs an optional immutable Git-owned descriptor before bootstrap/workers.
-// A nonempty default model explicitly selects its profile for new roles; existing agent choices remain intact.
-// ConfigureModelProvider назначает optional immutable Git-owned descriptor до bootstrap/workers.
-// Непустая default model явно выбирает profile для новых ролей; существующий выбор не переписывается.
+// ConfigureModelProvider constructs an explicit single-route catalog for programmatic callers; installation files use only the catalog decoder.
+// ConfigureModelProvider создаёт явный каталог одного маршрута для программных callers; файлы установки разбираются только catalog decoder.
 func (repository *Repository) ConfigureModelProvider(config runtimecontract.ModelProviderConfiguration, defaultModel string) error {
-	if config.Validate() != nil {
-		return runtimecontract.ErrModelProviderConfiguration
-	}
-	if defaultModel != "" {
-		if _, found := config.Model(defaultModel); !found {
-			return runtimecontract.ErrModelProviderConfiguration
-		}
-	}
-	cloned, err := config.Clone()
+	return repository.ConfigureModelProviderCatalog(runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: config.SourceRevision, DefaultProvider: config.DefinitionKey(), DefaultModel: defaultModel, Providers: []runtimecontract.ModelProviderConfiguration{config}})
+}
+
+// ConfigureModelProviderCatalog installs a detached validated immutable catalog before bootstrap and workers, without changing existing agent selections.
+// ConfigureModelProviderCatalog назначает проверенный immutable каталог до bootstrap и workers без изменения выбора существующих агентов.
+func (repository *Repository) ConfigureModelProviderCatalog(catalog runtimecontract.ModelProviderCatalog) error {
+	cloned, err := catalog.Clone()
 	if err != nil {
 		return err
 	}
-	config = cloned
-	repository.modelProvider, repository.modelProviderDefaultModel = &config, defaultModel
+	repository.modelProviderCatalog = &cloned
 	return nil
+}
+
+// configuredModelProvider resolves one exact active definition with no default fallback.
+// configuredModelProvider разрешает точный активный definition без default fallback.
+func (repository *Repository) configuredModelProvider(key string) *runtimecontract.ModelProviderConfiguration {
+	if repository.modelProviderCatalog == nil {
+		return nil
+	}
+	provider, _ := repository.modelProviderCatalog.Provider(key)
+	return provider
+}
+
+// defaultModelProvider resolves only the explicit installation default; it does not choose a route from model spelling.
+// defaultModelProvider разрешает только явный default установки, не выбирая маршрут по имени модели.
+func (repository *Repository) defaultModelProvider() *runtimecontract.ModelProviderConfiguration {
+	if repository.modelProviderCatalog == nil {
+		return nil
+	}
+	return repository.configuredModelProvider(repository.modelProviderCatalog.DefaultProvider)
+}
+
+// modelProviderDefinitionKeys returns a detached closed installation set for task eligibility and expiry SQL.
+// modelProviderDefinitionKeys возвращает отдельный закрытый набор установки для eligibility и expiry SQL.
+func (repository *Repository) modelProviderDefinitionKeys() []string {
+	keys := []string{}
+	if repository.modelProviderCatalog != nil {
+		for _, provider := range repository.modelProviderCatalog.Providers {
+			keys = append(keys, provider.DefinitionKey())
+		}
+	}
+	return keys
 }
 
 // defaultRuntimeProfileKey selects a configured default only when the operator explicitly supplied it.
 // defaultRuntimeProfileKey выбирает configured default только по явному указанию владельца установки.
 func (repository *Repository) defaultRuntimeProfileKey() string {
-	if repository.modelProvider != nil && repository.modelProviderDefaultModel != "" {
-		return modelProviderProfileKey(*repository.modelProvider, repository.modelProviderDefaultModel)
+	if provider := repository.defaultModelProvider(); provider != nil {
+		return modelProviderProfileKey(*provider, repository.modelProviderCatalog.DefaultModel)
 	}
 	return defaultRuntimeKey
 }
 
-// defaultProviderDefinitionKey keeps bootstrap credential affinity aligned with the explicit default engine.
-// defaultProviderDefinitionKey сохраняет affinity bootstrap credential к явно выбранному default engine.
+// defaultProviderDefinitionKey keeps bootstrap credential affinity aligned with the explicit installation default.
+// defaultProviderDefinitionKey сохраняет affinity bootstrap credential к явному default установки.
 func (repository *Repository) defaultProviderDefinitionKey() string {
-	if repository.modelProvider != nil && repository.modelProviderDefaultModel != "" {
-		return repository.modelProvider.DefinitionKey()
+	if provider := repository.defaultModelProvider(); provider != nil {
+		return provider.DefinitionKey()
 	}
 	return repository.defaultRuntimeProvider
 }
@@ -81,10 +107,11 @@ func modelProviderProfileKey(config runtimecontract.ModelProviderConfiguration, 
 // runtimeProviderSelection разрешает только registered engine и exact allowlisted model действующей конфигурации.
 // Возвращает копию descriptor для immutable snapshot без credential values.
 func (repository *Repository) runtimeProviderSelection(definitionKey, model string) (string, *runtimecontract.ModelProviderConfiguration, error) {
-	if repository.modelProvider == nil || repository.modelProvider.DefinitionKey() != definitionKey {
+	selected := repository.configuredModelProvider(definitionKey)
+	if selected == nil {
 		return "", nil, errs.ErrConflict
 	}
-	config := *repository.modelProvider
+	config := *selected
 	if config.Validate() != nil {
 		return "", nil, errs.ErrConflict
 	}
@@ -106,17 +133,24 @@ func (repository *Repository) runtimeProviderSelection(definitionKey, model stri
 // reconcileModelProvider работает под installation lock, не присваивает чужие definitions и не меняет endpoint существующих credentials.
 // Отключение файла закрывает definition; immutable history и UI-owned role configurations остаются сохранёнными.
 func (repository *Repository) reconcileModelProvider(ctx context.Context, tx pgx.Tx) error {
-	selectedKey := ""
-	if repository.modelProvider != nil {
-		selectedKey = repository.modelProvider.DefinitionKey()
-	}
-	if _, err := tx.Exec(ctx, queryModelProviderDisableOtherDefinitions, pgx.StrictNamedArgs{"definition_key": selectedKey}); err != nil {
+	if _, err := tx.Exec(ctx, queryModelProviderDisableOtherDefinitions, pgx.StrictNamedArgs{"definition_keys": repository.modelProviderDefinitionKeys()}); err != nil {
 		return bootstrapFailure("reconcile model provider eligibility", err)
 	}
-	if repository.modelProvider == nil {
+	if repository.modelProviderCatalog == nil {
 		return nil
 	}
-	config := *repository.modelProvider
+	for _, config := range repository.modelProviderCatalog.Providers {
+		if err := repository.registerModelProvider(ctx, tx, config); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// registerModelProvider materializes one exact Git-owned definition and immutable model profiles inside the installation transaction.
+// registerModelProvider материализует один Git-owned definition и immutable model profiles в транзакции установки.
+func (repository *Repository) registerModelProvider(ctx context.Context, tx pgx.Tx, config runtimecontract.ModelProviderConfiguration) error {
+	selectedKey := config.DefinitionKey()
 	digest, err := config.Digest()
 	if err != nil {
 		return err

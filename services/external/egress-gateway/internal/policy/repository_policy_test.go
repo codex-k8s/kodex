@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -74,7 +75,24 @@ func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		t.Fatal("machine policy schema contains trailing data")
 	}
-	resolved, err := compiled.Resolve(nil)
+	resolved, err := compiled.Resolve(&jsonschema.ResolveOptions{Loader: func(uri *url.URL) (*jsonschema.Schema, error) {
+		paths := map[string]string{"urn:kodex:contract:model-provider-catalog:v1": "contracts/model-provider/v1/catalog.schema.json", "urn:kodex:contract:runtime:agent-runner-input:v10": "contracts/runtime-controller/v10/agent-runner-input.schema.json"}
+		path, ok := paths[uri.String()]
+		if !ok {
+			return nil, errors.New("unregistered schema reference")
+		}
+		raw, err := os.ReadFile(filepath.Join(root, path))
+		if err != nil {
+			return nil, err
+		}
+		var dependency jsonschema.Schema
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&dependency); err != nil {
+			return nil, err
+		}
+		return &dependency, nil
+	}})
 	if err != nil {
 		t.Fatalf("machine policy schema cannot be resolved: %v", err)
 	}

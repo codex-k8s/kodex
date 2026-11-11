@@ -79,17 +79,14 @@ func (repository *Repository) ClaimProviderModelCatalogTasks(ctx context.Context
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	gatewayDefinition := ""
-	if repository.modelProvider != nil {
-		gatewayDefinition = repository.modelProvider.DefinitionKey()
-	}
-	if _, err := tx.Exec(ctx, queryModelCatalogExpireTasks, gatewayDefinition); err != nil {
+	gatewayDefinitions := repository.modelProviderDefinitionKeys()
+	if _, err := tx.Exec(ctx, queryModelCatalogExpireTasks, gatewayDefinitions); err != nil {
 		return nil, errs.ErrUnavailable
 	}
 	if err := repository.expireProviderVerifications(ctx, tx, "", true); err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit, gatewayDefinition)
+	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit, gatewayDefinitions)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}

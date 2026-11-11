@@ -161,7 +161,7 @@ func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, 
 	if err := tx.QueryRow(ctx, queryProviderAuthorizationDefinition, pgx.StrictNamedArgs{"account_id": accountID}).Scan(&result.DefinitionKey); err != nil {
 		return result, errs.ErrConflict
 	}
-	if repository.modelProvider == nil || result.DefinitionKey != repository.modelProvider.DefinitionKey() {
+	if repository.configuredModelProvider(result.DefinitionKey) == nil {
 		return result, errs.ErrInvalid
 	}
 	var storedDigest, preparation string

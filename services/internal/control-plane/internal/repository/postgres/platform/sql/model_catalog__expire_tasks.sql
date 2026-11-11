@@ -4,7 +4,7 @@ WITH expired AS (
     JOIN control_plane.provider_accounts account ON account.id = task.provider_account_id
     WHERE task.state IN ('PENDING', 'CLAIMED')
       AND ((task.expires_at IS NOT NULL AND task.expires_at <= clock_timestamp())
-           OR $1::text = '' OR account.definition_key <> $1::text OR task.authorization_method <> 'API_KEY'
+           OR NOT (account.definition_key = ANY($1::text[])) OR task.authorization_method <> 'API_KEY'
            OR NOT account.enabled OR account.state <> 'AUTHORIZED'
            OR account.version <> task.account_version
            OR account.current_credential_revision_id IS DISTINCT FROM task.provider_credential_revision_id)

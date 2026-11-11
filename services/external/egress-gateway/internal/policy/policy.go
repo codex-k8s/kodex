@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -25,7 +26,7 @@ import (
 const (
 	APIVersion       = "kodex.io/v1alpha1"
 	Kind             = "EgressGatewayPolicy"
-	MaximumFileBytes = 64 << 10
+	MaximumFileBytes = runtimecontract.MaximumModelProviderCatalogBytes + (64 << 10)
 	STTProfileName   = "openai-stt"
 	STTWorkload      = "stt-tts-service"
 	STTOperation     = "openai.transcription"
@@ -50,11 +51,11 @@ type Metadata struct {
 // Spec binds DNS rules, runtime limits, destinations, and optional profiles.
 // Spec задаёт DNS, лимиты выполнения, адреса назначения и профили.
 type Spec struct {
-	ModelProvider *runtimecontract.ModelProviderConfiguration `json:"modelProvider,omitempty"`
-	DNS           DNSConfig                                   `json:"dns"`
-	Limits        Limits                                      `json:"limits"`
-	Destinations  []Destination                               `json:"destinations"`
-	Profiles      []Profile                                   `json:"profiles,omitempty"`
+	ModelProviderCatalog *runtimecontract.ModelProviderCatalog `json:"modelProviderCatalog,omitempty"`
+	DNS                  DNSConfig                             `json:"dns"`
+	Limits               Limits                                `json:"limits"`
+	Destinations         []Destination                         `json:"destinations"`
+	Profiles             []Profile                             `json:"profiles,omitempty"`
 }
 
 // Profile binds a separate listener to a closed workload and operation.
@@ -295,21 +296,27 @@ func validate(document *Document) error {
 	sort.Slice(document.Spec.Destinations, func(left, right int) bool {
 		return document.Spec.Destinations[left].Hostname < document.Spec.Destinations[right].Hostname
 	})
-	if document.Spec.ModelProvider != nil {
-		route, err := document.Spec.ModelProvider.Route()
-		if err != nil {
-			return errors.New("policy model provider is invalid")
+	if catalog := document.Spec.ModelProviderCatalog; catalog != nil {
+		if catalog.Validate() != nil {
+			return errors.New("policy model provider catalog is invalid")
 		}
-		found := false
-		for _, destination := range document.Spec.Destinations {
-			if destination.Port == 443 && route.AllowsHost(destination.Hostname) {
-				found = true
+		for _, provider := range catalog.Providers {
+			route, err := provider.Route()
+			if err != nil {
+				return errors.New("policy model provider is invalid")
+			}
+			found := false
+			for _, destination := range document.Spec.Destinations {
+				if destination.Port == 443 && route.AllowsHost(destination.Hostname) {
+					found = true
+				}
+			}
+			if !found {
+				return errors.New("policy model provider destination is missing")
 			}
 		}
-		if !found {
-			return errors.New("policy model provider destination is missing")
-		}
 	}
+
 	if len(document.Spec.Profiles) > 1 {
 		return errors.New("policy profiles are invalid")
 	}
@@ -374,8 +381,8 @@ func canonicalJSON(document Document) ([]byte, error) {
 		}
 		canonical["spec"].(map[string]any)["profiles"] = profiles
 	}
-	if document.Spec.ModelProvider != nil {
-		canonical["spec"].(map[string]any)["modelProvider"] = document.Spec.ModelProvider
+	if document.Spec.ModelProviderCatalog != nil {
+		canonical["spec"].(map[string]any)["modelProviderCatalog"] = document.Spec.ModelProviderCatalog
 	}
 	return json.Marshal(canonical)
 }
@@ -476,15 +483,34 @@ func inspectJSONValue(decoder *json.Decoder) error {
 	return nil
 }
 
-// ModelProviderRoute returns a copy of the explicitly approved literal route for one exact host.
-// ModelProviderRoute возвращает копию явно одобренного literal route одного exact host.
+// ModelProviderRoute returns static broker transport pins for an exact host; catalog validation requires every route on that host to share those pins.
+// This lookup grants no runtime authority: signed execution routes use MatchesModelProviderRoute instead.
+// ModelProviderRoute возвращает static broker transport pins точного host; все маршруты этого host обязаны иметь одинаковые pins.
+// Этот поиск не выдаёт runtime authority: подписанные execution routes проверяются MatchesModelProviderRoute.
 func (active *Active) ModelProviderRoute(host string) *runtimecontract.ModelProviderRoute {
-	if active.profile != nil || active.document.Spec.ModelProvider == nil {
+	if active.profile != nil || active.document.Spec.ModelProviderCatalog == nil || !active.Allows(host, 443) {
 		return nil
 	}
-	route, err := active.document.Spec.ModelProvider.Route()
-	if err != nil || !route.AllowsHost(host) || !active.Allows(host, 443) {
-		return nil
+	for _, provider := range active.document.Spec.ModelProviderCatalog.Providers {
+		route, err := provider.Route()
+		if err == nil && route.AllowsHost(host) {
+			return &route
+		}
 	}
-	return &route
+	return nil
+}
+
+// MatchesModelProviderRoute binds the complete signed descriptor to an installed route, including API, base path and exact ordered address pins.
+// MatchesModelProviderRoute связывает полный подписанный descriptor с установленным маршрутом, включая API, base path и точный порядок address pins.
+func (active *Active) MatchesModelProviderRoute(host string, claim *runtimecontract.ModelProviderRoute) bool {
+	if claim == nil || active.profile != nil || active.document.Spec.ModelProviderCatalog == nil || !active.Allows(host, 443) || !claim.AllowsHost(host) {
+		return false
+	}
+	for _, provider := range active.document.Spec.ModelProviderCatalog.Providers {
+		route, err := provider.Route()
+		if err == nil && route.ConfigurationSHA256 == claim.ConfigurationSHA256 && route.BaseURL == claim.BaseURL && route.API == claim.API && slices.Equal(route.AddressCIDRs, claim.AddressCIDRs) {
+			return true
+		}
+	}
+	return false
 }

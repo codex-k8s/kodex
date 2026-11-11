@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.2
-updated: 2026-11-11
+version: 2.4.3
+updated: 2026-11-12
 ---
 
 # Чистое развертывание Kodex
@@ -92,6 +92,18 @@ authority, но направляет raw TLS tunnel на этот внутрен
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
 
+### Подготовка полного runner без изменения кластера
+
+`tools/dev/build-local-runner.sh --build-only --image-profile full
+--source-root <clean-exact-worktree> --state-directory <private-directory>`
+собирает OCI и проверяет exact source/binary provenance тем же verifier, что
+обычная доставка. Режим требует существующий builder `kodex-local-dev`,
+не пересоздаёт builder/network, не импортирует образ в Kubernetes и не записывает
+`agent-runner-image` как установленный pin. Manifest и provenance остаются в
+private cache; последующий import использует прежние exact-manifest guards.
+Полный runner ещё не является допущенным RoleImage: supply-chain admission,
+материализация среды, pod readback и реальный workspace path проверяются отдельно.
+
 ### Локальный hot-reload
 
 `dev.sh up` добавляет к web-only render SeaweedFS release 4.41 в
@@ -101,15 +113,28 @@ deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
 не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
 control-plane; повторный apply выполняет exact Secret/job/readiness readback.
 
-Перед первым `dev.sh up` оператор передаёт утверждённую конфигурацию OpenCode
+Перед первым `dev.sh up` оператор передаёт утверждённый каталог OpenCode
 и приватный regular файл API key (0600, текущий владелец, без symlink/hardlink):
 
 ```bash
-KODEX_MODEL_PROVIDER_CONFIGURATION_FILE=/private/provider.json \
+KODEX_MODEL_PROVIDER_CONFIGURATION_FILE=/private/providers.json \
 KODEX_MODEL_PROVIDER_API_KEY_FILE=/private/provider-api-key \
-KODEX_MODEL_PROVIDER_DEFAULT_MODEL=approved-model \
 ./dev.sh up --kubeconfig /private/kubeconfig --context approved-local
 ```
+
+Файл имеет единственный формат `kodex.model-provider-catalog/v1` по
+`contracts/model-provider/v1/catalog.schema.json`: `managed_by=git`, одна
+`source_revision`, явные `default_provider`/`default_model` и от 1 до 16
+`providers`. Каждый элемент — закрытый `kodex.model-provider/v1` с той же
+source revision. Default provider — точный `opencode-<provider_id>`, а не имя
+модели. Одинаковый alias у разных providers допустим; общий hostname требует
+одинаковых address pins. Отдельный старый descriptor вместо каталога отвергается.
+Флаг `--model-provider-default-model` и одноимённый env, если заданы, служат только
+проверкой совпадения с каталогом и не переопределяют его. Первичный API key
+принадлежит исключительно default provider; остальные accounts создаются через
+штатные UI/API, с собственными credentials и проверкой доступности моделей.
+Изменение каталога требует drain и остановки старых consumers перед применением
+совместимого immutable render; hot reload маршрутов не поддерживается.
 
 Локальный bootstrap использует тот же `tools/install/model-provider.py`, что
 `install.sh`: проверяет exact provider/model/endpoint, создаёт typed credential

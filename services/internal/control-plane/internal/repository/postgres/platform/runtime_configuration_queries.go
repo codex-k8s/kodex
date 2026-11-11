@@ -531,7 +531,7 @@ func (repository *Repository) scanAgentRuntimeConfigurationView(scanner rowScann
 		view.DraftOverlay = &draft
 	}
 	view.SafeEffectiveConfig, err = runtimecontract.RenderSafeEffectiveConfig(runtimecontract.SafeEffectiveConfigInput{
-		ModelProvider: repository.modelProvider,
+		ModelProvider: repository.configuredModelProvider(view.Configuration.Provider),
 		Model:         view.Configuration.Model, Provider: view.Configuration.Provider, RuntimeProfileRef: view.Configuration.RuntimeProfileRef,
 		RuntimeConfigRef: view.Configuration.Ref, RuntimeConfigVersion: view.Configuration.Version, RuntimeConfigDigest: view.Configuration.Digest,
 		ProviderPolicyRef: view.Configuration.ProviderPolicy.Ref, ProviderPolicyVersion: view.Configuration.ProviderPolicy.Version,

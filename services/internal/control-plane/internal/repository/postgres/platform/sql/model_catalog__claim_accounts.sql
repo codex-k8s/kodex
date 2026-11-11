@@ -7,7 +7,7 @@ FROM control_plane.provider_accounts account
 JOIN control_plane.provider_credential_revisions credential ON credential.id = account.current_credential_revision_id
   AND credential.provider_account_id = account.id AND credential.organization_id = account.organization_id
 JOIN control_plane.provider_definitions definition ON definition.stable_key = account.definition_key
-WHERE $2::text <> '' AND account.definition_key = $2::text
+WHERE account.definition_key = ANY($2::text[])
   AND NOT EXISTS (SELECT 1 FROM control_plane.provider_authorization_attempts attempt
       WHERE attempt.provider_account_id = account.id AND attempt.organization_id = account.organization_id
         AND attempt.state = 'AUTHORIZED' AND attempt.method <> 'API_KEY')

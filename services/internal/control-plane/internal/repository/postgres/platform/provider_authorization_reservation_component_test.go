@@ -119,7 +119,7 @@ func testProviderAuthorizationReservation(t *testing.T, ctx context.Context, rep
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-provider-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Reserved API account"}})
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-provider-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.defaultModelProvider().DefinitionKey(), Name: "Reserved API account"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create reserved account: %v", err)
 	}
@@ -170,7 +170,7 @@ func testProviderAuthorizationReservation(t *testing.T, ctx context.Context, rep
 	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "API_KEY", strings.Repeat("8", 64)); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("deleted reservation was revived: %v", err)
 	}
-	expiring, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-expiry-account"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Expired reservation"}})
+	expiring, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-expiry-account"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.defaultModelProvider().DefinitionKey(), Name: "Expired reservation"}})
 	if err != nil || expiring.ProviderAccount == nil {
 		t.Fatalf("expiry account: %v", err)
 	}

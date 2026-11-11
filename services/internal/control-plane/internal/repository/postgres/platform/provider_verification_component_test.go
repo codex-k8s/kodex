@@ -31,7 +31,7 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 		t.Fatal(err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "verification-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Verification fixture"}})
+		Mutation: value.Mutation{IdempotencyKey: "verification-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.defaultModelProvider().DefinitionKey(), Name: "Verification fixture"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create verification account: %v", err)
 	}
@@ -48,10 +48,10 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 	seedObservedCatalogFixture(t, ctx, repository)
 	verify := command.Command{Kind: command.VerifyProviderAuthorization, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "verification-exact", ExpectedVersion: &account.Version}, Payload: command.ProviderAccountInput{AccountRef: account.Ref}}
-	configured := repository.modelProvider
-	repository.modelProvider = nil
+	configured := repository.modelProviderCatalog
+	repository.modelProviderCatalog = nil
 	_, unavailableErr := service.Execute(ctx, verify)
-	repository.modelProvider = configured
+	repository.modelProviderCatalog = configured
 	if !errors.Is(unavailableErr, errs.ErrConflict) {
 		t.Fatal("unconfigured route accepted verification", unavailableErr)
 	}

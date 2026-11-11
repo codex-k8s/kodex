@@ -108,7 +108,7 @@ func (repository *Repository) hydrateProviderVerifications(ctx context.Context, 
 // добавляет current pinned attempt до отмены прежней catalog work. Недопустимая вставка даёт
 // Conflict. Не запускает provider probe и не фиксирует caller transaction.
 func (repository *Repository) startProviderVerification(ctx context.Context, tx pgx.Tx, current scope, accountID string) error {
-	if repository.modelProvider == nil {
+	if repository.modelProviderCatalog == nil {
 		return errs.ErrConflict
 	}
 	if err := repository.expireProviderVerifications(ctx, tx, accountID, false); err != nil {
@@ -120,7 +120,7 @@ func (repository *Repository) startProviderVerification(ctx context.Context, tx 
 	}
 	var id string
 	err = tx.QueryRow(ctx, queryProviderVerificationStart, pgx.StrictNamedArgs{
-		"provider_definition": repository.modelProvider.DefinitionKey(), "verification_ref": ref, "organization_id": current.organizationID, "account_id": accountID, "actor_id": current.actorID,
+		"provider_definitions": repository.modelProviderDefinitionKeys(), "verification_ref": ref, "organization_id": current.organizationID, "account_id": accountID, "actor_id": current.actorID,
 	}).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrConflict

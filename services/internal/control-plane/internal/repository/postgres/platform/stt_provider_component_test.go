@@ -25,7 +25,7 @@ var querySTTProviderFixtureActivate string
 // createSTTProviderFixture создаёт лишь метаданные фиксированного адаптера речи OpenAI без сетевых вызовов и настоящих ключей.
 func createSTTProviderFixture(t *testing.T, ctx context.Context, repository *Repository, organizationID, actorID string) string {
 	t.Helper()
-	config := *repository.modelProvider
+	config := *repository.defaultModelProvider()
 	config.ProviderID = "openai"
 	config.BaseURL = "https://api.openai.com/v1"
 	config.API = runtimecontract.ModelAPIResponses

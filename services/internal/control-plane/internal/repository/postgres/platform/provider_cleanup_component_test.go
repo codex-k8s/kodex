@@ -136,7 +136,7 @@ func testProviderDeletionTerminalReadback(t *testing.T, ctx context.Context, rep
 		testProviderProducedCompletionOrder(t, ctx, repository, service, actor, credentialFirst)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: actor,
-		Mutation: value.Mutation{IdempotencyKey: "provider-terminal-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Terminal cleanup fixture"}})
+		Mutation: value.Mutation{IdempotencyKey: "provider-terminal-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.defaultModelProvider().DefinitionKey(), Name: "Terminal cleanup fixture"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create terminal cleanup account: %v", err)
 	}
@@ -283,7 +283,7 @@ func testProviderProducedCompletionOrder(t *testing.T, ctx context.Context, repo
 	if credentialFirst {
 		key, uid = "credential-first", "61000000-0000-4000-8000-000000000022"
 	}
-	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: actor, Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: key}})
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: actor, Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.defaultModelProvider().DefinitionKey(), Name: key}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatal(err)
 	}

@@ -24,7 +24,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 	if ctx == nil || service == nil || service.lifecycle.Err() != nil || ctx.Err() != nil {
 		return ModelCatalog{}, errors.New("provider model catalog lifecycle is unavailable")
 	}
-	if method != CatalogMethodAPIKey || definitionKey == "" || service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
+	if method != CatalogMethodAPIKey || definitionKey == "" || service.configuredModelProvider(definitionKey) == nil {
 		return ModelCatalog{}, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, modelCatalogTimeout)
@@ -42,7 +42,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 	if decodeErr != nil {
 		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
-	result, err := service.observeGatewayCatalog(ctx, raw)
+	result, err := service.observeGatewayCatalog(ctx, definitionKey, raw)
 	if err != nil {
 		return catalogFailure(ctx, err)
 	}

@@ -338,7 +338,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	// Выбираем точный bootstrap-аккаунт, а не первый элемент общего каталога.
 	var bootstrapAccountRef string
-	if err := pool.QueryRow(ctx, queryConfiguredBootstrapProviderAccount, "default-"+repository.modelProvider.DefinitionKey()).Scan(&bootstrapAccountRef); err != nil {
+	if err := pool.QueryRow(ctx, queryConfiguredBootstrapProviderAccount, "default-"+repository.defaultModelProvider().DefinitionKey()).Scan(&bootstrapAccountRef); err != nil {
 		t.Fatalf("resolve bootstrap provider account: %v", err)
 	}
 	account, err := service.GetProviderAccountWithUsage(ctx, owner, bootstrapAccountRef, nil)

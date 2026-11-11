@@ -49,10 +49,10 @@ func TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := service.ConfigureModelProvider(config); err != nil {
+			if err := service.ConfigureModelProviderCatalog(gatewayProviderCatalogFixture(config)); err != nil {
 				t.Fatal(err)
 			}
-			service.gatewayHTTP = catalogHTTPFunc(func(request *http.Request) (*http.Response, error) {
+			service.gatewayHTTP[config.DefinitionKey()] = catalogHTTPFunc(func(request *http.Request) (*http.Response, error) {
 				requests++
 				if request.URL.String() != config.BaseURL+"/models" || request.Method != http.MethodGet || request.Header.Get("Authorization") != "Bearer synthetic-gateway-key" {
 					t.Fatal("gateway request boundary changed")
@@ -98,7 +98,7 @@ func TestGatewayCatalogRejectsAffinityBeforeCredentialRead(t *testing.T) {
 			}
 			config := gatewayCatalogFixture()
 			if mode != "missing_configuration" {
-				if err := service.ConfigureModelProvider(config); err != nil {
+				if err := service.ConfigureModelProviderCatalog(gatewayProviderCatalogFixture(config)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -125,11 +125,11 @@ func TestGatewayCatalogRejectsAffinityBeforeCredentialRead(t *testing.T) {
 func TestGatewayCatalogKeepsCredentialAndModelAffinity(t *testing.T) {
 	config := gatewayCatalogFixture()
 	service := &Service{}
-	if err := service.ConfigureModelProvider(config); err != nil {
+	if err := service.ConfigureModelProviderCatalog(gatewayProviderCatalogFixture(config)); err != nil {
 		t.Fatal(err)
 	}
 	calls := 0
-	service.gatewayHTTP = catalogHTTPFunc(func(request *http.Request) (*http.Response, error) {
+	service.gatewayHTTP[config.DefinitionKey()] = catalogHTTPFunc(func(request *http.Request) (*http.Response, error) {
 		calls++
 		if request.URL.String() != config.BaseURL+"/models" || request.Method != "GET" || request.Header.Get("Authorization") != "Bearer synthetic-gateway-key" {
 			t.Fatal("gateway request boundary changed")
@@ -140,12 +140,12 @@ func TestGatewayCatalogKeepsCredentialAndModelAffinity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.observeGatewayCatalog(t.Context(), raw)
+	result, err := service.observeGatewayCatalog(t.Context(), config.DefinitionKey(), raw)
 	if err != nil || result.Failure != CatalogFailureNone || len(result.Models) != 1 || result.Models[0].ID != "allowed-model" || len(result.Models[0].ReasoningEfforts) != 0 {
 		t.Fatal("gateway intersection failed")
 	}
 	wrong, _ := runtimecontract.EncodeGatewayProviderAuthentication("opencode-other-gateway", []byte("synthetic-gateway-key"))
-	rejected, err := service.observeGatewayCatalog(t.Context(), wrong)
+	rejected, err := service.observeGatewayCatalog(t.Context(), config.DefinitionKey(), wrong)
 	if err != nil || rejected.Failure == CatalogFailureNone || calls != 1 {
 		t.Fatal("foreign definition reached gateway")
 	}
@@ -166,16 +166,16 @@ func TestGatewayCatalogRejectsAuthorizationAndPartialResponses(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			config := gatewayCatalogFixture()
 			service := &Service{}
-			if err := service.ConfigureModelProvider(config); err != nil {
+			if err := service.ConfigureModelProviderCatalog(gatewayProviderCatalogFixture(config)); err != nil {
 				t.Fatal(err)
 			}
 			calls := 0
-			service.gatewayHTTP = catalogHTTPFunc(func(*http.Request) (*http.Response, error) {
+			service.gatewayHTTP[config.DefinitionKey()] = catalogHTTPFunc(func(*http.Request) (*http.Response, error) {
 				calls++
 				return &http.Response{StatusCode: test.status, Body: io.NopCloser(strings.NewReader(test.body))}, nil
 			})
 			raw, _ := runtimecontract.EncodeGatewayProviderAuthentication(config.DefinitionKey(), []byte("synthetic-gateway-key"))
-			result, err := service.observeGatewayCatalog(t.Context(), raw)
+			result, err := service.observeGatewayCatalog(t.Context(), config.DefinitionKey(), raw)
 			if err != nil || result.Failure != test.failure || len(result.Models) != 0 || calls != 1 {
 				t.Fatal("gateway failure boundary changed")
 			}
@@ -187,7 +187,7 @@ func TestGatewayCatalogRejectsAuthorizationAndPartialResponses(t *testing.T) {
 // TestGatewayMaterializationRejectsWrongDefinitionBeforeStorage запрещает provider switch через key upload.
 func TestGatewayMaterializationRejectsWrongDefinitionBeforeStorage(t *testing.T) {
 	service := &Service{}
-	if err := service.ConfigureModelProvider(gatewayCatalogFixture()); err != nil {
+	if err := service.ConfigureModelProviderCatalog(gatewayProviderCatalogFixture(gatewayCatalogFixture())); err != nil {
 		t.Fatal(err)
 	}
 	for _, definition := range []string{"", "openai-codex", "opencode-foreign"} {
@@ -195,5 +195,67 @@ func TestGatewayMaterializationRejectsWrongDefinitionBeforeStorage(t *testing.T)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Fatal("foreign or missing definition accepted")
 		}
+	}
+}
+
+// gatewayProviderCatalogFixture wraps explicit synthetic routes with a fixed default for startup tests.
+// gatewayProviderCatalogFixture объединяет явные synthetic routes с фиксированным default для startup tests.
+func gatewayProviderCatalogFixture(providers ...runtimecontract.ModelProviderConfiguration) runtimecontract.ModelProviderCatalog {
+	return runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: providers[0].SourceRevision, DefaultProvider: providers[0].DefinitionKey(), DefaultModel: providers[0].Models[0].ID, Providers: providers}
+}
+
+// TestGatewayCatalogMultipleDefinitionsKeepsExactCredentials tests both direct Messages and proxy accounts sharing an alias, with cross-definition refusal before HTTP.
+// TestGatewayCatalogMultipleDefinitionsKeepsExactCredentials проверяет direct Messages и proxy accounts с общим alias и отказ подмены definition до HTTP.
+func TestGatewayCatalogMultipleDefinitionsKeepsExactCredentials(t *testing.T) {
+	first := gatewayCatalogFixture()
+	first.API = runtimecontract.ModelAPIMessages
+	first.RouteKind = "DIRECT"
+	second, err := first.Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.ProviderID = "second-gateway"
+	second.BaseURL = "https://second.example.invalid/v1"
+	second.AddressCIDRs = []string{"192.0.2.5/32"}
+	second.RouteKind = "LITELLM"
+	second.RouteVersion = runtimecontract.QualifiedLiteLLMVersion
+	service := &Service{}
+	catalog := gatewayProviderCatalogFixture(first, second)
+	if err := service.ConfigureModelProviderCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	// Startup retains its own immutable copy.
+	// Startup сохраняет собственную immutable копию.
+	catalog.Providers[0].BaseURL = second.BaseURL
+	calls := map[string]int{}
+	for _, provider := range []runtimecontract.ModelProviderConfiguration{first, second} {
+		service.gatewayHTTP[provider.DefinitionKey()] = catalogHTTPFunc(func(request *http.Request) (*http.Response, error) {
+			calls[provider.DefinitionKey()]++
+			if request.URL.String() != provider.BaseURL+"/models" {
+				t.Fatal("credential routed to another endpoint")
+			}
+			expected := "synthetic-" + provider.ProviderID
+			if provider.RouteKind == "DIRECT" {
+				if request.Header.Get("x-api-key") != expected || request.Header.Get("anthropic-version") != "2023-06-01" || request.Header.Get("Authorization") != "" {
+					t.Fatal("direct Messages authentication is invalid")
+				}
+			} else if request.Header.Get("Authorization") != "Bearer "+expected || request.Header.Get("x-api-key") != "" {
+				t.Fatal("proxy authentication is invalid")
+			}
+			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"data":[{"id":"allowed-model"}],"has_more":false}`))}, nil
+		})
+		raw, err := runtimecontract.EncodeGatewayProviderAuthentication(provider.DefinitionKey(), []byte("synthetic-"+provider.ProviderID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := service.observeGatewayCatalog(t.Context(), provider.DefinitionKey(), raw)
+		if err != nil || result.Failure != CatalogFailureNone || len(result.Models) != 1 {
+			t.Fatal("exact provider observation failed", err)
+		}
+	}
+	wrong, _ := runtimecontract.EncodeGatewayProviderAuthentication(first.DefinitionKey(), []byte("synthetic-"+first.ProviderID))
+	result, err := service.observeGatewayCatalog(t.Context(), second.DefinitionKey(), wrong)
+	if err != nil || result.Failure == CatalogFailureNone || calls[first.DefinitionKey()] != 1 || calls[second.DefinitionKey()] != 1 {
+		t.Fatal("cross-definition credential reached HTTP")
 	}
 }

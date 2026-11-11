@@ -382,7 +382,7 @@ func TestBootstrapComponent(t *testing.T) {
 	}
 	configureComponentArtifactScanner(t, repository)
 	configureComponentProviderAndRoleImages(t, repository)
-	profile := *repository.modelProvider
+	profile := *repository.defaultModelProvider()
 	for _, model := range []string{"non-reasoning", "secondary-only"} {
 		profile.Models = append(profile.Models, runtimecontract.ModelProviderModel{ID: model, ContextWindowTokens: 32768, MaximumOutputTokens: 1024})
 	}

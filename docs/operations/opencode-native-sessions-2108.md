@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.2.0
+version: 1.3.0
 updated: 2026-11-12
 ---
 
@@ -438,3 +438,49 @@ export 804318 bytes, максимальный model HTTP body 17738 bytes; 246.8
 Это forced-threshold квалификация, не многочасовая нагрузка и не cluster E2E.
 Полная установка, несколько provider definitions и установленная приёмка
 по-прежнему не подтверждены этим срезом.
+
+## Несколько маршрутов: сквозная карта установки
+
+Каталог установки — один Git-owned immutable документ с закрытым набором
+provider definitions и точным default provider/model. Это требования текущего
+продолжения #2108; наличие этой карты не означает завершённую реализацию.
+В RunnerInput по-прежнему входит только выбранный descriptor, не весь каталог.
+Учётные записи и API keys создаются через прежний owner lifecycle; наличие
+маршрута в каталоге не выдаёт право использовать чужой account.
+
+| Сценарий | Полный путь и граница состояния |
+|---|---|
+| Чистая установка | Проверенный owner input → installer closed catalog → immutable ConfigMap/digest → CP registration и broker/egress configuration. Default model должен принадлежать exact default definition; пустая/дублирующаяся/неоднозначная конфигурация отклоняется до apply |
+| API key account | Проверенный actor и tenant → прежний provider-account endpoint/RPC → owner definition eligibility → exact attempt/account credential command → broker выбирает один descriptor по owner definition. Чужая definition не разрешает чтение секрета; credential envelope закрепляет definition |
+| Каталог моделей | Owner task/claim/request digest → проверенный service principal → exact account/version/credential/definition → broker HTTP по одному маршруту → ограниченное наблюдение → owner completion CAS. Model alias другого маршрута и payload definition не назначают authority |
+| Выбор в UI | Каталог definitions/accounts/models → существующий agent runtime publication с exact catalog pins → owner transaction/version/idempotency → immutable runtime configuration. Один model ID у двух провайдеров не делает их взаимозаменяемыми |
+| Claim/continuation/retry | Текущие grants + выбранный account/definition/model → свежая RuntimeRevision → один descriptor в signed RunnerInput → broker → OpenCode adapter. Exact retry сохраняет прежний snapshot; несовместимый native binding блокируется, не очищается |
+| Egress | Signed configuration digest/base URL/addresses → exact registered route → TLS hostname/CA и destination pins. Несколько definitions на одном host не разрешают выбирать произвольный descriptor только по имени; runtime сравнивает полный подписанный route |
+| Изменение Git-каталога | Установочный drain и положительный join активных writers предшествуют смене immutable конфигурации. Existing UI selections не переписываются. Удалённая definition закрывается, её queued/catalog tasks истекают по прежнему owner lifecycle; новый claim/renew не получает старый маршрут |
+| Stop/delete/terminal/expiry | Прежние owner transactions закрывают весь execution graph и grants. Каталог не создаёт альтернативный переход, retry или «оживление» терминального run; events/read paths и cardinality прежних task kinds сохраняются |
+| Отказ/default | Неполный default, неизвестный provider/model, неподтверждённая строгая policy либо отсутствующий egress route дают закрытый отказ. Другой account/provider не выбирается как неявный fallback |
+
+Producer/client registration, RPC, inbox/effects и deploy ownership остаются у
+существующих CP, broker, controller, gateway и runner. Qualification относится к
+exact API/model/proxy/route, а не к факту наличия нескольких definitions.
+
+Каталог имеет формат `kodex.model-provider-catalog/v1` и общий source revision,
+явные default provider/model, не более 16 независимых descriptors. Старый
+одиночный installer-файл не читается. Bootstrap key создаёт account только
+для default provider; дополнительные accounts проходят обычную авторизацию
+API key и удалённую проверку моделей. Один alias не выбирает provider.
+
+Для прямого Messages catalog используется `GET <base_url>/models` с
+`x-api-key` и закреплённым `anthropic-version: 2023-06-01`; для LiteLLM catalog
+используется Bearer credential proxy. Неполная pagination даёт UNVERIFIED,
+не выдуманный полный список. Через Context7 проверены официальный
+`/anthropics/anthropic-sdk-typescript`, `models.ts` и `client.ts`; текущий SDK
+не считается доказательством поддержки установленным OpenCode. Synthetic
+broker-тест проверяет конкретные headers и cross-definition отказ; реальная
+доступность account подтверждается только установленной проверкой.
+
+Контракт каталога зарегистрирован как `model-provider-catalog-v1`; egress schema
+ссылается на него, а он — на единственную схему runtime descriptor v10. Проверки
+разрешают эти ссылки из закрытого локального реестра без сетевой загрузки.
+Для `github.com/google/jsonschema-go` через Context7 проверен `ResolveOptions.Loader`,
+его сигнатура сверена с исходником закреплённого v0.3.0.

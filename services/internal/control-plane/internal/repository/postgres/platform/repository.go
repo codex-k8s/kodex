@@ -55,8 +55,7 @@ type Repository struct {
 	trustedCluster                  bool
 	defaultRuntimeProvider          string
 	defaultRuntimeModel             string
-	modelProvider                   *runtimecontract.ModelProviderConfiguration
-	modelProviderDefaultModel       string
+	modelProviderCatalog            *runtimecontract.ModelProviderCatalog
 	providerCredential              ProviderCredentialConfig
 	roleImages                      RoleImageConfig
 	objects                         objectstorage.Store
@@ -249,7 +248,7 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 	}
 	if bootstrappedAt != nil {
 		if repository.providerCredential.SecretName != "" {
-			if repository.modelProvider == nil {
+			if repository.modelProviderCatalog == nil {
 				return runtimecontract.ErrModelProviderConfiguration
 			}
 			if err := repository.reconcileProviderCredential(ctx, tx); err != nil {

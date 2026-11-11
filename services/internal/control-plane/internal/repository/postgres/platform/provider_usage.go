@@ -196,7 +196,7 @@ func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string
 // необязательный глобальный профиль. Отсутствующий профиль блокирует совместимость; ёмкость не
 // захватывается.
 func (repository *Repository) resolveProviderUsageContext(ctx context.Context, tx pgx.Tx, current scope, input *entity.ProviderAccountUsageContext) (providerUsageContext, error) {
-	result := providerUsageContext{Input: input, ModelProvider: repository.modelProvider}
+	result := providerUsageContext{Input: input}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
 		return result, err
@@ -248,6 +248,10 @@ func (repository *Repository) resolveProviderUsageContext(ctx context.Context, t
 	result.Agent, ok = agents[input.AgentRef]
 	if !ok {
 		return result, errs.ErrNotFound
+	}
+	result.ModelProvider = repository.configuredModelProvider(result.Agent.Provider)
+	if input.Purpose == "CONFIGURE" {
+		result.ModelProvider = repository.configuredModelProvider(input.ProviderDefinitionKey)
 	}
 	if input.Purpose == "CONFIGURE" {
 		err = tx.QueryRow(ctx, queryProviderUsageProfile, pgx.StrictNamedArgs{"profile_ref": input.RuntimeProfileRef}).Scan(&result.Profile.Ref, &result.Profile.Provider, &result.Profile.Model, &result.Profile.RuntimeRevision, &result.Profile.Enabled)
@@ -578,7 +582,7 @@ func (repository *Repository) providerAdmissionForAgents(ctx context.Context, tx
 			continue
 		}
 		// Actor admission выполняет общий Workflow/Agent caller; это внутренний dependency snapshot.
-		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true, ModelProvider: repository.modelProvider})
+		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true, ModelProvider: repository.configuredModelProvider(agent.Provider)})
 		if err != nil {
 			return nil, err
 		}

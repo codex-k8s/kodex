@@ -4,5 +4,5 @@ SET enabled = false
 WHERE (stable_key = 'openai-codex' OR (
     capabilities->>'runtimeEngine' = 'opencode'
     AND capabilities->>'managedBy' = 'git'
-    AND stable_key <> @definition_key))
+    AND NOT (stable_key = ANY(@definition_keys::text[]))))
   AND enabled;

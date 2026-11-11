@@ -18,7 +18,7 @@ root = pathlib.Path(os.environ["RUNNER_FIXTURE"])
 name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
 with (root / "calls.jsonl").open("a") as stream:
     stream.write(json.dumps({"name": name, "args": args}) + "\n")
-if name == "docker" and args == ["buildx", "version"]:
+if name == "docker" and (args == ["buildx", "version"] or args[:2] == ["buildx", "inspect"]):
     sys.exit(0)
 if name == "ensure-local-buildx-builder.sh":
     sys.exit(0)
@@ -124,6 +124,19 @@ class BuildLocalRunnerProfile(unittest.TestCase):
                              (c["name"] == "docker" and c["args"][:2] == ["buildx", "build"])
                              for c in self.calls()))
         return result
+
+    def test_build_only_qualifies_full_oci_without_import_or_installed_pin(self):
+        result = self.run_builder('--build-only', '--image-profile', 'full')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.state / 'agent-runner-image').exists())
+        self.assertFalse(any(call['name'] == 'import-local-image.sh' for call in self.calls()))
+        self.assertEqual(len(list((self.state / 'cache').glob('*.provenance.json'))), 1)
+        self.assertIn('LOCAL_OCI_BUILD_ONLY', result.stdout)
+        self.assertNotIn('image ready', result.stdout)
+
+    def test_duplicate_build_only_stops_before_tools(self):
+        self.assertNotEqual(self.run_builder('--build-only', '--build-only').returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_reuse_cache_imports_existing_exact_full_archive_without_build_or_cache_writes(self):
         cache, manifest, _previous = self.reuse_fixture()

@@ -6,7 +6,7 @@ FROM control_plane.provider_accounts account
 JOIN control_plane.provider_definitions definition ON definition.stable_key = account.definition_key
 WHERE account.organization_id = @organization_id::uuid AND account.id = @account_id::uuid
   AND account.enabled AND account.state = 'AUTHORIZED' AND account.current_credential_revision_id IS NOT NULL
-  AND definition.enabled AND account.definition_key = @provider_definition
+  AND definition.enabled AND account.definition_key = ANY(@provider_definitions::text[])
   AND NOT EXISTS (SELECT 1 FROM control_plane.provider_authorization_attempts attempt
        WHERE attempt.provider_account_id = account.id AND attempt.organization_id = account.organization_id
          AND attempt.state = 'AUTHORIZED' AND attempt.method <> 'API_KEY')

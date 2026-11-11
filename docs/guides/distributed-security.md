@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.50
+version: 1.7.51
 updated: 2026-11-12
 ---
 
@@ -932,6 +932,15 @@ credentials, qualification или model limits. Git-конфигурация м�
 Отсутствие hints не доказывает отсутствие кеша провайдера; физическая изоляция
 не выводится из namespace или usage. Fresh owner readback отделён от immutable
 snapshot хода; retry использует прежний снимок, continuation — свежую ревизию.
+
+Каталог нескольких model providers имеет единственного Git-владельца, immutable
+source revision и явный default. Account, credential и разрешённый маршрут
+выбираются по точному definition, а не по имени модели или порядку каталога.
+Совпадение TLS hostname не объединяет authority: подписанный runtime route
+сверяется по digest, API, base path и address pins. Статический broker CONNECT
+может объединять лишь одинаковые transport pins одного host. Удалённое
+definition закрывает новые admissions и catalog proofs; старые consumers
+останавливаются в рамках drain перед изменением installation snapshot.
 
 Native tools не являются источником полномочий. OpenCode shell/file/network и
 самостоятельная делегация закрыты; доступные инструменты назначаются exact

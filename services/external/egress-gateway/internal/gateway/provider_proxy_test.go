@@ -36,7 +36,7 @@ func providerProxyFixture(t *testing.T, host string, access runtimecontract.Runt
 		t.Fatal("read synthetic policy")
 	}
 	config := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "synthetic", API: runtimecontract.ModelAPIResponses, BaseURL: "https://" + host + "/v1", AddressCIDRs: []string{"93.184.216.34/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "synthetic", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
-	doc.Spec.ModelProvider = &config
+	doc.Spec.ModelProviderCatalog = &runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: config.SourceRevision, DefaultProvider: config.DefinitionKey(), DefaultModel: config.Models[0].ID, Providers: []runtimecontract.ModelProviderConfiguration{config}}
 	raw, err = json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)

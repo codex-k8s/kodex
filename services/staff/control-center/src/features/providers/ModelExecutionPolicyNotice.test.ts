@@ -16,12 +16,12 @@ vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 import Notice from "./ModelExecutionPolicyNotice.vue";
 
 describe("политика исполнения модели", () => {
-  it("очищает прежние гарантии и отбрасывает поздний ответ после смены маршрута", async () => {
+  it("при одинаковом alias очищает гарантии прежнего маршрута и отбрасывает его поздний ответ", async () => {
     const responses: ((page: { items: ProviderDefinition[] }) => void)[] = [];
     api.loadProviderDefinitions.mockImplementation(
       () => new Promise((resolve) => responses.push(resolve)),
     );
-    const props = reactive({ definitionKey: "opencode-one", model: "one" });
+    const props = reactive({ definitionKey: "opencode-one", model: "shared-model" });
     type State = {
       definition: Ref<ProviderDefinition | undefined>;
       unavailable: Ref<boolean>;
@@ -44,7 +44,6 @@ describe("политика исполнения модели", () => {
     try {
       expect(state.loading.value).toBe(true);
       props.definitionKey = "opencode-two";
-      props.model = "two";
       const first = responses[0];
       if (!first) throw new Error("Initial provider request is missing");
       first({ items: [{ key: "opencode-one" } as ProviderDefinition] });

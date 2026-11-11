@@ -183,12 +183,12 @@ type deviceWorker struct {
 // учитывая только local device workers под mutex. Он не владеет account полномочиями; lifecycle и
 // порядок shutdown обеспечивает composition.
 type Service struct {
-	modelProvider     *runtimecontract.ModelProviderConfiguration
-	gatewayHTTP       modelCatalogHTTPClient
-	lifecycle         context.Context
-	store             Store
-	credentialBackend CredentialBackend
-	deviceTTL         time.Duration
+	modelProviderCatalog *runtimecontract.ModelProviderCatalog
+	gatewayHTTP          map[string]modelCatalogHTTPClient
+	lifecycle            context.Context
+	store                Store
+	credentialBackend    CredentialBackend
+	deviceTTL            time.Duration
 
 	mu       sync.Mutex
 	sessions map[string]*deviceWorker
