@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.0
+version: 2.4.1
 updated: 2026-11-11
 ---
 
@@ -121,6 +121,19 @@ Codex CLI, ChatGPT auth snapshots и автоматический импорт �
 ключ требуют явного управления credential, а не молчаливой перезаписи bootstrap.
 В `trusted-cluster` допустим отложенный ввод credential; это не означает
 готовность системного помощника. `protected` требует файл ключа до изменений.
+
+Локальные `credentials.env` и `access-identities.env` содержат только закрытый
+набор строк `KEY="value"` с JSON-экранированием внутри значения. Их создаёт
+`tools/dev/local_credentials.py`; shell подключает только код loader, а не файл
+данных. Reader проверяет владельца, приватный каталог, regular файл без
+symlink/hardlink, размер, полный набор и уникальность ключей. Повторное применение
+сверяет переданные owner credentials без перезаписи. Старый shell-формат не
+исполняется и не импортируется: для чистой установки нужен новый приватный state.
+Проверки без credentials и кластера: `python3 -m unittest discover -s tools/dev
+-p test_local_credentials.py`, `bash scripts/tests/full-local-e2e-entrypoint-test.sh`
+и `bash scripts/tests/remote-disposable-cluster-contract-test.sh`. Через Context7
+`/python/cpython` проверены `os.open`/`dir_fd`/`O_NOFOLLOW`, `fstat` и публикация
+`os.link` в [официальной документации](https://docs.python.org/3/library/os.html).
 
 `dev.sh down` содержит удаление фиксированных application namespaces, включая
 `identity`, и не доказывает их исключительное владение. В разделяемом кластере

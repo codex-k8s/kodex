@@ -581,8 +581,9 @@ fi
 
 credentials_file="$state_directory/credentials.env"
 bash "$repository_root/tools/dev/prepare-local-credentials.sh" "$credentials_file"
-# shellcheck disable=SC1090
-source "$credentials_file"
+# shellcheck source=tools/dev/lib/local-credentials.sh
+source "$repository_root/tools/dev/lib/local-credentials.sh"
+kodex_load_local_credentials "$credentials_file"
 
 cluster_mode=readback
 [[ "$command_name" == up || "$command_name" == identity ]] && cluster_mode=apply
