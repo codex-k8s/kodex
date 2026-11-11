@@ -123,6 +123,66 @@ func providerUsageLaunchFixture(t *testing.T, withCapability bool) (providerUsag
 	return account, context, first
 }
 
+// TestProviderUsageOpenCodeManagedWorkspace separates published workspace commands from native
+// provider tools. Readiness does not grant execution: overlay, missing environment, catalog,
+// credential and actor checks must still deny independently.
+// TestProviderUsageOpenCodeManagedWorkspace отличает опубликованные команды workspace от native
+// tools провайдера. Готовность не разрешает исполнение: overlay, отсутствие окружения, каталог,
+// credential и полномочия actor по-прежнему проверяются независимо.
+func TestProviderUsageOpenCodeManagedWorkspace(t *testing.T) {
+	for _, scenario := range []struct {
+		name    string
+		count   int32
+		managed bool
+		overlay string
+		denied  string
+	}{
+		{name: "legacy-no-tools"},
+		{name: "managed-commands", count: 2, managed: true},
+		{name: "unmanaged-commands", count: 2, denied: "RUNTIME_PROFILE_UNAVAILABLE"},
+		{name: "missing-environment", count: -1, managed: true, denied: "RUNTIME_PROFILE_UNAVAILABLE"},
+		{name: "overlay", count: 2, managed: true, overlay: "model_reasoning_effort = \"low\"", denied: "RUNTIME_PROFILE_UNAVAILABLE"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			account, context := providerUsageFixture()
+			account.Provider = "opencode-test-gateway"
+			account.Models = []platformrepo.ProviderModelCatalogRecord{{ID: "model-one"}}
+			context.Input = nil
+			catalog, err := providerAccountUsage(account, context)
+			if err != nil {
+				t.Fatal(err)
+			}
+			context.Input = &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: "agt_usage00001"}
+			context.Agent = providerUsageAgent{Ref: context.Input.AgentRef, Enabled: true, State: "READY", ConfigRef: "rcfg_usage001", Provider: account.Provider, Model: "model-one", NativeToolCount: scenario.count, ManagedWorkspaceTools: scenario.managed, Overlay: scenario.overlay,
+				Candidates: []entity.ProviderAccountCandidate{{AccountRef: account.Ref, ProviderDefinitionKey: account.Provider, CatalogRevision: catalog.CatalogRevision, CatalogDigest: catalog.CatalogDigest}}}
+			usage, err := providerAccountUsage(account, context)
+			if err != nil || usage.AllowedToSubmit != (scenario.denied == "") || scenario.denied != "" && usage.ModelCompatibility.Reason != scenario.denied {
+				t.Fatalf("unexpected managed workspace admission: usage=%+v err=%v", usage, err)
+			}
+			if scenario.denied != "" {
+				return
+			}
+			context.ActorAllowed = false
+			denied, _ := providerAccountUsage(account, context)
+			if denied.AllowedToSubmit || denied.ContextDigest == usage.ContextDigest {
+				t.Fatal("workspace readiness replaced actor authority")
+			}
+			context.ActorAllowed = true
+			account.Catalog.State = "PENDING"
+			denied, _ = providerAccountUsage(account, context)
+			if denied.AllowedToSubmit || denied.ModelCompatibility.Reason != "CATALOG_PENDING" {
+				t.Fatal("workspace readiness replaced catalog evidence")
+			}
+			account.Catalog.State = "READY"
+			account.State = "REVOKED"
+			denied, _ = providerAccountUsage(account, context)
+			if denied.AllowedToSubmit {
+				t.Fatal("workspace readiness replaced credential lifecycle")
+			}
+		})
+	}
+}
+
 // TestProviderUsageLaunchPinsAndFreshCredentialBinding accepts exact saved launch pins, binds
 // context identity to credential changes and rejects pending observation or duplicate selected
 // pins.

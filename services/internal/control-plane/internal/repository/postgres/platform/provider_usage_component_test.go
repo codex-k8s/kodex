@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -17,6 +19,124 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
+
+// TestProviderUsageManagedWorkspaceProjectionComponent reads the real SQL/Scan projection from
+// pinned immutable environment versions. Synthetic changes stay in rolled-back transactions;
+// no runtime, credential, native tool or external effect is created by this read-side check.
+// TestProviderUsageManagedWorkspaceProjectionComponent читает настоящую SQL/Scan-проекцию точных
+// immutable версий окружения. Искусственные изменения откатываются транзакциями; проверка чтения
+// не создаёт runtime, credential, native tool или внешний эффект.
+func TestProviderUsageManagedWorkspaceProjectionComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	defer pool.Close()
+	repository := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.projects.create"}, "control-api-gateway")
+	service, err := platformservice.New(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createProject := func(key string) entity.Project {
+		t.Helper()
+		result, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.ProjectInput{Name: key, Language: "en"}})
+		if err != nil || result.Project == nil {
+			t.Fatal("create projection project", err)
+		}
+		return *result.Project
+	}
+	project := createProject("workspace-projection")
+	other := createProject("workspace-projection-other")
+	otherAgent := createLifecycleAgent(t, ctx, service, owner, other.Ref, "projection-other-agent", "Other workspace")
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "projection-agent", "Workspace projection")
+	helper, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		name, mutation string
+		assistant      bool
+		managed        bool
+		want           bool
+		count          int32
+	}{
+		{name: "pinned-managed-version", managed: true, want: true, count: 2},
+		{name: "profile-off", count: 2},
+		{name: "capability-revoked", managed: true, count: 2, mutation: "UPDATE control_plane.agents SET capabilities='{}' WHERE ref=$1"},
+		{name: "disabled-environment", managed: true, count: 2, mutation: "UPDATE control_plane.runtime_environment_sets SET state='DISABLED' WHERE id=(SELECT environment_set_id FROM control_plane.agent_runtime_environment_bindings WHERE agent_id=(SELECT id FROM control_plane.agents WHERE ref=$1))"},
+		{name: "foreign-project", managed: true, count: -1, mutation: "UPDATE control_plane.agent_runtime_environment_bindings b SET environment_set_id=other.environment_set_id, environment_version_id=other.environment_version_id FROM control_plane.agent_runtime_environment_bindings other JOIN control_plane.agents a ON a.id=other.agent_id WHERE a.ref=$2 AND b.agent_id=(SELECT id FROM control_plane.agents WHERE ref=$1)"},
+		{name: "missing-binding", managed: true, count: -1, mutation: "DELETE FROM control_plane.agent_runtime_environment_bindings WHERE agent_id=(SELECT id FROM control_plane.agents WHERE ref=$1)"},
+		{name: "system-assistant", assistant: true, managed: true, count: 2},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			ref := agent.Ref
+			if scenario.assistant {
+				ref = helper.Ref
+			}
+			// A new test-only version leaves the set's current pointer unchanged: the agent's exact
+			// version pin must win. Immutable rows and their guards are never edited or disabled.
+			// Новая test-only версия не меняет current pointer набора: должна читаться точная версия
+			// binding агента. Immutable строки и их guards не изменяются и не отключаются.
+			_, err = tx.Exec(ctx, `WITH version AS (
+ INSERT INTO control_plane.runtime_environment_versions
+ (ref,organization_id,environment_set_id,version_number,parent_version_id,non_secret_values,
+ secret_descriptors,role_image_artifact_id,selected_tools,core_digest,managed_workspace,
+ resource_policy,volume_policy,network_policy,kubernetes_access_profile,resources_digest,
+ volumes_digest,network_digest,rbac_digest,digest,created_by)
+ SELECT 'renvv_projection0001',v.organization_id,v.environment_set_id,v.version_number+1,v.id,
+ v.non_secret_values,v.secret_descriptors,v.role_image_artifact_id,
+ '[{"name":"Bash","command":"bash"},{"name":"Go","command":"go"}]'::jsonb,v.core_digest,$2,
+ v.resource_policy,v.volume_policy,v.network_policy,v.kubernetes_access_profile,v.resources_digest,
+ v.volumes_digest,v.network_digest,v.rbac_digest,v.digest,v.created_by
+ FROM control_plane.agents a
+ JOIN control_plane.agent_runtime_environment_bindings b ON b.agent_id=a.id
+ JOIN control_plane.runtime_environment_sets e ON e.id=b.environment_set_id
+ JOIN control_plane.runtime_environment_versions v ON v.id=COALESCE(b.environment_version_id,e.current_version_id)
+ WHERE a.ref=$1 RETURNING id
+ ) UPDATE control_plane.agent_runtime_environment_bindings SET environment_version_id=version.id
+ FROM version WHERE agent_id=(SELECT id FROM control_plane.agents WHERE ref=$1)`, ref, scenario.managed)
+			if err != nil {
+				t.Fatal("create immutable projection fixture", err)
+			}
+			if _, err := tx.Exec(ctx, "UPDATE control_plane.agents SET capabilities=$2 WHERE ref=$1", ref, []string{runtimecontract.ArtifactCapability}); err != nil {
+				t.Fatal(err)
+			}
+			if scenario.mutation != "" {
+				args := []any{ref}
+				if scenario.name == "foreign-project" {
+					args = append(args, otherAgent.Ref)
+				}
+				_, err := tx.Exec(ctx, scenario.mutation, args...)
+				if scenario.name == "foreign-project" {
+					var rejected *pgconn.PgError
+					if !errors.As(err, &rejected) || rejected.Code != "23514" {
+						t.Fatal("foreign binding escaped immutable owner guard", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatal("mutate disposable eligibility fixture", err)
+				}
+			}
+			agents, err := readProviderUsageAgents(ctx, tx, owner.AuthorityTenant, []string{ref})
+			if err != nil || agents[ref].NativeToolCount != scenario.count || agents[ref].ManagedWorkspaceTools != scenario.want {
+				t.Fatalf("wrong workspace projection: agents=%+v err=%v", agents, err)
+			}
+			hidden, err := readProviderUsageAgents(ctx, tx, "20000000-0000-4000-8000-000000009999", []string{ref})
+			if err != nil || len(hidden) != 0 {
+				t.Fatal("projection crossed organization boundary", err)
+			}
+		})
+	}
+}
 
 // testProviderUsageProjection checks PostgreSQL-backed single/list usage agreement, actor-bound
 // cursors, separate configure/launch permissions, revocation and hidden assistant boundaries using
