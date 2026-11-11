@@ -4,11 +4,17 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.52
+version: 1.7.53
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+При локальном разрешении TLS hostname через `hostAliases` адрес закрепляется
+за проверенным Service UID/ClusterIP и ready EndpointSlice/Pod. Именованный
+target port проверяется до числового container port; один DNS alias не доказывает
+назначение. SNI/HTTP Host/проверка CA сохраняются, NetworkPolicy ограничивается
+точными namespace/Pod selectors/port. Замена Service не наследует прежний допуск.
 
 Установщики не передают credentials в argv ни локальных процессов, ни команд
 внутри Pod. Для Keycloak 26.7.1 используются stdin и штатные

@@ -44,6 +44,58 @@ def fixture():
 
 class RegistrySource(unittest.TestCase):
 
+    def test_ingress_source_preserves_tls_identity_and_rejects_alias_collision(self):
+        config, lock, resources = fixture()
+        host = lock['registry']['push']
+        config.update(schema='kodex.registry-source/v2', tls_hostname=host,
+                      service_ip='192.0.2.20', service_port_name='websecure')
+        lock['registry']['node_pull'] = 'node-cache.example.invalid'
+        result = registry.transform(resources, config, lock)
+        pod = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']
+        self.assertEqual(pod['hostAliases'], [{'ip': '192.0.2.20', 'hostnames': [host]}])
+        self.assertEqual(registry.transform(result, config, lock), result)
+        pod['hostAliases'][0]['ip'] = '192.0.2.21'
+        with self.assertRaises(ValueError):
+            registry.transform(result, config, lock)
+        for field, value in [('service_ip', '127.0.0.1'), ('service_ip', '169.254.169.254'),
+                             ('service_ip', '0.0.0.0'), ('tls_hostname', 'foreign.example.invalid'),
+                             ('tls_hostname', 'bad..example.invalid'), ('service_port_name', '443')]:
+            invalid = dict(config, **{field: value})
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                registry.transform(resources, invalid, lock)
+
+    def test_ingress_preflight_pins_service_ip_and_named_target(self):
+        config, lock, _ = fixture()
+        config.update(schema='kodex.registry-source/v2', tls_hostname=lock['registry']['push'],
+                      service_ip='192.0.2.20', service_port_name='websecure')
+        service = {'metadata': {'uid': config['service_uid']}, 'spec': {'type': 'LoadBalancer',
+            'clusterIP': config['service_ip'], 'selector': config['pod_labels'],
+            'ports': [{'port': 443, 'targetPort': 'websecure', 'protocol': 'TCP'}]}}
+        slices = {'items': [{'metadata': {'ownerReferences': [{'kind': 'Service', 'uid': config['service_uid'], 'controller': True}]},
+            'ports': [{'port': 8443, 'protocol': 'TCP'}], 'endpoints': [{'conditions': {'ready': True},
+            'addresses': ['192.0.2.9'], 'targetRef': {'kind': 'Pod', 'namespace': config['namespace'], 'name': 'synthetic', 'uid': 'pod-uid'}}]}]}
+        pod = {'metadata': {'uid': 'pod-uid', 'labels': config['pod_labels']},
+            'spec': {'containers': [{'ports': [{'name': 'websecure', 'containerPort': 8443}]}]},
+            'status': {'podIPs': [{'ip': '192.0.2.9'}]}}
+        def run_case(service_value, pod_value, accepted):
+            def get(command, **kwargs):
+                kind = command[command.index('get') + 1]
+                value = {'service': service_value, 'configmap': {'data': {'ca.crt': '-----BEGIN CERTIFICATE-----synthetic'}},
+                         'endpointslices': slices, 'pod': pod_value}[kind]
+                return subprocess.CompletedProcess(command, 0, json.dumps(value).encode())
+            with patch.object(registry.subprocess, 'run', side_effect=get), patch('ssl.create_default_context'):
+                if accepted:
+                    self.assertEqual(registry.preflight(config, lock, 'synthetic-context')['workload_tls_and_auth'], 'NOT_RUN')
+                else:
+                    with self.assertRaises(ValueError):registry.preflight(config, lock, 'synthetic-context')
+        run_case(service, pod, True)
+        bad = copy.deepcopy(service);bad['spec']['clusterIP'] = '192.0.2.21'
+        run_case(bad, pod, False)
+        bad = copy.deepcopy(service);bad['spec']['ports'][0]['targetPort'] = 'web'
+        run_case(bad, pod, False)
+        bad = copy.deepcopy(pod);bad['spec']['containers'][0]['ports'][0]['containerPort'] = 8080
+        run_case(service, bad, False)
+
     def test_promoted_buildkit_tls_is_exact_and_config_digest_rolls_only_daemon(self):
         config, lock, resources = fixture()
         result = registry.transform(resources, config, lock)

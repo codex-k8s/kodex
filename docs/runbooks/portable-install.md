@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.1
+version: 1.6.2
 updated: 2026-11-12
 ---
 
@@ -509,6 +509,29 @@ Kubelet/containerd находятся вне Pod DNS: оператор адре�
 `make test-web-only-release`). Fixtures синтетические; live cluster не используется.
 Документация K3s private registry через Context7 проверена; конкретная настройка
 узлов зависит от закреплённой версии дистрибутива и не выполняется этим overlay.
+
+Для registry за существующим HTTPS ingress предусмотрен
+`kodex.registry-source/v2`: к тем же полям добавляются `tls_hostname`,
+`service_ip` и `service_port_name`. `registry.push` точно равен TLS hostname;
+`registry.node_pull` остаётся отдельным immutable адресом прикладных образов.
+Materializer получает единственный `hostAliases` для этого hostname на закреплённый
+ClusterIP ingress Service, сохраняя исходные SNI, HTTP Host и проверку сертификата.
+Публичный loopback DNS локального стенда не используется внутри Pod. Конфликтующий
+alias, loopback/link-local/unspecified адрес и неизвестные поля отклоняются.
+Ingress, его маршруты и общесистемный DNS этим преобразованием не изменяются.
+
+Сквозной путь: операторский lock/profile → immutable ConfigMap и Job →
+Service с точными UID/ClusterIP/selector → ready EndpointSlice и Pod с проверенным
+именованным портом → HTTPS ingress → source registry. Проверка перед apply
+сверяет все эти Kubernetes-связи; NetworkPolicy разрешает только выбранные
+namespace/Pod labels/port. Ошибка останавливает материализацию до запуска;
+событие домена не создаётся, авторитетный read path — Kubernetes и exact digest
+registry. Привилегии задаёт операторский профиль, содержимое OCI их не расширяет.
+Повторное применение идемпотентно; replacement Service требует нового профиля.
+Готовность TLS/auth и копирование каждого digest подтверждаются отдельно живым Job.
+Проверены Context7 `/websites/kubernetes_io`, официальные
+[HostAliases](https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/)
+и [именованные порты Service](https://kubernetes.io/docs/concepts/services-networking/service/).
 
 ## Закреплённый OpenCode build-рецепт без смены приложения
 
