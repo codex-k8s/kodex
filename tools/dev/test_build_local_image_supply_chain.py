@@ -32,9 +32,12 @@ def event(kind, target="", delta=0, child=0):
             output.write(json.dumps(dict(kind=kind, target=target, active=active,
                                          pid=os.getpid(), child=child)) + "\n")
         return active
-if name == "git":
+if name == "git" and "status" in args:
+    print(os.environ.get("BUILD_DIRTY", ""), end="")
+elif name == "git":
     print(os.environ.get("BUILD_REVISION", "a" * 40))
 elif name == "kubectl":
+    if os.environ.get("FORBID_KUBECTL"): sys.exit(99)
     if args == ["config", "current-context"]:
         print("k3d-import-fixture" if os.environ.get("IMPORT_K3D") else "synthetic-staging")
     elif "nodes" in args:
@@ -54,7 +57,7 @@ elif name == "import-local-image.sh":
     if target == os.environ.get("FAIL_IMPORT"):
         sys.exit(92)
     assert args[args.index("--exact-reference") + 1] == repository + "@sha256:" + "b" * 64
-elif name == "docker" and args[:2] == ["buildx", "version"]:
+elif name == "docker" and args[:2] in (["buildx", "version"], ["buildx", "inspect"]):
     pass
 elif name == "k3d":
     if args[:2] == ["image", "import"]:
@@ -199,6 +202,33 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         return subprocess.run(self.arguments(jobs, component),
                               env=dict(self.environment, **environment),
                               capture_output=True, text=True, timeout=12)
+
+    def test_build_only_never_contacts_cluster_or_replaces_installed_pointers(self):
+        args = self.arguments(2)
+        index = args.index("--context")
+        del args[index:index + 2]
+        result = subprocess.run(args + ["--build-only"], env=dict(self.environment, FORBID_KUBECTL="1"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_no_new_pointers()
+        self.assertFalse([event for event in self.events() if event["kind"] == "import"])
+        for name in IMAGE_NAMES:
+            self.assertIn("@sha256:", (self.state / f"{name}-oci-image").read_text())
+        receipt = json.loads((self.state / "build-only.json").read_text())
+        self.assertEqual(receipt["import"], "NOT_RUN")
+        self.assertEqual(receipt["sourceSHA"], REVISION)
+
+    def test_build_only_rejects_context_and_dirty_source_before_build(self):
+        result = subprocess.run(self.arguments(2) + ["--build-only"], env=self.environment,
+                                capture_output=True, text=True, timeout=12)
+        self.assertNotEqual(result.returncode, 0)
+        args = self.arguments(2)
+        index = args.index("--context")
+        del args[index:index + 2]
+        result = subprocess.run(args + ["--build-only"], env=dict(self.environment, BUILD_DIRTY=" M tracked"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.events(), [])
 
     def events(self):
         path = self.root / "events.jsonl"

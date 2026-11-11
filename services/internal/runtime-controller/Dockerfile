@@ -11,6 +11,7 @@ COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/modelmeasurementwire/ libs/go/modelmeasurementwire/
 COPY libs/go/providerfinancewire/ libs/go/providerfinancewire/
 COPY libs/go/repositorybundle/ libs/go/repositorybundle/
 COPY libs/go/runtimecontract/ libs/go/runtimecontract/

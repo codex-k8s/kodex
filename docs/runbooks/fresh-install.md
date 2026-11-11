@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.3
+version: 2.4.4
 updated: 2026-11-12
 ---
 
@@ -103,6 +103,21 @@ namespace пока закрыто отклоняется, чтобы manifests �
 private cache; последующий import использует прежние exact-manifest guards.
 Полный runner ещё не является допущенным RoleImage: supply-chain admission,
 материализация среды, pod readback и реальный workspace path проверяются отдельно.
+
+Вспомогательные authority/admission/builder образы готовятся отдельно через
+`tools/dev/build-local-image-supply-chain.sh --build-only --component all
+--source-root <clean-exact-worktree> --state-directory <private-directory>`.
+Этот режим требует прежний builder, не вызывает Kubernetes и сохраняет
+`*-oci-image` и `build-only.json` с `import=NOT_RUN`; прежние указатели установленных
+образов не меняются. Полный supply-chain admission проверяется после установки.
+
+Установщик передаёт каждому дочернему `kubectl` явные kubeconfig/context через
+`tools/install/target_kubectl.py` в приватном временном PATH. Он не вызывает
+`config use-context` и не изменяет конфигурацию хоста. Для отдельных repo helpers
+тот же launcher можно разместить как `kubectl` в приватном PATH и задать
+`KODEX_TARGET_KUBECTL`, `KODEX_TARGET_KUBECONFIG`, `KODEX_TARGET_CONTEXT`.
+Подмена target flags и изменение host config закрыто отклоняются; обычные операции
+с ресурсами сохраняют собственные ownership guards соответствующего helper.
 
 ### Локальный hot-reload
 

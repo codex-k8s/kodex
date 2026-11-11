@@ -8,7 +8,7 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission|authority-security] [--context <exact-staging-context>] [--build-jobs 1..4]\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> [--component all|image-admission|authority-security] [--context <exact-staging-context>] [--build-jobs 1..4] [--build-only]\n' "$0" >&2
 }
 
 source_root=""
@@ -16,6 +16,7 @@ state_directory=""
 component=all
 context=""
 build_jobs=1
+build_only=false
 while (($# > 0)); do
   case "$1" in
     --source-root) source_root=${2:-}; shift 2 ;;
@@ -23,6 +24,7 @@ while (($# > 0)); do
     --component) component=${2:-}; shift 2 ;;
     --context) context=${2:-}; shift 2 ;;
     --build-jobs) build_jobs=${2:-}; shift 2 ;;
+    --build-only) [[ "$build_only" == false ]] || fail 'duplicate build-only option'; build_only=true; shift ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -38,8 +40,12 @@ done
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / && "$state_directory" != "$HOME" ]] ||
   fail 'state directory is invalid'
-[[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] ||
-  fail 'exact staging context is required'
+if "$build_only"; then
+  [[ "$component" == all && -z "$context" ]] || fail 'build-only requires all components and no context'
+  [[ -z "$(git -C "$source_root" status --porcelain --untracked-files=normal)" ]] || fail 'clean source is required for build-only'
+else
+  [[ -n "$context" && "$(kubectl config current-context)" == "$context" ]] || fail 'exact staging context is required'
+fi
 for command_name in docker git jq kubectl sha256sum tar flock setsid; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -66,7 +72,11 @@ install -d -m 0700 "$state_directory/cache/image-supply-chain"
 exec {build_lock_fd}>"$state_directory/cache/image-supply-chain/build.lock"
 flock -n "$build_lock_fd" || fail 'another supply-chain build owns this state directory'
 builder=kodex-local-dev
-"$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
+if "$build_only"; then
+  docker buildx inspect "$builder" >/dev/null 2>&1 || fail 'existing local builder is required'
+else
+  "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
+fi
 
 build_work_directory=$(mktemp -d "$state_directory/cache/image-supply-chain/build.XXXXXXXX")
 declare -a build_pids=() build_names=() build_archives=() build_next_archives=() build_status_files=() build_logs=()
@@ -130,9 +140,11 @@ import_oci() {
   [[ "$manifest_digest" =~ ^sha256:[a-f0-9]{64}$ ]] ||
     fail "OCI manifest digest is invalid: $repository"
   exact_reference="$repository@$manifest_digest"
-  "$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \
-    --repository "$repository" --tag "$tag" --exact-reference "$exact_reference" >/dev/null ||
-    fail "OCI digest readback failed: $repository"
+  if ! "$build_only"; then
+    "$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \
+      --repository "$repository" --tag "$tag" --exact-reference "$exact_reference" >/dev/null ||
+      fail "OCI digest readback failed: $repository"
+  fi
   printf '%s' "$exact_reference"
 }
 
@@ -221,7 +233,11 @@ import_targets() {
   done
   # Все digest readback завершены до публикации первого указателя.
   for name in "${image_names[@]}"; do
-    mv -- "$build_work_directory/$name-image" "$state_directory/$name-image"
+    if "$build_only"; then
+      mv -- "$build_work_directory/$name-image" "$state_directory/$name-oci-image"
+    else
+      mv -- "$build_work_directory/$name-image" "$state_directory/$name-image"
+    fi
   done
 }
 
@@ -318,4 +334,12 @@ if [[ ! -s "$role_input_archive" || ! -s "$role_input_metadata" ]]; then
   chmod 0600 "$role_input_metadata"
 fi
 
-printf 'Kodex local image supply-chain images are ready for source %s\n' "$source_revision"
+if "$build_only"; then
+  jq -n --arg source "$source_revision" --arg input "$input_digest" \
+    '{schema:"kodex.supply-chain-local-build/v1",sourceSHA:$source,inputSHA256:$input,build:"PASS",import:"NOT_RUN",admission:"NOT_RUN"}' \
+    >"$state_directory/build-only.json"
+  chmod 0600 "$state_directory/build-only.json"
+  printf 'Kodex supply-chain OCI build completed; cluster import not run for source %s\n' "$source_revision"
+else
+  printf 'Kodex local image supply-chain images are ready for source %s\n' "$source_revision"
+fi

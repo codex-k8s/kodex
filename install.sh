@@ -175,7 +175,17 @@ fi
 
 export KUBECONFIG=$KODEX_KUBECONFIG
 [[ -f "$KUBECONFIG" && -r "$KUBECONFIG" ]] || fail 'Kubernetes configuration is absent'
-kubectl config use-context "$KODEX_KUBE_CONTEXT" >/dev/null
+installer_temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$installer_temporary_directory"' EXIT
+# Дочерние shell/Python/Node helpers получают те же явные flags; исходный
+# kubeconfig и выбранный в нём current-context остаются без изменений.
+export KODEX_TARGET_KUBECTL=${KODEX_TARGET_KUBECTL:-$(command -v kubectl)}
+export KODEX_TARGET_KUBECONFIG=$KODEX_KUBECONFIG
+export KODEX_TARGET_CONTEXT=$KODEX_KUBE_CONTEXT
+mkdir -m 0700 "$installer_temporary_directory/bin"
+cp "$repository_root/tools/install/target_kubectl.py" "$installer_temporary_directory/bin/kubectl"
+chmod 0700 "$installer_temporary_directory/bin/kubectl"
+export PATH="$installer_temporary_directory/bin:$PATH"
 [[ "$(kubectl config current-context)" == "$KODEX_KUBE_CONTEXT" ]] || fail 'Kubernetes context mismatch'
 kubectl get --raw=/readyz >/dev/null || fail 'Kubernetes API is unavailable'
 if component_selected platform && ! component_selected secrets; then
@@ -189,8 +199,6 @@ if component_selected platform && ! component_selected secrets; then
   ' >/dev/null || fail 'pre-provisioned runtime S3 credential projection is absent or invalid'
 fi
 
-installer_temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$installer_temporary_directory"' EXIT
 ensure_core_material() {
   if [[ ! -e "$material_directory" ]]; then
     local -a arguments=(
