@@ -14282,7 +14282,7 @@ components:
         state: { type: string, enum: [PENDING, READY, FAILED, EXPIRED] }
         observedAt: { $ref: "#/components/schemas/Timestamp" }
         expiresAt: { $ref: "#/components/schemas/Timestamp" }
-        source: { type: string, enum: [REMOTE_API, REMOTE_CODEX] }
+        source: { type: string, enum: [REMOTE_API] }
         failure:
           {
             type: string,

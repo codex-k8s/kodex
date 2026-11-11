@@ -7369,9 +7369,8 @@ func (EmailEffectOutcome) EnumDescriptor() ([]byte, []int) {
 type ProviderModelCatalogSource int32
 
 const (
-	ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED  ProviderModelCatalogSource = 0
-	ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API   ProviderModelCatalogSource = 1
-	ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX ProviderModelCatalogSource = 2
+	ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED ProviderModelCatalogSource = 0
+	ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API  ProviderModelCatalogSource = 1
 )
 
 // Enum value maps for ProviderModelCatalogSource.
@@ -7379,12 +7378,10 @@ var (
 	ProviderModelCatalogSource_name = map[int32]string{
 		0: "PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED",
 		1: "PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API",
-		2: "PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX",
 	}
 	ProviderModelCatalogSource_value = map[string]int32{
-		"PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED":  0,
-		"PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API":   1,
-		"PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX": 2,
+		"PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED": 0,
+		"PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API":  1,
 	}
 )
 
@@ -97251,11 +97248,10 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" EMAIL_EFFECT_OUTCOME_UNSPECIFIED\x10\x00\x12(\n" +
 	"$EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME\x10\x01\x12)\n" +
 	"%EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED\x10\x02\x12,\n" +
-	"(EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED\x10\x03*\xa9\x01\n" +
+	"(EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED\x10\x03*\xab\x01\n" +
 	"\x1aProviderModelCatalogSource\x12-\n" +
 	")PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED\x10\x00\x12,\n" +
-	"(PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API\x10\x01\x12.\n" +
-	"*PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX\x10\x02*\x97\x02\n" +
+	"(PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API\x10\x01\"\x04\b\x02\x10\x02**PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX*\x97\x02\n" +
 	"\x1bProviderModelCatalogFailure\x12.\n" +
 	"*PROVIDER_MODEL_CATALOG_FAILURE_UNSPECIFIED\x10\x00\x12'\n" +
 	"#PROVIDER_MODEL_CATALOG_FAILURE_NONE\x10\x01\x12.\n" +

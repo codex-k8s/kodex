@@ -33,7 +33,7 @@ func (stub *catalogClientStub) ObserveProviderModelCatalog(context.Context, *con
 // catalogTask задаёт фиксированные синтетические привязки аккаунта/учётных данных/заявки и срок для воспроизводимых тестов дайджеста.
 // Значения не являются действующей заявкой или разрешением опрашивать настоящего провайдера.
 func catalogTask() platformrepo.ProviderModelCatalogTask {
-	return platformrepo.ProviderModelCatalogTask{Ref: "mcattsk_testtask123", AccountRef: cleanupAccountRef, AccountVersion: 3, CredentialRef: "pcred_testrevision123", CredentialRevision: 4, Credential: cleanupCredential, AuthorizationMethod: "API_KEY", ClaimantID: "catalog-worker", ClaimGeneration: 1, Fence: "mcf_testfence123", ExpiresAt: time.Date(2026, 9, 5, 12, 0, 15, 0, time.UTC)}
+	return platformrepo.ProviderModelCatalogTask{Ref: "mcattsk_testtask123", ProviderDefinitionKey: "opencode-fixture", AccountRef: cleanupAccountRef, AccountVersion: 3, CredentialRef: "pcred_testrevision123", CredentialRevision: 4, Credential: cleanupCredential, AuthorizationMethod: "API_KEY", ClaimantID: "catalog-worker", ClaimGeneration: 1, Fence: "mcf_testfence123", ExpiresAt: time.Date(2026, 9, 5, 12, 0, 15, 0, time.UTC)}
 }
 
 // TestModelCatalogRequestRejectsChangedOwnerBindingBeforeRPC computes a baseline digest, then changes each selected owner/credential/claim/expiry/auth pin.
@@ -86,7 +86,7 @@ func TestModelCatalogObservationPreservesCapabilitiesAndRejectsUnverifiedModels(
 	for name, change := range map[string]func(*controlplanev1.ObserveProviderModelCatalogResponse){
 		"unknown source": func(r *controlplanev1.ObserveProviderModelCatalogResponse) { r.Source = 99 },
 		"wrong auth source": func(r *controlplanev1.ObserveProviderModelCatalogResponse) {
-			r.Source = controlplanev1.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX
+			r.Source = controlplanev1.ProviderModelCatalogSource(2)
 		},
 		"failure with models": func(r *controlplanev1.ObserveProviderModelCatalogResponse) {
 			r.Failure = controlplanev1.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_UNVERIFIED_SOURCE

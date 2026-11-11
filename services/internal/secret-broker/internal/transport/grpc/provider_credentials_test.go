@@ -33,9 +33,9 @@ type cleanupProviderCredentialMaterializerStub struct {
 // Check возвращает synthetic readiness без проверки provider, Kubernetes и credential state.
 func (stub *cleanupProviderCredentialMaterializerStub) Check(context.Context) error { return nil }
 
-// ObserveModelCatalog refuses unexpected catalog access in cleanup-only fixtures.
-// ObserveModelCatalog отклоняет неожиданный catalog access в cleanup-only fixtures.
-func (stub *cleanupProviderCredentialMaterializerStub) ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error) {
+// ObserveModelCatalogForDefinition refuses unexpected catalog access in cleanup-only fixtures.
+// ObserveModelCatalogForDefinition отклоняет неожиданный catalog access в cleanup-only fixtures.
+func (stub *cleanupProviderCredentialMaterializerStub) ObserveModelCatalogForDefinition(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string, string) (providercredential.ModelCatalog, error) {
 	return providercredential.ModelCatalog{}, errors.New("unexpected catalog observation")
 }
 

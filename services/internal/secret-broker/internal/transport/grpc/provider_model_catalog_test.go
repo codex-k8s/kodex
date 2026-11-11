@@ -46,8 +46,11 @@ type catalogMaterializerFixture struct {
 // model only for the configured successful outcome.
 // ObserveModelCatalog сохраняет bounded call context и возвращает current-time metadata с одной fixture
 // model лишь для настроенного successful outcome.
-func (fixture *catalogMaterializerFixture) ObserveModelCatalog(ctx context.Context, account string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (providercredential.ModelCatalog, error) {
+func (fixture *catalogMaterializerFixture) ObserveModelCatalogForDefinition(ctx context.Context, account string, descriptor kubernetesstore.ProviderCredentialDescriptor, method, definition string) (providercredential.ModelCatalog, error) {
 	fixture.calls++
+	if definition != "opencode-fixture" {
+		return providercredential.ModelCatalog{}, providercredential.ErrInvalidInput
+	}
 	fixture.account, fixture.method, fixture.descriptor = account, method, descriptor
 	fixture.deadline, _ = ctx.Deadline()
 	result := providercredential.ModelCatalog{ObservedAt: time.Now().UTC(), Failure: fixture.failure}
@@ -100,7 +103,7 @@ func (fixture *catalogVerifierFixture) VerifyAuthorizationContext(_ context.Cont
 // catalogRequestFixture создаёт bounded synthetic owner task, versioned credential pins и short future
 // expiry без реального account.
 func catalogRequestFixture() *cp.ObserveProviderModelCatalogRequest {
-	return &cp.ObserveProviderModelCatalogRequest{TaskRef: "pct_fixture0001", ClaimantId: "controller-fixture", ClaimGeneration: 2, Fence: "fence-fixture", AccountRef: "pacc_fixture01", AccountVersion: 3, CredentialRevisionRef: "pcrev_fixture01", CredentialRevision: 4,
+	return &cp.ObserveProviderModelCatalogRequest{TaskRef: "pct_fixture0001", ProviderDefinitionKey: "opencode-fixture", ClaimantId: "controller-fixture", ClaimGeneration: 2, Fence: "fence-fixture", AccountRef: "pacc_fixture01", AccountVersion: 3, CredentialRevisionRef: "pcrev_fixture01", CredentialRevision: 4,
 		Credential:          &cp.ProviderCredentialDescriptor{SecretName: "provider-fixture", SecretUid: "f4b9c3dc-69c9-44f2-b010-d75d5e62c06e", SecretResourceVersion: "10", ContentSha256: strings.Repeat("a", 64)},
 		AuthorizationMethod: cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY, ExpiresAt: timestamppb.New(time.Now().UTC().Add(5 * time.Second))}
 }
@@ -127,7 +130,7 @@ func catalogPeerContext(t *testing.T) context.Context {
 // peer/bearer/proof/request/scope/ABI fields и требует отсутствия observer calls, кроме valid case с exact
 // descriptor/deadline forwarding.
 func TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead(t *testing.T) {
-	for _, mode := range []string{"allowed", "missing_mtls", "missing_bearer", "revoked", "changed_payload", "wrong_operation", "wrong_permission", "foreign_caller", "project", "expired", "binding", "continuation", "unknown_payload", "unknown_auth"} {
+	for _, mode := range []string{"allowed", "missing_mtls", "missing_bearer", "revoked", "changed_payload", "wrong_operation", "wrong_permission", "foreign_caller", "project", "expired", "binding", "continuation", "unknown_payload", "unknown_auth", "retired_auth", "missing_definition", "retired_definition"} {
 		t.Run(mode, func(t *testing.T) {
 			request := catalogRequestFixture()
 			raw, _ := proto.MarshalOptions{Deterministic: true}.Marshal(request)
@@ -163,8 +166,14 @@ func TestProviderCatalogMiddlewareRejectsDetachedAuthorityBeforeCredentialRead(t
 				request.ProtoReflect().SetUnknown([]byte{0x98, 0x06, 0x01})
 			case "unknown_auth":
 				request.AuthorizationMethod = cp.ProviderAuthorizationMethod(999)
+			case "retired_auth":
+				request.AuthorizationMethod = cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE
+			case "missing_definition":
+				request.ProviderDefinitionKey = ""
+			case "retired_definition":
+				request.ProviderDefinitionKey = "openai-codex"
 			}
-			if mode == "unknown_payload" || mode == "unknown_auth" {
+			if mode == "unknown_payload" || mode == "unknown_auth" || mode == "retired_auth" || mode == "missing_definition" || mode == "retired_definition" {
 				raw, _ = proto.MarshalOptions{Deterministic: true}.Marshal(request)
 				sum = sha256.Sum256(raw)
 				verifier.expectedDigest = hex.EncodeToString(sum[:])

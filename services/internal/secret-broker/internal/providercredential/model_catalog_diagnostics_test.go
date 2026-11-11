@@ -20,7 +20,7 @@ func TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess(t *testing.T) {
 			t.Fatal("cleanup masked primary failure")
 		}
 	}
-	for _, success := range []ModelCatalog{{}, {Failure: CatalogFailureNone, Source: CatalogRemoteCodex, Models: []CatalogModel{{ID: "fixture-model"}}}} {
+	for _, success := range []ModelCatalog{{}, {Failure: CatalogFailureNone, Source: CatalogRemoteAPI, Models: []CatalogModel{{ID: "fixture-model"}}}} {
 		result, err := catalogCleanupFailure(t.Context(), success, nil, cleanup)
 		if err != nil || result.Failure != CatalogFailureUnavailable || result.DiagnosticStage() != string(catalogStageCleanup) || len(result.Models) != 0 || result.Source != "" {
 			t.Fatal("cleanup failure allowed a successful catalog")

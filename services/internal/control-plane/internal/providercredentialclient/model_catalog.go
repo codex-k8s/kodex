@@ -22,7 +22,7 @@ const invalidModelCatalog = "provider model catalog binding is invalid"
 // Создаётся запрос наблюдения провайдера без проверки свежести срока или самостоятельного разрешения доступа.
 func modelCatalogRequest(task platformrepo.ProviderModelCatalogTask) (*controlplanev1.ObserveProviderModelCatalogRequest, error) {
 	method, ok := controlplanev1.ProviderAuthorizationMethod_value["PROVIDER_AUTHORIZATION_METHOD_"+task.AuthorizationMethod]
-	if !ok || method == 0 || !validProviderCredentialRef(task.Ref, "mcattsk_") || !validProviderCredentialRef(task.AccountRef, "pacc_") || task.AccountVersion < 1 || task.AccountVersion > 9007199254740991 || task.CredentialRevision < 1 || task.CredentialRevision > 9007199254740991 || task.ClaimGeneration < 1 || task.ClaimGeneration > 9007199254740991 || !validBoundedSafeText(task.ClaimantID, 128) || !validBoundedSafeText(task.Fence, 128) || !validBoundedSafeText(task.CredentialRef, 96) || !validProviderCredentialDescriptor(task.Credential) || task.ExpiresAt.IsZero() {
+	if !ok || task.AuthorizationMethod != "API_KEY" || !strings.HasPrefix(task.ProviderDefinitionKey, "opencode-") || !validBoundedSafeText(task.ProviderDefinitionKey, 128) || !validProviderCredentialRef(task.Ref, "mcattsk_") || !validProviderCredentialRef(task.AccountRef, "pacc_") || task.AccountVersion < 1 || task.AccountVersion > 9007199254740991 || task.CredentialRevision < 1 || task.CredentialRevision > 9007199254740991 || task.ClaimGeneration < 1 || task.ClaimGeneration > 9007199254740991 || !validBoundedSafeText(task.ClaimantID, 128) || !validBoundedSafeText(task.Fence, 128) || !validBoundedSafeText(task.CredentialRef, 96) || !validProviderCredentialDescriptor(task.Credential) || task.ExpiresAt.IsZero() {
 		return nil, errors.New(invalidModelCatalog)
 	}
 	expires := timestamppb.New(task.ExpiresAt)
@@ -86,8 +86,6 @@ func modelCatalogObservation(task platformrepo.ProviderModelCatalogTask, respons
 		result.Failure = "NONE"
 		if response.GetSource() == controlplanev1.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API && task.AuthorizationMethod == "API_KEY" {
 			result.Source = "REMOTE_API"
-		} else if response.GetSource() == controlplanev1.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX && task.AuthorizationMethod == "DEVICE_CODE" {
-			result.Source = "REMOTE_CODEX"
 		} else {
 			return invalid()
 		}

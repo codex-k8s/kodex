@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log/slog"
+	"strings"
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -95,20 +96,10 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	method := providercredential.CatalogMethodDeviceCode
-	if request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY {
-		method = providercredential.CatalogMethodAPIKey
-	}
+	method := providercredential.CatalogMethodAPIKey
 	descriptor := request.GetCredential()
-	var result providercredential.ModelCatalog
 	exact := kubernetesstore.ProviderCredentialDescriptor{SecretName: descriptor.GetSecretName(), SecretUID: descriptor.GetSecretUid(), SecretResourceVersion: descriptor.GetSecretResourceVersion(), ContentSHA256: descriptor.GetContentSha256()}
-	if request.GetProviderDefinitionKey() == "" || request.GetProviderDefinitionKey() == "openai-codex" {
-		result, err = server.providerCredentials.ObserveModelCatalog(ctx, request.GetAccountRef(), exact, method)
-	} else if gateway, ok := server.providerCredentials.(gatewayCatalogObserver); ok {
-		result, err = gateway.ObserveModelCatalogForDefinition(ctx, request.GetAccountRef(), exact, method, request.GetProviderDefinitionKey())
-	} else {
-		return nil, status.Error(codes.InvalidArgument, "provider catalog definition is unsupported")
-	}
+	result, err := server.providerCredentials.ObserveModelCatalogForDefinition(ctx, request.GetAccountRef(), exact, method, request.GetProviderDefinitionKey())
 
 	if ctx.Err() != nil {
 		return nil, status.FromContextError(ctx.Err()).Err()
@@ -125,8 +116,6 @@ func (server *Server) ObserveProviderModelCatalog(ctx context.Context, request *
 		response.Failure = cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE
 		if result.Source == providercredential.CatalogRemoteAPI {
 			response.Source = cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API
-		} else if result.Source == providercredential.CatalogRemoteCodex {
-			response.Source = cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX
 		} else {
 			return nil, status.Error(codes.Unavailable, "provider catalog source is invalid")
 		}
@@ -191,7 +180,8 @@ func validCatalogRequest(request *cp.ObserveProviderModelCatalogRequest) bool {
 	descriptor := request.GetCredential()
 	return descriptor != nil && len(descriptor.ProtoReflect().GetUnknown()) == 0 && descriptor.GetSecretName() != "" && descriptor.GetSecretUid() != "" && descriptor.GetSecretResourceVersion() != "" && validProjectionSHA256(descriptor.GetContentSha256()) &&
 		request.GetExpiresAt() != nil && request.GetExpiresAt().CheckValid() == nil &&
-		(request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY || request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_DEVICE_CODE)
+		request.GetAuthorizationMethod() == cp.ProviderAuthorizationMethod_PROVIDER_AUTHORIZATION_METHOD_API_KEY &&
+		validCorrelation(request.GetProviderDefinitionKey()) && strings.HasPrefix(request.GetProviderDefinitionKey(), "opencode-")
 }
 
 // minCatalogDeadline returns the earliest supplied time without consulting the clock; callers must pass at
@@ -206,12 +196,4 @@ func minCatalogDeadline(values ...time.Time) time.Time {
 		}
 	}
 	return result
-}
-
-// gatewayCatalogObserver receives provider affinity covered by the exact task request digest.
-// gatewayCatalogObserver получает provider affinity, покрытую exact task request digest.
-type gatewayCatalogObserver interface {
-	// ObserveModelCatalogForDefinition checks the exact task-selected provider affinity.
-	// ObserveModelCatalogForDefinition проверяет exact task-selected provider affinity.
-	ObserveModelCatalogForDefinition(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string, string) (providercredential.ModelCatalog, error)
 }

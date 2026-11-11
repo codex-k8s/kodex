@@ -289,7 +289,7 @@ func providerAccountUsage(item providerUsageAccount, context providerUsageContex
 	u.ProviderHealthScope = "CREDENTIALED_CATALOG_REACHABILITY"
 	// READY относится только к подтверждённому пути текущей credential, не к SLA провайдера.
 	if item.CredentialID != "" && item.Catalog.State == "READY" && item.Catalog.Failure == "NONE" &&
-		(item.Catalog.Source == "REMOTE_API" || item.Catalog.Source == "REMOTE_CODEX") &&
+		item.Catalog.Source == "REMOTE_API" &&
 		item.Catalog.ObservedAt != nil && !item.Catalog.ObservedAt.After(item.ObservedAt) && item.Catalog.ExpiresAt != nil && item.Catalog.ExpiresAt.After(item.ObservedAt) {
 		u.ProviderHealth = providerDimension("READY", "CREDENTIALED_CATALOG_REACHABLE", "NONE")
 		u.ProviderHealthObservedAt, u.ProviderHealthExpiresAt = item.Catalog.ObservedAt, item.Catalog.ExpiresAt
@@ -468,7 +468,7 @@ func validProviderUsageCatalog(item providerUsageAccount) bool {
 	if !slices.Contains([]string{"READY", "PENDING", "FAILED", "EXPIRED"}, item.Catalog.State) || len(item.Models) > 128 {
 		return false
 	}
-	if !slices.Contains([]string{"", "NONE", "UNAVAILABLE", "UNVERIFIED_SOURCE", "AUTHORIZATION_REJECTED"}, item.Catalog.Failure) || !slices.Contains([]string{"", "REMOTE_API", "REMOTE_CODEX"}, item.Catalog.Source) {
+	if !slices.Contains([]string{"", "NONE", "UNAVAILABLE", "UNVERIFIED_SOURCE", "AUTHORIZATION_REJECTED"}, item.Catalog.Failure) || !slices.Contains([]string{"", "REMOTE_API"}, item.Catalog.Source) {
 		return false
 	}
 	if item.Catalog.State == "READY" && (item.Catalog.Failure != "NONE" || item.Catalog.Source == "" || item.Catalog.ObservedAt == nil || item.Catalog.ExpiresAt == nil || !item.Catalog.ExpiresAt.After(item.ObservedAt)) {

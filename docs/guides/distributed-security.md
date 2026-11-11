@@ -52,6 +52,11 @@ API-контрактов, runtime, credentials, ServiceAccount либо друг
 optional cursor в HTTP-странице означает конец списка; отсутствие обязательного
 items остаётся ошибкой формы, null/нестроковый либо слишком длинный cursor отклоняется.
 
+Проверка настроенного provider definition и поддержанного способа авторизации
+предшествует чтению credential из secret backend. Валидный task digest и точный
+Secret descriptor не разрешают чтение для чужого либо снятого runtime route.
+Отсутствующий definition не получает неявного default или fallback каталога.
+
 Gateway model catalog сначала пересекает typed remote IDs с exact deployment
 allowlist. Невыбранные aliases не возвращаются, не используются как endpoint/model
 inputs и не меняют доступность выбранной модели. Matching IDs проходят прежнюю

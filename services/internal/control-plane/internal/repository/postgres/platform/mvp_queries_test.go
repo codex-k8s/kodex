@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"os"
 	"reflect"
@@ -284,6 +285,14 @@ func TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescrip
 	}
 }
 
+// queryConfiguredBootstrapProviderAccount selects the exact configured bootstrap account in disposable fixtures.
+// It reads only a locator and supplies no credential or account authority.
+// queryConfiguredBootstrapProviderAccount выбирает точный настроенный bootstrap account в disposable fixtures.
+// Запрос читает лишь locator и не выдаёт credential или полномочия аккаунта.
+//
+//go:embed testdata/sql/configured_bootstrap_provider_account.sql
+var queryConfiguredBootstrapProviderAccount string
+
 // TestBootstrapComponentProviderAccountLifecycle runs only with the configured component DSN,
 // initializes synthetic provider/image metadata, bootstraps and resolves the exact default account
 // before materialization-reference and disable/enable/revoke assertions. Descriptor mismatch must
@@ -329,7 +338,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	// Выбираем точный bootstrap-аккаунт, а не первый элемент общего каталога.
 	var bootstrapAccountRef string
-	if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&bootstrapAccountRef); err != nil {
+	if err := pool.QueryRow(ctx, queryConfiguredBootstrapProviderAccount, "default-"+repository.modelProvider.DefinitionKey()).Scan(&bootstrapAccountRef); err != nil {
 		t.Fatalf("resolve bootstrap provider account: %v", err)
 	}
 	account, err := service.GetProviderAccountWithUsage(ctx, owner, bootstrapAccountRef, nil)

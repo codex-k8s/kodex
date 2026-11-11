@@ -58,7 +58,7 @@ func validProviderUsage(u *cp.ProviderAccountUsage) bool {
 	if u.ProviderHealth.State == ready {
 		if u.ProviderHealth.Reason != cp.ProviderUsageReason_PROVIDER_USAGE_REASON_CREDENTIALED_CATALOG_REACHABLE || u.ProviderHealthObservedAt == nil || u.ProviderHealthExpiresAt == nil ||
 			u.CatalogStatus.State != cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY || u.CatalogStatus.Failure != cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE ||
-			(u.CatalogStatus.Source != cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API && u.CatalogStatus.Source != cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX) ||
+			u.CatalogStatus.Source != cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API ||
 			u.ProviderHealthObservedAt.CheckValid() != nil || u.ProviderHealthExpiresAt.CheckValid() != nil || u.ProviderHealthObservedAt.AsTime().After(u.ObservedAt.AsTime()) || !u.ProviderHealthExpiresAt.AsTime().After(u.ObservedAt.AsTime()) ||
 			u.CatalogStatus.ObservedAt == nil || u.CatalogStatus.ExpiresAt == nil || !u.ProviderHealthObservedAt.AsTime().Equal(u.CatalogStatus.ObservedAt.AsTime()) || !u.ProviderHealthExpiresAt.AsTime().Equal(u.CatalogStatus.ExpiresAt.AsTime()) {
 			return false

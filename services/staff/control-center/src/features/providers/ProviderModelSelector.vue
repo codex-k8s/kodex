@@ -38,7 +38,6 @@ const catalogLabels = computed(() => ({
   FAILED: t("providers.catalogFailed"),
   EXPIRED: t("providers.catalogExpired"),
   REMOTE_API: t("providers.catalogRemoteApi"),
-  REMOTE_CODEX: t("providers.catalogRemoteCodex"),
   UNAVAILABLE: t("providers.catalogUnavailable"),
   UNVERIFIED_SOURCE: t("providers.catalogUnverified"),
   AUTHORIZATION_REJECTED: t("providers.catalogAuthorizationRejected"),

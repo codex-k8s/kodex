@@ -28,16 +28,11 @@ const (
 	// modelCatalogTimeout ограничивает service и process наблюдение каталога 15 секундами без продления
 	// более короткого caller или lifecycle дедлайна.
 	modelCatalogTimeout = 15 * time.Second
-	// catalogCodexVersion is the exact runtime/cache version accepted by this adapter, not a dynamically
-	// discovered latest CLI version.
-	// catalogCodexVersion задаёт точную runtime/cache версию, принимаемую адаптером, а не динамически
-	// определяемую последнюю версию CLI.
-	catalogCodexVersion = "0.160.0"
 )
 
-// ModelCatalogSource identifies the verified remote API or Codex observation route; failure results
+// ModelCatalogSource identifies the verified configured remote API observation route; failure results
 // carry no source.
-// ModelCatalogSource обозначает проверенный маршрут наблюдения через remote API либо Codex; результаты
+// ModelCatalogSource обозначает проверенный маршрут наблюдения через настроенный remote API; результаты
 // отказа не содержат source.
 type ModelCatalogSource string
 
@@ -53,11 +48,6 @@ const (
 	// CatalogRemoteAPI обозначает доступность API моделей для account, пересечённую с закреплённым
 	// датированным API capability источником.
 	CatalogRemoteAPI ModelCatalogSource = "REMOTE_API"
-	// CatalogRemoteCodex marks validated app-server capabilities, additionally checked against its fresh
-	// pinned-version cache unless the explicit protocol-only mode is enabled.
-	// CatalogRemoteCodex обозначает проверенные app-server capabilities, дополнительно сверенные со свежим
-	// cache закреплённой версии, если явно не включён protocol-only режим.
-	CatalogRemoteCodex ModelCatalogSource = "REMOTE_CODEX"
 	// CatalogFailureNone marks a successful observation whose source, timestamp and capability schema still
 	// require validation at the service boundary.
 	// CatalogFailureNone обозначает успешное наблюдение, чьи source, timestamp и схема capabilities
@@ -203,7 +193,4 @@ const (
 	// CatalogMethodAPIKey identifies explicit API-key material without selecting an executable runtime.
 	// CatalogMethodAPIKey обозначает explicit API-key material без выбора executable runtime.
 	CatalogMethodAPIKey = "API_KEY"
-	// CatalogMethodDeviceCode is retained only for terminal cleanup of retired credential attempts.
-	// CatalogMethodDeviceCode сохраняется лишь для terminal cleanup снятых credential attempts.
-	CatalogMethodDeviceCode = "DEVICE_CODE"
 )

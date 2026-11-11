@@ -61,7 +61,7 @@ func castProviderAccountUsageRead(value entity.ProviderAccount) (*cp.ProviderAcc
 	if u.ProviderHealth.State == "READY" {
 		if u.ProviderHealth.Reason != "CREDENTIALED_CATALOG_REACHABLE" || u.ProviderHealthObservedAt == nil || u.ProviderHealthExpiresAt == nil ||
 			u.ProviderHealthObservedAt.After(u.ObservedAt) || !u.ProviderHealthExpiresAt.After(u.ObservedAt) || u.CatalogStatus.State != "READY" || u.CatalogStatus.Failure != "NONE" ||
-			(u.CatalogStatus.Source != "REMOTE_API" && u.CatalogStatus.Source != "REMOTE_CODEX") || u.CatalogStatus.ObservedAt == nil || u.CatalogStatus.ExpiresAt == nil ||
+			u.CatalogStatus.Source != "REMOTE_API" || u.CatalogStatus.ObservedAt == nil || u.CatalogStatus.ExpiresAt == nil ||
 			!u.ProviderHealthObservedAt.Equal(*u.CatalogStatus.ObservedAt) || !u.ProviderHealthExpiresAt.Equal(*u.CatalogStatus.ExpiresAt) {
 			return nil, errs.ErrUnavailable
 		}

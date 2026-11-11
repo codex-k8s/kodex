@@ -13,8 +13,8 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
-// TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation exercises the real credential service and HTTP parser with unrelated aliases, approved duplicates and malformed/partial bounded responses; it never calls the Codex adapter or invents capabilities.
-// TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation проверяет реальный credential service и HTTP parser с посторонними aliases, повторами approved модели и неверными/неполными bounded ответами; Codex adapter не вызывается, capabilities не выдумываются.
+// TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation exercises the real credential service and HTTP parser with unrelated aliases, approved duplicates and malformed/partial bounded responses; it never invents capabilities or issues an inference request.
+// TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation проверяет реальный credential service и HTTP parser с посторонними aliases, повторами approved модели и неверными/неполными bounded ответами; capabilities не выдумываются, inference не вызывается.
 func TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation(t *testing.T) {
 	for _, test := range []struct {
 		name, body string
@@ -45,11 +45,7 @@ func TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation(t *t
 				}
 				return material, nil
 			}}
-			app := &catalogAppFixture{observe: func(context.Context, []byte, string) (ModelCatalog, error) {
-				t.Fatal("gateway catalog fell back to Codex")
-				return ModelCatalog{}, nil
-			}}
-			service, err := New(t.Context(), store, app, DefaultDeviceAuthorizationTTL())
+			service, err := New(t.Context(), store, NewCredentialClient(), DefaultDeviceAuthorizationTTL())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,6 +79,45 @@ func TestGatewayCatalogServiceIntersectsApprovedModelsBeforeAliasValidation(t *t
 // gatewayCatalogFixture задаёт synthetic Git-owned routing без real provider credential.
 func gatewayCatalogFixture() runtimecontract.ModelProviderConfiguration {
 	return runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "test-gateway", BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.4/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "allowed-model", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+}
+
+// TestGatewayCatalogRejectsAffinityBeforeCredentialRead rejects missing, foreign and retired
+// routes before the exact secret store or the provider transport can observe any request.
+// TestGatewayCatalogRejectsAffinityBeforeCredentialRead отклоняет отсутствующий, чужой и снятый
+// маршрут до обращения к точному secret store либо транспорту провайдера.
+func TestGatewayCatalogRejectsAffinityBeforeCredentialRead(t *testing.T) {
+	for _, mode := range []string{"missing_configuration", "missing_definition", "foreign_definition", "retired_definition", "device_method"} {
+		t.Run(mode, func(t *testing.T) {
+			store := &catalogStoreFixture{read: func(context.Context, string, kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
+				t.Fatal("invalid affinity reached secret store")
+				return nil, nil
+			}}
+			service, err := New(t.Context(), store, NewCredentialClient(), DefaultDeviceAuthorizationTTL())
+			if err != nil {
+				t.Fatal(err)
+			}
+			config := gatewayCatalogFixture()
+			if mode != "missing_configuration" {
+				if err := service.ConfigureModelProvider(config); err != nil {
+					t.Fatal(err)
+				}
+			}
+			definition, method := config.DefinitionKey(), CatalogMethodAPIKey
+			switch mode {
+			case "missing_definition":
+				definition = ""
+			case "foreign_definition":
+				definition = "opencode-foreign"
+			case "retired_definition":
+				definition = "openai-codex"
+			case "device_method":
+				method = "DEVICE_CODE"
+			}
+			if _, err := service.ObserveModelCatalogForDefinition(t.Context(), "pacc_fixture01", kubernetesstore.ProviderCredentialDescriptor{}, method, definition); !errors.Is(err, ErrInvalidInput) {
+				t.Fatal("invalid provider affinity accepted")
+			}
+		})
+	}
 }
 
 // TestGatewayCatalogKeepsCredentialAndModelAffinity rejects other definitions and never invents reasoning capabilities.

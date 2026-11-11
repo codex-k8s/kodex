@@ -2166,7 +2166,7 @@ export type ProviderModelCatalogStatus = {
     state: 'PENDING' | 'READY' | 'FAILED' | 'EXPIRED';
     observedAt?: Timestamp;
     expiresAt?: Timestamp;
-    source?: 'REMOTE_API' | 'REMOTE_CODEX';
+    source?: 'REMOTE_API';
     failure?: 'NONE' | 'UNAVAILABLE' | 'UNVERIFIED_SOURCE' | 'AUTHORIZATION_REJECTED';
 };
 

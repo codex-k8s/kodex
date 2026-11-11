@@ -22,20 +22,3 @@ type catalogStoreFixture struct {
 func (store *catalogStoreFixture) ReadProviderCredentialExact(ctx context.Context, account string, descriptor kubernetesstore.ProviderCredentialDescriptor) ([]byte, error) {
 	return store.read(ctx, account, descriptor)
 }
-
-// catalogAppFixture injects one model-observation callback over the synthetic app-server stub to model
-// success, invalid results and lifecycle cancellation without provider access.
-// catalogAppFixture внедряет один model-observation callback поверх synthetic app-server подмены для
-// моделирования успеха, неверных результатов и lifecycle cancellation без provider доступа.
-type catalogAppFixture struct {
-	providerCredentialBackendStub
-	observe func(context.Context, []byte, string) (ModelCatalog, error)
-}
-
-// ObserveModelCatalog relays context, credential bytes and method to the programmed fixture callback
-// without copying or performing network operations.
-// ObserveModelCatalog передаёт context, credential байты и method в запрограммированный fixture callback
-// без копирования и сетевых операций.
-func (server *catalogAppFixture) ObserveModelCatalog(ctx context.Context, raw []byte, method string) (ModelCatalog, error) {
-	return server.observe(ctx, raw, method)
-}

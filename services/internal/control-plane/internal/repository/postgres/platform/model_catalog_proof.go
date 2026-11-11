@@ -35,7 +35,7 @@ var queryModelCatalogResolveProof string
 // ActorVersion один и возвращает версию организации. Не захватывает работу, не раскрывает
 // credentials и не использует timestamp как authority.
 func (repository *Repository) ResolveProviderModelCatalogProof(ctx context.Context, principal platformrepo.ProofPrincipalInput) (platformrepo.ProofAuthority, error) {
-	if principal.CallerWorkload != "control-plane" || principal.Operation != platformrepo.ProviderModelCatalogOperation || principal.ProjectRef != "" || !validModelCatalogDigest(principal.RequestDigestSHA256) {
+	if repository.modelProvider == nil || principal.CallerWorkload != "control-plane" || principal.Operation != platformrepo.ProviderModelCatalogOperation || principal.ProjectRef != "" || !validModelCatalogDigest(principal.RequestDigestSHA256) {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -46,7 +46,7 @@ func (repository *Repository) ResolveProviderModelCatalogProof(ctx context.Conte
 	}
 	var resolved platformrepo.ProofAuthority
 	var updatedAt time.Time
-	err = repository.pool.QueryRow(ctx, queryModelCatalogResolveProof, principal.RequestDigestSHA256).Scan(&resolved.ActorID, &resolved.OrganizationID, &updatedAt, &resolved.OrganizationVersion)
+	err = repository.pool.QueryRow(ctx, queryModelCatalogResolveProof, principal.RequestDigestSHA256, repository.modelProvider.DefinitionKey()).Scan(&resolved.ActorID, &resolved.OrganizationID, &updatedAt, &resolved.OrganizationVersion)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ProofAuthority{}, errs.ErrForbidden
 	}

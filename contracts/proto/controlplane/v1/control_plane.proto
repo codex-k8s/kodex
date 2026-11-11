@@ -8588,7 +8588,8 @@ message CheckProviderCredentialMaterializerReadinessRequest {}
 enum ProviderModelCatalogSource {
   PROVIDER_MODEL_CATALOG_SOURCE_UNSPECIFIED = 0;
   PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API = 1;
-  PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX = 2;
+  reserved 2;
+  reserved "PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX";
 }
 
 enum ProviderModelCatalogFailure {

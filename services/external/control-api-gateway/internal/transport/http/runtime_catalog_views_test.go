@@ -55,12 +55,12 @@ func runtimeOverlayFixture() *cp.ConfigOverlaySchema {
 }
 
 // runtimeCatalogStatusFixture builds a fixed-time ready account catalog observation from
-// REMOTE_CODEX with a fifteen-minute expiry and no failure.
-// runtimeCatalogStatusFixture создаёт наблюдение готового каталога аккаунта от REMOTE_CODEX с
+// REMOTE_API with a fifteen-minute expiry and no failure.
+// runtimeCatalogStatusFixture создаёт наблюдение готового каталога аккаунта от REMOTE_API с
 // фиксированным временем, сроком пятнадцать минут и отсутствием ошибки.
 func runtimeCatalogStatusFixture() *cp.ProviderModelCatalogStatus {
 	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
-	return &cp.ProviderModelCatalogStatus{State: cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY, Source: cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX, Failure: cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE, ObservedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(15 * time.Minute))}
+	return &cp.ProviderModelCatalogStatus{State: cp.ProviderModelCatalogState_PROVIDER_MODEL_CATALOG_STATE_READY, Source: cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API, Failure: cp.ProviderModelCatalogFailure_PROVIDER_MODEL_CATALOG_FAILURE_NONE, ObservedAt: timestamppb.New(now), ExpiresAt: timestamppb.New(now.Add(15 * time.Minute))}
 }
 
 // TestRuntimeCatalogPublishExactPins checks unchanged model catalog authority pins and rejects

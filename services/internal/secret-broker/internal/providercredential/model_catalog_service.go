@@ -10,11 +10,11 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
-// ObserveModelCatalog ties observation to service/caller lifetime, reads the exact owner-selected
+// ObserveModelCatalogForDefinition ties observation to service/caller lifetime, reads the exact owner-selected
 // credential once and clears that copy, then validates observation time and
 // method/source/failure/capability consistency. It does not grant account access or refresh tokens;
 // invalid or partial results become safe metadata-only failures.
-// ObserveModelCatalog связывает наблюдение со service/caller lifetime, один раз читает точный выбранный
+// ObserveModelCatalogForDefinition связывает наблюдение со service/caller lifetime, один раз читает точный выбранный
 // владельцем credential и обнуляет копию, затем проверяет время и согласованность
 // method/source/failure/capabilities. Доступ account и token refresh не выдаются; неверный или частичный
 // результат становится безопасным отказом только с metadata.
@@ -24,7 +24,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 	if ctx == nil || service == nil || service.lifecycle.Err() != nil || ctx.Err() != nil {
 		return ModelCatalog{}, errors.New("provider model catalog lifecycle is unavailable")
 	}
-	if method != CatalogMethodAPIKey && method != CatalogMethodDeviceCode {
+	if method != CatalogMethodAPIKey || definitionKey == "" || service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
 		return ModelCatalog{}, ErrInvalidInput
 	}
 	ctx, cancel := context.WithTimeout(ctx, modelCatalogTimeout)
@@ -37,20 +37,12 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 		return catalogFailure(ctx, atCatalogStage(catalogStageCredential, err))
 	}
 	defer clear(raw)
-	var result ModelCatalog
-	if definitionKey != "" {
-		if method != CatalogMethodAPIKey || service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
-			return catalogFailure(ctx, errModelCatalogUnverified)
-		}
-		key, decodeErr := runtimecontract.DecodeGatewayProviderAuthentication(raw, definitionKey)
-		clear(key)
-		if decodeErr != nil {
-			return catalogFailure(ctx, errModelCatalogUnverified)
-		}
-		result, err = service.observeGatewayCatalog(ctx, raw)
-	} else {
+	key, decodeErr := runtimecontract.DecodeGatewayProviderAuthentication(raw, definitionKey)
+	clear(key)
+	if decodeErr != nil {
 		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
+	result, err := service.observeGatewayCatalog(ctx, raw)
 	if err != nil {
 		return catalogFailure(ctx, err)
 	}
@@ -61,10 +53,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 		return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 	}
 	if result.Failure == CatalogFailureNone {
-		if result.Source != CatalogRemoteAPI && result.Source != CatalogRemoteCodex || validateCatalogModels(result.Models) != nil {
-			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
-		}
-		if method == CatalogMethodAPIKey && result.Source != CatalogRemoteAPI || method == CatalogMethodDeviceCode && result.Source != CatalogRemoteCodex {
+		if result.Source != CatalogRemoteAPI || validateCatalogModels(result.Models) != nil {
 			return catalogFailure(ctx, atCatalogStage(catalogStageResult, errModelCatalogUnverified))
 		}
 	} else {
@@ -78,10 +67,4 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 		}
 	}
 	return result, nil
-}
-
-// ObserveModelCatalog preserves the legacy definition boundary for callers without gateway support.
-// ObserveModelCatalog сохраняет legacy definition boundary для callers без gateway support.
-func (service *Service) ObserveModelCatalog(ctx context.Context, accountRef string, descriptor kubernetesstore.ProviderCredentialDescriptor, method string) (ModelCatalog, error) {
-	return service.ObserveModelCatalogForDefinition(ctx, accountRef, descriptor, method, "openai-codex")
 }

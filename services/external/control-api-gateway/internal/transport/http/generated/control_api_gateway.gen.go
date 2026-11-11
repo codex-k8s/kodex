@@ -5514,16 +5514,13 @@ func (e ProviderModelCatalogStatusFailure) Valid() bool {
 
 // Defines values for ProviderModelCatalogStatusSource.
 const (
-	REMOTEAPI   ProviderModelCatalogStatusSource = "REMOTE_API"
-	REMOTECODEX ProviderModelCatalogStatusSource = "REMOTE_CODEX"
+	REMOTEAPI ProviderModelCatalogStatusSource = "REMOTE_API"
 )
 
 // Valid indicates whether the value is a known member of the ProviderModelCatalogStatusSource enum.
 func (e ProviderModelCatalogStatusSource) Valid() bool {
 	switch e {
 	case REMOTEAPI:
-		return true
-	case REMOTECODEX:
 		return true
 	default:
 		return false

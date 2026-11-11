@@ -224,3 +224,32 @@ purge graph и сценарии terminal/retry. Их необходимо уст
 завершение, повторные события и 4097 последовательных сообщений без накопления
 всего transcript. Бюджет полного пакета — 300s, внешнего запуска — 360s;
 индивидуальные ограничения native-сценариев сохранены.
+
+## Каталог моделей после удаления Codex runtime
+
+Срез #2108 оставляет один источник наблюдений `REMOTE_API`. CP выбирает только
+аккаунт exact настроенного OpenCode definition, действующий credential и API_KEY.
+Отсутствующая конфигурация не создаёт задач опроса. Число и имя удалённого enum
+REMOTE_CODEX резервируются в Proto; decoder прежнего источника отсутствует.
+
+| Путь | Authority, состояние и потребитель |
+| --- | --- |
+| PWA → gateway → ListModelCapabilities | Проверенные OIDC/внутренние полномочия, прежняя account eligibility; READY только по текущему REMOTE_API receipt; public endpoint и RPC не меняются |
+| CP worker → ClaimProviderModelCatalogTasks | CP владеет account/credential/version и immutable task; отсутствующий или чужой definition не получает claim; API_KEY назначен из проверенного состояния |
+| Generated client → ObserveProviderModelCatalog → secret-broker | Exact task/request digest, workload/method, account/credential pins, deadline; configured definition и API_KEY проверяются **до** чтения секрета |
+| Broker → configured provider /models | Прежние exact TLS/egress/credential boundary и allowlist; URL из task/payload не принимается |
+| Complete → CP receipt → gateway/PWA | Lease/fence/generation и текущие owner pins; одна транзакция сохраняет observation и закрывает task; REMOTE_CODEX/unknown не становятся READY |
+
+| Lifecycle задачи каталога | Результат и read path |
+| --- | --- |
+| Create/claim | Прежние атомарные task/fence/request digest; без domain event, owner ledger CP |
+| Renew | Не поддерживается; фиксированный deadline не продлевается |
+| Complete | Прежний exact receipt, идемпотентность и один атомарный PROVIDER_ACCOUNT_CHANGED при новом completion; consumer — текущая platform projection, повтор события не создаёт |
+| Cancel/delete/revoke/config drift | Прежние owner guards закрывают применение; удалённый/чужой definition не получает новую задачу; authority не восстанавливается по receipt |
+| Expiry/retry | Прежний terminal expiry; повторный опрос создаёт новую task с новыми pins, без переноса device authority |
+| Dead-letter/WAITING_OWNER/CHANGES_REQUESTED | Не являются состояниями этого task kind; не преобразуются в успех |
+
+Новых deployment, listener, transport permission или secret key нет. Источник
+контракта проверен через Context7 `/protocolbuffers/protocolbuffers.github.io`:
+[резервирование удалённых enum](https://protobuf.dev/programming-guides/proto3/#reserved).
+Это карта изменения; результаты проверок фиксируются отдельно по SHA.

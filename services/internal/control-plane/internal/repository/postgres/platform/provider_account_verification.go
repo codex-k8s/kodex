@@ -54,9 +54,9 @@ var queryProviderVerificationLinkTask string
 
 // queryProviderVerificationComplete embeds terminal verification from the linked observation with
 // exact account-version/credential pins before deadline. Only a fresh NONE-failure
-// REMOTE_API/REMOTE_CODEX observation is VERIFIED; other linked observations fail.
+// REMOTE_API observation is VERIFIED; other linked observations fail.
 // queryProviderVerificationComplete встраивает terminal verification по linked observation с exact
-// account-version/credential pins до deadline. Только свежая NONE-failure REMOTE_API/REMOTE_CODEX
+// account-version/credential pins до deadline. Только свежая NONE-failure REMOTE_API
 // observation даёт VERIFIED; прочие linked observations дают отказ.
 //
 //go:embed sql/provider_verification_complete.sql

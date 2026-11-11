@@ -154,11 +154,11 @@ type ProviderCredentialMaterializer interface {
 	// CleanupAuthorizationWithRecovery performs fenced authorization cleanup using the bound recovery descriptor.
 	// CleanupAuthorizationWithRecovery выполняет fenced authorization cleanup по связанному recovery descriptor.
 	CleanupAuthorizationWithRecovery(context.Context, kubernetesstore.ProviderAuthorizationCleanupTarget, kubernetesstore.ProviderCleanupRecoveryIdentity) (kubernetesstore.ProviderCredentialCleanupResult, error)
-	// ObserveModelCatalog queries the configured catalog method using the exact account/credential descriptor,
+	// ObserveModelCatalogForDefinition queries the configured catalog method using the exact account/credential descriptor,
 	// not an arbitrary caller-selected provider URL or credential body.
-	// ObserveModelCatalog запрашивает настроенный catalog method по точным account/credential descriptor,
+	// ObserveModelCatalogForDefinition запрашивает настроенный catalog method по точным account/credential descriptor,
 	// не произвольному provider URL или credential body caller.
-	ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error)
+	ObserveModelCatalogForDefinition(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string, string) (providercredential.ModelCatalog, error)
 }
 
 // Option configures a server during trusted composition; it is not a runtime mutation or authorization API.

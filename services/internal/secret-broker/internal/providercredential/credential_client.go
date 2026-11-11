@@ -48,9 +48,9 @@ type DeviceAuthorizationSession interface {
 	Close() error
 }
 
-// CredentialBackend separates runtime readiness, starting device login and observing model capabilities; owner
+// CredentialBackend separates runtime readiness and authorization lifecycle; owner
 // authorization and durable effect reservation are supplied by higher-level services.
-// CredentialBackend разделяет runtime readiness, начало device login и наблюдение model capabilities; owner
+// CredentialBackend разделяет runtime readiness и lifecycle авторизации; owner
 // авторизацию и durable резервирование эффекта обеспечивают вышележащие сервисы.
 type CredentialBackend interface {
 	// Check verifies the configured executable/state root and pinned CLI version using the caller's budget
@@ -63,11 +63,6 @@ type CredentialBackend interface {
 	// StartDeviceAuthorization создаёт один изолированный local login по server-derived attempt/home
 	// идентификаторам и возвращает сессию, чей lifecycle и закрытие принадлежат вызывающему.
 	StartDeviceAuthorization(context.Context, string, string) (DeviceAuthorizationSession, error)
-	// ObserveModelCatalog consumes a private auth copy for the selected API/device route and returns only
-	// safe capability metadata or a classified failure, not raw credentials.
-	// ObserveModelCatalog использует приватную auth копию для выбранного API/device маршрута и возвращает
-	// только безопасные capability metadata либо классифицированный отказ без сырых credentials.
-	ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error)
 }
 
 // CredentialClient has no executable runtime or hidden authentication fallback; API keys use the configured provider descriptor.
@@ -86,10 +81,4 @@ func (*CredentialClient) Check(ctx context.Context) error { return ctx.Err() }
 // StartDeviceAuthorization отклоняет удалённый CLI device flow до provider request или сохранения materialization.
 func (*CredentialClient) StartDeviceAuthorization(context.Context, string, string) (DeviceAuthorizationSession, error) {
 	return nil, ErrInvalidInput
-}
-
-// ObserveModelCatalog rejects the removed implicit catalog; the service dispatches only an explicit configured provider.
-// ObserveModelCatalog отклоняет удалённый implicit catalog; service допускает лишь explicit configured provider.
-func (*CredentialClient) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
-	return ModelCatalog{}, ErrInvalidInput
 }

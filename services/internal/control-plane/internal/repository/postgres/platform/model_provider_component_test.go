@@ -45,6 +45,20 @@ func TestModelProviderBootstrapComponent(t *testing.T) {
 		t.Fatalf("bootstrap gateway catalog did not select API_KEY: tasks=%+v err=%v", tasks, err)
 	}
 	task := tasks[0]
+	savedProvider := repository.modelProvider
+	repository.modelProvider = nil
+	if _, err := repository.ResolveProviderModelCatalogProof(ctx, platformrepo.ProofPrincipalInput{CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: task.RequestDigest}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("unconfigured provider retained catalog authority", err)
+	}
+	if claims, err := repository.ClaimProviderModelCatalogTasks(ctx, "unconfigured-fixture", 16, &providercredentialclient.Client{}); err != nil || len(claims) != 0 {
+		t.Fatal("unconfigured provider created catalog work", err)
+	}
+	repository.modelProvider = savedProvider
+	tasks, err = repository.ClaimProviderModelCatalogTasks(ctx, "restored-provider-fixture", 16, &providercredentialclient.Client{})
+	if err != nil || len(tasks) != 1 || tasks[0].Ref == task.Ref {
+		t.Fatal("retired catalog task was reused", err)
+	}
+	task = tasks[0]
 	principal := platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: task.RequestDigest}
 	if _, err := repository.ResolveProviderModelCatalogProof(ctx, principal); err != nil {
 		t.Fatal("bootstrap catalog proof rejected", err)

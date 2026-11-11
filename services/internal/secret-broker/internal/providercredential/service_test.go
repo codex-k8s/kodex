@@ -140,14 +140,6 @@ func (store *providerCredentialStoreStub) ReadProviderCredentialExact(context.Co
 	return nil, errors.New("unexpected credential read")
 }
 
-// ObserveModelCatalog rejects unexpected catalog access without launching an executable or contacting
-// HTTP endpoints.
-// ObserveModelCatalog отклоняет неожиданный доступ к каталогу без executable и обращений к HTTP
-// endpoints.
-func (server *providerCredentialBackendStub) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
-	return ModelCatalog{}, errors.New("unexpected model catalog observation")
-}
-
 // Check reports fixture readiness without version probes or process creation.
 // Check сообщает fixture readiness без version probes и создания процесса.
 func (server *providerCredentialBackendStub) Check(context.Context) error { return nil }

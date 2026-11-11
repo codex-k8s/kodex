@@ -1,8 +1,8 @@
 -- name: provider_verification_complete :exec
 UPDATE control_plane.provider_account_verifications verification
-SET state = CASE WHEN observation.failure = 'NONE' AND observation.source IN ('REMOTE_API', 'REMOTE_CODEX')
+SET state = CASE WHEN observation.failure = 'NONE' AND observation.source = 'REMOTE_API'
                       AND observation.observed_at >= verification.requested_at THEN 'VERIFIED' ELSE 'FAILED' END,
-    safe_reason = CASE WHEN observation.failure = 'NONE' AND observation.source IN ('REMOTE_API', 'REMOTE_CODEX')
+    safe_reason = CASE WHEN observation.failure = 'NONE' AND observation.source = 'REMOTE_API'
                            AND observation.observed_at >= verification.requested_at THEN 'CREDENTIAL_REACHABILITY_VERIFIED'
                        ELSE 'CREDENTIAL_VERIFICATION_FAILED' END,
     completed_at = clock_timestamp()

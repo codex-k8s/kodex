@@ -9,6 +9,7 @@ JOIN control_plane.subjects subject ON subject.organization_id = organization.id
 JOIN control_plane.provider_definitions definition ON definition.stable_key = account.definition_key
 WHERE task.request_digest = $1 AND task.state = 'CLAIMED' AND task.expires_at > clock_timestamp()
   AND account.version = task.account_version AND account.current_credential_revision_id = task.provider_credential_revision_id
+  AND account.definition_key = $2::text AND task.authorization_method = 'API_KEY'
   AND account.enabled AND account.state = 'AUTHORIZED' AND definition.enabled AND subject.active
   AND EXISTS (SELECT 1 FROM control_plane.access_bindings binding
       JOIN control_plane.application_role_versions role_version ON role_version.id = binding.role_version_id

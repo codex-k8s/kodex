@@ -46,11 +46,11 @@ var queryModelCatalogComplete string
 // JSON. Content digest охватывает owner/provider/source/models, receipt digest также фиксирует
 // observation metadata; свежесть и live claim authority проверяются позднее.
 func canonicalModelCatalogObservation(task platformrepo.ProviderModelCatalogTask, observation platformrepo.ProviderModelCatalogObservation) (platformrepo.ProviderModelCatalogObservation, string, string, error) {
-	if observation.AccountRef != task.AccountRef || observation.CredentialRef != task.CredentialRef || observation.ObservedAt.IsZero() || len(observation.Models) > 128 {
+	if task.AuthorizationMethod != "API_KEY" || observation.AccountRef != task.AccountRef || observation.CredentialRef != task.CredentialRef || observation.ObservedAt.IsZero() || len(observation.Models) > 128 {
 		return observation, "", "", errs.ErrInvalid
 	}
 	if observation.Failure == "NONE" {
-		if !(task.AuthorizationMethod == "API_KEY" && observation.Source == "REMOTE_API" || task.AuthorizationMethod == "DEVICE_CODE" && observation.Source == "REMOTE_CODEX") {
+		if observation.Source != "REMOTE_API" {
 			return observation, "", "", errs.ErrInvalid
 		}
 	} else if !slices.Contains([]string{"UNAVAILABLE", "UNVERIFIED_SOURCE", "AUTHORIZATION_REJECTED"}, observation.Failure) || observation.Source != "" || len(observation.Models) != 0 {
@@ -134,7 +134,7 @@ func (repository *Repository) CompleteProviderModelCatalogTask(ctx context.Conte
 	if err != nil {
 		return errs.ErrUnavailable
 	}
-	if stored.AccountRef != task.AccountRef || stored.AccountVersion != task.AccountVersion || stored.ProviderDefinitionKey != task.ProviderDefinitionKey || stored.CredentialRef != task.CredentialRef || stored.CredentialRevision != task.CredentialRevision || stored.Credential != task.Credential || stored.AuthorizationMethod != task.AuthorizationMethod {
+	if repository.modelProvider == nil || stored.ProviderDefinitionKey != repository.modelProvider.DefinitionKey() || stored.AccountRef != task.AccountRef || stored.AccountVersion != task.AccountVersion || stored.ProviderDefinitionKey != task.ProviderDefinitionKey || stored.CredentialRef != task.CredentialRef || stored.CredentialRevision != task.CredentialRevision || stored.Credential != task.Credential || stored.AuthorizationMethod != task.AuthorizationMethod {
 		return errs.ErrConflict
 	}
 	if state == "COMPLETED" {

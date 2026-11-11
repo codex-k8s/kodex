@@ -111,9 +111,6 @@ func modelCatalogStatusView(status *cp.ProviderModelCatalogStatus, accountScoped
 	case cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_API:
 		value := generated.ProviderModelCatalogStatusSource("REMOTE_API")
 		result.Source = &value
-	case cp.ProviderModelCatalogSource_PROVIDER_MODEL_CATALOG_SOURCE_REMOTE_CODEX:
-		value := generated.ProviderModelCatalogStatusSource("REMOTE_CODEX")
-		result.Source = &value
 	default:
 		return nil, false
 	}
