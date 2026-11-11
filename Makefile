@@ -123,6 +123,7 @@ test-install-workload-startup:
 	@python3 scripts/tests/install-workload-startup-test.py
 
 test-install-contract:
+	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_dns_address_normalization.py'
 	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_ensure_namespace.py'
 	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_local_object_storage_tls.py'
 	@./scripts/tests/install-contract-test.sh
