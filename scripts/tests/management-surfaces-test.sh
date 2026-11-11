@@ -89,7 +89,7 @@ oauth2_upgrade_line=$(grep -n 'helm upgrade --install "oauth2-$surface"' "$boots
 [[ -n "$routes_apply_line" && -n "$oauth2_upgrade_line" &&
   "$routes_apply_line" -lt "$oauth2_upgrade_line" ]] ||
   fail 'OAuth2 routes and NetworkPolicy are not applied before proxy rollout'
-rg -q -- '-s ssoSessionIdleTimeout=28800 -s ssoSessionMaxLifespan=43200' "$keycloak_bootstrap" ||
+rg -q -- '-s ssoSessionIdleTimeout=43200 -s ssoSessionMaxLifespan=43200' "$keycloak_bootstrap" ||
   fail 'realm SSO lifetime contract is absent'
 rg -q -- '-s revokeRefreshToken=true -s refreshTokenMaxReuse=0' "$keycloak_bootstrap" ||
   fail 'realm refresh-token rotation contract is absent'

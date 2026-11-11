@@ -112,6 +112,7 @@ test-service-infrastructure-bootstrap:
 	@./scripts/tests/local-storage-e2e-reliability-contract-test.sh
 
 test-management-surfaces:
+	@timeout 30s python3 -m unittest discover -s tools/deploy -p 'test_keycloak*.py'
 	@node --test tools/release/proxy-session-cookies.test.mjs
 	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh
 	@./scripts/tests/keycloak-group-reconcile-test.sh
