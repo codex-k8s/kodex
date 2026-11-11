@@ -6,6 +6,18 @@ import installation_images as images
 
 
 class ImagePlanTests(unittest.TestCase):
+    def test_promoted_policy_scope_and_bare_alias_require_local_target_witness(self):
+        digest = "sha256:" + "a" * 64
+        witness = {"name": images.PREFIX + "control-plane:fixture", "digest": digest}
+        promoted = {"name": "example.invalid/kodex/control-plane@" + digest, "digest": digest}
+        bare = {"name": "sha256:" + "b" * 64, "digest": digest}
+        self.assertEqual(images.candidates([witness, promoted, bare], {"control-plane"}, set())[0], [])
+        selected, preserved = images.candidates([witness, promoted, bare], {"control-plane"}, set(), {"example.invalid"})
+        self.assertEqual(preserved, [])
+        self.assertEqual(selected[-1], witness)
+        self.assertTrue(all(entry["witness"] == witness["name"] for entry in selected[:-1]))
+        self.assertEqual(images.candidates([bare], {"control-plane"}, set(), {"example.invalid"})[0], [])
+
     def test_shared_target_and_live_reference_are_preserved(self):
         digest = "sha256:" + "a" * 64
         own = {"name": images.PREFIX + "control-plane:fixture", "digest": digest}

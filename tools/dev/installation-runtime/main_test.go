@@ -33,7 +33,13 @@ func (client *fixtureImages) List(context.Context, *imagesapi.ListImagesRequest,
 // Delete фиксирует target и моделирует завершённое удаление с возможной потерей подтверждения.
 func (client *fixtureImages) Delete(_ context.Context, request *imagesapi.DeleteImageRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
 	client.deleted = request
-	client.records = nil
+	remaining := make([]*imagesapi.Image, 0, len(client.records))
+	for _, record := range client.records {
+		if record.Name != request.Name {
+			remaining = append(remaining, record)
+		}
+	}
+	client.records = remaining
 	if client.lostACK {
 		return nil, status.Error(codes.Unavailable, "synthetic lost acknowledgement")
 	}
@@ -42,7 +48,12 @@ func (client *fixtureImages) Delete(_ context.Context, request *imagesapi.Delete
 
 // Get models authoritative absence after deletion without inventing a replacement.
 // Get моделирует авторитетное отсутствие после удаления без создания replacement.
-func (client *fixtureImages) Get(context.Context, *imagesapi.GetImageRequest, ...grpc.CallOption) (*imagesapi.GetImageResponse, error) {
+func (client *fixtureImages) Get(_ context.Context, request *imagesapi.GetImageRequest, _ ...grpc.CallOption) (*imagesapi.GetImageResponse, error) {
+	for _, record := range client.records {
+		if record.Name == request.Name {
+			return &imagesapi.GetImageResponse{Image: record}, nil
+		}
+	}
 	return nil, status.Error(codes.NotFound, "synthetic absence")
 }
 
@@ -66,7 +77,7 @@ func TestErasePreconditionsAndRejoin(t *testing.T) {
 	name := imagePrefix + "control-plane@" + digest
 	for _, lost := range []bool{false, true} {
 		images := &fixtureImages{records: []*imagesapi.Image{{Name: name, Target: &types.Descriptor{Digest: digest}}}, lostACK: lost}
-		err := erase(context.Background(), images, &fixtureContainers{}, name, digest)
+		err := erase(context.Background(), images, &fixtureContainers{}, name, digest, "")
 		if (err != nil) != lost {
 			t.Fatalf("unexpected first-call result: lost=%v error=%v", lost, err)
 		}
@@ -74,7 +85,7 @@ func TestErasePreconditionsAndRejoin(t *testing.T) {
 			t.Fatal("atomic target precondition missing")
 		}
 		previous := images.deleted
-		if err := erase(context.Background(), images, &fixtureContainers{}, name, digest); err != nil || images.deleted != previous {
+		if err := erase(context.Background(), images, &fixtureContainers{}, name, digest, ""); err != nil || images.deleted != previous {
 			t.Fatal("rejoin repeated deletion instead of accepting authoritative absence")
 		}
 	}
@@ -102,9 +113,31 @@ func TestEraseRejectsForeignAliasesConsumersAndTargetDrift(t *testing.T) {
 			case "immutable-mismatch":
 				reference = imagePrefix + "control-plane@sha256:" + strings.Repeat("b", 64)
 			}
-			if err := erase(context.Background(), images, containers, reference, digest); err == nil || images.deleted != nil {
+			if err := erase(context.Background(), images, containers, reference, digest, ""); err == nil || images.deleted != nil {
 				t.Fatal("unsafe image deletion accepted")
 			}
 		})
+	}
+}
+
+// TestAliasRequiresExistingExactWitness binds promoted and CRI aliases to a still-present owned target.
+// TestAliasRequiresExistingExactWitness связывает promoted и CRI aliases с ещё существующим собственным target.
+func TestAliasRequiresExistingExactWitness(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	witness := imagePrefix + "agent-runner:fixture"
+	for _, alias := range []string{"example.invalid/kodex/agent-runner@" + digest, "sha256:" + strings.Repeat("b", 64)} {
+		for _, valid := range []bool{false, true} {
+			images := &fixtureImages{records: []*imagesapi.Image{{Name: alias, Target: &types.Descriptor{Digest: digest}}}}
+			if valid {
+				images.records = append(images.records, &imagesapi.Image{Name: witness, Target: &types.Descriptor{Digest: digest}})
+			}
+			err := erase(context.Background(), images, &fixtureContainers{}, alias, digest, witness)
+			if (err == nil) != valid || (images.deleted != nil) != valid {
+				t.Fatal("alias deletion did not require the exact witness")
+			}
+			if valid && (len(images.records) != 1 || images.records[0].Name != witness || images.deleted.Name != alias) {
+				t.Fatal("alias deletion affected the witness")
+			}
+		}
 	}
 }

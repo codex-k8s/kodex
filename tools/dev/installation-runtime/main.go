@@ -39,6 +39,10 @@ var referencePattern = regexp.MustCompile(`^registry\.local\.kodex/kodex/[a-z0-9
 // digestPattern требует полный SHA256 адрес содержимого, а не tag или сокращённый digest.
 var digestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
+// aliasPattern bounds a promoted alias whose ownership the wrapper proved from an immutable Kubernetes policy.
+// aliasPattern ограничивает promoted alias, принадлежность которого wrapper доказал по immutable Kubernetes policy.
+var aliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*(?::[0-9]+)?/kodex/[a-z0-9][a-z0-9-]*(?::[A-Za-z0-9][A-Za-z0-9_.-]{0,127}|@sha256:[a-f0-9]{64})$`)
+
 // imageRecord projects only public image identity; arbitrary labels and container configuration are excluded.
 // imageRecord проецирует только публичную identity образа; произвольные labels и конфигурация контейнера исключены.
 type imageRecord struct {
@@ -68,8 +72,12 @@ func inspect(ctx context.Context, client imagesapi.ImagesClient) ([]imageRecord,
 
 // erase requires an unused exact target, preserves foreign aliases, and sends the digest as an atomic server precondition.
 // erase требует неиспользуемый exact target, сохраняет чужие aliases и передаёт digest как атомарное условие серверу.
-func erase(ctx context.Context, images imagesapi.ImagesClient, containers containersapi.ContainersClient, name, expected string) error {
-	if !referencePattern.MatchString(name) || !digestPattern.MatchString(expected) {
+func erase(ctx context.Context, images imagesapi.ImagesClient, containers containersapi.ContainersClient, name, expected, witness string) error {
+	if !digestPattern.MatchString(expected) || witness == "" && !referencePattern.MatchString(name) {
+		return errors.New(failureText)
+	}
+	if witness != "" && (!referencePattern.MatchString(witness) || name == witness ||
+		(!digestPattern.MatchString(name) && !aliasPattern.MatchString(name))) {
 		return errors.New(failureText)
 	}
 	if _, suffix, immutable := strings.Cut(name, "@"); immutable && suffix != expected {
@@ -82,13 +90,16 @@ func erase(ctx context.Context, images imagesapi.ImagesClient, containers contai
 	byName := make(map[string]string, len(records))
 	for _, record := range records {
 		byName[record.Name] = record.Digest
-		if record.Digest == expected && !strings.HasPrefix(record.Name, imagePrefix) {
+		if witness == "" && record.Digest == expected && !strings.HasPrefix(record.Name, imagePrefix) {
 			return errors.New(failureText)
 		}
 	}
 	if current, found := byName[name]; !found {
 		return nil
 	} else if current != expected {
+		return errors.New(failureText)
+	}
+	if witness != "" && byName[witness] != expected {
 		return errors.New(failureText)
 	}
 	active, err := containers.List(ctx, &containersapi.ListContainersRequest{})
@@ -114,7 +125,8 @@ func erase(ctx context.Context, images imagesapi.ImagesClient, containers contai
 // run connects exclusively to the local k3s Unix socket; no caller-selected endpoint or namespace is accepted.
 // run подключается только к локальному Unix socket k3s; caller не выбирает endpoint или namespace.
 func run(arguments []string) error {
-	if len(arguments) != 1 && len(arguments) != 3 || len(arguments) == 1 && arguments[0] != "inspect" || len(arguments) == 3 && arguments[0] != "delete" {
+	valid := len(arguments) == 1 && arguments[0] == "inspect" || len(arguments) == 3 && arguments[0] == "delete" || len(arguments) == 4 && arguments[0] == "alias"
+	if !valid {
 		return errors.New(failureText)
 	}
 	connection, err := grpc.NewClient("unix:///run/k3s/containerd/containerd.sock", grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -133,7 +145,11 @@ func run(arguments []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(value)
 	}
-	if err := erase(ctx, images, containersapi.NewContainersClient(connection), arguments[1], arguments[2]); err != nil {
+	witness := ""
+	if arguments[0] == "alias" {
+		witness = arguments[3]
+	}
+	if err := erase(ctx, images, containersapi.NewContainersClient(connection), arguments[1], arguments[2], witness); err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]string{"status": "ABSENT"})

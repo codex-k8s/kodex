@@ -212,7 +212,14 @@ Build info helper должен подтверждать тот же SHA. Plan к
 bytes в новый private task directory каждого exact k3d container и проверяет
 readback хеша; Kubernetes workloads при этом не создаются.
 Удаляются только references canonical components в локальной области Kodex;
-чужие aliases того же digest и используемые образы сохраняются. Apply использует
+чужие aliases того же digest и используемые образы сохраняются.
+Promoted registry определяется по exact UID существующих immutable
+`kodex-image-admission-policy-*`, а не по переданному URL. Его aliases и bare CRI
+image references удаляются только при наличии ещё существующего local reference
+того же target. Alias удаляется первым, local witness — последним; неизвестный
+registry или consumer сохраняет всю группу. Повторное применение заново сверяет
+policy UID/host/repository. Очистку образов поэтому завершают до фазы `objects`.
+Apply использует
 typed containerd API через локальный Unix socket, namespace `k8s.io` и
 `DeleteImageRequest.Target.Digest`. Server-side precondition защищает от замены
 tag между проверкой и удалением. Синхронный GC следует штатному графу ссылок

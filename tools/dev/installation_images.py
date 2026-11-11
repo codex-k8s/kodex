@@ -68,23 +68,61 @@ def verify_helper(container, path, expected):
         raise ValueError(ERROR)
 
 
-def candidates(records, components, protected):
+def candidates(records, components, protected, registries=()):
     """Признать только canonical component references без чужих aliases того же target и без consumers."""
     targets = {entry["name"]: entry["digest"] for entry in records}
     if len(targets) != len(records) or any(not re.fullmatch(r"sha256:[a-f0-9]{64}", value) for value in targets.values()):
         raise ValueError(ERROR)
     protected_digests = {targets[name] for name in protected if name in targets}
-    foreign_digests = {value for name, value in targets.items() if not name.startswith(PREFIX)}
+    promoted = tuple(host + "/kodex/" for host in registries)
+    def owned_name(name):
+        for prefix in (PREFIX, *promoted):
+            if name.startswith(prefix):
+                normalized = PREFIX + name[len(prefix):]
+                match = REFERENCE.fullmatch(normalized)
+                if not match or match[1] not in components:
+                    raise ValueError(ERROR)
+                return True
+        return False
+    foreign_digests = {value for name, value in targets.items() if not owned_name(name) and not re.fullmatch(r"sha256:[a-f0-9]{64}", name)}
+    witnesses = {}
+    for name, value in sorted(targets.items()):
+        if REFERENCE.fullmatch(name):
+            witnesses.setdefault(value, name)
     selected, preserved = [], []
     for record in records:
-        match = REFERENCE.fullmatch(record["name"])
-        if record["name"].startswith(PREFIX) and (not match or match[1] not in components):
-            raise ValueError(ERROR)
-        if match and record["digest"] not in foreign_digests | protected_digests and record["name"] not in protected:
-            selected.append(record)
+        own = owned_name(record["name"])
+        bare = bool(re.fullmatch(r"sha256:[a-f0-9]{64}", record["name"]))
+        witness = witnesses.get(record["digest"])
+        if (own or bare and witness) and record["digest"] not in foreign_digests | protected_digests and record["name"] not in protected:
+            if not record["name"].startswith(PREFIX):
+                if not witness:
+                    raise ValueError(ERROR)
+                selected.append({**record, "witness": witness})
+            else:
+                selected.append(record)
         else:
             preserved.append(record)
-    return selected, preserved
+    return sorted(selected, key=lambda entry: ("witness" not in entry, entry["name"])), preserved
+
+
+def registry_authorities(client, cleanup, current):
+    """Вывести promoted host только из существующих immutable policy с доказанным исходным Kodex UID."""
+    owned = {entry["identity"]["uid"] for entry in cleanup["deleteCandidates"]}
+    result = []
+    for item in current["objects"]:
+        if (item["uid"] not in owned or item["resource"] != "configmaps" or item["namespace"] != "kodex-system"
+                or not re.fullmatch(r"kodex-image-admission-policy-[a-f0-9]{30,32}", item["name"])):
+            continue
+        value = client.get("/api/v1/namespaces/kodex-system/configmaps/" + item["name"])
+        if value["metadata"]["uid"] != item["uid"] or value.get("immutable") is not True:
+            raise ValueError(ERROR)
+        data = value.get("data", {})
+        host, repository = data.get("pullRegistryHost", ""), data.get("promotedPullRepository", "")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,252}", host) or repository != host + "/kodex/roles":
+            raise ValueError(ERROR)
+        result.append({"uid": item["uid"], "host": host, "repository": repository})
+    return sorted(result, key=lambda entry: entry["uid"])
 
 
 def main():
@@ -106,7 +144,7 @@ def main():
     payload = helper_file(args.helper, args.helper_sha256, source)
     components = {entry["component"] for entry in decode(Path("tools/release/images.json").read_bytes())["images"]}
     # Эти два build-only component зарегистрированы в canonical local image importer.
-    components |= {"image-admission-tools", "integration-hot-reload", "stt-hot-reload"}
+    components |= {"image-admission-tools", "integration-hot-reload", "stt-hot-reload", "roles"}
     with tempfile.TemporaryDirectory(prefix="kodex-image-inventory-") as temporary:
         client = Client(args.kubectl, args.kubeconfig, args.context, temporary)
         current = inventory(client, args.context)
@@ -119,14 +157,16 @@ def main():
         if any(entry["namespace"] in namespaces and entry["resource"] in workloads for entry in current["objects"]):
             raise ValueError(ERROR)
         protected = {reference for entry in current["links"] for reference in entry.get("images", [])}
+        authorities = registry_authorities(client, cleanup, current)
+        registries = {entry["host"] for entry in authorities}
         containers = cleanup["physicalStorage"]["containers"]
         if args.mode == "plan":
             value = {"schema": "kodex.installation-image-plan/v1", "cleanupDigest": cleanup["digest"], "sourceSHA": source,
-                     "helperSHA256": args.helper_sha256, "nodes": []}
+                     "helperSHA256": args.helper_sha256, "registryAuthorities": authorities, "nodes": []}
             for node, container in containers.items():
                 path = install_helper(container, payload, args.helper_sha256)
                 records = decode(command(["docker", "exec", container, path, "inspect"]))
-                selected, preserved = candidates(records, components, protected)
+                selected, preserved = candidates(records, components, protected, registries)
                 value["nodes"].append({"name": node, "containerID": container, "helperPath": path, "delete": selected, "preserve": preserved})
             value["digest"] = digest(value)
             write_private(args.image_plan, value)
@@ -136,6 +176,7 @@ def main():
         without_digest = {key: item for key, item in value.items() if key != "digest"}
         if (value.get("schema") != "kodex.installation-image-plan/v1" or value["digest"] != digest(without_digest)
                 or value["cleanupDigest"] != cleanup["digest"] or value["sourceSHA"] != source or value["helperSHA256"] != args.helper_sha256
+                or value.get("registryAuthorities") != authorities
                 or {node["name"]: node["containerID"] for node in value["nodes"]} != containers):
             raise ValueError(ERROR)
         journal = Journal(args.journal, value["digest"])
@@ -145,7 +186,7 @@ def main():
                 container, path = node["containerID"], node["helperPath"]
                 verify_helper(container, path, args.helper_sha256)
                 now = decode(command(["docker", "exec", container, path, "inspect"]))
-                allowed, _ = candidates(now, components, protected)
+                allowed, _ = candidates(now, components, protected, registries)
                 by_name = {entry["name"]: entry["digest"] for entry in now}
                 for record in node["delete"]:
                     if time.monotonic() >= deadline:
@@ -155,7 +196,8 @@ def main():
                     if record["name"] in by_name and by_name[record["name"]] != record["digest"]:
                         raise ValueError(ERROR)
                     journal.append({"event": "IMAGE_DELETE_INTENT", "node": node["name"], **record})
-                    result = decode(command(["docker", "exec", container, path, "delete", record["name"], record["digest"]]))
+                    operation = ["alias", record["name"], record["digest"], record["witness"]] if "witness" in record else ["delete", record["name"], record["digest"]]
+                    result = decode(command(["docker", "exec", container, path, *operation]))
                     if result != {"status": "ABSENT"}:
                         raise ValueError(ERROR)
                     journal.append({"event": "IMAGE_ABSENT", "node": node["name"], **record})
