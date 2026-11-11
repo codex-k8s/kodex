@@ -83,8 +83,13 @@ type providerUsageAccount struct {
 // providerUsageAgent Хранит текущие идентичность, состояние, версию и проект агента, конфигурацию
 // runtime с хешем, провайдера, модель, overlay, закреплённых кандидатов и выбранный аккаунт.
 // Зависимости чтения требуют отдельного права субъекта на запуск или настройку.
+// NativeToolCount retains the historical environment-command count; ManagedWorkspaceTools is
+// server-derived eligibility for the isolated command path, not a native provider permission.
+// NativeToolCount сохраняет прежний счётчик команд окружения; ManagedWorkspaceTools выводится
+// сервером для изолированного пути команд и не разрешает native tools провайдера.
 type providerUsageAgent struct {
 	NativeToolCount                                                                            int32 `json:"nativeToolCount,omitempty"`
+	ManagedWorkspaceTools                                                                      bool  `json:"managedWorkspaceTools,omitempty"`
 	Ref, State, ProjectRef, ConfigRef, ConfigDigest, Provider, Model, Overlay, SelectedAccount string
 	Version                                                                                    int64
 	Enabled                                                                                    bool
@@ -169,7 +174,7 @@ func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string
 	for rows.Next() {
 		var item providerUsageAgent
 		var candidates []byte
-		if rows.Scan(&item.Ref, &item.Version, &item.Enabled, &item.State, &item.ProjectRef, &item.ConfigRef, &item.ConfigDigest, &item.Provider, &item.Model, &candidates, &item.Overlay, &item.SelectedAccount, &item.NativeToolCount) != nil || len(candidates) > 131072 || decodeStrict(candidates, &item.Candidates) != nil {
+		if rows.Scan(&item.Ref, &item.Version, &item.Enabled, &item.State, &item.ProjectRef, &item.ConfigRef, &item.ConfigDigest, &item.Provider, &item.Model, &candidates, &item.Overlay, &item.SelectedAccount, &item.NativeToolCount, &item.ManagedWorkspaceTools) != nil || len(candidates) > 131072 || decodeStrict(candidates, &item.Candidates) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		result[item.Ref] = item
@@ -362,7 +367,7 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 			return blocked("RUNTIME_CONFIGURATION_MISSING", "REPUBLISH_CONFIGURATION")
 		}
 		provider, model = context.Agent.Provider, context.Agent.Model
-		if strings.HasPrefix(provider, "opencode-") && (context.Agent.Overlay != "" || context.Agent.NativeToolCount != 0) {
+		if strings.HasPrefix(provider, "opencode-") && (context.Agent.Overlay != "" || context.Agent.NativeToolCount < 0 || context.Agent.NativeToolCount > 0 && !context.Agent.ManagedWorkspaceTools) {
 			return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
 		}
 		for _, candidate := range context.Agent.Candidates {
