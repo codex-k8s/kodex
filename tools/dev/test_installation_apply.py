@@ -196,9 +196,15 @@ class ApplyTests(unittest.TestCase):
     def test_path_cannot_escape_exact_api_object(self):
         row = item("pods", "fixture")
         self.assertEqual(apply.object_path(row), "/api/v1/namespaces/kodex-system/pods/fixture")
+        role = item("clusterroles", "fixture:read", "")
+        role["apiVersion"] = "rbac.authorization.k8s.io/v1"
+        self.assertEqual(apply.object_path(role), "/apis/rbac.authorization.k8s.io/v1/clusterroles/fixture%3Aread")
         for key in ("resource", "name", "namespace", "apiVersion"):
             with self.assertRaises(ValueError):
                 apply.object_path({**row, key: "../foreign"})
+        for name in ("fixture%2Fforeign", "fixture?query=true", "fixture/foreign", "fixture#fragment"):
+            with self.assertRaises(ValueError):
+                apply.object_path({**row, "name": name})
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
 
 from installation_cleanup import address, digest, plan_inventory, read_private
 from installation_inventory import Client, decode, inventory, metadata
@@ -35,15 +36,16 @@ PHASES = {
 def object_path(item):
     """Сформировать один API address только из проверенных сегментов, без selector и deletecollection."""
     for key in ("resource", "name", "namespace"):
+        pattern = r"[a-z0-9][a-z0-9.:-]*" if key == "name" else r"[a-z0-9][a-z0-9.-]*"
         if (not isinstance(item[key], str) or (not item[key] and key != "namespace")
-                or item[key] and not re.fullmatch(r"[a-z0-9][a-z0-9.-]*", item[key])):
+                or item[key] and not re.fullmatch(pattern, item[key])):
             raise ValueError(ERROR)
     version = item["apiVersion"]
     if not re.fullmatch(r"(?:[a-z0-9][a-z0-9.-]*/)?v[0-9]+(?:(?:alpha|beta)[0-9]+)?", version):
         raise ValueError(ERROR)
     prefix = "/api/" if version == "v1" else "/apis/"
     scope = "/namespaces/" + item["namespace"] if item["namespace"] else ""
-    return prefix + version + scope + "/" + item["resource"] + "/" + item["name"]
+    return prefix + version + scope + "/" + item["resource"] + "/" + urllib.parse.quote(item["name"], safe="")
 
 
 def ownership(item):
