@@ -8,14 +8,14 @@ VALUES ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-0000000
 INSERT INTO control_plane.owner_claim_contracts (organization_id, stable_key, state)
 VALUES ('10000000-0000-4000-8000-000000000001', 'installation-owner', 'PENDING_CLAIM');
 INSERT INTO control_plane.provider_definitions (stable_key, name, adapter_key)
-VALUES ('openai-codex', 'Synthetic Codex', 'openai-codex') ON CONFLICT DO NOTHING;
+VALUES ('opencode-fixture', 'Synthetic OpenCode', 'opencode-fixture') ON CONFLICT DO NOTHING;
 INSERT INTO control_plane.provider_accounts (ref, organization_id, definition_key, stable_key, name, state, created_by)
-VALUES ('pacc_bootstrap_fixture', '10000000-0000-4000-8000-000000000001', 'openai-codex',
-        'default-openai-codex', 'Synthetic default', 'AUTHORIZED', '20000000-0000-4000-8000-000000000001'),
-       ('pacc_foreign_fixture', '10000000-0000-4000-8000-000000000002', 'openai-codex',
-        'default-openai-codex', 'Synthetic foreign', 'AUTHORIZED', '20000000-0000-4000-8000-000000000001');
+VALUES ('pacc_bootstrap_fixture', '10000000-0000-4000-8000-000000000001', 'opencode-fixture',
+        'default-opencode-fixture', 'Synthetic default', 'AUTHORIZED', '20000000-0000-4000-8000-000000000001'),
+       ('pacc_foreign_fixture', '10000000-0000-4000-8000-000000000002', 'opencode-fixture',
+        'default-opencode-fixture', 'Synthetic foreign', 'AUTHORIZED', '20000000-0000-4000-8000-000000000001');
 INSERT INTO control_plane.provider_accounts (ref, organization_id, definition_key, stable_key, name, state, enabled, created_by)
-VALUES ('pacc_disabled_fixture', '10000000-0000-4000-8000-000000000001', 'openai-codex',
+VALUES ('pacc_disabled_fixture', '10000000-0000-4000-8000-000000000001', 'opencode-fixture',
         'disabled-fixture', 'Synthetic disabled', 'PENDING_AUTHORIZATION', false, '20000000-0000-4000-8000-000000000001');
 INSERT INTO control_plane.provider_credential_revisions
     (ref, organization_id, provider_account_id, revision_number, secret_name, secret_uid,

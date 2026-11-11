@@ -15,7 +15,7 @@ const sdk = vi.hoisted(() => ({
   setProviderAccountEnabled: vi.fn(),
   setProviderAccountConcurrency: vi.fn(),
   startProviderAccountDeviceAuthorization: vi.fn(),
-  verifyProviderAccountDeviceAuthorization: vi.fn(),
+  verifyProviderAccountAuthorization: vi.fn(),
 }));
 const mutateMock = vi.hoisted(() =>
   vi.fn(
@@ -48,7 +48,7 @@ import {
   reauthorizeProviderDevice,
   setProviderAccountEnabled,
   setProviderAccountConcurrency,
-  verifyDeviceAuthorization,
+  verifyAccountAuthorization,
 } from "./api";
 
 const account: ProviderAccount = {
@@ -158,17 +158,17 @@ describe("provider API adapter", () => {
   });
 
   it("использует отдельный verify endpoint и PUT для enabled", async () => {
-    sdk.verifyProviderAccountDeviceAuthorization.mockResolvedValue({
+    sdk.verifyProviderAccountAuthorization.mockResolvedValue({
       data: account,
     });
     sdk.setProviderAccountEnabled.mockResolvedValue({
       data: { ...account, enabled: false },
     });
 
-    await verifyDeviceAuthorization(account);
+    await verifyAccountAuthorization(account);
     await setProviderAccountEnabled(account, false);
 
-    expect(sdk.verifyProviderAccountDeviceAuthorization).toHaveBeenCalledWith(
+    expect(sdk.verifyProviderAccountAuthorization).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { providerAccountRef: account.ref },
       }),

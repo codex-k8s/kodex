@@ -77,7 +77,7 @@ def read_private_auth(path):
     try:
         mode = os.fstat(fd)
         require(file.is_absolute() and stat.S_ISREG(mode.st_mode) and mode.st_uid == os.getuid()
-                and mode.st_mode & 0o077 == 0 and mode.st_size <= 1048576)
+                and mode.st_mode & 0o077 == 0 and mode.st_nlink == 1 and mode.st_size <= 1048576)
         with os.fdopen(fd, "rb", closefd=False) as source:
             return auth_valid(source.read(1048577))
     finally:
@@ -91,7 +91,7 @@ def descriptor(secret):
                 secretResourceVersion=meta["resourceVersion"], contentSHA256=digest(raw))
 
 
-def validate(secret, pins, account, key, legacy=False):
+def validate(secret, pins, account, key, seed_epoch=""):
     meta = secret["metadata"]
     labels, annotations = meta.get("labels", {}), meta.get("annotations", {})
     require(meta.get("namespace") == "kodex-runtime" and not meta.get("deletionTimestamp"))
@@ -117,10 +117,12 @@ def validate(secret, pins, account, key, legacy=False):
     if canonical:
         require(stored == sha.encode())
         return raw, True
-    # Только вход миграции, не runtime reader и не подтверждение canonical readiness.
-    require(legacy and owner in ("kodex-local-dev", "kodex-install") and
-            annotations.get("kodex.dev/provider-account-key") == key and
-            not meta.get("ownerReferences") and stored in (sha.encode(), (sha + "\n").encode()))
+    # Единственное промежуточное состояние новой установки: exact seed текущего
+    # namespace. Старые неразмеченные snapshots не являются входом восстановления.
+    require(seed_epoch and key == bootstrap_key(raw))
+    expected = seed_manifest(seed_epoch, raw)["metadata"]
+    require(meta["name"] == expected["name"] and labels == expected["labels"] and
+            annotations == expected["annotations"] and not meta.get("ownerReferences") and stored == sha.encode())
     return raw, False
 
 
@@ -233,7 +235,7 @@ class Operator:
             self.call(["create", "--field-manager=kodex-install", "-f", "-"], json.dumps(wanted).encode())
             created = self.get("secret", wanted["metadata"]["name"])
         pins = descriptor(created)
-        validate(created, pins, "", self.bootstrap_account_key, legacy=True)
+        validate(created, pins, "", self.bootstrap_account_key, seed_epoch=epoch)
         require(created["metadata"].get("annotations", {}).get(SEED_EPOCH) == epoch and
                 created["metadata"]["annotations"].get(PREFIX + "seed") == "v1" and
                 pins["contentSHA256"] == digest(raw) and
@@ -272,12 +274,12 @@ class Operator:
         selected = self.get("secret", pins["secretName"]) if pins else None
         if auth_file is None:
             require(selected is not None)
-            raw, canonical = validate(selected, pins, before["accountRef"], key, legacy=True)
+            raw, canonical = validate(selected, pins, before["accountRef"], key, seed_epoch=self.namespace_epoch())
         else:
             raw = read_private_auth(auth_file)
             canonical = False
             if selected and pins["contentSHA256"] == digest(raw):
-                _, canonical = validate(selected, pins, before["accountRef"], key, legacy=True)
+                _, canonical = validate(selected, pins, before["accountRef"], key, seed_epoch=self.namespace_epoch())
         require_definition(raw, before["definitionKey"])
         if canonical:
             after = self.snapshot(key)
@@ -320,7 +322,7 @@ class Operator:
         secret = self.get("secret", pins["secretName"])
         annotations = secret["metadata"].get("annotations", {})
         account = annotations.get(PREFIX + "account-ref", annotations.get("runtime.kodex.dev/provider-account-ref", ""))
-        validate(secret, pins, account, self.bootstrap_account_key, legacy=True)
+        validate(secret, pins, account, self.bootstrap_account_key, seed_epoch=self.namespace_epoch())
         return True
 
 

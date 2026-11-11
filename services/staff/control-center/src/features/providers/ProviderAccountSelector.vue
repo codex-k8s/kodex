@@ -19,7 +19,6 @@ import {
   normalizeProviderAccountCandidates,
   type ProviderAccount,
   type ProviderAccountCandidate,
-  type ProviderDefinitionKey,
   type ProviderPolicyMode,
 } from "./model";
 
@@ -54,7 +53,7 @@ function current(account: ProviderAccount): boolean {
 const definitionKey = computed(() =>
   /^[a-z][a-z0-9-]{0,95}$/.test(props.definitionKey) &&
   props.usageContext.runtimeProfileRef
-    ? (props.definitionKey as ProviderDefinitionKey)
+    ? props.definitionKey
     : undefined,
 );
 const selectedRefs = computed(() =>

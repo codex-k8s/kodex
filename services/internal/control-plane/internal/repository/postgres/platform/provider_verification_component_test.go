@@ -24,31 +24,23 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.device-verify",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.authorization.verify",
 	}, "control-api-gateway")
 	service, err := platformservice.New(repository)
 	if err != nil {
 		t.Fatal(err)
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "verification-create"}, Payload: command.ProviderAccountInput{DefinitionKey: "openai-codex", Name: "Verification fixture"}})
+		Mutation: value.Mutation{IdempotencyKey: "verification-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Verification fixture"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create verification account: %v", err)
 	}
 	account := created.ProviderAccount
-	expires := time.Now().Add(5 * time.Minute)
-	payload := command.ProviderAccountInput{AccountRef: account.Ref, AuthorizationRef: "pauth_verification_fixture", AuthorizationMethod: "DEVICE_CODE",
-		AuthorizationState: "PENDING", MaterializerAttemptRef: "pmat_verification_fixture", VerificationURI: "https://provider.invalid/device", UserCode: "TEST", AuthorizationExpiresAt: &expires}
-	pending, err := service.Execute(ctx, command.Command{Kind: command.StartProviderDeviceAuth, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "verification-start", ExpectedVersion: &account.Version}, Payload: payload})
-	if err != nil || pending.ProviderAccount == nil {
-		t.Fatalf("start verification credential: %v", err)
-	}
-	payload.AuthorizationState = "AUTHORIZED"
-	payload.ExternalAccountMasked = "Verification fixture"
-	payload.Credential = &entity.ProviderCredentialDescriptor{SecretName: "runtime-provider-verification", SecretUID: "63000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("6", 64)}
-	authorized, err := service.Execute(ctx, command.Command{Kind: command.RefreshProviderAuthorization, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "verification-authorize", ExpectedVersion: &pending.ProviderAccount.Version}, Payload: payload})
+	payload := command.ProviderAccountInput{AccountRef: account.Ref, AuthorizationRef: "pauth_verification_fixture", AuthorizationMethod: "API_KEY",
+		AuthorizationState: "AUTHORIZED", ExternalAccountMasked: "Verification fixture",
+		Credential: &entity.ProviderCredentialDescriptor{SecretName: "runtime-provider-verification", SecretUID: "63000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("6", 64)}}
+	authorized, err := service.Execute(ctx, command.Command{Kind: command.AuthorizeProviderAPIKey, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "verification-authorize", ExpectedVersion: &account.Version}, Payload: payload})
 	if err != nil || authorized.ProviderAccount == nil {
 		t.Fatalf("authorize verification credential: %v", err)
 	}
@@ -56,6 +48,13 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 	seedObservedCatalogFixture(t, ctx, repository)
 	verify := command.Command{Kind: command.VerifyProviderAuthorization, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "verification-exact", ExpectedVersion: &account.Version}, Payload: command.ProviderAccountInput{AccountRef: account.Ref}}
+	configured := repository.modelProvider
+	repository.modelProvider = nil
+	_, unavailableErr := service.Execute(ctx, verify)
+	repository.modelProvider = configured
+	if !errors.Is(unavailableErr, errs.ErrConflict) {
+		t.Fatal("unconfigured route accepted verification", unavailableErr)
+	}
 	requested, err := service.Execute(ctx, verify)
 	if err != nil || requested.ProviderAccount == nil || requested.ProviderAccount.Verification == nil || requested.ProviderAccount.Verification.State != "PENDING" || requested.ProviderAccount.Version != account.Version {
 		t.Fatalf("request fresh verification: result=%#v err=%v", requested.ProviderAccount, err)
@@ -78,7 +77,7 @@ func testProviderVerificationFreshObservation(t *testing.T, ctx context.Context,
 	if task.Ref == "" {
 		t.Fatal("cached catalog suppressed explicit verification")
 	}
-	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: "REMOTE_CODEX", Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}}}}
+	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: "REMOTE_API", Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}}}}
 	if err := repository.CompleteProviderModelCatalogTask(ctx, task, observation); err != nil {
 		t.Fatalf("complete fresh verification: %v", err)
 	}

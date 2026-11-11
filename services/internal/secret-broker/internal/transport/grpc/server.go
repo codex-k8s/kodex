@@ -137,11 +137,11 @@ type ProviderCredentialMaterializer interface {
 	// ObserveDeviceAuthorization reads attempt state and may persist expiry; it is not the read-only cleanup observer.
 	// ObserveDeviceAuthorization читает attempt state и может фиксировать expiry; это не read-only cleanup observer.
 	ObserveDeviceAuthorization(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
-	// MaterializeAPIKey stores the validated account/attempt credential and returns its exact descriptor and display label;
+	// MaterializeGatewayAPIKey stores the validated account/attempt credential and returns its exact descriptor and display label;
 	// plaintext remains sensitive input, never a diagnostic or ordinary response field.
-	// MaterializeAPIKey сохраняет проверенный account/attempt credential и возвращает точные descriptor и display label;
+	// MaterializeGatewayAPIKey сохраняет проверенный account/attempt credential и возвращает точные descriptor и display label;
 	// plaintext остаётся чувствительным входом, не diagnostic или обычным response field.
-	MaterializeAPIKey(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
+	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
 	// Discard stops local pending work where needed and removes only the supplied pinned attempt or credential.
 	// Discard при необходимости останавливает локальный pending work и удаляет лишь переданные pinned attempt/credential.
 	Discard(context.Context, providercredential.DiscardMaterialization) error

@@ -424,7 +424,7 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("assistant parallel admission preserves session and capacity isolation", func(t *testing.T) {
 		testAssistantParallelAdmission(t, ctx, repository)
 	})
-	t.Run("authorized device verification requires a fresh exact observation", func(t *testing.T) {
+	t.Run("authorized API verification requires a fresh exact observation", func(t *testing.T) {
 		testProviderVerificationFreshObservation(t, ctx, repository)
 	})
 	t.Run("provider queued cancellation preserves snapshot and exact receipt", func(t *testing.T) {
@@ -7092,7 +7092,7 @@ func testProviderAuthRejectionLifecycle(t *testing.T, ctx context.Context, repos
 	// До атомарной замены новый attempt не удаляет прежнюю credential.
 	deviceVerifyOwner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
-		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.device-verify",
+		CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.authorization.verify",
 	}, "control-api-gateway")
 	finalDescriptor := entity.ProviderCredentialDescriptor{
 		SecretName: "runtime-provider-rejection-reauthorized",

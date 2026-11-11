@@ -102,7 +102,7 @@ func TestProviderVerificationAttemptSurvivesSingleListAndCommandReadback(t *test
 		RequestedAt: timestamppb.New(time.Now().UTC()), SafeReason: "VERIFICATION_PENDING"}
 	for _, response := range []proto.Message{a, &cp.GetProviderAccountResponse{Account: a},
 		&cp.ListProviderAccountsResponse{Accounts: []*cp.ProviderAccount{a}},
-		&cp.VerifyProviderAccountDeviceAuthorizationResponse{Account: a},
+		&cp.VerifyProviderAccountAuthorizationResponse{Account: a},
 		&cp.ReauthorizeProviderAccountDeviceCodeResponse{Account: a}} {
 		w := httptest.NewRecorder()
 		writeMessage(w, 200, response, "", "")

@@ -4039,7 +4039,7 @@ const (
 	PlatformCommandService_StartProviderAccountDeviceAuthorization_FullMethodName   = "/controlplane.v1.PlatformCommandService/StartProviderAccountDeviceAuthorization"
 	PlatformCommandService_AuthorizeProviderAccountAPIKey_FullMethodName            = "/controlplane.v1.PlatformCommandService/AuthorizeProviderAccountAPIKey"
 	PlatformCommandService_RefreshProviderAccountAuthorization_FullMethodName       = "/controlplane.v1.PlatformCommandService/RefreshProviderAccountAuthorization"
-	PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName  = "/controlplane.v1.PlatformCommandService/VerifyProviderAccountDeviceAuthorization"
+	PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName        = "/controlplane.v1.PlatformCommandService/VerifyProviderAccountAuthorization"
 	PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName      = "/controlplane.v1.PlatformCommandService/ReauthorizeProviderAccountDeviceCode"
 	PlatformCommandService_RevokeProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/RevokeProviderAccount"
 	PlatformCommandService_DeleteProviderAccount_FullMethodName                     = "/controlplane.v1.PlatformCommandService/DeleteProviderAccount"
@@ -4227,7 +4227,7 @@ type PlatformCommandServiceClient interface {
 	StartProviderAccountDeviceAuthorization(ctx context.Context, in *StartProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*StartProviderAccountDeviceAuthorizationResponse, error)
 	AuthorizeProviderAccountAPIKey(ctx context.Context, in *AuthorizeProviderAccountAPIKeyRequest, opts ...grpc.CallOption) (*AuthorizeProviderAccountAPIKeyResponse, error)
 	RefreshProviderAccountAuthorization(ctx context.Context, in *RefreshProviderAccountAuthorizationRequest, opts ...grpc.CallOption) (*RefreshProviderAccountAuthorizationResponse, error)
-	VerifyProviderAccountDeviceAuthorization(ctx context.Context, in *VerifyProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountDeviceAuthorizationResponse, error)
+	VerifyProviderAccountAuthorization(ctx context.Context, in *VerifyProviderAccountAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountAuthorizationResponse, error)
 	ReauthorizeProviderAccountDeviceCode(ctx context.Context, in *ReauthorizeProviderAccountDeviceCodeRequest, opts ...grpc.CallOption) (*ReauthorizeProviderAccountDeviceCodeResponse, error)
 	RevokeProviderAccount(ctx context.Context, in *RevokeProviderAccountRequest, opts ...grpc.CallOption) (*RevokeProviderAccountResponse, error)
 	DeleteProviderAccount(ctx context.Context, in *DeleteProviderAccountRequest, opts ...grpc.CallOption) (*DeleteProviderAccountResponse, error)
@@ -5431,10 +5431,10 @@ func (c *platformCommandServiceClient) RefreshProviderAccountAuthorization(ctx c
 	return out, nil
 }
 
-func (c *platformCommandServiceClient) VerifyProviderAccountDeviceAuthorization(ctx context.Context, in *VerifyProviderAccountDeviceAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountDeviceAuthorizationResponse, error) {
+func (c *platformCommandServiceClient) VerifyProviderAccountAuthorization(ctx context.Context, in *VerifyProviderAccountAuthorizationRequest, opts ...grpc.CallOption) (*VerifyProviderAccountAuthorizationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(VerifyProviderAccountDeviceAuthorizationResponse)
-	err := c.cc.Invoke(ctx, PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName, in, out, cOpts...)
+	out := new(VerifyProviderAccountAuthorizationResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -6211,7 +6211,7 @@ type PlatformCommandServiceServer interface {
 	StartProviderAccountDeviceAuthorization(context.Context, *StartProviderAccountDeviceAuthorizationRequest) (*StartProviderAccountDeviceAuthorizationResponse, error)
 	AuthorizeProviderAccountAPIKey(context.Context, *AuthorizeProviderAccountAPIKeyRequest) (*AuthorizeProviderAccountAPIKeyResponse, error)
 	RefreshProviderAccountAuthorization(context.Context, *RefreshProviderAccountAuthorizationRequest) (*RefreshProviderAccountAuthorizationResponse, error)
-	VerifyProviderAccountDeviceAuthorization(context.Context, *VerifyProviderAccountDeviceAuthorizationRequest) (*VerifyProviderAccountDeviceAuthorizationResponse, error)
+	VerifyProviderAccountAuthorization(context.Context, *VerifyProviderAccountAuthorizationRequest) (*VerifyProviderAccountAuthorizationResponse, error)
 	ReauthorizeProviderAccountDeviceCode(context.Context, *ReauthorizeProviderAccountDeviceCodeRequest) (*ReauthorizeProviderAccountDeviceCodeResponse, error)
 	RevokeProviderAccount(context.Context, *RevokeProviderAccountRequest) (*RevokeProviderAccountResponse, error)
 	DeleteProviderAccount(context.Context, *DeleteProviderAccountRequest) (*DeleteProviderAccountResponse, error)
@@ -6618,8 +6618,8 @@ func (UnimplementedPlatformCommandServiceServer) AuthorizeProviderAccountAPIKey(
 func (UnimplementedPlatformCommandServiceServer) RefreshProviderAccountAuthorization(context.Context, *RefreshProviderAccountAuthorizationRequest) (*RefreshProviderAccountAuthorizationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshProviderAccountAuthorization not implemented")
 }
-func (UnimplementedPlatformCommandServiceServer) VerifyProviderAccountDeviceAuthorization(context.Context, *VerifyProviderAccountDeviceAuthorizationRequest) (*VerifyProviderAccountDeviceAuthorizationResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method VerifyProviderAccountDeviceAuthorization not implemented")
+func (UnimplementedPlatformCommandServiceServer) VerifyProviderAccountAuthorization(context.Context, *VerifyProviderAccountAuthorizationRequest) (*VerifyProviderAccountAuthorizationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyProviderAccountAuthorization not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) ReauthorizeProviderAccountDeviceCode(context.Context, *ReauthorizeProviderAccountDeviceCodeRequest) (*ReauthorizeProviderAccountDeviceCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReauthorizeProviderAccountDeviceCode not implemented")
@@ -8771,20 +8771,20 @@ func _PlatformCommandService_RefreshProviderAccountAuthorization_Handler(srv int
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PlatformCommandService_VerifyProviderAccountDeviceAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(VerifyProviderAccountDeviceAuthorizationRequest)
+func _PlatformCommandService_VerifyProviderAccountAuthorization_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyProviderAccountAuthorizationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PlatformCommandServiceServer).VerifyProviderAccountDeviceAuthorization(ctx, in)
+		return srv.(PlatformCommandServiceServer).VerifyProviderAccountAuthorization(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName,
+		FullMethod: PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlatformCommandServiceServer).VerifyProviderAccountDeviceAuthorization(ctx, req.(*VerifyProviderAccountDeviceAuthorizationRequest))
+		return srv.(PlatformCommandServiceServer).VerifyProviderAccountAuthorization(ctx, req.(*VerifyProviderAccountAuthorizationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -10387,8 +10387,8 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformCommandService_RefreshProviderAccountAuthorization_Handler,
 		},
 		{
-			MethodName: "VerifyProviderAccountDeviceAuthorization",
-			Handler:    _PlatformCommandService_VerifyProviderAccountDeviceAuthorization_Handler,
+			MethodName: "VerifyProviderAccountAuthorization",
+			Handler:    _PlatformCommandService_VerifyProviderAccountAuthorization_Handler,
 		},
 		{
 			MethodName: "ReauthorizeProviderAccountDeviceCode",

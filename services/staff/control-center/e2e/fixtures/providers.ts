@@ -153,7 +153,7 @@ export async function installProviderFixture(
       };
       account.nextActions = ["REFRESH_AUTHORIZATION", "DELETE"];
     } else if (
-      url.pathname.endsWith("/device-authorization/verification") ||
+      url.pathname.endsWith("/verification") ||
       url.pathname.endsWith("/authorization-refresh")
     ) {
       events.push(

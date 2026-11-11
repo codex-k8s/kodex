@@ -45,6 +45,7 @@ usage() {
     '  --image-admission-tools-image <repository@sha256:digest>' \
     '  --authority-image <repository@sha256:digest>' \
     '  [--provider-apparmor-profile <name>]' \
+    '  [--model-provider-configuration <path>] [--model-provider-default-model <id>]' \
     '  --authority-source-revision <positive integer>' \
     '  --role-image-input-manifest-digest <sha256:digest>' \
     '  --role-image-input-payload-sha256 <sha256>' \
@@ -81,6 +82,8 @@ image_admission_image=""
 image_admission_tools_image=""
 authority_image=""
 provider_apparmor_profile=""
+model_provider_configuration=""
+model_provider_default_model=""
 authority_source_revision=""
 role_image_input_manifest_digest=""
 role_image_input_payload_sha256=""
@@ -115,6 +118,8 @@ while (($# > 0)); do
     --image-admission-image) image_admission_image=${2:-}; shift 2 ;;
     --image-admission-tools-image) image_admission_tools_image=${2:-}; shift 2 ;;
     --authority-image) authority_image=${2:-}; shift 2 ;;
+    --model-provider-configuration) model_provider_configuration=${2:-}; shift 2 ;;
+    --model-provider-default-model) model_provider_default_model=${2:-}; shift 2 ;;
     --provider-apparmor-profile) provider_apparmor_profile=${2:-}; shift 2 ;;
     --authority-source-revision) authority_source_revision=${2:-}; shift 2 ;;
     --role-image-input-manifest-digest) role_image_input_manifest_digest=${2:-}; shift 2 ;;
@@ -215,6 +220,12 @@ done
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 [[ "$repository_root" == "$source_root" ]] || fail 'source root must match the current worktree'
+if [[ -n "$model_provider_configuration" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null ||
+    fail 'model provider configuration is invalid'
+else
+  [[ -z "$model_provider_default_model" ]] || fail 'model provider configuration is required'
+fi
 lock_file="$repository_root/tools/dev/components.lock.json"
 runtime_contract_file="$repository_root/contracts/runtime-controller/v10/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
@@ -398,7 +409,6 @@ yq -i '
 ' "$render"
 
 runner_digest=${runner_image#*@}
-runtime_runner_image="$promoted_pull_host/kodex/agent-runner@$runner_digest"
 session_archive_digest=${session_archive_image#*@}
 runtime_session_archive_image="$promoted_pull_host/kodex/session-archive@$session_archive_digest"
 role_image_builder_digest=${role_image_builder_image#*@}
@@ -643,7 +653,7 @@ BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
 ' "$render"
 
 API_SERVICE_CIDR="$kubernetes_service_cidr" API_ENDPOINT_CIDR="$kubernetes_endpoint_cidr" \
-API_ENDPOINT_PORT="$kubernetes_endpoint_port" RUNTIME_RUNNER_IMAGE="$runtime_runner_image" \
+API_ENDPOINT_PORT="$kubernetes_endpoint_port" \
 OIDC_HOST="$oidc_host" yq -i '
   with(select(.kind == "ConfigMap" and .metadata.name == "kodex-platform-endpoints");
     .data.oidcConnectAddress = "sso.identity.svc.cluster.local:443" |
@@ -677,35 +687,6 @@ OIDC_HOST="$oidc_host" yq -i '
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "session-archive-runtime");
     .data.SESSION_ARCHIVE_OBJECT_STORAGE_ALLOW_INSECURE_LOCAL = "true"
-  ) |
-  with(select(.kind == "Deployment" and .metadata.name == "secret-broker");
-    .spec.template.spec.initContainers = (
-      ((.spec.template.spec.initContainers // []) |
-        map(select(.name != "codex-cli-install"))) +
-      [{
-        "name":"codex-cli-install",
-        "image":strenv(RUNTIME_RUNNER_IMAGE),
-        "imagePullPolicy":"IfNotPresent",
-        "command":["/bin/sh","-ec"],
-        "args":["elf() { test \"$(od -An -tx1 -N4 \"$1\" | tr -d \" \\n\")\" = 7f454c46; }; binary=/usr/local/bin/codex; if ! elf \"$binary\"; then case \"$(uname -m)\" in x86_64) package=codex-linux-x64; triple=x86_64-unknown-linux-musl;; aarch64) package=codex-linux-arm64; triple=aarch64-unknown-linux-musl;; *) exit 1;; esac; binary=/opt/kodex/npm-toolchain/node_modules/@openai/$package/vendor/$triple/bin/codex; fi; test -x \"$binary\"; elf \"$binary\"; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; elf \"$temporary\"; test \"$(\"$temporary\" --version 2>/dev/null)\" = \"codex-cli 0.160.0\"; mv -f \"$temporary\" /codex/codex"],
-        "resources":{"requests":{"cpu":"10m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"256Mi"}},
-        "securityContext":{"runAsNonRoot":true,"runAsUser":10001,"runAsGroup":29000,"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
-        "volumeMounts":[{"name":"codex-cli","mountPath":"/codex"}]
-      }]
-    ) |
-    (.spec.template.spec.containers[] | select(.name == "secret-broker")) |= (
-      .env = (((.env // []) |
-        map(select(.name != "SECRET_BROKER_CODEX_BINARY"))) +
-        [{"name":"SECRET_BROKER_CODEX_BINARY","value":"/codex/codex"}]) |
-      .volumeMounts = (((.volumeMounts // []) |
-        map(select(.name != "codex-cli"))) +
-        [{"name":"codex-cli","mountPath":"/codex","readOnly":true}])
-    ) |
-    .spec.template.spec.volumes = (
-      ((.spec.template.spec.volumes // []) |
-        map(select(.name != "codex-cli"))) +
-      [{"name":"codex-cli","emptyDir":{"sizeLimit":"384Mi"}}]
-    )
   ) |
   with(select(.kind == "StatefulSet" and .metadata.name == "kodex-postgresql");
     (.spec.template.spec.containers[] | select(.name == "postgresql") | .args) += [
@@ -1277,6 +1258,43 @@ yq -o=json -I=0 '.' "$render" | jq -sc '
 ' | jq -f "$repository_root/tools/dev/worker-grant-rollout.jq" |
   jq -c '.[]' | yq -p=json -P >"$output"
 
+# Kubernetes still resolves YAML 1.1 boolean-like scalars in string fields.
+# Quote every literal env value so tokens such as GOWORK=off remain strings.
+yq -i '
+  (select(.kind == "Deployment" or .kind == "Job" or .kind == "StatefulSet") |
+    .spec.template.spec |
+    (.initContainers[]?, .containers[]?) |
+    .env[]? |
+    select(has("value")) |
+    .value) style="double"
+' "$output"
+
+
+if [[ -n "$model_provider_configuration" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" render --configuration "$model_provider_configuration" \
+    --render "$output" --default-model "$model_provider_default_model" >/dev/null || fail 'model provider projection failed'
+  egress_policy_file="$temporary_directory/egress-policy.json"
+  yq -r 'select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-"))) | .data."policy.json"' "$output" >"$egress_policy_file"
+  egress_policy_digest=$(
+    cd -- "$repository_root/services/external/egress-gateway"
+    GOWORK=off go run ./cmd/policy-digest "$egress_policy_file"
+  )
+  EGRESS_POLICY_NAME="egress-gateway-policy-${egress_policy_digest:0:12}" EGRESS_DIGEST="$egress_policy_digest" yq -i '
+    with(select(.kind == "ConfigMap" and (.metadata.name | test("^egress-gateway-policy-")));
+      .metadata.name = strenv(EGRESS_POLICY_NAME)
+    ) |
+    with(select(.kind == "Deployment" and .metadata.name == "egress-gateway");
+      .spec.template.metadata.annotations."kodex.dev/egress-policy-sha256" = strenv(EGRESS_DIGEST) |
+      (.spec.template.spec.volumes[] | select(.name == "policy").configMap.name) = strenv(EGRESS_POLICY_NAME) |
+      (.spec.template.spec.containers[] | select(.name == "egress-gateway").env[] |
+        select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST").value) = strenv(EGRESS_DIGEST)
+    )
+  ' "$output"
+fi
+
+python3 "$repository_root/tools/install/egress_bootstrap_projection.py" --render "$output" ||
+  fail 'egress bootstrap projection failed'
+
 if [[ -z "$mail_configuration" ]]; then
   mail_configuration="$temporary_directory/mail-bootstrap.json"
   yq -r 'select(.kind == "Secret" and .metadata.name == "email-bridge-mailbox-projection") |
@@ -1296,6 +1314,7 @@ yq -i '
   )
 ' "$output"
 
+
 # Kubernetes still resolves YAML 1.1 boolean-like scalars in string fields.
 # Quote every literal env value so tokens such as GOWORK=off remain strings.
 yq -i '
@@ -1307,6 +1326,7 @@ yq -i '
     .value) style="double"
 ' "$output"
 
+
 render_digest=$(sha256sum "$output" | awk '{print $1}')
 RENDER_DIGEST="$render_digest" yq -i '
   with(select(.kind == "Deployment");
@@ -1314,7 +1334,20 @@ RENDER_DIGEST="$render_digest" yq -i '
   )
 ' "$output"
 
-if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid' "$output" >/dev/null; then
+if ! python3 - "$output" "$model_provider_configuration" <<'PY'
+import json, re, sys
+from pathlib import Path
+from urllib.parse import urlsplit
+raw = Path(sys.argv[1]).read_text()
+allowed = set()
+if sys.argv[2]:
+    # Явно настроенный synthetic endpoint допустим; остальные placeholders нет.
+    allowed.add(urlsplit(json.loads(Path(sys.argv[2]).read_text())['base_url']).hostname)
+unresolved = re.search(r'__KODEX_[A-Z0-9_]+__', raw)
+hosts = set(re.findall(r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.invalid\b', raw))
+sys.exit(1 if unresolved or hosts - allowed else 0)
+PY
+then
   fail 'local render contains unresolved placeholders'
 fi
 if yq -e '
@@ -1418,32 +1451,6 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
         .command == ["/workspace/tools/dev/run-go-hot-reload.sh"] and
         .image == "docker.io/library/golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696")))
 ' >/dev/null || fail 'Control Plane authority sidecars do not share the hot-reload source revision'
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
-  any(.[];
-    .kind == "Deployment" and .metadata.name == "secret-broker" and
-    any(.spec.template.spec.initContainers[]?;
-      .name == "codex-cli-install" and .image == $runnerImage and
-      .imagePullPolicy == "IfNotPresent" and
-      .resources.requests.cpu == "10m" and
-      .resources.requests.memory == "64Mi" and
-      .resources.limits.cpu == "100m" and
-      .resources.limits.memory == "256Mi" and
-      any(.args[]?; contains("binary=/usr/local/bin/codex")) and
-      any(.args[]?; contains("elf \"$temporary\"")) and
-      any(.args[]?; contains("\"$temporary\" --version 2>/dev/null")) and
-      any(.args[]?; contains("mv -f \"$temporary\" /codex/codex")) and
-      any(.volumeMounts[]?; .name == "codex-cli" and .mountPath == "/codex")) and
-    any(.spec.template.spec.containers[]?;
-      .name == "secret-broker" and
-      any(.env[]?;
-        .name == "SECRET_BROKER_CODEX_BINARY" and
-        .value == "/codex/codex") and
-      any(.volumeMounts[]?;
-        .name == "codex-cli" and
-        .mountPath == "/codex" and .readOnly == true)) and
-    any(.spec.template.spec.volumes[]?;
-      .name == "codex-cli" and .emptyDir.sizeLimit == "384Mi"))
-' >/dev/null || fail 'secret-broker local Codex app-server binary is absent'
 yq -o=json -I=0 '.' "$output" | jq -s -e '
   [
     .[] |
@@ -1530,8 +1537,8 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_i
     ([
       {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","get"]},
       {apiGroups:[""], resources:["persistentvolumeclaims"], verbs:["create","delete","get"]},
-      {apiGroups:[""], resources:["pods"], verbs:["list"]},
-      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","get","list"]}
+      {apiGroups:[""], resources:["pods"], verbs:["delete","get","list"]},
+      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","get","list","patch"]}
     ] | sort_by(.resources[0]))) and
   any(.[];
     .kind == "Role" and .metadata.name == "session-archive-worker" and
@@ -1799,12 +1806,8 @@ if [[ "$security_profile" == trusted-cluster ]]; then
   python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" verify \
     --profile "$security_profile" <"$temporary_directory/trusted-hot-reload.json"
   # Digest вычисляется после преобразования; прежний protected digest не наследуется.
-  jq --arg cliImage "$runtime_runner_image" 'map(
-    (if .spec.template.metadata.annotations then
-      del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end) |
-    (if .kind == "Deployment" and .metadata.name == "secret-broker" then
-      (.spec.template.spec.initContainers[] | select(.name == "codex-cli-install").image) = $cliImage
-      else . end))' \
+  jq 'map(if .spec.template.metadata.annotations then
+    del(.spec.template.metadata.annotations["kodex.dev/render-sha256"]) else . end)' \
     "$temporary_directory/trusted-hot-reload.json" >"$temporary_directory/trusted-final.json"
   render_digest=$(sha256sum "$temporary_directory/trusted-final.json" | awk '{print $1}')
   jq --arg digest "$render_digest" 'map(if .spec.template then
@@ -1830,12 +1833,13 @@ for resource in yaml.safe_load_all(open(sys.argv[1])):
             if 'value' in entry and not isinstance(entry['value'], str):
                 raise SystemExit('Rendered environment value must be a string: ' + entry['name'])
 PY
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_image" '
+yq -o=json -I=0 '.' "$output" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "secret-broker" and
-    any(.spec.template.spec.initContainers[]?;
-      .name == "codex-cli-install" and
-      .image == $runnerImage and
-      .imagePullPolicy == "IfNotPresent"))
-' >/dev/null || fail 'secret-broker Codex CLI must use the promoted node pull reference'
+    all(.spec.template.spec.initContainers[]?; .name != "codex-cli-install") and
+    all(.spec.template.spec.containers[]?;
+      all(.env[]?; .name != "SECRET_BROKER_CODEX_BINARY") and
+      all(.volumeMounts[]?; .name != "codex-cli")) and
+    all(.spec.template.spec.volumes[]?; .name != "codex-cli"))
+' >/dev/null || fail 'secret-broker render contains a retired runtime dependency'
 printf 'Kodex local render created: %s (security profile: %s)\n' "$output" "$security_profile"

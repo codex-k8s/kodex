@@ -153,6 +153,24 @@ class ModelProviderTests(unittest.TestCase):
                 self.assertTrue(any(item.get('configMap', {}).get('name') == projections[0]['metadata']['name'] for item in pod['volumes']))
             policy = next(json.loads(item['data']['policy.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('egress-gateway-policy-'))
             self.assertEqual(policy['spec']['modelProvider'], fixture())
+            gateway = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'egress-gateway')
+            container = next(item for item in gateway['spec']['template']['spec']['containers'] if item['name'] == 'egress-gateway')
+            environment = {item['name']: item.get('value') for item in container['env']}
+            for kind in ('mail', 'integration'):
+                projection = next(item for item in resources if item['kind'] == 'ConfigMap' and kind + '-policy.json' in item.get('data', {}))
+                raw = projection['data'][kind + '-policy.json']
+                self.assertEqual(json.loads(raw)['gatewayPolicyDigest'], environment['EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'])
+                self.assertEqual(hashlib.sha256(raw.encode()).hexdigest(), environment['EGRESS_GATEWAY_' + kind.upper() + '_POLICY_DIGEST'])
+                volume = next(item for item in gateway['spec']['template']['spec']['volumes'] if item['name'] == kind + '-policy')
+                self.assertEqual(volume['configMap']['name'], projection['metadata']['name'])
+            import copy, egress_bootstrap_projection
+            nonempty = copy.deepcopy(resources)
+            projection = next(item for item in nonempty if item['kind'] == 'ConfigMap' and 'integration-policy.json' in item.get('data', {}))
+            policy_document = json.loads(projection['data']['integration-policy.json'])
+            policy_document['generation'] = 2
+            projection['data']['integration-policy.json'] = json.dumps(policy_document)
+            with self.assertRaisesRegex(ValueError, 'empty bootstrap'):
+                egress_bootstrap_projection.bind(nonempty)
             first_render = output.read_bytes()
             MODULE.render(fixture(), output, 'vendor/model-v1')
             self.assertEqual(first_render, output.read_bytes())

@@ -5,6 +5,7 @@ import type { BootstrapState } from "../../src/shared/api/generated/openapi/type
 usePlatformStore().bootstrap = {
   organizationRef: "org_synthetic",
   platformRole: "OWNER",
+  speechTranscription: { available: false, reason: "STT_NOT_CONFIGURED" },
 } as BootstrapState;
 import EnvironmentImpactDialog from "../../src/features/runtime/EnvironmentImpactDialog.vue";
 import SecretImpactDialog from "../../src/features/runtime/SecretImpactDialog.vue";

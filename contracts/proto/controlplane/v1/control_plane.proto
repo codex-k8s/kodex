@@ -244,7 +244,7 @@ service PlatformCommandService {
   rpc StartProviderAccountDeviceAuthorization(StartProviderAccountDeviceAuthorizationRequest) returns (StartProviderAccountDeviceAuthorizationResponse);
   rpc AuthorizeProviderAccountAPIKey(AuthorizeProviderAccountAPIKeyRequest) returns (AuthorizeProviderAccountAPIKeyResponse);
   rpc RefreshProviderAccountAuthorization(RefreshProviderAccountAuthorizationRequest) returns (RefreshProviderAccountAuthorizationResponse);
-  rpc VerifyProviderAccountDeviceAuthorization(VerifyProviderAccountDeviceAuthorizationRequest) returns (VerifyProviderAccountDeviceAuthorizationResponse);
+  rpc VerifyProviderAccountAuthorization(VerifyProviderAccountAuthorizationRequest) returns (VerifyProviderAccountAuthorizationResponse);
   rpc ReauthorizeProviderAccountDeviceCode(ReauthorizeProviderAccountDeviceCodeRequest) returns (ReauthorizeProviderAccountDeviceCodeResponse);
   rpc RevokeProviderAccount(RevokeProviderAccountRequest) returns (RevokeProviderAccountResponse);
   rpc DeleteProviderAccount(DeleteProviderAccountRequest) returns (DeleteProviderAccountResponse);
@@ -6925,11 +6925,11 @@ message RefreshProviderAccountAuthorizationRequest {
 message RefreshProviderAccountAuthorizationResponse {
   ProviderAccount account = 1;
 }
-message VerifyProviderAccountDeviceAuthorizationRequest {
+message VerifyProviderAccountAuthorizationRequest {
   MutationContext mutation = 1;
   string account_ref = 2;
 }
-message VerifyProviderAccountDeviceAuthorizationResponse {
+message VerifyProviderAccountAuthorizationResponse {
   ProviderAccount account = 1;
 }
 message ReauthorizeProviderAccountDeviceCodeRequest {

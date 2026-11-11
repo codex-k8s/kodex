@@ -19069,13 +19069,6 @@ type StartProviderAccountDeviceAuthorizationParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
-// VerifyProviderAccountDeviceAuthorizationParams defines parameters for VerifyProviderAccountDeviceAuthorization.
-type VerifyProviderAccountDeviceAuthorizationParams struct {
-	IfMatch        IfMatch        `json:"If-Match"`
-	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
-	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
-}
-
 // ReauthorizeProviderAccountDeviceCodeParams defines parameters for ReauthorizeProviderAccountDeviceCode.
 type ReauthorizeProviderAccountDeviceCodeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -19099,6 +19092,13 @@ type CancelProviderAccountQueuedWorkParams struct {
 
 // RevokeProviderAccountParams defines parameters for RevokeProviderAccount.
 type RevokeProviderAccountParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// VerifyProviderAccountAuthorizationParams defines parameters for VerifyProviderAccountAuthorization.
+type VerifyProviderAccountAuthorizationParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -21966,9 +21966,6 @@ type ServerInterface interface {
 	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-authorization)
 	StartProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params StartProviderAccountDeviceAuthorizationParams)
 
-	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification)
-	VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params VerifyProviderAccountDeviceAuthorizationParams)
-
 	// (POST /api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations)
 	ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params ReauthorizeProviderAccountDeviceCodeParams)
 
@@ -21980,6 +21977,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/provider-accounts/{providerAccountRef}/revocation)
 	RevokeProviderAccount(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params RevokeProviderAccountParams)
+
+	// (POST /api/v1/provider-accounts/{providerAccountRef}/verification)
+	VerifyProviderAccountAuthorization(w http.ResponseWriter, r *http.Request, providerAccountRef ProviderAccountRef, params VerifyProviderAccountAuthorizationParams)
 
 	// (GET /api/v1/provider-definitions)
 	ListProviderDefinitions(w http.ResponseWriter, r *http.Request, params ListProviderDefinitionsParams)
@@ -43480,112 +43480,6 @@ func (siw *ServerInterfaceWrapper) StartProviderAccountDeviceAuthorization(w htt
 	handler.ServeHTTP(w, r)
 }
 
-// VerifyProviderAccountDeviceAuthorization operation middleware
-func (siw *ServerInterfaceWrapper) VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "providerAccountRef" -------------
-	var providerAccountRef ProviderAccountRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params VerifyProviderAccountDeviceAuthorizationParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "If-Match" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
-		var IfMatch IfMatch
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
-			return
-		}
-
-		params.IfMatch = IfMatch
-
-	} else {
-		err := fmt.Errorf("Header parameter If-Match is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = IdempotencyKey
-
-	} else {
-		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
-		return
-	}
-
-	// ------------- Required header parameter "X-CSRF-Token" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
-		var XCSRFToken CsrfToken
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
-			return
-		}
-
-		params.XCSRFToken = XCSRFToken
-
-	} else {
-		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.VerifyProviderAccountDeviceAuthorization(w, r, providerAccountRef, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ReauthorizeProviderAccountDeviceCode operation middleware
 func (siw *ServerInterfaceWrapper) ReauthorizeProviderAccountDeviceCode(w http.ResponseWriter, r *http.Request) {
 
@@ -44001,6 +43895,112 @@ func (siw *ServerInterfaceWrapper) RevokeProviderAccount(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeProviderAccount(w, r, providerAccountRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// VerifyProviderAccountAuthorization operation middleware
+func (siw *ServerInterfaceWrapper) VerifyProviderAccountAuthorization(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerAccountRef" -------------
+	var providerAccountRef ProviderAccountRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerAccountRef", r.PathValue("providerAccountRef"), &providerAccountRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerAccountRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params VerifyProviderAccountAuthorizationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.VerifyProviderAccountAuthorization(w, r, providerAccountRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -53091,11 +53091,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/blockers", wrapper.ListProviderAccountBlockers)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/concurrency", wrapper.SetProviderAccountConcurrency)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization", wrapper.StartProviderAccountDeviceAuthorization)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification", wrapper.VerifyProviderAccountDeviceAuthorization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/device-reauthorizations", wrapper.ReauthorizeProviderAccountDeviceCode)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/enabled", wrapper.SetProviderAccountEnabled)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/queued-work/cancellation", wrapper.CancelProviderAccountQueuedWork)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/revocation", wrapper.RevokeProviderAccount)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/provider-accounts/{providerAccountRef}/verification", wrapper.VerifyProviderAccountAuthorization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/provider-definitions", wrapper.ListProviderDefinitions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/revision-impact-plans/{planRef}", wrapper.GetRevisionImpactPlan)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/role-environments", wrapper.ListRoleEnvironments)

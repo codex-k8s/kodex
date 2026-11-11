@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("publisher", ROOT / "tools/install/provider-bootstrap.py")
 p = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(p)
-RAW = b'{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-provider-material"}'
+RAW = b'{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-test-gateway","API_KEY":"synthetic-provider-material","cache_namespace_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
 ACCOUNT = "pacc_bootstrap_fixture"
-KEY = "default-openai-codex"
+KEY = "default-opencode-test-gateway"
 
 
 def stored(raw=RAW):
@@ -25,13 +25,16 @@ def stored(raw=RAW):
 
 class Memory(p.Operator):
     def __init__(self, secret):
-        super().__init__("synthetic")
+        super().__init__("synthetic", KEY)
         self.secrets = {secret["metadata"]["name"]: copy.deepcopy(secret)}
-        self.state = dict(accountRef=ACCOUNT, definitionKey="openai-codex", version=1, state="AUTHORIZED", enabled=True,
+        self.state = dict(accountRef=ACCOUNT, definitionKey="opencode-test-gateway", version=1, state="AUTHORIZED", enabled=True,
                           credentialRef="pcr_initialfixture", credential=p.descriptor(secret))
         self.effects = []
         self.conflict = False
         self.unknown = False
+
+    def namespace_epoch(self):
+        return "30000000-0000-4000-8000-000000000001"
 
     def snapshot(self, key):
         return copy.deepcopy(self.state)
@@ -93,18 +96,20 @@ class Tests(unittest.TestCase):
             with self.assertRaises(p.Rejected):
                 p.validate(changed, pins, ACCOUNT, KEY)
 
-    def test_legacy_is_only_migration_input_and_preserved(self):
-        legacy = self.legacy()
+    def test_unowned_old_snapshot_is_rejected_without_effects(self):
+        old = self.legacy()
         with self.assertRaises(p.Rejected):
-            p.validate(legacy, p.descriptor(legacy), ACCOUNT, KEY)
-        operator = Memory(legacy)
-        operator.reconcile(KEY)
-        self.assertEqual(operator.secrets[legacy["metadata"]["name"]], legacy)
-        self.assertEqual(operator.effects, ["create", "cas", "metadata"])
-        operator.effects.clear()
-        operator.reconcile(KEY)
-        self.assertEqual(operator.effects, ["metadata"])
-        self.assertEqual(operator.state["version"], 2)
+            p.validate(old, p.descriptor(old), ACCOUNT, KEY)
+        operator = Memory(old)
+        with self.assertRaises(p.Rejected):
+            operator.reconcile(KEY)
+        self.assertEqual(operator.effects, [])
+        self.assertEqual(operator.secrets[old["metadata"]["name"]], old)
+
+    def seed(self):
+        value = p.seed_manifest("30000000-0000-4000-8000-000000000001", RAW)
+        value["metadata"].update(uid="10000000-0000-4000-8000-000000000001", resourceVersion="7")
+        return value
 
     def test_current_selection_not_downgraded_by_old_file(self):
         operator = Memory(stored())
@@ -112,7 +117,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(operator.effects, ["metadata"])
 
     def test_stale_cas_preserves_old_revision_and_created_object(self):
-        operator = Memory(self.legacy())
+        operator = Memory(self.seed())
         before = copy.deepcopy(operator.state)
         operator.conflict = True
         with self.assertRaises(p.Rejected):
@@ -122,7 +127,7 @@ class Tests(unittest.TestCase):
         self.assertNotIn("metadata", operator.effects)
 
     def test_lost_create_ack_next_attempt_reads_existing_without_second_create(self):
-        operator = Memory(self.legacy())
+        operator = Memory(self.seed())
         operator.unknown = True
         with self.assertRaises(p.Rejected):
             operator.reconcile(KEY)
@@ -163,7 +168,7 @@ class Tests(unittest.TestCase):
             self.assertEqual(operator.state["version"], 3)
 
     def test_cross_provider_auth_rejected_before_effects(self):
-        for definition in ("opencode-other-gateway", "opencode-test-gateway"):
+        for definition in ("opencode-other-gateway", "openai-codex"):
             operator = Memory(stored())
             operator.state["definitionKey"] = definition
             with self.assertRaises(p.Rejected):
@@ -179,10 +184,10 @@ class Tests(unittest.TestCase):
                 return self.rows
         operator = Snapshot("synthetic")
         operator.rows = [Memory(stored()).state]
-        for definition in ("openai-codex", "opencode-test-gateway"):
+        for definition in ("opencode-other-gateway", "opencode-test-gateway"):
             operator.rows[0]["definitionKey"] = definition
             self.assertEqual(operator.snapshot(KEY)["definitionKey"], definition)
-        for rows in ([], operator.rows * 2, [{**operator.rows[0], "definitionKey": "unsupported"}]):
+        for rows in ([], operator.rows * 2, [{**operator.rows[0], "definitionKey": "unsupported"}], [{**operator.rows[0], "definitionKey": "openai-codex"}]):
             operator.rows = rows
             with self.assertRaises(p.Rejected):
                 operator.snapshot(KEY)
@@ -190,7 +195,7 @@ class Tests(unittest.TestCase):
 
 class SeedMemory(p.Operator):
     def __init__(self, old):
-        super().__init__("synthetic")
+        super().__init__("synthetic", KEY)
         self.epoch = "30000000-0000-4000-8000-000000000001"
         self.secrets = {old["metadata"]["name"]: copy.deepcopy(old)}
         self.configmap = None

@@ -7908,7 +7908,7 @@ export type RefreshProviderAccountAuthorizationResponses = {
 
 export type RefreshProviderAccountAuthorizationResponse = RefreshProviderAccountAuthorizationResponses[keyof RefreshProviderAccountAuthorizationResponses];
 
-export type VerifyProviderAccountDeviceAuthorizationData = {
+export type VerifyProviderAccountAuthorizationData = {
     body?: never;
     headers: {
         'If-Match': string;
@@ -7919,26 +7919,26 @@ export type VerifyProviderAccountDeviceAuthorizationData = {
         providerAccountRef: OpaqueRef;
     };
     query?: never;
-    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification';
+    url: '/api/v1/provider-accounts/{providerAccountRef}/verification';
 };
 
-export type VerifyProviderAccountDeviceAuthorizationErrors = {
+export type VerifyProviderAccountAuthorizationErrors = {
     /**
      * Безопасная ошибка API
      */
     default: Problem;
 };
 
-export type VerifyProviderAccountDeviceAuthorizationError = VerifyProviderAccountDeviceAuthorizationErrors[keyof VerifyProviderAccountDeviceAuthorizationErrors];
+export type VerifyProviderAccountAuthorizationError = VerifyProviderAccountAuthorizationErrors[keyof VerifyProviderAccountAuthorizationErrors];
 
-export type VerifyProviderAccountDeviceAuthorizationResponses = {
+export type VerifyProviderAccountAuthorizationResponses = {
     /**
-     * Device authorization проверена авторитетным provider adapter
+     * Создана или прочитана проверка текущего API-подключения; результат приходит через account readback
      */
     200: ProviderAccount;
 };
 
-export type VerifyProviderAccountDeviceAuthorizationResponse = VerifyProviderAccountDeviceAuthorizationResponses[keyof VerifyProviderAccountDeviceAuthorizationResponses];
+export type VerifyProviderAccountAuthorizationResponse = VerifyProviderAccountAuthorizationResponses[keyof VerifyProviderAccountAuthorizationResponses];
 
 export type ReauthorizeProviderAccountDeviceCodeData = {
     body?: never;

@@ -84,11 +84,11 @@ type ProviderCredentialMaterializer interface {
 	// ObserveDeviceAuthorization наблюдает точную попытку materializer и возвращает безопасное
 	// состояние авторизации и необязательный дескриптор реквизитов.
 	ObserveDeviceAuthorization(context.Context, string) (ProviderAuthorizationObservation, error)
-	// MaterializeAPIKey materializes the supplied mutable key bytes for the reserved attempt/account
+	// MaterializeGatewayAPIKey materializes the supplied mutable key bytes for the reserved attempt/account
 	// and returns a descriptor and masked account rather than raw key material.
-	// MaterializeAPIKey материализует переданные изменяемые байты ключа для зарезервированных попытки
+	// MaterializeGatewayAPIKey материализует переданные изменяемые байты ключа для зарезервированных попытки
 	// и аккаунта и возвращает дескриптор и скрытый аккаунт вместо исходного ключа.
-	MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error)
+	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error)
 	// Discard removes only the exactly pinned materializer attempt or credential selected by
 	// compensating owner readback.
 	// Discard удаляет только точно закреплённую попытку materializer либо реквизиты, выбранные
@@ -231,15 +231,10 @@ func (service *Service) AuthorizeProviderAccountAPIKey(
 	attemptRef := reservation.AttemptRef
 	credentialCopy := append([]byte(nil), apiKey...)
 	defer clear(credentialCopy)
-	var descriptor entity.ProviderCredentialDescriptor
-	var masked string
-	if reservation.DefinitionKey == "" || reservation.DefinitionKey == "openai-codex" {
-		descriptor, masked, err = service.providerCredentialMaterializer.MaterializeAPIKey(ctx, attemptRef, accountRef, credentialCopy)
-	} else if gateway, ok := service.providerCredentialMaterializer.(gatewayCredentialMaterializer); ok {
-		descriptor, masked, err = gateway.MaterializeGatewayAPIKey(ctx, attemptRef, accountRef, reservation.DefinitionKey, credentialCopy)
-	} else {
-		err = errs.ErrUnavailable
+	if !strings.HasPrefix(reservation.DefinitionKey, "opencode-") {
+		return entity.ProviderAccount{}, errs.ErrUnavailable
 	}
+	descriptor, masked, err := service.providerCredentialMaterializer.MaterializeGatewayAPIKey(ctx, attemptRef, accountRef, reservation.DefinitionKey, credentialCopy)
 	if err != nil {
 		return entity.ProviderAccount{}, errors.Join(errs.ErrUnavailable, err)
 	}
@@ -389,12 +384,4 @@ func providerAccountResult(result command.Result, err error) (entity.ProviderAcc
 		return entity.ProviderAccount{}, errs.ErrUnavailable
 	}
 	return *result.ProviderAccount, nil
-}
-
-// gatewayCredentialMaterializer keeps the optional gateway secret kind distinct from legacy credentials.
-// gatewayCredentialMaterializer отделяет optional gateway secret kind от legacy credentials.
-type gatewayCredentialMaterializer interface {
-	// MaterializeGatewayAPIKey binds key material to an owner-selected provider definition.
-	// MaterializeGatewayAPIKey связывает ключ с owner-selected provider definition.
-	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error)
 }

@@ -79,16 +79,15 @@ func (server *Server) RefreshProviderAccountAuthorization(
 	return &controlplanev1.RefreshProviderAccountAuthorizationResponse{Account: castProviderAccount(account)}, nil
 }
 
-// VerifyProviderAccountDeviceAuthorization executes the dedicated device-authorization
+// VerifyProviderAccountAuthorization executes the dedicated API-credential
 // verification command for the supplied account locator.
-// VerifyProviderAccountDeviceAuthorization выполняет отдельную команду проверки device
-// authorization по переданной ссылке аккаунта.
-func (server *Server) VerifyProviderAccountDeviceAuthorization(
+// VerifyProviderAccountAuthorization выполняет отдельную команду проверки API-подключения по переданной ссылке аккаунта.
+func (server *Server) VerifyProviderAccountAuthorization(
 	ctx context.Context,
-	request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest,
-) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
-	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName, command.VerifyProviderAuthorization, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()}, func(result command.Result) *controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse {
-		return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}
+	request *controlplanev1.VerifyProviderAccountAuthorizationRequest,
+) (*controlplanev1.VerifyProviderAccountAuthorizationResponse, error) {
+	return executeResponse(ctx, server.service, controlplanev1.PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName, command.VerifyProviderAuthorization, request.GetMutation(), command.ProviderAccountInput{AccountRef: request.GetAccountRef()}, func(result command.Result) *controlplanev1.VerifyProviderAccountAuthorizationResponse {
+		return &controlplanev1.VerifyProviderAccountAuthorizationResponse{Account: castProviderAccount(*result.ProviderAccount)}
 	})
 }
 

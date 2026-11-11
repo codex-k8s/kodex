@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   setProviderAccountEnabled: vi.fn(),
   startDeviceAuthorization: vi.fn(),
   pollDeviceAuthorization: vi.fn(),
-  verifyDeviceAuthorization: vi.fn(),
+  verifyAccountAuthorization: vi.fn(),
 }));
 vi.mock("./api", () => api);
 vi.mock("@/shared/api/client", () => ({
@@ -278,7 +278,7 @@ describe("providers store", () => {
     await vi.advanceTimersByTimeAsync(4_000);
 
     expect(api.pollDeviceAuthorization).toHaveBeenCalledWith(pending);
-    expect(api.verifyDeviceAuthorization).not.toHaveBeenCalled();
+    expect(api.verifyAccountAuthorization).not.toHaveBeenCalled();
     expect(store.pollingRefs).toEqual([]);
     expect(store.accounts[0]?.state).toBe("AUTHORIZED");
   });

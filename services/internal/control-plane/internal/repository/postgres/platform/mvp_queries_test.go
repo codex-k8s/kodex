@@ -40,7 +40,7 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 			State:         "PENDING_AUTHORIZATION",
 			Authorization: &entity.ProviderAuthorization{State: "PENDING"},
 		}, want: []string{"OPEN", "EDIT", "DELETE", "REFRESH_AUTHORIZATION", "REVOKE"}},
-		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}},
+		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REFRESH_AUTHORIZATION", "TEST", "REVOKE", "DISABLE"}},
 		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "EDIT", "DELETE", "REVOKE", "ENABLE"}},
 		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
 		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN", "EDIT", "DELETE"}},
@@ -376,7 +376,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, true, "provider-enable-component")
 	if account.State != "AUTHORIZED" || !account.Enabled || !account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REFRESH_AUTHORIZATION", "TEST", "REVOKE", "DISABLE"}) {
 		t.Fatalf("re-enabled provider account = %#v", account)
 	}
 	version := account.Version

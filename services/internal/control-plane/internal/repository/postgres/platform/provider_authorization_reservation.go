@@ -130,7 +130,7 @@ func (repository *Repository) expireProviderAuthorizationReservations(ctx contex
 func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, principal value.Principal, mutation value.Mutation, accountRef, method, digest string) (entity.ProviderAuthorizationReservation, error) {
 	var result entity.ProviderAuthorizationReservation
 	if mutation.ExpectedVersion == nil || *mutation.ExpectedVersion < 1 || len(mutation.IdempotencyKey) < 8 || len(mutation.IdempotencyKey) > 128 ||
-		len(digest) != 64 || !strings.HasPrefix(accountRef, "pacc_") || !contains([]string{"API_KEY", "DEVICE_CODE"}, method) {
+		len(digest) != 64 || !strings.HasPrefix(accountRef, "pacc_") || method != "API_KEY" {
 		return result, errs.ErrInvalid
 	}
 	current, err := repository.resolveScope(ctx, principal)
@@ -161,7 +161,7 @@ func (repository *Repository) ReserveProviderAuthorization(ctx context.Context, 
 	if err := tx.QueryRow(ctx, queryProviderAuthorizationDefinition, pgx.StrictNamedArgs{"account_id": accountID}).Scan(&result.DefinitionKey); err != nil {
 		return result, errs.ErrConflict
 	}
-	if method == "DEVICE_CODE" && result.DefinitionKey != "openai-codex" {
+	if repository.modelProvider == nil || result.DefinitionKey != repository.modelProvider.DefinitionKey() {
 		return result, errs.ErrInvalid
 	}
 	var storedDigest, preparation string

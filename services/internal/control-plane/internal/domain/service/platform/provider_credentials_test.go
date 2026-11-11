@@ -26,14 +26,15 @@ var errProviderOwnerCommit = errors.New("synthetic provider owner commit failure
 // reservation, replay и неопределённым commit для тестов провайдера.
 type providerFailureRepository struct {
 	platformrepo.Repository
-	account            entity.ProviderAccount
-	referenced         bool
-	referenceErr       error
-	referenceChecks    int
-	resolveCalls       int
-	executed           command.Command
-	reservationErr     error
-	reservationApplied bool
+	account               entity.ProviderAccount
+	referenced            bool
+	referenceErr          error
+	referenceChecks       int
+	resolveCalls          int
+	executed              command.Command
+	reservationErr        error
+	reservationApplied    bool
+	reservationDefinition *string
 }
 
 // ReserveProviderAuthorization returns a synthetic stable attempt and advanced reserved version or
@@ -47,7 +48,11 @@ func (repository *providerFailureRepository) ReserveProviderAuthorization(_ cont
 	if mutation.ExpectedVersion == nil || len(digest) != 64 {
 		return entity.ProviderAuthorizationReservation{}, errs.ErrInvalid
 	}
-	return entity.ProviderAuthorizationReservation{AttemptRef: providerAuthorizationRef(accountRef, mutation.IdempotencyKey, method), ReservedVersion: *mutation.ExpectedVersion + 1, Applied: repository.reservationApplied}, nil
+	definition := "opencode-fixture"
+	if repository.reservationDefinition != nil {
+		definition = *repository.reservationDefinition
+	}
+	return entity.ProviderAuthorizationReservation{DefinitionKey: definition, AttemptRef: providerAuthorizationRef(accountRef, mutation.IdempotencyKey, method), ReservedVersion: *mutation.ExpectedVersion + 1, Applied: repository.reservationApplied}, nil
 }
 
 // TestProviderMaterializationRequiresDurableReservationAndSkipsAppliedReplay checks a denied owner
@@ -126,6 +131,7 @@ type providerMaterializerRecorder struct {
 	apiKey      entity.ProviderCredentialDescriptor
 	discards    []ProviderMaterializationDiscard
 	apiCalls    int
+	definition  string
 }
 
 // Check reports the local materializer fixture as ready without probing any external dependency.
@@ -148,12 +154,13 @@ func (materializer *providerMaterializerRecorder) ObserveDeviceAuthorization(con
 	return materializer.observation, nil
 }
 
-// MaterializeAPIKey counts materialization attempts and returns the fixture descriptor and fixed
+// MaterializeGatewayAPIKey counts materialization attempts and returns the fixture descriptor and fixed
 // masked label without storing supplied key bytes.
-// MaterializeAPIKey подсчитывает попытки материализации и возвращает тестовый дескриптор и
+// MaterializeGatewayAPIKey подсчитывает попытки материализации и возвращает тестовый дескриптор и
 // фиксированную скрытую метку без сохранения переданных байтов ключа.
-func (materializer *providerMaterializerRecorder) MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
+func (materializer *providerMaterializerRecorder) MaterializeGatewayAPIKey(_ context.Context, _, _, definition string, _ []byte) (entity.ProviderCredentialDescriptor, string, error) {
 	materializer.apiCalls++
+	materializer.definition = definition
 	return materializer.apiKey, "API key account", nil
 }
 
@@ -195,7 +202,7 @@ func TestProviderAPIKeyKeepsExactMaterializationAfterAmbiguousOwnerCommitFailure
 			t.Fatalf("attempt %d error = %v", attempt+1, err)
 		}
 	}
-	if materializer.apiCalls != 2 || len(materializer.discards) != 0 || repository.referenceChecks != 2 || repository.resolveCalls != 2 {
+	if materializer.apiCalls != 2 || materializer.definition != "opencode-fixture" || len(materializer.discards) != 0 || repository.referenceChecks != 2 || repository.resolveCalls != 2 {
 		t.Fatalf("materialize/discard/reference/resolve calls = %d/%d/%d/%d",
 			materializer.apiCalls, len(materializer.discards), repository.referenceChecks, repository.resolveCalls)
 	}
@@ -387,5 +394,27 @@ func providerTestPrincipal() value.Principal {
 	return value.Principal{
 		ActorID: "owner-test", AuthorityTenant: "organization-test", Permission: "platform.provider-accounts.authorize",
 		CorrelationRef: "correlation-test", CallerWorkload: "control-api-gateway", CredentialRevision: 1,
+	}
+}
+
+// TestProviderAPIKeyRejectsMissingOrRetiredOwnerDefinition prevents implicit provider selection
+// after an invalid reservation, without publishing material or issuing a cleanup effect.
+// TestProviderAPIKeyRejectsMissingOrRetiredOwnerDefinition запрещает неявный выбор provider
+// после неверной reservation без публикации материала либо эффекта очистки.
+func TestProviderAPIKeyRejectsMissingOrRetiredOwnerDefinition(t *testing.T) {
+	for _, definition := range []string{"", "openai-codex"} {
+		t.Run("definition_"+definition, func(t *testing.T) {
+			version := int64(4)
+			repository := &providerFailureRepository{account: entity.ProviderAccount{Ref: "pacc_test123", Version: version}, reservationDefinition: &definition}
+			materializer := &providerMaterializerRecorder{}
+			service, err := New(repository, WithProviderCredentialMaterializer(materializer))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = service.AuthorizeProviderAccountAPIKey(t.Context(), providerTestPrincipal(), value.Mutation{IdempotencyKey: "invalid-definition", ExpectedVersion: &version}, repository.account.Ref, []byte("synthetic-provider-key"))
+			if !errors.Is(err, errs.ErrUnavailable) || materializer.apiCalls != 0 || len(materializer.discards) != 0 {
+				t.Fatal("invalid definition reached credential materialization")
+			}
+		})
 	}
 }

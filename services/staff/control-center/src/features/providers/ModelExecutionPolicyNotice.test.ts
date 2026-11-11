@@ -45,10 +45,14 @@ describe("политика исполнения модели", () => {
       expect(state.loading.value).toBe(true);
       props.definitionKey = "opencode-two";
       props.model = "two";
-      responses[0]!({ items: [{ key: "opencode-one" } as ProviderDefinition] });
+      const first = responses[0];
+      if (!first) throw new Error("Initial provider request is missing");
+      first({ items: [{ key: "opencode-one" } as ProviderDefinition] });
       await nextTick();
       expect(state.definition.value).toBeUndefined();
-      responses.at(-1)!({ items: [{ key: "foreign" } as ProviderDefinition] });
+      const last = responses.at(-1);
+      if (!last) throw new Error("Current provider request is missing");
+      last({ items: [{ key: "foreign" } as ProviderDefinition] });
       await nextTick();
       expect(state.definition.value).toBeUndefined();
       expect(state.unavailable.value).toBe(true);

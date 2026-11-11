@@ -688,7 +688,7 @@ func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize
 	}
 	switch item.State {
 	case "AUTHORIZED":
-		if canAuthorize && item.Authorization != nil && item.Authorization.Method == "DEVICE_CODE" {
+		if canAuthorize && (item.Authorization == nil || item.Authorization.Method == "API_KEY") {
 			actions = append(actions, "CONFIGURE_CREDENTIAL")
 			if item.Verification == nil || item.Verification.State != "PENDING" {
 				actions = append(actions, "REFRESH_AUTHORIZATION")

@@ -63491,7 +63491,7 @@ func (x *RefreshProviderAccountAuthorizationResponse) GetAccount() *ProviderAcco
 	return nil
 }
 
-type VerifyProviderAccountDeviceAuthorizationRequest struct {
+type VerifyProviderAccountAuthorizationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Mutation      *MutationContext       `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
 	AccountRef    string                 `protobuf:"bytes,2,opt,name=account_ref,json=accountRef,proto3" json:"account_ref,omitempty"`
@@ -63499,20 +63499,20 @@ type VerifyProviderAccountDeviceAuthorizationRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationRequest) Reset() {
-	*x = VerifyProviderAccountDeviceAuthorizationRequest{}
+func (x *VerifyProviderAccountAuthorizationRequest) Reset() {
+	*x = VerifyProviderAccountAuthorizationRequest{}
 	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationRequest) String() string {
+func (x *VerifyProviderAccountAuthorizationRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*VerifyProviderAccountDeviceAuthorizationRequest) ProtoMessage() {}
+func (*VerifyProviderAccountAuthorizationRequest) ProtoMessage() {}
 
-func (x *VerifyProviderAccountDeviceAuthorizationRequest) ProtoReflect() protoreflect.Message {
+func (x *VerifyProviderAccountAuthorizationRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_controlplane_v1_control_plane_proto_msgTypes[721]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -63524,46 +63524,46 @@ func (x *VerifyProviderAccountDeviceAuthorizationRequest) ProtoReflect() protore
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use VerifyProviderAccountDeviceAuthorizationRequest.ProtoReflect.Descriptor instead.
-func (*VerifyProviderAccountDeviceAuthorizationRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use VerifyProviderAccountAuthorizationRequest.ProtoReflect.Descriptor instead.
+func (*VerifyProviderAccountAuthorizationRequest) Descriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{721}
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationRequest) GetMutation() *MutationContext {
+func (x *VerifyProviderAccountAuthorizationRequest) GetMutation() *MutationContext {
 	if x != nil {
 		return x.Mutation
 	}
 	return nil
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationRequest) GetAccountRef() string {
+func (x *VerifyProviderAccountAuthorizationRequest) GetAccountRef() string {
 	if x != nil {
 		return x.AccountRef
 	}
 	return ""
 }
 
-type VerifyProviderAccountDeviceAuthorizationResponse struct {
+type VerifyProviderAccountAuthorizationResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Account       *ProviderAccount       `protobuf:"bytes,1,opt,name=account,proto3" json:"account,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationResponse) Reset() {
-	*x = VerifyProviderAccountDeviceAuthorizationResponse{}
+func (x *VerifyProviderAccountAuthorizationResponse) Reset() {
+	*x = VerifyProviderAccountAuthorizationResponse{}
 	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationResponse) String() string {
+func (x *VerifyProviderAccountAuthorizationResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*VerifyProviderAccountDeviceAuthorizationResponse) ProtoMessage() {}
+func (*VerifyProviderAccountAuthorizationResponse) ProtoMessage() {}
 
-func (x *VerifyProviderAccountDeviceAuthorizationResponse) ProtoReflect() protoreflect.Message {
+func (x *VerifyProviderAccountAuthorizationResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_controlplane_v1_control_plane_proto_msgTypes[722]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -63575,12 +63575,12 @@ func (x *VerifyProviderAccountDeviceAuthorizationResponse) ProtoReflect() protor
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use VerifyProviderAccountDeviceAuthorizationResponse.ProtoReflect.Descriptor instead.
-func (*VerifyProviderAccountDeviceAuthorizationResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use VerifyProviderAccountAuthorizationResponse.ProtoReflect.Descriptor instead.
+func (*VerifyProviderAccountAuthorizationResponse) Descriptor() ([]byte, []int) {
 	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{722}
 }
 
-func (x *VerifyProviderAccountDeviceAuthorizationResponse) GetAccount() *ProviderAccount {
+func (x *VerifyProviderAccountAuthorizationResponse) GetAccount() *ProviderAccount {
 	if x != nil {
 		return x.Account
 	}
@@ -94182,12 +94182,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vaccount_ref\x18\x02 \x01(\tR\n" +
 	"accountRef\"i\n" +
 	"+RefreshProviderAccountAuthorizationResponse\x12:\n" +
-	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x90\x01\n" +
-	"/VerifyProviderAccountDeviceAuthorizationRequest\x12<\n" +
+	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x8a\x01\n" +
+	")VerifyProviderAccountAuthorizationRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
 	"\vaccount_ref\x18\x02 \x01(\tR\n" +
-	"accountRef\"n\n" +
-	"0VerifyProviderAccountDeviceAuthorizationResponse\x12:\n" +
+	"accountRef\"h\n" +
+	"*VerifyProviderAccountAuthorizationResponse\x12:\n" +
 	"\aaccount\x18\x01 \x01(\v2 .controlplane.v1.ProviderAccountR\aaccount\"\x8c\x01\n" +
 	"+ReauthorizeProviderAccountDeviceCodeRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1f\n" +
@@ -97509,7 +97509,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1aGetRuntimeEnvironmentDraft\x122.controlplane.v1.GetRuntimeEnvironmentDraftRequest\x1a3.controlplane.v1.GetRuntimeEnvironmentDraftResponse\x12\x88\x01\n" +
 	"\x1bGetRuntimeEnvironmentImpact\x123.controlplane.v1.GetRuntimeEnvironmentImpactRequest\x1a4.controlplane.v1.GetRuntimeEnvironmentImpactResponse\x12y\n" +
 	"\x16GetRuntimeSecretImpact\x12..controlplane.v1.GetRuntimeSecretImpactRequest\x1a/.controlplane.v1.GetRuntimeSecretImpactResponse\x12\x82\x01\n" +
-	"\x19ListInteractionIdentities\x121.controlplane.v1.ListInteractionIdentitiesRequest\x1a2.controlplane.v1.ListInteractionIdentitiesResponse2\xbe\xb5\x01\n" +
+	"\x19ListInteractionIdentities\x121.controlplane.v1.ListInteractionIdentitiesRequest\x1a2.controlplane.v1.ListInteractionIdentitiesResponse2\xac\xb5\x01\n" +
 	"\x16PlatformCommandService\x12|\n" +
 	"\x17CreateEmailMailboxDraft\x12/.controlplane.v1.CreateEmailMailboxDraftRequest\x1a0.controlplane.v1.CreateEmailMailboxDraftResponse\x12v\n" +
 	"\x15SaveEmailMailboxDraft\x12-.controlplane.v1.SaveEmailMailboxDraftRequest\x1a..controlplane.v1.SaveEmailMailboxDraftResponse\x12\x82\x01\n" +
@@ -97620,8 +97620,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15CreateProviderAccount\x12-.controlplane.v1.CreateProviderAccountRequest\x1a..controlplane.v1.CreateProviderAccountResponse\x12\xac\x01\n" +
 	"'StartProviderAccountDeviceAuthorization\x12?.controlplane.v1.StartProviderAccountDeviceAuthorizationRequest\x1a@.controlplane.v1.StartProviderAccountDeviceAuthorizationResponse\x12\x91\x01\n" +
 	"\x1eAuthorizeProviderAccountAPIKey\x126.controlplane.v1.AuthorizeProviderAccountAPIKeyRequest\x1a7.controlplane.v1.AuthorizeProviderAccountAPIKeyResponse\x12\xa0\x01\n" +
-	"#RefreshProviderAccountAuthorization\x12;.controlplane.v1.RefreshProviderAccountAuthorizationRequest\x1a<.controlplane.v1.RefreshProviderAccountAuthorizationResponse\x12\xaf\x01\n" +
-	"(VerifyProviderAccountDeviceAuthorization\x12@.controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest\x1aA.controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse\x12\xa3\x01\n" +
+	"#RefreshProviderAccountAuthorization\x12;.controlplane.v1.RefreshProviderAccountAuthorizationRequest\x1a<.controlplane.v1.RefreshProviderAccountAuthorizationResponse\x12\x9d\x01\n" +
+	"\"VerifyProviderAccountAuthorization\x12:.controlplane.v1.VerifyProviderAccountAuthorizationRequest\x1a;.controlplane.v1.VerifyProviderAccountAuthorizationResponse\x12\xa3\x01\n" +
 	"$ReauthorizeProviderAccountDeviceCode\x12<.controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest\x1a=.controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse\x12v\n" +
 	"\x15RevokeProviderAccount\x12-.controlplane.v1.RevokeProviderAccountRequest\x1a..controlplane.v1.RevokeProviderAccountResponse\x12v\n" +
 	"\x15DeleteProviderAccount\x12-.controlplane.v1.DeleteProviderAccountRequest\x1a..controlplane.v1.DeleteProviderAccountResponse\x12\x94\x01\n" +
@@ -98707,8 +98707,8 @@ var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(*AuthorizeProviderAccountAPIKeyResponse)(nil),                                  // 870: controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
 	(*RefreshProviderAccountAuthorizationRequest)(nil),                              // 871: controlplane.v1.RefreshProviderAccountAuthorizationRequest
 	(*RefreshProviderAccountAuthorizationResponse)(nil),                             // 872: controlplane.v1.RefreshProviderAccountAuthorizationResponse
-	(*VerifyProviderAccountDeviceAuthorizationRequest)(nil),                         // 873: controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
-	(*VerifyProviderAccountDeviceAuthorizationResponse)(nil),                        // 874: controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
+	(*VerifyProviderAccountAuthorizationRequest)(nil),                               // 873: controlplane.v1.VerifyProviderAccountAuthorizationRequest
+	(*VerifyProviderAccountAuthorizationResponse)(nil),                              // 874: controlplane.v1.VerifyProviderAccountAuthorizationResponse
 	(*ReauthorizeProviderAccountDeviceCodeRequest)(nil),                             // 875: controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
 	(*ReauthorizeProviderAccountDeviceCodeResponse)(nil),                            // 876: controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
 	(*RevokeProviderAccountRequest)(nil),                                            // 877: controlplane.v1.RevokeProviderAccountRequest
@@ -100292,8 +100292,8 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	851,  // 1193: controlplane.v1.AuthorizeProviderAccountAPIKeyResponse.account:type_name -> controlplane.v1.ProviderAccount
 	152,  // 1194: controlplane.v1.RefreshProviderAccountAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
 	851,  // 1195: controlplane.v1.RefreshProviderAccountAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1196: controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1197: controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1196: controlplane.v1.VerifyProviderAccountAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1197: controlplane.v1.VerifyProviderAccountAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
 	152,  // 1198: controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest.mutation:type_name -> controlplane.v1.MutationContext
 	851,  // 1199: controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse.account:type_name -> controlplane.v1.ProviderAccount
 	152,  // 1200: controlplane.v1.RevokeProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
@@ -101043,7 +101043,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	867,  // 1944: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:input_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationRequest
 	869,  // 1945: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:input_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyRequest
 	871,  // 1946: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:input_type -> controlplane.v1.RefreshProviderAccountAuthorizationRequest
-	873,  // 1947: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:input_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
+	873,  // 1947: controlplane.v1.PlatformCommandService.VerifyProviderAccountAuthorization:input_type -> controlplane.v1.VerifyProviderAccountAuthorizationRequest
 	875,  // 1948: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:input_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
 	877,  // 1949: controlplane.v1.PlatformCommandService.RevokeProviderAccount:input_type -> controlplane.v1.RevokeProviderAccountRequest
 	879,  // 1950: controlplane.v1.PlatformCommandService.DeleteProviderAccount:input_type -> controlplane.v1.DeleteProviderAccountRequest
@@ -101440,7 +101440,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	868,  // 2341: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:output_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationResponse
 	870,  // 2342: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:output_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
 	872,  // 2343: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:output_type -> controlplane.v1.RefreshProviderAccountAuthorizationResponse
-	874,  // 2344: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:output_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
+	874,  // 2344: controlplane.v1.PlatformCommandService.VerifyProviderAccountAuthorization:output_type -> controlplane.v1.VerifyProviderAccountAuthorizationResponse
 	876,  // 2345: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:output_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
 	878,  // 2346: controlplane.v1.PlatformCommandService.RevokeProviderAccount:output_type -> controlplane.v1.RevokeProviderAccountResponse
 	880,  // 2347: controlplane.v1.PlatformCommandService.DeleteProviderAccount:output_type -> controlplane.v1.DeleteProviderAccountResponse

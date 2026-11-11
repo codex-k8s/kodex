@@ -301,7 +301,7 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         required = ("bash", "curl", "git", "gh", "jq", "yq", "ripgrep", "make", "just", "go", "goimports", "gofumpt",
                            "golangci-lint", "staticcheck", "goose", "sqlc", "buf", "protoc", "protoc-gen-go", "protoc-gen-go-grpc",
                            "grpcurl", "mockgen", "oapi-codegen", "node", "npm", "pnpm", "yarn", "typescript", "eslint", "prettier",
-                           "vite", "vue-tsc", "vitest", "playwright", "chromium", "playwright-mcp", "wscat", "codex")
+                           "vite", "vue-tsc", "vitest", "playwright", "chromium", "playwright-mcp", "wscat", "opencode")
         probes = (ROOT / "libs/go/runtimecontract/image_inventory.go").read_text().split('return []ImageToolProbe{', 1)[1].split('optional(probe(', 1)[0]
         observed = re.findall(r'probe\("([^"]+)"|Name: "([^"]+)"', probes)
         self.assertEqual(tuple(left or right for left, right in observed), required)
@@ -309,11 +309,14 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         for executable in required:
             self.assertIn(executable, dockerfile + manifest)
 
-    def test_local_codex_default_remains_in_its_own_stage(self):
+    def test_only_opencode_runtime_is_built(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
-        local = dockerfile.split(" AS local-codex-cli\n", 1)[1].split("\nFROM ", 1)[0]
-        self.assertIn("ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0", local)
-        self.assertLess(local.index("ARG KODEX_CODEX_PACKAGE="), local.index("RUN "))
+        manifest = (ROOT / "services/jobs/agent-runner/npm-toolchain/package.json").read_text()
+        self.assertNotIn("@openai/codex", dockerfile + manifest)
+        self.assertNotIn("AS local-codex-cli", dockerfile)
+        self.assertNotIn("/usr/local/bin/codex", dockerfile)
+        self.assertIn("AS opencode-binary", dockerfile)
+        self.assertIn("/out/opencode /usr/local/bin/opencode", dockerfile)
 
     def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
         full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
@@ -427,7 +430,8 @@ return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</t
         source_copy = full.index('COPY --from=runner-build ')
         self.assertGreater(source_copy, installation_end)
         early_copies = re.findall(r'(?m)^COPY .*?--from=([^ ]+)', full[:installation_end])
-        self.assertEqual(early_copies, ["toolchain-build", "platform-cli-build", "build"])
+        self.assertEqual(early_copies, ["opencode-binary", "toolchain-build", "platform-cli-build", "build"])
+        self.assertNotRegex(stages["opencode-binary"][1], r'(?m)^(?:COPY|ADD) ')
 
     def test_full_guard_stages_exact_runner_after_prepare_before_install(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()

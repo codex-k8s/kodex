@@ -671,6 +671,9 @@ EGRESS_POLICY_NAME="$egress_policy_name" yq -i '
   )
 ' "$rendered"
 
+python3 "$repository_root/tools/install/egress_bootstrap_projection.py" --render "$rendered" ||
+  fail 'egress bootstrap projection failed'
+
 # Kustomize versions bundled with kubectl may classify newer cluster-scoped
 # APIs as namespaced. Canonicalize their identity before duplicate detection
 # and server-side apply.

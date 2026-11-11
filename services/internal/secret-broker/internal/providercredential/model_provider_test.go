@@ -190,8 +190,10 @@ func TestGatewayMaterializationRejectsWrongDefinitionBeforeStorage(t *testing.T)
 	if err := service.ConfigureModelProvider(gatewayCatalogFixture()); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := service.MaterializeGatewayAPIKey(t.Context(), "pauth_fixture0001", "pacc_fixture0001", "openai-codex", []byte("synthetic-gateway-key"))
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Fatal("foreign definition accepted")
+	for _, definition := range []string{"", "openai-codex", "opencode-foreign"} {
+		_, _, err := service.MaterializeGatewayAPIKey(t.Context(), "pauth_fixture0001", "pacc_fixture0001", definition, []byte("synthetic-gateway-key"))
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Fatal("foreign or missing definition accepted")
+		}
 	}
 }

@@ -275,14 +275,14 @@ func (server *Server) RefreshProviderAccountAuthorization(w http.ResponseWriter,
 	writeRPCResult(w, http.StatusAccepted, response, err, "account", "")
 }
 
-// VerifyProviderAccountDeviceAuthorization invokes explicit owner verification with mutation pins, requires a nonnil exact-account reply and projects HTTP200; it does not infer success from merely possessing a device code.
-// VerifyProviderAccountDeviceAuthorization вызывает явную проверку владельца с mutation pins, требует ненулевой ответ точного аккаунта и проецирует HTTP200; наличие device code само по себе успех не доказывает.
-func (server *Server) VerifyProviderAccountDeviceAuthorization(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.VerifyProviderAccountDeviceAuthorizationParams) {
+// VerifyProviderAccountAuthorization invokes explicit owner verification with mutation pins, requires a nonnil exact-account reply and projects HTTP200; it does not infer success from merely possessing a device code.
+// VerifyProviderAccountAuthorization вызывает явную проверку владельца с mutation pins, требует ненулевой ответ точного аккаунта и проецирует HTTP200; наличие device code само по себе успех не доказывает.
+func (server *Server) VerifyProviderAccountAuthorization(w http.ResponseWriter, r *http.Request, ref generated.ProviderAccountRef, p generated.VerifyProviderAccountAuthorizationParams) {
 	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.VerifyProviderAccountDeviceAuthorization(r.Context(), &controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest{Mutation: mutation, AccountRef: ref})
+	response, err := server.control.Command.VerifyProviderAccountAuthorization(r.Context(), &controlplanev1.VerifyProviderAccountAuthorizationRequest{Mutation: mutation, AccountRef: ref})
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

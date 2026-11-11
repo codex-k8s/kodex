@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.3.0
-updated: 2026-10-02
+version: 2.4.0
+updated: 2026-11-11
 ---
 
 # Чистое развертывание Kodex
@@ -101,20 +101,32 @@ deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
 не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
 control-plane; повторный apply выполняет exact Secret/job/readiness readback.
 
-Перед первым `dev.sh up` оператор передаёт приватный auth snapshot, который
-текущий Codex CLI подтверждает через `codex login status`:
+Перед первым `dev.sh up` оператор передаёт утверждённую конфигурацию OpenCode
+и приватный regular файл API key (0600, текущий владелец, без symlink/hardlink):
 
 ```bash
-KODEX_DEV_PROVIDER_AUTH_FILE="$HOME/.codex/auth.json" ./dev.sh up
+KODEX_MODEL_PROVIDER_CONFIGURATION_FILE=/private/provider.json \
+KODEX_MODEL_PROVIDER_API_KEY_FILE=/private/provider-api-key \
+KODEX_MODEL_PROVIDER_DEFAULT_MODEL=approved-model \
+./dev.sh up --kubeconfig /private/kubeconfig --context approved-local
 ```
 
-После `provider-import --account-key default-openai-codex` последующие запуски
-автоматически используют
-`.kodex-dev/provider-accounts/default-openai-codex/auth.json`. Синтетический
-credential и режим `local-development` запрещены: они не создают ложный
-`AUTHORIZED` account и не позволяют объявить системного помощника готовым.
-`dev.sh down` удаляет только application namespaces `kodex-runtime`,
-`kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
+Локальный bootstrap использует тот же `tools/install/model-provider.py`, что
+`install.sh`: проверяет exact provider/model/endpoint, создаёт typed credential
+и отдельный секретный cache namespace key. Render доставляет immutable
+конфигурацию control-plane, secret-broker и egress-gateway с проверяемым digest.
+Codex CLI, ChatGPT auth snapshots и автоматический импорт прежних аккаунтов
+не поддерживаются. Дополнительные аккаунты создаются через штатный UI/API.
+Повторный запуск с тем же API key сохраняет namespace; другая конфигурация или
+ключ требуют явного управления credential, а не молчаливой перезаписи bootstrap.
+В `trusted-cluster` допустим отложенный ввод credential; это не означает
+готовность системного помощника. `protected` требует файл ключа до изменений.
+
+`dev.sh down` содержит удаление фиксированных application namespaces, включая
+`identity`, и не доказывает их исключительное владение. В разделяемом кластере
+эту команду не применять: сначала нужен адресный inventory/plan с UID и
+доказательством принадлежности каждого ресурса. Разрешение очистить Kodex не
+разрешает удалять общий IdP, чужие workloads или данные.
 
 Локальный профиль по умолчанию использует
 `--management-surfaces control-center-grafana`: Grafana устанавливается, а

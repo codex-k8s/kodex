@@ -1803,11 +1803,11 @@ paths:
                 { schema: { $ref: "#/components/schemas/ProviderAccount" } },
             }
         default: { $ref: "#/components/responses/Problem" }
-  /api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification:
+  /api/v1/provider-accounts/{providerAccountRef}/verification:
     parameters: [{ $ref: "#/components/parameters/ProviderAccountRef" }]
     post:
       tags: [Providers]
-      operationId: verifyProviderAccountDeviceAuthorization
+      operationId: verifyProviderAccountAuthorization
       parameters:
         [
           { $ref: "#/components/parameters/IfMatch" },
@@ -1816,7 +1816,7 @@ paths:
         ]
       responses:
         "200":
-          description: Device authorization проверена авторитетным provider adapter
+          description: Создана или прочитана проверка текущего API-подключения; результат приходит через account readback
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProviderAccount" }

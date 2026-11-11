@@ -106,29 +106,6 @@ func (client *Client) ObserveDeviceAuthorization(
 	}, nil
 }
 
-// MaterializeAPIKey forwards the supplied key bytes with attempt/account references and requires a returned descriptor.
-// It neither clones nor clears the caller's byte slice and does not independently validate every descriptor field here.
-// MaterializeAPIKey передаёт байты ключа со ссылками попытки и аккаунта и требует возвращённый дескриптор.
-// Срез вызывающего кода здесь не копируется и не очищается; каждое поле дескриптора отдельно не проверяется.
-func (client *Client) MaterializeAPIKey(
-	ctx context.Context,
-	attemptRef, accountRef string,
-	apiKey []byte,
-) (entity.ProviderCredentialDescriptor, string, error) {
-	response, err := client.client.ProviderCredentials.MaterializeAPIKey(ctx,
-		&controlplanev1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest{
-			AttemptRef: attemptRef, AccountRef: accountRef, ApiKey: apiKey,
-		})
-	if err != nil {
-		return entity.ProviderCredentialDescriptor{}, "", err
-	}
-	descriptor := credentialDescriptor(response.GetCredential())
-	if descriptor == nil {
-		return entity.ProviderCredentialDescriptor{}, "", errors.New("provider credential descriptor is missing")
-	}
-	return *descriptor, response.GetExternalAccountMasked(), nil
-}
-
 // Discard forwards the exact attempt/account and materializer version pins, including an optional credential descriptor.
 // RPC errors or a response without the discarded flag fail the operation; this method does not implement retries.
 // Discard передаёт точные ссылки попытки и аккаунта и привязки версии размещения, включая необязательный дескриптор учётных данных.

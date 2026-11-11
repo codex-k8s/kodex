@@ -81,13 +81,13 @@ func (fixture *reservedProviderFixture) ObserveDeviceAuthorization(context.Conte
 	return platformservice.ProviderAuthorizationObservation{State: "AUTHORIZED", ExternalAccountMasked: "Synthetic reserved account", Credential: &descriptor}, nil
 }
 
-// MaterializeAPIKey increments API-call and generation counters and returns fabricated
+// MaterializeGatewayAPIKey increments API-call and generation counters and returns fabricated
 // descriptor/masked account metadata, deliberately ignoring the supplied key bytes. The counter
 // detects duplicate materialization; no API key is stored or sent.
-// MaterializeAPIKey увеличивает API-call и generation counters и возвращает вымышленные
+// MaterializeGatewayAPIKey увеличивает API-call и generation counters и возвращает вымышленные
 // descriptor/masked account metadata, намеренно игнорируя key bytes. Counter обнаруживает
 // duplicate materialization; API key не сохраняется и не отправляется.
-func (fixture *reservedProviderFixture) MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
+func (fixture *reservedProviderFixture) MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
 	fixture.apiCalls++
 	fixture.current++
 	return fixture.descriptor(), "Synthetic reserved API account", nil
@@ -102,90 +102,75 @@ func (*reservedProviderFixture) Discard(context.Context, platformservice.Provide
 }
 
 // testProviderAuthorizationReservation uses real owner reservation/idempotency/OCC state with the
-// fake materializer to ensure device/API replay does not repeat external-call counters and changed
+// fake materializer to ensure API replay does not repeat external-call counters and changed
 // inputs fail. It covers replacement activation, crash-before-effect reservation, deletion/expiry
 // preventing revival and durable metadata-cleanup task discovery. It does not execute that cleanup
 // or verify real provider/Secret effects.
 // testProviderAuthorizationReservation использует real owner reservation/idempotency/OCC state с
-// fake materializer, проверяя отсутствие повторных external-call counters для device/API replay и
+// fake materializer, проверяя отсутствие повторных external-call counters для API replay и
 // отказ changed inputs. Охватывает replacement activation, crash-before-effect reservation, запрет
 // revival после deletion/expiry и наличие durable metadata-cleanup task. Не исполняет cleanup и не
 // проверяет реальные provider/Secret effects.
 func testProviderAuthorizationReservation(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
-	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.device-reauthorize"}, "control-api-gateway")
+	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.provider-accounts.api-key-authorize"}, "control-api-gateway")
 	fixture := &reservedProviderFixture{}
 	service, err := platformservice.New(repository, platformservice.WithProviderCredentialMaterializer(fixture))
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-provider-create"}, Payload: command.ProviderAccountInput{DefinitionKey: "openai-codex", Name: "Reserved device account"}})
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-provider-create"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Reserved API account"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create reserved account: %v", err)
 	}
 	account := *created.ProviderAccount
-	original := value.Mutation{IdempotencyKey: "reserved-device-start", ExpectedVersion: &account.Version}
-	pending, err := service.StartProviderAccountDeviceAuthorization(ctx, owner, original, account.Ref)
-	if err != nil || pending.Authorization == nil || len(fixture.attempts) != 1 {
-		t.Fatalf("reserved start: %v", err)
+	var updated entity.ProviderAccount
+	for round := 1; round <= 2; round++ {
+		mutation := value.Mutation{IdempotencyKey: fmt.Sprintf("reserved-api-key-%d", round), ExpectedVersion: &account.Version}
+		key := []byte(fmt.Sprintf("synthetic-reservation-key-%d", round))
+		updated, err = service.AuthorizeProviderAccountAPIKey(ctx, owner, mutation, account.Ref, key)
+		if err != nil || updated.State != "AUTHORIZED" || fixture.apiCalls != round {
+			t.Fatalf("API key reservation/activation: round=%d err=%v", round, err)
+		}
+		if _, err := service.AuthorizeProviderAccountAPIKey(ctx, owner, mutation, account.Ref, key); err != nil || fixture.apiCalls != round {
+			t.Fatalf("API key replay repeated materialization: %v", err)
+		}
+		if _, err := service.AuthorizeProviderAccountAPIKey(ctx, owner, mutation, account.Ref, []byte("different-synthetic-key")); !errors.Is(err, errs.ErrIdempotencyReuse) || fixture.apiCalls != round {
+			t.Fatalf("API key changed input reused reservation: %v", err)
+		}
+		if round == 2 && updated.Authorization.Ref == account.Authorization.Ref {
+			t.Fatal("replacement reused old authorization attempt")
+		}
+		account = updated
 	}
-	firstAttempt := pending.Authorization.Ref
-	if _, err := service.StartProviderAccountDeviceAuthorization(ctx, owner, original, account.Ref); err != nil || len(fixture.attempts) != 1 {
-		t.Fatalf("start replay repeated external effect: %v", err)
-	}
-	authorized, err := service.RefreshProviderAccountAuthorization(ctx, owner, value.Mutation{IdempotencyKey: "reserved-device-observe", ExpectedVersion: &pending.Version}, account.Ref)
-	if err != nil || authorized.State != "AUTHORIZED" {
-		t.Fatalf("activate reserved credential: %v", err)
-	}
-	reauthMutation := value.Mutation{IdempotencyKey: "reserved-device-reauth", ExpectedVersion: &authorized.Version}
-	replacement, err := service.StartProviderAccountDeviceAuthorization(ctx, owner, reauthMutation, account.Ref)
-	if err != nil || replacement.Authorization == nil || replacement.Authorization.Ref == firstAttempt || len(fixture.attempts) != 2 {
-		t.Fatalf("new reauthorization attempt: %v", err)
-	}
-	if _, err := service.StartProviderAccountDeviceAuthorization(ctx, owner, reauthMutation, account.Ref); err != nil || len(fixture.attempts) != 2 {
-		t.Fatalf("reauthorization replay repeated external effect: %v", err)
-	}
-	updated, err := service.RefreshProviderAccountAuthorization(ctx, owner, value.Mutation{IdempotencyKey: "reserved-device-new-observe", ExpectedVersion: &replacement.Version}, account.Ref)
-	if err != nil || updated.State != "AUTHORIZED" || updated.Ref != account.Ref {
-		t.Fatalf("atomic replacement activation: %v", err)
-	}
-	apiMutation := value.Mutation{IdempotencyKey: "reserved-api-key", ExpectedVersion: &updated.Version}
-	apiAccount, err := service.AuthorizeProviderAccountAPIKey(ctx, owner, apiMutation, account.Ref, []byte("synthetic-reservation-key"))
-	if err != nil || apiAccount.State != "AUTHORIZED" || fixture.apiCalls != 1 {
-		t.Fatalf("API key durable reservation: %v", err)
-	}
-	if _, err := service.AuthorizeProviderAccountAPIKey(ctx, owner, apiMutation, account.Ref, []byte("synthetic-reservation-key")); err != nil || fixture.apiCalls != 1 {
-		t.Fatalf("API key replay repeated materialization: %v", err)
-	}
-	if _, err := service.AuthorizeProviderAccountAPIKey(ctx, owner, apiMutation, account.Ref, []byte("different-synthetic-key")); !errors.Is(err, errs.ErrIdempotencyReuse) || fixture.apiCalls != 1 {
-		t.Fatalf("API key changed input reused reservation: %v", err)
-	}
-	updated = apiAccount
 	// Резервирование без внешнего эффекта тоже даёт достижимую очистку после Delete.
 	mutation := value.Mutation{IdempotencyKey: "reserved-crash-before-effect", ExpectedVersion: &updated.Version}
 	resolved, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reservation, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "DEVICE_CODE", strings.Repeat("8", 64))
+	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "DEVICE_CODE", strings.Repeat("8", 64)); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatal("retired device method reserved authority", err)
+	}
+	reservation, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "API_KEY", strings.Repeat("8", 64))
 	if err != nil || reservation.Applied {
 		t.Fatalf("reserve crash boundary: %v", err)
 	}
-	repeated, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "DEVICE_CODE", strings.Repeat("8", 64))
+	repeated, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "API_KEY", strings.Repeat("8", 64))
 	if err != nil || repeated.AttemptRef != reservation.AttemptRef {
 		t.Fatalf("reservation identity replay: %v", err)
 	}
-	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "DEVICE_CODE", strings.Repeat("9", 64)); !errors.Is(err, errs.ErrIdempotencyReuse) {
+	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "API_KEY", strings.Repeat("9", 64)); !errors.Is(err, errs.ErrIdempotencyReuse) {
 		t.Fatalf("changed reservation intent: %v", err)
 	}
 	deleted, err := service.Execute(ctx, command.Command{Kind: command.DeleteProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-delete", ExpectedVersion: &reservation.ReservedVersion}, Payload: command.ProviderAccountInput{AccountRef: account.Ref}})
 	if err != nil || deleted.ProviderAccount == nil || deleted.ProviderAccount.State != "DELETING" {
 		t.Fatalf("delete reserved attempt: %v", err)
 	}
-	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "DEVICE_CODE", strings.Repeat("8", 64)); !errors.Is(err, errs.ErrConflict) {
+	if _, err := repository.ReserveProviderAuthorization(ctx, resolved, mutation, account.Ref, "API_KEY", strings.Repeat("8", 64)); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("deleted reservation was revived: %v", err)
 	}
-	expiring, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-expiry-account"}, Payload: command.ProviderAccountInput{DefinitionKey: "openai-codex", Name: "Expired reservation"}})
+	expiring, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "reserved-expiry-account"}, Payload: command.ProviderAccountInput{DefinitionKey: repository.modelProvider.DefinitionKey(), Name: "Expired reservation"}})
 	if err != nil || expiring.ProviderAccount == nil {
 		t.Fatalf("expiry account: %v", err)
 	}

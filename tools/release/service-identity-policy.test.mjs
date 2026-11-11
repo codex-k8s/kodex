@@ -61,8 +61,8 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(source.policy_revision,100);
-  assert.equal(policy.bindings.length,433);
+  assert.equal(source.policy_revision,105);
+  assert.equal(policy.bindings.length,450);
   for (const [operation, method, caller] of [
     ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
     ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
@@ -85,8 +85,8 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,322);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,111);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,334);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,116);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",
@@ -176,4 +176,22 @@ test("workspace observation remains an exact controller-only owner binding", () 
   const changed = structuredClone(source);
   changed.policy.operation_bindings.find(binding => binding.operation_id === operation).caller_workload_id = "control-api-gateway";
   assert.throws(() => buildServicePolicy(changed, classification), /service operation classification drift/);
+});
+
+test("проверка API-подключения сохраняет USER/OCC/idempotency без device alias", () => {
+  const policy = buildServicePolicy(source, classification);
+  const operation = "platform.command.provider-accounts.authorization.verify";
+  const sourceBindings = source.policy.operation_bindings.filter(value => value.operation_id === operation);
+  assert.equal(sourceBindings.length, 1);
+  // Owner разрешает opaque account ref из подписанного RPC внутри организации;
+  // отдельный caller-supplied resource locator не назначает полномочия.
+  assert.deepEqual(sourceBindings[0].request_profile, {mode:"UNARY_PROTO_SHA256",resource:"FORBIDDEN",version:"REQUIRED",attempt:"FORBIDDEN",idempotency:"REQUIRED"});
+  assert.deepEqual(sourceBindings[0].authority_sources, ["OIDC_SESSION","DOMAIN_STATE"]);
+  assert.deepEqual(policy.bindings.filter(value => value.operation_id === operation), [{caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",full_method:"/controlplane.v1.PlatformCommandService/VerifyProviderAccountAuthorization",operation_id:operation,permission:operation,actor_mode:"USER_CREDENTIAL_REQUIRED",project_required:false}]);
+  assert.ok(!source.policy.operation_bindings.some(value => value.operation_id === "platform.command.provider-accounts.device-verify" || value.full_method === "/controlplane.v1.PlatformCommandService/VerifyProviderAccountDeviceAuthorization"));
+  for (const mutate of [value => {value.request_profile.version="FORBIDDEN";}, value => {value.authority_sources=["DOMAIN_STATE"];}, value => {value.caller_workload_id="agent-runner";}]) {
+    const changed=structuredClone(source);
+    mutate(changed.policy.operation_bindings.find(value=>value.operation_id===operation));
+    assert.throws(()=>buildServicePolicy(changed,classification),/classification drift/);
+  }
 });

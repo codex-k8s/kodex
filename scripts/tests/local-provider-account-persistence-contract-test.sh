@@ -7,15 +7,10 @@ python3 - "$repository_root" <<'PY'
 from pathlib import Path
 import sys
 root = Path(sys.argv[1])
-provider = (root / "tools/dev/provider-account.sh").read_text()
+assert not (root / "tools/dev/provider-account.sh").exists()
 dev = (root / "dev.sh").read_text()
 installer = (root / "tools/install/materialize-secrets.sh").read_text()
 sql = (root / "tools/dev/reconcile-provider-account.sql").read_text()
-assert 'canonical_auth_file="$account_home/auth.json"' in provider
-assert '{version:1, accountKey:$account_key, name:$account_name, authorizationMode:$authorization_mode}' in provider
-assert 'provider-bootstrap.py" import' in provider
-assert 'create secret generic' not in provider
-assert 'delete "secret/' not in provider
 assert 'ON CONFLICT (organization_id, stable_key)' not in sql
 assert "account.ref = :'account_ref'" in sql
 assert "installation_owner.stable_key = 'installation-owner'" in sql
@@ -26,11 +21,14 @@ assert "restore_selected_provider_metadata_from_auth" not in installer
 assert 'provider-bootstrap.py" seed' in installer
 assert "runtime-provider-openai-default-r1" not in installer
 assert "preserve_selected_provider_metadata" not in installer
-assert 'elif [[ "$security_profile" == trusted-cluster ]]' in dev
 assert 'provider_mode=deferred' in dev
-assert "protected profile requires KODEX_LOCAL_PROVIDER_AUTH_FILE" in dev
+assert "protected profile requires KODEX_MODEL_PROVIDER_API_KEY_FILE" in dev
 assert '--security-profile "$security_profile" --provider-mode "$provider_mode"' in dev
-assert '--auth-file "$account_auth_file" --preserve-current' in dev
+assert 'model-provider.py" prepare-auth' in dev
+assert '--api-key-file "$KODEX_MODEL_PROVIDER_API_KEY_FILE"' in dev
+assert '--model-provider-configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE"' in dev
+assert 'codex login' not in dev and 'provider_metadata=(' not in dev
+assert dev.index('retired CLI bootstrap is unsupported') < dev.index('kubectl get --raw=/readyz')
 for path in ("tools/dev/deploy-local.sh", "tools/install/deploy-platform.sh"):
     source = (root / path).read_text()
     import_at = source.index('provider-bootstrap.py" recover')

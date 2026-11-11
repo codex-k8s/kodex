@@ -12,7 +12,7 @@ import {
   setProviderAccountEnabled as setProviderAccountEnabledRequest,
   setProviderAccountConcurrency as setProviderAccountConcurrencyRequest,
   startProviderAccountDeviceAuthorization,
-  verifyProviderAccountDeviceAuthorization,
+  verifyProviderAccountAuthorization,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import { mutate, type MutationHeaders } from "@/shared/api/mutation";
 import { unwrap } from "@/shared/api/problem";
@@ -156,14 +156,14 @@ export async function pollDeviceAuthorization(
   ).data;
 }
 
-export async function verifyDeviceAuthorization(
+export async function verifyAccountAuthorization(
   account: ProviderAccount,
   key?: string,
 ): Promise<ProviderAccount> {
   return (
     await mutate(
       (headers) =>
-        verifyProviderAccountDeviceAuthorization({
+        verifyProviderAccountAuthorization({
           path: { providerAccountRef: account.ref },
           headers: versionedHeaders(headers),
           signal: requestSignal(),

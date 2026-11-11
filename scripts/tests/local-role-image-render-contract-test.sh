@@ -188,7 +188,16 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 install -d -m 0700 "$cache_root"
 render="$temporary_directory/render.yaml"
 
+python3 - "$source_root" "$temporary_directory/provider.json" <<'PYCONFIG'
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]) / 'tools/install'))
+from test_model_provider import fixture
+Path(sys.argv[2]).write_text(json.dumps(fixture()))
+PYCONFIG
+
 "$source_root/tools/dev/render-local.sh" \
+  --model-provider-configuration "$temporary_directory/provider.json" --model-provider-default-model vendor/model-v1 \
   --profile "$deployment_profile" \
   --source-root "$source_root" --cache-root "$cache_root" --output "$render" \
   --public-host control.127.0.0.1.nip.io \
@@ -376,7 +385,7 @@ actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256
   <<<"$policy_json" | sha256sum | awk '{print $1}')
 jq -e --arg policy "$actual_policy_digest" --arg runtime "$expected_runtime_contract_digest" '
   .data.policySHA256 == $policy and
-  .data.roleRuntimeContractRevision == "3" and
+  .data.roleRuntimeContractRevision == "5" and
   .data.roleRuntimeContractSHA256 == $runtime
 ' <<<"$policy_json" >/dev/null ||
   fail 'local policy or role runtime contract identity is not content-addressed'
@@ -635,20 +644,34 @@ yq -o=json -I=0 '.' "$jobs" | jq -s -e '
 yq -o=json -I=0 '.' "$render" | jq -s -e '
   any(.[];
     .kind == "Deployment" and .metadata.name == "secret-broker" and
-    any(.spec.template.spec.initContainers[]?;
-      .name == "codex-cli-install" and
-      .image == "pull.127.0.0.1.nip.io/kodex/agent-runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and
-      .imagePullPolicy == "IfNotPresent" and
-      .resources.requests.cpu == "10m" and
-      .resources.requests.memory == "64Mi" and
-      .resources.limits.cpu == "100m" and
-      .resources.limits.memory == "256Mi" and
-      any(.args[]?; contains("binary=/usr/local/bin/codex")) and
-      all(.args[]?; contains("node_modules/@openai/codex") | not)))
-' >/dev/null || fail 'secret-broker Codex CLI init resources are not bounded for a clean local install'
+    all(.spec.template.spec.initContainers[]?; .name != "codex-cli-install") and
+    all(.spec.template.spec.containers[]?;
+      all(.env[]?; .name != "SECRET_BROKER_CODEX_BINARY") and
+      all(.volumeMounts[]?; .name != "codex-cli")) and
+    all(.spec.template.spec.volumes[]?; .name != "codex-cli"))
+' >/dev/null || fail 'secret-broker retains a retired runtime dependency'
 
-if rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|@sha256:0{64}' "$render" "$jobs" >/dev/null; then
+if rg -n '__KODEX_[A-Z0-9_]+__|@sha256:0{64}' "$render" "$jobs" >/dev/null; then
   fail 'rendered supply-chain contains unresolved values'
 fi
+python3 - "$render" "$jobs" <<'PY'
+import json, re, sys, yaml
+from pathlib import Path
+for path in sys.argv[1:]:
+    raw = Path(path).read_text()
+    hosts = set(re.findall(r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.invalid\b', raw))
+    assert hosts <= {'gateway.example.invalid'}, 'unresolved synthetic render hostname'
+resources = list(filter(None, yaml.safe_load_all(Path(sys.argv[1]).read_text())))
+providers = [r for r in resources if r['kind'] == 'ConfigMap' and r['metadata']['name'].startswith('kodex-model-provider-')]
+assert len(providers) == 1
+assert json.loads(providers[0]['data']['provider.json'])['base_url'] == 'https://gateway.example.invalid/v1'
+for r in resources:
+    if r['kind'] in ('Deployment', 'StatefulSet', 'Job'):
+        pod = r['spec']['template']['spec']
+        for c in pod.get('initContainers', []) + pod.get('containers', []):
+            for e in c.get('env', []):
+                if e['name'] == 'GOWORK':
+                    assert e['value'] == 'off', 'YAML scalar changed the Go workspace setting'
+PY
 
 printf 'Kodex local RoleImage render contract test passed\n'

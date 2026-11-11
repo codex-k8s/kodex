@@ -253,3 +253,68 @@ REMOTE_CODEX резервируются в Proto; decoder прежнего ис�
 контракта проверен через Context7 `/protocolbuffers/protocolbuffers.github.io`:
 [резервирование удалённых enum](https://protobuf.dev/programming-guides/proto3/#reserved).
 Это карта изменения; результаты проверок фиксируются отдельно по SHA.
+
+## Явная проверка API-подключения
+
+`POST /api/v1/provider-accounts/{providerAccountRef}/verification` заменяет
+снятый device-only endpoint без alias. PWA отправляет прежние If-Match,
+idempotency key и CSRF; gateway использует generated
+`VerifyProviderAccountAuthorization`, operation
+`platform.command.provider-accounts.authorization.verify`. Actor приходит из
+проверенной OIDC session/service context; accountRef остаётся locator.
+CP сначала разрешает account в tenant/owner boundary, затем OCC и receipt.
+
+| Переход проверки подключения | Состояние, событие, потребитель |
+| --- | --- |
+| Create verification | Exact enabled AUTHORIZED account, current credential, configured provider и API_KEY; owner transaction создаёт PENDING с account version/credential revision, audit/receipt и PROVIDER_ACCOUNT_CHANGED; PWA получает PENDING, не успешный probe |
+| Claim/renew | Сам verification не имеет lease; привязанный catalog task использует прежний claim/fence/deadline; renewal отсутствует |
+| Complete | Один exact REMOTE_API observation до deadline → VERIFIED или FAILED; атомарный PROVIDER_ACCOUNT_CHANGED, PWA/realtime readback; identity credential не меняется |
+| Repeat/lost response | Свежая owner eligibility до receipt; прежний verification ref и текущий readback, без второго probe intent/event |
+| Disable/revoke/delete/config drift | Owner guards и отмена catalog task закрывают применение; verification STALE/FAILED по прежнему owner sweep, событие на изменённый account; поздний complete не восстанавливает доступ |
+| Deadline/expiry | Прежний bounded sweep переводит PENDING в FAILED; PROVIDER_ACCOUNT_CHANGED и authoritative account verification read |
+| Retry | Новая явная owner-команда с новым key создаёт новый verification и новую catalog task; credentials не обновляются автоматически |
+| Dead-letter/WAITING_OWNER/CHANGES_REQUESTED | Не поддерживаются этим видом; нет преобразования в VERIFIED |
+
+Bootstrap API credential может не иметь interactive authorization attempt:
+допуск требует exact настроенный definition/current credential, а брокер перед
+remote GET декодирует только его typed API material. Любая сохранённая
+AUTHORIZED попытка другого метода закрывает проверку. Новых workloads, keys,
+listener или сетевых направлений нет; меняются существующие generated RPC,
+operation profile, authority registry и target-owned service policy.
+
+Материализация API key также требует обязательный owner-derived definition
+во всём пути reservation → domain port → generated RPC → broker port → typed
+credential. Пустой либо старый definition не подменяется локальным default.
+Reservation принимает только API_KEY и exact настроенный route после account
+eligibility; публикация, ambiguous commit, reference readback и compensation
+сохраняют прежние task/account/attempt/UID/version/digest границы.
+
+## Bootstrap новой установки и начальные egress-проекции
+
+Release и локальный render получают одну конфигурацию через
+`tools/install/model-provider.py`: Git-owned exact definition/model, typed
+credential из приватного API-key файла и отдельный cache namespace key.
+Локальные `codex login`, автоматический импорт старых auth-файлов и SQL default
+`openai-codex` удалены. `provider-bootstrap.py` принимает только canonical
+credential либо новый seed с точным именем, namespace epoch, labels, annotations
+и digest; прежний неполный snapshot не читается как вход миграции. Seed создаётся
+лишь до появления owner state; повторная установка разрешает current credential
+через authoritative owner readback/CAS. Потерянный ответ create не разрешает
+повторить внешний эффект без чтения deterministic identity.
+
+Изменение provider меняет digest базовой egress policy. Оба renderer вызывают
+`egress_bootstrap_projection.py`, который использует существующие Go-команды
+`mail-projection` и `integration-projection` и связывает пустые начальные
+ConfigMap, mounts, digest env и email runtime с фактической базовой policy.
+Этот offline producer отклоняет непустые или опубликованные поколения; он не
+подменяет CP publisher и не переписывает live-конфигурацию. Локальная почтовая
+проекция затем материализует текущий typed source также по итоговой policy,
+а не по исходному файлу из `deploy/k8s/base`.
+
+Для браузерной проверки использован Context7 `/microsoft/playwright`:
+[pageerror и pageErrors](https://github.com/microsoft/playwright/blob/main/docs/src/api/class-page.md).
+Synthetic provider fixture использует API_KEY, обязательное bootstrap-поле
+speechTranscription и проверяет отсутствие исключений страницы. Прогон проверяет
+verification через новый endpoint, замену ключа, realtime readback и UNKNOWN
+replay. Он не является доказательством доступности реального провайдера или
+кластерной приёмки.

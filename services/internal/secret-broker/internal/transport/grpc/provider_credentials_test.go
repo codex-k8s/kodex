@@ -60,10 +60,11 @@ func (stub *cleanupProviderCredentialMaterializerStub) ObserveDeviceAuthorizatio
 	return kubernetesstore.ProviderAuthorizationAttempt{}, errors.New("unexpected device authorization observation")
 }
 
-// MaterializeAPIKey refuses unexpected key handling and returns no credential or account label.
-// MaterializeAPIKey отклоняет неожиданную обработку ключа без возврата credential и account label.
-func (stub *cleanupProviderCredentialMaterializerStub) MaterializeAPIKey(
+// MaterializeGatewayAPIKey refuses unexpected key handling and returns no credential or account label.
+// MaterializeGatewayAPIKey отклоняет неожиданную обработку ключа без возврата credential и account label.
+func (stub *cleanupProviderCredentialMaterializerStub) MaterializeGatewayAPIKey(
 	context.Context,
+	string,
 	string,
 	string,
 	[]byte,

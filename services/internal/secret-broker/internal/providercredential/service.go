@@ -425,23 +425,6 @@ func (service *Service) ObserveDeviceAuthorization(
 	return stored, nil
 }
 
-// MaterializeAPIKey validates reference/key bounds and unsafe separators, serializes a private API-key
-// auth record and publishes immutable material before returning descriptor and a fixed account label.
-// Encoded bytes are cleared; the original input and immutable Go string copies are not erased here.
-// MaterializeAPIKey проверяет границы reference/key и опасные разделители, сериализует приватную API-key
-// auth запись и публикует immutable material до возврата descriptor и фиксированной account метки.
-// Encoded байты обнуляются; исходный вход и immutable Go string копии здесь не стираются.
-func (service *Service) MaterializeAPIKey(
-	ctx context.Context,
-	attemptRef, accountRef string,
-	apiKey []byte,
-) (kubernetesstore.ProviderCredentialDescriptor, string, error) {
-	if service.modelProvider == nil {
-		return kubernetesstore.ProviderCredentialDescriptor{}, "", ErrInvalidInput
-	}
-	return service.MaterializeGatewayAPIKey(ctx, attemptRef, accountRef, service.modelProvider.DefinitionKey(), apiKey)
-}
-
 // Close snapshots and removes local worker registrations, closes each session and waits for all
 // registered workers. Composition must prevent concurrent new starts; this method does not itself cancel
 // the supplied lifecycle or add a shutdown timeout.
