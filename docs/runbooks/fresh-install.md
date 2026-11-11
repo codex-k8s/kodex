@@ -204,6 +204,27 @@ S3/БД: для них нужны отдельные доказательств�
 Возврат после согласованного уничтожения данных — новая совместимая установка;
 legacy backup/reader и выдуманный goose down не применяются.
 
+Старые локальные node images очищаются отдельно через
+`tools/dev/installation_images.py plan|apply`. Нужны исходный cleanup plan с
+SHA256, exact client/context, приватные image plan/journal и SHA256 статического
+helper, собранного из `tools/dev/installation-runtime` на чистом committed HEAD.
+Build info helper должен подтверждать тот же SHA. Plan копирует проверенные
+bytes в новый private task directory каждого exact k3d container и проверяет
+readback хеша; Kubernetes workloads при этом не создаются.
+Удаляются только references canonical components в локальной области Kodex;
+чужие aliases того же digest и используемые образы сохраняются. Apply использует
+typed containerd API через локальный Unix socket, namespace `k8s.io` и
+`DeleteImageRequest.Target.Digest`. Server-side precondition защищает от замены
+tag между проверкой и удалением. Синхронный GC следует штатному графу ссылок
+containerd; blobs, snapshots, leases и общие base images напрямую не удаляются.
+После каждого удаления проверяется отсутствие reference, после узла — сохранность
+невыбранных references. План имеет бюджет900 секунд; lost ACK разрешается readback.
+Проверены Context7 `/containerd/containerd/v2.2.1` и source
+[containerd2.2.3 image store](https://github.com/containerd/containerd/blob/v2.2.3/core/metadata/images.go):
+digest проверяется внутри metadata transaction. Native API client закреплён на
+`github.com/containerd/containerd/api v1.10.0`; поддержка exact node runtime
+проверяется отдельно от fixtures.
+
 Безопасная локальная проверка: `make test-installation-cleanup` (бюджет60 секунд,
 synthetic API и filesystem fixtures, ожидается exit0). Она входит в
 `make test-install-contract` и не доказывает фактическую очистку кластера.

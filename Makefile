@@ -130,6 +130,7 @@ test-install-contract:
 .PHONY: test-installation-cleanup
 test-installation-cleanup:
 	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test_installation_*.py'
+	@cd tools/dev/installation-runtime && GOTOOLCHAIN=go1.26.10 go test -race -timeout=60s ./...
 
 .PHONY: test-scan-memory-budget
 test-scan-memory-budget:
