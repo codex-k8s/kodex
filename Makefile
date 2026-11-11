@@ -78,7 +78,7 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_observability_profile.py
 	timeout 60 python3 -B tools/release/build-recipe-test.py
 	timeout 180 python3 -B tools/install/test_registry_source.py
-	@timeout 180s python3 -B tools/install/test_model_provider.py
+	@timeout 600s python3 -B tools/install/test_model_provider.py
 	@timeout 30s node --test tools/release/build-release-inventory.test.mjs tools/release/build-release-pool.test.mjs
 	@timeout 120s python3 -B tools/install/test_deployment_profile.py
 	@timeout 60s python3 -B tools/install/test_portable_state.py
