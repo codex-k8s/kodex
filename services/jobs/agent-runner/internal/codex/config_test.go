@@ -51,7 +51,7 @@ func TestProviderSandboxProbeUsesBoundedBubblewrapBoundary(t *testing.T) {
 	if err != nil || !called {
 		t.Fatalf("verifyProviderSandbox() error = %v, called = %t", err, called)
 	}
-	if err := verifyProviderSandbox(context.Background(), func(*exec.Cmd) error { return errors.New("denied") }); err == nil || err.Error() != "Codex provider sandbox is unavailable" {
+	if err := verifyProviderSandbox(context.Background(), func(*exec.Cmd) error { return errors.New("denied") }); err == nil || err.Error() != "OpenCode provider sandbox is unavailable" {
 		t.Fatalf("provider sandbox probe failure was not classified safely: %v", err)
 	}
 }
