@@ -18,9 +18,9 @@ type TurnResult struct {
 }
 
 // turnObserver projects upstream events into current-turn measurements and bounded commentary.
-// Its maps retain only unfinished assistant messages, never the lifetime transcript or authority.
+// Its maps retain unfinished messages and a bounded recent completion window, never the lifetime transcript or authority.
 // turnObserver преобразует upstream events в измерения текущего turn и ограниченные commentary.
-// Maps содержат лишь незавершённые assistant messages, а не всю историю или authority.
+// Maps содержат незавершённые сообщения и ограниченное окно завершений, а не всю историю или authority.
 type turnObserver struct {
 	sessionID  string
 	result     TurnResult
@@ -29,13 +29,16 @@ type turnObserver struct {
 	commentary func(string, string) error
 	completed  func(string) error
 	progress   func(string) error
+	retired    []string
 }
 
 // observedMessage keeps only current-message deduplication and summary classification.
 // observedMessage хранит только дедупликацию текущего сообщения и признак summary.
 type observedMessage struct {
-	summary bool
-	parts   map[string]bool
+	summary  bool
+	complete bool
+	measured bool
+	parts    map[string]bool
 }
 
 // Execute submits exactly one new message to the native loop and observes its established SSE stream.
@@ -182,17 +185,10 @@ func (observer *turnObserver) consume(event Event) error {
 		if info.SessionID != observer.sessionID || info.Role != "assistant" {
 			return nil
 		}
-		if info.Time.Completed != 0 {
-			if pending := observer.active[info.ID]; pending != nil && pending.summary && observer.progress != nil {
-				if err := observer.progress("MODEL_REQUEST_RUNNING"); err != nil {
-					return err
-				}
+		for _, id := range observer.retired {
+			if id == info.ID {
+				return nil
 			}
-			delete(observer.active, info.ID)
-			if observer.completed != nil {
-				return observer.completed(info.ID)
-			}
-			return nil
 		}
 		if observer.active[info.ID] == nil {
 			if len(observer.active) >= 8 {
@@ -204,8 +200,11 @@ func (observer *turnObserver) consume(event Event) error {
 					return err
 				}
 			}
-
 		}
+		message := observer.active[info.ID]
+		message.complete = message.complete || info.Time.Completed != 0
+		return observer.finishMessage(info.ID, message)
+
 	case "message.part.updated":
 		var value struct {
 			Part struct {
@@ -251,6 +250,7 @@ func (observer *turnObserver) consume(event Event) error {
 				return ErrProtocol
 			}
 			message.parts[part.ID] = true
+			message.measured = true
 		}
 		if part.Type == "text" && part.Time.End != 0 && !message.summary {
 			if len(part.Text) > runtimecontract.MaximumRuntimeMessageBytes || !utf8.ValidString(part.Text) {
@@ -266,6 +266,34 @@ func (observer *turnObserver) consume(event Event) error {
 		if len(message.parts) > 1024 {
 			return ErrProtocol
 		}
+		return observer.finishMessage(part.MessageID, message)
+	}
+	return nil
+}
+
+// finishMessage joins completion with its measured step before releasing bounded observer state.
+// Upstream may serialize the first message event after mutating its completed timestamp;
+// that timestamp alone must neither discard following parts nor close the final stream.
+// finishMessage объединяет завершение с измеренным шагом до освобождения состояния наблюдателя.
+// Upstream может сериализовать первое событие уже с изменённым временем завершения;
+// одной этой отметки недостаточно для отбрасывания частей или закрытия итогового потока.
+func (observer *turnObserver) finishMessage(id string, message *observedMessage) error {
+	if !message.complete || !message.measured {
+		return nil
+	}
+	if message.summary && observer.progress != nil {
+		if err := observer.progress("MODEL_REQUEST_RUNNING"); err != nil {
+			return err
+		}
+	}
+	delete(observer.active, id)
+	if len(observer.retired) == 64 {
+		copy(observer.retired, observer.retired[1:])
+		observer.retired = observer.retired[:63]
+	}
+	observer.retired = append(observer.retired, id)
+	if observer.completed != nil {
+		return observer.completed(id)
 	}
 	return nil
 }

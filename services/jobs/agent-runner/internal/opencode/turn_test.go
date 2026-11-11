@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -59,5 +60,54 @@ func TestFinalTextRejectsSummaryErrorsAndIncompleteOutput(t *testing.T) {
 				t.Fatal("false native success accepted")
 			}
 		})
+	}
+}
+
+// TestObserverJoinsEarlyCompletionWithUsage reproduces the pinned server's mutable event snapshot.
+// It requires each final signal to follow usage, while duplicate events cannot count a second step.
+// TestObserverJoinsEarlyCompletionWithUsage воспроизводит изменяемый снимок события закреплённого сервера.
+// Итоговый сигнал следует после usage; повторные события не учитывают шаг повторно.
+func TestObserverJoinsEarlyCompletionWithUsage(t *testing.T) {
+	completed := 0
+	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(string) bool { return true }, commentary: func(string, string) error { return nil }, completed: func(string) error { completed++; return nil }}
+	message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_final", "sessionID": "ses_native", "role": "assistant", "time": map[string]int{"completed": 1}}})
+	part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]int{"input": 10, "output": 24}}})
+	for _, event := range []Event{message, message} {
+		if err := observer.consume(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if completed != 0 {
+		t.Fatal("completion preceded measured step")
+	}
+	for _, event := range []Event{part, message, part, message} {
+		if err := observer.consume(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if completed != 1 || observer.result.Usage.OutputTokens != 24 || len(observer.active) != 0 {
+		t.Fatal("completion and usage were not joined exactly once")
+	}
+}
+
+// TestObserverBoundsCompletionMemory crosses the old event lifetime limit with constant retained state.
+// TestObserverBoundsCompletionMemory проходит прежний предел событий с постоянным объёмом состояния.
+func TestObserverBoundsCompletionMemory(t *testing.T) {
+	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(string) bool { return true }, commentary: func(string, string) error { return nil }}
+	for i := 0; i < 4097; i++ {
+		id := fmt.Sprintf("msg_%d", i)
+		message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": id, "sessionID": "ses_native", "role": "assistant", "summary": true, "time": map[string]int{"completed": 1}}})
+		part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": fmt.Sprintf("prt_%d", i), "messageID": id, "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]int{"output": 1}}})
+		for _, event := range []Event{message, part, message, part} {
+			if err := observer.consume(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if len(observer.active) != 0 || len(observer.retired) > 64 {
+			t.Fatal("completed message state grew beyond its bound")
+		}
+	}
+	if observer.result.Usage.OutputTokens != 4097 {
+		t.Fatal("long event stream lost measured steps")
 	}
 }

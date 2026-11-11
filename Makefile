@@ -281,7 +281,7 @@ test-agent-runner:
 .PHONY: test-opencode-native
 test-opencode-native: check-go-toolchain
 	@test -n "$${KODEX_TEST_OPENCODE_BINARY:-}" || { echo 'KODEX_TEST_OPENCODE_BINARY must select the pinned qualification executable' >&2; exit 1; }
-	@cd services/jobs/agent-runner && env -u GOFLAGS GOENV=off GOWORK=off timeout 180s go test -count=1 -race -timeout=120s -v ./internal/opencode
+	@cd services/jobs/agent-runner && env -u GOFLAGS GOENV=off GOWORK=off timeout 360s go test -count=1 -race -timeout=300s -v ./internal/opencode
 
 .PHONY: test-opencode-native-postgres
 test-opencode-native-postgres: check-go-toolchain

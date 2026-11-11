@@ -176,6 +176,17 @@ purge graph и сценарии terminal/retry. Их необходимо уст
 Точка воспроизведения native harness: `make test-opencode-native`, с явным
 `KODEX_TEST_OPENCODE_BINARY`. Опциональный `KODEX_TEST_LITELLM_REDIS=1` запускает
 изолированные LiteLLM1.104.2/Redis7.2 по digest, без доступа к внешней модели.
-Полный native пакет с race прошёл за86.479s, включая managed effects,
-compaction, pruning и official export/import. Это локальный synthetic model
+Полный native пакет с race после исправления SSE-учёта прошёл за210.074s,
+включая managed effects, compaction, pruning, official export/import и
+изолированный LiteLLM/Redis. Это локальный synthetic model
 контур, не квалификация реального облачного account либо аппаратного inference.
+
+В source `810c0eba1a7348036f8bdf61e6632d0c36c6876c` очередь V1 SSE сохраняет
+ссылку на payload до сериализации (`session/processor.ts`,
+`server/routes/instance/httpapi/handlers/event.ts`). Поэтому первое
+`message.updated` может уже содержать `time.completed`, хотя `step-finish`
+ещё не доставлен. Наблюдатель теперь ждёт обе части и сохраняет ограниченное
+окно последних завершений для дедупликации. Регрессия воспроизводит раннее
+завершение, повторные события и 4097 последовательных сообщений без накопления
+всего transcript. Бюджет полного пакета — 300s, внешнего запуска — 360s;
+индивидуальные ограничения native-сценариев сохранены.
