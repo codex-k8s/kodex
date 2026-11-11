@@ -1,0 +1,147 @@
+"""Отрицательные проверки адресного plan без Kubernetes и реальных credentials."""
+
+import copy
+import unittest
+
+import installation_cleanup as cleanup
+
+
+def item(resource, name, namespace="kodex-system", uid=None, labels=None, managers=None, owners=None):
+    """Создать только synthetic identity с явными ownership markers."""
+    return {"resource": resource, "apiVersion": "v1", "name": name, "namespace": namespace,
+            "uid": uid or name + "-uid", "resourceVersion": "17", "labels": labels or {}, "managers": managers or [],
+            "helm": {}, "ownerReferences": owners or [], "deleting": False}
+
+
+def fixture():
+    """Отдельная synthetic установка имеет одну node и сохраняемый kube-system."""
+    return {"schema": "kodex.installation-inventory/v1", "status": "COMPLETE", "incomplete": [],
+            "context": "fixture", "clusterUID": "cluster-uid", "endpoint": "https://example.invalid", "caSHA256": "b" * 64, "nodes": [item("nodes", "node", "", uid="node-uid")],
+            "namespaces": [item("namespaces", "kodex-system", "", managers=["kodex-install"]),
+                           item("namespaces", "kube-system", "")], "volumes": [], "objects": [], "links": []}
+
+
+def plan(value):
+    """Передать exact synthetic target независимо от содержимого inventory."""
+    return cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40)
+
+
+class CleanupTests(unittest.TestCase):
+    def test_foreign_object_blocks_owned_namespace(self):
+        value = fixture()
+        value["objects"] = [item("deployments", "kodex-component", managers=["kodex-local-dev"]),
+                            item("deployments", "foreign-component")]
+        result = plan(value)
+        self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+        self.assertEqual([x["identity"]["name"] for x in result["unresolved"]], ["foreign-component"])
+        self.assertEqual(result["applyStatus"], "NOT_EXECUTED")
+
+    def test_shared_cluster_capabilities_and_foreign_namespace_are_preserved(self):
+        value = fixture()
+        value["objects"] = [item("nodes", "node", "", labels={"app.kubernetes.io/part-of": "kodex"}, managers=["kodex-install"]),
+                            item("customresourcedefinitions", "certificates.cert-manager.io", "", managers=["kodex-install"]),
+                            item("deployments", "kodex-named", "foreign", managers=["kodex-local-dev"])]
+        self.assertEqual(plan(value)["deleteCandidates"], [])
+        self.assertEqual(plan(value)["preserveNamespaces"][0]["name"], "kube-system")
+
+    def test_owner_uid_closure_does_not_cross_namespace(self):
+        value = fixture()
+        parent = item("deployments", "controller", managers=["kodex-local-dev"])
+        value["objects"] = [parent, item("pods", "owned", owners=[{"uid": parent["uid"]}]),
+                            item("pods", "foreign", "foreign", owners=[{"uid": parent["uid"]}]),
+                            item("pods", "mixed", owners=[{"uid": parent["uid"]}, {"uid": "foreign-owner"}])]
+        names = {x["identity"]["name"] for x in plan(value)["deleteCandidates"]}
+        self.assertEqual(names, {"controller", "owned"})
+
+    def test_foreign_consumer_blocks_shared_secret(self):
+        value = fixture()
+        secret = item("secrets", "configured", managers=["kodex-install"])
+        foreign = item("pods", "foreign")
+        value["objects"] = [secret, foreign]
+        value["links"] = [{"identity": foreign, "references": [{"namespace": "kodex-system", "resource": "secrets", "name": "configured", "relation": "CONSUMES"}]}]
+        result = plan(value)
+        self.assertEqual(result["shared"][0]["identity"]["uid"], secret["uid"])
+        self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+
+    def test_consumption_does_not_invent_resource_origin(self):
+        value = fixture()
+        owner = item("deployments", "component", managers=["kodex-local-dev"])
+        foreign = item("secrets", "unknown-origin")
+        value["objects"] = [owner, foreign]
+        value["links"] = [{"identity": owner, "references": [{"namespace": "kodex-system", "resource": "secrets", "name": "unknown-origin", "relation": "CONSUMES"}]}]
+        self.assertEqual(plan(value)["unresolved"][0]["identity"]["name"], "unknown-origin")
+
+    def test_target_identity_and_incomplete_inventory_fail_closed(self):
+        for key, changed in (("context", "other"), ("clusterUID", "other"), ("status", "INCOMPLETE"), ("nodes", [])):
+            value = fixture()
+            value[key] = changed
+            with self.assertRaises(ValueError):
+                plan(value)
+        value = fixture()
+        volume = item("persistentvolumeclaims", "own", managers=["kodex-install"])
+        value["objects"] = [volume]
+        value["volumes"] = [{"claim": {"uid": volume["uid"], "name": "foreign", "namespace": "kodex-system"}, "reclaimPolicy": "Delete"}]
+        with self.assertRaises(ValueError):
+            plan(value)
+
+    def test_foreign_custom_resource_blocks_crd_cascade(self):
+        value = fixture()
+        crd = item("customresourcedefinitions", "settings.fixture.kodex.dev", "",
+                   labels={"app.kubernetes.io/part-of": "kodex"}, managers=["kodex-install"])
+        foreign = item("settings", "foreign-settings", "foreign")
+        foreign["apiVersion"] = "fixture.kodex.dev/v1"
+        value["objects"] = [crd, foreign]
+        result = plan(value)
+        self.assertEqual(result["shared"][0]["foreignConsumerUIDs"], [foreign["uid"]])
+        self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+
+    def test_stateful_claim_requires_exact_existing_template_and_no_foreign_reader(self):
+        value = fixture()
+        controller = item("statefulsets", "database", managers=["kodex-local-dev"])
+        claim = item("persistentvolumeclaims", "data-database-0", managers=["k3s"])
+        value["objects"] = [controller, claim]
+        value["links"] = [{"identity": controller, "references": [], "claimTemplates": ["data"]}]
+        result = plan(value)
+        self.assertEqual(result["unresolved"], [])
+        foreign = item("pods", "foreign")
+        value["objects"].append(foreign)
+        value["links"].append({"identity": foreign, "references": [{"resource": "persistentvolumeclaims", "namespace": "kodex-system", "name": claim["name"], "relation": "CONSUMES"}]})
+        self.assertIn(claim["uid"], {x["identity"]["uid"] for x in plan(value)["unresolved"]})
+
+    def test_selector_policy_rejects_foreign_matching_pod_and_broad_selector(self):
+        value = fixture()
+        owner = item("deployments", "component", managers=["kodex-local-dev"])
+        policy = item("networkpolicies", "policy", managers=["kubectl-create"])
+        selector = {"matchLabels": {"app.kubernetes.io/name": "component"}}
+        value["objects"] = [owner, policy]
+        value["links"] = [{"identity": owner, "references": [], "controllerSelector": selector},
+                          {"identity": policy, "references": [], "policySelector": selector}]
+        self.assertEqual(plan(value)["unresolved"], [])
+        foreign = item("pods", "foreign", labels=selector["matchLabels"])
+        value["objects"].append(foreign)
+        self.assertIn(policy["uid"], {x["identity"]["uid"] for x in plan(value)["unresolved"]})
+        value["objects"].pop()
+        value["links"][1]["policySelector"] = {}
+        self.assertIn(policy["uid"], {x["identity"]["uid"] for x in plan(value)["unresolved"]})
+
+    def test_known_private_state_still_requires_exact_owned_deployment(self):
+        value = fixture()
+        owner = item("deployments", "control-plane", managers=["kodex-local-dev"])
+        secret = item("secrets", "kodex-ssh-compose-signing", managers=["kubectl-create"])
+        value["objects"] = [owner, secret]
+        value["links"] = [{"identity": owner, "references": [{"resource": "secrets", "namespace": "kodex-system", "name": secret["name"], "relation": "CONSUMES"}]}]
+        self.assertEqual(plan(value)["unresolved"], [])
+        owner["name"] = "unrelated"
+        self.assertEqual(plan(value)["unresolved"][0]["identity"]["uid"], secret["uid"])
+
+    def test_exact_helm_release_receipt_outside_application_namespace(self):
+        value = fixture()
+        own = item("secrets", "sh.helm.release.v1.kodex-trust-manager.v1", "cert-manager", labels={"owner": "helm", "name": "kodex-trust-manager"})
+        foreign = copy.deepcopy(own)
+        foreign.update(name="foreign", uid="foreign-uid", labels={"owner": "helm", "name": "cert-manager"})
+        value["objects"] = [own, foreign]
+        self.assertEqual([x["identity"]["name"] for x in plan(value)["deleteCandidates"]], [own["name"]])
+
+
+if __name__ == "__main__":
+    unittest.main()

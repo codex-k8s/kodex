@@ -125,6 +125,11 @@ test-install-contract:
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh
 	@$(MAKE) --no-print-directory test-scan-memory-budget
+	@$(MAKE) --no-print-directory test-installation-cleanup
+
+.PHONY: test-installation-cleanup
+test-installation-cleanup:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test_installation_*.py'
 
 .PHONY: test-scan-memory-budget
 test-scan-memory-budget:

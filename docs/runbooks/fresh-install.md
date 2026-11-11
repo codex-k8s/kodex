@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.1
+version: 2.4.2
 updated: 2026-11-11
 ---
 
@@ -140,6 +140,59 @@ symlink/hardlink, размер, полный набор и уникальнос�
 эту команду не применять: сначала нужен адресный inventory/plan с UID и
 доказательством принадлежности каждого ресурса. Разрешение очистить Kodex не
 разрешает удалять общий IdP, чужие workloads или данные.
+
+Для согласованной полной очистки локального k3d доступен адресный путь
+`installation_inventory.py → installation_cleanup.py → installation_apply.py`
+из `tools/dev`. Он не заменяет разрешение владельца на уничтожение данных.
+До применения требуется committed source, exact kubeconfig/context, cluster UID
+из `kube-system`, node UID и приватный каталог0700 для inventory/plan/journal.
+Публичные fixtures используют только synthetic identities; фактический inventory
+и журнал не публикуются в Issue/PR.
+
+Inventory вызывается с явными `--kubectl`, `--kubeconfig`, `--context`,
+`--with-k3d-storage` и `--output`. Он читает metadata всех API ресурсов без
+Secret data/last-applied; для закрытых типов извлекает только ссылки на
+зависимости, состояния Pod и image IDs. Для каждого local-path PV проверяются
+claim UID, exact каталог, affinity, node UID, k3d container ID, device/inode и
+отсутствие symlink. Неизвестное происхождение, неполный discovery, чужой consumer,
+чужой дочерний объект или пересечение foreign hostPath запрещают зависимую очистку.
+
+Plan принимает `--inventory`, SHA256 фактических bytes через
+`--inventory-sha256`, `--context`, `--cluster-uid`, повторяемый `--node-uid`
+и `--output`. Он сохраняет ownership proofs и source SHA; `OWNERSHIP_CLASSIFIED`
+означает классификацию, а не выполненную очистку. Имена namespace сами по себе
+не доказывают принадлежность, third-party CRD и общие cluster capabilities
+сохраняются.
+
+Apply получает те же client/config/context, `--inventory`,
+`--inventory-sha256`, `--plan`, `--plan-sha256`, `--journal` и одну `--phase`.
+Без `--execute` выполняется только preflight. Фазы идут в порядке `admission`,
+`producers`, `workloads`, `pods`, `claims`, `objects`, `namespaces`.
+Каждая фаза заново проверяет target и ownership, имеет бюджет600 секунд и
+ожидает авторитетного отсутствия удалённых UID. Все удаления адресные, с UID/RV
+preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delete и
+глобальный prune отсутствуют. Перед каждым эффектом журнал fsync фиксирует intent.
+Повторный запуск той же фазы с тем же журналом проверяет отсутствие/оставшееся
+удаление; replacement UID не удаляется. Снятие ownerReferences допускается только
+для exact parent UID с записанным intent. Остальной ownership drift закрыто
+останавливает применение.
+
+Перед claims проверяется завершение containers через CRI exact k3d nodes.
+Перед namespace дополнительно требуется отсутствие PV и физических каталогов
+всех исходных томов. Недоступный узел, зависший finalizer или reclaimer при
+DiskPressure оставляет фазу незавершённой; отсутствие Pod в API не заменяет
+положительный writer join. Этот путь не удаляет host files, image cache и внешние
+S3/БД: для них нужны отдельные доказательства ownership и адресные операции.
+Возврат после согласованного уничтожения данных — новая совместимая установка;
+legacy backup/reader и выдуманный goose down не применяются.
+
+Безопасная локальная проверка: `make test-installation-cleanup` (бюджет60 секунд,
+synthetic API и filesystem fixtures, ожидается exit0). Она входит в
+`make test-install-contract` и не доказывает фактическую очистку кластера.
+Через Context7 `/websites/kubernetes_io` проверены
+[Orphan deletion](https://kubernetes.io/docs/tasks/administer-cluster/use-cascading-deletion/)
+и DeleteOptions UID/resourceVersion preconditions. Совместимость с конкретным
+API server подтверждается readback применения, отдельно от unit fixtures.
 
 Локальный профиль по умолчанию использует
 `--management-surfaces control-center-grafana`: Grafana устанавливается, а

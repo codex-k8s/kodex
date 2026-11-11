@@ -4,11 +4,22 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.48
+version: 1.7.49
 updated: 2026-11-11
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Полная очистка установки ограничивается exact cluster/node/namespace UID и
+доказанным графом принадлежности ресурсов. Namespace label или использование
+Secret/PVC самим приложением не доказывает исключительное владение. Перед
+удалением проверяются чужие consumers, дочерние UID, shared capabilities и
+физические пути. Адресный DELETE несёт UID/resourceVersion preconditions;
+потерянный ответ разрешается readback, replacement не наследует прежний допуск.
+Отсутствие Pod в API не доказывает остановку writer: перед уничтожением тома
+нужен положительный runtime join на точном узле. Недоступность узла не разрешает
+force-delete или global prune. Исполняемый локальный путь и ограничения:
+[чистая установка](../runbooks/fresh-install.md).
 
 Authority proof revision принадлежит устойчивому server-owned allocator и не
 конкурирует за одну строку с platform event sequence. Разделение storage не
