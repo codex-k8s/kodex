@@ -78,8 +78,7 @@ for required_file in \
   [[ -s "$required_file" && ! -L "$required_file" ]] || fail "required material is invalid: $required_file"
 done
 
-kubectl create namespace kodex-system --dry-run=client -o yaml |
-  kubectl apply --server-side --field-manager=kodex-install -f - >/dev/null
+python3 "$repository_root/tools/install/ensure_namespace.py" --context "$context" --namespace kodex-system
 
 apply_secret() {
   local name=$1

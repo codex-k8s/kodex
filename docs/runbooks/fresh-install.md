@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.5
+version: 2.4.6
 updated: 2026-11-12
 ---
 
@@ -118,6 +118,16 @@ private cache; последующий import использует прежние
 `KODEX_TARGET_KUBECTL`, `KODEX_TARGET_KUBECONFIG`, `KODEX_TARGET_CONTEXT`.
 Подмена target flags и изменение host config закрыто отклоняются; обычные операции
 с ресурсами сохраняют собственные ownership guards соответствующего helper.
+
+Bootstrap identity, NATS и trust-manager создаёт namespace Kodex через
+`tools/install/ensure_namespace.py`: метка владельца устанавливается в том же
+create, существующий чужой namespace не присваивается установке. Если ранний
+bootstrap этой же новой установки уже создал namespace без метки, оператор
+проверяет creation receipt и передаёт его exact UID через `--created-uid`.
+Helper допускает только четыре namespace платформы, проверяет UID/resourceVersion
+перед patch и UID после записи; прочие labels сохраняются. Обычный повторный
+запуск не требует этого параметра и не изменяет уже подтверждённое владение.
+Это исправление metadata новой установки, а не импорт старых данных.
 
 ### Локальный hot-reload
 
