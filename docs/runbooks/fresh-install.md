@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.4
+version: 2.4.5
 updated: 2026-11-12
 ---
 
@@ -120,6 +120,37 @@ private cache; последующий import использует прежние
 с ресурсами сохраняют собственные ownership guards соответствующего helper.
 
 ### Локальный hot-reload
+
+Для immutable candidate на локальном кластере S3 можно подготовить из того же
+`deploy/k8s/base/local-object-storage`, закрепив SeaweedFS/AWS CLI по
+`tools/dev/components.lock.json`. `tools/install/local_object_storage_tls.py storage`
+принимает этот render, публичную CA и exact ClusterIssuer; создаёт Certificate
+для `seaweedfs-s3.kodex-system.svc.cluster.local`, включает штатный TLS на 8333
+без второго HTTP listener и переводит probes/bucket bootstrap на проверяемый HTTPS.
+Credentials создаются заново в private state и материализуются как immutable
+`kodex-external-s3`: полный набор metadata/credentials/S3 identity в `kodex-system`,
+только `access-key`/`secret-key` в `kodex-runtime`. Перед первым apply проверяется
+отсутствие всех точных объектов, cluster/namespace UID и сохраняется hash render.
+Повторный apply использует те же credentials; их молчаливая регенерация запрещена.
+
+Фаза `consumers` того же helper применяется к полному release render до его
+закрепления: control-plane, retention, backup-controller и session-archive получают
+публичную CA; `SESSION_ARCHIVE_OBJECT_STORAGE_CA_CONFIG_MAP` доставляет её каждому
+временному archive worker штатным controller. Ни один `ALLOW_INSECURE_LOCAL` не
+включается. Сценарий: bootstrap Job создаёт versioned buckets и проверяет точные
+write/read/delete receipts → control-plane владеет storage metadata и task/grant →
+session-archive создаёт exact worker в `kodex-runtime` → worker обращается к S3
+с той же CA/hostname и возвращает owner-bound receipt. NetworkPolicy связывает
+оба namespace с точными pod selectors. TLS/readiness не заменяют приёмку native
+checkpoint, workspace PVC и восстановления; эти проверки выполняются после
+установки полного RoleImage.
+
+Проверены Context7 `/seaweedfs/seaweedfs` и исходники
+[SeaweedFS 4.41](https://github.com/seaweedfs/seaweedfs/blob/4.41/weed/command/s3.go):
+сертификат и ключ при `s3.port.https=0` обслуживают TLS на основном S3 port.
+Проверки преобразования: `python3 -m unittest discover -s tools/install
+-p test_local_object_storage_tls.py`; отрицательные случаи включают отсутствующий
+consumer, повторный ресурс и некорректную CA.
 
 `dev.sh up` добавляет к web-only render SeaweedFS release 4.41 в
 `kodex-system`: один StatefulSet с PVC, внутренний S3 Service на TCP/8333,
