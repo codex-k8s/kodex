@@ -220,7 +220,11 @@ func (repository *Repository) resolveStandardOIDCIdentityOnce(ctx context.Contex
 		return result, errs.ErrForbidden
 	}
 	binding.ActorID = authority.ActorID
-	if found {
+	// An unchanged or older signed issuance still rechecks current authority,
+	// but must not rewrite the session and contend with parallel revalidation.
+	// Равное или старое подписанное время выпуска повторно проверяет полномочия,
+	// но не переписывает сессию и не конфликтует с параллельной проверкой.
+	if found && input.IssuedAt.After(binding.LastIssuedAt) {
 		updated, err := tx.Exec(ctx, queryStandardOIDCSessionAdvance, pgx.StrictNamedArgs{
 			"revision": binding.Revision, "organization_id": organizationID, "subject_id": binding.ActorID, "issued_at": input.IssuedAt,
 		})
@@ -230,15 +234,16 @@ func (repository *Repository) resolveStandardOIDCIdentityOnce(ctx context.Contex
 		if updated.RowsAffected() != 1 {
 			return result, errs.ErrForbidden
 		}
-		if input.IssuedAt.After(binding.LastIssuedAt) {
-			binding.LastIssuedAt = input.IssuedAt
+		binding.LastIssuedAt = input.IssuedAt
+	} else if !found {
+		_, err := tx.Exec(ctx, queryStandardOIDCSessionInsert, pgx.StrictNamedArgs{
+			"revision": binding.Revision, "organization_id": organizationID, "subject_id": binding.ActorID, "issuer": input.Issuer,
+			"external_subject": input.Subject, "session_id": input.SessionID, "authenticated_at": input.AuthenticatedAt,
+			"absolute_expires_at": binding.AbsoluteExpiry, "issued_at": input.IssuedAt, "policy_revision": policy.Revision, "policy_digest": digest,
+		})
+		if err != nil {
+			return result, serializableTransactionError(err, errs.ErrUnavailable)
 		}
-	} else if _, err := tx.Exec(ctx, queryStandardOIDCSessionInsert, pgx.StrictNamedArgs{
-		"revision": binding.Revision, "organization_id": organizationID, "subject_id": binding.ActorID, "issuer": input.Issuer,
-		"external_subject": input.Subject, "session_id": input.SessionID, "authenticated_at": input.AuthenticatedAt,
-		"absolute_expires_at": binding.AbsoluteExpiry, "issued_at": input.IssuedAt, "policy_revision": policy.Revision, "policy_digest": digest,
-	}); err != nil {
-		return result, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	var allowed bool
 	if err := tx.QueryRow(ctx, queryProofSubjectHasActiveBinding, organizationID, binding.ActorID).Scan(&allowed); err != nil {
