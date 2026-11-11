@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
-updated: 2026-11-10
+version: 1.6.1
+updated: 2026-11-12
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -1311,3 +1311,15 @@ Skills, avatars, executable bundles и структурированный workfl
 вернуть conflict, а не переаттестовать или повторно записать объект. Migration profile
 `artifact-optional-antivirus` проверяет exact037 и отсутствие активных effects, применяет только
 forward038 и читает его postcondition. Специальный backup ACL/profile для этой миграции не нужен.
+
+
+## Git в образе integration-gateway
+
+Для Alpine3.23 закреплён `git=2.52.1-r0`: прежний2.52.0-r0 больше не
+доступен в текущем APKINDEX и останавливает fresh build. Версия проверяется
+также runtime-тестом. Digest базового Alpine сохраняется, неподписанные
+пакеты, edge repository и плавающий диапазон версий не добавляются. Проверены
+через Context7 правила [apk pinning](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
+и официальный APKINDEX веткиv3.23/main/x86_64, source commit пакета
+`2f20de3527863b1b84f620fefe687921498e7240`. Фактическая OCI-сборка и runtime
+readback остаются отдельными обязательными проверками candidate.

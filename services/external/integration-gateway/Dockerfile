@@ -40,7 +40,7 @@ RUN --mount=type=tmpfs,target=/tmp,size=4294967296 \
     -o /out/integration-synthetic ./cmd/integration-synthetic
 
 FROM docker.io/library/alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime-base
-RUN apk add --no-cache git=2.52.0-r0 ca-certificates && \
+RUN apk add --no-cache git=2.52.1-r0 ca-certificates && \
     addgroup -g 10001 kodex && adduser -D -H -u 10001 -G kodex kodex
 
 # Существующий тестовый adapter имеет отдельный образ и не попадает в gateway.
