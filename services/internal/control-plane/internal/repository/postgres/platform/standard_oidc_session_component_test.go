@@ -217,3 +217,93 @@ func TestStandardOIDCConcurrentSessionComponent(t *testing.T) {
 		t.Fatal("concurrent bootstrap created duplicate committed ownership/session state")
 	}
 }
+
+// TestStandardOIDCRevalidationNoWriteComponent proves that repeated signed identity checks preserve the stored session row and absolute expiry.
+// A newer issued-at still advances the durable watermark, and revocation remains effective for the unchanged token.
+// TestStandardOIDCRevalidationNoWriteComponent проверяет отсутствие пустой записи сессии и продления абсолютного срока при повторной identity.
+// Более новый issued-at по-прежнему продвигает watermark, а отзыв закрывает повторный запрос с тем же токеном.
+func TestStandardOIDCRevalidationNoWriteComponent(t *testing.T) {
+	repository, pool, owner := standardOIDCSessionFixture(t)
+	binding, err := repository.ResolveStandardOIDCIdentity(t.Context(), owner)
+	if err != nil {
+		t.Fatalf("resolve initial session: %v", err)
+	}
+	var before string
+	if err := pool.QueryRow(t.Context(), `SELECT xmin::text FROM control_plane.oidc_identity_sessions WHERE revision=$1`, binding.Revision).Scan(&before); err != nil {
+		t.Fatal("read initial session row version")
+	}
+	for range 4 {
+		current, err := repository.ResolveStandardOIDCIdentity(t.Context(), owner)
+		if err != nil || current.Revision != binding.Revision || current.ActorID != binding.ActorID || !current.AbsoluteExpiry.Equal(binding.AbsoluteExpiry) {
+			t.Fatalf("revalidation changed the binding or absolute expiry: %v", err)
+		}
+	}
+	var unchanged string
+	if err := pool.QueryRow(t.Context(), `SELECT xmin::text FROM control_plane.oidc_identity_sessions WHERE revision=$1`, binding.Revision).Scan(&unchanged); err != nil {
+		t.Fatal("read revalidated session row version")
+	}
+	if unchanged != before {
+		t.Fatal("unchanged signed identity rewrote the session row")
+	}
+	newer := owner
+	newer.IssuedAt = newer.IssuedAt.Add(time.Second)
+	current, err := repository.ResolveStandardOIDCIdentity(t.Context(), newer)
+	if err != nil || !current.LastIssuedAt.Equal(newer.IssuedAt) || !current.AbsoluteExpiry.Equal(binding.AbsoluteExpiry) {
+		t.Fatalf("newer issuance did not advance the watermark safely: %v", err)
+	}
+	var advanced string
+	if err := pool.QueryRow(t.Context(), `SELECT xmin::text FROM control_plane.oidc_identity_sessions WHERE revision=$1`, binding.Revision).Scan(&advanced); err != nil || advanced == unchanged {
+		t.Fatal("newer issuance did not persist a new row version")
+	}
+	if _, err := repository.ResolveStandardOIDCIdentity(t.Context(), owner); err != nil {
+		t.Fatalf("older signed identity unexpectedly failed: %v", err)
+	}
+	var older string
+	if err := pool.QueryRow(t.Context(), `SELECT xmin::text FROM control_plane.oidc_identity_sessions WHERE revision=$1`, binding.Revision).Scan(&older); err != nil || older != advanced {
+		t.Fatal("older issuance rewrote the newer session watermark")
+	}
+	if err := repository.RevokeStandardOIDCSession(t.Context(), binding.OrganizationID, binding.ActorID, binding.Revision); err != nil {
+		t.Fatal("revoke revalidated session")
+	}
+	if _, err := repository.ResolveStandardOIDCIdentity(t.Context(), owner); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("unchanged token rejoined a revoked session")
+	}
+}
+
+// TestStandardOIDCConcurrentRevalidationComponent races three repository replicas on one established identity without extending the retry budget.
+// Every request must recheck the binding and converge without a write or a new session revision.
+// TestStandardOIDCConcurrentRevalidationComponent сталкивает три repository replicas на существующей identity без расширения retry budget.
+// Каждый запрос повторно проверяет binding и сходится без записи и выделения новой session revision.
+func TestStandardOIDCConcurrentRevalidationComponent(t *testing.T) {
+	repository, pool, owner := standardOIDCSessionFixture(t)
+	first, err := repository.ResolveStandardOIDCIdentity(t.Context(), owner)
+	if err != nil {
+		t.Fatalf("resolve initial parallel session: %v", err)
+	}
+	policy := standardOIDCComponentPolicy()
+	replicas := []*Repository{repository, standardOIDCComponentRepository(t, pool, &policy), standardOIDCComponentRepository(t, pool, &policy)}
+	const requests = 24
+	bindings := make([]platformrepo.StandardOIDCBinding, requests)
+	failures := make([]error, requests)
+	var wait sync.WaitGroup
+	start := make(chan struct{})
+	for index := range requests {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			<-start
+			bindings[index], failures[index] = replicas[index%len(replicas)].ResolveStandardOIDCIdentity(t.Context(), owner)
+		}()
+	}
+	close(start)
+	wait.Wait()
+	for index, binding := range bindings {
+		if failures[index] != nil || binding.Revision != first.Revision || binding.ActorID != first.ActorID || !binding.AbsoluteExpiry.Equal(first.AbsoluteExpiry) {
+			t.Errorf("parallel revalidation %d did not preserve its established binding: %v", index, failures[index])
+		}
+	}
+	var sessions int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM control_plane.oidc_identity_sessions`).Scan(&sessions); err != nil || sessions != 1 {
+		t.Fatal("parallel revalidation changed session cardinality")
+	}
+}
