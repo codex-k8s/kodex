@@ -217,7 +217,7 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 			if err != nil {
 				return invalid("PROMPT_STAGE_TEMPLATE_INVALID", "Workflow stage template is invalid")
 			}
-			slots, _ := templateSlots(parsed.Tree.Root)
+			slots, _ := templateSlots(parsed)
 			if len(slots) != 0 {
 				return invalid("PROMPT_STAGE_TEMPLATE_INVALID", "Workflow stage fields cannot contain semantic slots")
 			}
@@ -279,6 +279,9 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		return "", nil
 	}}
 	parsed.Funcs(slotFunctions)
+	if analyzeTemplate(parsed, Catalog(), data).unknown != "" {
+		return invalid("PROMPT_TEMPLATE_EXECUTION_INVALID", "Prompt template exceeds its execution budget")
+	}
 	if err := parsed.Execute(&output, data); err != nil {
 		return invalid("PROMPT_TEMPLATE_EXECUTION_INVALID", "Prompt template cannot be executed with this snapshot")
 	}
@@ -313,6 +316,9 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		}
 		activeUserKind, activeTemplateRef, activeTemplateDigest = extra.Kind, extra.Ref, extra.Digest
 		extraParsed.Funcs(slotFunctions)
+		if analyzeTemplate(extraParsed, Catalog(), data).unknown != "" {
+			return invalid("PROMPT_TEMPLATE_EXECUTION_INVALID", "Prompt template exceeds its execution budget")
+		}
 		if err := extraParsed.Execute(&output, data); err != nil {
 			return invalid("PROMPT_TEMPLATE_EXECUTION_INVALID", "Prompt template cannot be executed with this snapshot")
 		}
@@ -374,7 +380,7 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		}
 		result.RuntimeDiff = &diff
 	}
-	references := templateVariableReferences(parsed.Tree.Root)
+	references := templateVariableReferences(parsed)
 	if snapshot.AssistantCore != nil {
 		// Тот же validated catalog и single-pass renderer; mandatory context
 		// базы не превращается в optional только потому, что owner его не читает.
@@ -382,18 +388,18 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		if err != nil {
 			return invalid("PROMPT_ASSISTANT_CORE_INVALID", "Platform assistant core is invalid")
 		}
-		references = append(references, templateVariableReferences(coreTemplate.Tree.Root)...)
+		references = append(references, templateVariableReferences(coreTemplate)...)
 	}
 	for _, extra := range snapshot.ExtraTemplates {
 		if template, err := parseTemplate(extra.Content); err == nil {
-			references = append(references, templateVariableReferences(template.Tree.Root)...)
+			references = append(references, templateVariableReferences(template)...)
 		}
 	}
 	for _, text := range []string{snapshot.StagePurposeTemplate, snapshot.StageExpectedResultTemplate} {
 		if text != "" {
 			parsed, err := parseTemplate(text)
 			if err == nil {
-				references = append(references, templateVariableReferences(parsed.Tree.Root)...)
+				references = append(references, templateVariableReferences(parsed)...)
 			}
 		}
 	}
@@ -428,65 +434,11 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 	return result, nil
 }
 
-// templateVariableReferences collects sorted distinct field references across template branches
-// and command arguments for unavailable-context diagnostics, without claiming those branches
-// executed.
-// templateVariableReferences собирает отсортированные уникальные ссылки полей по ветвям шаблона и
-// аргументам команд для диагностики недоступного контекста без утверждения об исполнении ветвей.
-func templateVariableReferences(root parse.Node) []string {
-	seen := make(map[string]bool)
-	var visit func(parse.Node)
-	visit = func(node parse.Node) {
-		if node == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
-			return
-		}
-		switch current := node.(type) {
-		case *parse.ListNode:
-			for _, child := range current.Nodes {
-				visit(child)
-			}
-		case *parse.ActionNode:
-			visit(current.Pipe)
-		case *parse.IfNode:
-			visit(current.Pipe)
-			visit(current.List)
-			visit(current.ElseList)
-		case *parse.RangeNode:
-			visit(current.Pipe)
-			visit(current.List)
-			visit(current.ElseList)
-		case *parse.WithNode:
-			visit(current.Pipe)
-			visit(current.List)
-			visit(current.ElseList)
-		case *parse.PipeNode:
-			for _, command := range current.Cmds {
-				visit(command)
-			}
-		case *parse.CommandNode:
-			for _, argument := range current.Args {
-				visit(argument)
-			}
-		case *parse.FieldNode:
-			seen[strings.Join(current.Ident, ".")] = true
-		case *parse.ChainNode:
-			visit(current.Node)
-		}
-	}
-	visit(root)
-	result := make([]string, 0, len(seen))
-	for name := range seen {
-		result = append(result, name)
-	}
-	slices.Sort(result)
-	return result
-}
-
 // templateSlots allows slot calls only as standalone literal action insertions, rejecting
 // condition, assignment and pipeline uses that do not prove value insertion.
 // templateSlots разрешает slot только отдельной вставкой action с литералом, отклоняя условия,
 // присваивания и pipelines, не доказывающие вставку значения.
-func templateSlots(root parse.Node) ([]SemanticSlot, bool) {
+func templateSlots(parsed *template.Template) ([]SemanticSlot, bool) {
 	var slots []SemanticSlot
 	var visit func(parse.Node) bool
 	visit = func(node parse.Node) bool {
@@ -539,7 +491,10 @@ func templateSlots(root parse.Node) ([]SemanticSlot, bool) {
 		}
 		return true
 	}
-	valid := visit(root)
+	valid := true
+	for _, defined := range parsed.Templates() {
+		valid = visit(defined.Tree.Root) && valid
+	}
 	return slots, valid
 }
 

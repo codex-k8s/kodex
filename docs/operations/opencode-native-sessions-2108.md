@@ -385,3 +385,10 @@ catalog/model кандидаты; исходная сессия не получ�
 неявному лимиту `10m` во время штатного ожидания lease expiry, без предшествующих
 ошибок assertions. Этот исход не считается PASS. Расширенный набор квалифицируется
 повторно целиком; отдельные адресные проверки его не заменяют.
+
+Повтор на исходном коде `33f37cc21` завершён: полный PostgreSQL18.3 component-набор
+PASS648,946с, завершающие read-only/owner проверки PASS. Native harness этого кода
+с настоящими OpenCode1.19.5/LiteLLM1.104.2/Redis и synthetic inference — PASS270,439с:
+144managed effects,36compactions,256retained messages, export804136bytes,
+максимальный model HTTP body17736bytes. Эти локальные результаты не подтверждают
+CI, установленный кластер или аппаратный/облачный cache profile.
