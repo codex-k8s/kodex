@@ -209,8 +209,12 @@ def select_phase(fresh, current, phase):
             raise ValueError(ERROR)
         return [item for item in current["namespaces"] if item["name"] in namespace_names]
     if phase == "objects":
-        return sorted([item for item in rows if item["resource"] not in previous],
-                      key=lambda item: (item["resource"] == "customresourcedefinitions", object_path(item)))
+        bootstrap = {("serviceaccounts", "default"), ("configmaps", "kube-root-ca.crt")}
+        # Namespace controller немедленно восстанавливает bootstrap; его удаляет только последняя фаза namespace.
+        # Service удаляется раньше generated Endpoint/EndpointSlice, чтобы не создавать новый UID во время readback.
+        priority = {"services": 0, "certificates": 0, "issuers": 1, "endpoints": 2, "endpointslices": 2, "customresourcedefinitions": 4}
+        return sorted([item for item in rows if item["resource"] not in previous and (item["resource"], item["name"]) not in bootstrap],
+                      key=lambda item: (priority.get(item["resource"], 3), object_path(item)))
     order = {"deployments": 0, "daemonsets": 1, "statefulsets": 2, "replicasets": 3, "jobs": 4}
     return sorted([item for item in rows if item["resource"] in PHASES[phase]],
                   key=lambda item: (order.get(item["resource"], 0), object_path(item)))
@@ -315,6 +319,7 @@ def main():
     subprocess.run(["git", "ls-files", "--error-unmatch", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py", "tools/dev/installation_storage.py"],
                    capture_output=True, check=True)
     journal = Journal(args.journal, plan["digest"])
+    active_identity = None
     try:
         with tempfile.TemporaryDirectory(prefix="kodex-cleanup-") as temporary:
             client = Client(args.kubectl, args.kubeconfig, args.context, temporary)
@@ -341,6 +346,7 @@ def main():
                 if args.phase == "storage":
                     erase_local_data(plan, current, journal, deadline)
                 for item in rows:
+                    active_identity = item
                     if time.monotonic() >= deadline:
                         raise ValueError(ERROR)
                     delete_one(client, item, journal)
@@ -348,6 +354,11 @@ def main():
                 verify_target(plan, inventory(client, args.context))
                 journal.append({"event": "PHASE_COMPLETE", "phase": args.phase, "count": len(rows)})
             print(json.dumps({"status": "PHASE_COMPLETE" if args.execute else "PREFLIGHT_ONLY", "phase": args.phase, "count": len(rows)}))
+    except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError) as error:
+        journal.append({"event": "PHASE_FAILED", "phase": args.phase, "executorSHA": executor,
+                        "errorType": type(error).__name__, "httpStatus": error.code if isinstance(error, urllib.error.HTTPError) else None,
+                        "activeIdentity": active_identity})
+        raise
     finally:
         journal.close()
 

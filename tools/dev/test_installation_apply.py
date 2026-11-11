@@ -193,6 +193,14 @@ class ApplyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             apply.select_phase(plan(baseline), baseline, "namespaces")
 
+    def test_object_phase_stops_service_producer_before_derived_endpoints_and_keeps_bootstrap(self):
+        baseline = fixture()
+        baseline["objects"] = [item("endpoints", "service", managers=["kodex-install"]),
+                               item("services", "service", managers=["kodex-install"]),
+                               item("serviceaccounts", "default"), item("configmaps", "kube-root-ca.crt")]
+        rows = apply.select_phase(plan(baseline), baseline, "objects")
+        self.assertEqual([row["resource"] for row in rows], ["services", "endpoints"])
+
     def test_path_cannot_escape_exact_api_object(self):
         row = item("pods", "fixture")
         self.assertEqual(apply.object_path(row), "/api/v1/namespaces/kodex-system/pods/fixture")
