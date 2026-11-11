@@ -74,6 +74,13 @@ def storage(resources, ca, issuer):
         "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kodex-system"}},
             "podSelector": {"matchLabels": {"app.kubernetes.io/name": "seaweedfs", "app.kubernetes.io/component": "object-storage"}}}],
             "ports": [{"protocol": "TCP", "port": 8333}]}]}})
+    result.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": {
+        "name": "local-object-storage-dns", "namespace": "kodex-system"}, "spec": {
+        "podSelector": {"matchExpressions": [{"key": "app.kubernetes.io/name", "operator": "In",
+            "values": ["seaweedfs", "seaweedfs-bucket-bootstrap"]}]}, "policyTypes": ["Egress"],
+        "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+            "ports": [{"protocol": protocol, "port": 53} for protocol in ["UDP", "TCP"]]}]}})
     for resource in result:
         resource["metadata"].setdefault("labels", {})["app.kubernetes.io/part-of"] = "kodex"
     return result
