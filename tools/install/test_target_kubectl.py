@@ -28,6 +28,10 @@ class TargetKubectlTest(unittest.TestCase):
         self.assertEqual(command(["config", "current-context"], self.environment)[-5:],
                          ["config", "view", "--minify", "-o", "jsonpath={.contexts[0].name}"])
 
+    def test_exec_payload_is_not_interpreted_as_kubernetes_flags(self):
+        arguments = ["exec", "synthetic", "--", "tool", "--context", "business", "-s", "text"]
+        self.assertEqual(command(arguments, self.environment)[5:], arguments)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,9 @@ def command(arguments, environment):
     index = 0
     while index < len(arguments):
         value = arguments[index]
+        if value == "--":
+            remaining.extend(arguments[index:])
+            break
         matched = False
         for flag, expected in (("--kubeconfig", config), ("--context", context)):
             if value == flag or value.startswith(flag + "="):
@@ -31,7 +34,7 @@ def command(arguments, environment):
                 matched = True
                 break
         if not matched:
-            if value.startswith("-s") and not value.startswith("--") or value in ("--server", "--cluster", "--user") or any(
+            if (value.startswith("-s") and not value.startswith("--")) or value in ("--server", "--cluster", "--user") or any(
                 value.startswith(flag + "=") for flag in ("--server", "--cluster", "--user")
             ):
                 raise ValueError("Kubernetes transport override is forbidden")
