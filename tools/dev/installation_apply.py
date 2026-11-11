@@ -212,7 +212,8 @@ def select_phase(fresh, current, phase):
         bootstrap = {("serviceaccounts", "default"), ("configmaps", "kube-root-ca.crt")}
         # Namespace controller немедленно восстанавливает bootstrap; его удаляет только последняя фаза namespace.
         # Service удаляется раньше generated Endpoint/EndpointSlice, чтобы не создавать новый UID во время readback.
-        priority = {"services": 0, "certificates": 0, "issuers": 1, "endpoints": 2, "endpointslices": 2, "customresourcedefinitions": 4}
+        priority = {"services": 0, "ingresses": 0, "certificates": 1, "issuers": 2,
+                    "certificaterequests": 2, "endpoints": 2, "endpointslices": 2, "customresourcedefinitions": 4}
         return sorted([item for item in rows if item["resource"] not in previous and (item["resource"], item["name"]) not in bootstrap],
                       key=lambda item: (priority.get(item["resource"], 3), object_path(item)))
     order = {"deployments": 0, "daemonsets": 1, "statefulsets": 2, "replicasets": 3, "jobs": 4}

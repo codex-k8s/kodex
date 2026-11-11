@@ -26,6 +26,11 @@ force-delete или global prune. Исполняемый локальный пу
 тот же объект; новый inode не наследует разрешение. Общий недоступный webhook
 не отключается ради cleanup: независимое завершение writers и освобождение
 принадлежащего установке диска выполняются отдельно от зависимых API deletions.
+Порядок очистки следует графу producers: Service предшествует Endpoint/EndpointSlice,
+Ingress предшествует Certificate и Secret. Восстановленный контроллером объект с
+новым UID требует свежего доказательства ownership; прежний DELETE intent не
+разрешает удалить replacement. Namespace bootstrap сохраняется до удаления самого
+namespace, чтобы не создавать бесконечную регенерацию default SA и root CA.
 
 Authority proof revision принадлежит устойчивому server-owned allocator и не
 конкурирует за одну строку с platform event sequence. Разделение storage не

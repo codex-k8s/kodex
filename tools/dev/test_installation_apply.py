@@ -201,6 +201,13 @@ class ApplyTests(unittest.TestCase):
         rows = apply.select_phase(plan(baseline), baseline, "objects")
         self.assertEqual([row["resource"] for row in rows], ["services", "endpoints"])
 
+    def test_object_phase_removes_ingress_shim_input_before_certificate_and_secret(self):
+        baseline = fixture()
+        baseline["objects"] = [item(resource, "fixture", uid=resource + "-uid", managers=["kodex-install"])
+                               for resource in ("secrets", "certificates", "ingresses")]
+        rows = apply.select_phase(plan(baseline), baseline, "objects")
+        self.assertEqual([row["resource"] for row in rows], ["ingresses", "certificates", "secrets"])
+
     def test_path_cannot_escape_exact_api_object(self):
         row = item("pods", "fixture")
         self.assertEqual(apply.object_path(row), "/api/v1/namespaces/kodex-system/pods/fixture")
