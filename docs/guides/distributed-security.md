@@ -4,11 +4,18 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.53
+version: 1.7.54
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Чистая установка материализует namespace и точные параметры admission раньше
+bindings и защищаемых ресурсов. Порядок YAML-документов не заменяет граф зависимостей:
+`parameterNotFoundAction=Deny` сохраняется, отсутствие параметров не обходится
+отключением policy. После частичного apply сначала восстанавливается недостающий
+параметр из закреплённого render с проверкой ownership/preimage, затем продолжается
+обычный защищённый путь. До этого workloads и их producers не запускаются.
 
 При локальном разрешении TLS hostname через `hostAliases` адрес закрепляется
 за проверенным Service UID/ClusterIP и ready EndpointSlice/Pod. Именованный

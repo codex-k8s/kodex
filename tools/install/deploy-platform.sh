@@ -928,10 +928,17 @@ if [[ "$mode" == apply || "$mode" == upgrade ]]; then
   ensure_seed_secret internal-rpc-authority-restore-evidence
   ensure_seed_secret internal-rpc-authority-snapshot
   reconcile_immutable_configmaps
+  # Параметры должны существовать до включения bindings с parameterNotFoundAction=Deny.
+  # Порядок документов Kustomize не является порядком зависимостей Kubernetes API.
+  apply_render foundation-namespaces 'select(.kind == "Namespace")'
+  apply_render foundation-parameters '
+    select(.kind == "ConfigMap" or .kind == "ImageAdmissionPolicyParameters")
+  '
   apply_render foundation '
     select(.kind != "CustomResourceDefinition" and .kind != "Deployment" and
       .kind != "StatefulSet" and .kind != "DaemonSet" and .kind != "Job" and
-      .kind != "CronJob" and .kind != "Secret" and
+      .kind != "CronJob" and .kind != "Secret" and .kind != "Namespace" and
+      .kind != "ConfigMap" and .kind != "ImageAdmissionPolicyParameters" and
       (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
        .kind != "Certificate" or
        .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)))
