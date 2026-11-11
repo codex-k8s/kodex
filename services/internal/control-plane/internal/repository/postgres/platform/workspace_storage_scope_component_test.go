@@ -51,8 +51,11 @@ func testWorkspaceProfileOffRejectsMismatchedRow(t *testing.T, ctx context.Conte
 	}()
 	var current scope
 	var candidate claimableExecution
-	if err := tx.QueryRow(ctx, `SELECT organization_id::text,project_id::text,session_id::text,agent_id::text
-  FROM control_plane.session_workspace_storage WHERE ref=$1`, workspaceRef).Scan(&current.organizationID, &candidate.projectID, &candidate.sessionID, &candidate.agentID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT workspace.organization_id::text,workspace.project_id::text,
+  workspace.session_id::text,workspace.agent_id::text,lease.run_id::text
+  FROM control_plane.session_workspace_storage workspace
+  JOIN control_plane.runtime_leases lease ON lease.id=workspace.writer_lease_id
+  WHERE workspace.ref=$1`, workspaceRef).Scan(&current.organizationID, &candidate.projectID, &candidate.sessionID, &candidate.agentID, &candidate.runID); err != nil {
 		t.Fatal("read original workspace scope", err)
 	}
 	if _, err := tx.Exec(ctx, `ALTER TABLE control_plane.session_workspace_storage DISABLE TRIGGER session_workspace_storage_guard`); err != nil {

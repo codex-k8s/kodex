@@ -17,6 +17,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workflow-workspace': {
+    version:'20261111000100',file:'20261111000100_workflow_workspace_scope.sql',
+    annotation:'kodex.dev/cp-workflow-workspace-migration-plan',previousVersion:20261110000200,
+    emptyField:'workflowWorkspaceAbsent',preconditionFile:'workflow-workspace-migration-precondition.sql',
+    postconditionFile:'workflow-workspace-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261111000100_workflow_workspace_scope.sql']),
+  },
   'managed-workspace': {
     version:'20261110000200',file:'20261110000200_managed_workspace.sql',
     annotation:'kodex.dev/cp-managed-workspace-migration-plan',previousVersion:20261110000100,
@@ -339,6 +346,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workflow-workspace')
+      ensure(validWorkflowWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'managed-workspace')
       ensure(validManagedWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'artifact-optional-antivirus')
@@ -990,6 +999,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workflow-workspace': return validWorkflowWorkspaceMigrationPostcondition(proof);
     case 'managed-workspace': return validManagedWorkspaceMigrationPostcondition(proof);
     case 'artifact-optional-antivirus': return validArtifactOptionalAntivirusMigrationPostcondition(proof);
     case 'integration-resource-policies': return validIntegrationResourcePoliciesMigrationPostcondition(proof);
@@ -1207,6 +1217,23 @@ export function validArtifactOptionalAntivirusMigrationPrecondition(proof, requi
     ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
       'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations',
       'activeIntegrationConnectionTests','activePersonalCredentialTests'].every(key => proof[key] === 0);
+}
+
+// Новый scope требует завершённого текущего исполнения; он не меняет данные прежних workspace.
+export function validWorkflowWorkspaceMigrationPrecondition(proof) {
+  return proof?.profile === 'WORKFLOW_WORKSPACE_PREDECESSOR_V1' && proof.database === 'control_plane' &&
+    proof.readOnly === 'on' && proof.gooseVersion === 20261110000200 &&
+    proof.workflowWorkspaceAbsent === true && proof.workspaceGuardReady === true && proof.archiveTaskGuardReady === true &&
+    ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases',
+      'activeWorkspaceVolumeTasks','activeWorkspaceArchiveTasks'].every(key => proof[key] === 0);
+}
+
+// Исторические schema proofs не принимают новый guard либо новый version pin.
+export function validWorkflowWorkspaceMigrationPostcondition(proof) {
+  return proof?.profile === 'WORKFLOW_WORKSPACE_V1' && proof.database === 'control_plane' &&
+    proof.readOnly === 'on' && proof.gooseVersion === 20261111000100 &&
+    proof.workflowVersionColumnReady === true && proof.rootVersionReferenceReady === true &&
+    proof.scopeFunctionReady === true && proof.workspaceGuardReady === true && proof.archiveTaskGuardReady === true;
 }
 
 // Переход039 расширяет immutable policy при выключенном opt-in и не требует dump либо новых ACL.

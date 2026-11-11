@@ -555,6 +555,11 @@ test-session-workspace-archive-wire: check-go-toolchain
 test-runtime-workspace-owner-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^TestWorkspaceWriterOwnerComponent$$'
 
+.PHONY: test-workflow-workspace-postgres
+test-workflow-workspace-postgres: check-go-toolchain
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh --workflow-workspace-upgrade
+	@timeout --kill-after=10s 240s bash scripts/tests/control-plane-postgres-test.sh '^(TestWorkflowWorkspaceOwnerComponent|TestWorkspaceWriterOwnerComponent)$$'
+
 .PHONY: test-static-backup-identity-plan
 test-static-backup-identity-plan:
 	@timeout 30s python3 -B tools/dev/test_static_backup_identity_plan.py
