@@ -17,6 +17,12 @@ import (
 //go:embed testdata/opencode_native_cutover_seed.sql
 var nativeCutoverSeed string
 
+// nativeVisibilityDefinitionQuery reads the complete predecessor definition in the disposable database without modifying roles or authority.
+// nativeVisibilityDefinitionQuery читает полное определение predecessor в одноразовой БД, не меняя роли или полномочия.
+//
+//go:embed testdata/opencode_native_visibility_definition.sql
+var nativeVisibilityDefinitionQuery string
+
 // TestOpenCodeNativeSessionCutover verifies the real forward-only migration and rejects implicit data erasure.
 // It then deletes only its own empty synthetic session, preserving the provider/project/owner configuration.
 // TestOpenCodeNativeSessionCutover проверяет настоящую forward-only миграцию и запрещает неявное стирание данных.
@@ -47,6 +53,23 @@ func TestOpenCodeNativeSessionCutover(t *testing.T) {
 	}
 	if _, err := observer.Exec(ctx, `ALTER TABLE control_plane.session_storage DROP CONSTRAINT synthetic_unregistered_edge`); err != nil {
 		t.Fatal("remove isolated unknown purge edge", err)
+	}
+	var visibilityDefinition string
+	if err := observer.QueryRow(ctx, nativeVisibilityDefinitionQuery).Scan(&visibilityDefinition); err != nil {
+		t.Fatal("read disposable visibility predecessor", err)
+	}
+	drifted := strings.Replace(visibilityDefinition, "file.lifecycle_state='ACTIVE'", "file.lifecycle_state='ACTIVE' AND true", 1)
+	if drifted == visibilityDefinition {
+		t.Fatal("visibility drift fixture marker missing")
+	}
+	if _, err := observer.Exec(ctx, drifted); err != nil {
+		t.Fatal("prepare visibility predecessor drift", err)
+	}
+	if err := goose.UpToContext(ctx, database, "migrations", 20261111000200); err == nil || !strings.Contains(err.Error(), "native runtime file visibility predecessor changed") {
+		t.Fatal("native cutover accepted a changed visibility boundary", err)
+	}
+	if _, err := observer.Exec(ctx, visibilityDefinition); err != nil {
+		t.Fatal("restore exact disposable predecessor", err)
 	}
 	if err := goose.UpToContext(ctx, database, "migrations", 20261111000200); err != nil {
 		t.Fatal("apply native session cutover", err)

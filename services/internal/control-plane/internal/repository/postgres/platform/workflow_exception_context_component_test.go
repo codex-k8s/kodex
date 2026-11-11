@@ -158,7 +158,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	}
 	page, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100})
 	if err != nil || page.Total != 2 || len(page.Items) != 2 || page.Next != "" {
-		t.Fatal("manager catalog does not contain exactly source and dependency files", completionOutcomeClass(err))
+		t.Fatalf("manager catalog does not contain exactly source and dependency files: outcome=%s total=%d items=%d next=%t", completionOutcomeClass(err), page.Total, len(page.Items), page.Next != "")
 	}
 	metadataActor := runtimeFilesTestPrincipal(t, ctx, repository, "metadata")
 	for _, file := range page.Items {
@@ -232,6 +232,16 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		}
 		if _, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100}); !errors.Is(err, errs.ErrNotFound) {
 			t.Fatal("expired manager lease retained file access", completionOutcomeClass(err))
+		}
+		if pending := f.claims("context-reclaim-before-native-stop"); len(pending) != 0 {
+			t.Fatal("expired manager was replaced before native writer reconciliation")
+		}
+		checkpoint := f.execute(command.CompleteExecution, "context-expired-native-checkpoint", nil, command.CompleteExecutionInput{
+			NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: execution.LeaseRef, Fence: execution.Fence,
+			Generation: execution.Generation, Success: true, ResultSummary: "Stopped native manager checkpoint", Usage: turnUsageFixture(),
+		})
+		if checkpoint.Runtime["nativeCheckpointRecorded"] != true {
+			t.Fatal("expired native manager checkpoint was not recorded")
 		}
 		fresh := f.claims("context-reclaim")
 		if len(fresh) != 1 || stringMap(fresh[0], "nodeRef") != stringMap(lease, "nodeRef") || stringMap(fresh[0], "leaseRef") == stringMap(lease, "leaseRef") || runtimeRevisionMapInt64(fresh[0], "generation") <= runtimeRevisionMapInt64(lease, "generation") {

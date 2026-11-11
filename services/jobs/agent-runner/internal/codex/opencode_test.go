@@ -176,3 +176,27 @@ func TestOpenCodeCoordinatorKeepsInstalledToolsUnexposed(t *testing.T) {
 		t.Fatal("native authority expanded")
 	}
 }
+
+// TestOpenCodeReasoningProjection carries owner-validated effort into the model options without arbitrary overlay passthrough.
+// TestOpenCodeReasoningProjection передаёт проверенное владельцем усилие в параметры модели без произвольного переноса overlay.
+func TestOpenCodeReasoningProjection(t *testing.T) {
+	for _, api := range []string{runtimecontract.ModelAPIResponses, runtimecontract.ModelAPIChatCompletions} {
+		input := openCodeInputFixture()
+		input.ModelProvider.API = api
+		input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
+		input.EffectiveReasoningEffort = "high"
+		input.ReasoningMode = runtimecontract.ReasoningSupported
+		raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+		if err != nil {
+			t.Fatal("valid reasoning profile rejected", err)
+		}
+		var config map[string]any
+		if json.Unmarshal(raw, &config) != nil {
+			t.Fatal("invalid configuration")
+		}
+		options := config["provider"].(map[string]any)[input.ModelProvider.ProviderID].(map[string]any)["models"].(map[string]any)[input.Model].(map[string]any)["options"].(map[string]any)
+		if len(options) != 1 || options["reasoningEffort"] != "high" {
+			t.Fatal("model reasoning projection changed")
+		}
+	}
+}

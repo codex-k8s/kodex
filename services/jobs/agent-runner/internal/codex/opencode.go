@@ -40,8 +40,8 @@ var errOpenCodeProvider = errors.New("OpenCode provider execution is unavailable
 // Проверяет metadata и exact local bridge, не execution authority или readiness.
 func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) {
 	if input.Provider != "opencode" || input.ModelProvider == nil || input.ModelProvider.Validate() != nil ||
-		input.ConfigOverlay != "" || (len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace) ||
-		input.EffectiveReasoningEffort != "" || input.ReasoningMode != runtimecontract.ReasoningUnsupported {
+		(len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace) ||
+		input.ModelProvider.ValidateRuntimePreferences(input.Model, input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return nil, ErrRuntimeProfile
 	}
 	selected, found := input.ModelProvider.Model(input.Model)
@@ -75,9 +75,14 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 		"mcp": map[string]any{"kodex": map[string]any{"type": "remote", "url": bridgeURL, "enabled": true,
 			"oauth": false, "timeout": runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds * 1000, "headers": map[string]string{"Authorization": "Bearer {env:KODEX_MCP_PROXY_TOKEN}"}}},
 	}
+	modelOptions := map[string]any{}
+	if input.EffectiveReasoningEffort != "" {
+		modelOptions["reasoningEffort"] = input.EffectiveReasoningEffort
+	}
+	definition := configuration["provider"].(map[string]any)[provider.ProviderID].(map[string]any)
+	definition["models"].(map[string]any)[input.Model].(map[string]any)["options"] = modelOptions
 	if effectiveCache.Mechanism == "ANTHROPIC_EPHEMERAL" {
-		definition := configuration["provider"].(map[string]any)[provider.ProviderID].(map[string]any)
-		definition["models"].(map[string]any)[input.Model].(map[string]any)["options"] = map[string]any{"cacheControl": map[string]string{"type": "ephemeral"}}
+		modelOptions["cacheControl"] = map[string]string{"type": "ephemeral"}
 	}
 	if input.ContextSnapshot != nil {
 		if input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {

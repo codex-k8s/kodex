@@ -31,7 +31,7 @@ func testProviderAccountConcurrency(t *testing.T, ctx context.Context, repositor
 	}
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateProviderAccount, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "concurrency-create"},
-		Payload:  command.ProviderAccountInput{Name: "Concurrency fixture", DefinitionKey: "openai-codex"}})
+		Payload:  command.ProviderAccountInput{Name: "Concurrency fixture", DefinitionKey: "opencode-synthetic"}})
 	if err != nil || created.ProviderAccount == nil {
 		t.Fatalf("create concurrency fixture: %v", err)
 	}

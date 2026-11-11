@@ -83,7 +83,7 @@ func (store *materializingSTTStore) ReadProviderCredentialExact(_ context.Contex
 	if store.fail {
 		return nil, errors.New("synthetic storage failure")
 	}
-	store.raw = []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-stt-fixture-key"}`)
+	store.raw = []byte(`{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-openai","API_KEY":"synthetic-stt-fixture-key"}`)
 	return store.raw, nil
 }
 

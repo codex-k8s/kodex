@@ -41,13 +41,13 @@ func testConfigOverlayHistory(t *testing.T, ctx context.Context, repository *Rep
 		return view
 	}
 	unpublishedRef := ""
-	for i, content := range []string{"personality = \"friendly\"\n", "personality = \"pragmatic\"\n"} {
+	for i, content := range []string{"model_reasoning_effort = \"low\"\n", "model_reasoning_effort = \"medium\"\n"} {
 		invoke(command.CreateConfigOverlayDraft, fmt.Sprintf("overlay-history-create-%d", i), content, "")
 		unpublishedRef = view.DraftOverlay.Ref
 		invoke(command.ValidateConfigOverlayDraft, fmt.Sprintf("overlay-history-validate-%d", i), "", "")
 		invoke(command.PublishConfigOverlayDraft, fmt.Sprintf("overlay-history-publish-%d", i), "", "")
 	}
-	invoke(command.CreateConfigOverlayDraft, "overlay-history-unpublished", "personality = \"friendly\"\n", "")
+	invoke(command.CreateConfigOverlayDraft, "overlay-history-unpublished", "model_reasoning_effort = \"low\"\n", "")
 	version := view.AgentVersion
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RollbackConfigOverlay, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "overlay-history-reject-unpublished", ExpectedVersion: &version},

@@ -206,6 +206,93 @@ BEGIN
 END $native_purge$;
 -- +goose StatementEnd
 
+-- Новый runtime сохраняет исторические immutable file pins и точный SERVER_DAG
+-- frontier, потерянные при замене функции миграцией optional antivirus.
+-- Допуск NOT_SCANNED обычных файлов сохраняется; CLEAN для skills и workflow
+-- evidence остаётся обязательным в их специализированных owner-функциях.
+-- +goose StatementBegin
+DO $native_file_boundary$
+BEGIN
+ IF (SELECT md5(prosrc) FROM pg_proc
+     WHERE oid='control_plane.runtime_file_source_visible(uuid,uuid,uuid,uuid,uuid,text,text,uuid)'::regprocedure)
+     IS DISTINCT FROM '9a14fe7cf18830648738eec9b80aa709' THEN
+   RAISE EXCEPTION 'native runtime file visibility predecessor changed';
+ END IF;
+END $native_file_boundary$;
+-- +goose StatementEnd
+
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION control_plane.runtime_file_source_visible(
+    p_tenant uuid,p_actor uuid,p_project uuid,p_agent uuid,p_artifact uuid,p_purpose text,p_source_revision text,p_node uuid
+) RETURNS boolean LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path=pg_catalog,control_plane AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM control_plane.catalog_access_targets file_target
+        JOIN control_plane.artifact_history file ON file.id=file_target.id AND file.organization_id=p_tenant
+        JOIN control_plane.artifact_revision_content content ON content.revision_id=file.revision_id
+          AND content.digest=file.digest AND content.size_bytes=file.size_bytes
+        JOIN control_plane.catalog_access_targets project_target
+          ON project_target.organization_id=p_tenant AND project_target.kind='PROJECT' AND project_target.id=p_project
+        LEFT JOIN control_plane.catalog_access_targets agent_target
+          ON agent_target.organization_id=p_tenant AND agent_target.kind='AGENT' AND agent_target.id=p_agent
+          AND agent_target.project_id=p_project
+        JOIN control_plane.agents current_agent ON current_agent.id=p_agent AND current_agent.organization_id=p_tenant
+        WHERE file_target.organization_id=p_tenant AND file_target.kind='ARTIFACT' AND file.id=p_artifact
+          AND (file.project_id=p_project OR (p_purpose='WORKSPACE_INPUT' AND file.project_id IS NULL
+              AND file.created_by=p_actor AND current_agent.system_key='system-assistant'))
+          AND file.lifecycle_state='ACTIVE' AND file.scan_state IN ('CLEAN','NOT_SCANNED')
+          AND control_plane.catalog_resource_visible(p_tenant,p_actor,'project.view','PROJECT',project_target.id,
+            project_target.project_id,project_target.owner_id,project_target.related_ids,statement_timestamp(),false)
+          AND (control_plane.catalog_resource_visible(p_tenant,p_actor,'agent.view','AGENT',agent_target.id,
+            agent_target.project_id,agent_target.owner_id,agent_target.related_ids,statement_timestamp(),false)
+            OR (current_agent.system_key='system-assistant' AND current_agent.project_id IS NULL AND current_agent.state<>'ARCHIVED'))
+          AND control_plane.catalog_resource_visible(p_tenant,p_actor,'artifact.view','ARTIFACT',file_target.id,
+            file_target.project_id,file_target.owner_id,file_target.related_ids,statement_timestamp())
+          AND control_plane.catalog_resource_visible(p_tenant,p_actor,'artifact.download','ARTIFACT',file_target.id,
+            file_target.project_id,file_target.owner_id,file_target.related_ids,statement_timestamp())
+          AND CASE p_purpose
+            WHEN 'PROJECT' THEN file.run_id IS NULL AND 'platform.artifact.manage'=ANY(current_agent.capabilities)
+            WHEN 'WORKSPACE_INPUT' THEN 'platform.artifact.manage'=ANY(current_agent.capabilities)
+            WHEN 'RUN_RESULT' THEN file.source IN ('AGENT_RESULT','INTEGRATION_RESULT')
+              AND CASE WHEN EXISTS (
+                SELECT 1 FROM control_plane.run_nodes execution
+                JOIN control_plane.runs root ON root.id=execution.root_run_id AND root.organization_id=execution.organization_id
+                JOIN control_plane.workflow_versions version ON version.id=root.workflow_version_id AND version.organization_id=p_tenant
+                WHERE execution.id=p_node AND execution.organization_id=p_tenant AND version.spec->>'ExecutionMode'='SERVER_DAG_V1'
+              ) THEN EXISTS (
+                SELECT 1 FROM control_plane.run_nodes execution
+                JOIN control_plane.runs root ON root.id=execution.root_run_id AND root.organization_id=p_tenant
+                WHERE execution.id=p_node AND execution.organization_id=p_tenant AND execution.agent_id=p_agent
+                  AND root.project_id=p_project AND root.initiated_by=p_actor
+                  AND control_plane.runtime_workflow_input_visible(p_tenant,p_node,file.revision_id)
+              ) ELSE (
+                (control_plane.runtime_file_coordinator(p_tenant,p_actor,p_project,p_agent,p_node)
+                 AND EXISTS (SELECT 1 FROM control_plane.runtime_received_result_artifacts(p_tenant,p_node) pin
+                     WHERE pin->>'ref'=file.ref AND pin->>'digest'=file.digest
+                       AND pin->'revision'=to_jsonb(file.revision)
+                       AND pin->'sizeBytes'=to_jsonb(file.size_bytes) AND pin->>'fileName'=file.file_name
+                       AND pin->>'mediaType'=file.media_type AND pin->>'source'=file.source))
+                OR (NOT control_plane.runtime_file_coordinator(p_tenant,p_actor,p_project,p_agent,p_node)
+                    AND 'platform.artifact.manage'=ANY(current_agent.capabilities)
+                    AND NOT EXISTS (SELECT 1 FROM control_plane.run_nodes execution
+                        WHERE execution.id=p_node AND execution.workflow_step_key LIKE 'workflow.coordinator.%'))
+              ) END
+              AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets run_target
+                WHERE run_target.organization_id=p_tenant AND run_target.kind='RUN' AND run_target.id=file.run_id
+                  AND control_plane.catalog_resource_visible(p_tenant,p_actor,'run.view','RUN',run_target.id,
+                    run_target.project_id,run_target.owner_id,run_target.related_ids,statement_timestamp(),false))
+            WHEN 'SKILL' THEN file.scan_state='CLEAN' AND EXISTS (
+              SELECT 1 FROM control_plane.agent_context_bindings binding
+              JOIN control_plane.skill_bundle_revisions revision ON revision.id=binding.skill_revision_id
+              JOIN control_plane.skill_bundles bundle ON bundle.id=revision.bundle_id AND bundle.id=binding.skill_bundle_id
+              WHERE binding.organization_id=p_tenant AND binding.project_id=p_project AND binding.agent_id=p_agent AND binding.enabled
+                AND revision.ref=p_source_revision AND bundle.project_id=p_project AND bundle.state='ACTIVE'
+                AND control_plane.skill_revision_visible(p_tenant,p_actor,revision.id,statement_timestamp()))
+            ELSE false END
+    );
+$$;
+-- +goose StatementEnd
+
 RESET ROLE;
 
 -- +goose Down

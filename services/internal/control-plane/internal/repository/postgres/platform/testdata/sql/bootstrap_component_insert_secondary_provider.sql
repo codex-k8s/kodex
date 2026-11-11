@@ -2,7 +2,7 @@
 INSERT INTO control_plane.provider_accounts
     (ref, organization_id, definition_key, stable_key, name,
      state, enabled, created_by)
-SELECT 'pacc_component_secondary', organization.id, 'openai-codex',
+SELECT 'pacc_component_secondary', organization.id, 'opencode-synthetic',
        'component-secondary', 'Component secondary account',
        'AUTHORIZED', true, subject.id
 FROM control_plane.organizations organization

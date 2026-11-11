@@ -106,6 +106,11 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	}
 	configureComponentArtifactScanner(t, repository)
 	configureComponentProviderAndRoleImages(t, repository)
+	profile := *repository.modelProvider
+	profile.Models = append(profile.Models, runtimecontract.ModelProviderModel{ID: "non-reasoning", ContextWindowTokens: 32768, MaximumOutputTokens: 1024})
+	if err := repository.ConfigureModelProvider(profile, "gpt-5"); err != nil {
+		t.Fatal("configure alternate assistant model", err)
+	}
 	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ JOIN control_plane.provider_account_policy_versions provider_policy
 JOIN LATERAL (
     WITH eligible AS (
         SELECT candidate.ref,
-               COALESCE(auth_attempt.method, '') AS authorization_method
+               COALESCE(auth_attempt.method, 'API_KEY') AS authorization_method
         FROM control_plane.provider_accounts candidate
         LEFT JOIN LATERAL (
             SELECT attempt.method
@@ -34,7 +34,7 @@ JOIN LATERAL (
         WHERE candidate.organization_id = runtime.organization_id
           AND candidate.definition_key = runtime_config.provider
           AND candidate.current_credential_revision_id IS NOT NULL
-          AND candidate.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED')
+          AND candidate.enabled AND candidate.state = 'AUTHORIZED'
     )
     SELECT COALESCE(
                jsonb_agg(
@@ -44,11 +44,7 @@ JOIN LATERAL (
                '[]'::jsonb
            ) AS account_candidates
     FROM eligible candidate
-    WHERE candidate.authorization_method = 'DEVICE_CODE'
-       OR NOT EXISTS (
-           SELECT 1 FROM eligible preferred
-           WHERE preferred.authorization_method = 'DEVICE_CODE'
-       )
+    WHERE candidate.authorization_method = 'API_KEY'
 ) candidate_pool ON true
 WHERE runtime.organization_id = @organization_id::uuid
   AND runtime.stable_key = 'system-assistant'

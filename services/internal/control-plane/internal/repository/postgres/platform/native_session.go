@@ -56,8 +56,8 @@ var queryNativeSessionUnresolvedEffects string
 //go:embed sql/native_session__requires_checkpoint.sql
 var queryNativeSessionRequiresCheckpoint string
 
-// queryNativeSessionClosedWriter selects a terminal graph's exact past writer without reviving its lease.
-// queryNativeSessionClosedWriter выбирает exact past writer terminal graph без оживления lease.
+// queryNativeSessionClosedWriter selects a closed lease's exact writer in a terminal graph or an expired active attempt; it never revives authority.
+// queryNativeSessionClosedWriter выбирает точного writer закрытой lease завершённого графа либо истёкшей активной attempt, не возвращая полномочия.
 //
 //go:embed sql/native_session__closed_writer.sql
 var queryNativeSessionClosedWriter string

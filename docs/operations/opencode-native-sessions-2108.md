@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-11-11
 ---
 
@@ -85,7 +85,10 @@ workspace generation и принятыми effect receipts. Без owner commit 
 | Обычный final | Completed ordinary assistant message + согласованный SSE terminal | Broker публикует итог; summary/error/length stop не проходят |
 | Stop/timeout | Owner прекращает admission effects; native abort/process join | Частичный результат сохраняется только с доказанной границей; неизвестный tool не повторяется |
 | Потеря SSE/POST | Нет автоматического повторного POST | Неопределённый результат, остановка provider; дальнейшее действие после reconciliation |
-| Lease expiry / stale writer | Прежний single-writer CAS и fence у CP/controller | Нельзя подтвердить checkpoint старой attempt или продолжить её authority |
+| Lease expiry | CP отзывает прежнюю lease/grants и возвращает допустимую работу в очередь; незавершённый native writer блокирует claim | Только точный остановленный writer может записать checkpoint и usage через прежний fence/CAS; исход run не меняется, graph event отсутствует; readback session_storage/run |
+| Повторный claim после expiry | Закреплённый checkpoint, отсутствие неопределённых effects, свежие права и RuntimeRevision | Новая lease/generation; прежние полномочия не возвращаются |
+| Поздний чужой или заменённый writer | Exact lease/fence/generation + current storage writer CAS | Отказ до изменения checkpoint, usage или состояния; событий нет |
+| Повтор checkpoint receipt | Точный idempotency key и текущая owner boundary | Прежний receipt; повторного учёта usage, event или tool effect нет |
 | Export | Join native process → официальный export → join exporter | Private file/hash; ещё не owner checkpoint receipt |
 | Restore | Exact owner scope/digest/version + согласованный workspace checkpoint | Новый приватный HOME, текущий runtime input; отсутствие state закрывает запуск |
 | Cutover | Drain старых executions и явно выбранная оператором очистка старых сессий | Нет legacy decoder или неявного преобразования auth; подключения и внешние объекты не удаляются |
@@ -318,3 +321,67 @@ speechTranscription и проверяет отсутствие исключен�
 verification через новый endpoint, замену ключа, realtime readback и UNKNOWN
 replay. Он не является доказательством доступности реального провайдера или
 кластерной приёмки.
+
+
+Квалификация полной установки выявила регрессию predecessor optional antivirus:
+полная замена `runtime_file_source_visible` потеряла чтение `artifact_history` и
+ограничение SERVER_DAG по `workflow_runtime_artifact_pins`. Исправление входит в
+ещё не поставленную миграцию041, которая сверяет точный predecessor перед заменой.
+Публичные metadata readback и миграционный verifier требуют новый source digest;
+возврат прежней функции закрыто отклоняется. Обычные файлы сохраняют явный
+`NOT_SCANNED`; skills и структурированные workflow evidence по-прежнему требуют
+`CLEAN`. Это не новый grant и не перенос данных прежней установки.
+
+### Допуск reasoning и независимый путь распознавания речи
+
+Путь настройки reasoning: опубликованный overlay и выбранная модель → проверенный
+каталог возможностей аккаунта → effective effort в immutable RuntimeRevision →
+RunnerInput → проверка точного provider/model → model options OpenCode → штатный
+SDK Responses либо Chat Completions. Разрешены `low`, `medium`, `high`; Messages
+не переводит их неявно в другой протокол. Исходные overlay-поля прежнего runtime
+для personality, web search, history и login shell отклоняются. Exact retry
+использует закреплённый effective effort; настройки не назначают полномочий.
+
+Для закреплённого source `810c0eba1a7348036f8bdf61e6632d0c36c6876c` проверены
+[session/llm.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/session/llm.ts)
+и [provider/transform.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/provider/transform.ts).
+Context7 `/anomalyco/opencode` использован для поиска V1 model/agent options;
+совместимость подтверждает закреплённый source и настоящий бинарник, а не latest
+документация. Native wire-тест проверяет отсутствие параметра и `low`/`high`
+для обоих API. Он не доказывает поддержку конкретной облачной моделью.
+
+STT сохраняет отдельный фиксированный транспорт OpenAI и собственные полномочия:
+владелец организации публикует SYSTEM_STT → версия/digest привязаны к STT_SERVICE →
+caller получает текущий `platform.stt.use` → владелец состояния повторно проверяет
+account, immutable credential generation, config revision/digest и прямой маршрут
+`opencode-openai` на официальный OpenAI endpoint → secret-broker читает точные
+Secret UID/resourceVersion/content digest и декодирует только новый owner-bound
+credential envelope → STT получает ключ на ограниченное время для своего adapter.
+Чужой gateway, LiteLLM и старый auth envelope не допускаются. Идентификатор account
+из запроса не является полномочием. Ошибка допуска возвращает отказ без вызова
+провайдера; успешная проекция не меняет состояние и не публикует domain event.
+Авторитетный read path — текущая SYSTEM_STT configuration и credential projection.
+Результат распознавания не проходит через native transcript OpenCode; это отдельная
+возможность платформы. Без допущенного прямого OpenAI account STT показывает
+отсутствие готовности, не использует ключ произвольной модели.
+
+Пока native resume квалифицирован для неизменной пары model/runtime profile и
+точного provider account. Несовместимая смена отклоняется владельцем уже при
+запросе продолжения; она не создаёт бесконечно ожидающий run и не подменяет
+сессию пустой историей. Новый явно запрошенный run может открыть новую сессию
+с другой разрешённой моделью. Исходные native checkpoint и audit сохраняются.
+Это не автоматический fork/перенос transcript между моделями.
+
+Bootstrap и warm reconciliation используют одинаковое правило: включённый
+AUTHORIZED account с текущей credential revision и способом API_KEY. Отсутствие
+authorization attempt допускается только как установленная bootstrap credential;
+при наличии attempt устаревший способ не выбирается. DEVICE_CODE не имеет
+приоритета, а REAUTHORIZATION_REQUIRED исключается из нового исполняемого пула.
+Новая immutable конфигурация фиксирует только прошедшие актуальную проверку
+catalog/model кандидаты; исходная сессия не получает скрытый fallback аккаунта.
+
+Полный PostgreSQL baseline имеет явный общий лимит Go `15m`; deadlines отдельных
+сценариев остаются прежними. Первый широкий повтор завершился `FAIL` по прежнему
+неявному лимиту `10m` во время штатного ожидания lease expiry, без предшествующих
+ошибок assertions. Этот исход не считается PASS. Расширенный набор квалифицируется
+повторно целиком; отдельные адресные проверки его не заменяют.

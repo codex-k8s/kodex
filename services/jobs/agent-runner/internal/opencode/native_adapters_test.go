@@ -144,6 +144,17 @@ func nativeAdapterFinalStream(w io.Writer, api string) {
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, raw)
 	}
 	text := "SYNTHETIC_ADAPTER_FINAL"
+	if api == "CHAT_COMPLETIONS" {
+		for _, choice := range []map[string]any{
+			{"index": 0, "delta": map[string]string{"role": "assistant", "content": text}, "finish_reason": nil},
+			{"index": 0, "delta": map[string]string{}, "finish_reason": "stop"},
+		} {
+			raw, _ := json.Marshal(map[string]any{"id": "chatcmpl_synthetic", "object": "chat.completion.chunk", "created": 1700000000, "model": "tiny", "choices": []any{choice}})
+			fmt.Fprintf(w, "data: %s\n\n", raw)
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		return
+	}
 	if api == "MESSAGES" {
 		emit("message_start", map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_synthetic", "type": "message", "role": "assistant", "model": "tiny", "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": map[string]int{"input_tokens": 42, "output_tokens": 1}}})
 		emit("content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]string{"type": "text", "text": ""}})

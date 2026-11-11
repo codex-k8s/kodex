@@ -591,11 +591,7 @@ func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T
 // иными значениями остаются отдельными.
 func configureComponentProviderAndRoleImages(t *testing.T, repository *Repository) ProviderCredentialConfig {
 	t.Helper()
-	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion,
-		ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "gpt-5", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
-	if repository.ConfigureModelProvider(profile, "gpt-5") != nil {
-		t.Fatal("configure synthetic native provider")
-	}
+	configureComponentModelProvider(t, repository)
 	credentialConfig := ProviderCredentialConfig{
 		SecretName:            "runtime-provider-openai-default-r1",
 		SecretUID:             "10000000-0000-4000-8000-000000000001",
@@ -609,4 +605,15 @@ func configureComponentProviderAndRoleImages(t *testing.T, repository *Repositor
 		t.Fatalf("configure role images: %v", err)
 	}
 	return credentialConfig
+}
+
+// configureComponentModelProvider installs the exact synthetic OpenCode route before bootstrap without reading environment or credentials.
+// configureComponentModelProvider задаёт точный синтетический маршрут OpenCode до bootstrap, не читая окружение или credentials.
+func configureComponentModelProvider(t *testing.T, repository *Repository) {
+	t.Helper()
+	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion,
+		ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "gpt-5", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	if repository.ConfigureModelProvider(profile, "gpt-5") != nil {
+		t.Fatal("configure synthetic native provider")
+	}
 }

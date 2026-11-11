@@ -719,6 +719,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if effectiveEffort == "" {
 				reasoningMode = runtimecontract.ReasoningUnsupported
 			}
+			if modelProvider.ValidateRuntimePreferences(candidate.model, candidate.configOverlay, effectiveEffort, reasoningMode) != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
 			nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 			rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 			sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef

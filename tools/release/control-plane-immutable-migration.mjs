@@ -1257,7 +1257,7 @@ export function validOpenCodeNativeMigrationPrecondition(proof) {
 export function validOpenCodeNativeMigrationPostcondition(proof) {
   return proof?.profile==='OPENCODE_NATIVE_V1' && proof.database==='control_plane' &&
     proof.readOnly==='on' && proof.gooseVersion===20261111000200 &&
-    ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady','nativeWriterForeignKeysReady','nativePurgeGraphReady','nativePurgeGuardReady'].every(key=>proof[key]===true);
+    ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady','nativeWriterForeignKeysReady','nativePurgeGraphReady','nativePurgeGuardReady','runtimeFileVisibilityReady'].every(key=>proof[key]===true);
 }
 
 // Переход039 расширяет immutable policy при выключенном opt-in и не требует dump либо новых ACL.

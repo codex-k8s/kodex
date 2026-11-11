@@ -433,10 +433,12 @@ fi
   # Эти координаты существуют только внутри disposable контейнера этой оснастки.
   psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
     -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
+  # Полный baseline включает реальные ожидания lease expiry; общий бюджет15m
+  # не меняет локальные deadlines сценариев и не скрывает assertion failures.
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
     KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=15m \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \

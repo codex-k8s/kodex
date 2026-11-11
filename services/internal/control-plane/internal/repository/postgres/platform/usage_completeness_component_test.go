@@ -88,7 +88,7 @@ func TestUsageCompletenessComponent(t *testing.T) {
 				t.Helper()
 				usage := entity.TokenUsage{Completeness: fixture.qualities[index], TotalTokens: fixture.tokens[index],
 					InputTokens: fixture.tokens[index], ModelContextWindow: 475000}
-				payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
+				payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
 					Generation: runtimeRevisionMapInt64(lease, "generation"), Success: !failed, ResultSummary: "Synthetic measured result.", Usage: usage}
 				if failed {
 					payload.SafeErrorCode = "RUNTIME_UNAVAILABLE"

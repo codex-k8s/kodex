@@ -39,6 +39,15 @@ SELECT jsonb_build_object(
    AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
     WHERE acl.grantee NOT IN('control_plane_owner'::regrole,'control_plane_runtime'::regrole)
     OR acl.grantee='control_plane_runtime'::regrole AND (acl.is_grantable OR acl.privilege_type<>'EXECUTE'))),
+ 'runtimeFileVisibilityReady',EXISTS(SELECT 1 FROM pg_proc p
+   WHERE p.oid='control_plane.runtime_file_source_visible(uuid,uuid,uuid,uuid,uuid,text,text,uuid)'::regprocedure
+   AND md5(p.prosrc)='6e6494d533d00f1bcd35d65497dff28c' AND p.proowner='control_plane_owner'::regrole
+   AND NOT p.prosecdef AND p.provolatile='s' AND p.prorettype='boolean'::regtype AND NOT p.proretset
+   AND p.prolang=(SELECT oid FROM pg_language WHERE lanname='sql')
+   AND p.proconfig=ARRAY['search_path=pg_catalog, control_plane']
+   AND has_function_privilege('control_plane_runtime',p.oid,'EXECUTE')
+   AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+     WHERE acl.grantee=0 AND acl.privilege_type='EXECUTE')),
  'nativeColumnsReady',(SELECT count(*)=2 FROM pg_attribute WHERE attrelid IN(
    'control_plane.session_storage'::regclass,'control_plane.session_archives'::regclass)
    AND attname='native_checkpoint' AND atttypid='jsonb'::regtype AND NOT attisdropped),

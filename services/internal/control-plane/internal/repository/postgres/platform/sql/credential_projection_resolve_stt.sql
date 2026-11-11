@@ -22,7 +22,7 @@ JOIN control_plane.provider_accounts account
  AND account.ref = revision.content::jsonb -> 'stt' ->> 'providerAccountRef'
 JOIN control_plane.provider_definitions definition
   ON definition.stable_key = account.definition_key
- AND definition.stable_key = 'openai-codex'
+ AND definition.stable_key = 'opencode-openai'
  AND definition.enabled
 JOIN control_plane.provider_credential_revisions credential
   ON credential.id = account.current_credential_revision_id

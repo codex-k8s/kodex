@@ -1,7 +1,7 @@
 INSERT INTO control_plane.provider_accounts
     (ref, organization_id, definition_key, stable_key, name,
      state, enabled, created_by)
-SELECT 'pacc_component_warm_failover', organization.id, 'openai-codex',
+SELECT 'pacc_component_warm_failover', organization.id, 'opencode-synthetic',
        'component-warm-failover', 'Component warm failover account',
        'AUTHORIZED', true, subject.id
 FROM control_plane.organizations organization

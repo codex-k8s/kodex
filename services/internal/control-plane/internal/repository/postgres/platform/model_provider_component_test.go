@@ -111,20 +111,20 @@ func TestModelProviderBootstrapComponent(t *testing.T) {
 	}
 }
 
-// TestModelCatalogBootstrapMethodComponent checks gateway inference, legacy defaults and explicit-method precedence in separate migrated databases. No provider is contacted and no authorization attempt is synthesized by production code.
-// TestModelCatalogBootstrapMethodComponent проверяет gateway inference, legacy defaults и приоритет явного метода в отдельных мигрированных БД. Обращения к provider отсутствуют; production code не создаёт фиктивной authorization attempt.
+// TestModelCatalogBootstrapMethodComponent checks configured API-key catalog work and rejects retired or missing routes in separate migrated databases. No provider is contacted and no authorization attempt is synthesized by production code.
+// TestModelCatalogBootstrapMethodComponent проверяет каталог настроенного API-key маршрута и отказ для удалённых или отсутствующих маршрутов в отдельных мигрированных БД. Обращения к provider отсутствуют; production code не создаёт фиктивной authorization attempt.
 func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 	for _, scenario := range []struct {
 		name, explicit, configured, want string
 		gateway, disabled                bool
 	}{
-		{name: "legacy-device-default", want: "DEVICE_CODE"},
-		{name: "legacy-explicit-api-key", explicit: "API_KEY", want: "API_KEY"},
+		{name: "configured-bootstrap", want: "API_KEY"},
+		{name: "configured-explicit-api-key", explicit: "API_KEY", want: "API_KEY"},
 		{name: "gateway-bootstrap", gateway: true, configured: "active", want: "API_KEY"},
-		{name: "gateway-explicit-device-preserved", gateway: true, configured: "active", explicit: "DEVICE_CODE", want: "DEVICE_CODE"},
+		{name: "retired-device-method-rejected", gateway: true, configured: "active", explicit: "DEVICE_CODE"},
 		{name: "gateway-explicit-api-key", gateway: true, configured: "active", explicit: "API_KEY", want: "API_KEY"},
-		{name: "gateway-not-configured", gateway: true, want: "DEVICE_CODE"},
-		{name: "gateway-different-definition", gateway: true, configured: "different", want: "DEVICE_CODE"},
+		{name: "gateway-not-configured", gateway: true},
+		{name: "gateway-different-definition", gateway: true, configured: "different"},
 		{name: "disabled-gateway", gateway: true, configured: "active", disabled: true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
@@ -171,9 +171,9 @@ func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 			if err != nil {
 				t.Fatal("claim method fixture", err)
 			}
-			if scenario.disabled {
+			if scenario.want == "" {
 				if len(tasks) != 0 {
-					t.Fatal("disabled definition produced a catalog task")
+					t.Fatal("ineligible definition or authorization method produced a catalog task")
 				}
 			} else if len(tasks) != 1 || tasks[0].AuthorizationMethod != scenario.want {
 				t.Fatalf("wrong catalog method: tasks=%+v want=%s", tasks, scenario.want)

@@ -13,6 +13,7 @@ LEFT JOIN control_plane.session_turns turn ON turn.id=node.turn_id AND turn.sess
 LEFT JOIN control_plane.projects project ON project.id=run.project_id AND project.organization_id=run.organization_id
 WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
  AND revision.safe_snapshot->>'runtimeProvider'='opencode'
- AND root.state IN('SUCCEEDED','FAILED','CANCELLED')
+ AND (root.state IN('SUCCEEDED','FAILED','CANCELLED')
+   OR lease.state='EXPIRED' AND root.state IN('PENDING','RUNNING','CANCELLING'))
  AND lease.state IN('COMPLETED','CANCELLED','EXPIRED')
 FOR UPDATE OF lease,root;

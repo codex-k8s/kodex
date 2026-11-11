@@ -65,10 +65,10 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 		}
 	}()
 	var accountRef string
-	if err := repository.pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&accountRef); err != nil {
+	if err := repository.pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-opencode-synthetic'`).Scan(&accountRef); err != nil {
 		t.Fatal(err)
 	}
-	initialCatalog, err := service.ListModelCatalog(ctx, owner, "openai-codex", accountRef, query.Filter{})
+	initialCatalog, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", accountRef, query.Filter{})
 	if err != nil || initialCatalog.Status == nil || initialCatalog.Status.State != "READY" {
 		t.Fatalf("initial synthetic catalog: %v", err)
 	}
@@ -105,7 +105,7 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 		if err != nil || result.ProviderAccount == nil || result.ProviderAccount.MaximumConcurrentExecutions != limit {
 			t.Fatalf("set parallel limit %d: %v", limit, err)
 		}
-		catalog, err := service.ListModelCatalog(ctx, owner, "openai-codex", accountRef, query.Filter{})
+		catalog, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", accountRef, query.Filter{})
 		if err != nil || catalog.Status == nil || catalog.Status.State != "READY" || catalog.Digest != initialCatalog.Digest {
 			t.Fatalf("capacity mutation invalidated catalog: %v", err)
 		}
@@ -234,7 +234,7 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 		t.Fatal("stop ignored the lowered limit")
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "parallel-stopped-late-complete"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(stoppedLease),
+		Mutation: value.Mutation{IdempotencyKey: "parallel-stopped-late-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(stoppedLease, "leaseRef"), Fence: stringMap(stoppedLease, "fence"), Generation: stoppedLease["generation"].(int64),
 			Success: true, ResultSummary: "Must not complete a stopped chat", Usage: turnUsageFixture()}})
 	if !errors.Is(err, errs.ErrForbidden) {

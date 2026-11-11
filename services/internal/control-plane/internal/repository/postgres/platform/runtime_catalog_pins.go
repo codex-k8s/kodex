@@ -14,6 +14,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeCatalogProviderConfiguration reads the registered nonsecret adapter contract in the owner transaction before accepting model preferences.
+// queryRuntimeCatalogProviderConfiguration читает зарегистрированный несекретный контракт адаптера в транзакции владельца до допуска настроек модели.
+//
+//go:embed sql/runtime_catalog__provider_configuration.sql
+var queryRuntimeCatalogProviderConfiguration string
+
 // queryRuntimeCatalogReadConfiguration reads provider/model/account candidates for the selected
 // agent configuration and the agent current overlay by exact organization/agent and optional
 // internal config ID. It does not check actor permissions or account eligibility; the caller owns
@@ -46,14 +52,8 @@ var queryRuntimeCatalogLockAccounts string
 //go:embed sql/runtime_catalog__read_accounts.sql
 var queryRuntimeCatalogReadAccounts string
 
-// queryRuntimeCatalogBootstrapAccounts returns at most 32 enabled authorized organization/provider
-// accounts with current credentials in ref order. If any latest applied authorized method is
-// DEVICE_CODE, only such preferred accounts remain; provider-definition and model/catalog checks
-// still follow.
-// queryRuntimeCatalogBootstrapAccounts возвращает до 32 включённых AUTHORIZED accounts организации
-// и provider с текущими credential по ссылке. Если последний применённый AUTHORIZED метод хотя бы
-// одного account — DEVICE_CODE, остаются только такие предпочтительные accounts; definition и
-// model/catalog проверки выполняются далее.
+// queryRuntimeCatalogBootstrapAccounts reads enabled authorized API-key accounts, including the installation-owned initial credential without a fabricated authorization attempt.
+// queryRuntimeCatalogBootstrapAccounts читает включённые авторизованные API-key аккаунты, включая исходный credential установки без фиктивной попытки авторизации.
 //
 //go:embed sql/runtime_catalog__bootstrap_accounts.sql
 var queryRuntimeCatalogBootstrapAccounts string
@@ -144,7 +144,22 @@ func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current sc
 // устаревшие pins, сбой чтения и неверная форма сохраняют разные ошибки. Частичные результаты
 // отбрасываются; значения credential и резерв ёмкости не создаются.
 func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, current scope, provider, model, overlay string, candidates []entity.ProviderAccountCandidate, input, lock bool) ([]entity.ProviderAccountCandidate, []string, error) {
-	if strings.HasPrefix(provider, "opencode-") && overlay != "" {
+	if strings.HasPrefix(provider, "opencode-") && runtimecontract.ValidateOpenCodeOverlay(overlay) != nil {
+		return nil, nil, errs.ErrInvalid
+	}
+	var rawProvider []byte
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogProviderConfiguration, provider).Scan(&rawProvider); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, errs.ErrConflict
+		}
+		return nil, nil, errs.ErrUnavailable
+	}
+	profile, err := runtimecontract.DecodeModelProviderConfiguration(rawProvider)
+	if err != nil || profile.DefinitionKey() != provider {
+		return nil, nil, errs.ErrConflict
+	}
+	parsedOverlay, err := runtimecontract.ParseConfigOverlay(overlay)
+	if err != nil {
 		return nil, nil, errs.ErrInvalid
 	}
 	if len(candidates) == 0 {
@@ -209,6 +224,17 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			if input || legacyUnpinned {
 				candidate.ModelCapabilityDigest = modelDigest
 			}
+			effective := parsedOverlay.ModelReasoningEffort
+			if effective == "" {
+				effective = capability.DefaultReasoningEffort
+			}
+			mode := runtimecontract.ReasoningSupported
+			if effective == "" {
+				mode = runtimecontract.ReasoningUnsupported
+			}
+			if profile.ValidateRuntimePreferences(model, overlay, effective, mode) != nil {
+				return nil, nil, errs.ErrConflict
+			}
 			modelEfforts := append([]string{}, capability.ReasoningEfforts...)
 			if len(runtimecontract.DiagnoseConfigOverlay(overlay, modelEfforts)) != 0 {
 				return nil, nil, errs.ErrConflict
@@ -240,7 +266,7 @@ func readRuntimeCatalogConfiguration(ctx context.Context, tx pgx.Tx, organizatio
 	var config entity.AgentRuntimeConfiguration
 	var raw []byte
 	var overlay string
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadConfiguration, organizationID, agentRef, configID).Scan(&config.Provider, &config.Model, &raw, &overlay); err != nil {
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogReadConfiguration, organizationID, agentRef, configID).Scan(&config.Provider, &config.Model, &config.RuntimeProfileRef, &raw, &overlay); err != nil {
 		return config, "", errs.ErrUnavailable
 	}
 	if decodeStrict(raw, &config.ProviderPolicy.AccountCandidates) != nil {

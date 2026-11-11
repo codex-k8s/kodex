@@ -158,10 +158,8 @@ func (config ModelProviderConfiguration) Model(id string) (ModelProviderModel, b
 	return ModelProviderModel{}, false
 }
 
-// validateModelProvider closes alternate-engine inputs unless their exact descriptor and model match.
-// An absent descriptor preserves the legacy validation path; it never enables OpenCode implicitly.
-// validateModelProvider отклоняет alternate engine без exact descriptor и model.
-// Отсутствующий descriptor сохраняет legacy проверку и не включает OpenCode неявно.
+// validateModelProvider requires the sole native engine, exact route/model and qualified preferences before execution.
+// validateModelProvider требует единственный native engine, точный route/model и проверенные настройки до исполнения.
 func (input RunnerInput) validateModelProvider() error {
 	if input.NativeSession != nil && (input.Provider != "opencode" || input.NativeSession.ValidateWorkspace(input.WorkspaceStorage) != nil) {
 		return ErrModelProviderConfiguration
@@ -173,8 +171,8 @@ func (input RunnerInput) validateModelProvider() error {
 	if input.Provider != "opencode" || input.ModelProvider.Validate() != nil {
 		return ErrModelProviderConfiguration
 	}
-	if len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace || input.ConfigOverlay != "" ||
-		input.EffectiveReasoningEffort != "" || input.ReasoningMode != ReasoningUnsupported {
+	if len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace ||
+		input.ModelProvider.ValidateRuntimePreferences(input.Model, input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return ErrModelProviderConfiguration
 	}
 	if _, err := input.ModelProvider.ResolveModelCache(input.Model); err != nil {
@@ -329,4 +327,36 @@ func (config ModelProviderConfiguration) Clone() (ModelProviderConfiguration, er
 		return ModelProviderConfiguration{}, ErrModelProviderConfiguration
 	}
 	return DecodeModelProviderConfiguration(raw)
+}
+
+// ValidateOpenCodeOverlay accepts only preferences consumed by the qualified native adapter, rejecting retired shell, search, personality and history switches.
+// ValidateOpenCodeOverlay принимает только настройки проверенного native adapter, отклоняя удалённые переключатели shell, поиска, стиля и истории.
+func ValidateOpenCodeOverlay(raw string) error {
+	overlay, err := ParseConfigOverlay(raw)
+	if err != nil || overlay.WebSearchMode != "" || overlay.Personality != "" || overlay.AllowLoginShell != nil || overlay.History.Persistence != "" {
+		return ErrModelProviderConfiguration
+	}
+	return nil
+}
+
+// ValidateRuntimePreferences binds an owner-selected effort to an exact model and qualified API. Catalog eligibility and fresh authorization remain separate owner checks; this method never infers remote model capabilities.
+// ValidateRuntimePreferences связывает выбранную владельцем степень рассуждений с точной моделью и проверенным API. Каталог и свежие полномочия проверяет владелец отдельно; возможности удалённой модели не выводятся из этого метода.
+func (config ModelProviderConfiguration) ValidateRuntimePreferences(model, overlay, effort, mode string) error {
+	if config.Validate() != nil || ValidateOpenCodeOverlay(overlay) != nil || ValidateEffectiveReasoningEffort(overlay, effort, mode) != nil {
+		return ErrModelProviderConfiguration
+	}
+	if _, found := config.Model(model); !found {
+		return ErrModelProviderConfiguration
+	}
+	if effort == "" {
+		return nil
+	}
+	if config.API == ModelAPIMessages {
+		return ErrModelProviderConfiguration
+	}
+	switch effort {
+	case "low", "medium", "high":
+		return nil
+	}
+	return ErrModelProviderConfiguration
 }

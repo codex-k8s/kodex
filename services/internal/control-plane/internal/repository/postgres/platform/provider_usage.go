@@ -379,7 +379,7 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 			return blocked("RUNTIME_CONFIGURATION_MISSING", "REPUBLISH_CONFIGURATION")
 		}
 		provider, model = context.Agent.Provider, context.Agent.Model
-		if strings.HasPrefix(provider, "opencode-") && (context.Agent.Overlay != "" || context.Agent.NativeToolCount < 0 || context.Agent.NativeToolCount > 0 && !context.Agent.ManagedWorkspaceTools) {
+		if strings.HasPrefix(provider, "opencode-") && (runtimecontract.ValidateOpenCodeOverlay(context.Agent.Overlay) != nil || context.Agent.NativeToolCount < 0 || context.Agent.NativeToolCount > 0 && !context.Agent.ManagedWorkspaceTools) {
 			return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
 		}
 		for _, candidate := range context.Agent.Candidates {
@@ -438,6 +438,19 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 		}
 		if len(runtimecontract.DiagnoseConfigOverlay(context.Agent.Overlay, capability.ReasoningEfforts)) != 0 {
 			return blocked("EFFORT_UNSUPPORTED", "CHANGE_EFFORT")
+		}
+		if profile := context.ModelProvider; profile != nil && profile.DefinitionKey() == provider {
+			effective := effort
+			if effective == "" {
+				effective = capability.DefaultReasoningEffort
+			}
+			mode := runtimecontract.ReasoningSupported
+			if effective == "" {
+				mode = runtimecontract.ReasoningUnsupported
+			}
+			if profile.ValidateRuntimePreferences(model, context.Agent.Overlay, effective, mode) != nil {
+				return blocked("EFFORT_UNSUPPORTED", "CHANGE_EFFORT")
+			}
 		}
 		return providerDimension("READY", "AVAILABLE", "NONE")
 	}

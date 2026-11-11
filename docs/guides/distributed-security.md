@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.47
-updated: 2026-11-08
+version: 1.7.48
+updated: 2026-11-11
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -91,6 +91,14 @@ same-schema contract: он сохраняет все пять прежних boo
 проверяет original cluster/namespace, fingerprints и native catalog, но не
 создаёт новую миграцию. Новый origin не заменяет forward receipt; закрытые
 режимы и порядок описаны в [#2067](../operations/image-only-upgrade-2067.md).
+
+Полная замена SQL eligibility-функции при развитии policy обязана сохранять
+все действующие owner, immutable revision и workflow frontier ограничения.
+Проверяется фактическая цепочка миграций, включая SYSTEM/PROJECT и
+SERVER_DAG consumers; успех отдельной миграции либо ослабление только scan state
+этого не доказывает. Metadata verifier должен отвергать прежнее тело функции
+после смены обязательной boundary. Ordinary file admission не расширяет допуск
+skills, executable bundles и структурированных workflow evidence.
 
 ## Bootstrap consumers и опциональная observability
 

@@ -376,12 +376,19 @@ func TestBootstrapComponent(t *testing.T) {
 		t.Fatalf("open disposable PostgreSQL: %v", err)
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
+	repository, err := New(pool, "opencode-synthetic", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
 	configureComponentArtifactScanner(t, repository)
 	configureComponentProviderAndRoleImages(t, repository)
+	profile := *repository.modelProvider
+	for _, model := range []string{"non-reasoning", "secondary-only"} {
+		profile.Models = append(profile.Models, runtimecontract.ModelProviderModel{ID: model, ContextWindowTokens: 32768, MaximumOutputTokens: 1024})
+	}
+	if err := repository.ConfigureModelProvider(profile, "gpt-5"); err != nil {
+		t.Fatal("configure explicit component models", err)
+	}
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := repository.Bootstrap(ctx); err != nil {
 			t.Fatalf("bootstrap attempt %d: %v", attempt+1, err)
@@ -477,8 +484,8 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("skill bundle draft owner lifecycle", func(t *testing.T) {
 		testSkillBundleDraft(t, ctx, repository)
 	})
-	t.Run("provider credential legacy repair creates an immutable next revision", func(t *testing.T) {
-		testProviderCredentialLegacyRepair(t, ctx, repository, pool)
+	t.Run("provider credential identity rebind creates an immutable next revision", func(t *testing.T) {
+		testProviderCredentialIdentityRebind(t, ctx, repository, pool)
 		t.Run("historical bootstrap preserves forward current", func(t *testing.T) {
 			testProviderBootstrapHistory(t, ctx, repository, pool)
 		})
@@ -877,15 +884,15 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	if err != nil || globalFoundTotal != 1 || len(globalFound) != 1 || globalFound[0].EntityRef != agent.Ref {
 		t.Fatalf("search global VFS agents: nodes=%#v total=%d err=%v", globalFound, globalFoundTotal, err)
 	}
-	models, modelTotal, modelNext, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2}})
+	models, modelTotal, modelNext, err := service.ListModelCapabilities(ctx, owner, "opencode-synthetic", "", query.Filter{Page: query.Page{Size: 2}})
 	if err != nil || len(models) != 2 || modelTotal != 3 || modelNext == "" || models[0].ID != "future-model" || models[0].DefaultReasoningEffort != "adaptive" {
 		t.Fatalf("list model capabilities: models=%#v total=%d next=%q err=%v", models, modelTotal, modelNext, err)
 	}
-	secondModels, secondTotal, secondNext, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2, Token: modelNext}})
+	secondModels, secondTotal, secondNext, err := service.ListModelCapabilities(ctx, owner, "opencode-synthetic", "", query.Filter{Page: query.Page{Size: 2, Token: modelNext}})
 	if err != nil || len(secondModels) != 1 || secondTotal != modelTotal || secondNext == modelNext {
 		t.Fatalf("continue model capabilities: models=%#v total=%d next=%q err=%v", secondModels, secondTotal, secondNext, err)
 	}
-	if _, _, _, err := service.ListModelCapabilities(ctx, owner, "openai-codex", "", query.Filter{Query: "gpt", Page: query.Page{Size: 2, Token: modelNext}}); !errors.Is(err, domainerrs.ErrInvalid) {
+	if _, _, _, err := service.ListModelCapabilities(ctx, owner, "opencode-synthetic", "", query.Filter{Query: "gpt", Page: query.Page{Size: 2, Token: modelNext}}); !errors.Is(err, domainerrs.ErrInvalid) {
 		t.Fatalf("model catalog accepted a cursor from another filter: %v", err)
 	}
 	configuration, history, historyTotal, next, err := service.ListManagedConfigurationHistory(ctx, owner, created.ManagedConfiguration.Ref, query.Page{Size: 2})
@@ -909,17 +916,7 @@ func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, reposi
 	}
 	testManagedPromptHistoryRedaction(t, ctx, repository, service, owner, projectResult.Project.Ref, created.ManagedConfiguration.Ref)
 	testManagedGitOwnership(t, ctx, service, pool, owner, *correctedRebound.ManagedConfiguration, effective.Ref)
-	var sttProviderAccountRef string
-	if err := pool.QueryRow(ctx, `
-		SELECT account.ref
-		FROM control_plane.provider_accounts account
-		WHERE account.organization_id = $1::uuid
-		  AND account.state = 'AUTHORIZED' AND account.enabled
-		  AND account.current_credential_revision_id IS NOT NULL
-		ORDER BY account.ref LIMIT 1
-	`, ownerScope.organizationID).Scan(&sttProviderAccountRef); err != nil {
-		t.Fatalf("select eligible system STT provider account: %v", err)
-	}
+	sttProviderAccountRef := createSTTProviderFixture(t, ctx, repository, ownerScope.organizationID, owner.ActorID)
 	sttContent := fmt.Sprintf(`{"name":"System STT","stt":{"enabled":true,"providerAccountRef":%q,"model":"gpt-transcribe","language":"ru","permissionKey":"platform.stt.use","parameters":{"keywords":["Kodex"],"prompt":"Names","temperature":0.2,"chunkingStrategy":"auto"}}}`, sttProviderAccountRef)
 	sttCreated, err := service.Execute(ctx, command.Command{Kind: command.CreateSystemSTTDraft, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "managed-system-stt-create"},
@@ -1790,7 +1787,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		  ON fallback.organization_id = runtime.organization_id
 		 AND fallback.ref = 'pacc_component_warm_failover'
 		WHERE runtime.organization_id = session.organization_id
-		  AND account.stable_key = 'default-openai-codex'
+		  AND account.stable_key = 'default-opencode-synthetic'
 	`).Scan(
 		&currentSessionID,
 		&currentSessionRef,
@@ -1827,7 +1824,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 	const workloadInstance = "runtime-warm-failover"
 	failedOver, desired, required, err := service.ReconcileWarmRuntime(ctx, reconcileWorker, workloadInstance)
 	if err != nil || !required {
-		t.Fatalf("reconcile rejected warm provider: assistant=%#v required=%v err=%v", failedOver, required, err)
+		t.Fatalf("reconcile rejected warm provider: stage=%s required=%v err=%v", domainerrs.WarmRuntimeStage(err), required, err)
 	}
 	selectedFallback := stringMap(desired, "providerAccountRef")
 	if runtimeRevisionMapInt64(desired, "promptRuntimeContractVersion") != 1 {
@@ -1881,7 +1878,7 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 			JOIN control_plane.agent_runtime_config_versions config ON config.id = agent.current_runtime_config_id
 			WHERE agent.ref = $1
 		), eligible AS (
-			SELECT account.ref, COALESCE(auth_attempt.method, '') AS authorization_method
+			SELECT account.ref, COALESCE(auth_attempt.method, 'API_KEY') AS authorization_method
 			FROM target
 			JOIN control_plane.provider_accounts account
 			  ON account.organization_id = target.organization_id
@@ -1897,15 +1894,11 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 				LIMIT 1
 			) auth_attempt ON true
 			WHERE account.current_credential_revision_id IS NOT NULL
-			  AND account.state IN ('AUTHORIZED', 'REAUTHORIZATION_REQUIRED')
+			  AND account.enabled AND account.state = 'AUTHORIZED'
 		)
 		SELECT candidate.ref
 		FROM eligible candidate
-		WHERE candidate.authorization_method = 'DEVICE_CODE'
-		   OR NOT EXISTS (
-			   SELECT 1 FROM eligible preferred
-			   WHERE preferred.authorization_method = 'DEVICE_CODE'
-		   )
+		WHERE candidate.authorization_method = 'API_KEY'
 		ORDER BY candidate.ref
 	`, assistant.Ref)
 	if err != nil {
@@ -1924,17 +1917,17 @@ func testSystemAssistantWarmRuntimeProviderFailover(
 		t.Fatalf("read expected system assistant provider accounts: %v", err)
 	}
 	for index := range expectedCandidates {
-		catalog, readErr := service.ListModelCatalog(ctx, owner, "openai-codex", expectedCandidates[index].AccountRef, query.Filter{})
+		catalog, readErr := service.ListModelCatalog(ctx, owner, "opencode-synthetic", expectedCandidates[index].AccountRef, query.Filter{})
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
-		expectedCandidates[index].ProviderDefinitionKey = "openai-codex"
+		expectedCandidates[index].ProviderDefinitionKey = "opencode-synthetic"
 		expectedCandidates[index].CatalogRevision, expectedCandidates[index].CatalogDigest = catalog.Revision, catalog.Digest
 		for _, model := range catalog.Models {
 			if model.ID == configuration.Configuration.Model {
 				expectedCandidates[index].DefaultReasoningEffort = model.DefaultReasoningEffort
 				expectedCandidates[index].ModelCapabilityDigest = modelcatalog.CapabilityDigest(
-					"openai-codex", expectedCandidates[index].AccountRef, model.ID,
+					"opencode-synthetic", expectedCandidates[index].AccountRef, model.ID,
 					model.ReasoningEfforts, model.DefaultReasoningEffort, model.IsDefault,
 				)
 			}
@@ -2245,7 +2238,7 @@ func testProviderAccountApplicationAccess(t *testing.T, ctx context.Context, rep
 		Kind: command.CreateProviderAccount, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-account-owner-create"},
 		Payload: command.ProviderAccountInput{
-			DefinitionKey: "openai-codex", Name: "Provider account owner API key",
+			DefinitionKey: "opencode-synthetic", Name: "Provider account owner API key",
 		},
 	})
 	if err != nil || created.ProviderAccount == nil || created.ProviderAccount.State != "PENDING_AUTHORIZATION" {
@@ -2501,7 +2494,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 		JOIN control_plane.provider_accounts secondary_account
 		  ON secondary_account.organization_id = primary_account.organization_id
 		 AND secondary_account.stable_key = 'component-secondary'
-		WHERE primary_account.stable_key = 'default-openai-codex'
+		WHERE primary_account.stable_key = 'default-opencode-synthetic'
 	`).Scan(&primaryAccountID, &primaryAccountRef, &primaryCredentialID, &secondaryAccountRef); err != nil {
 		t.Fatalf("read provider affinity accounts: %v", err)
 	}
@@ -2775,12 +2768,16 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	}
 	completeClaimedExecution(t, ctx, service, worker, newDefault.RuntimeItems[0], "provider-affinity-new-default", false)
 	publishFixedPolicy("provider-affinity-non-reasoning-model", primaryAccountRef, "non-reasoning")
-	next, err = service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-non-reasoning-turn"},
-		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: next.Run.Ref, Task: "Use a model without reasoning support."},
-	})
-	if err != nil || next.Run == nil {
-		t.Fatalf("non-reasoning turn: %v", err)
+	if _, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-model-change-blocked"},
+		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: next.Run.Ref, Task: "Reject incompatible native model continuation."}}); !errors.Is(err, domainerrs.ErrConflict) {
+		t.Fatal("incompatible native model continuation was accepted", err)
+	}
+	next, err = service.Execute(ctx, command.Command{Kind: command.LaunchRun, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-non-reasoning-new-session"},
+		Payload:  command.LaunchRunInput{ProjectRef: project.Project.Ref, Title: "Explicit new model session", Task: "Use a model without reasoning support in a new session.", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}})
+	if err != nil || next.Run == nil || next.Run.SessionRef == launched.Run.SessionRef {
+		t.Fatal("explicit new model session failed", err)
 	}
 	unsupported, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-non-reasoning-claim"},
@@ -2799,7 +2796,7 @@ func testSessionProviderAffinityAfterPolicyMutation(
 	publishFixedPolicy("provider-affinity-secondary-only-model", secondaryAccountRef, "secondary-only")
 	if _, err := service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "provider-affinity-unsupported-new-model"},
-		Payload:  command.SessionTurnInput{SessionRef: launched.Run.SessionRef, RunRef: next.Run.Ref, Task: "Reject model absent from the selected Session account."},
+		Payload:  command.SessionTurnInput{SessionRef: next.Run.SessionRef, RunRef: next.Run.Ref, Task: "Reject model absent from the selected Session account."},
 	}); !errors.Is(err, domainerrs.ErrConflict) {
 		t.Fatalf("unsupported model switched Session account: %v", err)
 	}
@@ -3583,20 +3580,20 @@ func testInstructionDraftSave(t *testing.T, ctx context.Context, repository *Rep
 	testInstructionBindingLifecycle(t, ctx, repository, service, owner, agent.Ref)
 }
 
-// testProviderCredentialLegacyRepair reads the initial first credential descriptor, changes only
+// testProviderCredentialIdentityRebind reads the initial first credential descriptor, changes only
 // configured secret identity/resource version with the same content digest and requires Bootstrap
 // to append revision two and increment account version once. Repetition must be idempotent; a
 // different content digest must fail without changing the stored descriptor, counts or account
 // version. The successful path explicitly restores the repaired configuration at the end. All
 // inputs are synthetic metadata; no secret bytes are read, copied or rotated.
-// testProviderCredentialLegacyRepair читает исходный первый credential descriptor, меняет только
+// testProviderCredentialIdentityRebind читает исходный первый credential descriptor, меняет только
 // настроенные identity/resource version секрета при том же digest и требует от Bootstrap
 // добавления второй revision с однократным увеличением account version. Повтор должен быть
 // идемпотентным; иной digest содержимого должен отклоняться без изменения сохранённого descriptor,
 // счётчиков или account version. Успешный путь явно восстанавливает исправленную конфигурацию в
 // конце. Все inputs являются синтетическими метаданными; байты секретов не читаются, не копируются
 // и не ротируются.
-func testProviderCredentialLegacyRepair(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+func testProviderCredentialIdentityRebind(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
 	t.Helper()
 	readback := func() (revision, accountVersion, count int64, uid, resourceVersion, digest string) {
 		t.Helper()
@@ -5969,8 +5966,13 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("create delegation project: result=%#v err=%v", project.Project, err)
 	}
 	runtimes, err := service.ListRuntimes(ctx, owner)
-	if err != nil || len(runtimes) != 1 || !runtimes[0].Ready || runtimes[0].Ref != defaultRuntimeKey {
+	if err != nil || len(runtimes) != 4 {
 		t.Fatalf("list enabled runtime catalog: runtimes=%#v err=%v", runtimes, err)
+	}
+	for _, runtime := range runtimes {
+		if !runtime.Ready || runtime.Provider != "opencode-synthetic" {
+			t.Fatal("runtime catalog exposed an unconfigured provider")
+		}
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAgent, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "delegation-unknown-runtime"}, Payload: command.AgentInput{
@@ -6204,26 +6206,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 	if stringMap(continuationLease, "sessionRef") != stringMap(coordinatorLease, "sessionRef") {
 		t.Fatalf("callback continuation left the parent session: continuation=%q parent=%q", stringMap(continuationLease, "sessionRef"), stringMap(coordinatorLease, "sessionRef"))
 	}
-	callbackContext, ok := continuationLease["sessionContext"].([]map[string]string)
-	if !ok {
-		t.Fatalf("continuation lost the authoritative session context: %#v", continuationLease["sessionContext"])
-	}
-	callbackTurns := 0
-	longCallbackTurns := 0
-	for _, message := range callbackContext {
-		if message["role"] != "USER" && message["role"] != "ASSISTANT" {
-			t.Fatalf("continuation exposed a non-canonical session role: %#v", callbackContext)
-		}
-		if message["content"] == "Customer response prepared" {
-			callbackTurns++
-		}
-		if message["content"] == longChildSummary {
-			longCallbackTurns++
-		}
-	}
-	if callbackTurns != 1 || longCallbackTurns != 1 {
-		t.Fatalf("expected two exactly-once callback turns including a long result, got normal=%d long=%d", callbackTurns, longCallbackTurns)
-	}
+	assertNativeCallbackContinuation(t, ctx, repository, coordinatorLease, continuationLease, "Customer response prepared", longChildSummary)
 	if targets, _ := continuationLease["delegationTargets"].([]map[string]string); len(targets) != 0 {
 		t.Fatalf("completed workflow steps remained delegatable: %#v", targets)
 	}
@@ -6322,7 +6305,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("fail parallel child: run=%#v err=%v", failedChild.Run, err)
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(failedCoordinatorLease),
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(failedCoordinatorLease, "leaseRef"), Fence: stringMap(failedCoordinatorLease, "fence"),
 			Generation: failedCoordinatorLease["generation"].(int64), Success: true,
 			ResultSummary: "Late coordinator completion must be rejected", Usage: turnUsageFixture(),
@@ -6347,7 +6330,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("terminal root did not cancel sibling node: graph=%#v", failedChild.Graph)
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lateGatedLease),
+		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lateGatedLease, "leaseRef"), Fence: stringMap(lateGatedLease, "fence"),
 			Generation: lateGatedLease["generation"].(int64), Success: true,
 			ResultSummary: "Late completion must be rejected", Usage: turnUsageFixture(),
@@ -6645,7 +6628,7 @@ func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, r
 	if err := pool.QueryRow(ctx, `
 		SELECT id::text, organization_id::text, ref, version
 		FROM control_plane.provider_accounts
-		WHERE stable_key = 'default-openai-codex'
+		WHERE stable_key = 'default-opencode-synthetic'
 	`).Scan(&defaultAccountID, &defaultOrganizationID, &defaultAccountRef, &defaultAccountVersion); err != nil {
 		t.Fatalf("read default provider account for cleanup guards: %v", err)
 	}
@@ -6752,7 +6735,7 @@ func testProviderCredentialCleanupLifecycle(t *testing.T, ctx context.Context, r
 		       'component-cleanup', 'Component cleanup account',
 		       'REAUTHORIZATION_REQUIRED', false, source.created_by
 		FROM control_plane.provider_accounts source
-		WHERE source.stable_key = 'default-openai-codex'
+		WHERE source.stable_key = 'default-opencode-synthetic'
 		RETURNING id::text, organization_id::text
 	`, accountRef).Scan(&accountID, &organizationID); err != nil {
 		t.Fatalf("create provider cleanup account: %v", err)

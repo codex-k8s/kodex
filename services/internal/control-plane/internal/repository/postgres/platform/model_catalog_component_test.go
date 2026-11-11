@@ -24,28 +24,28 @@ func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repo
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", query.Filter{Page: query.Page{Size: 2}})
+	first, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", query.Filter{Page: query.Page{Size: 2}})
 	if err != nil || first.Total != 3 || first.NextPageToken == "" || len(first.NextPageToken) > 512 || len(first.Digest) != 64 || first.Revision != "mcat_"+first.Digest {
 		t.Fatalf("first catalog: %v", err)
 	}
 	filter := query.Filter{Page: query.Page{Size: 2, Token: first.NextPageToken}, ExpectedCatalogRevision: first.Revision, ExpectedCatalogDigest: first.Digest}
-	second, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter)
+	second, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", filter)
 	if err != nil || second.Digest != first.Digest || second.Revision != first.Revision || second.Models[0].ID == first.Models[0].ID {
 		t.Fatalf("version-bound page: %v", err)
 	}
-	empty, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", query.Filter{Query: "no-such-model"})
+	empty, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", query.Filter{Query: "no-such-model"})
 	if err != nil || empty.Total != 0 || empty.Digest != first.Digest {
 		t.Fatalf("empty filtered page: %v", err)
 	}
 	filter.ExpectedCatalogDigest = "wrong"
-	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); !errors.Is(err, errs.ErrInvalid) {
+	if _, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", filter); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("mismatched pin: %v", err)
 	}
-	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.provider_definitions SET version=version+1 WHERE stable_key='openai-codex'`); err != nil {
+	if _, err := repository.pool.Exec(ctx, `UPDATE control_plane.provider_definitions SET version=version+1 WHERE stable_key='opencode-synthetic'`); err != nil {
 		t.Fatal(err)
 	}
 	filter.ExpectedCatalogDigest = first.Digest
-	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); err != nil {
+	if _, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", filter); err != nil {
 		t.Fatalf("metadata-only update changed capabilities pin: %v", err)
 	}
 	if _, err := repository.pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, first.Models[0].EligibleProviderAccountRefs[0]); err != nil {
@@ -54,20 +54,20 @@ func testModelCatalogVersion(t *testing.T, ctx context.Context, repository *Repo
 	seedObservedCatalogFixture(t, ctx, repository, func(observation *platformrepo.ProviderModelCatalogObservation) {
 		observation.Models[0].DefaultReasoningEffort = "low"
 	})
-	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); !errors.Is(err, errs.ErrInvalid) {
+	if _, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", filter); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("stale source pin: %v", err)
 	}
 	filter.ExpectedCatalogRevision, filter.ExpectedCatalogDigest = "", ""
-	if _, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", filter); !errors.Is(err, errs.ErrInvalid) {
+	if _, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", filter); !errors.Is(err, errs.ErrInvalid) {
 		t.Fatalf("stale cursor: %v", err)
 	}
-	latest, err := service.ListModelCatalog(ctx, owner, "openai-codex", "", query.Filter{})
+	latest, err := service.ListModelCatalog(ctx, owner, "opencode-synthetic", "", query.Filter{})
 	if err != nil || latest.Digest == first.Digest {
 		t.Fatalf("new source revision: %v", err)
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if _, err := service.ListModelCatalog(canceled, owner, "openai-codex", "", query.Filter{}); err == nil {
+	if _, err := service.ListModelCatalog(canceled, owner, "opencode-synthetic", "", query.Filter{}); err == nil {
 		t.Fatal("cancellation accepted")
 	}
 	if _, err := repository.pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, owner.AuthorityTenant, first.Models[0].EligibleProviderAccountRefs[0]); err != nil {
