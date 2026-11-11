@@ -320,6 +320,7 @@ class State:
     def __init__(self, context):
         self.context = context
         self.routes = {}
+        self.resource_hint = ''
 
     def call(self, args, value=None):
         result = subprocess.run(['kubectl', '--context', self.context, '--request-timeout=15s', *args],
@@ -353,6 +354,9 @@ class State:
         return prefix + suffix + '/' + plural + '/' + metadata['name']
 
     def get(self, resource):
+        # Диагностика содержит только API identity, никогда spec/data или ответ API.
+        hint = key(resource)
+        self.resource_hint = hint if re.fullmatch(r'[A-Za-z0-9_.:/|\-]{1,400}', hint) else ''
         if (resource['apiVersion'], resource['kind']) not in self.routes:
             return None
         raw = self.call(['get', '-f', '-', '--ignore-not-found', '-o', 'json'], descriptor(resource))
@@ -614,7 +618,9 @@ def main():
             Path(args.inventory).write_text(json.dumps(record))
     except Rejected as error:
         code = str(error) if re.fullmatch(r'[A-Z][A-Z0-9_]{0,95}', str(error)) else 'REJECTED'
-        raise SystemExit('Portable state operation rejected: ' + code + '; readback required') from None
+        hint = getattr(locals().get('state'), 'resource_hint', '')
+        suffix = '; resource=' + hint if hint else ''
+        raise SystemExit('Portable state operation rejected: ' + code + suffix + '; readback required') from None
     except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
         raise SystemExit('Portable state operation rejected; readback required') from None
 
