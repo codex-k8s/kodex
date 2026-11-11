@@ -168,6 +168,15 @@ Apply получает те же client/config/context, `--inventory`,
 `--inventory-sha256`, `--plan`, `--plan-sha256`, `--journal` и одну `--phase`.
 Без `--execute` выполняется только preflight. Фазы идут в порядке `admission`,
 `producers`, `workloads`, `pods`, `claims`, `objects`, `namespaces`.
+При DiskPressure перед `claims` доступна дополнительная фаза `storage`: после
+отсутствия workload/Pod и положительного CRI join она удаляет только exact
+local-path каталоги исходных PV. UID/claim/affinity, node/container ID,
+canonical path, device/inode и отсутствие вложенных mount points проверяются
+заново. Внутренние symlink не обходятся; корневой symlink отклоняется. PVC/PV
+ещё сохраняют доказательство принадлежности, а после удаления данных проходят
+обычную фазу `claims` и штатный reclaimer. Каждый erase имеет отдельный fsync intent
+и readback отсутствия каталога. Эта необратимая фаза разрешена только при полном
+уничтожении старых данных, а не при обновлении с сохранением сессий.
 Сертификаты удаляются в `objects`: недоступный общий webhook не должен блокировать
 независимую остановку workloads и освобождение диска Kodex. Общий webhook при этом
 не отключается, его failure policy и finalizers не изменяются.
@@ -190,7 +199,7 @@ preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delet
 Перед namespace дополнительно требуется отсутствие PV и физических каталогов
 всех исходных томов. Недоступный узел, зависший finalizer или reclaimer при
 DiskPressure оставляет фазу незавершённой; отсутствие Pod в API не заменяет
-положительный writer join. Этот путь не удаляет host files, image cache и внешние
+положительный writer join. Этот путь не удаляет файлы хоста вне этих PV, image cache и внешние
 S3/БД: для них нужны отдельные доказательства ownership и адресные операции.
 Возврат после согласованного уничтожения данных — новая совместимая установка;
 legacy backup/reader и выдуманный goose down не применяются.

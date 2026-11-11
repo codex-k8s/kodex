@@ -17,6 +17,7 @@ import urllib.request
 
 from installation_cleanup import address, digest, plan_inventory, read_private
 from installation_inventory import Client, decode, inventory, metadata
+from installation_storage import erase_local_data
 
 ERROR = "Installation apply rejected: target, ownership, precondition or phase readback failed"
 PHASES = {
@@ -24,6 +25,7 @@ PHASES = {
     "producers": {"prometheuses", "alertmanagers", "bundles", "cronjobs"},
     "workloads": {"deployments", "daemonsets", "statefulsets", "replicasets", "jobs"},
     "pods": {"pods"},
+    "storage": set(),
     "claims": {"persistentvolumeclaims"},
     "objects": set(),
     "namespaces": {"namespaces"},
@@ -229,7 +231,7 @@ def wait_absent(client, rows, journal, deadline):
             time.sleep(2)
 
 
-def verify_local_writers(plan, storage_absent=False, current_claims=None):
+def verify_local_writers(plan, storage_absent=False, current_claims=None, erased_claims=()):
     """Подтвердить завершение containers через exact k3d runtime; API absence само по себе не доказывает join."""
     physical = plan.get("physicalStorage")
     if not physical or physical.get("schema") != "kodex.k3d-local-storage/v1":
@@ -240,6 +242,7 @@ def verify_local_writers(plan, storage_absent=False, current_claims=None):
     if set(physical["containers"]) != nodes or not plan["context"].startswith("k3d-"):
         raise ValueError(ERROR)
     namespaces = {entry["name"] for entry in plan["namespaces"]}
+    pod_uids = {entry["identity"]["uid"] for entry in plan["deleteCandidates"] if entry["identity"]["resource"] == "pods"}
     for name, identifier in physical["containers"].items():
         if not re.fullmatch(r"[a-f0-9]{64}", identifier):
             raise ValueError(ERROR)
@@ -256,7 +259,8 @@ def verify_local_writers(plan, storage_absent=False, current_claims=None):
         if not isinstance(containers, list):
             raise ValueError(ERROR)
         for container in containers:
-            if (container.get("labels", {}).get("io.kubernetes.pod.namespace") in namespaces
+            if ((container.get("labels", {}).get("io.kubernetes.pod.namespace") in namespaces
+                 or container.get("labels", {}).get("io.kubernetes.pod.uid") in pod_uids)
                     and container.get("state") != "CONTAINER_EXITED"):
                 raise ValueError(ERROR)
     if storage_absent:
@@ -271,6 +275,10 @@ def verify_local_writers(plan, storage_absent=False, current_claims=None):
         for claim_uid in current_claims:
             volume = by_claim[claim_uid]
             base = ["docker", "exec", volume["containerID"]]
+            if claim_uid in erased_claims:
+                for predicate in ("-e", "-L"):
+                    subprocess.run(base + ["test", "!", predicate, volume["path"]], capture_output=True, timeout=20, check=True)
+                continue
             result = subprocess.run(base + ["readlink", "-f", volume["path"]], capture_output=True, timeout=20, check=True)
             if result.stdout.decode().strip() != volume["path"]:
                 raise ValueError(ERROR)
@@ -300,9 +308,9 @@ def main():
     if not re.fullmatch(r"[a-f0-9]{40}", executor) or source != executor:
         raise ValueError(ERROR)
     subprocess.run(["git", "merge-base", "--is-ancestor", plan["sourceSHA"], executor], capture_output=True, check=True)
-    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py"],
+    subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py", "tools/dev/installation_storage.py"],
                    capture_output=True, check=True)
-    subprocess.run(["git", "ls-files", "--error-unmatch", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py"],
+    subprocess.run(["git", "ls-files", "--error-unmatch", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py", "tools/dev/installation_storage.py"],
                    capture_output=True, check=True)
     journal = Journal(args.journal, plan["digest"])
     try:
@@ -311,7 +319,7 @@ def main():
             current = inventory(client, args.context)
             fresh = current_plan(plan, baseline, current, retired_uids(journal))
             rows = select_phase(fresh, current, args.phase)
-            if args.phase in {"claims", "objects", "namespaces"}:
+            if args.phase in {"storage", "claims", "objects", "namespaces"}:
                 expected_volumes = {volume["identity"]["uid"]: volume for volume in plan["volumes"]}
                 target_namespaces = {item["name"] for item in plan["namespaces"]}
                 for volume in current["volumes"]:
@@ -320,11 +328,16 @@ def main():
                     previous = expected_volumes.get(volume["identity"]["uid"])
                     if not previous or any(volume[key] != previous[key] for key in ("claim", "localPath", "csiDriver", "nodeAffinity", "reclaimPolicy")):
                         raise ValueError(ERROR)
+                erased = {entry["volumeUID"] for entry in journal.entries if entry["event"] == "STORAGE_ABSENT"}
+                erased_claims = {volume["claim"]["uid"] for uid, volume in expected_volumes.items() if uid in erased}
                 verify_local_writers(plan, storage_absent=args.phase == "namespaces",
-                                     current_claims={item["uid"] for item in rows} if args.phase == "claims" else None)
+                                     current_claims={item["uid"] for item in rows} if args.phase == "claims" else None,
+                                     erased_claims=erased_claims)
             journal.append({"event": "PREFLIGHT", "phase": args.phase, "snapshotDigest": digest(current), "count": len(rows), "executorSHA": executor})
             if args.execute:
                 deadline = time.monotonic() + 600
+                if args.phase == "storage":
+                    erase_local_data(plan, current, journal, deadline)
                 for item in rows:
                     if time.monotonic() >= deadline:
                         raise ValueError(ERROR)

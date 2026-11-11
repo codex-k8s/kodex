@@ -20,6 +20,12 @@ Secret/PVC самим приложением не доказывает искл�
 нужен положительный runtime join на точном узле. Недоступность узла не разрешает
 force-delete или global prune. Исполняемый локальный путь и ограничения:
 [чистая установка](../runbooks/fresh-install.md).
+При согласованном уничтожении local-path данных недостаточно строкового префикса:
+проверяются claim UID, canonical path, device/inode, exact node/container и
+отсутствие вложенных mount points. Rejoin после частичного удаления сохраняет
+тот же объект; новый inode не наследует разрешение. Общий недоступный webhook
+не отключается ради cleanup: независимое завершение writers и освобождение
+принадлежащего установке диска выполняются отдельно от зависимых API deletions.
 
 Authority proof revision принадлежит устойчивому server-owned allocator и не
 конкурирует за одну строку с platform event sequence. Разделение storage не
