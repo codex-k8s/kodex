@@ -27,6 +27,43 @@ def plan(value):
 
 
 class CleanupTests(unittest.TestCase):
+    def test_orphaned_ingress_certificate_requires_both_recorded_deletions_and_exact_references(self):
+        value = fixture()
+        ingress = item("ingresses", "web", managers=["kodex-install"])
+        previous = item("certificates", "web-tls", uid="old-cert", managers=["kodex-install"])
+        replacement = item("certificates", "web-tls", uid="new-cert", managers=["cert-manager-ingress-shim"])
+        secret = {"namespace": "kodex-system", "resource": "secrets", "name": "web-tls", "relation": "PRODUCES"}
+        issuer = {"namespace": "", "resource": "clusterissuers", "name": "fixture", "relation": "CONSUMES"}
+        value["objects"] = [ingress, previous, replacement]
+        value["links"] = [{"identity": ingress, "references": [{**secret, "relation": "CONSUMES"}]},
+                          {"identity": previous, "references": [secret, issuer]},
+                          {"identity": replacement, "references": copy.deepcopy([secret, issuer])}]
+        for retired in (set(), {ingress["uid"]}, {previous["uid"]}):
+            result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40, retired)
+            self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+        retired = {ingress["uid"], previous["uid"]}
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40, retired)
+        self.assertEqual(result["status"], "OWNERSHIP_CLASSIFIED")
+        second = item("ingresses", "auth", managers=["kodex-install"])
+        value["objects"].append(second)
+        value["links"].append({"identity": second, "references": [{**secret, "relation": "CONSUMES"}]})
+        retired.add(second["uid"])
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40, retired)
+        self.assertEqual(result["status"], "OWNERSHIP_CLASSIFIED")
+        for change in ("issuer", "foreign-owner", "foreign-namespace"):
+            changed = copy.deepcopy(value)
+            if change == "issuer":
+                changed["links"][2]["references"][-1]["name"] = "foreign"
+            elif change == "foreign-owner":
+                changed["objects"][2]["ownerReferences"] = [{"uid": "foreign"}]
+            else:
+                changed["objects"][2]["namespace"] = "foreign"
+            result = cleanup.plan_inventory(changed, "fixture", "cluster-uid", ["node-uid"], "a" * 40, retired)
+            if change == "foreign-namespace":
+                self.assertNotIn("new-cert", {entry["identity"]["uid"] for entry in result["deleteCandidates"]})
+            else:
+                self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+
     def test_foreign_object_blocks_owned_namespace(self):
         value = fixture()
         value["objects"] = [item("deployments", "kodex-component", managers=["kodex-local-dev"]),

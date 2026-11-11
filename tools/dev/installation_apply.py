@@ -146,7 +146,7 @@ def current_plan(plan, baseline, current, retired=()):
     merged["links"] += [item for item in baseline["links"] if item["identity"]["uid"] not in current_uids]
     names = {item["name"] for item in current["namespaces"]}
     merged["namespaces"] += [item for item in baseline["namespaces"] if item["name"] not in names]
-    fresh = plan_inventory(merged, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]], plan["sourceSHA"])
+    fresh = plan_inventory(merged, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]], plan["sourceSHA"], retired)
     if fresh["status"] != "OWNERSHIP_CLASSIFIED":
         raise ValueError(ERROR)
     actual = {(item["uid"], item["apiVersion"]): item for item in current["objects"]}

@@ -195,6 +195,17 @@ preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delet
 новый SHA записывается в preflight. Это не меняет digest/область исходного плана
 и не разрешает другие ресурсы. По умолчанию executor SHA равен source SHA плана.
 
+Для уже осиротевшего после прерывания ingress-shim Certificate допускается только
+узкий read-only reconciliation: в журнале должны быть удаления exact старых
+Certificate и использующих его Ingress, совпасть namespace, имя TLS Secret и полный
+закрытый набор issuer/output references. Новый объект должен иметь producer
+`cert-manager-ingress-shim` и не иметь чужого ownerRef. После нового доказательства
+удаление использует его новый UID/RV; один старый intent такого права не даёт.
+Связанный CSR/Secret/Event проходит обычную UID/producer closure. Механизм
+[ingress-shim](https://cert-manager.io/docs/usage/ingress/) проверен через
+Context7 `/websites/cert-manager_io`; воспроизводимый сценарий replacement включён
+в `make test-installation-cleanup`.
+
 Перед claims проверяется завершение containers через CRI exact k3d nodes.
 Перед namespace дополнительно требуется отсутствие PV и физических каталогов
 всех исходных томов. Недоступный узел, зависший finalizer или reclaimer при

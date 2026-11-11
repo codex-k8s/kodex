@@ -122,9 +122,27 @@ def reference_origin(item, consumers, owned, objects):
     return None
 
 
-def controller_origin(item, link, owned, objects, links, consumers):
+def controller_origin(item, link, owned, objects, links, consumers, retired=()):
     """Связать generated PVC, policies и исторические события с конкретным существующим контроллером."""
     namespace = item["namespace"]
+    if (item["resource"] == "certificates" and not item["ownerReferences"]
+            and "cert-manager-ingress-shim" in item["managers"]
+            and item["labels"].get("app.kubernetes.io/part-of", "kodex") == "kodex"):
+        references = link.get("references", [])
+        outputs = [reference for reference in references if reference["relation"] == "PRODUCES"]
+        if len(outputs) == 1 and address(outputs[0]) == (namespace, "secrets", item["name"]):
+            previous = sorted(uid for uid, parent in objects.items()
+                              if uid in owned and uid in retired and parent["resource"] == "certificates"
+                              and parent["namespace"] == namespace and parent["name"] == item["name"]
+                              and links.get(uid, {}).get("references") == references)
+            ingresses = sorted(uid for uid, parent in objects.items()
+                               if uid in owned and uid in retired and parent["resource"] == "ingresses"
+                               and parent["namespace"] == namespace and any(address(reference) == address(outputs[0])
+                               for reference in links.get(uid, {}).get("references", [])))
+            if previous and ingresses:
+                return {"kind": "RECONCILED_INGRESS_SHIM_CERTIFICATE", "retiredIngressUIDs": ingresses,
+                        "retiredCertificateUIDs": previous, "outputSecret": item["name"],
+                        "source": "cert-manager/ingress-shim", "references": references}
     if item["resource"] == "persistentvolumeclaims" and "k3s" in item["managers"]:
         if consumers.get(address(item), set()) - owned.keys():
             return None
@@ -162,7 +180,7 @@ def controller_origin(item, link, owned, objects, links, consumers):
     return None
 
 
-def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha):
+def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retired=()):
     """Построить проверяемый граф принадлежности; неизвестные объекты и shared consumers блокируют зависимую очистку."""
     if (snapshot.get("schema") != "kodex.installation-inventory/v1" or snapshot.get("status") != "COMPLETE"
             or snapshot.get("incomplete") or snapshot.get("context") != context or snapshot.get("clusterUID") != cluster_uid
@@ -203,7 +221,7 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha):
             key = address(item)
             if item["namespace"] in namespaces:
                 proof = proof or reference_origin(item, consumers, owned, objects)
-                proof = proof or controller_origin(item, links.get(uid, {}), owned, objects, links, consumers)
+                proof = proof or controller_origin(item, links.get(uid, {}), owned, objects, links, consumers, retired)
             if item["resource"] == "secrets":
                 writers = sorted(parent for parent, link in links.items() if parent in owned
                                  and objects[parent]["namespace"] == item["namespace"] and any(
