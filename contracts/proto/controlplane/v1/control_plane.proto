@@ -7175,6 +7175,15 @@ message PromptContextPin {
   string previous_runtime_revision_ref = 16;
 }
 
+message PromptTemplateDependency {
+  string template_digest = 1;
+  string path = 2;
+  string stability = 3;
+  string sensitivity = 4;
+  string trust_scope = 5;
+  string source_digest = 6;
+}
+
 message PreviewPromptTemplateResponse {
   string safe_preview = 1;
   string full_materialized_prompt = 2;
@@ -7192,6 +7201,7 @@ message PreviewPromptTemplateResponse {
   PromptContextPin context_pin = 14;
   bool complete = 15;
   PromptRuntimeDiff runtime_diff = 16;
+  repeated PromptTemplateDependency dependencies = 17;
 }
 
 enum PromptRuntimeComponent {

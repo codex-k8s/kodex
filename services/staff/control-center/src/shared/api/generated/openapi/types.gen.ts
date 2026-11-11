@@ -2376,7 +2376,17 @@ export type PromptTemplateValidation = {
     contextPin?: PromptContextPin;
 };
 
+export type PromptTemplateDependency = {
+    templateDigest: string;
+    path: string;
+    stability: 'STATIC_LITERAL' | 'VERSION_PINNED' | 'TURN_LIVE' | 'UNKNOWN';
+    sensitivity: 'PRIVATE';
+    trustScope: 'OWNER_TEMPLATE' | 'DATA_ONLY';
+    sourceDigest?: string;
+};
+
 export type PromptTemplatePreview = {
+    dependencies?: Array<PromptTemplateDependency>;
     safePreview: string;
     fullMaterializedPrompt?: string;
     diagnostics: Array<PromptTemplateDiagnostic>;

@@ -1,5 +1,18 @@
 export const promptContextMessages = {
   ru: {
+    dependencies: "Зависимости шаблонов",
+    dependencyNotice:
+      "Тексты и значения считаются приватными. Классификация не выдаёт полномочий и не гарантирует повторное использование кеша провайдера. Служебные блоки разрешаются отдельно для каждого хода.",
+    stability: {
+      STATIC_LITERAL: "литерал закреплённого шаблона",
+      VERSION_PINNED: "закреплено версией источника",
+      TURN_LIVE: "заново разрешается для хода",
+      UNKNOWN: "стабильность не подтверждена",
+    },
+    trust: {
+      OWNER_TEMPLATE: "текст владельца",
+      DATA_ONLY: "данные без полномочий",
+    },
     markdownPreview: "Предпросмотр Markdown",
     platform: "Будет добавлено платформой",
     order: "Порядок и происхождение блоков",
@@ -46,6 +59,19 @@ export const promptContextMessages = {
     },
   },
   en: {
+    dependencies: "Template dependencies",
+    dependencyNotice:
+      "Text and values are private. Classification grants no authority and does not guarantee provider cache reuse. Service sections are resolved separately for each turn.",
+    stability: {
+      STATIC_LITERAL: "pinned template literal",
+      VERSION_PINNED: "source version pinned",
+      TURN_LIVE: "resolved for each turn",
+      UNKNOWN: "stability unproven",
+    },
+    trust: {
+      OWNER_TEMPLATE: "owner text",
+      DATA_ONLY: "data without authority",
+    },
     markdownPreview: "Markdown preview",
     platform: "Added by the platform",
     order: "Block order and provenance",

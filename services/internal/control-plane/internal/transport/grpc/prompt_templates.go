@@ -135,6 +135,12 @@ func castPromptMaterialization(result promptservice.Materialization, full bool) 
 		response.Sections = append(response.Sections, mapped)
 	}
 	response.ContextPin = castPromptContextPin(result.ContextPin)
+	for _, dependency := range result.Dependencies {
+		response.Dependencies = append(response.Dependencies, &controlplanev1.PromptTemplateDependency{
+			TemplateDigest: dependency.TemplateDigest, Path: dependency.Path, Stability: dependency.Stability,
+			Sensitivity: dependency.Sensitivity, TrustScope: dependency.TrustScope, SourceDigest: dependency.SourceDigest,
+		})
+	}
 	if result.RuntimeDiff != nil {
 		response.RuntimeDiff, err = castPromptRuntimeDiff(*result.RuntimeDiff)
 		if err != nil {

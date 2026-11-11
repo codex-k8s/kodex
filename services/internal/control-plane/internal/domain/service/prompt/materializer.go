@@ -84,6 +84,7 @@ type Snapshot struct {
 // effective capabilities и диагностику; неполные семантические результаты не выдают исполняемый
 // текст и дайджест.
 type Materialization struct {
+	Dependencies                                                                   []Dependency
 	Complete                                                                       bool
 	ContextPin                                                                     entity.PromptContextPin
 	RuntimeDiff                                                                    *RuntimeDiff
@@ -159,10 +160,21 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 // Materialize выбирает семантическое построение только по service revision снимка и использует
 // историческое построение исключительно при отсутствии этой ревизии.
 func Materialize(templateText string, snapshot Snapshot) (Materialization, error) {
+	var result Materialization
+	var err error
 	if snapshot.ServiceTemplateRevision != "" {
-		return materializeSemantic(templateText, snapshot)
+		result, err = materializeSemantic(templateText, snapshot)
+	} else {
+		result, err = materializeLegacy(templateText, snapshot)
 	}
-	return materializeLegacy(templateText, snapshot)
+	if err != nil {
+		return result, err
+	}
+	result.Dependencies, err = templateDependencies(templateText, snapshot)
+	if err != nil {
+		return Materialization{}, err
+	}
+	return result, nil
 }
 
 // materializeLegacy replays historical snapshots with canonical values, separately redacted

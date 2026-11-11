@@ -14686,6 +14686,17 @@ components:
             items: { $ref: "#/components/schemas/PromptTemplateDiagnostic" },
           }
         contextPin: { $ref: "#/components/schemas/PromptContextPin" }
+    PromptTemplateDependency:
+      type: object
+      additionalProperties: false
+      required: [templateDigest, path, stability, sensitivity, trustScope]
+      properties:
+        templateDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        path: { type: string, minLength: 1, maxLength: 128 }
+        stability: { type: string, enum: [STATIC_LITERAL, VERSION_PINNED, TURN_LIVE, UNKNOWN] }
+        sensitivity: { type: string, enum: [PRIVATE] }
+        trustScope: { type: string, enum: [OWNER_TEMPLATE, DATA_ONLY] }
+        sourceDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
     PromptTemplatePreview:
       type: object
       additionalProperties: false
@@ -14706,6 +14717,10 @@ components:
           sections,
         ]
       properties:
+        dependencies:
+          type: array
+          maxItems: 512
+          items: { $ref: "#/components/schemas/PromptTemplateDependency" }
         safePreview: { type: string, maxLength: 262144 }
         fullMaterializedPrompt: { type: string, maxLength: 1048576 }
         diagnostics:

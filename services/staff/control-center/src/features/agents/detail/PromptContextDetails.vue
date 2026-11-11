@@ -130,6 +130,20 @@ async function copySection(index: number): Promise<void> {
         </li>
       </ol>
     </section>
+    <details v-if="preview.dependencies?.length">
+      <summary>{{ t("promptDetails.dependencies") }}</summary>
+      <p>{{ t("promptDetails.dependencyNotice") }}</p>
+      <ul>
+        <li
+          v-for="item in preview.dependencies"
+          :key="`${item.templateDigest}:${item.path}`"
+        >
+          <code>{{ item.path }}</code> —
+          {{ t(`promptDetails.stability.${item.stability}`) }};
+          {{ t(`promptDetails.trust.${item.trustScope}`) }}.
+        </li>
+      </ul>
+    </details>
     <details v-if="preview.runtimeDiff">
       <summary>{{ t("promptDetails.changes") }}</summary>
       <p>

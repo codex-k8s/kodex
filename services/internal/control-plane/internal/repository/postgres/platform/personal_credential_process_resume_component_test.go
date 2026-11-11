@@ -207,9 +207,9 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 		if json.Unmarshal(previousJSON, &previous) != nil || json.Unmarshal(currentJSON, &current) != nil {
 			t.Fatal("decode synthetic compatibility snapshots")
 		}
-		_, previousMCPError := runtimeSessionMCPDependencies(previous)
-		_, currentMCPError := runtimeSessionMCPDependencies(current)
-		t.Log("synthetic compatibility", runtimeSessionResumeCompatible(previous, current), "MCP validity", previousMCPError == nil, currentMCPError == nil, "session match", stringMap(lease, "sessionRef") == state.SessionRef, "native match", stringMap(lease, "nativeSessionID") == state.NativeSessionID)
+		_, previousMCPError := managedMCPInputFromOwnerSnapshot(previousJSON)
+		_, currentMCPError := managedMCPInputFromOwnerSnapshot(currentJSON)
+		t.Log("synthetic compatibility", nativeSessionResumeCompatible(previous, current), "MCP validity", previousMCPError == nil, currentMCPError == nil, "session match", stringMap(lease, "sessionRef") == state.SessionRef, "native match", stringMap(lease, "nativeSessionID") == state.NativeSessionID)
 		for key, value := range previous {
 			before, _ := json.Marshal(value)
 			after, _ := json.Marshal(current[key])

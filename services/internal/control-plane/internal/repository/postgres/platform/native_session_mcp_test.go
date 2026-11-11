@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -12,13 +11,13 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// TestRuntimeSessionMCPDependenciesPreserveSemanticPins keeps native tool-context dependencies
+// TestNativeSessionMCPOwnerInputsPreserveSemanticPins keeps native tool-context dependencies
 // stable across a fresh identical health observation but changes them with
 // credential/configuration semantics, rejecting an unknown profile without remote MCP access.
-// TestRuntimeSessionMCPDependenciesPreserveSemanticPins сохраняет зависимости контекста нативных
+// TestNativeSessionMCPOwnerInputsPreserveSemanticPins сохраняет зависимости контекста нативных
 // инструментов при свежем одинаковом наблюдении здоровья, меняя их при смене семантики credential
 // и конфигурации и отклоняя неизвестный профиль без удалённого MCP-доступа.
-func TestRuntimeSessionMCPDependenciesPreserveSemanticPins(t *testing.T) {
+func TestNativeSessionMCPOwnerInputsPreserveSemanticPins(t *testing.T) {
 	grants := []map[string]string{}
 	for index, capability := range []string{runtimecontract.Context7ResolveCapability, runtimecontract.Context7QueryCapability} {
 		inputSchema := `{"type":"object","additionalProperties":false,"properties":{"query":{"type":"string"}},"required":["query"]}`
@@ -33,7 +32,7 @@ func TestRuntimeSessionMCPDependenciesPreserveSemanticPins(t *testing.T) {
 	health := runtimecontract.ManagedMCPHealthProof{TestRef: "ict_health001", Generation: 1, ConnectionRef: "icn_context01", ConnectionVersion: 4,
 		ConfigurationSHA256: strings.Repeat("b", 64), CredentialRevisionRef: "icr_credential01", CredentialRevision: 2, CredentialSHA256: strings.Repeat("c", 64),
 		DefinitionKey: "context7", DefinitionVersion: "1.0.0", DefinitionDigest: strings.Repeat("a", 64), CheckedAt: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC), Probe: runtimecontract.ManagedMCPHealthProbe}
-	projection := func(health runtimecontract.ManagedMCPHealthProof) any {
+	projection := func(health runtimecontract.ManagedMCPHealthProof) runtimecontract.ManagedMCPHealthProof {
 		t.Helper()
 		profile, err := runtimecontract.DeriveContext7ManagedMCPProfile("SYSTEM", "agt_fixture01", runtimeRevisionGrants(grants), health)
 		if err != nil {
@@ -47,16 +46,16 @@ func TestRuntimeSessionMCPDependenciesPreserveSemanticPins(t *testing.T) {
 		if json.Unmarshal(raw, &snapshot) != nil {
 			t.Fatal("synthetic snapshot cannot be decoded")
 		}
-		result, err := runtimeSessionMCPDependencies(snapshot)
+		result, err := managedMCPInputFromOwnerSnapshot(raw)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return result
+		return result.ManagedMCPProfiles[0].Health
 	}
 	baseline := projection(health)
 	refreshed := health
 	refreshed.TestRef, refreshed.Generation, refreshed.CheckedAt = "ict_health002", 2, health.CheckedAt.Add(time.Minute)
-	if !reflect.DeepEqual(baseline, projection(refreshed)) {
+	if !sameManagedMCPHealthInputs(baseline, projection(refreshed)) {
 		t.Fatal("fresh health observation reset unchanged native tools context")
 	}
 	for _, change := range []func(*runtimecontract.ManagedMCPHealthProof){
@@ -69,11 +68,12 @@ func TestRuntimeSessionMCPDependenciesPreserveSemanticPins(t *testing.T) {
 	} {
 		changed := health
 		change(&changed)
-		if reflect.DeepEqual(baseline, projection(changed)) {
+		if sameManagedMCPHealthInputs(baseline, projection(changed)) {
 			t.Fatal("changed MCP semantic dependency resumed native tools context")
 		}
 	}
-	if _, err := runtimeSessionMCPDependencies(map[string]any{"assistantScope": "SYSTEM", "agentRef": "agt_fixture01", "managedMCPProfiles": []map[string]any{{"provider": "UNKNOWN"}}, "integrationGrants": grants}); err == nil {
+	invalid, _ := json.Marshal(map[string]any{"assistantScope": "SYSTEM", "agentRef": "agt_fixture01", "managedMCPProfiles": []map[string]any{{"provider": "UNKNOWN"}}, "integrationGrants": grants})
+	if _, err := managedMCPInputFromOwnerSnapshot(invalid); err == nil {
 		t.Fatal("unknown managed MCP profile accepted")
 	}
 }

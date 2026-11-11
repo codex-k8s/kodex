@@ -4885,6 +4885,63 @@ func (e PromptSemanticSlot) Valid() bool {
 	}
 }
 
+// Defines values for PromptTemplateDependencySensitivity.
+const (
+	PRIVATE PromptTemplateDependencySensitivity = "PRIVATE"
+)
+
+// Valid indicates whether the value is a known member of the PromptTemplateDependencySensitivity enum.
+func (e PromptTemplateDependencySensitivity) Valid() bool {
+	switch e {
+	case PRIVATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromptTemplateDependencyStability.
+const (
+	PromptTemplateDependencyStabilitySTATICLITERAL PromptTemplateDependencyStability = "STATIC_LITERAL"
+	PromptTemplateDependencyStabilityTURNLIVE      PromptTemplateDependencyStability = "TURN_LIVE"
+	PromptTemplateDependencyStabilityUNKNOWN       PromptTemplateDependencyStability = "UNKNOWN"
+	PromptTemplateDependencyStabilityVERSIONPINNED PromptTemplateDependencyStability = "VERSION_PINNED"
+)
+
+// Valid indicates whether the value is a known member of the PromptTemplateDependencyStability enum.
+func (e PromptTemplateDependencyStability) Valid() bool {
+	switch e {
+	case PromptTemplateDependencyStabilitySTATICLITERAL:
+		return true
+	case PromptTemplateDependencyStabilityTURNLIVE:
+		return true
+	case PromptTemplateDependencyStabilityUNKNOWN:
+		return true
+	case PromptTemplateDependencyStabilityVERSIONPINNED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromptTemplateDependencyTrustScope.
+const (
+	DATAONLY      PromptTemplateDependencyTrustScope = "DATA_ONLY"
+	OWNERTEMPLATE PromptTemplateDependencyTrustScope = "OWNER_TEMPLATE"
+)
+
+// Valid indicates whether the value is a known member of the PromptTemplateDependencyTrustScope enum.
+func (e PromptTemplateDependencyTrustScope) Valid() bool {
+	switch e {
+	case DATAONLY:
+		return true
+	case OWNERTEMPLATE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromptTemplateDiagnosticSeverity.
 const (
 	PromptTemplateDiagnosticSeverityERROR   PromptTemplateDiagnosticSeverity = "ERROR"
@@ -10800,16 +10857,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	DELETED SearchVFSParamsLifecycleState = "DELETED"
+	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case SearchVFSParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case SearchVFSParamsLifecycleStateDELETED:
 		return true
 	default:
 		return false
@@ -14009,6 +14066,25 @@ type PromptSlotProvenance struct {
 	Source   PromptSectionSource `json:"source"`
 }
 
+// PromptTemplateDependency defines model for PromptTemplateDependency.
+type PromptTemplateDependency struct {
+	Path           string                              `json:"path"`
+	Sensitivity    PromptTemplateDependencySensitivity `json:"sensitivity"`
+	SourceDigest   *string                             `json:"sourceDigest,omitempty"`
+	Stability      PromptTemplateDependencyStability   `json:"stability"`
+	TemplateDigest string                              `json:"templateDigest"`
+	TrustScope     PromptTemplateDependencyTrustScope  `json:"trustScope"`
+}
+
+// PromptTemplateDependencySensitivity defines model for PromptTemplateDependency.Sensitivity.
+type PromptTemplateDependencySensitivity string
+
+// PromptTemplateDependencyStability defines model for PromptTemplateDependency.Stability.
+type PromptTemplateDependencyStability string
+
+// PromptTemplateDependencyTrustScope defines model for PromptTemplateDependency.TrustScope.
+type PromptTemplateDependencyTrustScope string
+
 // PromptTemplateDiagnostic defines model for PromptTemplateDiagnostic.
 type PromptTemplateDiagnostic struct {
 	Code         string                           `json:"code"`
@@ -14033,22 +14109,23 @@ type PromptTemplateInput struct {
 
 // PromptTemplatePreview defines model for PromptTemplatePreview.
 type PromptTemplatePreview struct {
-	Complete                bool                       `json:"complete"`
-	ContextPin              *PromptContextPin          `json:"contextPin,omitempty"`
-	Diagnostics             []PromptTemplateDiagnostic `json:"diagnostics"`
-	EffectiveCapabilities   []string                   `json:"effectiveCapabilities"`
-	FullMaterializedPrompt  *string                    `json:"fullMaterializedPrompt,omitempty"`
-	Locale                  string                     `json:"locale"`
-	MaterializationDigest   string                     `json:"materializationDigest"`
-	RuntimeDiff             *PromptRuntimeDiff         `json:"runtimeDiff,omitempty"`
-	SafePreview             string                     `json:"safePreview"`
-	Sections                []PromptPreviewSection     `json:"sections"`
-	ServiceTemplateDigest   string                     `json:"serviceTemplateDigest"`
-	ServiceTemplateRevision string                     `json:"serviceTemplateRevision"`
-	Slots                   []PromptSlotProvenance     `json:"slots"`
-	TemplateDigest          string                     `json:"templateDigest"`
-	TemplateRef             OpaqueRef                  `json:"templateRef"`
-	VariableSnapshotDigest  string                     `json:"variableSnapshotDigest"`
+	Complete                bool                        `json:"complete"`
+	ContextPin              *PromptContextPin           `json:"contextPin,omitempty"`
+	Dependencies            *[]PromptTemplateDependency `json:"dependencies,omitempty"`
+	Diagnostics             []PromptTemplateDiagnostic  `json:"diagnostics"`
+	EffectiveCapabilities   []string                    `json:"effectiveCapabilities"`
+	FullMaterializedPrompt  *string                     `json:"fullMaterializedPrompt,omitempty"`
+	Locale                  string                      `json:"locale"`
+	MaterializationDigest   string                      `json:"materializationDigest"`
+	RuntimeDiff             *PromptRuntimeDiff          `json:"runtimeDiff,omitempty"`
+	SafePreview             string                      `json:"safePreview"`
+	Sections                []PromptPreviewSection      `json:"sections"`
+	ServiceTemplateDigest   string                      `json:"serviceTemplateDigest"`
+	ServiceTemplateRevision string                      `json:"serviceTemplateRevision"`
+	Slots                   []PromptSlotProvenance      `json:"slots"`
+	TemplateDigest          string                      `json:"templateDigest"`
+	TemplateRef             OpaqueRef                   `json:"templateRef"`
+	VariableSnapshotDigest  string                      `json:"variableSnapshotDigest"`
 }
 
 // PromptTemplatePreviewInput defines model for PromptTemplatePreviewInput.

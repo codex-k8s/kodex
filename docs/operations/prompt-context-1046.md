@@ -4,8 +4,8 @@ title: Контекст preview и материализация инструкц
 type: operations
 status: approved
 owner: manager
-version: 2.1.0
-updated: 2026-11-11
+version: 2.2.0
+updated: 2026-11-12
 ---
 
 # Контекст preview и материализация инструкций
@@ -189,3 +189,46 @@ HTTP/PWA и общий owner gate проверяются отдельно.
 Context7: Go standard library `/websites/pkg_go_dev_go1_25_3`,
 text/template FuncMap и encoding/json Marshal; execution error закрывает
 render, JSON Marshal экранирует значения.
+
+## Консервативная классификация зависимостей #2108
+
+Источник требования — #2108: стабильность model input не может выводиться из
+одного имени шаблона. Тот же AST renderer обходит условия, присваивания,
+`with`, `range`, чистые функции и вложенные templates. Отчёт `dependencies`
+относится к исходникам шаблонов, а не обещает cacheability полного prompt.
+Автоматически добавляемые служебные блоки по-прежнему разрешаются для хода.
+
+| Путь | Авторитетный владелец и результат |
+| --- | --- |
+| Actor → POST `/api/v1/prompt-templates/preview` | Проверенный transport principal и прежние permissions на target/full preview; request refs не назначают actor/project |
+| Gateway → `PlatformQueryService.PreviewPromptTemplate` | Generated adapter сохраняет exact target/context/version/digest; CP разрешает owner snapshot до исполнения AST |
+| CP → общий `prompt.Materialize` | Preview и runtime используют одинаковый анализ exact snapshot. Исходный template digest и path связывают каждую строку; значения не выдаются |
+| CP Proto → gateway → UI | Закрытая классификация, bounded 512 строк, проверка сочетаний digest/trust; UI показывает приватность и отсутствие cache guarantee |
+| Retry/continuation | Exact retry использует прежний immutable snapshot; continuation заново разрешает данные и pins, не меняет оригинал |
+| Ошибка/повторное чтение | Неизвестная конструкция отклоняется до исполнения; недоказанная стабильность UNKNOWN. Query не меняет состояние, не требует idempotency receipt и не создаёт domain event; авторитетный read path — прежний preview RPC |
+
+`STATIC_LITERAL` означает только буквальный текст конкретного исходника.
+`VERSION_PINNED` требует проверенный ContextPin и точную версию агента,
+workflow либо immutable environment digest. Динамические purpose/result
+шаблоны стадии не объявляются статическими. Остальные разрешаемые значения и
+явные slots считаются `TURN_LIVE`; отсутствие pin или доступности даёт UNKNOWN.
+Все значения консервативно PRIVATE. `OWNER_TEMPLATE` описывает происхождение
+текста, а `DATA_ONLY` не даёт данным стать разрешением на инструменты.
+Ни одна классификация не разрешает кешировать готовый ответ или пропускать
+актуальное чтение данных. Совпавшее свежее live-значение не запрещает prefix reuse.
+Существующие RPC registration, readiness, deploy ownership и transport сохранены;
+новый consumer — защищённый просмотр зависимостей в карточке preview.
+
+Для UI проверены через Context7 [ключи списков Vue](https://vuejs.org/guide/essentials/list):
+identity строки составляют source digest и path; данные не помещаются в ключ.
+
+Локальная квалификация изменения зависимостей: renderer race, gateway prompt
+race, Proto codegen/lint, frontend typecheck/build и15 UI tests прошли.
+PostgreSQL preview/core сначала FAIL из-за оставшегося тестового вызова старого
+Codex compatibility helper. Неиспользуемый helper удалён; native-проверка теперь
+сохраняет transcript при свежих инструкциях, но отвергает чужого агента. MCP
+негативные проверки переведены на действующий `managedMCPInputFromOwnerSnapshot`.
+Повторный disposable PG18.3 прогон `TestAssistantCoreInheritanceComponent`
+(SYSTEM, SYSTEM в project context, два PROJECT) и
+`TestProspectiveWorkflowPromptComponent` прошёл за8.396s. Это не установленная
+browser/runtime приёмка и не результат CI.
