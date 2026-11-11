@@ -6,7 +6,6 @@ import {
   h,
   reactive,
   ssrContextKey,
-  type Ref,
   type SetupContext,
 } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
@@ -38,7 +37,7 @@ const disposers: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
 });
-function operation(mode?: unknown, ordinary = false): EditablePlanOperation {
+function operation(ordinary = false): EditablePlanOperation {
   const owner = {
     agentRef: "agt_assistant",
     assistantScope: "SYSTEM",
@@ -71,15 +70,13 @@ function operation(mode?: unknown, ordinary = false): EditablePlanOperation {
       reasoningEffort: "medium",
       providerPolicyMode: "FIXED",
       providerAccounts: [{ accountRef: "pacc_synthetic", weight: 1 }],
-      ...(mode === undefined ? {} : { webSearchMode: mode }),
     },
     before: {
       ...owner,
       agentVersion: 3,
       runtimeProfilePin,
-      webSearchMode: "cached",
     },
-    after: { ...owner, runtimeProfilePin, webSearchMode: mode ?? "cached" },
+    after: { ...owner, runtimeProfilePin },
   };
   if (ordinary) {
     input.type = "PREPARE_AGENT_RUNTIME_CONFIGURATION";
@@ -95,12 +92,11 @@ function operation(mode?: unknown, ordinary = false): EditablePlanOperation {
   if (!editable) throw new Error("Synthetic operation is missing");
   return editable;
 }
-function mount(mode?: unknown, disabled = false, ordinary = false) {
-  const props = reactive({ operation: operation(mode, ordinary), disabled });
+function mount(disabled = false, ordinary = false) {
+  const props = reactive({ operation: operation(ordinary), disabled });
   const events: Array<[string, unknown[]]> = [];
   let setup!: {
-    changeWebSearch: (event: Event) => void;
-    webSearchValid: Ref<boolean>;
+    change: (key: string, event: Event) => void;
   };
   const renderer = createNoopRenderer();
   const app = renderer
@@ -136,114 +132,53 @@ function event(mode: string): Event {
 }
 
 it.each(["ru", "en"] as const)(
-  "показывает actual live и точное изменение cached→live (%s)",
+  "показывает native runtime без удалённых настроек поиска (%s)",
   async (locale) => {
     i18n.global.locale.value = locale;
-    const input = operation("live");
+    const input = operation();
     const before = structuredClone(operationInputs([input]));
     const html = await renderToString(
       createSSRApp({
         render: () => h(Component, { operation: input, disabled: false }),
       }).use(i18n),
     );
-    expect(html).toContain("-web-search");
-    for (const mode of ["disabled", "cached", "indexed", "live"])
-      expect(html).toContain(`value="${mode}"`);
-    expect(html).toMatch(/<select[^>]*-web-search[^>]*value="live"/);
-    expect(html).toContain(
-      i18n.global.t("assistant.planEditor.webSearchReview", {
-        before: i18n.global.t("assistant.planEditor.webSearchModes.cached"),
-        after: i18n.global.t("assistant.planEditor.webSearchModes.live"),
-      }),
-    );
+    expect(html).not.toContain("-web-search");
+    expect(html).toContain("-effort");
     expect(operationInputs([input])).toEqual(before);
   },
 );
-
-it("показывает Не менять для отсутствующего поля, а не выбирает disabled по умолчанию", async () => {
-  const input = operation();
-  const html = await renderToString(
-    createSSRApp({
-      render: () => h(Component, { operation: input, disabled: false }),
-    }).use(i18n),
-  );
-  expect(html).toMatch(/<select[^>]*-web-search[^>]*value=""/);
-  expect(html).toContain(
-    i18n.global.t("assistant.planEditor.webSearchUnchanged"),
-  );
-  expect(operationInputs([input])[0]?.parameters).not.toHaveProperty(
-    "webSearchMode",
-  );
-});
-
-it("не меняет отсутствующий optional режим при открытии и изменении модели", () => {
-  const { props, events } = mount();
-  expect(events.filter(([name]) => name === "parameter")).toEqual([]);
-  updateOperationParameter(props.operation, "model", "model_new");
-  const saved = operationInputs([props.operation])[0];
-  expect(saved?.parameters).not.toHaveProperty("webSearchMode");
-  expect(saved?.before.webSearchMode).toBe("cached");
-  expect(saved?.after.webSearchMode).toBe("cached");
-});
-
-it("сохраняет existing live при новой ревизии других настроек без эмита при открытии", () => {
-  const { props, events } = mount("live");
-  expect(events.filter(([name]) => name === "parameter")).toEqual([]);
-  updateOperationParameter(props.operation, "model", "model_new");
-  const saved = operationInputs([props.operation])[0];
-  expect(saved?.parameters.webSearchMode).toBe("live");
-  expect(saved?.after.webSearchMode).toBe("live");
-  expect(saved?.before.webSearchMode).toBe("cached");
-});
-
-it.each(["disabled", "cached", "indexed", "live"])(
-  "явный выбор %s сохраняет before и readonly pins в новой ревизии",
-  (mode) => {
-    const { props, setup } = mount();
-    const original = operationInputs([props.operation])[0];
-    setup.changeWebSearch(event(mode));
-    const saved = operationInputs([props.operation])[0];
-    expect(saved?.parameters.webSearchMode).toBe(mode);
-    expect(saved?.after.webSearchMode).toBe(mode);
-    expect(saved?.before).toEqual(original?.before);
-    expect(saved?.target).toEqual(original?.target);
-    expect(saved?.expectedVersion).toBe(original?.expectedVersion);
-    expect(saved?.parameters.runtimeProfilePin).toEqual(
-      original?.parameters.runtimeProfilePin,
-    );
-  },
-);
-
-it.each([null, "future-mode", "", false])(
-  "не принимает неизвестный optional режим %s",
-  (mode) => {
-    const { setup } = mount(mode);
-    expect(setup.webSearchValid.value).toBe(false);
-  },
-);
-
-it("readonly или неподдерживаемый выбор не изменяет параметры", () => {
-  const readonly = mount("live", true);
-  readonly.setup.changeWebSearch(event("disabled"));
-  expect(readonly.events.filter(([name]) => name === "parameter")).toEqual([]);
-  const editable = mount();
-  editable.setup.changeWebSearch(event("future-mode"));
-  editable.setup.changeWebSearch(event(""));
-  expect(editable.events.filter(([name]) => name === "parameter")).toEqual([]);
-});
-
-it("редактирует специализированный ordinary-план и сохраняет закрытую project policy", () => {
-  const { props, events, setup } = mount("live", false, true);
+it("сохраняет owner pins при изменении модели и не меняет их при открытии", () => {
+  const { props, events, setup } = mount();
   const original = operationInputs([props.operation])[0];
-  setup.changeWebSearch(event("cached"));
+  expect(events.filter(([name]) => name === "parameter")).toEqual([]);
+  setup.change("model", event("model_new"));
   const saved = operationInputs([props.operation])[0];
-  expect(events.some(([name]) => name === "parameter")).toBe(true);
-  expect(saved?.type).toBe("PREPARE_AGENT_RUNTIME_CONFIGURATION");
-  expect(saved?.parameters.webSearchMode).toBe("cached");
+  expect(saved?.parameters.model).toBe("model_new");
   expect(saved?.before).toEqual(original?.before);
   expect(saved?.target).toEqual(original?.target);
+  expect(saved?.expectedVersion).toEqual(original?.expectedVersion);
+  expect(saved?.parameters.runtimeProfilePin).toEqual(
+    original?.parameters.runtimeProfilePin,
+  );
+  expect(saved?.parameters).not.toHaveProperty("webSearchMode");
+});
+it("readonly и удалённое поле не меняют параметры", () => {
+  const readonly = mount(true);
+  readonly.setup.change("model", event("model_new"));
+  expect(readonly.events.filter(([name]) => name === "parameter")).toEqual([]);
+  const editable = mount();
+  editable.setup.change("webSearchMode", event("live"));
+  expect(editable.events.filter(([name]) => name === "parameter")).toEqual([]);
+});
+it("ordinary-план сохраняет project boundary при изменении модели", () => {
+  const { props, setup } = mount(false, true);
+  const original = operationInputs([props.operation])[0];
+  setup.change("model", event("model_new"));
+  const saved = operationInputs([props.operation])[0];
+  expect(saved?.type).toBe("PREPARE_AGENT_RUNTIME_CONFIGURATION");
+  expect(saved?.parameters.model).toBe("model_new");
+  expect(saved?.before).toEqual(original?.before);
   expect(saved?.parameters.targetKind).toBe("AGENT");
   expect(saved?.parameters.projectRef).toBe("prj_synthetic");
   expect(saved?.parameters.assistantScope).toBeUndefined();
-  expect(saved?.parameters.assistantProfileRef).toBeUndefined();
 });

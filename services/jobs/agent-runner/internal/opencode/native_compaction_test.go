@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -284,7 +285,11 @@ func nativeToolConfiguration(t *testing.T, fixture *nativeFixture) map[string]an
 	provider := config["provider"].(map[string]any)["synthetic"].(map[string]any)
 	provider["options"].(map[string]string)["baseURL"] = model.URL + "/v1"
 	provider["models"].(map[string]any)["tiny"] = map[string]any{"limit": map[string]int{"context": 16384, "output": 2048}}
-	config["compaction"] = map[string]any{"auto": true, "prune": false, "reserved": 2048}
+	policy, err := (runtimecontract.ModelProviderModel{}).ResolveRuntimeContext("[context]\nauto_compaction = true\nprune = false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config["compaction"] = map[string]any{"auto": policy.AutoCompaction, "prune": policy.Prune, "reserved": 2048}
 	config["agent"] = map[string]any{"compaction": map[string]string{"prompt": "SYNTHETIC_NATIVE_COMPACTION. Preserve completed counter steps and the next ordinal."}}
 	config["permission"] = map[string]string{"*": "deny", "kodex_*": "allow"}
 	config["mcp"] = map[string]any{"kodex": map[string]any{"type": "remote", "url": mcp.URL, "enabled": true, "oauth": false}}

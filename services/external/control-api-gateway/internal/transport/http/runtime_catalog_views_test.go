@@ -34,7 +34,7 @@ var runtimeOverlayGolden []byte
 // runtimeOverlayProducerDigest фиксирует неизменный дайджест эталона owner
 // runtimecontract.OverlaySchema([low, high], high), полученного из владельца, а не из прежнего
 // набора полей gateway.
-const runtimeOverlayProducerDigest = "e84f6b4c641531755549ee8c79f186e3f8778511afe2e63786269a776d90bceb"
+const runtimeOverlayProducerDigest = "2c42a753c49d4ef469936d1ee3809528033235d9b0f5e15d2959b03134750ede"
 
 // runtimePublishFixture provides synthetic fixed-provider runtime publication input with exact
 // model catalog revision and digest pins.
@@ -134,25 +134,25 @@ func TestRuntimeOverlaySchemaAndDiagnostics(t *testing.T) {
 	}
 }
 
-// TestRuntimeOverlayNativeSearchReadPath checks the exact owner-produced five-field schema, native
+// TestRuntimeOverlayNativePreferencesReadPath checks the exact owner-produced eight-field schema, native
 // search modes and default through HTTP and generated OpenAPI enums.
-// TestRuntimeOverlayNativeSearchReadPath проверяет точную схему из пяти полей от владельца, режимы
+// TestRuntimeOverlayNativePreferencesReadPath проверяет точную схему из восьми полей от владельца, режимы
 // и умолчание native search через HTTP и generated OpenAPI enum.
-func TestRuntimeOverlayNativeSearchReadPath(t *testing.T) {
+func TestRuntimeOverlayNativePreferencesReadPath(t *testing.T) {
 	view := runtimeContextFixture()
-	if view.OverlaySchema.Digest != runtimeOverlayProducerDigest || view.OverlaySchema.Revision != "cos_"+runtimeOverlayProducerDigest || len(view.OverlaySchema.Fields) != 5 {
-		t.Fatal("golden does not match the current five-field producer schema")
+	if view.OverlaySchema.Digest != runtimeOverlayProducerDigest || view.OverlaySchema.Revision != "cos_"+runtimeOverlayProducerDigest || len(view.OverlaySchema.Fields) != 8 {
+		t.Fatal("golden does not match the current eight-field producer schema")
 	}
 	var search *cp.ConfigOverlayField
 	for _, field := range view.OverlaySchema.Fields {
-		if field.Key == "web_search" {
+		if field.Key == "context.auto_compaction" {
 			search = field
 		}
 	}
-	if search == nil || search.ValueType != "string" || search.DefaultValue != "cached" || !slices.Equal(search.AllowedValues, []string{"disabled", "cached", "indexed", "live"}) {
+	if search == nil || search.ValueType != "boolean" || search.DefaultValue != "" || !slices.Equal(search.AllowedValues, []string{"true", "false"}) {
 		t.Fatal("native search schema lost exact pinned modes or default")
 	}
-	view.DraftOverlay = &cp.ConfigOverlayVersion{Diagnostics: []*cp.ConfigOverlayDiagnostic{{Code: "CONFIG_OVERLAY_VALUE_INVALID", Key: "web_search", Line: 1, Column: 1, Message: "Overlay value is not allowed"}}, SchemaRevision: view.OverlaySchema.Revision, SchemaDigest: view.OverlaySchema.Digest}
+	view.DraftOverlay = &cp.ConfigOverlayVersion{Diagnostics: []*cp.ConfigOverlayDiagnostic{{Code: "CONFIG_OVERLAY_VALUE_INVALID", Key: "context.auto_compaction", Line: 1, Column: 1, Message: "Overlay value is not allowed"}}, SchemaRevision: view.OverlaySchema.Revision, SchemaDigest: view.OverlaySchema.Digest}
 	client := &contextRPCRecorder{corrupt: func(response proto.Message) {
 		field := response.ProtoReflect().Descriptor().Fields().ByName("runtime_configuration")
 		response.ProtoReflect().Set(field, protoreflect.ValueOfMessage(view.ProtoReflect()))
@@ -176,31 +176,31 @@ func TestRuntimeOverlayNativeSearchReadPath(t *testing.T) {
 			Diagnostics []struct{ Key, Code, Message string } `json:"diagnostics"`
 		} `json:"draftOverlay"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &body) != nil || body.OverlaySchema == nil || len(body.OverlaySchema.Fields) != 5 || body.OverlaySchema.Digest != runtimeOverlayProducerDigest || len(body.DraftOverlay.Diagnostics) != 1 || body.DraftOverlay.Diagnostics[0].Key != "web_search" {
+	if json.Unmarshal(w.Body.Bytes(), &body) != nil || body.OverlaySchema == nil || len(body.OverlaySchema.Fields) != 8 || body.OverlaySchema.Digest != runtimeOverlayProducerDigest || len(body.DraftOverlay.Diagnostics) != 1 || body.DraftOverlay.Diagnostics[0].Key != "context.auto_compaction" {
 		t.Fatal("native search schema or safe diagnostic was lost on HTTP readback")
 	}
 	for _, field := range body.OverlaySchema.Fields {
 		if !generated.ConfigOverlayFieldKey(field.Key).Valid() {
 			t.Fatalf("native search readback violates generated OpenAPI enum: key=%s", field.Key)
 		}
-		if field.Key == "web_search" && (field.ValueType != "string" || field.DefaultValue != "cached" || !slices.Equal(field.AllowedValues, search.AllowedValues)) {
+		if field.Key == "context.auto_compaction" && (field.ValueType != "boolean" || field.DefaultValue != "" || !slices.Equal(field.AllowedValues, search.AllowedValues)) {
 			t.Fatal("native search modes or default changed on HTTP readback")
 		}
 	}
-	if generated.ConfigOverlayFieldKey("web_search_custom").Valid() {
+	if generated.ConfigOverlayFieldKey("context.auto_compaction_custom").Valid() {
 		t.Fatal("generated OpenAPI enum accepts an unknown overlay key")
 	}
 }
 
-// TestRuntimeOverlayNativeSearchRemainsClosed checks rejection of unknown, missing or repeated
+// TestRuntimeOverlayNativePreferencesRemainsClosed checks rejection of unknown, missing or repeated
 // schema fields and altered search modes or defaults even after recomputing their digest.
-// TestRuntimeOverlayNativeSearchRemainsClosed проверяет отказ неизвестным, отсутствующим либо
+// TestRuntimeOverlayNativePreferencesRemainsClosed проверяет отказ неизвестным, отсутствующим либо
 // повторным полям схемы и изменённым режимам либо умолчаниям поиска даже после пересчёта
 // дайджеста.
-func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
+func TestRuntimeOverlayNativePreferencesRemainsClosed(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.AgentRuntimeConfigurationView){
 		"unknown field with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
-			v.OverlaySchema.Fields[1].Key = "web_search_custom"
+			v.OverlaySchema.Fields[1].Key = "context.auto_compaction_custom"
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
 		},
 		"missing field with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
@@ -208,7 +208,7 @@ func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
 		},
 		"duplicate field with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
-			v.OverlaySchema.Fields[2].Key = "web_search"
+			v.OverlaySchema.Fields[2].Key = "context.auto_compaction"
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
 		},
 		"unknown mode with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
@@ -223,8 +223,8 @@ func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 			v.OverlaySchema.Fields[1].DefaultValue = "live"
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
 		},
-		"native search boolean": func(v *cp.AgentRuntimeConfigurationView) {
-			v.OverlaySchema.Fields[1].ValueType = "boolean"
+		"native preference string": func(v *cp.AgentRuntimeConfigurationView) {
+			v.OverlaySchema.Fields[1].ValueType = "string"
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
 		},
 		"tampered search hover": func(v *cp.AgentRuntimeConfigurationView) { v.OverlaySchema.Fields[1].Hover = "tampered" },
@@ -232,7 +232,9 @@ func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 			v.OverlaySchema.Digest = strings.Repeat("a", 64)
 			v.OverlaySchema.Revision = "cos_" + v.OverlaySchema.Digest
 		},
-		"unknown diagnostic key": func(v *cp.AgentRuntimeConfigurationView) { v.DraftOverlay.Diagnostics[0].Key = "web_search_custom" },
+		"unknown diagnostic key": func(v *cp.AgentRuntimeConfigurationView) {
+			v.DraftOverlay.Diagnostics[0].Key = "context.auto_compaction_custom"
+		},
 		"unknown diagnostic code": func(v *cp.AgentRuntimeConfigurationView) {
 			v.DraftOverlay.Diagnostics[0].Code = "WEB_SEARCH_CUSTOM_ERROR"
 		},
@@ -242,7 +244,7 @@ func TestRuntimeOverlayNativeSearchRemainsClosed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			view := runtimeContextFixture()
-			view.DraftOverlay = &cp.ConfigOverlayVersion{Diagnostics: []*cp.ConfigOverlayDiagnostic{{Code: "CONFIG_OVERLAY_VALUE_INVALID", Key: "web_search", Message: "Overlay value is not allowed"}}}
+			view.DraftOverlay = &cp.ConfigOverlayVersion{Diagnostics: []*cp.ConfigOverlayDiagnostic{{Code: "CONFIG_OVERLAY_VALUE_INVALID", Key: "context.auto_compaction", Message: "Overlay value is not allowed"}}}
 			mutate(view)
 			w := httptest.NewRecorder()
 			writeMessage(w, http.StatusOK, view, "", "")

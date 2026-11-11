@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.49
-updated: 2026-11-11
+version: 1.7.50
+updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -922,29 +922,25 @@ token, а запрос нового токена закрыто отклоняе
 env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
 временного credential state; inherited proxy bypass и прямой fallback запрещены.
 
-Настройка hosted native search материализуется только из опубликованного
-version/digest-pinned ConfigOverlay. Для Codex 0.160.0 закрытые режимы
-`disabled|cached|indexed|live` входят в существующий reviewed
-`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`; отсутствие параметра сохраняет
-текущую настройку. Это не sandbox WebAccess: domain allowlist shell egress
-не ограничивает hosted search, и настройка search не выдаёт shell/network
-authority. Readback различает свежую owner-конфигурацию и immutable snapshot
-хода; запрошенный режим либо SDK default не доказывает effective поведение
-provider или успешный native call. Неизвестные режимы и вложенный arbitrary
-TOML закрыто отклоняются, без legacy feature flags.
+OpenCode получает только опубликованные version/digest-pinned preferences из
+ConfigOverlay. Закрытые context/compaction/cache поля не меняют endpoint,
+credentials, qualification или model limits. Git-конфигурация маршрута задаёт
+обязательные ограничения, а UI overlay — допустимые предпочтения. Обязательную
+область reuse нельзя расширить и обязательный запрет нельзя снять через overlay.
+`NO_REUSE=true` и `NO_STORE=true` требуют исполнения независимо от дополнительного
+флага `required`: unsupported/unknown отклоняются до публикации и model request.
+Отсутствие hints не доказывает отсутствие кеша провайдера; физическая изоляция
+не выводится из namespace или usage. Fresh owner readback отделён от immutable
+snapshot хода; retry использует прежний снимок, continuation — свежую ревизию.
 
-Маршрутизация native tools не является источником полномочий. Для закреплённого
-Codex0.160.0 provider-owned `model.tool_mode` может иметь приоритет над
-отключением code mode: `CodeModeOnly` не получает обычный Direct fallback.
-При выключенном code-mode host платформа явно материализует DirectModelOnly
-только для закрытых namespace `functions`, `web`, `mcp__kodex`; feature
-flags host/only/enabled остаются false. Это изменение способа вызова, не
-выдача sandbox, shell egress, MCP grants или credential access. Проверка
-tool policy и прежние deny paths сохраняются; произвольный namespace и
-arbitrary TOML от клиента не принимаются. При обновлении SDK требуется
-проверить точные namespace и parser/spec_plan закреплённой версии, затем
-реальные shell/web/MCP ходы с новым admitted image и immutable runtime pins.
-Наличие executable в inventory или успешный Go test этого не заменяет.
+Native tools не являются источником полномочий. OpenCode shell/file/network и
+самостоятельная делегация закрыты; доступные инструменты назначаются exact
+managed MCP grants и проверяются при каждом эффекте. Удалённые Codex
+search/personality/history/shell параметры не рекламируются и не декодируются.
+Неполные старые read projections не достраивают owner pins. При обновлении
+upstream повторно проверяются штатные adapters, реальные tools/compaction,
+positive writer join и admitted image с immutable runtime pins. Наличие
+executable в inventory или успешный Go test этого не заменяет.
 
 Authenticated runtime CONNECT поддерживает стандартную proxy authentication
 negotiation Git/libcurl: полный корректный bodyless CONNECT без

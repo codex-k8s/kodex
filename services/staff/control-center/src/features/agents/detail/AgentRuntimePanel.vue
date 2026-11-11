@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, reactive, ref, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import CodeEditorSurface from "@/features/agents/detail/CodeEditorSurface.vue";
+import OverlayExecutionPreferences from "./OverlayExecutionPreferences.vue";
 import OverlayHistoryPanel from "./OverlayHistoryPanel.vue";
 import { restoreOverlayRevision } from "./overlay-history";
 import { agentDetailCopy } from "@/features/agents/detail/copy";
@@ -45,6 +46,7 @@ import type {
   RuntimeSelection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { useServerMessage } from "@/shared/ui/server-message";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type {
@@ -72,6 +74,7 @@ const emit = defineEmits<{
 }>();
 
 const { locale, t } = useI18n();
+const serverMessage = useServerMessage();
 const copy = computed(() => agentDetailCopy(locale.value));
 const view = ref<AgentRuntimeConfigurationView>();
 const runtimes = ref<RuntimeSelection[]>([]);
@@ -214,7 +217,7 @@ const overlayValidation = computed(() =>
     : (view.value?.draftOverlay?.validationMessages ?? []).map((value) =>
         value === "CONFIG_OVERLAY_INVALID_OR_PROTECTED"
           ? t("runtimeOverlay.invalid")
-          : value,
+          : serverMessage(value),
       ),
 );
 const overlayDiagnostics = computed(() =>
@@ -831,6 +834,12 @@ onBeforeUnmount(reset);
           </div>
           <StatusBadge :state="overlayDirty ? 'DRAFT' : overlayState" />
         </div>
+        <OverlayExecutionPreferences
+          :content="overlayContent"
+          :schema="view.overlaySchema"
+          :disabled="!canEdit || busy"
+          @update:content="updateOverlay"
+        />
         <CodeEditorSurface
           :model-value="overlayContent"
           language="toml"

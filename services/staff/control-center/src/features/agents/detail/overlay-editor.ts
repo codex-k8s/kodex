@@ -39,11 +39,48 @@ export function changeOverlayEffort(
   schema: ConfigOverlaySchema,
   effort: string,
 ): string {
-  const field = schema.fields.find(
-    (item) => item.key === "model_reasoning_effort",
+  return changeOverlayPreference(
+    content,
+    schema,
+    "model_reasoning_effort",
+    effort,
   );
-  if (!field || (effort && !field.allowedValues.includes(effort)))
-    throw new Error("Overlay reasoning effort is unavailable");
+}
+export function overlayPreference(
+  content: string,
+  schema: ConfigOverlaySchema,
+  key: string,
+): string | undefined {
+  try {
+    const field = schema.fields.find((item) => item.key === key);
+    if (!field) return undefined;
+    let value: unknown = parsedOverlay(content, schema);
+    for (const part of key.split(".")) {
+      if (value === undefined) return "";
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return undefined;
+      value = (value as Record<string, unknown>)[part];
+    }
+    if (value === undefined) return "";
+    if (typeof value !== "string" && typeof value !== "boolean")
+      return undefined;
+    return typeof value === field.valueType &&
+      field.allowedValues.includes(String(value))
+      ? String(value)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+export function changeOverlayPreference(
+  content: string,
+  schema: ConfigOverlaySchema,
+  key: string,
+  value: string,
+): string {
+  const field = schema.fields.find((item) => item.key === key);
+  if (!field || (value && !field.allowedValues.includes(value)))
+    throw new Error("Overlay preference is unavailable");
   const parsed = parsedOverlay(content, schema);
   function check(value: unknown, prefix: string): void {
     if (!value || typeof value !== "object" || Array.isArray(value))
@@ -66,8 +103,20 @@ export function changeOverlayEffort(
     }
   }
   check(parsed, "");
-  if (effort) parsed.model_reasoning_effort = effort;
-  else Reflect.deleteProperty(parsed, "model_reasoning_effort");
+  const parts = key.split(".");
+  const leaf = parts.pop();
+  if (!leaf || parts.length > 1) throw new Error("Overlay field is invalid");
+  let target = parsed;
+  for (const part of parts) {
+    if (!target[part]) target[part] = {};
+    const table = target[part];
+    if (!table || typeof table !== "object" || Array.isArray(table))
+      throw new Error("Overlay field is invalid");
+    target = table as typeof parsed;
+  }
+  if (value)
+    target[leaf] = field.valueType === "boolean" ? value === "true" : value;
+  else Reflect.deleteProperty(target, leaf);
   return stringify(parsed);
 }
 function markerPath(content: string): string | undefined {

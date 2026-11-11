@@ -56,7 +56,11 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 		return nil, ErrRuntimeProfile
 	}
 	provider := input.ModelProvider
-	effectiveCache, err := provider.ResolveModelCache(input.Model)
+	effectiveCache, err := provider.ResolveRuntimeModelCache(input.Model, input.ConfigOverlay)
+	if err != nil {
+		return nil, err
+	}
+	contextPolicy, err := selected.ResolveRuntimeContext(input.ConfigOverlay)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +68,7 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 		"$schema": "https://opencode.ai/config.json", "model": provider.ProviderID + "/" + input.Model,
 		"small_model": provider.ProviderID + "/" + input.Model, "enabled_providers": []string{provider.ProviderID},
 		"autoupdate": false, "share": "disabled", "snapshot": false, "default_agent": "build",
-		"compaction": map[string]bool{"auto": selected.EffectiveContextPolicy().AutoCompaction, "prune": selected.EffectiveContextPolicy().Prune},
+		"compaction": map[string]bool{"auto": contextPolicy.AutoCompaction, "prune": contextPolicy.Prune},
 		"permission": map[string]string{"*": "deny", "kodex_*": "allow"},
 		"provider": map[string]any{provider.ProviderID: map[string]any{
 			"npm": provider.AdapterPackage(), "name": "Kodex managed model gateway",
@@ -178,7 +182,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if routeKind == "" {
 		routeKind = "DIRECT"
 	}
-	effectiveCache, err := input.ModelProvider.ResolveModelCache(input.Model)
+	effectiveCache, err := input.ModelProvider.ResolveRuntimeModelCache(input.Model, input.ConfigOverlay)
 	if err != nil {
 		return Result{}, err
 	}
@@ -190,7 +194,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		}
 		clear(namespaceKey)
 		if keyErr != nil {
-			if effectiveCache.Requested.Required {
+			if effectiveCache.Requested.Required || effectiveCache.Requested.NoReuse || effectiveCache.Requested.NoStore {
 				return Result{}, runtimecontract.ErrInferenceCachePolicy
 			}
 			effectiveCache.Mechanism = "NONE"

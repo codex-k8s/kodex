@@ -63,30 +63,25 @@ type canonicalOverlaySchema struct {
 	MaximumBytes int32                   `json:"maximumBytes"`
 }
 
-// validOverlaySchema checks five unique allowlisted fields, value/default bounds and the fixed
-// shell/web-search restrictions, then recomputes the owner canonical JSON digest and cos_ revision
-// binding. It validates advertised schema without changing executable overlay policy.
-// validOverlaySchema проверяет пять уникальных разрешённых полей, значения и defaults и
-// фиксированные ограничения shell/web-search, затем пересчитывает канонический JSON digest
-// владельца и связь cos_ revision. Проверяется заявленная схема без изменения исполняемой политики
-// overlay.
+// validOverlaySchema verifies the closed native preference catalog and its owner JSON digest without inventing provider guarantees.
+// validOverlaySchema проверяет закрытый каталог native preferences и JSON digest владельца без выдуманных гарантий провайдера.
 func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
-	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
+	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 8 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
 		return false
 	}
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
 	seen := map[string]bool{}
 	for _, field := range schema.Fields {
-		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "web_search", "personality", "allow_login_shell", "history.persistence"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
+		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
 			return false
 		}
 		seen[field.Key] = true
-		if field.ValueType != "string" && field.ValueType != "boolean" || (field.Key == "allow_login_shell") != (field.ValueType == "boolean") {
+		if field.ValueType != "string" && field.ValueType != "boolean" || (strings.HasPrefix(field.Key, "context.") || slices.Contains([]string{"cache.no_reuse", "cache.no_store", "cache.required"}, field.Key)) != (field.ValueType == "boolean") {
 			return false
 		}
 		values := map[string]bool{}
 		for _, value := range field.AllowedValues {
-			if !runtimeEffortPattern.MatchString(value) || values[value] {
+			if (field.Key == "model_reasoning_effort" && !runtimeEffortPattern.MatchString(value)) || values[value] {
 				return false
 			}
 			values[value] = true
@@ -94,10 +89,16 @@ func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
 		if field.DefaultValue != "" && !values[field.DefaultValue] {
 			return false
 		}
-		if field.Key == "allow_login_shell" && (!slices.Equal(field.AllowedValues, []string{"false"}) || field.DefaultValue != "false") {
-			return false
+		var exact []string
+		switch field.Key {
+		case "context.auto_compaction", "context.prune", "cache.no_reuse", "cache.no_store", "cache.required":
+			exact = []string{"true", "false"}
+		case "cache.optimization":
+			exact = []string{"PROVIDER_DEFAULT", "NO_HINTS", "OPTIMIZE"}
+		case "cache.reuse_scope":
+			exact = []string{"PROJECT", "INITIATOR", "SESSION"}
 		}
-		if field.Key == "web_search" && (!slices.Equal(field.AllowedValues, []string{"disabled", "cached", "indexed", "live"}) || field.DefaultValue != "cached") {
+		if exact != nil && (!slices.Equal(field.AllowedValues, exact) || field.DefaultValue != "") {
 			return false
 		}
 		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover})
@@ -127,7 +128,7 @@ func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 	if diagnostic == nil || diagnostic.Line < 0 || diagnostic.Line > 65537 || diagnostic.Column < 0 || diagnostic.Column > 65537 {
 		return false
 	}
-	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "web_search", "personality", "allow_login_shell", "history.persistence", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
+	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
 		return false
 	}
 	switch diagnostic.Code {

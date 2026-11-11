@@ -13,14 +13,14 @@ func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 		raw, code, key string
 		line           int32
 	}{
-		"syntax":    {"personality = [\n", OverlaySyntaxInvalid, "", 1},
+		"syntax":    {"cache.optimization = [\n", OverlaySyntaxInvalid, "", 1},
 		"protected": {"\nmodel = \"private-value\"", OverlayKeyForbidden, "model", 2},
 		"unknown":   {"\"private-key\" = \"private-value\"", OverlayKeyForbidden, "", 1},
-		"quoted":    {"\"personality\" = \"private-value\"", OverlayValueInvalid, "personality", 1},
-		"dotted":    {"history.persistence = \"private-value\"", OverlayValueInvalid, "history.persistence", 1},
-		"table":     {"[history]\npersistence = \"private-value\"", OverlayValueInvalid, "history.persistence", 2},
-		"inline":    {"history = { persistence = \"private-value\" }", OverlayValueInvalid, "history.persistence", 1},
-		"type":      {"personality = 42", OverlayValueInvalid, "personality", 1},
+		"quoted":    {"cache.\"optimization\" = \"private-value\"", OverlayValueInvalid, "cache.optimization", 1},
+		"dotted":    {"cache.reuse_scope = \"private-value\"", OverlayValueInvalid, "cache.reuse_scope", 1},
+		"table":     {"[cache]\nreuse_scope = \"private-value\"", OverlayValueInvalid, "cache.reuse_scope", 2},
+		"inline":    {"cache = { reuse_scope = \"private-value\" }", OverlayValueInvalid, "cache.reuse_scope", 1},
+		"type":      {"cache.optimization = 42", OverlayValueInvalid, "cache.optimization", 1},
 		"effort":    {"model_reasoning_effort = \"max\"", OverlayEffortUnsupported, "model_reasoning_effort", 1},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -40,7 +40,7 @@ func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 // TestOverlaySchemaMatchesValidatorAndModelCapabilities принимает объявленные значения, связывает изменения возможностей с дайджестом схемы и отделяет структурный разбор от допустимости степени для модели.
 func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 	schema := OverlaySchema([]string{"medium", "max"}, "medium")
-	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 5 || schema.MaximumBytes != 65536 {
+	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 8 || schema.MaximumBytes != 65536 {
 		t.Fatalf("schema = %+v", schema)
 	}
 	if other := OverlaySchema([]string{"medium"}, "medium"); other.Digest == schema.Digest {
@@ -83,5 +83,17 @@ func TestEffectiveReasoningEffortRequiresOwnerValue(t *testing.T) {
 	}
 	if ValidateEffectiveReasoningEffort("", "custom-effort", ReasoningSupported) != nil || ValidateEffectiveReasoningEffort(`model_reasoning_effort = "high"`, "high", ReasoningSupported) != nil {
 		t.Fatal("owner effort rejected")
+	}
+}
+
+// TestOverlaySchemaCanonicalizesEmptyCapabilitySet keeps nil and empty owner capabilities identical across JSON and Proto transport.
+// TestOverlaySchemaCanonicalizesEmptyCapabilitySet сохраняет одинаковый nil/empty набор возможностей при передаче JSON и Proto.
+func TestOverlaySchemaCanonicalizesEmptyCapabilitySet(t *testing.T) {
+	nilSchema, emptySchema := OverlaySchema(nil, ""), OverlaySchema([]string{}, "")
+	if nilSchema.Digest != emptySchema.Digest || nilSchema.Fields[0].AllowedValues == nil {
+		t.Fatal("empty capability set changed canonical transport digest")
+	}
+	if len(DiagnoseConfigOverlay(`cache.optimization = ""`, nil)) == 0 {
+		t.Fatal("empty cache enum accepted instead of omitted inheritance")
 	}
 }

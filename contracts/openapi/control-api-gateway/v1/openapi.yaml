@@ -12572,10 +12572,13 @@ components:
             enum:
               [
                 model_reasoning_effort,
-                web_search,
-                personality,
-                allow_login_shell,
-                history.persistence,
+                context.auto_compaction,
+                context.prune,
+                cache.optimization,
+                cache.reuse_scope,
+                cache.no_reuse,
+                cache.no_store,
+                cache.required,
               ],
           }
         valueType: { type: string, enum: [string, boolean] }
@@ -12601,8 +12604,8 @@ components:
         fields:
           {
             type: array,
-            minItems: 5,
-            maxItems: 5,
+            minItems: 8,
+            maxItems: 8,
             items: { $ref: "#/components/schemas/ConfigOverlayField" },
           }
     ConfigOverlayDraftInput:

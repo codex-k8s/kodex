@@ -116,6 +116,10 @@ func (config ModelProviderConfiguration) ResolveModelCache(modelID string) (Effe
 		return result, ErrInferenceCachePolicy
 	}
 	if policy.Optimization != "OPTIMIZE" && !policy.NoReuse && !policy.NoStore {
+		if policy.Required {
+			result.Status, result.Reason = "UNSUPPORTED", "REQUIRED_POLICY_HAS_NO_ENFORCEMENT"
+			return result, ErrInferenceCachePolicy
+		}
 		return result, nil
 	}
 	q := policy.Qualification
@@ -147,7 +151,7 @@ func (config ModelProviderConfiguration) ResolveModelCache(modelID string) (Effe
 		if result.Reason != "NO_STORE_UNSUPPORTED" && q.Status == "SUPPORTED" {
 			result.Reason = "EXACT_ROUTE_NOT_QUALIFIED"
 		}
-		if policy.Required {
+		if policy.Required || policy.NoReuse || policy.NoStore {
 			return result, ErrInferenceCachePolicy
 		}
 		return result, nil

@@ -44,17 +44,26 @@ var runtimeToolCommandPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{
 // ConfigOverlay contains only owner-editable non-authorizing preferences; provider, credentials, sandbox, approvals, permissions, MCP and shell environment remain server materializations.
 // ConfigOverlay содержит только редактируемые владельцем настройки без полномочий; провайдер, реквизиты, sandbox, подтверждения, права, MCP и shell-окружение материализуются сервером.
 type ConfigOverlay struct {
-	WebSearchMode        string         `toml:"web_search,omitempty" json:"webSearchMode,omitempty"`
-	ModelReasoningEffort string         `toml:"model_reasoning_effort,omitempty" json:"modelReasoningEffort,omitempty"`
-	Personality          string         `toml:"personality,omitempty" json:"personality,omitempty"`
-	AllowLoginShell      *bool          `toml:"allow_login_shell,omitempty" json:"allowLoginShell,omitempty"`
-	History              OverlayHistory `toml:"history,omitempty" json:"history,omitempty"`
+	Context              *OverlayContext `toml:"context,omitempty" json:"context,omitempty"`
+	Cache                *OverlayCache   `toml:"cache,omitempty" json:"cache,omitempty"`
+	ModelReasoningEffort string          `toml:"model_reasoning_effort,omitempty" json:"modelReasoningEffort,omitempty"`
 }
 
-// OverlayHistory carries the allowlisted history-persistence preference without selecting filesystem paths or granting file access.
-// OverlayHistory содержит разрешённую настройку сохранения истории без выбора файловых путей и выдачи доступа к файлам.
-type OverlayHistory struct {
-	Persistence string `toml:"persistence,omitempty" json:"persistence,omitempty"`
+// OverlayContext holds owner preferences for qualified native switches without changing model limits.
+// OverlayContext хранит предпочтения владельца для штатных переключателей без изменения пределов модели.
+type OverlayContext struct {
+	AutoCompaction *bool `toml:"auto_compaction,omitempty" json:"autoCompaction,omitempty"`
+	Prune          *bool `toml:"prune,omitempty" json:"prune,omitempty"`
+}
+
+// OverlayCache expresses intent only; route qualification, secret namespaces and mandatory policy stay server-owned.
+// OverlayCache выражает только намерение; qualification, секретные namespace и обязательная policy принадлежат серверу.
+type OverlayCache struct {
+	Optimization string `toml:"optimization,omitempty" json:"optimization,omitempty"`
+	ReuseScope   string `toml:"reuse_scope,omitempty" json:"reuseScope,omitempty"`
+	NoReuse      *bool  `toml:"no_reuse,omitempty" json:"noReuse,omitempty"`
+	NoStore      *bool  `toml:"no_store,omitempty" json:"noStore,omitempty"`
+	Required     *bool  `toml:"required,omitempty" json:"required,omitempty"`
 }
 
 // RuntimeEnvironmentValue binds a nonsecret string value to a validated user variable name; secret values use a separate projection channel.
@@ -97,6 +106,7 @@ type RuntimeEnvironmentTool struct {
 // SafeEffectiveConfigInput collects versioned configuration metadata, ordinary values and secret locators for readback; callers must not put secret bytes in Values or Overlay.
 // SafeEffectiveConfigInput собирает версионные метаданные, обычные значения и ссылки на секреты для чтения; вызывающий не должен помещать секретные байты в Values или Overlay.
 type SafeEffectiveConfigInput struct {
+	ModelProvider                                               *ModelProviderConfiguration
 	Model, Provider, RuntimeProfileRef                          string
 	RuntimeConfigRef, RuntimeConfigDigest                       string
 	ProviderPolicyRef, ProviderPolicyMode, ProviderPolicyDigest string
@@ -111,8 +121,8 @@ type SafeEffectiveConfigInput struct {
 	Secrets                                                     []RuntimeSecretProjection
 }
 
-// RenderSafeEffectiveConfig validates overlay and environment values, then renders TOML readback with default history persistence and secret metadata but no resolved secret contents.
-// RenderSafeEffectiveConfig проверяет настройки и переменные, затем формирует TOML с сохранением истории по умолчанию и метаданными секретов без разрешения их содержимого.
+// RenderSafeEffectiveConfig validates overlay and environment values, then renders requested/effective native policies and secret metadata without resolved secret contents.
+// RenderSafeEffectiveConfig проверяет настройки и переменные, затем формирует TOML с запрошенными и действующими native policies и метаданными секретов без их содержимого.
 func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 	overlay, err := ParseConfigOverlay(input.Overlay)
 	if err != nil || ValidateRuntimeEnvironment(input.Values, input.Secrets) != nil {
@@ -126,13 +136,13 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 	// safeReadback fixes the effective TOML layout without embedding credential values or transport-authority configuration.
 	// safeReadback закрепляет формат итогового TOML без значений реквизитов и конфигурации транспортных полномочий.
 	type safeReadback struct {
-		WebSearchMode        string         `toml:"web_search,omitempty"`
-		Model                string         `toml:"model"`
-		ModelReasoningEffort string         `toml:"model_reasoning_effort,omitempty"`
-		Personality          string         `toml:"personality,omitempty"`
-		AllowLoginShell      *bool          `toml:"allow_login_shell,omitempty"`
-		History              OverlayHistory `toml:"history"`
+		Model                string          `toml:"model"`
+		ModelReasoningEffort string          `toml:"model_reasoning_effort,omitempty"`
+		Context              *OverlayContext `toml:"context,omitempty"`
+		Cache                *OverlayCache   `toml:"cache,omitempty"`
 		Kodex                struct {
+			Context       *ModelContextPolicy  `toml:"Context,omitempty"`
+			Cache         *EffectiveModelCache `toml:"Cache,omitempty"`
 			RuntimeConfig struct {
 				Ref, Digest string
 				Version     int64
@@ -158,10 +168,18 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 			Provider, RuntimeProfile string
 		}
 	}
-	readback := safeReadback{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort,
-		WebSearchMode: overlay.WebSearchMode, Personality: overlay.Personality, AllowLoginShell: overlay.AllowLoginShell, History: overlay.History}
-	if readback.History.Persistence == "" {
-		readback.History.Persistence = "save-all"
+	readback := safeReadback{Model: input.Model, ModelReasoningEffort: overlay.ModelReasoningEffort, Context: overlay.Context, Cache: overlay.Cache}
+	if config := input.ModelProvider; config != nil && config.DefinitionKey() == input.Provider {
+		model, found := config.Model(input.Model)
+		if config.Validate() != nil || !found {
+			return "", ErrModelProviderConfiguration
+		}
+		contextPolicy, err := model.ResolveRuntimeContext(input.Overlay)
+		if err != nil {
+			return "", err
+		}
+		cachePolicy, _ := config.ResolveRuntimeModelCache(input.Model, input.Overlay)
+		readback.Kodex.Context, readback.Kodex.Cache = &contextPolicy, &cachePolicy
 	}
 	readback.Kodex.Provider, readback.Kodex.RuntimeProfile = input.Provider, input.RuntimeProfileRef
 	readback.Kodex.RuntimeConfig.Ref, readback.Kodex.RuntimeConfig.Version, readback.Kodex.RuntimeConfig.Digest = input.RuntimeConfigRef, input.RuntimeConfigVersion, input.RuntimeConfigDigest

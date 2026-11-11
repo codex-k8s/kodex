@@ -1308,25 +1308,34 @@ func (e ConfigOverlayDiagnosticCode) Valid() bool {
 
 // Defines values for ConfigOverlayFieldKey.
 const (
-	AllowLoginShell      ConfigOverlayFieldKey = "allow_login_shell"
-	HistoryPersistence   ConfigOverlayFieldKey = "history.persistence"
-	ModelReasoningEffort ConfigOverlayFieldKey = "model_reasoning_effort"
-	Personality          ConfigOverlayFieldKey = "personality"
-	WebSearch            ConfigOverlayFieldKey = "web_search"
+	CacheNoReuse          ConfigOverlayFieldKey = "cache.no_reuse"
+	CacheNoStore          ConfigOverlayFieldKey = "cache.no_store"
+	CacheOptimization     ConfigOverlayFieldKey = "cache.optimization"
+	CacheRequired         ConfigOverlayFieldKey = "cache.required"
+	CacheReuseScope       ConfigOverlayFieldKey = "cache.reuse_scope"
+	ContextAutoCompaction ConfigOverlayFieldKey = "context.auto_compaction"
+	ContextPrune          ConfigOverlayFieldKey = "context.prune"
+	ModelReasoningEffort  ConfigOverlayFieldKey = "model_reasoning_effort"
 )
 
 // Valid indicates whether the value is a known member of the ConfigOverlayFieldKey enum.
 func (e ConfigOverlayFieldKey) Valid() bool {
 	switch e {
-	case AllowLoginShell:
+	case CacheNoReuse:
 		return true
-	case HistoryPersistence:
+	case CacheNoStore:
+		return true
+	case CacheOptimization:
+		return true
+	case CacheRequired:
+		return true
+	case CacheReuseScope:
+		return true
+	case ContextAutoCompaction:
+		return true
+	case ContextPrune:
 		return true
 	case ModelReasoningEffort:
-		return true
-	case Personality:
-		return true
-	case WebSearch:
 		return true
 	default:
 		return false

@@ -101,11 +101,11 @@ func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, req
 	if json.Unmarshal(raw, &projection) != nil {
 		return nil, invalid
 	}
-	search, err := assistantHostedSearchDiscovery(overlay.GetContent())
+	search, err := assistantNativePreferencesDiscovery(overlay.GetContent())
 	if err != nil {
 		return nil, invalid
 	}
-	projection["hosted_native_search"] = search
+	projection["native_preferences"] = search
 	return map[string]any{"kind": "CURRENT_CONFIGURATION", "assistant_ref": input.AgentRef,
 		"scope_kind": response.GetScopeKind(), "organization_ref": response.GetOrganizationRef(), "project_ref": response.GetProjectRef(),
 		"assistant_profile_ref": response.GetAssistantProfileRef(), "entries": []any{}, "next_offset": 0,
@@ -114,10 +114,10 @@ func castAssistantOwnCurrentConfiguration(input runtimecontract.RunnerInput, req
 
 // assistantCurrentExecutionSnapshot validates workspace policy and projects safe
 // immutable turn/revision/image/instruction/model pins with fixed read-only roots and
-// search configuration. It omits fences, credentials, task/input and resolved values;
+// native preferences. It omits fences, credentials, task/input and resolved values;
 // provider-process status remains UNKNOWN, not an inferred live process observation.
 // assistantCurrentExecutionSnapshot проверяет workspace policy и проецирует safe immutable
-// turn/revision/image/instruction/model pins с fixed read-only roots и search configuration.
+// turn/revision/image/instruction/model pins с fixed read-only roots и native preferences.
 // Fences,credentials,task/input,resolved values исключены; provider-process status
 // остаётся UNKNOWN, а не выводится как live process observation.
 func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[string]any, error) {
@@ -129,7 +129,7 @@ func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[s
 	workspace := map[string]any{"revision": input.WorkspacePolicy.Revision, "root": input.WorkspacePolicy.Root,
 		"maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount,
 		"readonly_logical_roots": []string{"input", "knowledge", "context"}}
-	search, err := assistantHostedSearchDiscovery(input.ConfigOverlay)
+	search, err := assistantNativePreferencesDiscovery(input.ConfigOverlay)
 	if err != nil {
 		return nil, err
 	}
@@ -141,21 +141,17 @@ func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[s
 		"provider_process": map[string]any{"status": "UNKNOWN", "provider": "OPENCODE"},
 		"instruction_ref":  input.InstructionRef, "instruction_digest": input.InstructionDigest, "prompt_template_ref": input.PromptTemplateRef,
 		"prompt_template_digest": input.PromptTemplateDigest, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort,
-		"workspace_policy": workspace, "hosted_native_search": search}, nil
+		"workspace_policy": workspace, "native_preferences": search}, nil
 }
 
-// assistantHostedSearchDiscovery reports requested settings without claiming native hosted search support; managed tools have their own grants.
-// assistantHostedSearchDiscovery сообщает requested settings без обещания native hosted search; managed tools имеют отдельные grants.
-func assistantHostedSearchDiscovery(raw string) (map[string]any, error) {
+// assistantNativePreferencesDiscovery reports only validated owner intent; route execution and cache enforcement are not inferred from preferences.
+// assistantNativePreferencesDiscovery сообщает только проверенное намерение владельца; исполнение и гарантии кеша из настроек не выводятся.
+func assistantNativePreferencesDiscovery(raw string) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(raw)
 	if err != nil {
-		return nil, errors.New("hosted search configuration is invalid")
+		return nil, errors.New("native preferences are invalid")
 	}
-	mode, source := overlay.WebSearchMode, "PUBLISHED_CONFIG_OVERLAY"
-	if mode == "" {
-		mode, source = "NONE", "OPENCODE_MANAGED_TOOLS"
-	}
-	return map[string]any{"configuration_source": source, "requested_mode": mode, "effective_status": "UNSUPPORTED", "owner_editable": false, "sandbox_domain_allowlist_applies": false, "actual_call_verified": false}, nil
+	return map[string]any{"requested_context": overlay.Context, "requested_cache": overlay.Cache, "effective_status": "UNKNOWN"}, nil
 }
 
 // validAssistantCurrentImage allows a wholly unset image only for SYSTEM bootstrap;

@@ -175,7 +175,7 @@ func (input RunnerInput) validateModelProvider() error {
 		input.ModelProvider.ValidateRuntimePreferences(input.Model, input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return ErrModelProviderConfiguration
 	}
-	if _, err := input.ModelProvider.ResolveModelCache(input.Model); err != nil {
+	if _, err := input.ModelProvider.ResolveRuntimeModelCache(input.Model, input.ConfigOverlay); err != nil {
 		return err
 	}
 	if _, found := input.ModelProvider.Model(input.Model); !found {
@@ -332,8 +332,8 @@ func (config ModelProviderConfiguration) Clone() (ModelProviderConfiguration, er
 // ValidateOpenCodeOverlay accepts only preferences consumed by the qualified native adapter, rejecting retired shell, search, personality and history switches.
 // ValidateOpenCodeOverlay принимает только настройки проверенного native adapter, отклоняя удалённые переключатели shell, поиска, стиля и истории.
 func ValidateOpenCodeOverlay(raw string) error {
-	overlay, err := ParseConfigOverlay(raw)
-	if err != nil || overlay.WebSearchMode != "" || overlay.Personality != "" || overlay.AllowLoginShell != nil || overlay.History.Persistence != "" {
+	_, err := ParseConfigOverlay(raw)
+	if err != nil {
 		return ErrModelProviderConfiguration
 	}
 	return nil
@@ -347,6 +347,9 @@ func (config ModelProviderConfiguration) ValidateRuntimePreferences(model, overl
 	}
 	if _, found := config.Model(model); !found {
 		return ErrModelProviderConfiguration
+	}
+	if _, err := config.ResolveRuntimeModelCache(model, overlay); err != nil {
+		return err
 	}
 	if effort == "" {
 		return nil

@@ -36,7 +36,7 @@ func TestModelCacheQualificationDoesNotInventGuarantees(t *testing.T) {
 				policy.NoStore = true
 				policy.Required = name == "no store required"
 				want = "NONE"
-				denied = policy.Required
+				denied = true
 			case "unknown optional", "unknown required":
 				policy.Qualification.Status = "UNKNOWN"
 				policy.Qualification.Source = "NONE"

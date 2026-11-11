@@ -36,7 +36,7 @@ for (const width of [1440, 390, 2900]) {
     await installSyntheticCsrf(page.context(), "a");
     const digest = "a".repeat(64);
     const now = "2026-09-05T00:00:00Z";
-    let content = 'personality = "none"';
+    let content = "context.prune = true";
     let finishSave: (() => void) | undefined;
     let saves = 0;
     let diffReads = 0;
@@ -158,6 +158,10 @@ for (const width of [1440, 390, 2900]) {
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
+      if (url.pathname === "/api/v1/provider-definitions") {
+        await route.fulfill({ json: { items: [], nextCursor: "" } });
+        return;
+      }
       const historyPath =
         "/api/v1/agents/agent_synthetic/config-overlay/revisions";
       const oldOverlay = {
@@ -165,7 +169,7 @@ for (const width of [1440, 390, 2900]) {
         ref: "overlay_old",
         revision: 7,
         state: "SUPERSEDED",
-        content: 'personality = "pragmatic"',
+        content: 'cache.optimization = "NO_HINTS"',
         digest: "b".repeat(64),
       };
       if (url.pathname === historyPath) {
@@ -429,7 +433,7 @@ for (const width of [1440, 390, 2900]) {
     ).toBeVisible();
     const editor = page.locator(".overlay-panel > .code-editor .cm-content");
     await expect(editor).toBeVisible();
-    await editor.fill('personality = "friendly"');
+    await editor.fill("[context]\nprune = false");
     const effort = page.getByRole("combobox", {
       name: "Степень рассуждения",
       exact: true,
@@ -437,7 +441,19 @@ for (const width of [1440, 390, 2900]) {
     await expect(effort.locator("option")).toHaveCount(3);
     await effort.selectOption("low");
     await expect(editor).toContainText('model_reasoning_effort = "low"');
-    await expect(editor).toContainText('personality = "friendly"');
+    await expect(editor).toContainText("prune = false");
+    const compaction = page.getByRole("combobox", {
+      name: "Штатное автоматическое сжатие OpenCode",
+      exact: true,
+    });
+    await compaction.selectOption("true");
+    await expect(editor).toContainText("auto_compaction = true");
+    const cache = page.getByRole("combobox", {
+      name: "Намерение оптимизации inference cache",
+      exact: true,
+    });
+    await cache.selectOption("NO_HINTS");
+    await expect(editor).toContainText('optimization = "NO_HINTS"');
     const voice = page
       .locator(".overlay-panel")
       .getByRole("button", { name: "Голосовой ввод", exact: true });
@@ -447,10 +463,12 @@ for (const width of [1440, 390, 2900]) {
       .click();
     await expect.poll(() => saves).toBe(1);
     await expect(editor).toHaveAttribute("contenteditable", "false");
+    await expect(compaction).toBeDisabled();
+    await expect(cache).toBeDisabled();
     await expect(voice).toHaveCount(0);
     finishSave?.();
     await expect(editor).toHaveAttribute("contenteditable", "true");
-    await expect(editor).toContainText('personality = "friendly"');
+    await expect(editor).toContainText("prune = false");
     await expect(editor).toContainText('model_reasoning_effort = "low"');
     expect(content).toContain('model_reasoning_effort = "low"');
     await page
@@ -466,7 +484,7 @@ for (const width of [1440, 390, 2900]) {
       "false",
     );
     await expect(history.locator(".cm-content")).toContainText(
-      'personality = "pragmatic"',
+      'cache.optimization = "NO_HINTS"',
     );
     await history
       .getByRole("button", {
@@ -475,7 +493,7 @@ for (const width of [1440, 390, 2900]) {
       })
       .click();
     await expect.poll(() => rollbacks).toBe(1);
-    await expect(editor).toContainText('personality = "pragmatic"');
+    await expect(editor).toContainText('cache.optimization = "NO_HINTS"');
     await page
       .getByRole("button", { name: "Новая ревизия", exact: true })
       .click();

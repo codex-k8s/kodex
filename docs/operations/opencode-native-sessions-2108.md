@@ -4,8 +4,8 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-11-11
+version: 1.2.0
+updated: 2026-11-12
 ---
 
 # OpenCode: нативные сессии и восстановление
@@ -392,3 +392,49 @@ PASS648,946с, завершающие read-only/owner проверки PASS. Nat
 144managed effects,36compactions,256retained messages, export804136bytes,
 максимальный model HTTP body17736bytes. Эти локальные результаты не подтверждают
 CI, установленный кластер или аппаратный/облачный cache profile.
+
+## Настройки исполнения через существующий overlay
+
+Для #2108 предпочтения context/cache принадлежат опубликованной revision overlay
+агента. Git-owned provider descriptor задаёт endpoint/model ceilings,
+qualification и обязательные ограничения маршрута. Overlay не изменяет descriptor,
+qualification, credentials, cache namespace key или источник authority. UI-owned
+предпочтения не могут ослабить обязательную route policy. Служебный config digest
+остаётся дайджестом исходного Git descriptor; overlay имеет собственные
+source/version/digest в прежней RuntimeRevision.
+
+| Сценарий | Сквозной путь и инвариант |
+| --- | --- |
+| Создать/изменить draft | Проверенный actor → прежний agent overlay endpoint → generated RPC → owner boundary агента, затем version/idempotency → immutable draft. Произвольные provider options, salt, endpoint и qualification не входят в editable schema |
+| Validate/publish | Прежние специализированные команды overlay; CP проверяет exact provider/model и cache enforcement до публикации. Ошибка не меняет active revision; обязательные ограничения Git нельзя отменить предпочтением UI |
+| Git-owned конфигурация | Действуют прежние source ownership и отдельный copy/detach. UI не переписывает Git-owned объект; настройки разных владельцев не используют одно поле хранения |
+| Readback | Прежний runtime configuration view показывает requested overlay и effective context/cache с UNKNOWN/UNSUPPORTED и причиной. Чтение не меняет состояние и не создаёт события |
+| Claim/retry/continuation | CP разрешает свежие права и опубликованный overlay, закрепляет revision. Exact retry сохраняет immutable snapshot; continuation получает новое разрешённое состояние |
+| Runner | Проверяет signed input и ту же typed policy, передаёт только штатные compaction/prune и квалифицированные cache controls native adapter. Qualification не пересчитывается из ответа модели |
+| Terminal/cancel/delete/expiry | Прежние owner transitions закрывают leases/grants; изменение overlay не оживляет run и не продлевает срок исполнения |
+| Ошибка cache enforcement | Обязательная неподдержанная политика отклоняется до model HTTP request. NO_REUSE и NO_STORE остаются независимыми; transport не выбирает более слабый fallback |
+
+Изменения используют прежние RPC registration, clients, readiness и deploy
+ownership CP/gateway/runner. Отдельных фоновых задач, событий или второго
+policy owner не добавляется; audit/idempotency/event cardinality существующих
+команд overlay сохраняются. Матрица задаёт проверяемый путь реализации, а не
+свидетельствует об установленной приёмке.
+
+Редактор агента предлагает наследование маршрута, auto-compaction/prune,
+optimization/reuse scope и строгие no-reuse/no-store/required через ту же TOML
+схему, что проверяет CP. Настройки проходят draft → validate → publish;
+несовместимый строгий запрос остаётся INVALID и не меняет published revision.
+Фактическая конфигурация показывает запрошенные и действующие native policies.
+Старые Codex overlay поля и hosted-search selector удалены, включая managed
+assistant schema и неполный legacy read projection. Поиск через managed tools
+остаётся отдельным разрешением, не параметром модели.
+
+Локальная проверка редактора: unit/runtimecontract с race, CP unit, PostgreSQL
+publication/history/rollback и SYSTEM/PROJECT assistants, gateway HTTP и
+controller callback race, producer/consumer managed MCP, UI unit и Chromium
+на 390/1440/2900 px. Настоящий OpenCode + LiteLLM/Redis с synthetic model
+повторно прошёл native harness: 144 tools, 36 compactions, 256 retained messages,
+export 804318 bytes, максимальный model HTTP body 17738 bytes; 246.813 s.
+Это forced-threshold квалификация, не многочасовая нагрузка и не cluster E2E.
+Полная установка, несколько provider definitions и установленная приёмка
+по-прежнему не подтверждены этим срезом.

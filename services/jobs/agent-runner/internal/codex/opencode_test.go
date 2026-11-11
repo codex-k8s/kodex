@@ -200,3 +200,23 @@ func TestOpenCodeReasoningProjection(t *testing.T) {
 		}
 	}
 }
+
+// TestOpenCodeConfigurationConsumesNativePreferences binds an owner overlay to actual native config and refuses unsupported strict policy before a process starts.
+// TestOpenCodeConfigurationConsumesNativePreferences связывает owner overlay с native config и отклоняет неподдержанную строгую policy до запуска процесса.
+func TestOpenCodeConfigurationConsumesNativePreferences(t *testing.T) {
+	input := openCodeInputFixture()
+	input.ConfigOverlay = "[context]\nauto_compaction = false\nprune = false\n[cache]\noptimization = \"NO_HINTS\""
+	raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	var config map[string]any
+	if err != nil || json.Unmarshal(raw, &config) != nil {
+		t.Fatal("native preferences rejected")
+	}
+	compaction := config["compaction"].(map[string]any)
+	if compaction["auto"] != false || compaction["prune"] != false {
+		t.Fatal("native preferences lost")
+	}
+	input.ConfigOverlay = "[cache]\nno_store = true\nrequired = false"
+	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
+		t.Fatal("strict unsupported preference reached native config")
+	}
+}

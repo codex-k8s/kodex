@@ -1480,7 +1480,7 @@ export type ConfigOverlayDiagnostic = {
 };
 
 export type ConfigOverlayField = {
-    key: 'model_reasoning_effort' | 'web_search' | 'personality' | 'allow_login_shell' | 'history.persistence';
+    key: 'model_reasoning_effort' | 'context.auto_compaction' | 'context.prune' | 'cache.optimization' | 'cache.reuse_scope' | 'cache.no_reuse' | 'cache.no_store' | 'cache.required';
     valueType: 'string' | 'boolean';
     allowedValues: Array<string>;
     defaultValue: string;
@@ -1494,6 +1494,9 @@ export type ConfigOverlaySchema = {
     digest: string;
     maximumBytes: 65536;
     fields: [
+        ConfigOverlayField,
+        ConfigOverlayField,
+        ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,

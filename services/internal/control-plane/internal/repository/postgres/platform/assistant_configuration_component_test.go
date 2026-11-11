@@ -355,7 +355,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("model config not published: %v", err)
 	}
 	parsed, err := runtimecontract.ParseConfigOverlay(changed.PublishedOverlay.Content)
-	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.WebSearchMode != "" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
+	if err != nil || parsed.ModelReasoningEffort != "medium" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
 		t.Fatalf("reasoning overlay not published: %v", err)
 	}
 	noChange := operation

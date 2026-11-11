@@ -232,8 +232,8 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 			if effective == "" {
 				mode = runtimecontract.ReasoningUnsupported
 			}
-			if profile.ValidateRuntimePreferences(model, overlay, effective, mode) != nil {
-				return nil, nil, errs.ErrConflict
+			if preferenceErr := profile.ValidateRuntimePreferences(model, overlay, effective, mode); preferenceErr != nil {
+				return nil, nil, errors.Join(errs.ErrConflict, preferenceErr)
 			}
 			modelEfforts := append([]string{}, capability.ReasoningEfforts...)
 			if len(runtimecontract.DiagnoseConfigOverlay(overlay, modelEfforts)) != 0 {

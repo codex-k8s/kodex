@@ -157,6 +157,21 @@ const ru = {
     },
   },
   runtimeOverlay: {
+    executionPreferences: "Контекст и кеш",
+    inheritRoute: "Из настройки маршрута",
+    preferencesHelp:
+      "Изменения входят в текущий черновик. Сохраните, проверьте и опубликуйте его. Обязательные ограничения маршрута проверяет сервер.",
+    repairPreferences: "Сначала исправьте недопустимые поля TOML ниже.",
+    preferenceValues: {
+      true: "Да",
+      false: "Нет",
+      PROVIDER_DEFAULT: "Настройки провайдера",
+      NO_HINTS: "Без подсказок Kodex",
+      OPTIMIZE: "Оптимизировать",
+      PROJECT: "Проект",
+      INITIATOR: "Инициатор",
+      SESSION: "Сессия",
+    },
     environmentShortBase: "База",
     environmentShortSavedAt: "Сохранено",
     environmentValidationDigest: "Дайджест проверки",
@@ -3749,7 +3764,7 @@ const ru = {
   },
   providers: {
     runtimePolicy: {
-      title: "Контекст и кеш модели",
+      title: "Контекст и кеш маршрута",
       enabled: "Включено",
       disabled: "Выключено",
       runtime: "Исполнитель",
@@ -3763,7 +3778,7 @@ const ru = {
       unknown:
         "Политика модели пока недоступна; гарантии кеширования не подтверждены.",
       ownership:
-        "Настройки принадлежат конфигурации установки в Git. Выбор модели применяет её политику; интерфейс не перезаписывает Git.",
+        "Здесь показана базовая политика маршрута из Git. Допустимые предпочтения задаются в настройках агента и публикуются вместе с overlay; обязательные ограничения маршрута сохраняются.",
       guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
       blocked: "Запуск с этой обязательной политикой заблокирован",
       noHints:
@@ -5032,6 +5047,21 @@ const en = {
     },
   },
   runtimeOverlay: {
+    executionPreferences: "Context and cache",
+    inheritRoute: "Inherit route setting",
+    preferencesHelp:
+      "Changes belong to the current draft. Save, validate and publish it. The server enforces mandatory route constraints.",
+    repairPreferences: "Correct invalid TOML fields below first.",
+    preferenceValues: {
+      true: "Yes",
+      false: "No",
+      PROVIDER_DEFAULT: "Provider default",
+      NO_HINTS: "No Kodex hints",
+      OPTIMIZE: "Optimize",
+      PROJECT: "Project",
+      INITIATOR: "Initiator",
+      SESSION: "Session",
+    },
     environmentShortBase: "Base",
     environmentShortSavedAt: "Saved",
     environmentValidationDigest: "Validation digest",
@@ -8627,7 +8657,7 @@ const en = {
       unknown:
         "Model policy is unavailable; caching guarantees are unconfirmed.",
       ownership:
-        "The installation configuration in Git owns these settings. Selecting a model applies its policy; the UI does not overwrite Git.",
+        "This is the Git-owned route baseline. Agent preferences are published through its overlay; mandatory route constraints remain enforced.",
       guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
       blocked: "Launch is blocked by this required policy",
       noHints:
