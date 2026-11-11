@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.28
+version: 1.0.29
 updated: 2026-11-11
 ---
 
@@ -37,6 +37,42 @@ group29000/mode2770 после BIND через общий nofollow/exclusive dir
 
 Этот документ фиксирует согласованный контракт. Наличие типов, миграции или
 локального теста само по себе не подтверждает доставку либо полную готовность.
+
+## Workspace координатора workflow
+
+Schema040 расширяет существующий opt-in `SESSION_WORKSPACE_V2` на координатора
+workflow. Legacy-профиль без V2 сохраняет прежнее поведение. Workspace отдельного
+сотрудника по-прежнему связан с точным AGENT target и не содержит workflow pin.
+Для WORKFLOW owner сохраняет `workflow_version_id`: опубликованная версия должна
+принадлежать тому же workflow/project/organization и быть закреплена реальным root
+этой сессии; её `CoordinatorAgentRef` должен совпасть с writer agent. Это проверка
+идентичности, а не разрешение исполнения: прежние ACL, initiator, grants, eligibility
+и writer fence проверяются независимо.
+
+| Переход | Дополнительная граница WORKFLOW |
+| --- | --- |
+| CREATE/PREPARE | Точный candidate run определяет version pin до подготовки тома; другой сотрудник и отсутствующий pin закрыто отклоняются |
+| Claim/BIND/renew | Owner row, candidate run и наблюдение текущего lease совпадают по версии и coordinator; legacy fallback отсутствует |
+| Complete/cancel/timeout | Прежние writer ACK, positive join и released proof обязательны; terminal бизнес-запуск не оживает из-за checkpoint |
+| Checkpoint/restore/continuation | Архив сохраняет прежний session/agent scope; новая generation не меняет version pin и не принимает старого writer |
+| Retry/restart | Durable owner row, прежние OCC/idempotency и physical custody сохраняются; повтор не выбирает текущую опубликованную версию |
+| Изменение workflow | Новый coordinator либо другая версия не переименовывают существующий workspace; для другого pin нужна новая сессия |
+| Удаление | Существующий root удерживает опубликованную версию своим FK до штатного purge; новая область не разрешает удаление активного workspace |
+
+Forward-only миграция `20261111000100` добавляет nullable pin существующим AGENT
+rows без преобразования данных и заменяет только scope-проверку guard, сохраняя
+остальные переходы. Перед apply обязательна остановка runtime и workspace tasks;
+профиль `workflow-workspace` проверяет exact039 и изменяемый guard. Postcondition
+сверяет колонку, существующий root FK, scope-функцию, оба guards и включённые triggers. Старые release-профили не
+принимают новый head. При возврате к старому image WORKFLOW/V2 остаётся закрыт;
+metadata и архивы сохраняются, `goose down` не используется.
+Новый control-plane требует schema040 даже при выключенном opt-in: readiness
+проверяет наличие column/function до запуска worker, а не ждёт первого отказа claim.
+
+`make test-workflow-workspace-postgres` выполняет реальный039→040, повторный
+`up` и общий lifecycle сотрудника/координатора в одноразовой PostgreSQL18.3.
+Pod/PVC/S3 observations в component suite — явные fixtures; они не доказывают
+физическое восстановление, установленный workflow либо полный AI PDLC.
 
 Выключение профиля не разрешает потерять уже существующий V2-каталог.
 Прежний путь допускается только после блокировки доверенной session и
@@ -242,9 +278,10 @@ exact trusted session и проверяет отсутствие **любого*
 разрешают fallback. Эта read-only развилка не создаёт событий; авторитетный
 read path — owner workspace row под той же session lock. Native-проверка
 выключения профиля во время CREATE/PREPARE не допускает model lease и сохраняет
-ту же physical task/attempt. Полная поддержка V2 для coordinator требует
-отдельной проверки pinned workflow version и agent; этот отказ не обходится
-при включённом профиле. Первый V2 init использует отдельный protected mode
+ту же physical task/attempt. В schema015–039 V2 для coordinator закрыто
+отклоняется. Schema040 добавляет описанную выше проверку pinned workflow version
+и agent; отказ не обходится выключением профиля либо пустым каталогом.
+Первый V2 init использует отдельный protected mode
 `runtime-bind-workspace`; отсутствующий input не включает legacy prepare.
 Только этот init получает private PVC root, остальные containers — exact
 work subPath и отдельные read-only inode/ACK records. Другой live consumer
@@ -1009,9 +1046,10 @@ Forward migration `20261028000100` добавляет отдельный `worksp
 | Fail/lease expiry последней попытки | RESTORE task → DEAD_LETTER, workspace → BLOCKED с RESTORE_UNCONFIRMED в одной транзакции; archive/том сохраняются | Нет бесконечного RESTORING и отсутствует право на автоматическую очистку |
 | Cancel business run во время data custody | Storage intent сохраняет право закончить только сохранение/копирование данных; новый model claim требует отдельной актуальной eligibility | Не выдаёт execution grant, human approve, бизнес-результат либо право удалить источник |
 
-Этот срез не завершает передачу файлов между разными session через retry/DAG
-и поддержку workspace координатора WORKFLOW. Эти пути требуют серверного
-происхождения и отдельной полной проверки; fallback к пустому каталогу не разрешён.
+Этот restore-срез сам по себе не завершает передачу файлов между разными session
+через retry/DAG. Workspace координатора WORKFLOW отдельно определён schema040
+выше; межсессионный перенос всё ещё требует собственного серверного происхождения
+и полной проверки. Fallback к пустому каталогу не разрешён.
 Context7 для PostgreSQL недоступен: возвращён отказ API key; проверена официальная
 [документация PostgreSQL18 о modifying CTE](https://www.postgresql.org/docs/current/queries-with.html#QUERIES-WITH-MODIFYING).
 

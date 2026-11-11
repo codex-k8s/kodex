@@ -1439,3 +1439,24 @@ test('039: managed workspace остаётся опциональным без ba
   assert.equal(validImmutableMigrationPostcondition('managed-workspace',{...after,gooseVersion:20261110000100}),false);
   assert.equal(validImmutableMigrationPostcondition('artifact-optional-antivirus',after),false);
 });
+
+test('040: workspace workflow требует точный version pin и завершённые исполнения', async () => {
+  const {validWorkflowWorkspaceMigrationPrecondition} = await import('./control-plane-immutable-migration.mjs');
+  const profile=immutableMigrationProfile('workflow-workspace');
+  assert.equal(profile.version,'20261111000100');assert.equal(profile.previousVersion,20261110000200);
+  const before={profile:'WORKFLOW_WORKSPACE_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261110000200,
+    workflowWorkspaceAbsent:true,workspaceGuardReady:true,archiveTaskGuardReady:true,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,
+    claimedRuntimeLeases:0,activeWorkspaceVolumeTasks:0,activeWorkspaceArchiveTasks:0};
+  assert.equal(validWorkflowWorkspaceMigrationPrecondition(before),true);
+  for(const patch of [{workflowWorkspaceAbsent:false},{workspaceGuardReady:false},{archiveTaskGuardReady:false},{activeRuntimeRuns:1},{activeRuntimeRuns:undefined}])
+    assert.equal(validWorkflowWorkspaceMigrationPrecondition({...before,...patch}),false);
+  for(const key of ['activeRunNodes','activeSessionTurns','claimedRuntimeLeases','activeWorkspaceVolumeTasks','activeWorkspaceArchiveTasks'])
+    assert.equal(validWorkflowWorkspaceMigrationPrecondition({...before,[key]:1}),false);
+  const after={profile:'WORKFLOW_WORKSPACE_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000100,
+    workflowVersionColumnReady:true,rootVersionReferenceReady:true,scopeFunctionReady:true,workspaceGuardReady:true,archiveTaskGuardReady:true};
+  assert.equal(validImmutableMigrationPostcondition('workflow-workspace',after),true);
+  for(const key of ['workflowVersionColumnReady','rootVersionReferenceReady','scopeFunctionReady','workspaceGuardReady','archiveTaskGuardReady'])
+    assert.equal(validImmutableMigrationPostcondition('workflow-workspace',{...after,[key]:false}),false);
+  assert.equal(validImmutableMigrationPostcondition('managed-workspace',after),false);
+  assert.equal(validImmutableMigrationPostcondition('workflow-workspace',{...after,gooseVersion:20261110000200}),false);
+});

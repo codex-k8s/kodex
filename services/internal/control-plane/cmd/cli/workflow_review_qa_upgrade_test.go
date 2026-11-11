@@ -100,6 +100,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "workflow-workspace":
+		verifier = "validWorkflowWorkspaceMigration"
 	case "managed-workspace":
 		verifier = "validManagedWorkspaceMigration"
 	case "artifact-optional-antivirus":
@@ -206,7 +208,8 @@ if (!module[process.argv[2]](proof)) {
   }
   visit(proof,''); console.error(JSON.stringify(failed)); process.exit(1);
 }
-if (process.argv[2].endsWith('Precondition') && proof.profile !== 'MANAGED_WORKSPACE_PREDECESSOR_V1') {
+// Новые короткие profiles сами проверяют применимые состояния; прежний общий контур неизменен.
+if (process.argv[2].endsWith('Precondition') && !['MANAGED_WORKSPACE_PREDECESSOR_V1','WORKFLOW_WORKSPACE_PREDECESSOR_V1'].includes(proof.profile)) {
   const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases',
     'openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','oldClaimSessions'];
   if (!fields.every(key => proof[key] === 0)) process.exit(2);

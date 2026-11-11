@@ -20,13 +20,13 @@ import (
 // testWorkspaceRestoreOwner проводит новый model request той же сессии через exact accepted source checkpoint.
 // Worker observations — disposable fixtures; проверяются owner transitions, не physical PVC/S3 effects.
 func testWorkspaceRestoreOwner(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, pool *pgxpool.Pool,
-	owner, worker, observer value.Principal, previous *runtimecontract.WorkspaceStorageBinding, oldBind command.WorkspaceObservationInput,
+	owner, worker, observer value.Principal, previous *runtimecontract.WorkspaceStorageBinding, oldBind command.WorkspaceObservationInput, target entity.RunTarget,
 	execute func(command.Kind, value.Principal, string, any) command.Result,
 ) {
 	t.Helper()
 	run := execute(command.LaunchRun, owner, "restore-launch", command.LaunchRunInput{
 		ProjectRef: previous.Scope.ProjectRef, SessionRef: previous.Scope.SessionRef, Title: "Продолжить работу с файлами",
-		Task: "Проверить сохранённый сервис", Target: entity.RunTarget{Type: "AGENT", Ref: previous.Scope.AgentRef}}).Run
+		Task: "Проверить сохранённый сервис", Target: target}).Run
 	if run == nil || run.SessionRef != previous.Scope.SessionRef {
 		t.Fatal("restore request did not retain exact session")
 	}

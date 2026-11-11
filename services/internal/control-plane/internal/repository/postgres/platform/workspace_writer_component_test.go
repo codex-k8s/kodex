@@ -22,6 +22,15 @@ import (
 // TestWorkspaceWriterOwnerComponent использует настоящие owner commands и immutable RR/lease rows для V2 writer custody.
 // Physical Pod/PVC observations — disposable controller fixtures; настоящая модель, кластер и object store не вызываются.
 func TestWorkspaceWriterOwnerComponent(t *testing.T) {
+	testWorkspaceWriterOwnerComponent(t, false)
+}
+
+// testWorkspaceWriterOwnerComponent runs the complete custody lifecycle for an employee or a
+// workflow coordinator using the same observations, fencing, checkpoint and restore assertions.
+// testWorkspaceWriterOwnerComponent проводит полный custody lifecycle сотрудника либо
+// координатора с одинаковыми проверками observations, fencing, checkpoint и restore.
+func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -38,6 +47,9 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	}
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatal("bootstrap workspace owner fixture", err)
+	}
+	if err := repository.Ready(ctx); err != nil {
+		t.Fatal("workspace owner schema is not ready", err)
 	}
 	seedObservedCatalogFixture(t, ctx, repository)
 	service, err := platformservice.New(repository)
@@ -65,8 +77,13 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 		t.Fatal("workspace project was not returned")
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "workspace-owner-agent", "Разработчик")
+	target := entity.RunTarget{Type: "AGENT", Ref: agent.Ref}
+	var workflowVersionRef string
+	if workflowMode {
+		target, workflowVersionRef = testWorkspaceWorkflowTarget(t, ctx, service, owner, project.Ref, agent, execute)
+	}
 	run := execute(command.LaunchRun, owner, "launch", command.LaunchRunInput{ProjectRef: project.Ref,
-		Title: "Сохранить рабочие исходники", Task: "Подготовить небольшой сервис", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
+		Title: "Сохранить рабочие исходники", Task: "Подготовить небольшой сервис", Target: target}).Run
 	if run == nil {
 		t.Fatal("workspace run was not returned")
 	}
@@ -86,6 +103,9 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	}
 	if binding.Generation != 1 || binding.Scope.AgentRef != agent.Ref || binding.Scope.SessionRef != run.SessionRef {
 		t.Fatal("workspace binding does not match assigned employee session")
+	}
+	if workflowMode {
+		testWorkflowWorkspaceScope(t, ctx, pool, binding, workflowVersionRef)
 	}
 	if binding.VolumeReady == nil || binding.VolumeReady.Preparation.PVCUID != "00000000-0000-4000-8000-000000000010" {
 		t.Fatal("model snapshot omitted its accepted physical preparation")
@@ -196,7 +216,7 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	}
 	if restoreProfile && !t.Failed() {
 		if !t.Run("restore_owner_generation", func(t *testing.T) {
-			testWorkspaceRestoreOwner(t, ctx, repository, service, pool, owner, worker, observer, binding, payload, execute)
+			testWorkspaceRestoreOwner(t, ctx, repository, service, pool, owner, worker, observer, binding, payload, target, execute)
 		}) {
 			return
 		}
@@ -204,4 +224,9 @@ func TestWorkspaceWriterOwnerComponent(t *testing.T) {
 	t.Run("physical_cancel_and_past_fact", func(t *testing.T) {
 		testWorkspaceVolumeCancellationOwner(t, ctx, repository, service, owner, worker, project.Ref, agent.Ref)
 	})
+	if workflowMode && !t.Failed() {
+		t.Run("changed_workflow_version_conflict", func(t *testing.T) {
+			testWorkflowWorkspaceVersionConflict(t, ctx, repository, service, owner, target.Ref, binding, execute)
+		})
+	}
 }

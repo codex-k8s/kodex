@@ -194,9 +194,9 @@ func validDNSLabel(value string) bool {
 	return runtimecontract.ValidDNSLabel(value)
 }
 
-// Ready checks installation schema version and secret-draft/purge-recovery schema predicates
+// Ready checks installation schema version and secret-draft/purge-recovery/workspace schema predicates
 // through the supplied pool, returning fixed diagnostics without probing downstream workers.
-// Ready проверяет версию схемы установки и schema predicates secret-draft и purge-recovery через
+// Ready проверяет версию схемы установки и schema predicates secret-draft, purge-recovery и workspace через
 // переданный pool, возвращая фиксированную диагностику без проверки downstream workers.
 func (repository *Repository) Ready(ctx context.Context) error {
 	var schemaVersion int
@@ -213,6 +213,10 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	var recoveryReady bool
 	if repository.pool.QueryRow(ctx, queryProjectPurgeRecoveryReadiness).Scan(&recoveryReady) != nil || !recoveryReady {
 		return errors.New("project purge recovery schema is unavailable")
+	}
+	var workspaceReady bool
+	if repository.pool.QueryRow(ctx, queryWorkspaceStorageReadiness).Scan(&workspaceReady) != nil || !workspaceReady {
+		return errors.New("workflow workspace schema is unavailable")
 	}
 	return repository.standardOIDCPolicyReady(ctx)
 }

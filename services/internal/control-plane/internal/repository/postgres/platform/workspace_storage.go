@@ -11,6 +11,10 @@ import (
 )
 
 var (
+	// queryWorkspaceStorageReadiness rejects an old schema before workspace workers can claim work.
+	// queryWorkspaceStorageReadiness отклоняет старую схему до claim работы workspace workers.
+	//go:embed sql/workspace_storage__readiness.sql
+	queryWorkspaceStorageReadiness string
 	// queryWorkspaceStorageLegacyEligible locks the exact trusted session and proves absence of every V2 row, independent of candidate agent.
 	// queryWorkspaceStorageLegacyEligible блокирует exact trusted session и доказывает отсутствие любых V2 rows независимо от candidate agent.
 	//go:embed sql/workspace_storage__legacy_eligible.sql
@@ -58,14 +62,18 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 		}
 	}
 	arguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_id": candidate.sessionID,
-		"project_id": candidate.projectID, "agent_id": candidate.agentID}
+		"project_id": candidate.projectID, "agent_id": candidate.agentID, "run_id": candidate.runID}
 	var sessionID string
 	if err := tx.QueryRow(ctx, queryWorkspaceStorageSession, arguments).Scan(&sessionID); err != nil || sessionID != candidate.sessionID {
 		return nil, false, errs.ErrConflict
 	}
 	var reference, state string
 	var generation int64
-	err := tx.QueryRow(ctx, queryWorkspaceStorageLock, arguments).Scan(&reference, &generation, &state)
+	var versionMatches bool
+	err := tx.QueryRow(ctx, queryWorkspaceStorageLock, arguments).Scan(&reference, &generation, &state, &versionMatches)
+	if err == nil && !versionMatches {
+		return nil, false, errs.ErrConflict
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		if !activated {
 			// Единственный legacy-допуск уже проверил отсутствие любой V2 row.

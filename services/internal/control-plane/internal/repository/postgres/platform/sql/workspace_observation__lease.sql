@@ -23,12 +23,15 @@ JOIN control_plane.run_nodes node ON node.id=lease.node_id AND node.organization
 JOIN control_plane.session_turns turn ON turn.id=revision.turn_id AND turn.organization_id=lease.organization_id
     AND turn.run_id=run.id AND turn.session_id=run.session_id
 JOIN control_plane.sessions session ON session.id=run.session_id AND session.organization_id=lease.organization_id
-    AND session.project_id=run.project_id AND session.target_type='AGENT'
+    AND session.project_id=run.project_id
 JOIN control_plane.agents agent ON agent.id=revision.agent_id AND agent.organization_id=lease.organization_id
-    AND agent.project_id=run.project_id AND agent.ref=session.target_ref
+    AND agent.project_id=run.project_id
 JOIN control_plane.projects project ON project.id=run.project_id AND project.organization_id=lease.organization_id
 JOIN control_plane.organizations organization ON organization.id=lease.organization_id
 JOIN control_plane.session_workspace_storage workspace ON workspace.session_id=session.id
     AND workspace.organization_id=lease.organization_id AND workspace.project_id=run.project_id AND workspace.agent_id=agent.id
+    AND workspace.workflow_version_id IS NOT DISTINCT FROM
+        CASE WHEN session.target_type='WORKFLOW' THEN run.workflow_version_id END
 WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
+    AND control_plane.workspace_session_scope_matches(session.id,agent.id,workspace.workflow_version_id)
 FOR UPDATE OF lease,workspace NOWAIT;
