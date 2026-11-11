@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"io"
 	"log/slog"
 	"math"
@@ -582,7 +583,7 @@ func (server *Server) RenewExecution(ctx context.Context, request *controlplanev
 // ReportExecutionProgress преобразует необязательные финансовое наблюдение и обычное сообщение,
 // затем возвращает запуск, событие и соответствующий узел команды.
 func (server *Server) ReportExecutionProgress(ctx context.Context, request *controlplanev1.ReportExecutionProgressRequest) (*controlplanev1.ReportExecutionProgressResponse, error) {
-	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress()}
+	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress(), ModelMeasurement: modelmeasurementwire.FromProto(request.GetModelMeasurement())}
 	if financial := request.GetFinancial(); financial != nil {
 		payload.Financial = &entity.ProviderFinancialSummary{Observation: financialObservation(financial)}
 	}

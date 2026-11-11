@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.3.0
+version: 1.4.0
 updated: 2026-11-12
 ---
 
@@ -484,3 +484,78 @@ broker-тест проверяет конкретные headers и cross-definit
 разрешают эти ссылки из закрытого локального реестра без сетевой загрузки.
 Для `github.com/google/jsonschema-go` через Context7 проверен `ResolveOptions.Loader`,
 его сигнатура сверена с исходником закреплённого v0.3.0.
+
+## Измерения model requests: сквозной путь
+
+Требование #2108 разделяет обычные шаги, штатную compaction и auxiliary calls.
+Карта была составлена до реализации. Локальные проверки и кластерная приёмка
+отчётно разделяются; наличие схемы пути не подтверждает установленный результат.
+Native `step-finish` даёт нормализованный расход, но время получения SSE event
+не является TTFT фактического HTTP request. В закреплённом upstream
+`session/llm/request.ts` вызывает `chat.headers` с agent/session/model и
+передаёт headers в SDK; image-owned fetch hook уже охватывает реальные запросы,
+включая SDK retries. Эти seams квалифицируются на настоящем бинарнике.
+
+| Сценарий | Полномочия, переход и потребитель |
+|---|---|
+| Начало request | RunnerInput и admitted image назначают route; native hook передаёт только закрытую классификацию обычного/summary/auxiliary вызова. Внутренняя metadata удаляется fetch hook до upstream; model ID и payload не назначают authority |
+| TTFT/завершение HTTP | Тот же fetch wrapper измеряет каждый фактический request и первый содержательный streaming output по закрытому API. Timing начинается непосредственно перед send, не на начале бизнес-хода. Неполный/неизвестный ответ остаётся UNKNOWN/PARTIAL; отсутствующий token не становится нулевым TTFT |
+| Native usage | Observer получает `step-finish` в exact native session, отдельно классифицирует summary и обычное сообщение и валидирует counters. Нормализованный native input уже включает cache reads/writes в общей сумме; подмножества не прибавляются повторно. Cost без квалифицированного источника остаётся UNKNOWN |
+| Доставка | Приватный loopback hook path привязан к свежему bearer и текущему execution; ограниченный callback идёт через существующий runner progress → runtime-controller → CP ReportExecutionProgress. CP разрешает tenant/root/node/session/turn/attempt и lease/fence по авторитетному состоянию, а не по metadata измерения |
+| Устойчивый результат | CP сохраняет закрытую безопасную measurement projection в существующем run event и outbox одной owner transaction. Stable receipt не допускает двойного учёта повторной доставки. Model request и native step — разные единицы: SDK retry не выдаётся за новый бизнес-Turn или новый native step |
+| Stop/terminal/revoke | Прежние owner transitions закрывают lease/grant; новые observations от stale writer отклоняются. Уже подтверждённые измерения сохраняются в истории. Неизмеренный хвост не реконструируется как нулевой расход; metrics не разрешают повтор внешнего effect |
+| UI/метрики | Защищённый event read/realtime показывает request/step phase и completeness; Prometheus использует только закрытые source/phase/outcome/completeness и token-kind labels. Prompt, reasoning, salt, credential, session ID и model alias не попадают в общие labels. Measurement не меняет RUNNING/COMPACTING phase и не объявляет SUCCESS |
+
+Общий native OpenTelemetry в этом срезе не включается автоматически:
+проверенный `session/llm.ts` не отключает запись inputs/outputs в SDK telemetry.
+Нужен узкий secret-free measurement path без экспорта prompt/transcript.
+
+### Исполняемые consumers и границы доказательств
+
+`ModelMeasurement` — закрытая проекция максимум4096байт. Native `step-finish`
+сохраняет PARTIAL usage, отдельно cache-read/cache-write/reasoning; HTTP wrapper
+не выдумывает usage из latency. Время первого содержательного delta (включая
+reasoning либо аргументы tool) измеряется от фактического fetch. Это не точное
+время генерации первого токена внутри провайдера. Неполный SSE, отсутствие
+измерения либо прекращение потока сохраняют неполноту. Parser держит ограниченную
+часть frame, не создаёт `tee`, не меняет bytes и уважает backpressure.
+
+Приватный `/model-measurements` доступен только на прежнем provider loopback
+bridge с fresh bearer и exact RuntimeRevision. Model ID, session ID и tenant
+в payload отсутствуют. Broker сериализует native и HTTP observations; после
+positive native join выполняет bounded HTTP shutdown до terminal frame.
+Consumer callback доставляет одну immutable receipt с ограниченными retries.
+CP перед чтением квитанции повторяет active lease/fence/root/deadline guards.
+Ключ назначается из owner lease ID, generation и measurement ref; повтор не
+добавляет audit/outbox/metrics. Lookup использует прежний indexed idempotency
+store, а не сканирует всю историю при каждом шаге.
+
+Новое событие — прежний `TURN_PROGRESS`, cardinality один на принятую квитанцию,
+origin exact execution. Оно не меняет progress summary узла. Run outbox сохраняет
+прежние sequence/root pins; gateway после wake читает exact authoritative event
+через защищённый `ListRunEvents`, затем общий HTTP/WebSocket mapper сохраняет
+measurement. Структура в Proto/OpenAPI/browser AsyncAPI одинакова. Отдельная
+schema migration не нужна: typed projection хранится в существующем `safe_delta`.
+Новый decoder закрыто проверяет её и не вводит reader старого runtime.
+
+PWA показывает сводку только **загруженной** истории, отдельно обычные шаги,
+сжатие и auxiliary requests. Receipt повторно не складывается, измерение не
+получает индикатор текущей работы. Неизвестный TTFT и стоимость отображаются
+явно. Измеренные cache tokens не доказывают физическую изоляцию, отсутствие
+retention или ускорение.
+
+После подтверждённого owner commit CP обновляет process-local operational
+Prometheus counters/histograms. Crash или потерянный COMMIT acknowledgement
+могут пропустить такое обновление; эти counters не являются durable billing.
+Авторитетный readback — сохранённые run events. Dashboard содержит отдельные
+phase/usage/TTFT panels; служебные идентификаторы и значения модели в labels
+не включаются. `/metrics` размещён на существующем technical listener, без
+нового публичного endpoint или изменения сетевой authority.
+
+Проверены официальные исходники закреплённого OpenCode
+`810c0eba1a7348036f8bdf61e6632d0c36c6876c` (`session/llm/request.ts`,
+`packages/plugin/src/index.ts`) и через Context7 Node.js24.22.2 Web Streams
+`pull`/`cancel`/`highWaterMark`. Node docs объясняют API, а совместимость с Bun
+в OpenCode подтверждается отдельным real-binary harness. Штатный
+`make test-opencode-native` также запускает bounded transport tests: все три
+API, fragmentation, отмена, отдельные HTTP attempts и oversized frame.

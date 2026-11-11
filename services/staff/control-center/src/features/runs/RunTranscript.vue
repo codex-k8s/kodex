@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ModelMeasurements from "./ModelMeasurements.vue";
 import { artifactContentAdmitted } from "@/shared/api/artifact-admission";
 
 import {
@@ -60,7 +61,7 @@ const activeItemId = computed(() =>
 );
 const displayItems = computed(() =>
   presentRunTranscriptItems(
-    props.items,
+    props.items.filter((item) => !item.modelMeasurement),
     activeItemId.value,
     props.closedExecutionKeys,
   ).map((item) => {
@@ -546,6 +547,7 @@ function bytes(value: number): string {
     :aria-live="embedded ? undefined : 'polite'"
     @scroll.passive="onScroll"
   >
+    <ModelMeasurements :items="props.items" />
     <template v-for="section in sections" :key="String(section.historical)">
       <component
         :is="section.historical ? 'details' : 'section'"
@@ -666,7 +668,11 @@ function bytes(value: number): string {
                       class="run-transcript__work"
                       role="status"
                     >
-                      {{ $t("runs.workIndicator")
+                      {{
+                        $t(
+                          runtimeProgressKey(item.serviceProgressCode) ??
+                            "runs.workIndicator",
+                        )
                       }}<span class="run-transcript__dots" aria-hidden="true"
                         ><i /><i /><i
                       /></span>

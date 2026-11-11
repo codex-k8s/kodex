@@ -447,3 +447,14 @@ func artifactTransferReason(err error) string {
 	}
 	return "UNKNOWN"
 }
+
+// ModelMeasurement retries one immutable receipt under a bounded delivery budget; failure remains visible to the runner.
+// ModelMeasurement повторяет одну immutable квитанцию в ограниченном бюджете доставки; отказ остаётся видимым runner.
+func (client *Client) ModelMeasurement(ctx context.Context, input model.Input, value runtimecontract.ModelMeasurement) error {
+	if value.Validate() != nil {
+		return runtimecontract.ErrModelMeasurement
+	}
+	delivery, cancel := context.WithTimeout(ctx, callbackDeliveryTimeout)
+	defer cancel()
+	return client.postRetriable(delivery, input, "/v1/executions/"+url.PathEscape(input.LeaseRef)+"/progress", runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, ModelMeasurement: &value})
+}

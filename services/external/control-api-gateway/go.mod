@@ -3,6 +3,7 @@ module github.com/codex-k8s/kodex/services/external/control-api-gateway
 go 1.26.10
 
 require (
+	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/coder/websocket v1.8.14
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
@@ -118,3 +119,5 @@ replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../../../libs/go/r
 replace github.com/codex-k8s/kodex/libs/go/httpserver => ../../../libs/go/httpserver
 
 replace github.com/codex-k8s/kodex/libs/go/sshcompose => ../../../libs/go/sshcompose
+
+replace github.com/codex-k8s/kodex/libs/go/modelmeasurementwire => ../../../libs/go/modelmeasurementwire

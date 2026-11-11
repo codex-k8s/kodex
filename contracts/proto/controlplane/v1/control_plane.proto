@@ -1358,6 +1358,20 @@ message RunEvent {
   // Только новые INTEGRATION_ACTION_* completion-события: ref invocation,
   // назначенный владельцем после проверки lease/fence, не общий aggregate_ref.
   optional string integration_invocation_ref = 26;
+  ModelMeasurement model_measurement = 27;
+}
+
+// Измерение не назначает execution authority; владельцем координат остаётся lease resolver.
+// HTTP attempts и native steps учитываются раздельно, без обещания полного billing.
+message ModelMeasurement {
+  string ref = 1;
+  string source = 2;
+  string phase = 3;
+  string outcome = 4;
+  string completeness = 5;
+  optional int64 duration_ms = 6;
+  optional int64 ttft_ms = 7;
+  TokenUsage usage = 8;
 }
 
 message RunEventExecution {
@@ -4310,6 +4324,7 @@ message ReportExecutionProgressRequest {
   // Сообщение публикуется отдельно от служебного progress, после completed item.
   RunMessage message = 5;
   ProviderFinancialObservation financial = 6;
+  ModelMeasurement model_measurement = 7;
 }
 message ReportExecutionProgressResponse {
   Run run = 1;

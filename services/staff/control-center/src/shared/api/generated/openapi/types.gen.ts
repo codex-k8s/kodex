@@ -3464,6 +3464,7 @@ export type RunEvent = {
      * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
      */
     integrationInvocationRef?: string;
+    modelMeasurement?: ModelMeasurement;
     execution?: RunEventExecution;
     message?: RunMessage;
     occurredAt: Timestamp;
@@ -3475,6 +3476,25 @@ export type RunEvent = {
     artifact?: Artifact;
     incident?: Incident;
 };
+
+export type ModelMeasurement = {
+    ref: string;
+    source: ModelMeasurementSource;
+    phase: ModelMeasurementPhase;
+    outcome: ModelMeasurementOutcome;
+    completeness: ModelMeasurementCompleteness;
+    durationMs?: number;
+    ttftMs?: number;
+    usage?: TokenUsage;
+};
+
+export type ModelMeasurementSource = 'HTTP_REQUEST' | 'NATIVE_STEP';
+
+export type ModelMeasurementPhase = 'NORMAL' | 'COMPACTION' | 'AUXILIARY';
+
+export type ModelMeasurementOutcome = 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export type ModelMeasurementCompleteness = 'COMPLETE' | 'PARTIAL' | 'UNKNOWN';
 
 export type RunEventExecution = {
     runRef: OpaqueRef;
@@ -5160,6 +5180,7 @@ export type RunEventWritable = {
      * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
      */
     integrationInvocationRef?: string;
+    modelMeasurement?: ModelMeasurement;
     execution?: RunEventExecution;
     message?: RunMessage;
     occurredAt: Timestamp;

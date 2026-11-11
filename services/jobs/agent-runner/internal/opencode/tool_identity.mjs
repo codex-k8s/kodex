@@ -3,6 +3,11 @@ import { createHmac, randomBytes } from "node:crypto";
 // Image-owned hook: model arguments do not assign the native execution identity.
 // Штатный hook из image: аргументы модели не назначают native execution identity.
 export default async () => ({
+  "chat.headers": async (input, output) => {
+    if (!process.env.KODEX_MODEL_TRANSPORT) return;
+    // Метка принадлежит этому hook и удаляется fetch wrapper до внешнего запроса.
+    output.headers["x-kodex-model-phase"] = input.agent === "compaction" ? "COMPACTION" : input.agent === "build" ? "NORMAL" : "AUXILIARY";
+  },
   config: async (configuration) => {
     const encoded = process.env.KODEX_MODEL_TRANSPORT;
     if (!encoded) return;
@@ -57,7 +62,12 @@ export default async () => ({
         body.cache = { "no-cache": true, "no-store": true };
         body.disable_fallbacks = true;
       }
-      return send(input, { ...init, body: JSON.stringify(body), redirect: "error" });
+      const headers = new Headers(init.headers);
+      const phase = headers.get("x-kodex-model-phase") ?? "AUXILIARY";
+      headers.delete("x-kodex-model-phase");
+      if (!["NORMAL", "COMPACTION", "AUXILIARY"].includes(phase)) throw new Error("Managed model phase is invalid");
+      const request = { ...init, headers, body: JSON.stringify(body), redirect: "error" };
+      return measuredModelRequest(send, input, request, route.api, phase);
     };
   },
   "tool.execute.before": async (input, output) => {
@@ -86,3 +96,106 @@ export default async () => ({
     }
   },
 });
+
+// Измерение выполняется на actual fetch, включая SDK retry. В памяти остаётся лишь ограниченный SSE frame;
+// поток передаётся без изменения bytes, без tee и без чтения следующего chunk до запроса consumer.
+async function measuredModelRequest(send, input, init, api, phase) {
+  const endpoint = process.env.KODEX_MODEL_MEASUREMENT_URL;
+  if (!endpoint) return send(input, init);
+  const target = new URL(endpoint);
+  const key = process.env.KODEX_MCP_PROXY_TOKEN;
+  const revision = process.env.KODEX_NATIVE_REVISION;
+  if (target.protocol !== "http:" || target.hostname !== "127.0.0.1" ||
+      !target.port || Number(target.port) < 1024 || target.pathname !== "/model-measurements" ||
+      target.username || target.password || target.search || target.hash ||
+      !/^[a-f0-9]{64}$/.test(key ?? "") || !/^[a-f0-9]{64}$/.test(revision ?? "")) {
+    throw new Error("Managed model measurement binding is invalid");
+  }
+  const ref = "request_" + randomBytes(24).toString("hex");
+  const started = performance.now();
+  let ttft, terminal = false, malformed = false, pending = "", sent;
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const finish = (outcome) => {
+    if (sent) return sent;
+    const duration = Math.round(performance.now() - started);
+    const bounded = duration >= 0 && duration <= 86400000;
+    const value = { ref, source: "HTTP_REQUEST", phase, outcome,
+      completeness: !bounded ? "UNKNOWN" : outcome === "COMPLETED" && ttft !== undefined && !malformed ? "COMPLETE" : "PARTIAL" };
+    if (bounded) { value.duration_ms = duration; if (ttft !== undefined) value.ttft_ms = Math.min(ttft, duration); }
+    sent = (async () => {
+      const response = await globalThis.fetch(target, { method: "POST", redirect: "error", signal: AbortSignal.timeout(5000),
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key, "X-Kodex-Runtime-Revision": revision }, body: JSON.stringify(value) });
+      await response.body?.cancel();
+      if (response.status !== 204) throw new Error("Managed model measurement delivery failed");
+    })();
+    return sent;
+  };
+  const content = (value) => typeof value === "string" && value.length > 0;
+  const observeLine = (line) => {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (data === "[DONE]") { if (api === "CHAT_COMPLETIONS") terminal = true; return; }
+    if (!data) return;
+    let value;
+    try { value = JSON.parse(data); } catch { malformed = true; return; }
+    let generated = false;
+    if (api === "CHAT_COMPLETIONS") {
+      generated = Array.isArray(value.choices) && value.choices.some(({delta}) => delta &&
+        (content(delta.content) || content(delta.reasoning_content) || content(delta.reasoning) ||
+         Array.isArray(delta.tool_calls) && delta.tool_calls.some(call => content(call.function?.arguments) || content(call.function?.name))));
+    } else if (api === "RESPONSES") {
+      generated = ["response.output_text.delta", "response.reasoning_text.delta", "response.reasoning_summary_text.delta", "response.function_call_arguments.delta"].includes(value.type) && content(value.delta);
+      if (value.type === "response.completed") terminal = true;
+    } else if (api === "MESSAGES") {
+      generated = value.type === "content_block_delta" && (content(value.delta?.text) || content(value.delta?.thinking) || content(value.delta?.partial_json));
+      if (value.type === "message_stop") terminal = true;
+    }
+    if (generated && ttft === undefined) ttft = Math.round(performance.now() - started);
+  };
+  const observe = (bytes) => {
+    // После неверного/oversized frame измерение остаётся PARTIAL; SDK получает исходный поток и сам проверяет протокол.
+    if (malformed) return;
+    try {
+      for (let offset = 0; offset < bytes.byteLength; offset += 65536) {
+      pending += decoder.decode(bytes.subarray(offset, offset + 65536), { stream: true });
+      let newline;
+      while ((newline = pending.indexOf("\n")) >= 0) {
+        if (newline > 1048576) { malformed = true; pending = ""; return; }
+        observeLine(pending.slice(0, newline).replace(/\r$/, ""));
+        pending = pending.slice(newline + 1);
+      }
+      if (pending.length > 1048576) { malformed = true; pending = ""; return; }
+      }
+    } catch { malformed = true; pending = ""; }
+  };
+  let response;
+  try { response = await send(input, init); }
+  catch (error) { await finish(init.signal?.aborted ? "CANCELLED" : "FAILED"); throw error; }
+  if (!response.ok || !response.body || !response.headers.get("content-type")?.includes("text/event-stream")) {
+    await finish(response.ok ? "COMPLETED" : "FAILED"); return response;
+  }
+  const reader = response.body.getReader();
+  const stream = new ReadableStream({
+    async pull(controller) {
+      try {
+        const {done,value} = await reader.read();
+        if (done) {
+          if (pending.trim()) malformed = true;
+          await finish(terminal && !malformed ? "COMPLETED" : "FAILED");
+          controller.close(); return;
+        }
+        observe(value);
+        controller.enqueue(value);
+      } catch (error) {
+        await reader.cancel().catch(() => {});
+        await finish(init.signal?.aborted ? "CANCELLED" : "FAILED");
+        controller.error(error);
+      }
+    },
+    async cancel(reason) {
+      try { await reader.cancel(reason); }
+      finally { await finish(terminal && !malformed ? "COMPLETED" : "CANCELLED"); }
+    },
+  }, { highWaterMark: 0 });
+  return new Response(stream, { status: response.status, statusText: response.statusText, headers: response.headers });
+}

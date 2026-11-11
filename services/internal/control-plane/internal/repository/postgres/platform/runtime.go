@@ -1959,6 +1959,9 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if payload.ModelMeasurement != nil {
+		return repository.reportModelMeasurement(ctx, tx, scope, payload, lease)
+	}
 	if payload.Financial != nil {
 		if payload.Message != nil || payload.Progress != "" {
 			return commandOutcome{}, errs.ErrInvalid

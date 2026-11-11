@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"encoding/json"
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"strings"
 	"time"
 
@@ -717,6 +718,7 @@ func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
 // castEvent отображает автора события, вид сообщения, последовательность графа и необязательные типизированные изменения, вызов инструмента, исполнение и сообщение, сохраняя нулевую историческую ревизию инструмента; безопасность данных и происхождение проверяют производители.
 func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
 	event := &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt), GraphRevision: value.GraphRevision, Run: castRunDelta(value.Delta.Run), Actor: &controlplanev1.RunEventActor{Kind: controlplanev1.RunEventActorKind(controlplanev1.RunEventActorKind_value["RUN_EVENT_ACTOR_KIND_"+value.Actor.Kind]), Ref: value.Actor.Ref, Name: value.Actor.Name}, MessageKind: controlplanev1.RunEventMessageKind(controlplanev1.RunEventMessageKind_value["RUN_EVENT_MESSAGE_KIND_"+value.MessageKind])}
+	event.ModelMeasurement = modelmeasurementwire.ToProto(value.Delta.ModelMeasurement)
 	if value.Delta.IntegrationInvocationRef != "" {
 		event.IntegrationInvocationRef = &value.Delta.IntegrationInvocationRef
 	}

@@ -3,6 +3,7 @@ module github.com/codex-k8s/kodex/services/internal/runtime-controller
 go 1.26.10
 
 require (
+	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
@@ -118,3 +119,5 @@ replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/se
 replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/securefile
 
 replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go/runtimepolicywire
+
+replace github.com/codex-k8s/kodex/libs/go/modelmeasurementwire => ../../../libs/go/modelmeasurementwire

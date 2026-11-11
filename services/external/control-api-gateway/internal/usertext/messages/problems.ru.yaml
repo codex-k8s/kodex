@@ -1080,3 +1080,8 @@ INTEGRATION_APPROVAL_REVOKED:
   other: Временное разрешение отозвано; новые действия требуют согласования
 INTEGRATION_APPROVAL_EXPIRED:
   other: Срок временного разрешения истёк; действие не началось
+
+MODEL_MEASUREMENT_RECORDED:
+  other: Измерение модели сохранено
+INFERENCE_CACHE_POLICY_UNSUPPORTED:
+  other: Маршрут модели не поддерживает обязательную политику кеша

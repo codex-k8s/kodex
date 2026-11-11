@@ -3967,6 +3967,87 @@ func (e ModelContextPolicyRevision) Valid() bool {
 	}
 }
 
+// Defines values for ModelMeasurementCompleteness.
+const (
+	ModelMeasurementCompletenessCOMPLETE ModelMeasurementCompleteness = "COMPLETE"
+	ModelMeasurementCompletenessPARTIAL  ModelMeasurementCompleteness = "PARTIAL"
+	ModelMeasurementCompletenessUNKNOWN  ModelMeasurementCompleteness = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ModelMeasurementCompleteness enum.
+func (e ModelMeasurementCompleteness) Valid() bool {
+	switch e {
+	case ModelMeasurementCompletenessCOMPLETE:
+		return true
+	case ModelMeasurementCompletenessPARTIAL:
+		return true
+	case ModelMeasurementCompletenessUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelMeasurementOutcome.
+const (
+	ModelMeasurementOutcomeCANCELLED ModelMeasurementOutcome = "CANCELLED"
+	ModelMeasurementOutcomeCOMPLETED ModelMeasurementOutcome = "COMPLETED"
+	ModelMeasurementOutcomeFAILED    ModelMeasurementOutcome = "FAILED"
+)
+
+// Valid indicates whether the value is a known member of the ModelMeasurementOutcome enum.
+func (e ModelMeasurementOutcome) Valid() bool {
+	switch e {
+	case ModelMeasurementOutcomeCANCELLED:
+		return true
+	case ModelMeasurementOutcomeCOMPLETED:
+		return true
+	case ModelMeasurementOutcomeFAILED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelMeasurementPhase.
+const (
+	AUXILIARY  ModelMeasurementPhase = "AUXILIARY"
+	COMPACTION ModelMeasurementPhase = "COMPACTION"
+	NORMAL     ModelMeasurementPhase = "NORMAL"
+)
+
+// Valid indicates whether the value is a known member of the ModelMeasurementPhase enum.
+func (e ModelMeasurementPhase) Valid() bool {
+	switch e {
+	case AUXILIARY:
+		return true
+	case COMPACTION:
+		return true
+	case NORMAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelMeasurementSource.
+const (
+	HTTPREQUEST ModelMeasurementSource = "HTTP_REQUEST"
+	NATIVESTEP  ModelMeasurementSource = "NATIVE_STEP"
+)
+
+// Valid indicates whether the value is a known member of the ModelMeasurementSource enum.
+func (e ModelMeasurementSource) Valid() bool {
+	switch e {
+	case HTTPREQUEST:
+		return true
+	case NATIVESTEP:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NextAction.
 const (
 	NextActionADDTURN                NextAction = "ADD_TURN"
@@ -13542,6 +13623,30 @@ type ModelExecutionPolicy struct {
 	ModelId             string               `json:"modelId"`
 }
 
+// ModelMeasurement defines model for ModelMeasurement.
+type ModelMeasurement struct {
+	Completeness ModelMeasurementCompleteness `json:"completeness"`
+	DurationMs   *int64                       `json:"durationMs,omitempty"`
+	Outcome      ModelMeasurementOutcome      `json:"outcome"`
+	Phase        ModelMeasurementPhase        `json:"phase"`
+	Ref          string                       `json:"ref"`
+	Source       ModelMeasurementSource       `json:"source"`
+	TtftMs       *int64                       `json:"ttftMs,omitempty"`
+	Usage        *TokenUsage                  `json:"usage,omitempty"`
+}
+
+// ModelMeasurementCompleteness defines model for ModelMeasurementCompleteness.
+type ModelMeasurementCompleteness string
+
+// ModelMeasurementOutcome defines model for ModelMeasurementOutcome.
+type ModelMeasurementOutcome string
+
+// ModelMeasurementPhase defines model for ModelMeasurementPhase.
+type ModelMeasurementPhase string
+
+// ModelMeasurementSource defines model for ModelMeasurementSource.
+type ModelMeasurementSource string
+
 // NextAction defines model for NextAction.
 type NextAction string
 
@@ -15279,6 +15384,7 @@ type RunEvent struct {
 	IntegrationInvocationRef *string              `json:"integrationInvocationRef,omitempty"`
 	Message                  *RunMessage          `json:"message,omitempty"`
 	MessageKind              *RunEventMessageKind `json:"messageKind,omitempty"`
+	ModelMeasurement         *ModelMeasurement    `json:"modelMeasurement,omitempty"`
 	Node                     *RunNode             `json:"node,omitempty"`
 	NodeRef                  *OpaqueRef           `json:"nodeRef,omitempty"`
 	NodeState                *RunEventNodeState   `json:"nodeState,omitempty"`

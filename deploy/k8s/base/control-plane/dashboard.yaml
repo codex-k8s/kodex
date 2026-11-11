@@ -8,7 +8,9 @@ metadata:
 data:
   control-plane.json: |
     {
-      "annotations": {"list": []},
+      "annotations": {
+        "list": []
+      },
       "editable": false,
       "panels": [
         {
@@ -125,12 +127,68 @@ data:
               "legendFormat": "{{kind}} {{action}}"
             }
           ]
+        },
+        {
+          "id": 30,
+          "title": "Измерения модели по этапу и полноте",
+          "type": "timeseries",
+          "description": "Process-local operational counters; после crash возможен неполный счёт. Authoritative receipt хранится в защищённой истории запуска. Это не billing и не доказательство физической cache isolation.",
+          "targets": [
+            {
+              "expr": "sum by (source, phase, outcome, completeness) (rate(kodex_control_plane_model_measurements_total[5m]))",
+              "legendFormat": "{{source}} {{phase}} {{outcome}} {{completeness}}"
+            }
+          ]
+        },
+        {
+          "id": 31,
+          "title": "Токены: обычные шаги и сжатие; кеш входит во вход",
+          "type": "timeseries",
+          "description": "Process-local operational counters; после crash возможен неполный счёт. Authoritative receipt хранится в защищённой истории запуска. Это не billing и не доказательство физической cache isolation.",
+          "targets": [
+            {
+              "expr": "sum by (phase, kind) (rate(kodex_control_plane_model_tokens_total[5m]))",
+              "legendFormat": "{{phase}} {{kind}}"
+            }
+          ]
+        },
+        {
+          "id": 32,
+          "title": "p95 TTFT фактических HTTP-запросов",
+          "type": "timeseries",
+          "description": "Process-local operational counters; после crash возможен неполный счёт. Authoritative receipt хранится в защищённой истории запуска. Это не billing и не доказательство физической cache isolation.",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, phase) (rate(kodex_control_plane_model_ttft_seconds_bucket[5m])))",
+              "legendFormat": "{{phase}}"
+            }
+          ]
+        },
+        {
+          "id": 33,
+          "title": "Длительность фактических HTTP attempts",
+          "type": "timeseries",
+          "description": "Process-local operational counters; после crash возможен неполный счёт. Authoritative receipt хранится в защищённой истории запуска. Это не billing и не доказательство физической cache isolation.",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, phase, outcome) (rate(kodex_control_plane_model_request_duration_seconds_bucket[5m])))",
+              "legendFormat": "{{phase}} {{outcome}}"
+            }
+          ]
         }
       ],
       "schemaVersion": 39,
-      "tags": ["kodex", "control-plane"],
-      "templating": {"list": []},
-      "time": {"from": "now-6h", "to": "now"},
+      "tags": [
+        "kodex",
+        "control-plane"
+      ],
+      "templating": {
+        "list": []
+      },
+      "time": {
+        "from": "now-6h",
+        "to": "now"
+      },
       "timezone": "browser",
       "title": "Kodex control-plane",
       "uid": "kodex-control-plane",

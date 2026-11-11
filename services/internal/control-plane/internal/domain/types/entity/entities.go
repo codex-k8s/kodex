@@ -923,6 +923,7 @@ type RunDelta struct {
 // исполнения и сообщения и ссылку вызова интеграции. Go-форма не обеспечивает взаимоисключение,
 // допустимость или атомарное сохранение полей.
 type RunEventDelta struct {
+	ModelMeasurement         *runtimecontract.ModelMeasurement
 	IntegrationInvocationRef string `json:",omitempty"`
 	Run                      *RunDelta
 	Node                     *RunNode

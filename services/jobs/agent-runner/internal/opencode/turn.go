@@ -2,6 +2,8 @@ package opencode
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"unicode/utf8"
@@ -17,19 +19,27 @@ type TurnResult struct {
 	Compactions int
 }
 
+// TurnObservers holds optional synchronous sinks; a rejected observation stops the turn without inventing delivery.
+// TurnObservers содержит необязательные синхронные sinks; отказ наблюдения останавливает turn без выдуманной доставки.
+type TurnObservers struct {
+	Progress    func(string) error
+	Measurement func(runtimecontract.ModelMeasurement) error
+}
+
 // turnObserver projects upstream events into current-turn measurements and bounded commentary.
 // Its maps retain unfinished messages and a bounded recent completion window, never the lifetime transcript or authority.
 // turnObserver преобразует upstream events в измерения текущего turn и ограниченные commentary.
 // Maps содержат незавершённые сообщения и ограниченное окно завершений, а не всю историю или authority.
 type turnObserver struct {
-	sessionID  string
-	result     TurnResult
-	active     map[string]*observedMessage
-	allowTool  func(string) bool
-	commentary func(string, string) error
-	completed  func(string) error
-	progress   func(string) error
-	retired    []string
+	sessionID   string
+	result      TurnResult
+	active      map[string]*observedMessage
+	allowTool   func(string) bool
+	commentary  func(string, string) error
+	completed   func(string) error
+	progress    func(string) error
+	measurement func(runtimecontract.ModelMeasurement) error
+	retired     []string
 }
 
 // observedMessage keeps only current-message deduplication and summary classification.
@@ -45,18 +55,19 @@ type observedMessage struct {
 // It never drives tool steps, invokes a compactor, replays history or retries uncertain mutations.
 // Execute отправляет ровно одно новое сообщение native loop и наблюдает установленный SSE stream.
 // Не управляет tool steps, не вызывает compactor, не повторяет историю или uncertain mutations.
-func (client *Client) Execute(ctx context.Context, sessionID string, prompt Prompt, allowTool func(string) bool, commentary func(string, string) error, progress ...func(string) error) (TurnResult, error) {
+func (client *Client) Execute(ctx context.Context, sessionID string, prompt Prompt, allowTool func(string) bool, commentary func(string, string) error, observers ...TurnObservers) (TurnResult, error) {
 	if allowTool == nil || commentary == nil || prompt.NoReply {
 		return TurnResult{}, ErrProtocol
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	observer := turnObserver{sessionID: sessionID, active: map[string]*observedMessage{}, allowTool: allowTool, commentary: commentary}
-	if len(progress) > 1 {
+	if len(observers) > 1 {
 		return TurnResult{}, ErrProtocol
 	}
-	if len(progress) == 1 {
-		observer.progress = progress[0]
+	if len(observers) == 1 {
+		observer.progress = observers[0].Progress
+		observer.measurement = observers[0].Measurement
 	}
 	completed := make(chan string)
 	observer.completed = func(id string) error {
@@ -248,6 +259,26 @@ func (observer *turnObserver) consume(event Event) error {
 			observer.result.Usage.ReasoningOutputTokens += usage.ReasoningOutputTokens
 			if observer.result.Usage.Validate() != nil {
 				return ErrProtocol
+			}
+			if observer.measurement != nil {
+				phase := "NORMAL"
+				if message.summary {
+					phase = "COMPACTION"
+				}
+				usage.Completeness = runtimecontract.UsageUnknown
+				completeness := "UNKNOWN"
+				if usage.TotalTokens > 0 {
+					usage.Completeness = runtimecontract.UsagePartial
+					completeness = "PARTIAL"
+				}
+				digest := sha256.Sum256([]byte(observer.sessionID + "\x00" + part.ID))
+				measurement := runtimecontract.ModelMeasurement{Ref: "step_" + hex.EncodeToString(digest[:]), Source: "NATIVE_STEP", Phase: phase, Outcome: "COMPLETED", Completeness: completeness, Usage: &usage}
+				if measurement.Validate() != nil {
+					return ErrProtocol
+				}
+				if err := observer.measurement(measurement); err != nil {
+					return err
+				}
 			}
 			message.parts[part.ID] = true
 			message.measured = true

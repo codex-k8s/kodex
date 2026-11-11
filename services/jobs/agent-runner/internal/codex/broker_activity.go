@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -54,10 +55,11 @@ type brokerFrame struct {
 }
 
 // brokerFrameWriter tracks one serialized response, advancing counters only after a successful copy.
-// Callers serialize access; input supplies optional binding for producer paths, not a new authority.
+// Writes serialize concurrent native/HTTP observations; input supplies optional binding for producer paths, not a new authority.
 // brokerFrameWriter отслеживает один последовательный ответ и меняет счётчики только после успешной записи.
-// Доступ упорядочивает вызывающий код; input задаёт привязку путям производителя, но не новые полномочия.
+// Записи упорядочивают concurrent native/HTTP observations; input задаёт привязку путям производителя, но не новые полномочия.
 type brokerFrameWriter struct {
+	mu       sync.Mutex
 	writer   io.Writer
 	sequence uint64
 	bytes    int
@@ -101,7 +103,10 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	}
 
 	err := writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &response})
-	if !errors.Is(err, errProviderBrokerResponseInvalid) || writer.terminal {
+	writer.mu.Lock()
+	terminal := writer.terminal
+	writer.mu.Unlock()
+	if !errors.Is(err, errProviderBrokerResponseInvalid) || terminal {
 		return err
 	}
 	// Ограниченный отказ сохраняет измеренный usage, не подтверждая большой итог.
@@ -116,6 +121,8 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 // для завершения. Он задаёт deadline net.Conn и меняет счётчики лишь после полной записи;
 // ошибка частичной записи не доказывает, что другая сторона ничего не получила.
 func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
+	writer.mu.Lock()
+	defer writer.mu.Unlock()
 	nativeStream := writer.input != nil && writer.input.Provider == "opencode"
 	if writer.terminal || writer.sequence == ^uint64(0) || !nativeStream && writer.sequence >= maximumBrokerFrames {
 		return errProviderBrokerResponseInvalid

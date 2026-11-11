@@ -28,6 +28,7 @@ type RunEvent struct {
 	MessageKind              RunEventMessageKind  `json:"messageKind"`
 	ToolCall                 *RunToolCall         `json:"toolCall,omitempty"`
 	IntegrationInvocationRef *string              `json:"integrationInvocationRef,omitempty"`
+	ModelMeasurement         *ModelMeasurement    `json:"modelMeasurement,omitempty"`
 	Execution                *RunEventExecution   `json:"execution,omitempty"`
 	Message                  *RunMessage          `json:"message,omitempty"`
 }

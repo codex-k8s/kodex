@@ -588,12 +588,18 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	if _, err := hex.DecodeString(request.MCPProxyToken); err != nil {
 		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBinding, errors.New("provider broker MCP capability is invalid"))
 	}
-	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken, request.Input)
+	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken, request.Input, frames.activity)
 	if err != nil {
 		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBridge, err)
 	}
 	defer bridge.Close()
 	result, err := executeOpenCodeTurn(ctx, request.Input, request.Prompt, bridge.URL(), request.MCPProxyToken, auth, frames.activity)
+	joinContext, joinCancel := context.WithTimeout(context.WithoutCancel(ctx), 6*time.Second)
+	joinError := bridge.server.Shutdown(joinContext)
+	joinCancel()
+	if joinError != nil {
+		err = errProviderBrokerFailed
+	}
 	if err != nil {
 		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)
@@ -681,8 +687,8 @@ type providerMCPBridge struct {
 // MCP-методы с bearer-проверкой и привязанные к каталогу file GET. Proxy ходит только в этот UDS,
 // удаляет входящие cookie/forwarding заголовки и ограничивает context/запись файлового ответа.
 // Авторизация остаётся у upstream; одна проверка длины токена здесь не доказывает его подлинность.
-func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, input model.Input) (*providerMCPBridge, error) {
-	if os.Geteuid() != 10002 || socketPath != "/run/kodex/provider/mcp-authority.sock" || len(localToken) != 64 {
+func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, input model.Input, observations ...func(runtimecontract.RuntimeActivity) error) (*providerMCPBridge, error) {
+	if len(observations) > 1 || os.Geteuid() != 10002 || socketPath != "/run/kodex/provider/mcp-authority.sock" || len(localToken) != 64 {
 		return nil, errors.New("provider MCP bridge binding is invalid")
 	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -706,6 +712,10 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 			http.Error(writer, "required MCP authority is unavailable", http.StatusBadGateway)
 		}, FlushInterval: -1}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/model-measurements" && len(observations) == 1 {
+			serveModelMeasurement(writer, request, localToken, input.RuntimeRevisionDigest, observations[0])
+			return
+		}
 		if bindNativeMCPRequest(request, input, localToken) != nil {
 			http.Error(writer, "invalid managed native tool identity", http.StatusBadRequest)
 			return

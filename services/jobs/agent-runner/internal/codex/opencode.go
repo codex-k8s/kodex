@@ -212,6 +212,9 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	}
 	environment = append(environment, "KODEX_MODEL_TRANSPORT="+string(transport))
 	environment = append(environment, "KODEX_NATIVE_REVISION="+input.RuntimeRevisionDigest)
+	measurementURL, _ := url.Parse(bridgeURL)
+	measurementURL.Path = "/model-measurements"
+	environment = append(environment, "KODEX_MODEL_MEASUREMENT_URL="+measurementURL.String())
 	if input.NativeSession != nil {
 		if activity(runtimecontract.RuntimeActivity{Progress: "NATIVE_SESSION_RECOVERING"}) != nil {
 			return Result{}, errOpenCodeProvider
@@ -309,7 +312,9 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		func(name string) bool { return allowedOpenCodeTool(input, name) }, func(id, text string) error {
 			message := runtimecontract.RuntimeAgentMessage{ItemID: "opencode-" + id, Phase: runtimecontract.RuntimeMessageCommentary, Revision: 1, Text: redact(text)}
 			return activity(runtimecontract.RuntimeActivity{Message: &message})
-		}, func(code string) error { return activity(runtimecontract.RuntimeActivity{Progress: code}) })
+		}, native.TurnObservers{Progress: func(code string) error { return activity(runtimecontract.RuntimeActivity{Progress: code}) }, Measurement: func(value runtimecontract.ModelMeasurement) error {
+			return activity(runtimecontract.RuntimeActivity{ModelMeasurement: &value})
+		}})
 	result.Usage = turn.Usage
 	result.UsageCompleteness = runtimecontract.UsageUnknown
 	if turn.Usage.TotalTokens > 0 {

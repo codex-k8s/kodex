@@ -3,6 +3,7 @@ package opencode
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"testing"
 )
 
@@ -17,7 +18,11 @@ func nativeObservation(kind string, properties any) Event {
 // TestObserverSeparatesSummaryAndDisjointUsage проверяет event consumer, не заменяя native qualification.
 func TestObserverSeparatesSummaryAndDisjointUsage(t *testing.T) {
 	comments := 0
-	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(name string) bool { return name == "kodex_counter" }, commentary: func(_, text string) error { comments++; return nil }}
+	var measurements []runtimecontract.ModelMeasurement
+	observer := turnObserver{measurement: func(value runtimecontract.ModelMeasurement) error {
+		measurements = append(measurements, value)
+		return nil
+	}, sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(name string) bool { return name == "kodex_counter" }, commentary: func(_, text string) error { comments++; return nil }}
 	for _, event := range []Event{
 		nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_summary", "sessionID": "ses_native", "role": "assistant", "summary": true}}),
 		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_text", "messageID": "msg_summary", "sessionID": "ses_native", "type": "text", "text": "not final", "time": map[string]int{"end": 1}}}),
@@ -31,6 +36,9 @@ func TestObserverSeparatesSummaryAndDisjointUsage(t *testing.T) {
 	}
 	if comments != 0 || len(observer.active) != 0 || observer.result.Usage.InputTokens != 33 || observer.result.Usage.OutputTokens != 7 || observer.result.Usage.TotalTokens != 40 {
 		t.Fatal("summary publication, event retention or native accounting is invalid")
+	}
+	if len(measurements) != 1 || measurements[0].Validate() != nil || measurements[0].Phase != "COMPACTION" || measurements[0].Usage.CacheWriteInputTokens != 3 || measurements[0].TTFTMS != nil {
+		t.Fatal("native observation duplicated or invented transport timing")
 	}
 	observer.active["msg_tool"] = &observedMessage{parts: map[string]bool{}}
 	if err := observer.consume(nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_shell", "messageID": "msg_tool", "sessionID": "ses_native", "type": "tool", "tool": "bash"}})); err == nil {

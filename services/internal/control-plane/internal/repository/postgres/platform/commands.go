@@ -87,15 +87,18 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err := repository.bindFinancialCallbackReceipt(ctx, tx, scope, &input); err != nil {
 		return command.Result{}, err
 	}
+	if err := repository.bindModelMeasurementReceipt(ctx, tx, scope, &input); err != nil {
+		return command.Result{}, err
+	}
 	var storedDigest string
 	var storedPayload []byte
 	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
 	if input.Kind == command.ObserveWorkspace || command.WorkspaceVolumeCommandPermission(input.Kind) != "" {
 		receiptQuery = queryWorkspaceObservationReceipt
 	}
-	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
+	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && (payload.Financial != nil || payload.ModelMeasurement != nil) {
 		// Долгий активный execution сохраняет semantic receipt; текущее право
-		// уже проверено bindFinancialCallbackReceipt, TTL не выдаёт authority.
+		// уже проверено соответствующим bind callback receipt, TTL не выдаёт authority.
 		receiptQuery = queryProviderFinancialReceipt
 	}
 	err = tx.QueryRow(ctx, receiptQuery, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
@@ -207,6 +210,9 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		// Потерянный ответ COMMIT уже может закрепить каждую подготовленную версию объекта.
 		keepPrepared = !errors.Is(err, pgx.ErrTxCommitRollback)
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
+	}
+	if input.Kind == command.ReportExecutionProgress && repository.modelMeasurementObserver != nil && outcome.result.Event != nil && outcome.result.Event.Delta.ModelMeasurement != nil {
+		repository.modelMeasurementObserver(*outcome.result.Event.Delta.ModelMeasurement)
 	}
 	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)
 	return outcome.result, executionDeadlineReceiptError(outcome.result)
@@ -2409,7 +2415,10 @@ func validIntegrationActionBinding(eventType, summary, ref string) bool {
 // execution/actor/message provenance, выводит текущие run/node state, сохраняет полный run event и
 // ordered run outbox envelope, затем создаёт ограниченную organization RUN_CHANGED invalidation.
 // Caller message source принудительно ORDINARY; commit либо direct broker publish отсутствуют.
-func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string) (entity.RunEvent, error) {
+func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string, measurements ...*runtimecontract.ModelMeasurement) (entity.RunEvent, error) {
+	if len(measurements) > 1 || len(measurements) == 1 && (measurements[0] == nil || measurements[0].Validate() != nil || eventType != "TURN_PROGRESS" || message != nil || integrationInvocationRef != "") {
+		return entity.RunEvent{}, errs.ErrInvalid
+	}
 	if integrationInvocationRef != "" && (integrationInvocationRef != aggregateRef || !validIntegrationActionBinding(eventType, summary, integrationInvocationRef)) {
 		return entity.RunEvent{}, errs.ErrInvalid
 	}
@@ -2472,6 +2481,13 @@ func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pg
 		}
 		messageCopy := *message
 		delta.Message = &messageCopy
+	}
+	if len(measurements) == 1 {
+		if delta.Execution == nil {
+			return entity.RunEvent{}, errs.ErrInvalid
+		}
+		measurement := *measurements[0]
+		delta.ModelMeasurement = &measurement
 	}
 	runState = ""
 	if delta.Run != nil {

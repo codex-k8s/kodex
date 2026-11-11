@@ -30,6 +30,8 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	var err error
 	defer pool.Close()
 	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
+	observedMeasurements := 0
+	r.ConfigureModelMeasurementObserver(func(runtimecontract.ModelMeasurement) { observedMeasurements++ })
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)
@@ -91,6 +93,33 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 		t.Fatal("rejected financial replay changed state")
 	}
 	lease.Financial = nil
+	measurement := runtimecontract.ModelMeasurement{Ref: "step_component_measurement", Source: "NATIVE_STEP", Phase: "COMPACTION", Outcome: "COMPLETED", Completeness: "PARTIAL", Usage: &runtimecontract.TokenUsage{Completeness: runtimecontract.UsagePartial, InputTokens: 100, OutputTokens: 20, TotalTokens: 120, CachedInputTokens: 70, CacheWriteInputTokens: 10}}
+	lease.ModelMeasurement = &measurement
+	measured := execute(command.ReportExecutionProgress, progress, "measurement", nil, lease).Event
+	if measured.Delta.ModelMeasurement == nil || measured.Delta.ModelMeasurement.Usage.CacheWriteInputTokens != 10 || measured.Delta.Execution == nil {
+		t.Fatal("measurement provenance or usage missing")
+	}
+	measuredCounts := counts()
+	measuredReplay := execute(command.ReportExecutionProgress, progress, "measurement-replay", nil, lease).Event
+	if measuredReplay.Ref != measured.Ref || counts() != measuredCounts || observedMeasurements != 1 {
+		t.Fatal("measurement replay produced another durable effect")
+	}
+	changed := measurement
+	changed.Phase = "NORMAL"
+	invalidMeasurement := lease
+	invalidMeasurement.ModelMeasurement = &changed
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-invalid-measurement"}, Payload: invalidMeasurement}); !errors.Is(err, errs.ErrIdempotencyReuse) {
+		t.Fatalf("conflicting measurement accepted: %v", err)
+	}
+	invalidMeasurement = lease
+	invalidMeasurement.Fence = "foreign-fence"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-invalid-measurement"}, Payload: invalidMeasurement}); err == nil {
+		t.Fatal("stale measurement fence accepted")
+	}
+	if counts() != measuredCounts {
+		t.Fatal("rejected measurement changed durable state")
+	}
+	lease.ModelMeasurement = nil
 	message := entity.RunMessage{Ref: "msg_activity_commentary", Phase: "COMMENTARY", Revision: 1, Text: "Проверяю текущую задачу.\n" + strings.Repeat("Длинный опубликованный текст. ", 200), Source: entity.MessageSource{Origin: "CALLBACK_CONTINUATION"}}
 	lease.Message = &message
 	first := execute(command.ReportExecutionProgress, progress, "message", nil, lease).Event
@@ -141,6 +170,12 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	}
 	if !inputFound || !messageFound || !closed {
 		t.Fatalf("history incomplete: input=%t message=%t toolClosed=%t", inputFound, messageFound, closed)
+	}
+	terminalMeasurement := lease
+	terminalMeasurement.Message = nil
+	terminalMeasurement.ModelMeasurement = &measurement
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-terminal-measurement"}, Payload: terminalMeasurement}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("terminal measurement receipt retained authority: %v", err)
 	}
 	terminalFinancial := lease
 	terminalFinancial.Message = nil

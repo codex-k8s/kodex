@@ -781,6 +781,7 @@ func validPinnedImage(reference, digest string) bool {
 // RunnerProgressRequest binds safe progress and optional typed observations to one runtime revision digest.
 // RunnerProgressRequest связывает безопасный прогресс и необязательные типизированные наблюдения с дайджестом runtime.
 type RunnerProgressRequest struct {
+	ModelMeasurement      *ModelMeasurement             `json:"model_measurement,omitempty"`
 	RuntimeRevisionDigest string                        `json:"runtime_revision_digest"`
 	Progress              string                        `json:"progress"`
 	Message               *RuntimeAgentMessage          `json:"message,omitempty"`

@@ -43,18 +43,19 @@ func (message RuntimeAgentMessage) Validate() error {
 // RuntimeActivity is a closed union of safe provider-broker observations.
 // RuntimeActivity — закрытое объединение безопасных наблюдений от provider broker.
 type RuntimeActivity struct {
-	Progress        string                        `json:"progress,omitempty"`
-	Message         *RuntimeAgentMessage          `json:"message,omitempty"`
-	ToolCall        *NativeToolCall               `json:"tool_call,omitempty"`
-	ProviderProcess *ProviderProcessObservation   `json:"provider_process,omitempty"`
-	Financial       *ProviderFinancialObservation `json:"financial,omitempty"`
+	ModelMeasurement *ModelMeasurement             `json:"model_measurement,omitempty"`
+	Progress         string                        `json:"progress,omitempty"`
+	Message          *RuntimeAgentMessage          `json:"message,omitempty"`
+	ToolCall         *NativeToolCall               `json:"tool_call,omitempty"`
+	ProviderProcess  *ProviderProcessObservation   `json:"provider_process,omitempty"`
+	Financial        *ProviderFinancialObservation `json:"financial,omitempty"`
 }
 
 // Validate requires exactly one activity variant and validates its own envelope.
 // Validate требует ровно один вариант события и проверяет его собственный конверт.
 func (activity RuntimeActivity) Validate() error {
 	count := 0
-	for _, present := range []bool{activity.Progress != "", activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil} {
+	for _, present := range []bool{activity.Progress != "", activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil, activity.ModelMeasurement != nil} {
 		if present {
 			count++
 		}
@@ -67,6 +68,9 @@ func (activity RuntimeActivity) Validate() error {
 			return errors.New("runtime activity progress is invalid")
 		}
 		return nil
+	}
+	if activity.ModelMeasurement != nil {
+		return activity.ModelMeasurement.Validate()
 	}
 	if activity.Financial != nil {
 		return activity.Financial.Validate()

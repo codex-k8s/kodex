@@ -1610,6 +1610,7 @@ type AssistantInstructionsInput struct{ Instructions string }
 // необязательные наблюдения о ходе и финансах. Эти наблюдения не дают права захватить работу,
 // согласовать расходы или обойти истёкшую аренду.
 type LeaseInput struct {
+	ModelMeasurement                  *runtimecontract.ModelMeasurement
 	SchedulingCapacity                *RuntimeSchedulingCapacity
 	Financial                         *entity.ProviderFinancialSummary
 	WorkloadInstance, LeaseRef, Fence string

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,11 +11,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 // nativeFixture records model wire and managed tool effects; upstream OpenCode still owns the loop.
 // nativeFixture фиксирует model wire и managed tool effects; циклом по-прежнему владеет upstream OpenCode.
 type nativeFixture struct {
+	modelDelay       time.Duration
 	proxyCacheBypass bool
 	cacheExpectation *nativeCacheWireExpectation
 	cacheSalts       map[string]bool
@@ -130,6 +132,9 @@ func (fixture *nativeFixture) model(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	fixture.mu.Lock()
+	if request.Header.Get("x-kodex-model-phase") != "" {
+		fixture.violations = append(fixture.violations, "private measurement header reached provider")
+	}
 	if fixture.proxyCacheBypass {
 		if len(input.Cache) != 2 || !input.Cache["no-cache"] || !input.Cache["no-store"] {
 			fixture.violations = append(fixture.violations, "proxy response-cache read/write bypass missing")
@@ -188,6 +193,12 @@ func (fixture *nativeFixture) model(writer http.ResponseWriter, request *http.Re
 		fmt.Fprintf(writer, "data: %s\n\n", raw)
 	}
 	chunk(map[string]any{"role": "assistant"}, nil)
+	if fixture.modelDelay > 0 {
+		if flusher, ok := writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(fixture.modelDelay)
+	}
 	finish := "stop"
 	switch {
 	case identityMode && call > 24:

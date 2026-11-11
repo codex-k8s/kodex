@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"io"
 	"log/slog"
 	"net"
@@ -630,7 +631,8 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	var payload runtimecontract.RunnerProgressRequest
 	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
-		payload.Financial == nil && payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.ModelMeasurement == nil && payload.Financial == nil && payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.ModelMeasurement != nil && (payload.Financial != nil || payload.Message != nil || payload.ProviderProcess != nil || payload.Progress != "" || payload.ModelMeasurement.Validate() != nil) ||
 		payload.Financial != nil && (payload.Message != nil || payload.ProviderProcess != nil || payload.Progress != "" || payload.Financial.Validate() != nil) ||
 		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) ||
 		payload.ProviderProcess != nil && (payload.Message != nil || payload.Progress != runtimecontract.ProviderProcessInitializedProgress || !payload.ProviderProcess.Matches(input)) {
@@ -641,7 +643,9 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
 	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
-	if payload.Financial != nil {
+	if payload.ModelMeasurement != nil {
+		projection.ModelMeasurement = modelmeasurementwire.ToProto(payload.ModelMeasurement)
+	} else if payload.Financial != nil {
 		projection.Financial = providerfinancewire.ObservationToProto(*payload.Financial)
 	} else if message := payload.Message; message != nil {
 		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))

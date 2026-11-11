@@ -1,0 +1,22 @@
+module github.com/codex-k8s/kodex/libs/go/modelmeasurementwire
+
+go 1.26.10
+
+require (
+	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
+	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
+)
+
+require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/grpc v1.83.2 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
+)
+
+replace github.com/codex-k8s/kodex/libs/go/controlplaneapi => ../controlplaneapi
+
+replace github.com/codex-k8s/kodex/libs/go/runtimecontract => ../runtimecontract

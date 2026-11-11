@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/observability"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/modelmeasurement"
 	"io"
 	"log/slog"
 	"net"
@@ -58,7 +60,7 @@ const maximumSecretFileBytes = 64 << 10
 // Run загружает конфигурацию и создаёт owner, storage и identity зависимости, выполняет bootstrap
 // и broker/outbox проверки до запуска workers; shutdown снимает readiness, останавливает workers и
 // выполняет отдельно ограниченные HTTP, gRPC и worker cleanup.
-func Run(lifecycle, shutdownBase context.Context, _ string) error {
+func Run(lifecycle, shutdownBase context.Context, version string) error {
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -98,6 +100,12 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return startupFailure(stageConstructPlatformRepository, err)
 	}
+	metrics := observability.NewMetrics("control_plane", version, nil)
+	modelMetrics, err := modelmeasurement.New(metrics.Register)
+	if err != nil {
+		return errors.New("register model measurement metrics")
+	}
+	repository.ConfigureModelMeasurementObserver(modelMetrics.Observe)
 	if err := configureModelProvider(repository, config); err != nil {
 		return err
 	}
@@ -371,7 +379,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return startupFailure(stageListenControlPlaneGRPC, err)
 	}
 	readiness := serviceruntime.NewReadiness()
-	technical := technicalServer(config.TechnicalListen, readiness)
+	technical := technicalServer(config.TechnicalListen, readiness, metrics)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		serveGRPC(grpcServer, listener),
 		serveHTTP(technical),
@@ -530,8 +538,13 @@ func loadServerTLS(config Config) (*tls.Config, error) {
 // control-plane header/read/write/idle budgets without opening a listener.
 // technicalServer создаёт прежний technical probe mux с snapshot readiness и control-plane
 // бюджетами header, read, write и idle без открытия listener.
-func technicalServer(address string, readiness *serviceruntime.Readiness) *http.Server {
+func technicalServer(address string, readiness *serviceruntime.Readiness, metrics *observability.Metrics) *http.Server {
 	mux := httpserver.ProbeMux(readiness.Ready)
+	mux.Handle("GET /metrics", http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		ready, _ := readiness.Ready()
+		metrics.SetReady(ready)
+		metrics.PrometheusHandler().ServeHTTP(writer, request)
+	}))
 	return &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 30 * time.Second}
 }
 

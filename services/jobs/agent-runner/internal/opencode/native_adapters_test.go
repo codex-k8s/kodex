@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,19 @@ func TestNativeBundledProtocolAdapters(t *testing.T) {
 			for _, optimized := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/cache=%t", api, kind, optimized), func(t *testing.T) {
 					var calls atomic.Int32
+					var measured atomic.Int32
+					collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						raw, _ := io.ReadAll(io.LimitReader(r.Body, 4097))
+						value, err := runtimecontract.DecodeModelMeasurement(raw)
+						if err != nil || value.Source != "HTTP_REQUEST" || value.Phase != "NORMAL" || value.Completeness != "COMPLETE" || value.TTFTMS == nil || value.Usage != nil || r.URL.Path != "/model-measurements" {
+							t.Error("bundled API HTTP measurement missing")
+							w.WriteHeader(400)
+							return
+						}
+						measured.Add(1)
+						w.WriteHeader(204)
+					}))
+					defer collector.Close()
 					endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 						raw, _ := io.ReadAll(io.LimitReader(r.Body, 2<<20))
 						var body map[string]any
@@ -36,7 +50,7 @@ func TestNativeBundledProtocolAdapters(t *testing.T) {
 						if api == "MESSAGES" {
 							wantPath = "/v1/messages"
 						}
-						if r.URL.Path != wantPath {
+						if r.URL.Path != wantPath || r.Header.Get("x-kodex-model-phase") != "" {
 							t.Error("adapter used another API")
 							w.WriteHeader(404)
 							return
@@ -119,7 +133,7 @@ func TestNativeBundledProtocolAdapters(t *testing.T) {
 						}
 					}
 					spec, _ := json.Marshal(map[string]any{"api": api, "provider_id": "synthetic", "model_id": "tiny", "base_url": endpoint.URL + "/v1", "route_kind": kind, "inference_cache": map[string]any{"mechanism": mechanism, "namespace": strings.Repeat("c", 64), "no_reuse": false}})
-					server := startConfiguredNativeServerEnvironment(t, binary, home, config, []string{"KODEX_MODEL_TRANSPORT=" + string(spec)})
+					server := startConfiguredNativeServerEnvironment(t, binary, home, config, []string{"KODEX_MODEL_TRANSPORT=" + string(spec), "KODEX_MODEL_MEASUREMENT_URL=" + collector.URL + "/model-measurements", "KODEX_MCP_PROXY_TOKEN=" + strings.Repeat("a", 64), "KODEX_NATIVE_REVISION=" + strings.Repeat("b", 64)})
 					ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 					defer cancel()
 					session, err := server.client.CreateSession(ctx, "Synthetic bundled API")
@@ -127,7 +141,7 @@ func TestNativeBundledProtocolAdapters(t *testing.T) {
 						t.Fatal(err)
 					}
 					result, err := server.client.Execute(ctx, session.ID, Prompt{MessageID: "msg_B1234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: "tiny"}, System: "SYNTHETIC_CURRENT_SYSTEM", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_CURRENT_TASK"}}}, func(string) bool { return false }, func(string, string) error { return nil })
-					if err != nil || result.FinalText != "SYNTHETIC_ADAPTER_FINAL" || calls.Load() != 1 {
+					if err != nil || result.FinalText != "SYNTHETIC_ADAPTER_FINAL" || calls.Load() != 1 || measured.Load() != 1 {
 						t.Fatalf("bundled adapter failed: calls=%d err=%v", calls.Load(), err)
 					}
 				})

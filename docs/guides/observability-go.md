@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.8
-updated: 2026-11-11
+version: 1.1.9
+updated: 2026-11-12
 ---
 
 # Наблюдаемость Go-сервисов
@@ -372,3 +372,25 @@ summary до normal cleanup, а private UID/tuple остаются safe log meta
 owner ACK. Локальный record и лог не подменяют durable owner commit. Смена Pod
 не наследует grace прежнего UID; диагностика не расширяет lease/retry либо
 полномочия. Пример: [#1941](../operations/runtime-initialization-failure.md).
+
+## Измерения фактических model requests
+
+Native step, бизнес-ход и HTTP attempt являются разными единицами. TTFT
+измеряется от actual send до первого содержательного streaming delta, а не
+по времени SSE-события agent runtime. HTTP retries получают отдельные receipts;
+summary/обычный/auxiliary вызов классифицируется в доверенном adapter. Private
+classification metadata удаляется до upstream и не становится authority.
+
+Доставка measurement использует exact owner lease и immutable receipt. Перед
+повторной выдачей receipt проверяются текущие authority, fence, deadline и
+terminal state. Callback не меняет фазу исполнения. Для длинных сессий нельзя
+сканировать всю историю на каждом шаге; indexed semantic receipt и bounded
+stream processing сохраняют постоянный локальный working set.
+
+Post-commit Prometheus counters не являются durable billing: crash или потеря
+COMMIT acknowledgement может оставить пропуск. Авторитетный источник —
+сохранённое owner event с защищённым read path. Неизвестные usage/TTFT/cost не
+заменяются нулём, cache-read/cache-write/reasoning не прибавляются повторно к
+input/output. Provider accounting не доказывает физическую изоляцию кеша.
+Все labels берутся из закрытого словаря; prompt, salt, alias и execution IDs
+в общие metrics не попадают. Пример: #2108.

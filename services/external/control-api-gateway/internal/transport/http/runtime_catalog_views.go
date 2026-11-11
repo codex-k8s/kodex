@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"regexp"
 	"slices"
 	"strings"
@@ -159,6 +160,14 @@ func validateRuntimeCatalogMessage(message protoreflect.Message, depth int) erro
 		return invalidRuntimeCatalogView("workflow_result_contract")
 	}
 	switch item := message.Interface().(type) {
+	case *cp.ModelMeasurement:
+		if modelmeasurementwire.FromProto(item).Validate() != nil {
+			return invalidRuntimeCatalogView("model_measurement")
+		}
+	case *cp.RunEvent:
+		if item.ModelMeasurement != nil && (item.Execution == nil || item.Type != cp.RunEventType_RUN_EVENT_TYPE_TURN_PROGRESS || item.Message != nil || item.ToolCall != nil) {
+			return invalidRuntimeCatalogView("model_measurement_execution")
+		}
 	case *cp.Run:
 		if !validRunIdentity(item) {
 			return invalidRuntimeCatalogView("run_identity")

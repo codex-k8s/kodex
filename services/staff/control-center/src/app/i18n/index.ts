@@ -1,3 +1,4 @@
+import { modelMeasurementMessages } from "@/features/runs/model-measurement-messages";
 import { approvalConsentMessages } from "@/features/integrations/approval-consent-messages";
 import { createI18n } from "vue-i18n";
 import { promptContextMessages } from "@/features/agents/detail/prompt-context-messages";
@@ -19,6 +20,7 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  modelMeasurements: modelMeasurementMessages.ru,
   integrationConsents: approvalConsentMessages.ru,
   credentialPolicy: {
     title: "Чей ключ использовать",
@@ -4905,6 +4907,7 @@ const ru = {
 
 const en = {
   ...ru,
+  modelMeasurements: modelMeasurementMessages.en,
   integrationConsents: approvalConsentMessages.en,
   credentialPolicy: {
     title: "Whose key to use",

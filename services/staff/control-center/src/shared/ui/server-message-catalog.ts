@@ -1105,6 +1105,10 @@ export const serverTokenTranslations = {
     "Runtime execution completed",
   ],
   RUNTIME_LEASE_RENEWED: ["Срок исполнения продлён", "Runtime lease renewed"],
+  MODEL_MEASUREMENT_RECORDED: [
+    "Измерение модели сохранено",
+    "Model measurement recorded",
+  ],
   RUNTIME_PROGRESS_RECORDED: [
     "Ход выполнения сохранён",
     "Runtime progress recorded",

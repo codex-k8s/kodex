@@ -36,7 +36,7 @@ func (repository *Repository) bindFinancialCallbackReceipt(ctx context.Context, 
 		return nil
 	}
 	observation := payload.Financial.Observation
-	if payload.Message != nil || payload.Progress != "" || observation.Validate() != nil {
+	if payload.ModelMeasurement != nil || payload.Message != nil || payload.Progress != "" || observation.Validate() != nil {
 		return errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, current, payload, true)

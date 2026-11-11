@@ -1,3 +1,4 @@
+import { validModelMeasurement } from "@/shared/api/model-measurement";
 import type {
   Artifact,
   AssistantConversation,
@@ -16,6 +17,7 @@ export type PresentedRunEvent = RunEvent & {
 };
 
 export interface RunActivityItem {
+  modelMeasurement?: RunEvent["modelMeasurement"];
   id: string;
   kind: "initiator" | "agent" | "tool" | "system";
   actor: string;
@@ -399,6 +401,12 @@ export function buildRunTranscriptItems(
       state: event.nodeState ?? event.runState,
       messageKind: callback ? "INTERMEDIATE_MESSAGE" : event.messageKind,
       toolCall: tool,
+      modelMeasurement:
+        scope &&
+        event.modelMeasurement &&
+        validModelMeasurement(event.modelMeasurement)
+          ? event.modelMeasurement
+          : undefined,
       artifactRef: event.artifactRef,
       artifact: event.artifact,
       execution: scope ? event.execution : undefined,
@@ -630,7 +638,8 @@ export function activeTranscriptItemId(
     JSON.stringify([execution.runRef, execution.nodeRef, execution.sessionRef]);
   for (const item of items) {
     const scope = executionKey(item.execution);
-    if (!scope || !item.execution || item.historical) continue;
+    if (!scope || !item.execution || item.historical || item.modelMeasurement)
+      continue;
     const key = sessionKey(item.execution);
     const previous = current.get(key);
     if (
@@ -655,6 +664,7 @@ export function activeTranscriptItemId(
       scope &&
       item.execution &&
       !item.historical &&
+      !item.modelMeasurement &&
       item.kind !== "initiator" &&
       !(
         item.phase === "USER" && item.messageOrigin !== "CALLBACK_CONTINUATION"
