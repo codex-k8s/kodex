@@ -171,7 +171,7 @@ func (f *workflowRecoveryRegression) claims(key string) []map[string]any {
 // complete заново строит native intent; допустимый результат включает настоящие bytes и exact SHA-256.
 func (f *workflowRecoveryRegression) complete(key string, lease map[string]any, file string, valid bool) {
 	f.t.Helper()
-	payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`}
+	payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`}
 	if file == "" {
 		payload.ResultSummary = "The missing material needs an owner-approved fresh attempt; this analysis cannot waive any predicate."
 	} else if valid {

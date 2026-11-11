@@ -82,7 +82,7 @@ func TestWorkspaceAgentProcess(t *testing.T) {
 	if mode != "positive" {
 		path := map[string]string{
 			"immutable":  "/workspace/input/immutable.txt",
-			"credential": "/workspace/.kodex/state/codex-home/auth.json",
+			"credential": "/workspace/.kodex/state/opencode/auth.json",
 			"foreign":    "/foreign/result.txt",
 			"symlink":    "/workspace/escape/result.txt",
 			"traversal":  "/workspace/../foreign/result.txt",
@@ -236,12 +236,12 @@ func TestWorkspaceSubprocessRejectsProtectedWrites(t *testing.T) {
 func workspaceProcessFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	for _, relative := range []string{"input", ".kodex/state/codex-home", ".kodex/outbox", "foreign"} {
+	for _, relative := range []string{"input", ".kodex/state/opencode", ".kodex/outbox", "foreign"} {
 		if err := os.MkdirAll(filepath.Join(root, relative), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(root, ".kodex/state/codex-home/auth.json"), []byte("fixture-only"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".kodex/state/opencode/auth.json"), []byte("fixture-only"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return root
@@ -271,7 +271,7 @@ func runWorkspaceProcess(t *testing.T, root, mode string) {
 		"--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64", "--ro-bind", executable, "/agent-test",
 		"--bind", root, "/workspace",
 		"--ro-bind", filepath.Join(root, "input"), "/workspace/input",
-		"--ro-bind", filepath.Join(root, ".kodex/state/codex-home/auth.json"), "/workspace/.kodex/state/codex-home/auth.json",
+		"--ro-bind", filepath.Join(root, ".kodex/state/opencode/auth.json"), "/workspace/.kodex/state/opencode/auth.json",
 		"--ro-bind", filepath.Join(root, "foreign"), "/foreign", "--chdir", "/workspace",
 		"--remount-ro", "/", "/agent-test", "-test.run=^TestWorkspaceAgentProcess$")
 	command.Env = []string{"KODEX_WORKSPACE_TEST_PROCESS=" + mode, "PATH=/usr/bin:/bin"}

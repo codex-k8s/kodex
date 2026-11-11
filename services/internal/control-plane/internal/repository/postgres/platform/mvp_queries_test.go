@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -581,6 +582,11 @@ func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T
 // иными значениями остаются отдельными.
 func configureComponentProviderAndRoleImages(t *testing.T, repository *Repository) ProviderCredentialConfig {
 	t.Helper()
+	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion,
+		ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "gpt-5", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	if repository.ConfigureModelProvider(profile, "gpt-5") != nil {
+		t.Fatal("configure synthetic native provider")
+	}
 	credentialConfig := ProviderCredentialConfig{
 		SecretName:            "runtime-provider-openai-default-r1",
 		SecretUID:             "10000000-0000-4000-8000-000000000001",

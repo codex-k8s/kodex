@@ -2,7 +2,6 @@ package codex
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -19,12 +18,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/filetransfer"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
@@ -91,45 +88,12 @@ type brokerRequest struct {
 // brokerResponse отделяет класс отказа транспорта или исполнения от Outcome результата и необязательных
 // привязанных доказательств диагностики и архива. Допустимые сочетания проверяет строгий читатель итога.
 type brokerResponse struct {
-	Result         Result                                     `json:"result"`
-	Failure        providerBrokerFailure                      `json:"failure,omitempty"`
-	OK             bool                                       `json:"ok"`
-	RolloutCapture *rolloutCaptureProof                       `json:"rollout_capture,omitempty"`
-	Diagnostic     *runtimecontract.ProviderFailureDiagnostic `json:"diagnostic,omitempty"`
-	WorkspaceJoin  *workspaceJoinProof                        `json:"workspace_join,omitempty"`
-}
-
-// rolloutCaptureProof records exact execution/attempt/session/turn and captured archive metadata.
-// The private sealed flag is not decoded from JSON; exported Result fields alone cannot establish proof.
-// rolloutCaptureProof хранит точные привязки исполнения, попытки, сессии, хода и метаданные захваченного архива.
-// Приватный sealed не читается из JSON; одни публичные поля Result не устанавливают доказательство.
-type rolloutCaptureProof struct {
-	Schema                 string `json:"schema"`
-	ExecutionBindingDigest string `json:"execution_binding_digest"`
-	RuntimeRevisionDigest  string `json:"runtime_revision_digest"`
-	InputDigest            string `json:"input_digest"`
-	Attempt                int32  `json:"attempt"`
-	SessionRef             string `json:"session_ref"`
-	TurnRef                string `json:"turn_ref"`
-	SessionID              string `json:"codex_session_id"`
-	RelativePath           string `json:"archive_relative_path"`
-	SHA256                 string `json:"archive_sha256"`
-	SizeBytes              int64  `json:"archive_size_bytes"`
-	sealed                 bool
-}
-
-// bound checks the proof's schema, canonical digests, exact execution tuple, archive identity/size and
-// canonical workspace/home relationship. It neither reads archive bytes nor checks the private seal.
-// bound проверяет схему, канонические digest, точную привязку исполнения, имя и размер архива,
-// а также каноническую связь workspace/home. Байты архива и приватный seal здесь не проверяются.
-func (proof *rolloutCaptureProof) bound(input model.Input) bool {
-	return proof != nil && proof.Schema == rolloutCaptureSchema && input.Mode == runtimecontract.RunnerModeTurn &&
-		validCaptureDigest(input.ExecutionBindingDigest) && validCaptureDigest(input.RuntimeRevisionDigest) && validCaptureDigest(input.InputDigest) &&
-		proof.ExecutionBindingDigest == input.ExecutionBindingDigest && proof.RuntimeRevisionDigest == input.RuntimeRevisionDigest && proof.InputDigest == input.InputDigest &&
-		input.Attempt > 0 && proof.Attempt == input.Attempt && input.SessionRef != "" && input.TurnRef != "" && proof.SessionRef == input.SessionRef && proof.TurnRef == input.TurnRef &&
-		(input.CodexSessionID == "" || proof.SessionID == input.CodexSessionID) && runtimecontract.ValidateCodexArchiveIdentity(proof.SessionID, proof.RelativePath) == nil &&
-		validCaptureDigest(proof.SHA256) && proof.SizeBytes > 0 && proof.SizeBytes <= maximumArchiveBytes &&
-		filepath.IsAbs(input.WorkspaceRoot) && filepath.Clean(input.WorkspaceRoot) == input.WorkspaceRoot && input.CodexHome == filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
+	Result        Result                                     `json:"result"`
+	Failure       providerBrokerFailure                      `json:"failure,omitempty"`
+	OK            bool                                       `json:"ok"`
+	Diagnostic    *runtimecontract.ProviderFailureDiagnostic `json:"diagnostic,omitempty"`
+	WorkspaceJoin *workspaceJoinProof                        `json:"workspace_join,omitempty"`
+	NativeCapture *nativeCaptureProof                        `json:"native_capture,omitempty"`
 }
 
 // validCaptureDigest accepts only a lowercase canonical hexadecimal SHA-256 digest of exactly 32 bytes.
@@ -137,37 +101,6 @@ func (proof *rolloutCaptureProof) bound(input model.Input) bool {
 func validCaptureDigest(value string) bool {
 	decoded, err := hex.DecodeString(value)
 	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
-}
-
-// withRolloutCapture attaches a sealed proof and its public metadata to a value copy of Result.
-// It does not independently verify input binding, file bytes or the final absolute archive path.
-// withRolloutCapture прикрепляет закрытое доказательство и его публичные метаданные к копии Result.
-// Она самостоятельно не проверяет привязку input, байты файла или окончательный абсолютный путь архива.
-func withRolloutCapture(result Result, proof *rolloutCaptureProof) Result {
-	if proof == nil || !proof.sealed {
-		return result
-	}
-	result.rolloutCapture = proof
-	result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes = proof.SessionID, proof.RelativePath, proof.SHA256, proof.SizeBytes
-	return result
-}
-
-// matchesCapture compares only public session/relative-path/digest/size metadata to the supplied proof.
-// It is not a file read, input-binding check or seal validation.
-// matchesCapture сравнивает только публичные session, относительный путь, digest и размер с доказательством.
-// Она не читает файл и не проверяет input binding или seal.
-func (result Result) matchesCapture(proof *rolloutCaptureProof) bool {
-	return proof != nil && result.SessionID == proof.SessionID && result.ArchiveRelativePath == proof.RelativePath && result.ArchiveSHA256 == proof.SHA256 && result.ArchiveSizeBytes == proof.SizeBytes
-}
-
-// HasVerifiedRollout requires a private sealed, input-bound proof, matching public metadata and the
-// exact workspace-relative absolute path. It cannot be reconstructed from arbitrary Result JSON
-// and does not re-read or re-hash a file that may subsequently change.
-// HasVerifiedRollout требует приватное закрытое доказательство, привязку к input, совпадение метаданных
-// и точный абсолютный путь внутри workspace. Его нельзя восстановить из произвольного JSON Result;
-// последующие изменения файла здесь не проверяются повторным чтением или хешированием.
-func (result Result) HasVerifiedRollout(input model.Input) bool {
-	return result.rolloutCapture != nil && result.rolloutCapture.sealed && result.rolloutCapture.bound(input) && result.matchesCapture(result.rolloutCapture) && result.ArchivePath == filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
 }
 
 // brokerPeerUID obtains Linux SO_PEERCRED only from a real UnixConn under RawConn.Control.
@@ -215,26 +148,6 @@ const (
 	providerBrokerFailureProvider providerBrokerFailure = "PROVIDER"
 )
 
-// providerAuthenticationSnapshot decodes only the mode and credential-bearing fields needed for local
-// shape checks; it is not a strict unknown-field/duplicate-key validator or an external authentication probe.
-// providerAuthenticationSnapshot читает лишь режим и поля реквизитов для локальной проверки структуры;
-// это не строгий валидатор лишних полей или повторных ключей и не внешняя проверка авторизации.
-type providerAuthenticationSnapshot struct {
-	AuthMode     string          `json:"auth_mode"`
-	OpenAIAPIKey *string         `json:"OPENAI_API_KEY"`
-	Tokens       json.RawMessage `json:"tokens"`
-}
-
-// providerExecutor runs one prepared turn and may return measured partial Result together with an error.
-// providerExecutor исполняет один подготовленный ход и может вернуть частичные измерения Result вместе с ошибкой.
-type providerExecutor func(context.Context, model.Input, []byte, string) (Result, error)
-
-// providerCredentialRefreshCommitter submits refreshed auth with exact previous revision/digest pins;
-// the relay/domain owner, not this function type, authorizes and commits the durable update.
-// providerCredentialRefreshCommitter отправляет обновлённый auth с точными прежними revision/digest;
-// разрешает и фиксирует устойчивое изменение relay или владелец домена, а не этот тип функции.
-type providerCredentialRefreshCommitter func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error
-
 // ExecuteViaBroker requires a live activity consumer and delegates provider-only data through UDS.
 // The UID and mount separation is completed by the deployment and receiver checks, not this call alone.
 // ExecuteViaBroker требует потребителя текущих событий и передаёт данные провайдера через UDS.
@@ -253,81 +166,37 @@ func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 // сырого auth уполномоченному коду. ReadFile предшествует проверке размера; это не ограничивающее
 // выделение памяти или исключающее гонки открытие, а очисткой возвращённых байтов владеет вызывающий код.
 func readProviderAuthentication(input model.Input) ([]byte, error) {
-	if err := security.VerifyProtectedRegular(input.ProviderAuthFile, false); err != nil {
+	if input.Provider != "opencode" || input.ModelProvider == nil || security.VerifyProtectedRegular(input.ProviderAuthFile, false) != nil {
 		return nil, ErrProviderAuthentication
 	}
-	auth, err := os.ReadFile(input.ProviderAuthFile)
-	expectedDigest, digestErr := pinnedProviderDigest(input)
-	if input.Provider == "opencode" {
-		if err != nil || digestErr != nil || input.ModelProvider == nil {
-			return nil, ErrProviderAuthentication
-		}
-		key, decodeErr := runtimecontract.DecodeGatewayProviderAuthentication(auth, input.ModelProvider.DefinitionKey())
-		clear(key)
-		digest := sha256.Sum256(auth)
-		if decodeErr != nil || hex.EncodeToString(digest[:]) != expectedDigest {
-			return nil, ErrProviderAuthentication
-		}
-		return auth, nil
+	file, err := os.OpenFile(input.ProviderAuthFile, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, ErrProviderAuthentication
 	}
-	if err != nil || digestErr != nil || validateProviderAuthenticationPayload(auth, expectedDigest) != nil {
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > runtimecontract.MaximumProviderAuthBytes {
+		return nil, ErrProviderAuthentication
+	}
+	auth, err := io.ReadAll(io.LimitReader(file, runtimecontract.MaximumProviderAuthBytes+1))
+	expected, digestErr := pinnedProviderDigest(input)
+	if err != nil || digestErr != nil || int64(len(auth)) != info.Size() || validateManagedProviderAuthentication(auth, expected, input.ModelProvider.DefinitionKey()) != nil {
+		clear(auth)
 		return nil, ErrProviderAuthentication
 	}
 	return auth, nil
 }
 
-// validateProviderAuthenticationPayload combines local auth-shape checks with exact SHA-256 pin equality,
-// without contacting a provider or proving credential freshness at the remote service.
-// validateProviderAuthenticationPayload объединяет локальную проверку auth с точным совпадением SHA-256,
-// не обращаясь к провайдеру и не доказывая актуальность реквизитов на внешнем сервисе.
-func validateProviderAuthenticationPayload(auth []byte, expectedSHA256 string) error {
-	if validateProviderAuthentication(auth) != nil {
-		return ErrProviderAuthentication
-	}
-	digest := sha256.Sum256(auth)
-	if hex.EncodeToString(digest[:]) != expectedSHA256 {
+// validateManagedProviderAuthentication requires the exact configured definition and credential digest, never a ChatGPT bootstrap or CLI auth fallback.
+// validateManagedProviderAuthentication требует exact configured definition и credential digest без ChatGPT bootstrap или CLI auth fallback.
+func validateManagedProviderAuthentication(auth []byte, digest, definition string) error {
+	key, err := runtimecontract.DecodeGatewayProviderAuthentication(auth, definition)
+	clear(key)
+	actual := sha256.Sum256(auth)
+	if err != nil || hex.EncodeToString(actual[:]) != digest {
 		return ErrProviderAuthentication
 	}
 	return nil
-}
-
-// validateProviderAuthentication exposes only the mode parser's validity result, not raw credential fields.
-// validateProviderAuthentication возвращает лишь результат проверки режима, а не исходные поля реквизитов.
-func validateProviderAuthentication(auth []byte) error {
-	_, err := providerAuthenticationMode(auth)
-	return err
-}
-
-// providerAuthenticationMode bounds and parses an object, then accepts supported credential shapes.
-// It intentionally uses ordinary JSON decoding; valid local structure is not successful remote login.
-// providerAuthenticationMode ограничивает и разбирает объект, затем принимает поддерживаемые формы реквизитов.
-// Здесь намеренно обычный JSON decode; корректная локальная структура не означает успешного внешнего входа.
-func providerAuthenticationMode(auth []byte) (string, error) {
-	trimmed := bytes.TrimSpace(auth)
-	if len(auth) == 0 || len(auth) > 1<<20 || len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
-		return "", ErrProviderAuthentication
-	}
-	var snapshot providerAuthenticationSnapshot
-	if json.Unmarshal(trimmed, &snapshot) != nil || !supportedProviderAuthentication(snapshot.AuthMode, snapshot.OpenAIAPIKey, snapshot.Tokens) {
-		return "", ErrProviderAuthentication
-	}
-	return snapshot.AuthMode, nil
-}
-
-// supportedProviderAuthentication requires nonempty token objects for chatgpt modes or a nonempty API
-// key for apikey mode. It does not validate token claims, expiry or individual OAuth token fields.
-// supportedProviderAuthentication требует непустой объект tokens для chatgpt либо непустой API key
-// для apikey. Claims, срок действия и отдельные OAuth-поля токенов здесь не проверяются.
-func supportedProviderAuthentication(mode string, apiKey *string, tokens json.RawMessage) bool {
-	switch mode {
-	case "chatgpt", "chatgptAuthTokens":
-		var value map[string]json.RawMessage
-		return len(tokens) > 0 && json.Unmarshal(tokens, &value) == nil && len(value) > 0
-	case "apikey":
-		return apiKey != nil && *apiKey != ""
-	default:
-		return false
-	}
 }
 
 // executeViaBroker retries failed dials within a timer window while each dial uses the caller context,
@@ -589,6 +458,9 @@ func ServeProviderBroker(ctx context.Context) error {
 	if os.Geteuid() != 10002 {
 		return errors.New("Codex provider broker UID is invalid")
 	}
+	// Provider-local native logs/cache must remain0600 even when upstream chooses permissive defaults.
+	// Provider-local native logs/cache остаются0600 даже при permissive defaults upstream.
+	unix.Umask(0o077)
 	if err := unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0); err != nil {
 		return errors.New("disable provider broker process inspection")
 	}
@@ -721,26 +593,13 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBridge, err)
 	}
 	defer bridge.Close()
-	var result Result
-	if request.Input.Provider == "opencode" {
-		result, err = executeOpenCodeTurn(ctx, request.Input, request.Prompt, bridge.URL(), request.MCPProxyToken, auth, frames.activity)
-	} else {
-		if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-			return writeProviderBrokerFailureAtStage(frames, providerStageHomePrepare, err)
-		}
-		execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
-			if err := prepareWorkingDirectory(ctx, input); err != nil {
-				return Result{}, atProviderStage(providerStageHomePrepare, err)
-			}
-			return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
-		}
-		result, err = executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
-	}
+	result, err := executeOpenCodeTurn(ctx, request.Input, request.Prompt, bridge.URL(), request.MCPProxyToken, auth, frames.activity)
 	if err != nil {
 		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)
 	}
 	result = normalizeCompletedProviderWorkspace(ctx, request.Input, result, normalizeProviderWorkspaceAccess)
+	result = publishCompletedProviderOutbox(ctx, request.Input, result)
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
@@ -774,10 +633,12 @@ func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecu
 // slice/pointer не копируются глубоко, а подтверждения credential effect эта проекция не выдаёт.
 func failedProviderResult(result Result) Result {
 	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls, providerDiagnostic: result.providerDiagnostic, workspaceJoin: result.workspaceJoin}
-	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
-		failed = withRolloutCapture(failed, result.rolloutCapture)
-		failed.ArchivePath = result.ArchivePath
+	if result.nativeCapture != nil && result.nativeCapture.sealed && result.NativeSession != nil && *result.NativeSession == result.nativeCapture.Checkpoint {
+		value := *result.NativeSession
+		failed.NativeSession = &value
+		failed.nativeCapture = result.nativeCapture
 	}
+
 	return failed
 }
 
@@ -799,87 +660,6 @@ func writeProviderBrokerResultFailure(connection io.Writer, result Result, err e
 		OK:         false,
 		Diagnostic: diagnostic,
 	})
-}
-
-// executeProviderTurn validates the pinned deadline, then executes once with a deferred attempt to remove
-// the temporary auth file. Refreshed credentials use an independent commit timeout even after execution failure;
-// refresh/commit errors keep the measured Result. Successful non-assistant artifact-capable turns
-// publish their outbox, converting publication failure into a failed outcome without inventing success.
-// executeProviderTurn проверяет закреплённый срок, затем исполняет один раз с отложенной попыткой удалить
-// временный auth. Обновлённые реквизиты сохраняются с независимым timeout даже после отказа исполнения;
-// ошибки refresh/commit сохраняют измеренный Result. Успешный ход не-помощника с artifact capability
-// публикует outbox, а отказ публикации даёт ошибочный Outcome вместо выдуманного успеха.
-func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,
-	execute providerExecutor, commit providerCredentialRefreshCommitter,
-) (Result, error) {
-	if input.ExecutionDeadline.Validate() != nil {
-		return Result{}, ErrRuntimeProfile
-	}
-	ctx, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
-	defer cancelDeadline()
-	authenticationPath := filepath.Join(input.CodexHome, "auth.json")
-	defer os.Remove(authenticationPath)
-	result, executionErr := execute(ctx, input, prompt, mcpProxyToken)
-	authentication, changed, err := readProviderCredentialRefresh(input, authenticationPath)
-	if err != nil {
-		return result, err
-	}
-	defer clear(authentication)
-	if changed {
-		payload := runtimecontract.RunnerProviderCredentialRefreshRequest{
-			RuntimeRevisionDigest:         input.RuntimeRevisionDigest,
-			PreviousCredentialRevisionRef: input.ProviderCredentialRef,
-			PreviousContentSHA256:         input.ProviderCredentialSHA256,
-			Authentication:                authentication,
-		}
-		commitContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), providerRefreshCommitTimeout)
-		defer cancel()
-		if err := commit(commitContext, input, payload); err != nil {
-			return result, errors.New("commit refreshed provider authentication")
-		}
-	}
-	if executionErr == nil && result.Outcome == "SUCCEEDED" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
-		if err := publishProviderOutbox(ctx, input); err != nil {
-			logProviderFilesystemDenial(providerOutboxStage, err)
-			result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
-			result = result.WithWorkspaceDiagnostic(input, providerOutboxStage, filesystemDenialReason(providerOutboxStage, err).String())
-		}
-	}
-	return result, executionErr
-}
-
-// readProviderCredentialRefresh opens the workspace-confined protected auth file, bounds metadata and
-// actual read size, validates its mode and compares the content pin. Changed API-key auth is rejected;
-// invalid buffers are cleared, while callers must clear a successfully returned OAuth/auth buffer.
-// readProviderCredentialRefresh открывает защищённый auth внутри workspace, ограничивает метаданные
-// и фактическое чтение, проверяет режим и сравнивает digest. Изменившийся API-key auth отклоняется;
-// ошибочные буферы очищаются, а успешно возвращённый auth обязан очистить вызывающий код.
-func readProviderCredentialRefresh(input model.Input, path string) ([]byte, bool, error) {
-	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
-	if err != nil {
-		return nil, false, errors.New("read refreshed provider authentication")
-	}
-	defer file.Close()
-	if info.Size() <= 0 || info.Size() > runtimecontract.MaximumProviderAuthBytes {
-		return nil, false, errors.New("refreshed provider authentication metadata is invalid")
-	}
-	authentication, err := io.ReadAll(io.LimitReader(file, runtimecontract.MaximumProviderAuthBytes+1))
-	if err != nil || int64(len(authentication)) != info.Size() || len(authentication) > runtimecontract.MaximumProviderAuthBytes {
-		clear(authentication)
-		return nil, false, errors.New("refreshed provider authentication content is invalid")
-	}
-	mode, modeErr := providerAuthenticationMode(authentication)
-	if modeErr != nil {
-		clear(authentication)
-		return nil, false, errors.New("refreshed provider authentication is invalid")
-	}
-	digest := sha256.Sum256(authentication)
-	changed := hex.EncodeToString(digest[:]) != input.ProviderCredentialSHA256
-	if changed && mode == "apikey" {
-		clear(authentication)
-		return nil, false, errors.New("provider API-key authentication changed unexpectedly")
-	}
-	return authentication, changed, nil
 }
 
 // providerMCPBridge owns the loopback HTTP server, UDS-only upstream transport and serve completion channel.
@@ -913,7 +693,7 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 		return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
 	}}
 	target, _ := url.Parse("http://kodex-mcp-authority/mcp")
-	reverse := &httputil.ReverseProxy{Transport: transport, ErrorLog: log.New(io.Discard, "", 0),
+	reverse := &httputil.ReverseProxy{Transport: transport, ErrorLog: log.New(io.Discard, "", 0), ModifyResponse: restoreNativeMCPResponse,
 		Director: func(request *http.Request) {
 			request.URL.Scheme, request.URL.Host = target.Scheme, target.Host
 			request.Host = target.Host
@@ -926,6 +706,10 @@ func startProviderMCPBridge(ctx context.Context, socketPath, localToken string, 
 			http.Error(writer, "required MCP authority is unavailable", http.StatusBadGateway)
 		}, FlushInterval: -1}
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if bindNativeMCPRequest(request, input, localToken) != nil {
+			http.Error(writer, "invalid managed native tool identity", http.StatusBadRequest)
+			return
+		}
 		if request.URL.Path == "/workspace/mcp" && runtimecontract.RuntimeWorkspaceToolsAvailable(input) &&
 			request.Method == http.MethodPost && request.URL.RawQuery == "" && subtle.ConstantTimeCompare([]byte(request.Header.Get("Authorization")), []byte("Bearer "+localToken)) == 1 {
 			reverse.ServeHTTP(writer, request)

@@ -415,7 +415,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV9, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV10, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",
@@ -423,27 +423,28 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
-		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
+		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: runtimecontract.WorkspaceStorageRuntimeContractRevision,
 		RoleRuntimeContractSHA256: strings.Repeat("d", 64), RoleDefinitionRef: "roledef_abcdefgh",
 		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
 		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
 		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
 		PromptMaterializationDigest: strings.Repeat("7", 64), AssistantScope: runtimecontract.AssistantScopeSystem,
 		Instructions: "Complete the bounded task.", Task: "Prepare the customer response.",
-		Provider: "openai", Model: "codex", ProviderAccountRef: "pacc_abcdefgh",
+		Provider: "opencode", Model: "model-a",
+		ModelProvider: &runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "test-gateway", BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.4/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}, ProviderAccountRef: "pacc_abcdefgh",
 		ProviderCredentialRef: "pcr_abcdefgh", ProviderCredentialRevision: 1,
 		ProviderCredentialSHA256: strings.Repeat("e", 64),
 		RuntimeConfigRef:         "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
-		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1, ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "medium",
+		ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1, ReasoningMode: runtimecontract.ReasoningUnsupported,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,
 		EnvironmentPolicy:        policy, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(),
 		EffectiveKubernetesAccess: access,
 		EnvironmentBindingRef:     "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
-		CodexSandbox:        "read-only",
-		CodexApprovalPolicy: "never", CallbackURL: "https://10.0.0.10:8444",
+		WorkspaceAccess: "read-only",
+		CallbackURL:     "https://10.0.0.10:8444",
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{
 			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",
 			CAFile:          "/var/run/config/kodex/runtime/callback/ca.crt",
@@ -453,7 +454,7 @@ func validWarmTurnFixture() runtimecontract.RunnerInput {
 		ExecutionTicketFile:    "/var/run/secrets/kodex/runtime/ticket/token",
 		ProviderAuthFile:       "/run/secrets/kodex/runtime/provider/auth.json",
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
-		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
+		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", NativeStateRoot: "/workspace/.kodex/state/opencode",
 	}
 	input.InputDigest, _ = runtimecontract.RuntimeBoundedInputDigest(input.BoundedInput)
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = runtimecontract.RuntimeExecutionBindingDigests(input)

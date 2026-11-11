@@ -26,9 +26,8 @@ func TestSignedHandoffV2RejectsTampering(t *testing.T) {
 		Outputs: []OutputV2{{Kind: "FINAL_MARKDOWN", ID: "output", Version: 1,
 			SHA256: "2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df",
 			Name:   "result.md", MediaType: "text/markdown", Payload: []byte("ok"), SizeBytes: 2, Sequence: 1, Total: 1}},
-		CodexSessionID: "00000000-0000-4000-8000-000000000001", ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl",
-		ArchiveSHA256:     strings.Repeat("6", 64),
-		ArchiveProvenance: "codex-app-server-rollout-v1:00000000-0000-4000-8000-000000000006:.kodex/state/codex-home/sessions/2026/08/04/rollout-00000000-0000-4000-8000-000000000001.jsonl:" + strings.Repeat("6", 64), ObservedAt: time.Now().UTC()}
+		NativeSession: &NativeSessionCheckpoint{SessionID: "ses_fixture", Version: OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_fixture.json", SHA256: strings.Repeat("6", 64), SizeBytes: 800}, ObservedAt: time.Now().UTC()}
+
 	if err := handoff.Outputs[0].validate(); err != nil {
 		t.Fatalf("output fixture is invalid: %v", err)
 	}
@@ -50,11 +49,13 @@ func TestSignedHandoffV2RejectsTampering(t *testing.T) {
 		t.Fatalf("scheduled failed outcome was rejected: %v", err)
 	}
 	invalidProvenance := handoff
-	invalidProvenance.ArchiveProvenance = strings.Replace(invalidProvenance.ArchiveProvenance,
-		"00000000-0000-4000-8000-000000000006", "not-an-execution", 1)
-	if err := invalidProvenance.Validate(); err == nil {
-		t.Fatal("archive provenance without an exact source execution was accepted")
+	foreign := *handoff.NativeSession
+	foreign.SessionID = "ses_foreign"
+	invalidProvenance.NativeSession = &foreign
+	if invalidProvenance.Validate() == nil {
+		t.Fatal("native checkpoint without exact identity accepted")
 	}
+
 	raw, err := SignHandoffV2(handoff, "key-v1", privateKey)
 	if err != nil {
 		t.Fatal(err)

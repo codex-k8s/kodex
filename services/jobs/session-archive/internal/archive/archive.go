@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
@@ -34,7 +35,8 @@ type manifest struct {
 	RuntimeRevisionRef     string `json:"runtime_revision_ref"`
 	RuntimeRevisionVersion int64  `json:"runtime_revision_version"`
 	RuntimeRevisionDigest  string `json:"runtime_revision_digest"`
-	CodexSessionID         string `json:"codex_session_id"`
+	NativeSessionID        string `json:"native_session_id"`
+	EngineVersion          string `json:"engine_version"`
 	ContentGeneration      int64  `json:"content_generation"`
 	SourceRelativePath     string `json:"source_relative_path"`
 	SourceSHA256           string `json:"source_sha256"`
@@ -140,7 +142,7 @@ func Delete(ctx context.Context, store objectstorage.Store, task model.Task) (mo
 func encode(task model.Task, source []byte) ([]byte, error) {
 	m := manifest{model.FormatVersion, task.OrganizationRef, task.ProjectRef, task.SessionRef,
 		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionVersion,
-		task.RuntimeRevisionDigest, task.CodexSessionID, task.ContentGeneration,
+		task.RuntimeRevisionDigest, task.NativeSessionID, runtimecontract.OpenCodeVersion, task.ContentGeneration,
 		task.SourceRelativePath, task.SourceSHA256, task.SourceSizeBytes}
 	manifestRaw, err := json.Marshal(m)
 	if err != nil {
@@ -179,7 +181,7 @@ func decode(task model.Task, raw []byte) ([]byte, error) {
 		return nil, errors.New("read session archive manifest")
 	}
 	var actual manifest
-	if json.Unmarshal(manifestRaw, &actual) != nil || actual != expectedManifest(task) {
+	if runtimecontract.DecodeWorkspaceStorageTaskJSON(manifestRaw, &actual) != nil || actual != expectedManifest(task) {
 		return nil, errors.New("session archive manifest binding mismatch")
 	}
 	sourceHeader, err := reader.Next()
@@ -205,7 +207,7 @@ func expectedManifest(task model.Task) manifest {
 	}
 	return manifest{model.FormatVersion, task.OrganizationRef, task.ProjectRef, task.SessionRef,
 		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionVersion,
-		task.RuntimeRevisionDigest, task.CodexSessionID, task.ContentGeneration, path, sha, size}
+		task.RuntimeRevisionDigest, task.NativeSessionID, runtimecontract.OpenCodeVersion, task.ContentGeneration, path, sha, size}
 }
 
 // readSource validates the local path and regular file, then bounds and checks exact source size and SHA-256.

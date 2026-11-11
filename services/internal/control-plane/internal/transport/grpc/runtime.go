@@ -125,8 +125,9 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	if agentRef == "" {
 		agentRef = mapString(values, "assistantRef")
 	}
-	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"), CodexSessionId: mapString(values, "codexSessionID"),
+	result := &controlplanev1.RuntimeRevisionSnapshot{Ref: mapString(values, "runtimeRevisionRef"), Version: mapInt64(values, "runtimeRevisionVersion"), OrganizationRef: mapString(values, "organizationRef"), RunRef: mapString(values, "runRef"), NodeRef: mapString(values, "nodeRef"), SessionRef: mapString(values, "sessionRef"), TurnRef: mapString(values, "turnRef"), Attempt: int32(mapInt64(values, "attempt")), AgentRef: agentRef, Instructions: instructions, InputDigest: mapString(values, "inputDigest"), RevisionDigest: mapString(values, "revisionDigest"),
 		AssistantScope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+mapString(values, "assistantScope")]), AssistantProfileRef: mapString(values, "assistantProfileRef")}
+	result.RootInitiatorRef = mapString(values, "rootInitiatorRef")
 	result.RoleDefinitionRef = mapString(values, "roleDefinitionRef")
 	result.EffectiveReasoningEffort = mapString(values, "effectiveReasoningEffort")
 	result.ReasoningMode = controlplanev1.RuntimeReasoningMode(controlplanev1.RuntimeReasoningMode_value["RUNTIME_REASONING_MODE_"+mapString(values, "reasoningMode")])
@@ -262,6 +263,11 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		return nil
 	}
 	result.Runtime.ModelProvider = modelProvider
+	nativeSession, validNativeSession := castNativeSession(values)
+	if !validNativeSession {
+		return nil
+	}
+	result.NativeSession = nativeSession
 	for _, key := range mapStrings(values, "capabilities") {
 		result.Capabilities = append(result.Capabilities, &controlplanev1.PlatformCapability{Key: key, Name: key})
 	}
@@ -642,7 +648,12 @@ func castProviderCredential(values map[string]any) *controlplanev1.ProviderCrede
 // CompleteExecution преобразует исход, использование, метаданные архива и содержимое артефактов до
 // отдельной команды завершения.
 func (server *Server) CompleteExecution(ctx context.Context, request *controlplanev1.CompleteExecutionRequest) (*controlplanev1.CompleteExecutionResponse, error) {
-	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), Usage: usageFromProto(request.GetUsage()), CodexSessionID: request.GetCodexSessionId(), ArchiveRelativePath: request.GetCodexArchiveRelativePath(), ArchiveSHA256: request.GetCodexArchiveSha256(), ArchiveSizeBytes: request.GetCodexArchiveSizeBytes()}
+	payload := command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), Usage: usageFromProto(request.GetUsage())}
+	native, err := nativeCompletionFromProto(request.GetNativeSession())
+	if err != nil {
+		return nil, transportError(errs.ErrInvalid)
+	}
+	payload.NativeSession = native
 	for _, item := range request.GetArtifacts() {
 		payload.Artifacts = append(payload.Artifacts, command.CompletedArtifact{FileName: item.GetFileName(), MediaType: item.GetMediaType(), SizeBytes: item.GetSizeBytes(), Content: item.GetContent(), SHA256: item.GetSha256()})
 	}

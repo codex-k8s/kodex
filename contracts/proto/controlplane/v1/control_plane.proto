@@ -3831,9 +3831,8 @@ message RuntimeRevisionSnapshot {
   string environment_binding_digest = 44;
   repeated RuntimeEnvironmentValue environment_values = 45;
   repeated RuntimeSecretDescriptor secret_projections = 46;
-  // Provider thread ID назначен Codex app-server и сохранён control-plane из
-  // terminal handoff предыдущего turn.
-  string codex_session_id = 47;
+  reserved 47;
+  reserved "codex_session_id";
   AssistantContextDescriptor assistant_context = 48;
   string attachment_set_ref = 49;
   string attachment_set_manifest_digest = 50;
@@ -3870,6 +3869,10 @@ message RuntimeRevisionSnapshot {
   RuntimeExecutionDeadline execution_deadline = 79;
   // Owner-selected private work generation; старый input сохраняет отсутствие поля.
   RuntimeWorkspaceStorage workspace_storage = 80;
+  // Подтверждённый native export выбирается control plane; это не полномочие resume.
+  NativeSessionCheckpoint native_session = 81;
+  // Root initiator назначается владельцем исполнения, не из prompt.
+  string root_initiator_ref = 82;
 }
 
 message RuntimeWorkspaceScope {
@@ -4330,10 +4333,9 @@ message CompleteExecutionRequest {
   string safe_error_code = 7;
   repeated CompletedArtifactInput artifacts = 8;
   TokenUsage usage = 9;
-  string codex_session_id = 10;
-  string codex_archive_relative_path = 11;
-  string codex_archive_sha256 = 12;
-  int64 codex_archive_size_bytes = 13;
+  reserved 10 to 13;
+  reserved "codex_session_id", "codex_archive_relative_path", "codex_archive_sha256", "codex_archive_size_bytes";
+  NativeSessionCheckpoint native_session = 14;
 }
 message CompleteExecutionResponse {
   Run run = 1;
@@ -4400,6 +4402,8 @@ message SessionArchiveBinding {
 }
 
 message SessionArchiveTask {
+  reserved 10;
+  reserved "codex_session_id";
   string task_ref = 1;
   SessionArchiveTaskKind kind = 2;
   string organization_ref = 3;
@@ -4409,7 +4413,6 @@ message SessionArchiveTask {
   string runtime_revision_ref = 7;
   int64 runtime_revision_version = 8;
   string runtime_revision_digest = 9;
-  string codex_session_id = 10;
   int64 content_generation = 11;
   string pvc_name = 12;
   SessionArchiveBinding archive = 13;
@@ -4422,6 +4425,7 @@ message SessionArchiveTask {
   string target_object_version = 20;
   int32 attempt = 21;
   SessionWorkspaceArchiveTask workspace = 22;
+  string native_session_id = 23;
 }
 
 message SessionWorkspaceArchiveTask {
@@ -6512,6 +6516,10 @@ message ProviderDefinition {
   bool ready = 8;
   repeated string readiness_blockers = 9;
   repeated ModelCapability models = 10;
+  repeated ModelExecutionPolicy runtime_policies = 11;
+  string managed_by = 12;
+  string source_revision = 13;
+  string engine_version = 14;
 }
 message ListProviderDefinitionsRequest {
   PageRequest page = 1;
@@ -9464,12 +9472,36 @@ message RuntimeModelProviderConfiguration {
   repeated string address_cidrs = 8;
   repeated RuntimeModelProviderModel models = 9;
   string tool_mode = 10;
+  string api = 11;
+  string route_kind = 12;
+  string route_version = 13;
 }
 
 message RuntimeModelProviderModel {
   string id = 1;
   int64 context_window_tokens = 2;
   int64 maximum_output_tokens = 3;
+  RuntimeModelCachePolicy cache_policy = 4;
+  RuntimeModelContextPolicy context_policy = 5;
+}
+
+message RuntimeModelCachePolicy {
+  int32 revision = 1;
+  string optimization = 2;
+  string reuse_scope = 3;
+  bool no_reuse = 4;
+  bool no_store = 5;
+  bool required = 6;
+  RuntimeModelCacheQualification qualification = 7;
+}
+
+message RuntimeModelCacheQualification {
+  string mechanism = 1;
+  string status = 2;
+  string source = 3;
+  string backend_version = 4;
+  string evidence_sha256 = 5;
+  string route_sha256 = 6;
 }
 
 // Browser operations собственной привязки не возвращают Secret descriptor либо значение ключа.
@@ -9707,3 +9739,40 @@ message RevokeIntegrationApprovalConsentRequest {
  string consent_ref = 2;
 }
 message RevokeIntegrationApprovalConsentResponse { IntegrationApprovalConsent consent = 1; }
+
+message NativeSessionCheckpoint {
+  string session_id = 1;
+  string version = 2;
+  int64 generation = 3;
+  string relative_path = 4;
+  string sha256 = 5;
+  int64 size_bytes = 6;
+  string workspace_ref = 7;
+  int64 workspace_generation = 8;
+}
+
+// Отдельная несекретная проекция исполняемой Git-owned политики модели.
+message ModelExecutionPolicy {
+  string model_id = 1;
+  int64 context_window_tokens = 2;
+  int64 maximum_output_tokens = 3;
+  RuntimeModelContextPolicy context = 4;
+  ModelCacheResolution cache = 5;
+  bool eligible = 6;
+}
+message RuntimeModelContextPolicy {
+  int32 revision = 1;
+  bool auto_compaction = 2;
+  bool prune = 3;
+}
+message ModelCacheResolution {
+  RuntimeModelCachePolicy requested = 1;
+  string mechanism = 2;
+  string reuse_scope = 3;
+  string status = 4;
+  string reason = 5;
+  bool no_reuse = 6;
+  bool no_store = 7;
+  string proxy_response_cache = 8;
+  string physical_isolation = 9;
+}

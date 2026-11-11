@@ -88,7 +88,7 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 	}
 	complete := func(key string, lease map[string]any, summary string) {
 		t.Helper()
-		execute(command.CompleteExecution, key, nil, command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary})
+		execute(command.CompleteExecution, key, nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary})
 	}
 	declaration := `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`
 	var anchorID, anchorRun string
@@ -104,7 +104,7 @@ func TestWorkflowExceptionRecoveryComponent(t *testing.T) {
 		}
 		seenRun[stringMap(step, "runRef")], seenNode[stringMap(step, "nodeRef")] = true, true
 		if attempt == 2 {
-			progress := command.CompleteExecutionInput{LeaseRef: stringMap(step, "leaseRef"), Fence: stringMap(step, "fence"), Generation: runtimeRevisionMapInt64(step, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("retry.md", []byte("Ранний материал второй business attempt.\n"))}}
+			progress := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(step), LeaseRef: stringMap(step, "leaseRef"), Fence: stringMap(step, "fence"), Generation: runtimeRevisionMapInt64(step, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("retry.md", []byte("Ранний материал второй business attempt.\n"))}}
 			execute(command.CompleteExecution, "snapshot-progress-two", nil, progress)
 			continued := claim("snapshot-technical-two")
 			if stringMap(continued, "runRef") != stringMap(step, "runRef") || runtimeRevisionMapInt64(continued, "attempt") != 2 {

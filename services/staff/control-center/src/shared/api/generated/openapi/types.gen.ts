@@ -2171,7 +2171,11 @@ export type ProviderModelCatalogStatus = {
 };
 
 export type ProviderDefinition = {
-    key: 'openai-codex';
+    managedBy?: 'git';
+    sourceRevision?: string;
+    engineVersion?: '1.19.5';
+    runtimePolicies?: Array<ModelExecutionPolicy>;
+    key: string;
     name: string;
     description: string;
     authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
@@ -2181,6 +2185,52 @@ export type ProviderDefinition = {
     available: boolean;
     ready: boolean;
     readinessBlockers: Array<string>;
+};
+
+export type ModelContextPolicy = {
+    revision: 1;
+    autoCompaction: boolean;
+    prune: boolean;
+};
+
+export type ModelCacheQualification = {
+    mechanism: 'NONE' | 'VLLM_CACHE_SALT' | 'OPENAI_PROMPT_CACHE_KEY' | 'ANTHROPIC_EPHEMERAL';
+    status: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    source: 'NONE' | 'DECLARED' | 'OBSERVED';
+    backendVersion: string;
+    evidenceSha256: string;
+    routeSha256: string;
+};
+
+export type ModelCachePolicy = {
+    revision: 1;
+    optimization: 'PROVIDER_DEFAULT' | 'NO_HINTS' | 'OPTIMIZE';
+    reuseScope: 'PROJECT' | 'INITIATOR' | 'SESSION';
+    noReuse: boolean;
+    noStore: boolean;
+    required: boolean;
+    qualification: ModelCacheQualification;
+};
+
+export type ModelCacheResolution = {
+    requested?: ModelCachePolicy;
+    mechanism: 'NONE' | 'VLLM_CACHE_SALT' | 'OPENAI_PROMPT_CACHE_KEY' | 'ANTHROPIC_EPHEMERAL';
+    reuseScope: 'PROJECT' | 'INITIATOR' | 'SESSION' | 'PROVIDER_BOUNDARY' | 'PROVIDER_ACCOUNT_ROUTING_KEY' | 'PROVIDER_ACCOUNT';
+    status: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    reason: string;
+    noReuse: boolean;
+    noStore: boolean;
+    proxyResponseCache: 'NOT_APPLICABLE' | 'BYPASS_READ_WRITE' | 'UNQUALIFIED';
+    physicalIsolation: 'NOT_PROVEN';
+};
+
+export type ModelExecutionPolicy = {
+    modelId: string;
+    contextWindowTokens: number;
+    maximumOutputTokens: number;
+    context: ModelContextPolicy;
+    cache: ModelCacheResolution;
+    eligible: boolean;
 };
 
 export type ProviderDefinitionPage = {
@@ -3468,7 +3518,7 @@ export type RunGraph = {
  */
 export type RunSessionReadiness = {
     sessionRef: OpaqueRef;
-    storageState: 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
+    storageState: 'INITIALIZING' | 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
     reason: 'STORAGE_NOT_LIVE' | 'SESSION_ACCOUNT_UNAVAILABLE' | 'EARLIER_EXECUTION' | 'NO_SESSION_BLOCKER';
     latestArchiveTask?: RunSessionArchiveTask;
 };
@@ -4078,7 +4128,7 @@ export type ProviderAuthorization = {
 export type ProviderAccount = {
     ref: OpaqueRef;
     version: number;
-    definitionKey: 'openai-codex';
+    definitionKey: string;
     name: string;
     externalAccountMasked: string;
     /**
@@ -4277,7 +4327,7 @@ export type ProviderAccountPage = {
 };
 
 export type ProviderAccountCreateInput = {
-    definitionKey: 'openai-codex';
+    definitionKey: string;
     name: string;
 };
 
@@ -7490,7 +7540,7 @@ export type ListProviderAccountsData = {
         usageModel?: string;
         usageReasoningEffort?: string;
         state?: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED' | 'DELETING' | 'DELETED';
-        definitionKey?: 'openai-codex';
+        definitionKey?: string;
         query?: string;
         pageSize?: number;
         pageToken?: string;

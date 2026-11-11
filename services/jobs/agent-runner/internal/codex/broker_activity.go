@@ -91,20 +91,21 @@ func (writer *brokerFrameWriter) activity(activity runtimecontract.RuntimeActivi
 func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	// Факты tool call уже доставлены в ACTIVITY; terminal переносит только итог.
 	response.Result.ToolCalls = nil
-	response.RolloutCapture = nil
 	response.WorkspaceJoin = nil
+	response.NativeCapture = nil
+	if writer.input != nil && response.Result.HasVerifiedNativeCheckpoint(*writer.input) {
+		response.NativeCapture = response.Result.nativeCapture
+	}
 	if response.Result.workspaceJoin != nil && response.Result.workspaceJoin.sealed && writer.input != nil && response.Result.workspaceJoin.bound(*writer.input) {
 		response.WorkspaceJoin = response.Result.workspaceJoin
 	}
-	if response.Result.rolloutCapture != nil && response.Result.rolloutCapture.sealed && response.Result.matchesCapture(response.Result.rolloutCapture) {
-		response.RolloutCapture = response.Result.rolloutCapture
-	}
+
 	err := writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &response})
 	if !errors.Is(err, errProviderBrokerResponseInvalid) || writer.terminal {
 		return err
 	}
 	// Ограниченный отказ сохраняет измеренный usage, не подтверждая большой итог.
-	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture, Diagnostic: response.Diagnostic, WorkspaceJoin: response.WorkspaceJoin}
+	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), Diagnostic: response.Diagnostic, WorkspaceJoin: response.WorkspaceJoin, NativeCapture: response.NativeCapture}
 	return writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &failure})
 }
 
@@ -115,7 +116,8 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 // для завершения. Он задаёт deadline net.Conn и меняет счётчики лишь после полной записи;
 // ошибка частичной записи не доказывает, что другая сторона ничего не получила.
 func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
-	if writer.terminal || writer.sequence >= maximumBrokerFrames {
+	nativeStream := writer.input != nil && writer.input.Provider == "opencode"
+	if writer.terminal || writer.sequence == ^uint64(0) || !nativeStream && writer.sequence >= maximumBrokerFrames {
 		return errProviderBrokerResponseInvalid
 	}
 	frame.Version, frame.Sequence = providerBrokerVersion, writer.sequence+1
@@ -123,11 +125,11 @@ func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
 	byteLimit := maximumBrokerStreamBytes
 	if frame.Kind == brokerFrameActivity {
 		byteLimit -= maximumBrokerFrameBytes
-		if writer.sequence >= maximumBrokerFrames-1 {
+		if !nativeStream && writer.sequence >= maximumBrokerFrames-1 {
 			return errProviderBrokerResponseInvalid
 		}
 	}
-	if err != nil || len(encoded)+1 > maximumBrokerFrameBytes || writer.bytes+len(encoded)+1 > byteLimit {
+	if err != nil || len(encoded)+1 > maximumBrokerFrameBytes || !nativeStream && writer.bytes+len(encoded)+1 > byteLimit {
 		return errProviderBrokerResponseInvalid
 	}
 	encoded = append(encoded, '\n')
@@ -140,7 +142,9 @@ func (writer *brokerFrameWriter) frame(frame brokerFrame) error {
 		return errProviderBrokerFailed
 	}
 	writer.sequence++
-	writer.bytes += len(encoded)
+	if !nativeStream {
+		writer.bytes += len(encoded)
+	}
 	writer.terminal = frame.Kind == brokerFrameTerminal
 	return nil
 }
@@ -191,7 +195,16 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 	if len(callbacks) == 1 {
 		callback = callbacks[0]
 	}
-	scanner := bufio.NewScanner(&boundedReader{reader: reader, remaining: maximumBrokerStreamBytes})
+	// The native production path streams under its existing deadline/cancellation and owner callback.
+	// The owner retains replay receipts; this transport must not accumulate the lifetime transcript.
+	// Native production path ограничен deadline/cancellation и owner callback.
+	// Replay receipts хранит owner; transport не накапливает lifetime transcript.
+	nativeStream := input != nil && input.Provider == "opencode" && writerUID == providerWriterUID && callback != nil
+	stream := reader
+	if !nativeStream {
+		stream = &boundedReader{reader: reader, remaining: maximumBrokerStreamBytes}
+	}
+	scanner := bufio.NewScanner(stream)
 	scanner.Buffer(make([]byte, 64<<10), maximumBrokerFrameBytes)
 	var terminal *brokerResponse
 	var callbackError error
@@ -204,7 +217,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 		if terminal != nil {
 			return Result{}, brokerResponseError(brokerResponsePostTerminal, errProviderBrokerResponseInvalid)
 		}
-		if sequence >= maximumBrokerFrames {
+		if sequence == ^uint64(0) || !nativeStream && sequence >= maximumBrokerFrames {
 			return Result{}, brokerResponseError(brokerResponseFrameLimit, errProviderBrokerResponseInvalid)
 		}
 		if rejectDuplicateJSONKeys(scanner.Bytes()) != nil {
@@ -239,13 +252,15 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 				}
 				providerProcessSeen = true
 			} else if message := frame.Activity.Message; message != nil {
-				if _, exists := seenMessages[message.ItemID]; exists {
+				if _, exists := seenMessages[message.ItemID]; !nativeStream && exists {
 					return Result{}, brokerResponseError(brokerResponseMessageReplay, errProviderBrokerResponseInvalid)
 				}
-				if len(seenMessages) >= maximumPublishedMessages {
+				if !nativeStream && len(seenMessages) >= maximumPublishedMessages {
 					return Result{}, brokerResponseError(brokerResponseMessageLimit, errProviderBrokerResponseInvalid)
 				}
-				seenMessages[message.ItemID] = struct{}{}
+				if !nativeStream {
+					seenMessages[message.ItemID] = struct{}{}
+				}
 			} else if financial := frame.Activity.Financial; financial != nil {
 				if financial.Sequence != financialSequence+1 {
 					return Result{}, errProviderBrokerResponseInvalid
@@ -261,6 +276,9 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 					return Result{}, brokerResponseError(brokerResponseToolLimit, errProviderBrokerResponseInvalid)
 				}
 				toolStates[call.CallID] = call
+				if nativeStream && call.Revision == 2 {
+					delete(toolStates, call.CallID)
+				}
 			}
 			if callbackError == nil && callback != nil && callback(*frame.Activity) != nil {
 				callbackError = errors.New("Codex runtime activity delivery failed")
@@ -275,14 +293,24 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 			if frame.Activity != nil || frame.Terminal == nil {
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
-			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture", "diagnostic", "workspace_join"))
+			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "diagnostic", "workspace_join", "native_capture"))
 			if err != nil {
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
-			if _, err := decodeObject(terminalFields["result"], schema(nil, "SessionID", "FinalMessage", "Outcome", "FailureCode", "ArchivePath", "ArchiveRelativePath", "ArchiveSHA256", "ArchiveSizeBytes", "Usage", "UsageCompleteness")); err != nil {
+			if _, err := decodeObject(terminalFields["result"], schema(nil, "FinalMessage", "Outcome", "FailureCode", "Usage", "UsageCompleteness", "NativeSession")); err != nil {
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
 			terminal = frame.Terminal
+			if raw, present := terminalFields["native_capture"]; present {
+				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "lease_ref", "lease_generation", "organization_ref", "project_ref", "agent_ref", "session_ref", "turn_ref", "attempt", "checkpoint"}
+				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || verifyNativeCapture(*input, terminal.Result, terminal.NativeCapture, writerUID) != nil {
+					return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
+				}
+				terminal.NativeCapture.sealed = true
+				terminal.Result.nativeCapture = terminal.NativeCapture
+			} else if terminal.Result.NativeSession != nil {
+				return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
+			}
 			if raw, present := terminalFields["workspace_join"]; present {
 				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "lease_ref", "lease_generation", "attempt", "joined"}
 				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || writerUID != providerWriterUID || !terminal.WorkspaceJoin.bound(*input) {
@@ -308,16 +336,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 				value := *terminal.Diagnostic
 				terminal.Result.providerDiagnostic = &value
 			}
-			if raw, present := terminalFields["rollout_capture"]; present {
-				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "attempt", "session_ref", "turn_ref", "codex_session_id", "archive_relative_path", "archive_sha256", "archive_size_bytes"}
-				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || terminal.RolloutCapture == nil || verifyRolloutCapture(*input, terminal.Result, terminal.RolloutCapture, writerUID) != nil {
-					return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
-				}
-				terminal.RolloutCapture.sealed = true
-				terminal.Result = withRolloutCapture(terminal.Result, terminal.RolloutCapture)
-			} else if terminal.Result.SessionID != "" || terminal.Result.ArchivePath != "" || terminal.Result.ArchiveRelativePath != "" || terminal.Result.ArchiveSHA256 != "" || terminal.Result.ArchiveSizeBytes != 0 {
-				return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
-			}
+
 		default:
 			return Result{}, brokerResponseError(brokerResponseFrameKind, errProviderBrokerResponseInvalid)
 		}

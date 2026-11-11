@@ -103,6 +103,7 @@ type providerUsageAgent struct {
 // профилем, отдельно вычисленной пригодностью субъекта и хешем субъекта с привязками. ActorAllowed
 // является внутренней проекцией и не принимается как полномочие из данных клиента.
 type providerUsageContext struct {
+	ModelProvider   *runtimecontract.ModelProviderConfiguration
 	Input           *entity.ProviderAccountUsageContext
 	Agent           providerUsageAgent
 	ActorAllowed    bool
@@ -195,7 +196,7 @@ func readProviderUsageAgents(ctx context.Context, tx pgx.Tx, organization string
 // необязательный глобальный профиль. Отсутствующий профиль блокирует совместимость; ёмкость не
 // захватывается.
 func (repository *Repository) resolveProviderUsageContext(ctx context.Context, tx pgx.Tx, current scope, input *entity.ProviderAccountUsageContext) (providerUsageContext, error) {
-	result := providerUsageContext{Input: input}
+	result := providerUsageContext{Input: input, ModelProvider: repository.modelProvider}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
 		return result, err
@@ -357,6 +358,17 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 	provider, model, effort := context.Input.ProviderDefinitionKey, context.Input.Model, context.Input.ReasoningEffort
 	if context.Input.Purpose == "CONFIGURE" && (!context.Profile.Enabled || context.Profile.Ref != context.Input.RuntimeProfileRef || context.Profile.Provider != provider || context.Profile.Model == "" || context.Profile.RuntimeRevision == "") {
 		return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
+	}
+	if profile := context.ModelProvider; profile != nil {
+		selectedProvider, selectedModel := provider, model
+		if context.Input.Purpose == "LAUNCH" {
+			selectedProvider, selectedModel = context.Agent.Provider, context.Agent.Model
+		}
+		if profile.DefinitionKey() == selectedProvider && selectedModel != "" {
+			if _, err := profile.ResolveModelCache(selectedModel); err != nil {
+				return blocked("INFERENCE_CACHE_POLICY_UNSUPPORTED", "REPUBLISH_CONFIGURATION")
+			}
+		}
 	}
 	var selected *entity.ProviderAccountCandidate
 	if context.Input.Purpose == "LAUNCH" {
@@ -553,7 +565,7 @@ func (repository *Repository) providerAdmissionForAgents(ctx context.Context, tx
 			continue
 		}
 		// Actor admission выполняет общий Workflow/Agent caller; это внутренний dependency snapshot.
-		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true})
+		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true, ModelProvider: repository.modelProvider})
 		if err != nil {
 			return nil, err
 		}

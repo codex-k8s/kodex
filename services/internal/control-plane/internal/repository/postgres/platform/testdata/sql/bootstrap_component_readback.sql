@@ -15,9 +15,9 @@ SELECT
     (SELECT count(*) FROM control_plane.integration_definitions
         WHERE optional AND enabled) AS integration_definition_count,
     (SELECT count(*) FROM control_plane.provider_definitions
-        WHERE stable_key = 'openai-codex' AND enabled) AS provider_definition_count,
+        WHERE stable_key = 'opencode-synthetic' AND enabled) AS provider_definition_count,
     (SELECT count(*) FROM control_plane.provider_accounts
-        WHERE stable_key = 'default-openai-codex' AND state = 'AUTHORIZED'
+        WHERE stable_key = 'default-opencode-synthetic' AND state = 'AUTHORIZED'
           AND enabled AND current_credential_revision_id IS NOT NULL) AS provider_account_count,
     (SELECT count(*) FROM control_plane.provider_credential_revisions
         WHERE revision_number = 1) AS provider_credential_revision_count,

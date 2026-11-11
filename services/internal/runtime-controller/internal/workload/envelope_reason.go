@@ -56,7 +56,7 @@ var diagnosticDefinitionVersion = regexp.MustCompile(`^[1-9][0-9]*\.[0-9]+\.[0-9
 // в закрытый код без изменения input. Функция вызывается после отказа валидатора;
 // UNKNOWN означает отсутствие диагноза, а не разрешение выполнить input.
 func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
-	if input.Schema != runtimecontract.RunnerInputSchemaV9 {
+	if input.Schema != runtimecontract.RunnerInputSchemaV10 {
 		return "ENVELOPE_SCHEMA"
 	}
 	if input.Mode != runtimecontract.RunnerModeTurn && input.Mode != runtimecontract.RunnerModeWarm {
@@ -131,14 +131,8 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if !diagnosticOpaque.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !runtimecontract.ValidSHA256Text(input.EnvironmentBindingDigest) {
 		return "ENVELOPE_ENVIRONMENT_BINDING"
 	}
-	if input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write" {
-		return "ENVELOPE_CODEX_SANDBOX"
-	}
-	if input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never" {
-		return "ENVELOPE_CODEX_APPROVAL_POLICY"
-	}
-	if input.CodexSessionID != "" && !diagnosticUUID.MatchString(input.CodexSessionID) {
-		return "ENVELOPE_CODEX_SESSION"
+	if input.WorkspaceAccess != "read-only" && input.WorkspaceAccess != "workspace-write" {
+		return "ENVELOPE_WORKSPACE_ACCESS"
 	}
 	if input.ValidateCallbackTransport() != nil {
 		return "ENVELOPE_CALLBACK_TRANSPORT"
@@ -146,10 +140,10 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 	if !diagnosticSecretFile(input.ExecutionTicketFile) || !diagnosticSecretFile(input.ProviderAuthFile) || !diagnosticSecretFile(input.ProviderAuthSHA256File) {
 		return "ENVELOPE_SECRET_PATHS"
 	}
-	if input.WorkspaceRoot != "/workspace" || input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" {
+	if input.WorkspaceRoot != "/workspace" || input.OutboxRoot != "/workspace/.kodex/outbox" || input.NativeStateRoot != "/workspace/.kodex/state/opencode" {
 		return "ENVELOPE_WORKSPACE_PATHS"
 	}
-	if len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 || len(input.AttachmentSets) > 128 || len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 {
+	if len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 || len(input.AttachmentSets) > 128 || len(input.BoundedInput) > 256 {
 		return "ENVELOPE_COLLECTION_LIMITS"
 	}
 
@@ -320,7 +314,7 @@ func knownEnvelopeReason(reason string) bool {
 		"ENVELOPE_CONFIG_OVERLAY",
 		"ENVELOPE_RUNTIME_ENVIRONMENT",
 		"ENVELOPE_ENVIRONMENT_BINDING",
-		"ENVELOPE_CODEX_SANDBOX",
+		"ENVELOPE_WORKSPACE_ACCESS",
 		"ENVELOPE_CODEX_APPROVAL_POLICY",
 		"ENVELOPE_CODEX_SESSION",
 		"ENVELOPE_CALLBACK_TRANSPORT",

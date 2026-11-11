@@ -997,7 +997,7 @@ spec:
           item.name == 'HOME' && item.value == '/tmp' && !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'CODEX_HOME' &&
-          item.value == '/workspace/.kodex/state/codex-home' &&
+          item.value == '/workspace/.kodex/state/opencode' &&
           !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'HTTPS_PROXY' &&

@@ -15,11 +15,11 @@ func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
 	input := validRunnerInputFixture()
 	refreshRunnerInputBindings(&input)
 	for name, mutate := range map[string]func(*RunnerInput){
-		"missing mode":    func(input *RunnerInput) { input.ReasoningMode = "" },
-		"changed mode":    func(input *RunnerInput) { input.ReasoningMode = ReasoningUnsupported },
-		"old ABI":         func(input *RunnerInput) { input.Schema = "kodex.agent-runner-input.v7" },
-		"missing effort":  func(input *RunnerInput) { input.EffectiveReasoningEffort = "" },
-		"tampered effort": func(input *RunnerInput) { input.EffectiveReasoningEffort = "high" },
+		"missing mode":      func(input *RunnerInput) { input.ReasoningMode = "" },
+		"changed mode":      func(input *RunnerInput) { input.ReasoningMode = ReasoningSupported },
+		"old ABI":           func(input *RunnerInput) { input.Schema = "kodex.agent-runner-input.v7" },
+		"unexpected effort": func(input *RunnerInput) { input.EffectiveReasoningEffort = "low" },
+		"tampered effort":   func(input *RunnerInput) { input.EffectiveReasoningEffort = "high" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := input
@@ -295,21 +295,21 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 // TestRunnerCompletionArchiveBindingIsCompleteAndBounded accepts complete archive metadata but rejects a foreign session path and an absent byte count.
 // TestRunnerCompletionArchiveBindingIsCompleteAndBounded принимает полные метаданные архива, но отклоняет путь чужой сессии и отсутствующий размер.
 func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
+	path, _ := NativeSessionExportPath("ses_fixture", 1)
 	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Attempt: 1, Success: true,
-		ResultSummary: "done", CodexSessionID: "00000000-0000-4000-8000-000000000001",
-		ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000001.jsonl",
-		ArchiveSHA256:       strings.Repeat("c", 64), ArchiveSizeBytes: 1024}
+		ResultSummary: "done", NativeSession: &NativeSessionCheckpoint{SessionID: "ses_fixture", Version: OpenCodeVersion, Generation: 1,
+			RelativePath: path, SHA256: strings.Repeat("c", 64), SizeBytes: 1024}}
 	if err := request.Validate(); err != nil {
-		t.Fatalf("valid archive binding rejected: %v", err)
+		t.Fatal(err)
 	}
-	request.ArchiveRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000002.jsonl"
-	if err := request.Validate(); err == nil {
-		t.Fatal("archive bound to another Codex session accepted")
+	request.NativeSession.SessionID = "ses_foreign"
+	if request.Validate() == nil {
+		t.Fatal("foreign native path accepted")
 	}
-	request.ArchiveRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000001.jsonl"
-	request.ArchiveSizeBytes = 0
-	if err := request.Validate(); err == nil {
-		t.Fatal("incomplete archive binding accepted")
+	request.NativeSession.SessionID = "ses_fixture"
+	request.NativeSession.SizeBytes = 0
+	if request.Validate() == nil {
+		t.Fatal("incomplete native checkpoint accepted")
 	}
 }
 
@@ -378,7 +378,7 @@ func validRunnerInputFixture() RunnerInput {
 	policy := DefaultRuntimeEnvironmentPolicy()
 	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := RunnerInput{
-		Schema: RunnerInputSchemaV9, AssistantScope: AssistantScopeNone, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV10, AssistantScope: AssistantScopeNone, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		OrganizationRef: "org_abcdefgh",
 		RunRef:          "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		ProjectRef: "prj_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,
@@ -386,26 +386,25 @@ func validRunnerInputFixture() RunnerInput {
 		InputDigest:        strings.Repeat("0", 64),
 		RuntimeRevisionRef: "revision_abcdefgh", RuntimeRevisionVersion: 1,
 		RuntimeRevisionDigest: strings.Repeat("b", 64), ImageReference: "registry.example/roles@" + imageDigest,
-		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: 1,
+		ImageManifestDigest: imageDigest, EnvironmentImage: image, RoleRuntimeContractRevision: WorkspaceStorageRuntimeContractRevision,
 		RoleRuntimeContractSHA256: strings.Repeat("d", 64), RoleDefinitionRef: "roledef_abcdefgh",
 		RuntimeProfileRef: "profile_abcdefgh", RuntimeProfileRevision: "profile-revision-1",
 		InstructionRef: "instr_abcdefgh", InstructionDigest: strings.Repeat("5", 64),
 		PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("6", 64),
 		PromptMaterializationDigest: strings.Repeat("7", 64), Instructions: "Complete the bounded task.",
-		Task: "Prepare the customer response.", Provider: "openai", Model: "codex",
+		Task: "Prepare the customer response.", Provider: "opencode", Model: "model-a",
 		ProviderAccountRef: "pacc_abcdefgh", ProviderCredentialRef: "pcr_abcdefgh",
 		ProviderCredentialRevision: 1, ProviderCredentialSHA256: strings.Repeat("e", 64),
 		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 		ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
 		ConfigOverlayRef: "cov_abcdefgh", ConfigOverlayVersion: 1,
-		ReasoningMode: ReasoningSupported, EffectiveReasoningEffort: "medium",
+		ReasoningMode:         ReasoningUnsupported,
 		ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 		RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 		RuntimeEnvironmentDigest: environmentDigest,
 		EnvironmentPolicy:        policy, WorkspacePolicy: RuntimeWorkspacePolicyV1(),
 		EnvironmentBindingRef: "aenv_abcdefgh", EnvironmentBindingVersion: 1, EnvironmentBindingDigest: strings.Repeat("3", 64),
-		CodexSandbox: "read-only", CodexApprovalPolicy: "never",
-		CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
+		WorkspaceAccess: "read-only", CallbackURL: "https://10.0.0.10:8444", CallbackTLS: RuntimeTLSBinding{
 			ServerName:      "runtime-controller-callback.kodex-system.svc.cluster.local",
 			CAFile:          "/var/run/config/kodex/runtime/callback/ca.crt",
 			CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt",
@@ -414,8 +413,11 @@ func validRunnerInputFixture() RunnerInput {
 		ExecutionTicketFile:    "/var/run/secrets/kodex/runtime/ticket/token",
 		ProviderAuthFile:       "/run/secrets/kodex/runtime/provider/auth.json",
 		ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
-		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
+		WorkspaceRoot:          "/workspace", OutboxRoot: "/workspace/.kodex/outbox", NativeStateRoot: "/workspace/.kodex/state/opencode",
 	}
+	input.ModelProvider = &ModelProviderConfiguration{Schema: ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: OpenCodeVersion,
+		ToolMode: "managed_mcp", ProviderID: "test-gateway", BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.40/32"},
+		Models: []ModelProviderModel{{ID: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
 	input.EffectiveKubernetesAccess, _ = RuntimeKubernetesAccessForExecution(policy.KubernetesAccess,
 		RuntimeServiceAccountName(input.LeaseRef), RuntimeTurnPodName(input.LeaseRef))
 	input.InputDigest, _ = RuntimeBoundedInputDigest(input.BoundedInput)

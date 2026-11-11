@@ -36,10 +36,10 @@ func fullRestoreSnapshotTask(t *testing.T) model.Task {
 	return model.Task{TaskRef: "sat_abcdefgh", Kind: "SNAPSHOT", OrganizationRef: "org_abcdefgh",
 		SessionRef: "ses_abcdefgh", ProviderAccountRef: "pacc_abcdefgh", RuntimeRevisionRef: "rrev_abcdefgh",
 		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: stringDigest('a'), ContentGeneration: 1,
-		CodexSessionID: "00000000-0000-4000-8000-000000000001", PVCName: pvc, InputDigest: stringDigest('b'),
-		SourceRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl",
+		NativeSessionID: "ses_NativeFixture1", PVCName: pvc, InputDigest: stringDigest('b'),
+		SourceRelativePath: ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture1.json",
 		SourceSHA256:       hex.EncodeToString(hash[:]), SourceSizeBytes: int64(len(body)),
-		TargetObjectKey: "session-archive/v1/org_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
+		TargetObjectKey: "session-archive/v3/org_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
 }
 
 // fullRestoreFixtureSnapshot archives synthetic session bytes in an isolated in-memory store and returns the verified receipt.
@@ -115,7 +115,7 @@ func TestPreparedRestoreThenCurrentWorkspaceAndNativeCapture(t *testing.T) {
 		t.Fatal("write exact synthetic immutable restore task")
 	}
 	run(prepareBinary, "TestPrepareRestoredHomeKernelFixture", "DIRECTORY_PREPARE", 10001, false)
-	home := filepath.Join(state, "codex-home")
+	home := filepath.Join(state, "opencode")
 	if os.Chown(home, 10002, 29000) != nil {
 		t.Fatal("prepare isolated wrong-owner negative")
 	}
@@ -170,7 +170,7 @@ func snapshotRestoreAndDeleteExactArchive(t *testing.T, projectRef string) {
 // RU: snapshotRestoreAndDeleteExactArchiveAtWorkspace проверяет восстановленные байты и режим, повторный снимок и удаление точной версии.
 func snapshotRestoreAndDeleteExactArchiveAtWorkspace(t *testing.T, workspace, projectRef string) {
 	t.Helper()
-	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl"
+	relative := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture1.json"
 	body := []byte("{\"type\":\"session_meta\"}\n")
 	path := filepath.Join(workspace, filepath.FromSlash(relative))
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -182,10 +182,10 @@ func snapshotRestoreAndDeleteExactArchiveAtWorkspace(t *testing.T, workspace, pr
 	hash := sha256.Sum256(body)
 	task := model.Task{TaskRef: "sat_abcdefgh", Kind: "SNAPSHOT", OrganizationRef: "org_abcdefgh", ProjectRef: projectRef,
 		SessionRef: "ses_abcdefgh", ProviderAccountRef: "pacc_abcdefgh", RuntimeRevisionRef: "rrev_abcdefgh",
-		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: stringDigest('a'), CodexSessionID: "00000000-0000-4000-8000-000000000001",
+		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: stringDigest('a'), NativeSessionID: "ses_NativeFixture1",
 		ContentGeneration: 1, PVCName: "runtime-session-0123456789abcdef", InputDigest: stringDigest('b'),
 		SourceRelativePath: relative, SourceSHA256: hex.EncodeToString(hash[:]), SourceSizeBytes: int64(len(body)),
-		TargetObjectKey: "session-archive/v1/org_abcdefgh/prj_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
+		TargetObjectKey: "session-archive/v3/org_abcdefgh/prj_abcdefgh/ses_abcdefgh/g1/sat_abcdefgh-a1.tar", Attempt: 1}
 	store := objectstoragetest.New()
 	result, err := Snapshot(context.Background(), store, workspace, task)
 	if err != nil {
@@ -251,7 +251,7 @@ func TestRestoreThenRunnerCaptureAcrossUIDs(t *testing.T) {
 				t.Fatal("create isolated restore workspace")
 			}
 			t.Cleanup(func() { _ = os.RemoveAll(workspace) })
-			relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl"
+			relative := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture1.json"
 			if err := os.MkdirAll(filepath.Dir(filepath.Join(workspace, relative)), 0o750); err != nil {
 				t.Fatal("create isolated restore directories")
 			}
@@ -304,7 +304,7 @@ func TestRestoreSourceOwnershipFixture(t *testing.T) {
 func TestRestoreRejectsReceiptMismatchBeforeWriting(t *testing.T) {
 	workspace := t.TempDir()
 	task := model.Task{Kind: "RESTORE", SourceSHA256: stringDigest('a'), SourceSizeBytes: 1,
-		Archive: &model.ArchiveBinding{ObjectKey: "session-archive/v1/test.tar", ObjectVersion: "memory-v1", ObjectETag: "wrong", ObjectDigest: "sha256:" + stringDigest('b'), ObjectSizeBytes: 1}}
+		Archive: &model.ArchiveBinding{ObjectKey: "session-archive/v3/test.tar", ObjectVersion: "memory-v1", ObjectETag: "wrong", ObjectDigest: "sha256:" + stringDigest('b'), ObjectSizeBytes: 1}}
 	if _, err := Restore(context.Background(), objectstoragetest.New(), workspace, task); err == nil {
 		t.Fatal("Restore() accepted a missing or mismatched receipt")
 	}
@@ -314,8 +314,8 @@ func TestRestoreRejectsReceiptMismatchBeforeWriting(t *testing.T) {
 // RU: TestSnapshotCleansUpObjectAfterReadbackMismatch требует очистки при несовпадении перечитанного ETag объекта.
 func TestSnapshotCleansUpObjectAfterReadbackMismatch(t *testing.T) {
 	workspace := t.TempDir()
-	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000004.jsonl"
-	task := snapshotSourceTask(t, workspace, relative, "session-archive/v1/readback-mismatch.tar")
+	relative := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture4.json"
+	task := snapshotSourceTask(t, workspace, relative, "session-archive/v3/readback-mismatch.tar")
 	store := &readbackMismatchStore{Store: objectstoragetest.New()}
 	if _, err := Snapshot(context.Background(), store, workspace, task); err == nil {
 		t.Fatal("Snapshot() accepted a readback mismatch")
@@ -329,8 +329,8 @@ func TestSnapshotCleansUpObjectAfterReadbackMismatch(t *testing.T) {
 // RU: TestSnapshotCleansUpObjectWhenPutReadbackFails удаляет байты, оставшиеся после отказа выдачи квитанции загрузки.
 func TestSnapshotCleansUpObjectWhenPutReadbackFails(t *testing.T) {
 	workspace := t.TempDir()
-	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000005.jsonl"
-	task := snapshotSourceTask(t, workspace, relative, "session-archive/v1/put-readback-failure.tar")
+	relative := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture5.json"
+	task := snapshotSourceTask(t, workspace, relative, "session-archive/v3/put-readback-failure.tar")
 	store := &putReadbackFailureStore{Store: objectstoragetest.New()}
 	if _, err := Snapshot(context.Background(), store, workspace, task); err == nil {
 		t.Fatal("Snapshot() accepted a failed Put readback")

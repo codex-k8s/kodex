@@ -54,7 +54,7 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 		t.Fatal("synthetic claim missing")
 	}
 	lease := leases[0]
-	execute(command.CompleteExecution, worker, "complete", command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), CodexSessionID: "00000000-0000-4000-8000-000000000003", ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000003.jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128})
+	execute(command.CompleteExecution, worker, "complete", command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture("00000000-0000-4000-8000-000000000003", 1, strings.Repeat("a", 64), 128)})
 	if _, err := pool.Exec(ctx, "UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)", run.SessionRef); err != nil {
 		t.Fatal(err)
 	}

@@ -345,6 +345,7 @@ type EmailMailboxCredential struct {
 // провайдера с препятствиями готовности; секрета авторизации и гарантии выполнения аккаунтом сейчас не
 // содержит.
 type ProviderDefinition struct {
+	ModelProvider                          *runtimecontract.ModelProviderConfiguration
 	Key, Name, Description, DefaultModelID string
 	AuthorizationMethods, ModelIDs         []string
 	Models                                 []ModelCapability

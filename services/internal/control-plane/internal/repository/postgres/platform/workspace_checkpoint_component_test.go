@@ -122,7 +122,7 @@ func testWorkspaceCheckpointOwner(t *testing.T, ctx context.Context, repository 
 		var state string
 		var format, deletes, receipts int
 		var noInventedCodex bool
-		if err := pool.QueryRow(ctx, `SELECT w.state,a.format_version,a.codex_session_id IS NULL AND a.source_relative_path IS NULL,
+		if err := pool.QueryRow(ctx, `SELECT w.state,a.format_version,a.native_session_id IS NULL AND a.source_relative_path IS NULL,
 			(SELECT count(*) FROM control_plane.session_archive_tasks t WHERE t.session_id=w.session_id AND t.kind='DELETE_PVC'),
 			(SELECT count(*) FROM control_plane.session_archives r WHERE r.workspace_id=w.id)
 			FROM control_plane.session_workspace_storage w JOIN control_plane.session_archives a ON a.id=w.current_archive_id WHERE w.ref=$1`,

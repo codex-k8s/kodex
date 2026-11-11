@@ -2504,6 +2504,9 @@ const ru = {
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
       modelRequestRunning: "Подготовка и выполнение запроса к модели",
+      modelContextCompacting: "Сжатие контекста; выполнение продолжится",
+      nativeSessionRecovering:
+        "Восстановление подтверждённого контекста сессии",
       providerUnavailable:
         "Провайдер модели временно недоступен. Ход завершён с ошибкой.",
     },
@@ -3745,6 +3748,29 @@ const ru = {
     },
   },
   providers: {
+    runtimePolicy: {
+      title: "Контекст и кеш модели",
+      enabled: "Включено",
+      disabled: "Выключено",
+      runtime: "Исполнитель",
+      context: "Контекст / максимум ответа, токены",
+      compaction: "Автоматическое сжатие",
+      pruning: "Сокращение старых результатов инструментов",
+      requested: "Запрошено",
+      effective: "Применяется",
+      strict: "Строгие гарантии",
+      response: "Кеш готовых ответов proxy",
+      unknown:
+        "Политика модели пока недоступна; гарантии кеширования не подтверждены.",
+      ownership:
+        "Настройки принадлежат конфигурации установки в Git. Выбор модели применяет её политику; интерфейс не перезаписывает Git.",
+      guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
+      blocked: "Запуск с этой обязательной политикой заблокирован",
+      noHints:
+        "Kodex не добавляет cache hints. Это не означает отключение внутреннего кеша провайдера.",
+      physical:
+        "Разделение физической памяти и отсутствие хранения у провайдера здесь не подтверждаются.",
+    },
     finance: {
       label: "Лимиты аккаунтов Codex",
       unavailable: "Лимиты и кредиты недоступны",
@@ -7355,6 +7381,8 @@ const en = {
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
       modelRequestRunning: "Preparing and executing the model request",
+      modelContextCompacting: "Compacting context; execution will continue",
+      nativeSessionRecovering: "Restoring the confirmed session context",
       providerUnavailable:
         "The model provider is temporarily unavailable. The turn failed.",
     },
@@ -8585,8 +8613,31 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    runtimePolicy: {
+      title: "Model context and cache",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      runtime: "Runtime",
+      context: "Context / maximum output tokens",
+      compaction: "Automatic compaction",
+      pruning: "Prune old tool results",
+      requested: "Requested",
+      effective: "Effective",
+      strict: "Strict guarantees",
+      response: "Proxy response cache",
+      unknown:
+        "Model policy is unavailable; caching guarantees are unconfirmed.",
+      ownership:
+        "The installation configuration in Git owns these settings. Selecting a model applies its policy; the UI does not overwrite Git.",
+      guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
+      blocked: "Launch is blocked by this required policy",
+      noHints:
+        "Kodex adds no cache hints. This does not disable the provider's internal cache.",
+      physical:
+        "Physical memory isolation and provider no-retention are not proven here.",
+    },
     finance: {
-      label: "Codex account limits",
+      label: "Model account limits",
       unavailable: "Limits and credits unavailable",
       stale: "Data is stale",
       limitUnknown: "Limit unavailable",

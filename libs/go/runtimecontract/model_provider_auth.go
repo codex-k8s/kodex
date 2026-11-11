@@ -2,6 +2,9 @@ package runtimecontract
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -26,6 +29,7 @@ type gatewayProviderAuthentication struct {
 	Mode                  string `json:"auth_mode"`
 	ProviderDefinitionKey string `json:"provider_definition_key"`
 	APIKey                string `json:"API_KEY"`
+	CacheNamespaceKey     string `json:"cache_namespace_key,omitempty"`
 }
 
 // DefinitionKey returns the stable provider-definition locator; it confers no account or credential authority.
@@ -42,7 +46,12 @@ func EncodeGatewayProviderAuthentication(definitionKey string, key []byte) ([]by
 	if !validGatewayProviderDefinition(definitionKey) || !validGatewayProviderKey(key) {
 		return nil, ErrGatewayProviderAuthentication
 	}
-	raw, err := json.Marshal(gatewayProviderAuthentication{Mode: GatewayProviderAuthenticationMode,
+	var namespace [32]byte
+	if _, err := rand.Read(namespace[:]); err != nil {
+		return nil, ErrGatewayProviderAuthentication
+	}
+	defer clear(namespace[:])
+	raw, err := json.Marshal(gatewayProviderAuthentication{CacheNamespaceKey: hex.EncodeToString(namespace[:]), Mode: GatewayProviderAuthenticationMode,
 		ProviderDefinitionKey: definitionKey, APIKey: string(key)})
 	if err != nil {
 		return nil, ErrGatewayProviderAuthentication
@@ -63,7 +72,7 @@ func DecodeGatewayProviderAuthentication(raw []byte, expectedDefinitionKey strin
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF || value.Mode != GatewayProviderAuthenticationMode ||
-		value.ProviderDefinitionKey != expectedDefinitionKey || !validGatewayProviderKey([]byte(value.APIKey)) {
+		value.ProviderDefinitionKey != expectedDefinitionKey || !validGatewayProviderKey([]byte(value.APIKey)) || value.CacheNamespaceKey != "" && (len(value.CacheNamespaceKey) != 64 || !lowerHex(value.CacheNamespaceKey)) {
 		return nil, ErrGatewayProviderAuthentication
 	}
 	return []byte(value.APIKey), nil
@@ -80,4 +89,43 @@ func validGatewayProviderDefinition(value string) bool {
 func validGatewayProviderKey(value []byte) bool {
 	return len(value) >= 8 && len(value) <= 16<<10 && utf8.Valid(value) &&
 		strings.IndexFunc(string(value), func(char rune) bool { return unicode.IsSpace(char) || unicode.IsControl(char) }) < 0
+}
+
+// DecodeModelCacheNamespaceKey reads only the dedicated backend-generated key after full credential/definition validation; a model API key is never reused as cache authority.
+// DecodeModelCacheNamespaceKey читает отдельный backend-generated key после полной credential/definition validation; model API key не становится cache authority.
+func DecodeModelCacheNamespaceKey(raw []byte, definition string) ([]byte, error) {
+	key, err := DecodeGatewayProviderAuthentication(raw, definition)
+	clear(key)
+	if err != nil {
+		return nil, ErrInferenceCachePolicy
+	}
+	var value gatewayProviderAuthentication
+	if json.Unmarshal(raw, &value) != nil || len(value.CacheNamespaceKey) != 64 {
+		return nil, ErrInferenceCachePolicy
+	}
+	key, err = hex.DecodeString(value.CacheNamespaceKey)
+	if err != nil || len(key) != 32 {
+		clear(key)
+		return nil, ErrInferenceCachePolicy
+	}
+	return key, nil
+}
+
+// SameGeneratedGatewayCredential reconciles concurrent/retried creation of one account-attempt; only the independently random namespace key may differ.
+// It is not an authority check: callers still verify exact publisher/account/attempt, immutable bytes, UID and digest.
+// SameGeneratedGatewayCredential сверяет concurrent/retried create одной account-attempt; различаться может лишь независимо случайный namespace key.
+// Это не authority check: caller отдельно проверяет publisher/account/attempt, immutable bytes, UID и digest.
+func SameGeneratedGatewayCredential(first, second []byte) bool {
+	var a, b gatewayProviderAuthentication
+	if json.Unmarshal(first, &a) != nil || json.Unmarshal(second, &b) != nil || a.ProviderDefinitionKey != b.ProviderDefinitionKey {
+		return false
+	}
+	left, errA := DecodeModelCacheNamespaceKey(first, a.ProviderDefinitionKey)
+	right, errB := DecodeModelCacheNamespaceKey(second, b.ProviderDefinitionKey)
+	defer clear(left)
+	defer clear(right)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a.APIKey), []byte(b.APIKey)) == 1
 }

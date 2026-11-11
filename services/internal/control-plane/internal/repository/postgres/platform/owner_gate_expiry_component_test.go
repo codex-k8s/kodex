@@ -85,7 +85,7 @@ func TestOwnerGateExpiryComponent(t *testing.T) {
 				return items[0]
 			}
 			complete := func(suffix string, lease map[string]any) {
-				execute(t, worker, command.CompleteExecution, key+suffix, nil, command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Результат подготовлен", Usage: turnUsageFixture()})
+				execute(t, worker, command.CompleteExecution, key+suffix, nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Результат подготовлен", Usage: turnUsageFixture()})
 			}
 			initial := claim("coordinator", run.Ref)
 			var siblingRef string

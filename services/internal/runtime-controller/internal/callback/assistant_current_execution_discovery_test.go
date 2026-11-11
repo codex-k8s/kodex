@@ -2,10 +2,7 @@ package callback
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -32,7 +29,7 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 			workspace := map[string]any{"revision": input.WorkspacePolicy.Revision, "root": "/workspace",
 				"maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount,
 				"readonly_logical_roots": []string{"input", "knowledge", "context"}}
-			search := map[string]any{"configuration_source": "SDK_DEFAULT_CACHED", "requested_mode": "cached", "owner_editable": true,
+			search := map[string]any{"configuration_source": "OPENCODE_MANAGED_TOOLS", "requested_mode": "NONE", "effective_status": "UNSUPPORTED", "owner_editable": false,
 				"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}
 			if !reflect.DeepEqual(execution["workspace_policy"], workspace) || !reflect.DeepEqual(execution["hosted_native_search"], search) {
 				t.Fatal("safe workspace policy or bounded SDK default metadata is missing")
@@ -116,45 +113,11 @@ func TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy(t *test
 	}
 }
 
-// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter checks local Docker/npm/lock pins and writer-source markers supporting SDK-default discovery metadata.
-// This source guard does not execute Codex, prove an actual hosted-search call or revalidate an upstream SDK implementation.
-// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter проверяет локальные привязки Docker, npm и lockfile, маркеры исходника записи настроек, на которых основаны метаданные умолчания SDK.
-// Проверка исходников не запускает Codex, не доказывает реальный серверный поисковый вызов и не перепроверяет реализацию внешнего SDK.
-func TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter(t *testing.T) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("test source path is unavailable")
-	}
-	job := filepath.Join(filepath.Dir(source), "..", "..", "..", "..", "jobs", "agent-runner")
-	dockerfile, err := os.ReadFile(filepath.Join(job, "Dockerfile"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Count(string(dockerfile), "ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0\n") != 1 {
-		t.Fatal("SDK default metadata requires revalidation for changed local pin")
-	}
-	var manifest struct {
-		Dependencies map[string]string `json:"dependencies"`
-	}
-	manifestJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package.json"))
-	if err != nil || json.Unmarshal(manifestJSON, &manifest) != nil || manifest.Dependencies["@openai/codex"] != "0.160.0" {
-		t.Fatal("SDK default metadata requires revalidation for changed production pin")
-	}
-	var lock struct {
-		Packages map[string]struct {
-			Dependencies map[string]string `json:"dependencies"`
-			Version      string            `json:"version"`
-		} `json:"packages"`
-	}
-	lockJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package-lock.json"))
-	if err != nil || json.Unmarshal(lockJSON, &lock) != nil || lock.Packages[""].Dependencies["@openai/codex"] != "0.160.0" || lock.Packages["node_modules/@openai/codex"].Version != "0.160.0" {
-		t.Fatal("SDK default metadata requires revalidation for changed production lock pin")
-	}
-	writer, err := os.ReadFile(filepath.Join(job, "internal", "codex", "config.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(writer), `toml:"web_search,omitempty"`) || !strings.Contains(string(writer), "WebSearchMode: overlay.WebSearchMode") {
-		t.Fatal("hosted search metadata requires the published-overlay writer")
+// TestAssistantCurrentExecutionDiscoveryDoesNotInventHostedSearch proves empty configuration never claims an upstream default or grants unavailable tools.
+// TestAssistantCurrentExecutionDiscoveryDoesNotInventHostedSearch проверяет, что empty configuration не выдумывает upstream default и не выдаёт unavailable tools.
+func TestAssistantCurrentExecutionDiscoveryDoesNotInventHostedSearch(t *testing.T) {
+	result, err := assistantHostedSearchDiscovery("")
+	if err != nil || result["effective_status"] != "UNSUPPORTED" || result["owner_editable"] != false || result["requested_mode"] != "NONE" {
+		t.Fatal("unavailable native tool was advertised as usable")
 	}
 }

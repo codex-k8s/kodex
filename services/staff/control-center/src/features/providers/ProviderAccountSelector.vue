@@ -52,7 +52,8 @@ function current(account: ProviderAccount): boolean {
   return hasCurrentUsage(account, props.usageContext, freshness.value);
 }
 const definitionKey = computed(() =>
-  props.definitionKey === "openai-codex" && props.usageContext.runtimeProfileRef
+  /^[a-z][a-z0-9-]{0,95}$/.test(props.definitionKey) &&
+  props.usageContext.runtimeProfileRef
     ? (props.definitionKey as ProviderDefinitionKey)
     : undefined,
 );
@@ -332,7 +333,7 @@ function changeWeight(accountRef: string, event: Event): void {
                 item.description || $t("providers.externalAccountPending")
               }}</small
               ><small
-                >OpenAI Codex ·
+                >{{ item.account.definitionKey }} ·
                 {{
                   item.account.authorization
                     ? $t(

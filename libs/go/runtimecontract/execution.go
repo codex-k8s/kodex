@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	// RunnerInputSchemaV9 pins the closed wire layout materialized for agent execution.
-	// RunnerInputSchemaV9 закрепляет закрытую wire-структуру материализованного входа агента.
-	RunnerInputSchemaV9 = "kodex.agent-runner-input.v9"
+	// RunnerInputSchemaV10 pins the closed wire layout materialized for agent execution.
+	// RunnerInputSchemaV10 закрепляет закрытую wire-структуру материализованного входа агента.
+	RunnerInputSchemaV10 = "kodex.agent-runner-input.v10"
 	// RunnerModeTurn selects an exact leased execution attempt with task and callback bindings.
 	// RunnerModeTurn выбирает точную арендованную попытку исполнения с задачей и callback-привязками.
 	RunnerModeTurn = "TURN"
@@ -197,6 +197,7 @@ type RunnerInput struct {
 	WorkloadInstance                  string                      `json:"workload_instance"`
 	OrganizationRef                   string                      `json:"organization_ref"`
 	RunRef                            string                      `json:"run_ref,omitempty"`
+	RootInitiatorRef                  string                      `json:"root_initiator_ref,omitempty"`
 	ProjectRef                        string                      `json:"project_ref,omitempty"`
 	NodeRef                           string                      `json:"node_ref,omitempty"`
 	SessionRef                        string                      `json:"session_ref"`
@@ -283,9 +284,8 @@ type RunnerInput struct {
 	WorkspaceStorage                  *WorkspaceStorageBinding    `json:"workspace_storage,omitempty"`
 	ExecutionDeadline                 *RuntimeExecutionDeadline   `json:"execution_deadline,omitempty"`
 	EffectiveKubernetesAccess         RuntimeKubernetesAccess     `json:"effective_kubernetes_access"`
-	CodexSandbox                      string                      `json:"codex_sandbox"`
-	CodexApprovalPolicy               string                      `json:"codex_approval_policy"`
-	CodexSessionID                    string                      `json:"codex_session_id,omitempty"`
+	WorkspaceAccess                   string                      `json:"workspace_access"`
+	NativeSession                     *NativeSessionCheckpoint    `json:"native_session,omitempty"`
 	CallbackURL                       string                      `json:"callback_url"`
 	CallbackTLS                       RuntimeTLSBinding           `json:"callback_tls"`
 	ExecutionTicketFile               string                      `json:"execution_ticket_file"`
@@ -293,7 +293,7 @@ type RunnerInput struct {
 	ProviderAuthSHA256File            string                      `json:"provider_auth_sha256_file"`
 	WorkspaceRoot                     string                      `json:"workspace_root"`
 	OutboxRoot                        string                      `json:"outbox_root"`
-	CodexHome                         string                      `json:"codex_home"`
+	NativeStateRoot                   string                      `json:"native_state_root"`
 }
 
 // RunnerProviderCredentialRefreshRequest carries refreshed managed authentication through the isolated
@@ -339,12 +339,13 @@ func (input RunnerInput) Validate() error {
 	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
 		return ErrRuntimeContext
 	}
-	if input.Schema != RunnerInputSchemaV9 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV10 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 || !opaqueReferencePattern.MatchString(input.OrganizationRef) ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
 		!sha256Pattern.MatchString(input.RuntimeRevisionDigest) || !validPinnedImage(input.ImageReference, input.ImageManifestDigest) ||
-		input.RoleRuntimeContractRevision == 0 || !sha256Pattern.MatchString(input.RoleRuntimeContractSHA256) ||
+		input.RoleRuntimeContractRevision != WorkspaceStorageRuntimeContractRevision ||
+		input.RootInitiatorRef != "" && !opaqueReferencePattern.MatchString(input.RootInitiatorRef) || !sha256Pattern.MatchString(input.RoleRuntimeContractSHA256) ||
 		!opaqueReferencePattern.MatchString(input.RoleDefinitionRef) || !validRuntimeProfileKey(input.RuntimeProfileRef) ||
 		input.RuntimeProfileRevision == "" || len(input.RuntimeProfileRevision) > 128 ||
 		!opaqueReferencePattern.MatchString(input.InstructionRef) || !sha256Pattern.MatchString(input.InstructionDigest) ||
@@ -361,15 +362,13 @@ func (input RunnerInput) Validate() error {
 		!opaqueReferencePattern.MatchString(input.ConfigOverlayRef) || input.ConfigOverlayVersion < 1 || !sha256Pattern.MatchString(input.ConfigOverlayDigest) ||
 		!opaqueReferencePattern.MatchString(input.RuntimeEnvironmentRef) || input.RuntimeEnvironmentVersion < 1 || !sha256Pattern.MatchString(input.RuntimeEnvironmentDigest) ||
 		!opaqueReferencePattern.MatchString(input.EnvironmentBindingRef) || input.EnvironmentBindingVersion < 1 || !sha256Pattern.MatchString(input.EnvironmentBindingDigest) ||
-		(input.CodexSandbox != "read-only" && input.CodexSandbox != "workspace-write") ||
-		(input.CodexApprovalPolicy != "untrusted" && input.CodexApprovalPolicy != "on-request" && input.CodexApprovalPolicy != "never") ||
-		(input.CodexSessionID != "" && !uuidPattern.MatchString(input.CodexSessionID)) ||
+		(input.WorkspaceAccess != "read-only" && input.WorkspaceAccess != "workspace-write") ||
 		input.ValidateCallbackTransport() != nil ||
 		!validSecretFile(input.ExecutionTicketFile) || !validSecretFile(input.ProviderAuthFile) ||
 		!validSecretFile(input.ProviderAuthSHA256File) || input.WorkspaceRoot != "/workspace" ||
-		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
+		input.OutboxRoot != "/workspace/.kodex/outbox" || input.NativeStateRoot != "/workspace/.kodex/state/opencode" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 || len(input.AttachmentSets) > 128 ||
-		len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
+		len(input.BoundedInput) > 256 ||
 		!validSessionContext(input) || !validIntegrationGrants(input.IntegrationGrants) ||
 		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil ||
 		input.EnvironmentImage.Reference != input.ImageReference || input.EnvironmentImage.Digest != input.ImageManifestDigest ||
@@ -669,8 +668,7 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ProviderCredentialRef         string
 		ProviderCredentialRevision    int64
 		ProviderCredentialSHA256      string
-		CodexSandbox                  string
-		CodexApprovalPolicy           string
+		WorkspaceAccess               string
 		Capabilities                  []string
 		RuntimeConfigRef              string
 		RuntimeConfigVersion          int64
@@ -717,9 +715,9 @@ func WarmCompatibilityDigest(input RunnerInput) (string, error) {
 		ProviderAccountRef: input.ProviderAccountRef, ProviderCredentialRef: input.ProviderCredentialRef,
 		ProviderCredentialRevision: input.ProviderCredentialRevision,
 		ProviderCredentialSHA256:   input.ProviderCredentialSHA256,
-		CodexSandbox:               input.CodexSandbox, CodexApprovalPolicy: input.CodexApprovalPolicy,
-		Capabilities:     capabilities,
-		RuntimeConfigRef: input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
+		WorkspaceAccess:            input.WorkspaceAccess,
+		Capabilities:               capabilities,
+		RuntimeConfigRef:           input.RuntimeConfigRef, RuntimeConfigVersion: input.RuntimeConfigVersion, RuntimeConfigDigest: input.RuntimeConfigDigest,
 		ProviderPolicyRef: input.ProviderPolicyRef, ProviderPolicyVersion: input.ProviderPolicyVersion, ProviderPolicyDigest: input.ProviderPolicyDigest,
 		ConfigOverlayRef: input.ConfigOverlayRef, ConfigOverlayVersion: input.ConfigOverlayVersion, ConfigOverlayDigest: input.ConfigOverlayDigest, ConfigOverlay: input.ConfigOverlay,
 		EffectiveReasoningEffort: input.EffectiveReasoningEffort,
@@ -839,11 +837,8 @@ type RunnerCompletionRequest struct {
 	SafeErrorCode         string                     `json:"safe_error_code,omitempty"`
 	Usage                 TokenUsage                 `json:"usage"`
 	Artifacts             []RunnerArtifact           `json:"artifacts,omitempty"`
-	CodexSessionID        string                     `json:"codex_session_id,omitempty"`
-	ArchiveRelativePath   string                     `json:"archive_relative_path,omitempty"`
-	ArchiveSHA256         string                     `json:"archive_sha256,omitempty"`
-	ArchiveSizeBytes      int64                      `json:"archive_size_bytes,omitempty"`
 	ProviderDiagnostic    *ProviderFailureDiagnostic `json:"provider_diagnostic,omitempty"`
+	NativeSession         *NativeSessionCheckpoint   `json:"native_session,omitempty"`
 }
 
 // Validate checks outcome/diagnostic consistency, token accounting, complete optional archive identity,
@@ -866,11 +861,8 @@ func (request RunnerCompletionRequest) Validate() error {
 		request.Usage.Validate() != nil {
 		return errors.New("runner completion is invalid")
 	}
-	hasArchiveBinding := request.CodexSessionID != "" || request.ArchiveRelativePath != "" || request.ArchiveSHA256 != "" || request.ArchiveSizeBytes != 0
-	if hasArchiveBinding && (ValidateCodexArchiveIdentity(request.CodexSessionID, request.ArchiveRelativePath) != nil ||
-		!sha256Pattern.MatchString(request.ArchiveSHA256) ||
-		request.ArchiveSizeBytes <= 0 || request.ArchiveSizeBytes > MaximumSessionSourceBytes) {
-		return errors.New("runner completion archive binding is invalid")
+	if request.NativeSession != nil && request.NativeSession.Validate() != nil {
+		return ErrNativeSession
 	}
 	total := 0
 	for _, artifact := range request.Artifacts {

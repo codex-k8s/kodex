@@ -32,7 +32,7 @@ func TestCompletionRejectionDiagnosticBoundary(t *testing.T) {
 					t.Fatal("observation preceded rejecting owner RPC")
 				}
 			}}
-			payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: "PRIVATE_PAYLOAD_SENTINEL"}
+			payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, SafeErrorCode: "PROVIDER_UNAVAILABLE", ResultSummary: "PRIVATE_PAYLOAD_SENTINEL"}
 			wantStatus, wantStage, wantCode, calls := http.StatusBadRequest, "PAYLOAD", "InvalidArgument", 0
 			switch scenario {
 			case "invalid payload":
@@ -56,6 +56,13 @@ func TestCompletionRejectionDiagnosticBoundary(t *testing.T) {
 			case "unauthorized", "header mismatch":
 				wantStatus, wantStage = http.StatusNotFound, ""
 			case "success", "replay":
+				payload.Success, payload.SafeErrorCode = true, ""
+				path, _ := runtimecontract.NativeSessionExportPath("ses_synthetic", 1)
+				payload.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_synthetic", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: path, SHA256: strings.Repeat("a", 64), SizeBytes: 800}
+				if input.WorkspaceStorage != nil {
+					payload.NativeSession.WorkspaceRef = input.WorkspaceStorage.WorkspaceRef
+					payload.NativeSession.WorkspaceGeneration = input.WorkspaceStorage.Generation
+				}
 				wantStatus, wantStage, calls = http.StatusNoContent, "", 1
 				if scenario == "replay" {
 					client.err = status.Error(codes.AlreadyExists, "PRIVATE_OWNER_SENTINEL")

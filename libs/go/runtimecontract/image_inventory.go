@@ -78,7 +78,7 @@ func ImageToolProbes() []ImageToolProbe {
 		// Native executable проверяется первым, без запуска browser session.
 		{Name: "chromium", Paths: []string{"/usr/lib/chromium/chromium", "/usr/local/bin/chromium", "/usr/local/bin/chromium-browser", "/usr/local/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/google-chrome"}, Args: []string{"--version"}, Required: true},
 		{Name: "playwright-mcp", Paths: []string{"/usr/local/bin/playwright-mcp", "/usr/local/bin/mcp-server-playwright", "/usr/bin/playwright-mcp", "/usr/bin/mcp-server-playwright"}, Args: []string{"--version"}, Required: true},
-		probe("wscat", "wscat", "--version"), probe("codex", "codex", "--version"),
+		probe("wscat", "wscat", "--version"), probe("opencode", "opencode", "--version"),
 		optional(probe("corepack", "corepack", "--version")), optional(probe("python3", "python3", "--version")), optional(probe("pip", "pip", "--version")),
 		optional(probe("kubectl", "kubectl", "version", "--client", "--output=json")), optional(probe("kustomize", "kustomize", "version")),
 		optional(probe("helm", "helm", "version", "--short")), optional(probe("buildctl", "buildctl", "--version")), optional(probe("docker", "docker", "--version")),

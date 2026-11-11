@@ -100,22 +100,13 @@ done
 
 case "$dockerfile" in
   services/jobs/agent-runner/Dockerfile | "$context/services/jobs/agent-runner/Dockerfile")
-    allowed_build_arg=KODEX_CODEX_PACKAGE
     ;;
   *)
     fail "неподдерживаемый защищённый agent-runner Dockerfile: $dockerfile"
     ;;
 esac
 
-build_arg_count=0
-for build_arg in "${build_args[@]}"; do
-  [[ "$build_arg" == *=* ]] || fail "build arg должен иметь форму key=value"
-  build_arg_key="${build_arg%%=*}"
-  [[ "$build_arg_key" == "$allowed_build_arg" ]] || \
-    fail "для защищённого agent-runner Dockerfile разрешён только build arg $allowed_build_arg"
-  build_arg_count=$((build_arg_count + 1))
-done
-((build_arg_count <= 1)) || fail "разрешённый agent-runner build arg нельзя передавать повторно"
+((${#build_args[@]} == 0)) || fail "защищённый OpenCode runtime не принимает build args"
 
 [[ -f "$dockerfile" || -f "$context/$dockerfile" ]] || fail "Dockerfile не найден: $dockerfile"
 builder_path="$(type -P -- "$builder" || true)"

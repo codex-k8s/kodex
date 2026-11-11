@@ -151,8 +151,11 @@ if [[ -n "${KODEX_CONTROL_TLS_RECOVERY_HOST:-}" ]]; then
     fail 'KODEX_CONTROL_TLS_RECOVERY_HOST must differ from KODEX_CONTROL_HOST'
 fi
 if component_selected secrets; then
-  [[ -n "${KODEX_OPENAI_AUTH_JSON_B64:-}" || -n "${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]] ||
-    fail 'KODEX_OPENAI_AUTH_JSON_B64 or KODEX_OPENAI_AUTH_JSON_FILE is required'
+  [[ -z "${KODEX_OPENAI_AUTH_JSON_B64:-}${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]] ||
+    fail 'retired CLI bootstrap is unsupported; configure a model provider API-key file'
+  if [[ -n "${KODEX_MODEL_PROVIDER_API_KEY_FILE:-}" ]]; then
+    [[ -n "${KODEX_MODEL_PROVIDER_CONFIGURATION_FILE:-}" ]] || fail 'model provider configuration is required for an API-key bootstrap'
+  fi
   kodex_require_env KODEX_S3_ENDPOINT KODEX_S3_REGION KODEX_S3_BUCKET \
     KODEX_S3_ACCESS_KEY KODEX_S3_SECRET_KEY || exit 1
 fi
@@ -253,19 +256,15 @@ if component_selected arc; then
   write_env_input KODEX_GITHUB_ARC_TOKEN "$material_directory/inputs/github-arc-token"
 fi
 
-provider_auth_file="$material_directory/inputs/openai-auth.json"
-if component_selected secrets && [[ -n "${KODEX_OPENAI_AUTH_JSON_FILE:-}" ]]; then
-  [[ -f "$KODEX_OPENAI_AUTH_JSON_FILE" && -s "$KODEX_OPENAI_AUTH_JSON_FILE" ]] ||
-    fail 'KODEX_OPENAI_AUTH_JSON_FILE is invalid'
-  install -m 0600 "$KODEX_OPENAI_AUTH_JSON_FILE" "$provider_auth_file"
-elif component_selected secrets && [[ -n "${KODEX_OPENAI_AUTH_JSON_B64:-}" ]]; then
-  printf '%s' "$KODEX_OPENAI_AUTH_JSON_B64" | base64 -d >"$provider_auth_file" ||
-    fail 'KODEX_OPENAI_AUTH_JSON_B64 is invalid'
-  chmod 0600 "$provider_auth_file"
+provider_auth_file="$material_directory/inputs/model-provider-auth.json"
+provider_mode=deferred
+if [[ -n "${KODEX_MODEL_PROVIDER_CONFIGURATION_FILE:-}" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE" >/dev/null || fail 'model provider configuration is invalid'
 fi
-if component_selected secrets; then
-  jq -e 'type == "object" and length > 0' "$provider_auth_file" >/dev/null ||
-    fail 'OpenAI authorization JSON is invalid'
+if component_selected secrets && [[ -n "${KODEX_MODEL_PROVIDER_API_KEY_FILE:-}" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" prepare-auth --configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE" \
+    --api-key-file "$KODEX_MODEL_PROVIDER_API_KEY_FILE" --output "$provider_auth_file" >/dev/null || fail 'model provider bootstrap rejected'
+  provider_mode=configured
 fi
 
 if component_selected cert-manager; then
@@ -400,10 +399,12 @@ if component_selected registry; then
 fi
 
 if component_selected secrets; then
+  provider_arguments=(--provider-mode "$provider_mode")
+  [[ "$provider_mode" == deferred ]] || provider_arguments+=(--provider-auth-file "$provider_auth_file")
   "$repository_root/tools/install/materialize-secrets.sh" \
     --context "$KODEX_KUBE_CONTEXT" --material-directory "$material_directory" \
-    --oidc-ca-file /etc/ssl/certs/ca-certificates.crt \
-    --provider-auth-file "$provider_auth_file"
+    --oidc-ca-file /etc/ssl/certs/ca-certificates.crt "${provider_arguments[@]}"
+
   if [[ -n "${KODEX_SENTRY_DSN:-}" ]]; then
     write_env_input KODEX_SENTRY_DSN "$installer_temporary_directory/sentry-dsn"
     for sentry_secret in kodex-sentry internal-rpc-authority-sentry; do
@@ -471,10 +472,15 @@ if component_selected platform; then
     --pod-name "$KODEX_OIDC_POD_NAME" \
     --pod-component "$KODEX_OIDC_POD_COMPONENT" \
     --target-port "$KODEX_OIDC_TARGET_PORT"
+  provider_render_arguments=()
+  if [[ -n "${KODEX_MODEL_PROVIDER_CONFIGURATION_FILE:-}" ]]; then
+    provider_render_arguments+=(--model-provider-configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE")
+    [[ -z "${KODEX_MODEL_PROVIDER_DEFAULT_MODEL:-}" ]] || provider_render_arguments+=(--model-provider-default-model "$KODEX_MODEL_PROVIDER_DEFAULT_MODEL")
+  fi
   "$repository_root/tools/install/release-platform.sh" --context "$KODEX_KUBE_CONTEXT" \
     --owner-pat-file "$material_directory/inputs/github-owner-pat" \
     --workflow-sha-file "$workflow_sha_file" --profile web-only \
-    --public-tls-mode "$KODEX_PUBLIC_TLS_MODE"
+    --public-tls-mode "$KODEX_PUBLIC_TLS_MODE" "${provider_render_arguments[@]}"
 fi
 
 if component_selected management; then

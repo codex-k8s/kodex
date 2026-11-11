@@ -230,8 +230,8 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		providerSecurity.AppArmorProfile.LocalhostProfile == nil || *providerSecurity.AppArmorProfile.LocalhostProfile != "kodex-provider-runtime" {
 		t.Fatalf("provider sandbox security context = %#v", providerSecurity)
 	}
-	if input.CodexHome != "/workspace/.kodex/state/codex-home" {
-		t.Fatalf("provider state path = %q; resumable Codex state must use the session volume", input.CodexHome)
+	if input.NativeStateRoot != "/workspace/.kodex/state/opencode" {
+		t.Fatalf("provider state path = %q; resumable Codex state must use the session volume", input.NativeStateRoot)
 	}
 	if len(input.InputArtifacts) != 1 || input.InputArtifacts[0].Ref != "artifact_abcdefgh" || input.InputArtifacts[0].Digest != testArtifactDigest {
 		t.Fatalf("runtime artifact catalog = %#v", input.InputArtifacts)
@@ -966,8 +966,8 @@ func TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.
 			if err != nil {
 				t.Fatalf("BuildTurnInput() error = %v", err)
 			}
-			if input.CodexSandbox != test.want {
-				t.Fatalf("CodexSandbox = %q, want %q", input.CodexSandbox, test.want)
+			if input.WorkspaceAccess != test.want {
+				t.Fatalf("WorkspaceAccess = %q, want %q", input.WorkspaceAccess, test.want)
 			}
 			if len(input.Capabilities) != len(test.capabilities) {
 				t.Fatal("local workspace access changed effective capabilities")
@@ -997,7 +997,7 @@ func TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.CodexSandbox != "workspace-write" || len(input.Capabilities) != 0 {
+	if input.WorkspaceAccess != "workspace-write" || len(input.Capabilities) != 0 {
 		t.Fatal("warm local workspace access requires or grants artifact publication")
 	}
 }
@@ -1222,7 +1222,7 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 	for _, name := range []string{"role-runtime", "provider-runtime"} {
 		container := containerByName(t, pod.Spec.Containers, name)
-		if container.WorkingDir != runtimecontract.RuntimeWorkspaceWorkingRoot || input.CodexSandbox != "workspace-write" {
+		if container.WorkingDir != runtimecontract.RuntimeWorkspaceWorkingRoot || input.WorkspaceAccess != "workspace-write" {
 			t.Fatal("warm runtime does not use the writable working directory")
 		}
 		for _, volume := range []string{"vfs-input", "vfs-knowledge", "runtime-context"} {
@@ -1513,7 +1513,7 @@ func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 	t.Parallel()
 	tests := map[string]func(*controlplanev1.RuntimeRevisionSnapshot){
 		"missing digest":           func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RevisionDigest = "" },
-		"missing effective effort": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.EffectiveReasoningEffort = "" },
+		"unsupported effort":       func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.EffectiveReasoningEffort = "medium" },
 		"changed effective effort": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.EffectiveReasoningEffort = "high" },
 		"revision":                 func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.Ref = "rrev_ijklmnop" },
 		"image":                    func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.RoleImageRecipeGeneration++ },
@@ -2140,7 +2140,7 @@ func testManagerConfig() Config {
 		StorageClass:            "", SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner",
 		PromotedRoleImageRepository: "registry.example/kodex/roles",
 		DefaultRoleImageReference:   "registry.example/kodex/agent-runner@" + testDefaultDigest,
-		RoleRuntimeContractRevision: 1,
+		RoleRuntimeContractRevision: runtimecontract.WorkspaceStorageRuntimeContractRevision,
 		RoleRuntimeContractSHA256:   testContractDigest,
 	}
 }
@@ -2262,12 +2262,12 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		Run: &controlplanev1.Run{Ref: "run_abcdefgh", ProjectRef: "prj_abcdefgh"}, Node: &controlplanev1.RunNode{Ref: "node_abcdefgh"},
 		Revision: &controlplanev1.RuntimeRevisionSnapshot{
 			Ref: "revision_abcdefgh", Version: 1, OrganizationRef: "org_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", Attempt: 1,
-			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "builtin-safe-runtime", Revision: "revision-1", Provider: "openai", Model: "codex"},
+			AgentRef: "agent_abcdefgh", Instructions: "Complete the server-owned task.", Runtime: &controlplanev1.RuntimeSelection{Ref: "builtin-safe-runtime", Revision: "revision-1", Provider: "opencode", Model: "model-a", ModelProvider: &controlplanev1.RuntimeModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderId: "synthetic", BaseUrl: "https://model.example.invalid/v1", AddressCidrs: []string{"192.0.2.1/32"}, Models: []*controlplanev1.RuntimeModelProviderModel{{Id: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}},
 			RevisionDigest: strings.Repeat("a", 64), AssistantScope: assistantScope,
 			RoleDefinitionRef: "roledef_abcdefgh", InstructionRef: "instruction_abcdefgh", InstructionDigest: strings.Repeat("4", 64),
 			PromptTemplateRef: "prompt_abcdefgh", PromptTemplateDigest: strings.Repeat("5", 64), PromptMaterializationDigest: strings.Repeat("6", 64),
 			ImageReference: "registry.example/kodex/roles@" + testDigest, ImageManifestDigest: testDigest,
-			RoleRuntimeContractRevision: 1, RoleRuntimeContractSha256: testContractDigest,
+			RoleRuntimeContractRevision: runtimecontract.WorkspaceStorageRuntimeContractRevision, RoleRuntimeContractSha256: testContractDigest,
 			Capabilities:     []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
 			AttachmentSetRef: attachmentSetRef, AttachmentSetManifestDigest: manifest.Digest, AttachmentContext: attachmentPurpose,
 			AttachmentSets: []*controlplanev1.RuntimeAttachmentSet{{
@@ -2283,7 +2283,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 			RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 1, RuntimeConfigDigest: strings.Repeat("1", 64),
 			ProviderPolicyRef: "ppol_abcdefgh", ProviderPolicyVersion: 1, ProviderPolicyDigest: strings.Repeat("2", 64),
 			ConfigOverlayRef: "cover_abcdefgh", ConfigOverlayVersion: 1,
-			ReasoningMode: controlplanev1.RuntimeReasoningMode_RUNTIME_REASONING_MODE_SUPPORTED, EffectiveReasoningEffort: "medium",
+			ReasoningMode:         controlplanev1.RuntimeReasoningMode_RUNTIME_REASONING_MODE_UNSUPPORTED,
 			ConfigOverlayDigest:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			RuntimeEnvironmentRef: "renv_abcdefgh", RuntimeEnvironmentVersion: 1,
 			RuntimeEnvironmentDigest: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -2300,6 +2300,7 @@ func testExecution(systemAssistant bool) *controlplanev1.ClaimedExecution {
 		}}
 	}
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	policy.ManagedWorkspace = !systemAssistant
 	serviceAccountName := runtimecontract.RuntimeServiceAccountName(execution.Lease.Ref)
 	podName := runtimecontract.RuntimeTurnPodName(execution.Lease.Ref)
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, serviceAccountName, podName)
@@ -2424,7 +2425,7 @@ func sealTestWarmRevision(revision *controlplanev1.RuntimeRevisionSnapshot) {
 // NONE, volume/protocol — disk/TCP, destination — enum zero; такой mapper
 // тестовых данных нельзя считать механизмом допуска.
 func testRuntimeEnvironmentPolicyProto(policy runtimecontract.RuntimeEnvironmentPolicy) *controlplanev1.RuntimeEnvironmentPolicy {
-	result := &controlplanev1.RuntimeEnvironmentPolicy{
+	result := &controlplanev1.RuntimeEnvironmentPolicy{ManagedWorkspace: policy.ManagedWorkspace,
 		Resources: &controlplanev1.RuntimeResourcePolicy{
 			CpuRequestMilli: policy.Resources.CPURequestMilli, CpuLimitMilli: policy.Resources.CPULimitMilli,
 			MemoryRequestMib: policy.Resources.MemoryRequestMiB, MemoryLimitMib: policy.Resources.MemoryLimitMiB,

@@ -116,7 +116,7 @@
     "rules": null,
     "digest": ""
   },
-  "codex_sandbox": "",
+  "workspace_access": "",
   "codex_approval_policy": "",
   "callback_url": "",
   "callback_tls": {
@@ -130,5 +130,5 @@
   "provider_auth_sha256_file": "",
   "workspace_root": "",
   "outbox_root": "",
-  "codex_home": ""
+  "native_state_root": ""
 }

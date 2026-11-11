@@ -2019,160 +2019,160 @@ func (e ImageToolInventoryStatus) Valid() bool {
 
 // Defines values for ImageToolObservationName.
 const (
-	Bash            ImageToolObservationName = "bash"
-	Buf             ImageToolObservationName = "buf"
-	Buildctl        ImageToolObservationName = "buildctl"
-	Chromium        ImageToolObservationName = "chromium"
-	Codex           ImageToolObservationName = "codex"
-	Corepack        ImageToolObservationName = "corepack"
-	Curl            ImageToolObservationName = "curl"
-	Docker          ImageToolObservationName = "docker"
-	Eslint          ImageToolObservationName = "eslint"
-	Gh              ImageToolObservationName = "gh"
-	Git             ImageToolObservationName = "git"
-	Gitleaks        ImageToolObservationName = "gitleaks"
-	Go              ImageToolObservationName = "go"
-	Gofumpt         ImageToolObservationName = "gofumpt"
-	Goimports       ImageToolObservationName = "goimports"
-	GolangciLint    ImageToolObservationName = "golangci-lint"
-	Goose           ImageToolObservationName = "goose"
-	Govulncheck     ImageToolObservationName = "govulncheck"
-	Grpcurl         ImageToolObservationName = "grpcurl"
-	Hadolint        ImageToolObservationName = "hadolint"
-	Helm            ImageToolObservationName = "helm"
-	Jq              ImageToolObservationName = "jq"
-	Just            ImageToolObservationName = "just"
-	Kubectl         ImageToolObservationName = "kubectl"
-	Kustomize       ImageToolObservationName = "kustomize"
-	Make            ImageToolObservationName = "make"
-	Mockgen         ImageToolObservationName = "mockgen"
-	Node            ImageToolObservationName = "node"
-	Npm             ImageToolObservationName = "npm"
-	OapiCodegen     ImageToolObservationName = "oapi-codegen"
-	Pip             ImageToolObservationName = "pip"
-	Playwright      ImageToolObservationName = "playwright"
-	PlaywrightMcp   ImageToolObservationName = "playwright-mcp"
-	Pnpm            ImageToolObservationName = "pnpm"
-	Prettier        ImageToolObservationName = "prettier"
-	Protoc          ImageToolObservationName = "protoc"
-	ProtocGenGo     ImageToolObservationName = "protoc-gen-go"
-	ProtocGenGoGrpc ImageToolObservationName = "protoc-gen-go-grpc"
-	Python3         ImageToolObservationName = "python3"
-	Ripgrep         ImageToolObservationName = "ripgrep"
-	Shellcheck      ImageToolObservationName = "shellcheck"
-	Sqlc            ImageToolObservationName = "sqlc"
-	Staticcheck     ImageToolObservationName = "staticcheck"
-	Typescript      ImageToolObservationName = "typescript"
-	Vite            ImageToolObservationName = "vite"
-	Vitest          ImageToolObservationName = "vitest"
-	VueTsc          ImageToolObservationName = "vue-tsc"
-	Wscat           ImageToolObservationName = "wscat"
-	Yarn            ImageToolObservationName = "yarn"
-	Yq              ImageToolObservationName = "yq"
+	ImageToolObservationNameBash            ImageToolObservationName = "bash"
+	ImageToolObservationNameBuf             ImageToolObservationName = "buf"
+	ImageToolObservationNameBuildctl        ImageToolObservationName = "buildctl"
+	ImageToolObservationNameChromium        ImageToolObservationName = "chromium"
+	ImageToolObservationNameCodex           ImageToolObservationName = "codex"
+	ImageToolObservationNameCorepack        ImageToolObservationName = "corepack"
+	ImageToolObservationNameCurl            ImageToolObservationName = "curl"
+	ImageToolObservationNameDocker          ImageToolObservationName = "docker"
+	ImageToolObservationNameEslint          ImageToolObservationName = "eslint"
+	ImageToolObservationNameGh              ImageToolObservationName = "gh"
+	ImageToolObservationNameGit             ImageToolObservationName = "git"
+	ImageToolObservationNameGitleaks        ImageToolObservationName = "gitleaks"
+	ImageToolObservationNameGo              ImageToolObservationName = "go"
+	ImageToolObservationNameGofumpt         ImageToolObservationName = "gofumpt"
+	ImageToolObservationNameGoimports       ImageToolObservationName = "goimports"
+	ImageToolObservationNameGolangciLint    ImageToolObservationName = "golangci-lint"
+	ImageToolObservationNameGoose           ImageToolObservationName = "goose"
+	ImageToolObservationNameGovulncheck     ImageToolObservationName = "govulncheck"
+	ImageToolObservationNameGrpcurl         ImageToolObservationName = "grpcurl"
+	ImageToolObservationNameHadolint        ImageToolObservationName = "hadolint"
+	ImageToolObservationNameHelm            ImageToolObservationName = "helm"
+	ImageToolObservationNameJq              ImageToolObservationName = "jq"
+	ImageToolObservationNameJust            ImageToolObservationName = "just"
+	ImageToolObservationNameKubectl         ImageToolObservationName = "kubectl"
+	ImageToolObservationNameKustomize       ImageToolObservationName = "kustomize"
+	ImageToolObservationNameMake            ImageToolObservationName = "make"
+	ImageToolObservationNameMockgen         ImageToolObservationName = "mockgen"
+	ImageToolObservationNameNode            ImageToolObservationName = "node"
+	ImageToolObservationNameNpm             ImageToolObservationName = "npm"
+	ImageToolObservationNameOapiCodegen     ImageToolObservationName = "oapi-codegen"
+	ImageToolObservationNamePip             ImageToolObservationName = "pip"
+	ImageToolObservationNamePlaywright      ImageToolObservationName = "playwright"
+	ImageToolObservationNamePlaywrightMcp   ImageToolObservationName = "playwright-mcp"
+	ImageToolObservationNamePnpm            ImageToolObservationName = "pnpm"
+	ImageToolObservationNamePrettier        ImageToolObservationName = "prettier"
+	ImageToolObservationNameProtoc          ImageToolObservationName = "protoc"
+	ImageToolObservationNameProtocGenGo     ImageToolObservationName = "protoc-gen-go"
+	ImageToolObservationNameProtocGenGoGrpc ImageToolObservationName = "protoc-gen-go-grpc"
+	ImageToolObservationNamePython3         ImageToolObservationName = "python3"
+	ImageToolObservationNameRipgrep         ImageToolObservationName = "ripgrep"
+	ImageToolObservationNameShellcheck      ImageToolObservationName = "shellcheck"
+	ImageToolObservationNameSqlc            ImageToolObservationName = "sqlc"
+	ImageToolObservationNameStaticcheck     ImageToolObservationName = "staticcheck"
+	ImageToolObservationNameTypescript      ImageToolObservationName = "typescript"
+	ImageToolObservationNameVite            ImageToolObservationName = "vite"
+	ImageToolObservationNameVitest          ImageToolObservationName = "vitest"
+	ImageToolObservationNameVueTsc          ImageToolObservationName = "vue-tsc"
+	ImageToolObservationNameWscat           ImageToolObservationName = "wscat"
+	ImageToolObservationNameYarn            ImageToolObservationName = "yarn"
+	ImageToolObservationNameYq              ImageToolObservationName = "yq"
 )
 
 // Valid indicates whether the value is a known member of the ImageToolObservationName enum.
 func (e ImageToolObservationName) Valid() bool {
 	switch e {
-	case Bash:
+	case ImageToolObservationNameBash:
 		return true
-	case Buf:
+	case ImageToolObservationNameBuf:
 		return true
-	case Buildctl:
+	case ImageToolObservationNameBuildctl:
 		return true
-	case Chromium:
+	case ImageToolObservationNameChromium:
 		return true
-	case Codex:
+	case ImageToolObservationNameCodex:
 		return true
-	case Corepack:
+	case ImageToolObservationNameCorepack:
 		return true
-	case Curl:
+	case ImageToolObservationNameCurl:
 		return true
-	case Docker:
+	case ImageToolObservationNameDocker:
 		return true
-	case Eslint:
+	case ImageToolObservationNameEslint:
 		return true
-	case Gh:
+	case ImageToolObservationNameGh:
 		return true
-	case Git:
+	case ImageToolObservationNameGit:
 		return true
-	case Gitleaks:
+	case ImageToolObservationNameGitleaks:
 		return true
-	case Go:
+	case ImageToolObservationNameGo:
 		return true
-	case Gofumpt:
+	case ImageToolObservationNameGofumpt:
 		return true
-	case Goimports:
+	case ImageToolObservationNameGoimports:
 		return true
-	case GolangciLint:
+	case ImageToolObservationNameGolangciLint:
 		return true
-	case Goose:
+	case ImageToolObservationNameGoose:
 		return true
-	case Govulncheck:
+	case ImageToolObservationNameGovulncheck:
 		return true
-	case Grpcurl:
+	case ImageToolObservationNameGrpcurl:
 		return true
-	case Hadolint:
+	case ImageToolObservationNameHadolint:
 		return true
-	case Helm:
+	case ImageToolObservationNameHelm:
 		return true
-	case Jq:
+	case ImageToolObservationNameJq:
 		return true
-	case Just:
+	case ImageToolObservationNameJust:
 		return true
-	case Kubectl:
+	case ImageToolObservationNameKubectl:
 		return true
-	case Kustomize:
+	case ImageToolObservationNameKustomize:
 		return true
-	case Make:
+	case ImageToolObservationNameMake:
 		return true
-	case Mockgen:
+	case ImageToolObservationNameMockgen:
 		return true
-	case Node:
+	case ImageToolObservationNameNode:
 		return true
-	case Npm:
+	case ImageToolObservationNameNpm:
 		return true
-	case OapiCodegen:
+	case ImageToolObservationNameOapiCodegen:
 		return true
-	case Pip:
+	case ImageToolObservationNamePip:
 		return true
-	case Playwright:
+	case ImageToolObservationNamePlaywright:
 		return true
-	case PlaywrightMcp:
+	case ImageToolObservationNamePlaywrightMcp:
 		return true
-	case Pnpm:
+	case ImageToolObservationNamePnpm:
 		return true
-	case Prettier:
+	case ImageToolObservationNamePrettier:
 		return true
-	case Protoc:
+	case ImageToolObservationNameProtoc:
 		return true
-	case ProtocGenGo:
+	case ImageToolObservationNameProtocGenGo:
 		return true
-	case ProtocGenGoGrpc:
+	case ImageToolObservationNameProtocGenGoGrpc:
 		return true
-	case Python3:
+	case ImageToolObservationNamePython3:
 		return true
-	case Ripgrep:
+	case ImageToolObservationNameRipgrep:
 		return true
-	case Shellcheck:
+	case ImageToolObservationNameShellcheck:
 		return true
-	case Sqlc:
+	case ImageToolObservationNameSqlc:
 		return true
-	case Staticcheck:
+	case ImageToolObservationNameStaticcheck:
 		return true
-	case Typescript:
+	case ImageToolObservationNameTypescript:
 		return true
-	case Vite:
+	case ImageToolObservationNameVite:
 		return true
-	case Vitest:
+	case ImageToolObservationNameVitest:
 		return true
-	case VueTsc:
+	case ImageToolObservationNameVueTsc:
 		return true
-	case Wscat:
+	case ImageToolObservationNameWscat:
 		return true
-	case Yarn:
+	case ImageToolObservationNameYarn:
 		return true
-	case Yq:
+	case ImageToolObservationNameYq:
 		return true
 	default:
 		return false
@@ -3709,6 +3709,255 @@ func (e MessageSourceOrigin) Valid() bool {
 	}
 }
 
+// Defines values for ModelCachePolicyOptimization.
+const (
+	NOHINTS         ModelCachePolicyOptimization = "NO_HINTS"
+	OPTIMIZE        ModelCachePolicyOptimization = "OPTIMIZE"
+	PROVIDERDEFAULT ModelCachePolicyOptimization = "PROVIDER_DEFAULT"
+)
+
+// Valid indicates whether the value is a known member of the ModelCachePolicyOptimization enum.
+func (e ModelCachePolicyOptimization) Valid() bool {
+	switch e {
+	case NOHINTS:
+		return true
+	case OPTIMIZE:
+		return true
+	case PROVIDERDEFAULT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCachePolicyReuseScope.
+const (
+	ModelCachePolicyReuseScopeINITIATOR ModelCachePolicyReuseScope = "INITIATOR"
+	ModelCachePolicyReuseScopePROJECT   ModelCachePolicyReuseScope = "PROJECT"
+	ModelCachePolicyReuseScopeSESSION   ModelCachePolicyReuseScope = "SESSION"
+)
+
+// Valid indicates whether the value is a known member of the ModelCachePolicyReuseScope enum.
+func (e ModelCachePolicyReuseScope) Valid() bool {
+	switch e {
+	case ModelCachePolicyReuseScopeINITIATOR:
+		return true
+	case ModelCachePolicyReuseScopePROJECT:
+		return true
+	case ModelCachePolicyReuseScopeSESSION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCachePolicyRevision.
+const (
+	ModelCachePolicyRevisionN1 ModelCachePolicyRevision = 1
+)
+
+// Valid indicates whether the value is a known member of the ModelCachePolicyRevision enum.
+func (e ModelCachePolicyRevision) Valid() bool {
+	switch e {
+	case ModelCachePolicyRevisionN1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheQualificationMechanism.
+const (
+	ModelCacheQualificationMechanismANTHROPICEPHEMERAL   ModelCacheQualificationMechanism = "ANTHROPIC_EPHEMERAL"
+	ModelCacheQualificationMechanismNONE                 ModelCacheQualificationMechanism = "NONE"
+	ModelCacheQualificationMechanismOPENAIPROMPTCACHEKEY ModelCacheQualificationMechanism = "OPENAI_PROMPT_CACHE_KEY"
+	ModelCacheQualificationMechanismVLLMCACHESALT        ModelCacheQualificationMechanism = "VLLM_CACHE_SALT"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheQualificationMechanism enum.
+func (e ModelCacheQualificationMechanism) Valid() bool {
+	switch e {
+	case ModelCacheQualificationMechanismANTHROPICEPHEMERAL:
+		return true
+	case ModelCacheQualificationMechanismNONE:
+		return true
+	case ModelCacheQualificationMechanismOPENAIPROMPTCACHEKEY:
+		return true
+	case ModelCacheQualificationMechanismVLLMCACHESALT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheQualificationSource.
+const (
+	ModelCacheQualificationSourceDECLARED ModelCacheQualificationSource = "DECLARED"
+	ModelCacheQualificationSourceNONE     ModelCacheQualificationSource = "NONE"
+	ModelCacheQualificationSourceOBSERVED ModelCacheQualificationSource = "OBSERVED"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheQualificationSource enum.
+func (e ModelCacheQualificationSource) Valid() bool {
+	switch e {
+	case ModelCacheQualificationSourceDECLARED:
+		return true
+	case ModelCacheQualificationSourceNONE:
+		return true
+	case ModelCacheQualificationSourceOBSERVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheQualificationStatus.
+const (
+	ModelCacheQualificationStatusSUPPORTED   ModelCacheQualificationStatus = "SUPPORTED"
+	ModelCacheQualificationStatusUNKNOWN     ModelCacheQualificationStatus = "UNKNOWN"
+	ModelCacheQualificationStatusUNSUPPORTED ModelCacheQualificationStatus = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheQualificationStatus enum.
+func (e ModelCacheQualificationStatus) Valid() bool {
+	switch e {
+	case ModelCacheQualificationStatusSUPPORTED:
+		return true
+	case ModelCacheQualificationStatusUNKNOWN:
+		return true
+	case ModelCacheQualificationStatusUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheResolutionMechanism.
+const (
+	ModelCacheResolutionMechanismANTHROPICEPHEMERAL   ModelCacheResolutionMechanism = "ANTHROPIC_EPHEMERAL"
+	ModelCacheResolutionMechanismNONE                 ModelCacheResolutionMechanism = "NONE"
+	ModelCacheResolutionMechanismOPENAIPROMPTCACHEKEY ModelCacheResolutionMechanism = "OPENAI_PROMPT_CACHE_KEY"
+	ModelCacheResolutionMechanismVLLMCACHESALT        ModelCacheResolutionMechanism = "VLLM_CACHE_SALT"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheResolutionMechanism enum.
+func (e ModelCacheResolutionMechanism) Valid() bool {
+	switch e {
+	case ModelCacheResolutionMechanismANTHROPICEPHEMERAL:
+		return true
+	case ModelCacheResolutionMechanismNONE:
+		return true
+	case ModelCacheResolutionMechanismOPENAIPROMPTCACHEKEY:
+		return true
+	case ModelCacheResolutionMechanismVLLMCACHESALT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheResolutionPhysicalIsolation.
+const (
+	NOTPROVEN ModelCacheResolutionPhysicalIsolation = "NOT_PROVEN"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheResolutionPhysicalIsolation enum.
+func (e ModelCacheResolutionPhysicalIsolation) Valid() bool {
+	switch e {
+	case NOTPROVEN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheResolutionProxyResponseCache.
+const (
+	BYPASSREADWRITE ModelCacheResolutionProxyResponseCache = "BYPASS_READ_WRITE"
+	NOTAPPLICABLE   ModelCacheResolutionProxyResponseCache = "NOT_APPLICABLE"
+	UNQUALIFIED     ModelCacheResolutionProxyResponseCache = "UNQUALIFIED"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheResolutionProxyResponseCache enum.
+func (e ModelCacheResolutionProxyResponseCache) Valid() bool {
+	switch e {
+	case BYPASSREADWRITE:
+		return true
+	case NOTAPPLICABLE:
+		return true
+	case UNQUALIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheResolutionReuseScope.
+const (
+	ModelCacheResolutionReuseScopeINITIATOR                 ModelCacheResolutionReuseScope = "INITIATOR"
+	ModelCacheResolutionReuseScopePROJECT                   ModelCacheResolutionReuseScope = "PROJECT"
+	ModelCacheResolutionReuseScopePROVIDERACCOUNT           ModelCacheResolutionReuseScope = "PROVIDER_ACCOUNT"
+	ModelCacheResolutionReuseScopePROVIDERACCOUNTROUTINGKEY ModelCacheResolutionReuseScope = "PROVIDER_ACCOUNT_ROUTING_KEY"
+	ModelCacheResolutionReuseScopePROVIDERBOUNDARY          ModelCacheResolutionReuseScope = "PROVIDER_BOUNDARY"
+	ModelCacheResolutionReuseScopeSESSION                   ModelCacheResolutionReuseScope = "SESSION"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheResolutionReuseScope enum.
+func (e ModelCacheResolutionReuseScope) Valid() bool {
+	switch e {
+	case ModelCacheResolutionReuseScopeINITIATOR:
+		return true
+	case ModelCacheResolutionReuseScopePROJECT:
+		return true
+	case ModelCacheResolutionReuseScopePROVIDERACCOUNT:
+		return true
+	case ModelCacheResolutionReuseScopePROVIDERACCOUNTROUTINGKEY:
+		return true
+	case ModelCacheResolutionReuseScopePROVIDERBOUNDARY:
+		return true
+	case ModelCacheResolutionReuseScopeSESSION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelCacheResolutionStatus.
+const (
+	ModelCacheResolutionStatusSUPPORTED   ModelCacheResolutionStatus = "SUPPORTED"
+	ModelCacheResolutionStatusUNKNOWN     ModelCacheResolutionStatus = "UNKNOWN"
+	ModelCacheResolutionStatusUNSUPPORTED ModelCacheResolutionStatus = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelCacheResolutionStatus enum.
+func (e ModelCacheResolutionStatus) Valid() bool {
+	switch e {
+	case ModelCacheResolutionStatusSUPPORTED:
+		return true
+	case ModelCacheResolutionStatusUNKNOWN:
+		return true
+	case ModelCacheResolutionStatusUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelContextPolicyRevision.
+const (
+	ModelContextPolicyRevisionN1 ModelContextPolicyRevision = 1
+)
+
+// Valid indicates whether the value is a known member of the ModelContextPolicyRevision enum.
+func (e ModelContextPolicyRevision) Valid() bool {
+	switch e {
+	case ModelContextPolicyRevisionN1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NextAction.
 const (
 	NextActionADDTURN                NextAction = "ADD_TURN"
@@ -4792,21 +5041,6 @@ func (e PromptVariableCatalogInputTargetKind) Valid() bool {
 	}
 }
 
-// Defines values for ProviderAccountDefinitionKey.
-const (
-	ProviderAccountDefinitionKeyOpenaiCodex ProviderAccountDefinitionKey = "openai-codex"
-)
-
-// Valid indicates whether the value is a known member of the ProviderAccountDefinitionKey enum.
-func (e ProviderAccountDefinitionKey) Valid() bool {
-	switch e {
-	case ProviderAccountDefinitionKeyOpenaiCodex:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ProviderAccountSafeStatusReason.
 const (
 	ProviderAccountSafeStatusReasonACCOUNTDELETED                  ProviderAccountSafeStatusReason = "ACCOUNT_DELETED"
@@ -4912,21 +5146,6 @@ func (e ProviderAccountBlockerKind) Valid() bool {
 	case ProviderAccountBlockerKindQUEUEDTURN:
 		return true
 	case ProviderAccountBlockerKindWARMRUNTIME:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ProviderAccountCreateInputDefinitionKey.
-const (
-	ProviderAccountCreateInputDefinitionKeyOpenaiCodex ProviderAccountCreateInputDefinitionKey = "openai-codex"
-)
-
-// Valid indicates whether the value is a known member of the ProviderAccountCreateInputDefinitionKey enum.
-func (e ProviderAccountCreateInputDefinitionKey) Valid() bool {
-	switch e {
-	case ProviderAccountCreateInputDefinitionKeyOpenaiCodex:
 		return true
 	default:
 		return false
@@ -5194,15 +5413,30 @@ func (e ProviderDefinitionAuthorizationMethods) Valid() bool {
 	}
 }
 
-// Defines values for ProviderDefinitionKey.
+// Defines values for ProviderDefinitionEngineVersion.
 const (
-	ProviderDefinitionKeyOpenaiCodex ProviderDefinitionKey = "openai-codex"
+	N1195 ProviderDefinitionEngineVersion = "1.19.5"
 )
 
-// Valid indicates whether the value is a known member of the ProviderDefinitionKey enum.
-func (e ProviderDefinitionKey) Valid() bool {
+// Valid indicates whether the value is a known member of the ProviderDefinitionEngineVersion enum.
+func (e ProviderDefinitionEngineVersion) Valid() bool {
 	switch e {
-	case ProviderDefinitionKeyOpenaiCodex:
+	case N1195:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderDefinitionManagedBy.
+const (
+	ProviderDefinitionManagedByGit ProviderDefinitionManagedBy = "git"
+)
+
+// Valid indicates whether the value is a known member of the ProviderDefinitionManagedBy enum.
+func (e ProviderDefinitionManagedBy) Valid() bool {
+	switch e {
+	case ProviderDefinitionManagedByGit:
 		return true
 	default:
 		return false
@@ -5535,31 +5769,31 @@ func (e RepositoryBundlePublicationContinuationState) Valid() bool {
 
 // Defines values for RepositoryBundlePublicationFailureCode.
 const (
-	AUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
-	BASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
-	BRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
-	CONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
-	DEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
-	OUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
-	UNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
+	RepositoryBundlePublicationFailureCodeAUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
+	RepositoryBundlePublicationFailureCodeBASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
+	RepositoryBundlePublicationFailureCodeBRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
+	RepositoryBundlePublicationFailureCodeCONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
+	RepositoryBundlePublicationFailureCodeDEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
+	RepositoryBundlePublicationFailureCodeOUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
+	RepositoryBundlePublicationFailureCodeUNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryBundlePublicationFailureCode enum.
 func (e RepositoryBundlePublicationFailureCode) Valid() bool {
 	switch e {
-	case AUTHORITYCHANGED:
+	case RepositoryBundlePublicationFailureCodeAUTHORITYCHANGED:
 		return true
-	case BASEINVALID:
+	case RepositoryBundlePublicationFailureCodeBASEINVALID:
 		return true
-	case BRANCHCONFLICT:
+	case RepositoryBundlePublicationFailureCodeBRANCHCONFLICT:
 		return true
-	case CONTENTINVALID:
+	case RepositoryBundlePublicationFailureCodeCONTENTINVALID:
 		return true
-	case DEADLINEEXCEEDED:
+	case RepositoryBundlePublicationFailureCodeDEADLINEEXCEEDED:
 		return true
-	case OUTCOMEUNCONFIRMED:
+	case RepositoryBundlePublicationFailureCodeOUTCOMEUNCONFIRMED:
 		return true
-	case UNAVAILABLE:
+	case RepositoryBundlePublicationFailureCodeUNAVAILABLE:
 		return true
 	default:
 		return false
@@ -6780,6 +7014,7 @@ const (
 	RunSessionReadinessStorageStateARCHIVED       RunSessionReadinessStorageState = "ARCHIVED"
 	RunSessionReadinessStorageStateDELETEPVCREADY RunSessionReadinessStorageState = "DELETE_PVC_READY"
 	RunSessionReadinessStorageStateERROR          RunSessionReadinessStorageState = "ERROR"
+	RunSessionReadinessStorageStateINITIALIZING   RunSessionReadinessStorageState = "INITIALIZING"
 	RunSessionReadinessStorageStateLIVE           RunSessionReadinessStorageState = "LIVE"
 	RunSessionReadinessStorageStatePURGED         RunSessionReadinessStorageState = "PURGED"
 	RunSessionReadinessStorageStateRESTOREREADY   RunSessionReadinessStorageState = "RESTORE_READY"
@@ -6797,6 +7032,8 @@ func (e RunSessionReadinessStorageState) Valid() bool {
 	case RunSessionReadinessStorageStateDELETEPVCREADY:
 		return true
 	case RunSessionReadinessStorageStateERROR:
+		return true
+	case RunSessionReadinessStorageStateINITIALIZING:
 		return true
 	case RunSessionReadinessStorageStateLIVE:
 		return true
@@ -10462,21 +10699,6 @@ func (e ListProviderAccountsParamsState) Valid() bool {
 	}
 }
 
-// Defines values for ListProviderAccountsParamsDefinitionKey.
-const (
-	ListProviderAccountsParamsDefinitionKeyOpenaiCodex ListProviderAccountsParamsDefinitionKey = "openai-codex"
-)
-
-// Valid indicates whether the value is a known member of the ListProviderAccountsParamsDefinitionKey enum.
-func (e ListProviderAccountsParamsDefinitionKey) Valid() bool {
-	switch e {
-	case ListProviderAccountsParamsDefinitionKeyOpenaiCodex:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for GetProviderAccountParamsUsagePurpose.
 const (
 	GetProviderAccountParamsUsagePurposeCONFIGURE GetProviderAccountParamsUsagePurpose = "CONFIGURE"
@@ -13149,6 +13371,73 @@ type MessageSource struct {
 // MessageSourceOrigin defines model for MessageSource.Origin.
 type MessageSourceOrigin string
 
+// ModelCachePolicy defines model for ModelCachePolicy.
+type ModelCachePolicy struct {
+	NoReuse       bool                         `json:"noReuse"`
+	NoStore       bool                         `json:"noStore"`
+	Optimization  ModelCachePolicyOptimization `json:"optimization"`
+	Qualification ModelCacheQualification      `json:"qualification"`
+	Required      bool                         `json:"required"`
+	ReuseScope    ModelCachePolicyReuseScope   `json:"reuseScope"`
+	Revision      ModelCachePolicyRevision     `json:"revision"`
+}
+
+// ModelCachePolicyOptimization defines model for ModelCachePolicy.Optimization.
+type ModelCachePolicyOptimization string
+
+// ModelCachePolicyReuseScope defines model for ModelCachePolicy.ReuseScope.
+type ModelCachePolicyReuseScope string
+
+// ModelCachePolicyRevision defines model for ModelCachePolicy.Revision.
+type ModelCachePolicyRevision int
+
+// ModelCacheQualification defines model for ModelCacheQualification.
+type ModelCacheQualification struct {
+	BackendVersion string                           `json:"backendVersion"`
+	EvidenceSha256 string                           `json:"evidenceSha256"`
+	Mechanism      ModelCacheQualificationMechanism `json:"mechanism"`
+	RouteSha256    string                           `json:"routeSha256"`
+	Source         ModelCacheQualificationSource    `json:"source"`
+	Status         ModelCacheQualificationStatus    `json:"status"`
+}
+
+// ModelCacheQualificationMechanism defines model for ModelCacheQualification.Mechanism.
+type ModelCacheQualificationMechanism string
+
+// ModelCacheQualificationSource defines model for ModelCacheQualification.Source.
+type ModelCacheQualificationSource string
+
+// ModelCacheQualificationStatus defines model for ModelCacheQualification.Status.
+type ModelCacheQualificationStatus string
+
+// ModelCacheResolution defines model for ModelCacheResolution.
+type ModelCacheResolution struct {
+	Mechanism          ModelCacheResolutionMechanism          `json:"mechanism"`
+	NoReuse            bool                                   `json:"noReuse"`
+	NoStore            bool                                   `json:"noStore"`
+	PhysicalIsolation  ModelCacheResolutionPhysicalIsolation  `json:"physicalIsolation"`
+	ProxyResponseCache ModelCacheResolutionProxyResponseCache `json:"proxyResponseCache"`
+	Reason             string                                 `json:"reason"`
+	Requested          *ModelCachePolicy                      `json:"requested,omitempty"`
+	ReuseScope         ModelCacheResolutionReuseScope         `json:"reuseScope"`
+	Status             ModelCacheResolutionStatus             `json:"status"`
+}
+
+// ModelCacheResolutionMechanism defines model for ModelCacheResolution.Mechanism.
+type ModelCacheResolutionMechanism string
+
+// ModelCacheResolutionPhysicalIsolation defines model for ModelCacheResolution.PhysicalIsolation.
+type ModelCacheResolutionPhysicalIsolation string
+
+// ModelCacheResolutionProxyResponseCache defines model for ModelCacheResolution.ProxyResponseCache.
+type ModelCacheResolutionProxyResponseCache string
+
+// ModelCacheResolutionReuseScope defines model for ModelCacheResolution.ReuseScope.
+type ModelCacheResolutionReuseScope string
+
+// ModelCacheResolutionStatus defines model for ModelCacheResolution.Status.
+type ModelCacheResolutionStatus string
+
 // ModelCapability defines model for ModelCapability.
 type ModelCapability struct {
 	Available                   bool        `json:"available"`
@@ -13168,6 +13457,26 @@ type ModelCapabilityPage struct {
 	Items           []ModelCapability           `json:"items"`
 	NextPageToken   string                      `json:"nextPageToken"`
 	Total           int64                       `json:"total"`
+}
+
+// ModelContextPolicy defines model for ModelContextPolicy.
+type ModelContextPolicy struct {
+	AutoCompaction bool                       `json:"autoCompaction"`
+	Prune          bool                       `json:"prune"`
+	Revision       ModelContextPolicyRevision `json:"revision"`
+}
+
+// ModelContextPolicyRevision defines model for ModelContextPolicy.Revision.
+type ModelContextPolicyRevision int
+
+// ModelExecutionPolicy defines model for ModelExecutionPolicy.
+type ModelExecutionPolicy struct {
+	Cache               ModelCacheResolution `json:"cache"`
+	Context             ModelContextPolicy   `json:"context"`
+	ContextWindowTokens int                  `json:"contextWindowTokens"`
+	Eligible            bool                 `json:"eligible"`
+	MaximumOutputTokens int                  `json:"maximumOutputTokens"`
+	ModelId             string               `json:"modelId"`
 }
 
 // NextAction defines model for NextAction.
@@ -13821,19 +14130,19 @@ type PromptVariableCatalogInputTargetKind string
 
 // ProviderAccount defines model for ProviderAccount.
 type ProviderAccount struct {
-	Authorization               *ProviderAuthorization       `json:"authorization,omitempty"`
-	CreatedAt                   Timestamp                    `json:"createdAt"`
-	DefinitionKey               ProviderAccountDefinitionKey `json:"definitionKey"`
-	Deletion                    *ProviderAccountDeletion     `json:"deletion,omitempty"`
-	Enabled                     bool                         `json:"enabled"`
-	ExternalAccountMasked       string                       `json:"externalAccountMasked"`
-	FinancialEligible           *bool                        `json:"financialEligible,omitempty"`
-	FinancialSummary            *ProviderFinancialSummary    `json:"financialSummary,omitempty"`
-	MaximumConcurrentExecutions int32                        `json:"maximumConcurrentExecutions"`
-	Name                        string                       `json:"name"`
-	NextActions                 []NextAction                 `json:"nextActions"`
-	Ready                       bool                         `json:"ready"`
-	Ref                         OpaqueRef                    `json:"ref"`
+	Authorization               *ProviderAuthorization    `json:"authorization,omitempty"`
+	CreatedAt                   Timestamp                 `json:"createdAt"`
+	DefinitionKey               string                    `json:"definitionKey"`
+	Deletion                    *ProviderAccountDeletion  `json:"deletion,omitempty"`
+	Enabled                     bool                      `json:"enabled"`
+	ExternalAccountMasked       string                    `json:"externalAccountMasked"`
+	FinancialEligible           *bool                     `json:"financialEligible,omitempty"`
+	FinancialSummary            *ProviderFinancialSummary `json:"financialSummary,omitempty"`
+	MaximumConcurrentExecutions int32                     `json:"maximumConcurrentExecutions"`
+	Name                        string                    `json:"name"`
+	NextActions                 []NextAction              `json:"nextActions"`
+	Ready                       bool                      `json:"ready"`
+	Ref                         OpaqueRef                 `json:"ref"`
 
 	// SafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
 	SafeStatusReason *ProviderAccountSafeStatusReason `json:"safeStatusReason,omitempty"`
@@ -13843,9 +14152,6 @@ type ProviderAccount struct {
 	Verification     *ProviderAccountVerification     `json:"verification,omitempty"`
 	Version          int64                            `json:"version"`
 }
-
-// ProviderAccountDefinitionKey defines model for ProviderAccount.DefinitionKey.
-type ProviderAccountDefinitionKey string
 
 // ProviderAccountSafeStatusReason Безопасная причина, назначенная владельцем account; не заменяет readiness конкретной модели.
 type ProviderAccountSafeStatusReason string
@@ -13905,12 +14211,9 @@ type ProviderAccountConcurrencyInput struct {
 
 // ProviderAccountCreateInput defines model for ProviderAccountCreateInput.
 type ProviderAccountCreateInput struct {
-	DefinitionKey ProviderAccountCreateInputDefinitionKey `json:"definitionKey"`
-	Name          string                                  `json:"name"`
+	DefinitionKey string `json:"definitionKey"`
+	Name          string `json:"name"`
 }
-
-// ProviderAccountCreateInputDefinitionKey defines model for ProviderAccountCreateInput.DefinitionKey.
-type ProviderAccountCreateInputDefinitionKey string
 
 // ProviderAccountDeletion defines model for ProviderAccountDeletion.
 type ProviderAccountDeletion struct {
@@ -14069,19 +14372,26 @@ type ProviderDefinition struct {
 	Available            bool                                     `json:"available"`
 	DefaultModelId       string                                   `json:"defaultModelId"`
 	Description          string                                   `json:"description"`
-	Key                  ProviderDefinitionKey                    `json:"key"`
+	EngineVersion        *ProviderDefinitionEngineVersion         `json:"engineVersion,omitempty"`
+	Key                  string                                   `json:"key"`
+	ManagedBy            *ProviderDefinitionManagedBy             `json:"managedBy,omitempty"`
 	ModelIds             []string                                 `json:"modelIds"`
 	Models               *[]ModelCapability                       `json:"models,omitempty"`
 	Name                 string                                   `json:"name"`
 	ReadinessBlockers    []string                                 `json:"readinessBlockers"`
 	Ready                bool                                     `json:"ready"`
+	RuntimePolicies      *[]ModelExecutionPolicy                  `json:"runtimePolicies,omitempty"`
+	SourceRevision       *string                                  `json:"sourceRevision,omitempty"`
 }
 
 // ProviderDefinitionAuthorizationMethods defines model for ProviderDefinition.AuthorizationMethods.
 type ProviderDefinitionAuthorizationMethods string
 
-// ProviderDefinitionKey defines model for ProviderDefinition.Key.
-type ProviderDefinitionKey string
+// ProviderDefinitionEngineVersion defines model for ProviderDefinition.EngineVersion.
+type ProviderDefinitionEngineVersion string
+
+// ProviderDefinitionManagedBy defines model for ProviderDefinition.ManagedBy.
+type ProviderDefinitionManagedBy string
 
 // ProviderDefinitionPage defines model for ProviderDefinitionPage.
 type ProviderDefinitionPage struct {
@@ -18680,17 +18990,17 @@ type ValidatePromptTemplateParams struct {
 // ListProviderAccountsParams defines parameters for ListProviderAccounts.
 type ListProviderAccountsParams struct {
 	// UsagePurpose CONFIGURE оценивает выбранные profile/provider/model; LAUNCH использует сохранённый owner snapshot. Purpose не назначает полномочия.
-	UsagePurpose               *ListProviderAccountsParamsUsagePurpose  `form:"usagePurpose,omitempty" json:"usagePurpose,omitempty"`
-	UsageAgentRef              *ProviderUsageAgentRef                   `form:"usageAgentRef,omitempty" json:"usageAgentRef,omitempty"`
-	UsageRuntimeProfileRef     *ProviderUsageRuntimeProfileRef          `form:"usageRuntimeProfileRef,omitempty" json:"usageRuntimeProfileRef,omitempty"`
-	UsageProviderDefinitionKey *ProviderUsageDefinitionKey              `form:"usageProviderDefinitionKey,omitempty" json:"usageProviderDefinitionKey,omitempty"`
-	UsageModel                 *ProviderUsageModel                      `form:"usageModel,omitempty" json:"usageModel,omitempty"`
-	UsageReasoningEffort       *ProviderUsageReasoningEffort            `form:"usageReasoningEffort,omitempty" json:"usageReasoningEffort,omitempty"`
-	State                      *ListProviderAccountsParamsState         `form:"state,omitempty" json:"state,omitempty"`
-	DefinitionKey              *ListProviderAccountsParamsDefinitionKey `form:"definitionKey,omitempty" json:"definitionKey,omitempty"`
-	Query                      *Query                                   `form:"query,omitempty" json:"query,omitempty"`
-	PageSize                   *PageSize                                `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken                  *PageToken                               `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	UsagePurpose               *ListProviderAccountsParamsUsagePurpose `form:"usagePurpose,omitempty" json:"usagePurpose,omitempty"`
+	UsageAgentRef              *ProviderUsageAgentRef                  `form:"usageAgentRef,omitempty" json:"usageAgentRef,omitempty"`
+	UsageRuntimeProfileRef     *ProviderUsageRuntimeProfileRef         `form:"usageRuntimeProfileRef,omitempty" json:"usageRuntimeProfileRef,omitempty"`
+	UsageProviderDefinitionKey *ProviderUsageDefinitionKey             `form:"usageProviderDefinitionKey,omitempty" json:"usageProviderDefinitionKey,omitempty"`
+	UsageModel                 *ProviderUsageModel                     `form:"usageModel,omitempty" json:"usageModel,omitempty"`
+	UsageReasoningEffort       *ProviderUsageReasoningEffort           `form:"usageReasoningEffort,omitempty" json:"usageReasoningEffort,omitempty"`
+	State                      *ListProviderAccountsParamsState        `form:"state,omitempty" json:"state,omitempty"`
+	DefinitionKey              *string                                 `form:"definitionKey,omitempty" json:"definitionKey,omitempty"`
+	Query                      *Query                                  `form:"query,omitempty" json:"query,omitempty"`
+	PageSize                   *PageSize                               `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken                  *PageToken                              `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
 // ListProviderAccountsParamsUsagePurpose defines parameters for ListProviderAccounts.
@@ -18698,9 +19008,6 @@ type ListProviderAccountsParamsUsagePurpose string
 
 // ListProviderAccountsParamsState defines parameters for ListProviderAccounts.
 type ListProviderAccountsParamsState string
-
-// ListProviderAccountsParamsDefinitionKey defines parameters for ListProviderAccounts.
-type ListProviderAccountsParamsDefinitionKey string
 
 // CreateProviderAccountParams defines parameters for CreateProviderAccount.
 type CreateProviderAccountParams struct {

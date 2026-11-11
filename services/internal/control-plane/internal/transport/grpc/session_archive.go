@@ -168,7 +168,7 @@ func castSessionArchiveTask(values map[string]any) *controlplanev1.SessionArchiv
 		OrganizationRef: mapString(values, "organizationRef"), ProjectRef: mapString(values, "projectRef"),
 		SessionRef: mapString(values, "sessionRef"), ProviderAccountRef: mapString(values, "providerAccountRef"),
 		RuntimeRevisionRef: mapString(values, "runtimeRevisionRef"), RuntimeRevisionVersion: mapInt64(values, "runtimeRevisionVersion"),
-		RuntimeRevisionDigest: mapString(values, "runtimeRevisionDigest"), CodexSessionId: mapString(values, "codexSessionID"),
+		RuntimeRevisionDigest: mapString(values, "runtimeRevisionDigest"), NativeSessionId: mapString(values, "nativeSessionID"),
 		ContentGeneration: mapInt64(values, "contentGeneration"), PvcName: mapString(values, "pvcName"),
 		InputDigest: mapString(values, "inputDigest"), SourceRelativePath: mapString(values, "sourceRelativePath"),
 		SourceSha256: mapString(values, "sourceSHA256"), SourceSizeBytes: mapInt64(values, "sourceSizeBytes"),

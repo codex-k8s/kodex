@@ -43,6 +43,7 @@ func (message RuntimeAgentMessage) Validate() error {
 // RuntimeActivity is a closed union of safe provider-broker observations.
 // RuntimeActivity — закрытое объединение безопасных наблюдений от provider broker.
 type RuntimeActivity struct {
+	Progress        string                        `json:"progress,omitempty"`
 	Message         *RuntimeAgentMessage          `json:"message,omitempty"`
 	ToolCall        *NativeToolCall               `json:"tool_call,omitempty"`
 	ProviderProcess *ProviderProcessObservation   `json:"provider_process,omitempty"`
@@ -53,13 +54,19 @@ type RuntimeActivity struct {
 // Validate требует ровно один вариант события и проверяет его собственный конверт.
 func (activity RuntimeActivity) Validate() error {
 	count := 0
-	for _, present := range []bool{activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil} {
+	for _, present := range []bool{activity.Progress != "", activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil} {
 		if present {
 			count++
 		}
 	}
 	if count != 1 {
 		return errors.New("runtime activity is invalid")
+	}
+	if activity.Progress != "" {
+		if !containsString([]string{"MODEL_REQUEST_RUNNING", "MODEL_CONTEXT_COMPACTING", "NATIVE_SESSION_RECOVERING"}, activity.Progress) {
+			return errors.New("runtime activity progress is invalid")
+		}
+		return nil
 	}
 	if activity.Financial != nil {
 		return activity.Financial.Validate()

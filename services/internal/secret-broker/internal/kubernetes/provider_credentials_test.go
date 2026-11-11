@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"strings"
 	"testing"
 
@@ -37,7 +38,7 @@ const (
 	// contains no real account or provider credential.
 	// providerCleanupContent задаёт синтетические JSON credential байты для хеширования и негативных тестов;
 	// реальных account или provider credentials нет.
-	providerCleanupContent = `{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-cleanup-value"}`
+	providerCleanupContent = `{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-test-gateway","API_KEY":"synthetic-cleanup-value"}`
 )
 
 // TestDiscardProviderCredentialRequiresExactDescriptorAndIsIdempotent rejects changed UID,
@@ -593,4 +594,49 @@ func changedCleanupDescriptor(
 ) ProviderCredentialDescriptor {
 	change(&value)
 	return value
+}
+
+// TestGeneratedGatewayCredentialRetainsNamespaceAfterLostCreateReply reconciles one persisted immutable secret before another create.
+// A regenerated random namespace cannot rotate the stored namespace; a changed model credential remains a conflict.
+// TestGeneratedGatewayCredentialRetainsNamespaceAfterLostCreateReply сверяет сохранённый immutable secret перед повторным create.
+// Новая случайная namespace не заменяет сохранённую; другой model credential остаётся конфликтом.
+func TestGeneratedGatewayCredentialRetainsNamespaceAfterLostCreateReply(t *testing.T) {
+	store, client := newAuthorizationCleanupStore(t)
+	first, err := runtimecontract.EncodeGatewayProviderAuthentication("opencode-synthetic", []byte("synthetic-model-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(first)
+	second, err := runtimecontract.EncodeGatewayProviderAuthentication("opencode-synthetic", []byte("synthetic-model-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(second)
+	creates := 0
+	client.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		creates++
+		wanted := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
+		wanted.UID = types.UID("61000000-0000-4000-8000-000000000123")
+		wanted.ResourceVersion = "123"
+		if err := client.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), wanted, wanted.Namespace); err != nil {
+			return true, nil, err
+		}
+		return true, nil, errors.New("synthetic lost create response")
+	})
+	if _, err := store.CreateProviderCredential(t.Context(), "pauth_native123", "pacc_native123", first); err == nil {
+		t.Fatal("lost response was reported as success")
+	}
+	got, err := store.CreateProviderCredential(t.Context(), "pauth_native123", "pacc_native123", second)
+	digest := sha256.Sum256(first)
+	if err != nil || creates != 1 || got.ContentSHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatal("retry recreated or rotated generated namespace", err)
+	}
+	changed, err := runtimecontract.EncodeGatewayProviderAuthentication("opencode-synthetic", []byte("different-model-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(changed)
+	if _, err := store.CreateProviderCredential(t.Context(), "pauth_native123", "pacc_native123", changed); !errors.Is(err, ErrProviderCredentialConflict) {
+		t.Fatal("changed credential reused old immutable material")
+	}
 }

@@ -126,11 +126,11 @@ func (store *providerCredentialStoreStub) CleanupProviderCredential(
 	return kubernetesstore.ProviderCredentialCleanupResult{TerminalReceipt: store.cleanupReceipt}, store.cleanupErr
 }
 
-// providerAppServerStub counts unexpected device-session starts and supplies fail-closed catalog/device
+// providerCredentialBackendStub counts unexpected device-session starts and supplies fail-closed catalog/device
 // defaults for tests that should not invoke a real provider.
-// providerAppServerStub считает неожиданные device-session starts и задаёт закрытые catalog/device
+// providerCredentialBackendStub считает неожиданные device-session starts и задаёт закрытые catalog/device
 // defaults для тестов без обращения к реальному provider.
-type providerAppServerStub struct{ starts int }
+type providerCredentialBackendStub struct{ starts int }
 
 // ReadProviderCredentialExact rejects an unconfigured credential read; catalog and renewal fixtures
 // override it only with synthetic material.
@@ -144,19 +144,19 @@ func (store *providerCredentialStoreStub) ReadProviderCredentialExact(context.Co
 // HTTP endpoints.
 // ObserveModelCatalog отклоняет неожиданный доступ к каталогу без executable и обращений к HTTP
 // endpoints.
-func (server *providerAppServerStub) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
+func (server *providerCredentialBackendStub) ObserveModelCatalog(context.Context, []byte, string) (ModelCatalog, error) {
 	return ModelCatalog{}, errors.New("unexpected model catalog observation")
 }
 
 // Check reports fixture readiness without version probes or process creation.
 // Check сообщает fixture readiness без version probes и создания процесса.
-func (server *providerAppServerStub) Check(context.Context) error { return nil }
+func (server *providerCredentialBackendStub) Check(context.Context) error { return nil }
 
 // StartDeviceAuthorization increments the start counter and returns a fixed error, proving reuse/expiry
 // paths do not launch an unnecessary authorization session.
 // StartDeviceAuthorization увеличивает счётчик starts и возвращает фиксированную ошибку, позволяя
 // проверить отсутствие лишней authorization сессии на reuse/expiry путях.
-func (server *providerAppServerStub) StartDeviceAuthorization(
+func (server *providerCredentialBackendStub) StartDeviceAuthorization(
 	context.Context,
 	string,
 	string,
@@ -174,8 +174,8 @@ func (server *providerAppServerStub) StartDeviceAuthorization(
 func TestStartDeviceAuthorizationFailsClosedForExpiredPendingAttemptAfterRestart(t *testing.T) {
 	t.Parallel()
 	store := &providerCredentialStoreStub{attempt: pendingProviderAttempt(time.Now().UTC().Add(-time.Minute))}
-	appServer := &providerAppServerStub{}
-	service, err := New(context.Background(), store, appServer, DefaultDeviceAuthorizationTTL())
+	credentialBackend := &providerCredentialBackendStub{}
+	service, err := New(context.Background(), store, credentialBackend, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,8 +183,8 @@ func TestStartDeviceAuthorizationFailsClosedForExpiredPendingAttemptAfterRestart
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("expired pending start error = %v", err)
 	}
-	if appServer.starts != 0 || len(store.completed) != 1 {
-		t.Fatalf("starts/completions = %d/%d", appServer.starts, len(store.completed))
+	if credentialBackend.starts != 0 || len(store.completed) != 1 {
+		t.Fatalf("starts/completions = %d/%d", credentialBackend.starts, len(store.completed))
 	}
 	completed := store.completed[0]
 	if completed.State != "EXPIRED" || completed.SafeFailureCode != "DEVICE_AUTHORIZATION_EXPIRED" ||
@@ -206,7 +206,7 @@ func TestCleanupProviderCredentialForwardsExactFencedTarget(t *testing.T) {
 		ContentSHA256:         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	}
 	store := &providerCredentialStoreStub{cleanupReceipt: "provider-credential-cleanup:sha256:receipt"}
-	service, err := New(context.Background(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	service, err := New(context.Background(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestCleanupProviderCredentialForwardsExactFencedTarget(t *testing.T) {
 func TestCleanupProviderCredentialMapsStoreValidationError(t *testing.T) {
 	t.Parallel()
 	store := &providerCredentialStoreStub{cleanupErr: kubernetesstore.ErrProviderCredentialCleanupInvalid}
-	service, err := New(context.Background(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	service, err := New(context.Background(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,7 +247,7 @@ func TestCleanupProviderCredentialMapsStoreValidationError(t *testing.T) {
 func TestObserveDeviceAuthorizationExpiresDurablePendingAttemptAfterRestart(t *testing.T) {
 	t.Parallel()
 	store := &providerCredentialStoreStub{attempt: pendingProviderAttempt(time.Now().UTC().Add(-time.Minute))}
-	service, err := New(context.Background(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	service, err := New(context.Background(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,8 +270,8 @@ func TestObserveDeviceAuthorizationExpiresDurablePendingAttemptAfterRestart(t *t
 func TestStartDeviceAuthorizationReusesUnexpiredCrossReplicaAttemptWithoutDuplicateWorker(t *testing.T) {
 	t.Parallel()
 	store := &providerCredentialStoreStub{attempt: pendingProviderAttempt(time.Now().UTC().Add(time.Minute))}
-	appServer := &providerAppServerStub{}
-	service, err := New(context.Background(), store, appServer, DefaultDeviceAuthorizationTTL())
+	credentialBackend := &providerCredentialBackendStub{}
+	service, err := New(context.Background(), store, credentialBackend, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,8 +279,8 @@ func TestStartDeviceAuthorizationReusesUnexpiredCrossReplicaAttemptWithoutDuplic
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.MaterializerAttemptRef != store.attempt.MaterializerAttemptRef || appServer.starts != 0 || len(store.completed) != 0 {
-		t.Fatalf("unexpected cross-replica reuse: %#v starts=%d completions=%d", result, appServer.starts, len(store.completed))
+	if result.MaterializerAttemptRef != store.attempt.MaterializerAttemptRef || credentialBackend.starts != 0 || len(store.completed) != 0 {
+		t.Fatalf("unexpected cross-replica reuse: %#v starts=%d completions=%d", result, credentialBackend.starts, len(store.completed))
 	}
 }
 

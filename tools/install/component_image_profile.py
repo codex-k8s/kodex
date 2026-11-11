@@ -67,8 +67,8 @@ def validate(value, lock, lock_sha256):
     require(set(value) == fields, 'EXACT_COMPONENT_IMAGE_FIELDS_REQUIRED')
     require(value['schema'] == SCHEMA and value['component'] in COMPONENTS, 'SUPPORTED_STATELESS_COMPONENT_REQUIRED')
     if value['component'] == 'registry-pull-authorizer':
-        require(value['runtime_engine'] in ('codex', 'opencode') and
-                value['runtime_engine'] == lock.get('role_base_runtime_engine', 'codex'), 'EXACT_COMPONENT_RUNTIME_REQUIRED')
+        require(value['runtime_engine'] == 'opencode' and
+                value['runtime_engine'] == lock.get('role_base_runtime_engine', 'opencode'), 'EXACT_COMPONENT_RUNTIME_REQUIRED')
     if value['component'] in ('control-plane', 'secret-broker'):
         require(isinstance(value['schema_heads'], dict) and bool(value['schema_heads']) and
                 value['schema_heads'] == lock.get('schema_heads') and
@@ -130,7 +130,7 @@ def load_predecessor(configuration, path, digest, base_release_lock):
 
 def select_runtime(container, engine):
     """Выбор процесса не перезаписывает конфликтующий env или valueFrom."""
-    require(engine in ('codex', 'opencode'), 'EXACT_COMPONENT_RUNTIME_REQUIRED')
+    require(engine == 'opencode', 'EXACT_COMPONENT_RUNTIME_REQUIRED')
     wanted = {'name': RUNTIME_ENV, 'value': engine}
     env = container.setdefault('env', [])
     existing = [item for item in env if item.get('name') == RUNTIME_ENV]

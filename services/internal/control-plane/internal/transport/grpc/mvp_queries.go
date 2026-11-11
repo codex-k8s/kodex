@@ -109,6 +109,12 @@ func castProviderDefinition(value entity.ProviderDefinition) *controlplanev1.Pro
 		DefaultModelId: value.DefaultModelID, Available: value.Available, Ready: value.Ready,
 		ReadinessBlockers: value.ReadinessBlockers,
 	}
+	if profile := value.ModelProvider; profile != nil {
+		result.ManagedBy = profile.ManagedBy
+		result.SourceRevision = profile.SourceRevision
+		result.EngineVersion = profile.EngineVersion
+		result.RuntimePolicies = castModelExecutionPolicies(*profile)
+	}
 	for _, method := range value.AuthorizationMethods {
 		result.AuthorizationMethods = append(result.AuthorizationMethods, providerAuthorizationMethod(method))
 	}

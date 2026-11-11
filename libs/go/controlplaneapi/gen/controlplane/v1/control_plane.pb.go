@@ -35361,28 +35361,25 @@ type RuntimeRevisionSnapshot struct {
 	RoleRuntimeContractSha256   string                   `protobuf:"bytes,27,opt,name=role_runtime_contract_sha256,json=roleRuntimeContractSha256,proto3" json:"role_runtime_contract_sha256,omitempty"`
 	// Внутренняя неизменяемая привязка credential revision. Она не входит в
 	// browser/OpenAPI contracts и не содержит secret value.
-	ProviderCredential        *ProviderCredentialBinding `protobuf:"bytes,28,opt,name=provider_credential,json=providerCredential,proto3" json:"provider_credential,omitempty"`
-	RuntimeConfigRef          string                     `protobuf:"bytes,29,opt,name=runtime_config_ref,json=runtimeConfigRef,proto3" json:"runtime_config_ref,omitempty"`
-	RuntimeConfigVersion      int64                      `protobuf:"varint,30,opt,name=runtime_config_version,json=runtimeConfigVersion,proto3" json:"runtime_config_version,omitempty"`
-	RuntimeConfigDigest       string                     `protobuf:"bytes,31,opt,name=runtime_config_digest,json=runtimeConfigDigest,proto3" json:"runtime_config_digest,omitempty"`
-	ProviderPolicyRef         string                     `protobuf:"bytes,32,opt,name=provider_policy_ref,json=providerPolicyRef,proto3" json:"provider_policy_ref,omitempty"`
-	ProviderPolicyVersion     int64                      `protobuf:"varint,33,opt,name=provider_policy_version,json=providerPolicyVersion,proto3" json:"provider_policy_version,omitempty"`
-	ProviderPolicyDigest      string                     `protobuf:"bytes,34,opt,name=provider_policy_digest,json=providerPolicyDigest,proto3" json:"provider_policy_digest,omitempty"`
-	ConfigOverlayRef          string                     `protobuf:"bytes,35,opt,name=config_overlay_ref,json=configOverlayRef,proto3" json:"config_overlay_ref,omitempty"`
-	ConfigOverlayVersion      int64                      `protobuf:"varint,36,opt,name=config_overlay_version,json=configOverlayVersion,proto3" json:"config_overlay_version,omitempty"`
-	ConfigOverlayDigest       string                     `protobuf:"bytes,37,opt,name=config_overlay_digest,json=configOverlayDigest,proto3" json:"config_overlay_digest,omitempty"`
-	ConfigOverlay             string                     `protobuf:"bytes,38,opt,name=config_overlay,json=configOverlay,proto3" json:"config_overlay,omitempty"`
-	RuntimeEnvironmentRef     string                     `protobuf:"bytes,39,opt,name=runtime_environment_ref,json=runtimeEnvironmentRef,proto3" json:"runtime_environment_ref,omitempty"`
-	RuntimeEnvironmentVersion int64                      `protobuf:"varint,40,opt,name=runtime_environment_version,json=runtimeEnvironmentVersion,proto3" json:"runtime_environment_version,omitempty"`
-	RuntimeEnvironmentDigest  string                     `protobuf:"bytes,41,opt,name=runtime_environment_digest,json=runtimeEnvironmentDigest,proto3" json:"runtime_environment_digest,omitempty"`
-	EnvironmentBindingRef     string                     `protobuf:"bytes,42,opt,name=environment_binding_ref,json=environmentBindingRef,proto3" json:"environment_binding_ref,omitempty"`
-	EnvironmentBindingVersion int64                      `protobuf:"varint,43,opt,name=environment_binding_version,json=environmentBindingVersion,proto3" json:"environment_binding_version,omitempty"`
-	EnvironmentBindingDigest  string                     `protobuf:"bytes,44,opt,name=environment_binding_digest,json=environmentBindingDigest,proto3" json:"environment_binding_digest,omitempty"`
-	EnvironmentValues         []*RuntimeEnvironmentValue `protobuf:"bytes,45,rep,name=environment_values,json=environmentValues,proto3" json:"environment_values,omitempty"`
-	SecretProjections         []*RuntimeSecretDescriptor `protobuf:"bytes,46,rep,name=secret_projections,json=secretProjections,proto3" json:"secret_projections,omitempty"`
-	// Provider thread ID назначен Codex app-server и сохранён control-plane из
-	// terminal handoff предыдущего turn.
-	CodexSessionId                    string                         `protobuf:"bytes,47,opt,name=codex_session_id,json=codexSessionId,proto3" json:"codex_session_id,omitempty"`
+	ProviderCredential                *ProviderCredentialBinding     `protobuf:"bytes,28,opt,name=provider_credential,json=providerCredential,proto3" json:"provider_credential,omitempty"`
+	RuntimeConfigRef                  string                         `protobuf:"bytes,29,opt,name=runtime_config_ref,json=runtimeConfigRef,proto3" json:"runtime_config_ref,omitempty"`
+	RuntimeConfigVersion              int64                          `protobuf:"varint,30,opt,name=runtime_config_version,json=runtimeConfigVersion,proto3" json:"runtime_config_version,omitempty"`
+	RuntimeConfigDigest               string                         `protobuf:"bytes,31,opt,name=runtime_config_digest,json=runtimeConfigDigest,proto3" json:"runtime_config_digest,omitempty"`
+	ProviderPolicyRef                 string                         `protobuf:"bytes,32,opt,name=provider_policy_ref,json=providerPolicyRef,proto3" json:"provider_policy_ref,omitempty"`
+	ProviderPolicyVersion             int64                          `protobuf:"varint,33,opt,name=provider_policy_version,json=providerPolicyVersion,proto3" json:"provider_policy_version,omitempty"`
+	ProviderPolicyDigest              string                         `protobuf:"bytes,34,opt,name=provider_policy_digest,json=providerPolicyDigest,proto3" json:"provider_policy_digest,omitempty"`
+	ConfigOverlayRef                  string                         `protobuf:"bytes,35,opt,name=config_overlay_ref,json=configOverlayRef,proto3" json:"config_overlay_ref,omitempty"`
+	ConfigOverlayVersion              int64                          `protobuf:"varint,36,opt,name=config_overlay_version,json=configOverlayVersion,proto3" json:"config_overlay_version,omitempty"`
+	ConfigOverlayDigest               string                         `protobuf:"bytes,37,opt,name=config_overlay_digest,json=configOverlayDigest,proto3" json:"config_overlay_digest,omitempty"`
+	ConfigOverlay                     string                         `protobuf:"bytes,38,opt,name=config_overlay,json=configOverlay,proto3" json:"config_overlay,omitempty"`
+	RuntimeEnvironmentRef             string                         `protobuf:"bytes,39,opt,name=runtime_environment_ref,json=runtimeEnvironmentRef,proto3" json:"runtime_environment_ref,omitempty"`
+	RuntimeEnvironmentVersion         int64                          `protobuf:"varint,40,opt,name=runtime_environment_version,json=runtimeEnvironmentVersion,proto3" json:"runtime_environment_version,omitempty"`
+	RuntimeEnvironmentDigest          string                         `protobuf:"bytes,41,opt,name=runtime_environment_digest,json=runtimeEnvironmentDigest,proto3" json:"runtime_environment_digest,omitempty"`
+	EnvironmentBindingRef             string                         `protobuf:"bytes,42,opt,name=environment_binding_ref,json=environmentBindingRef,proto3" json:"environment_binding_ref,omitempty"`
+	EnvironmentBindingVersion         int64                          `protobuf:"varint,43,opt,name=environment_binding_version,json=environmentBindingVersion,proto3" json:"environment_binding_version,omitempty"`
+	EnvironmentBindingDigest          string                         `protobuf:"bytes,44,opt,name=environment_binding_digest,json=environmentBindingDigest,proto3" json:"environment_binding_digest,omitempty"`
+	EnvironmentValues                 []*RuntimeEnvironmentValue     `protobuf:"bytes,45,rep,name=environment_values,json=environmentValues,proto3" json:"environment_values,omitempty"`
+	SecretProjections                 []*RuntimeSecretDescriptor     `protobuf:"bytes,46,rep,name=secret_projections,json=secretProjections,proto3" json:"secret_projections,omitempty"`
 	AssistantContext                  *AssistantContextDescriptor    `protobuf:"bytes,48,opt,name=assistant_context,json=assistantContext,proto3" json:"assistant_context,omitempty"`
 	AttachmentSetRef                  string                         `protobuf:"bytes,49,opt,name=attachment_set_ref,json=attachmentSetRef,proto3" json:"attachment_set_ref,omitempty"`
 	AttachmentSetManifestDigest       string                         `protobuf:"bytes,50,opt,name=attachment_set_manifest_digest,json=attachmentSetManifestDigest,proto3" json:"attachment_set_manifest_digest,omitempty"`
@@ -35419,6 +35416,10 @@ type RuntimeRevisionSnapshot struct {
 	ExecutionDeadline             *RuntimeExecutionDeadline `protobuf:"bytes,79,opt,name=execution_deadline,json=executionDeadline,proto3" json:"execution_deadline,omitempty"`
 	// Owner-selected private work generation; старый input сохраняет отсутствие поля.
 	WorkspaceStorage *RuntimeWorkspaceStorage `protobuf:"bytes,80,opt,name=workspace_storage,json=workspaceStorage,proto3" json:"workspace_storage,omitempty"`
+	// Подтверждённый native export выбирается control plane; это не полномочие resume.
+	NativeSession *NativeSessionCheckpoint `protobuf:"bytes,81,opt,name=native_session,json=nativeSession,proto3" json:"native_session,omitempty"`
+	// Root initiator назначается владельцем исполнения, не из prompt.
+	RootInitiatorRef string `protobuf:"bytes,82,opt,name=root_initiator_ref,json=rootInitiatorRef,proto3" json:"root_initiator_ref,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -35775,13 +35776,6 @@ func (x *RuntimeRevisionSnapshot) GetSecretProjections() []*RuntimeSecretDescrip
 	return nil
 }
 
-func (x *RuntimeRevisionSnapshot) GetCodexSessionId() string {
-	if x != nil {
-		return x.CodexSessionId
-	}
-	return ""
-}
-
 func (x *RuntimeRevisionSnapshot) GetAssistantContext() *AssistantContextDescriptor {
 	if x != nil {
 		return x.AssistantContext
@@ -36011,6 +36005,20 @@ func (x *RuntimeRevisionSnapshot) GetWorkspaceStorage() *RuntimeWorkspaceStorage
 		return x.WorkspaceStorage
 	}
 	return nil
+}
+
+func (x *RuntimeRevisionSnapshot) GetNativeSession() *NativeSessionCheckpoint {
+	if x != nil {
+		return x.NativeSession
+	}
+	return nil
+}
+
+func (x *RuntimeRevisionSnapshot) GetRootInitiatorRef() string {
+	if x != nil {
+		return x.RootInitiatorRef
+	}
+	return ""
 }
 
 type RuntimeWorkspaceScope struct {
@@ -40215,22 +40223,19 @@ func (x *CompletedArtifactInput) GetSha256() string {
 }
 
 type CompleteExecutionRequest struct {
-	state                    protoimpl.MessageState    `protogen:"open.v1"`
-	Mutation                 *MutationContext          `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
-	LeaseRef                 string                    `protobuf:"bytes,2,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
-	Fence                    string                    `protobuf:"bytes,3,opt,name=fence,proto3" json:"fence,omitempty"`
-	Generation               int64                     `protobuf:"varint,4,opt,name=generation,proto3" json:"generation,omitempty"`
-	Success                  bool                      `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
-	ResultSummary            string                    `protobuf:"bytes,6,opt,name=result_summary,json=resultSummary,proto3" json:"result_summary,omitempty"`
-	SafeErrorCode            string                    `protobuf:"bytes,7,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
-	Artifacts                []*CompletedArtifactInput `protobuf:"bytes,8,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	Usage                    *TokenUsage               `protobuf:"bytes,9,opt,name=usage,proto3" json:"usage,omitempty"`
-	CodexSessionId           string                    `protobuf:"bytes,10,opt,name=codex_session_id,json=codexSessionId,proto3" json:"codex_session_id,omitempty"`
-	CodexArchiveRelativePath string                    `protobuf:"bytes,11,opt,name=codex_archive_relative_path,json=codexArchiveRelativePath,proto3" json:"codex_archive_relative_path,omitempty"`
-	CodexArchiveSha256       string                    `protobuf:"bytes,12,opt,name=codex_archive_sha256,json=codexArchiveSha256,proto3" json:"codex_archive_sha256,omitempty"`
-	CodexArchiveSizeBytes    int64                     `protobuf:"varint,13,opt,name=codex_archive_size_bytes,json=codexArchiveSizeBytes,proto3" json:"codex_archive_size_bytes,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	state         protoimpl.MessageState    `protogen:"open.v1"`
+	Mutation      *MutationContext          `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	LeaseRef      string                    `protobuf:"bytes,2,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence         string                    `protobuf:"bytes,3,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation    int64                     `protobuf:"varint,4,opt,name=generation,proto3" json:"generation,omitempty"`
+	Success       bool                      `protobuf:"varint,5,opt,name=success,proto3" json:"success,omitempty"`
+	ResultSummary string                    `protobuf:"bytes,6,opt,name=result_summary,json=resultSummary,proto3" json:"result_summary,omitempty"`
+	SafeErrorCode string                    `protobuf:"bytes,7,opt,name=safe_error_code,json=safeErrorCode,proto3" json:"safe_error_code,omitempty"`
+	Artifacts     []*CompletedArtifactInput `protobuf:"bytes,8,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	Usage         *TokenUsage               `protobuf:"bytes,9,opt,name=usage,proto3" json:"usage,omitempty"`
+	NativeSession *NativeSessionCheckpoint  `protobuf:"bytes,14,opt,name=native_session,json=nativeSession,proto3" json:"native_session,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CompleteExecutionRequest) Reset() {
@@ -40326,32 +40331,11 @@ func (x *CompleteExecutionRequest) GetUsage() *TokenUsage {
 	return nil
 }
 
-func (x *CompleteExecutionRequest) GetCodexSessionId() string {
+func (x *CompleteExecutionRequest) GetNativeSession() *NativeSessionCheckpoint {
 	if x != nil {
-		return x.CodexSessionId
+		return x.NativeSession
 	}
-	return ""
-}
-
-func (x *CompleteExecutionRequest) GetCodexArchiveRelativePath() string {
-	if x != nil {
-		return x.CodexArchiveRelativePath
-	}
-	return ""
-}
-
-func (x *CompleteExecutionRequest) GetCodexArchiveSha256() string {
-	if x != nil {
-		return x.CodexArchiveSha256
-	}
-	return ""
-}
-
-func (x *CompleteExecutionRequest) GetCodexArchiveSizeBytes() int64 {
-	if x != nil {
-		return x.CodexArchiveSizeBytes
-	}
-	return 0
+	return nil
 }
 
 type CompleteExecutionResponse struct {
@@ -40778,7 +40762,6 @@ type SessionArchiveTask struct {
 	RuntimeRevisionRef     string                       `protobuf:"bytes,7,opt,name=runtime_revision_ref,json=runtimeRevisionRef,proto3" json:"runtime_revision_ref,omitempty"`
 	RuntimeRevisionVersion int64                        `protobuf:"varint,8,opt,name=runtime_revision_version,json=runtimeRevisionVersion,proto3" json:"runtime_revision_version,omitempty"`
 	RuntimeRevisionDigest  string                       `protobuf:"bytes,9,opt,name=runtime_revision_digest,json=runtimeRevisionDigest,proto3" json:"runtime_revision_digest,omitempty"`
-	CodexSessionId         string                       `protobuf:"bytes,10,opt,name=codex_session_id,json=codexSessionId,proto3" json:"codex_session_id,omitempty"`
 	ContentGeneration      int64                        `protobuf:"varint,11,opt,name=content_generation,json=contentGeneration,proto3" json:"content_generation,omitempty"`
 	PvcName                string                       `protobuf:"bytes,12,opt,name=pvc_name,json=pvcName,proto3" json:"pvc_name,omitempty"`
 	Archive                *SessionArchiveBinding       `protobuf:"bytes,13,opt,name=archive,proto3" json:"archive,omitempty"`
@@ -40791,6 +40774,7 @@ type SessionArchiveTask struct {
 	TargetObjectVersion    string                       `protobuf:"bytes,20,opt,name=target_object_version,json=targetObjectVersion,proto3" json:"target_object_version,omitempty"`
 	Attempt                int32                        `protobuf:"varint,21,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	Workspace              *SessionWorkspaceArchiveTask `protobuf:"bytes,22,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	NativeSessionId        string                       `protobuf:"bytes,23,opt,name=native_session_id,json=nativeSessionId,proto3" json:"native_session_id,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -40888,13 +40872,6 @@ func (x *SessionArchiveTask) GetRuntimeRevisionDigest() string {
 	return ""
 }
 
-func (x *SessionArchiveTask) GetCodexSessionId() string {
-	if x != nil {
-		return x.CodexSessionId
-	}
-	return ""
-}
-
 func (x *SessionArchiveTask) GetContentGeneration() int64 {
 	if x != nil {
 		return x.ContentGeneration
@@ -40977,6 +40954,13 @@ func (x *SessionArchiveTask) GetWorkspace() *SessionWorkspaceArchiveTask {
 		return x.Workspace
 	}
 	return nil
+}
+
+func (x *SessionArchiveTask) GetNativeSessionId() string {
+	if x != nil {
+		return x.NativeSessionId
+	}
+	return ""
 }
 
 type SessionWorkspaceArchiveTask struct {
@@ -60659,6 +60643,10 @@ type ProviderDefinition struct {
 	Ready                bool                          `protobuf:"varint,8,opt,name=ready,proto3" json:"ready,omitempty"`
 	ReadinessBlockers    []string                      `protobuf:"bytes,9,rep,name=readiness_blockers,json=readinessBlockers,proto3" json:"readiness_blockers,omitempty"`
 	Models               []*ModelCapability            `protobuf:"bytes,10,rep,name=models,proto3" json:"models,omitempty"`
+	RuntimePolicies      []*ModelExecutionPolicy       `protobuf:"bytes,11,rep,name=runtime_policies,json=runtimePolicies,proto3" json:"runtime_policies,omitempty"`
+	ManagedBy            string                        `protobuf:"bytes,12,opt,name=managed_by,json=managedBy,proto3" json:"managed_by,omitempty"`
+	SourceRevision       string                        `protobuf:"bytes,13,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	EngineVersion        string                        `protobuf:"bytes,14,opt,name=engine_version,json=engineVersion,proto3" json:"engine_version,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -60761,6 +60749,34 @@ func (x *ProviderDefinition) GetModels() []*ModelCapability {
 		return x.Models
 	}
 	return nil
+}
+
+func (x *ProviderDefinition) GetRuntimePolicies() []*ModelExecutionPolicy {
+	if x != nil {
+		return x.RuntimePolicies
+	}
+	return nil
+}
+
+func (x *ProviderDefinition) GetManagedBy() string {
+	if x != nil {
+		return x.ManagedBy
+	}
+	return ""
+}
+
+func (x *ProviderDefinition) GetSourceRevision() string {
+	if x != nil {
+		return x.SourceRevision
+	}
+	return ""
+}
+
+func (x *ProviderDefinition) GetEngineVersion() string {
+	if x != nil {
+		return x.EngineVersion
+	}
+	return ""
 }
 
 type ListProviderDefinitionsRequest struct {
@@ -86560,6 +86576,9 @@ type RuntimeModelProviderConfiguration struct {
 	AddressCidrs   []string                     `protobuf:"bytes,8,rep,name=address_cidrs,json=addressCidrs,proto3" json:"address_cidrs,omitempty"`
 	Models         []*RuntimeModelProviderModel `protobuf:"bytes,9,rep,name=models,proto3" json:"models,omitempty"`
 	ToolMode       string                       `protobuf:"bytes,10,opt,name=tool_mode,json=toolMode,proto3" json:"tool_mode,omitempty"`
+	Api            string                       `protobuf:"bytes,11,opt,name=api,proto3" json:"api,omitempty"`
+	RouteKind      string                       `protobuf:"bytes,12,opt,name=route_kind,json=routeKind,proto3" json:"route_kind,omitempty"`
+	RouteVersion   string                       `protobuf:"bytes,13,opt,name=route_version,json=routeVersion,proto3" json:"route_version,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -86664,11 +86683,34 @@ func (x *RuntimeModelProviderConfiguration) GetToolMode() string {
 	return ""
 }
 
+func (x *RuntimeModelProviderConfiguration) GetApi() string {
+	if x != nil {
+		return x.Api
+	}
+	return ""
+}
+
+func (x *RuntimeModelProviderConfiguration) GetRouteKind() string {
+	if x != nil {
+		return x.RouteKind
+	}
+	return ""
+}
+
+func (x *RuntimeModelProviderConfiguration) GetRouteVersion() string {
+	if x != nil {
+		return x.RouteVersion
+	}
+	return ""
+}
+
 type RuntimeModelProviderModel struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Id                  string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	ContextWindowTokens int64                  `protobuf:"varint,2,opt,name=context_window_tokens,json=contextWindowTokens,proto3" json:"context_window_tokens,omitempty"`
-	MaximumOutputTokens int64                  `protobuf:"varint,3,opt,name=maximum_output_tokens,json=maximumOutputTokens,proto3" json:"maximum_output_tokens,omitempty"`
+	state               protoimpl.MessageState     `protogen:"open.v1"`
+	Id                  string                     `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ContextWindowTokens int64                      `protobuf:"varint,2,opt,name=context_window_tokens,json=contextWindowTokens,proto3" json:"context_window_tokens,omitempty"`
+	MaximumOutputTokens int64                      `protobuf:"varint,3,opt,name=maximum_output_tokens,json=maximumOutputTokens,proto3" json:"maximum_output_tokens,omitempty"`
+	CachePolicy         *RuntimeModelCachePolicy   `protobuf:"bytes,4,opt,name=cache_policy,json=cachePolicy,proto3" json:"cache_policy,omitempty"`
+	ContextPolicy       *RuntimeModelContextPolicy `protobuf:"bytes,5,opt,name=context_policy,json=contextPolicy,proto3" json:"context_policy,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -86724,6 +86766,196 @@ func (x *RuntimeModelProviderModel) GetMaximumOutputTokens() int64 {
 	return 0
 }
 
+func (x *RuntimeModelProviderModel) GetCachePolicy() *RuntimeModelCachePolicy {
+	if x != nil {
+		return x.CachePolicy
+	}
+	return nil
+}
+
+func (x *RuntimeModelProviderModel) GetContextPolicy() *RuntimeModelContextPolicy {
+	if x != nil {
+		return x.ContextPolicy
+	}
+	return nil
+}
+
+type RuntimeModelCachePolicy struct {
+	state         protoimpl.MessageState          `protogen:"open.v1"`
+	Revision      int32                           `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	Optimization  string                          `protobuf:"bytes,2,opt,name=optimization,proto3" json:"optimization,omitempty"`
+	ReuseScope    string                          `protobuf:"bytes,3,opt,name=reuse_scope,json=reuseScope,proto3" json:"reuse_scope,omitempty"`
+	NoReuse       bool                            `protobuf:"varint,4,opt,name=no_reuse,json=noReuse,proto3" json:"no_reuse,omitempty"`
+	NoStore       bool                            `protobuf:"varint,5,opt,name=no_store,json=noStore,proto3" json:"no_store,omitempty"`
+	Required      bool                            `protobuf:"varint,6,opt,name=required,proto3" json:"required,omitempty"`
+	Qualification *RuntimeModelCacheQualification `protobuf:"bytes,7,opt,name=qualification,proto3" json:"qualification,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RuntimeModelCachePolicy) Reset() {
+	*x = RuntimeModelCachePolicy{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1066]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuntimeModelCachePolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuntimeModelCachePolicy) ProtoMessage() {}
+
+func (x *RuntimeModelCachePolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1066]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuntimeModelCachePolicy.ProtoReflect.Descriptor instead.
+func (*RuntimeModelCachePolicy) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1066}
+}
+
+func (x *RuntimeModelCachePolicy) GetRevision() int32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *RuntimeModelCachePolicy) GetOptimization() string {
+	if x != nil {
+		return x.Optimization
+	}
+	return ""
+}
+
+func (x *RuntimeModelCachePolicy) GetReuseScope() string {
+	if x != nil {
+		return x.ReuseScope
+	}
+	return ""
+}
+
+func (x *RuntimeModelCachePolicy) GetNoReuse() bool {
+	if x != nil {
+		return x.NoReuse
+	}
+	return false
+}
+
+func (x *RuntimeModelCachePolicy) GetNoStore() bool {
+	if x != nil {
+		return x.NoStore
+	}
+	return false
+}
+
+func (x *RuntimeModelCachePolicy) GetRequired() bool {
+	if x != nil {
+		return x.Required
+	}
+	return false
+}
+
+func (x *RuntimeModelCachePolicy) GetQualification() *RuntimeModelCacheQualification {
+	if x != nil {
+		return x.Qualification
+	}
+	return nil
+}
+
+type RuntimeModelCacheQualification struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Mechanism      string                 `protobuf:"bytes,1,opt,name=mechanism,proto3" json:"mechanism,omitempty"`
+	Status         string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Source         string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	BackendVersion string                 `protobuf:"bytes,4,opt,name=backend_version,json=backendVersion,proto3" json:"backend_version,omitempty"`
+	EvidenceSha256 string                 `protobuf:"bytes,5,opt,name=evidence_sha256,json=evidenceSha256,proto3" json:"evidence_sha256,omitempty"`
+	RouteSha256    string                 `protobuf:"bytes,6,opt,name=route_sha256,json=routeSha256,proto3" json:"route_sha256,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RuntimeModelCacheQualification) Reset() {
+	*x = RuntimeModelCacheQualification{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1067]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuntimeModelCacheQualification) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuntimeModelCacheQualification) ProtoMessage() {}
+
+func (x *RuntimeModelCacheQualification) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1067]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuntimeModelCacheQualification.ProtoReflect.Descriptor instead.
+func (*RuntimeModelCacheQualification) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1067}
+}
+
+func (x *RuntimeModelCacheQualification) GetMechanism() string {
+	if x != nil {
+		return x.Mechanism
+	}
+	return ""
+}
+
+func (x *RuntimeModelCacheQualification) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *RuntimeModelCacheQualification) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *RuntimeModelCacheQualification) GetBackendVersion() string {
+	if x != nil {
+		return x.BackendVersion
+	}
+	return ""
+}
+
+func (x *RuntimeModelCacheQualification) GetEvidenceSha256() string {
+	if x != nil {
+		return x.EvidenceSha256
+	}
+	return ""
+}
+
+func (x *RuntimeModelCacheQualification) GetRouteSha256() string {
+	if x != nil {
+		return x.RouteSha256
+	}
+	return ""
+}
+
 type BeginPersonalIntegrationInvocationRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	InvocationRef    string                 `protobuf:"bytes,1,opt,name=invocation_ref,json=invocationRef,proto3" json:"invocation_ref,omitempty"`
@@ -86737,7 +86969,7 @@ type BeginPersonalIntegrationInvocationRequest struct {
 
 func (x *BeginPersonalIntegrationInvocationRequest) Reset() {
 	*x = BeginPersonalIntegrationInvocationRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1066]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1068]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86749,7 +86981,7 @@ func (x *BeginPersonalIntegrationInvocationRequest) String() string {
 func (*BeginPersonalIntegrationInvocationRequest) ProtoMessage() {}
 
 func (x *BeginPersonalIntegrationInvocationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1066]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1068]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -86762,7 +86994,7 @@ func (x *BeginPersonalIntegrationInvocationRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use BeginPersonalIntegrationInvocationRequest.ProtoReflect.Descriptor instead.
 func (*BeginPersonalIntegrationInvocationRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1066}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1068}
 }
 
 func (x *BeginPersonalIntegrationInvocationRequest) GetInvocationRef() string {
@@ -86812,7 +87044,7 @@ type BeginPersonalIntegrationInvocationResponse struct {
 
 func (x *BeginPersonalIntegrationInvocationResponse) Reset() {
 	*x = BeginPersonalIntegrationInvocationResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1067]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1069]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86824,7 +87056,7 @@ func (x *BeginPersonalIntegrationInvocationResponse) String() string {
 func (*BeginPersonalIntegrationInvocationResponse) ProtoMessage() {}
 
 func (x *BeginPersonalIntegrationInvocationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1067]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1069]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -86837,7 +87069,7 @@ func (x *BeginPersonalIntegrationInvocationResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use BeginPersonalIntegrationInvocationResponse.ProtoReflect.Descriptor instead.
 func (*BeginPersonalIntegrationInvocationResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1067}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1069}
 }
 
 func (x *BeginPersonalIntegrationInvocationResponse) GetAdmitted() bool {
@@ -86887,7 +87119,7 @@ type PersonalIntegrationCredentialView struct {
 
 func (x *PersonalIntegrationCredentialView) Reset() {
 	*x = PersonalIntegrationCredentialView{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1068]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1070]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86899,7 +87131,7 @@ func (x *PersonalIntegrationCredentialView) String() string {
 func (*PersonalIntegrationCredentialView) ProtoMessage() {}
 
 func (x *PersonalIntegrationCredentialView) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1068]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1070]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -86912,7 +87144,7 @@ func (x *PersonalIntegrationCredentialView) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use PersonalIntegrationCredentialView.ProtoReflect.Descriptor instead.
 func (*PersonalIntegrationCredentialView) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1068}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1070}
 }
 
 func (x *PersonalIntegrationCredentialView) GetConnectionRef() string {
@@ -86994,7 +87226,7 @@ type GetPersonalIntegrationCredentialRequest struct {
 
 func (x *GetPersonalIntegrationCredentialRequest) Reset() {
 	*x = GetPersonalIntegrationCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1069]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1071]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87006,7 +87238,7 @@ func (x *GetPersonalIntegrationCredentialRequest) String() string {
 func (*GetPersonalIntegrationCredentialRequest) ProtoMessage() {}
 
 func (x *GetPersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1069]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1071]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87019,7 +87251,7 @@ func (x *GetPersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use GetPersonalIntegrationCredentialRequest.ProtoReflect.Descriptor instead.
 func (*GetPersonalIntegrationCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1069}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1071}
 }
 
 func (x *GetPersonalIntegrationCredentialRequest) GetConnectionRef() string {
@@ -87038,7 +87270,7 @@ type GetPersonalIntegrationCredentialResponse struct {
 
 func (x *GetPersonalIntegrationCredentialResponse) Reset() {
 	*x = GetPersonalIntegrationCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1070]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1072]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87050,7 +87282,7 @@ func (x *GetPersonalIntegrationCredentialResponse) String() string {
 func (*GetPersonalIntegrationCredentialResponse) ProtoMessage() {}
 
 func (x *GetPersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1070]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1072]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87063,7 +87295,7 @@ func (x *GetPersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use GetPersonalIntegrationCredentialResponse.ProtoReflect.Descriptor instead.
 func (*GetPersonalIntegrationCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1070}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1072}
 }
 
 func (x *GetPersonalIntegrationCredentialResponse) GetCredential() *PersonalIntegrationCredentialView {
@@ -87084,7 +87316,7 @@ type CreatePersonalIntegrationCredentialRequest struct {
 
 func (x *CreatePersonalIntegrationCredentialRequest) Reset() {
 	*x = CreatePersonalIntegrationCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1071]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1073]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87096,7 +87328,7 @@ func (x *CreatePersonalIntegrationCredentialRequest) String() string {
 func (*CreatePersonalIntegrationCredentialRequest) ProtoMessage() {}
 
 func (x *CreatePersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1071]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1073]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87109,7 +87341,7 @@ func (x *CreatePersonalIntegrationCredentialRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use CreatePersonalIntegrationCredentialRequest.ProtoReflect.Descriptor instead.
 func (*CreatePersonalIntegrationCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1071}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1073}
 }
 
 func (x *CreatePersonalIntegrationCredentialRequest) GetMutation() *MutationContext {
@@ -87142,7 +87374,7 @@ type CreatePersonalIntegrationCredentialResponse struct {
 
 func (x *CreatePersonalIntegrationCredentialResponse) Reset() {
 	*x = CreatePersonalIntegrationCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1072]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1074]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87154,7 +87386,7 @@ func (x *CreatePersonalIntegrationCredentialResponse) String() string {
 func (*CreatePersonalIntegrationCredentialResponse) ProtoMessage() {}
 
 func (x *CreatePersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1072]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1074]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87167,7 +87399,7 @@ func (x *CreatePersonalIntegrationCredentialResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use CreatePersonalIntegrationCredentialResponse.ProtoReflect.Descriptor instead.
 func (*CreatePersonalIntegrationCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1072}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1074}
 }
 
 func (x *CreatePersonalIntegrationCredentialResponse) GetCredential() *PersonalIntegrationCredentialView {
@@ -87189,7 +87421,7 @@ type ConfigurePersonalIntegrationCredentialRequest struct {
 
 func (x *ConfigurePersonalIntegrationCredentialRequest) Reset() {
 	*x = ConfigurePersonalIntegrationCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1073]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1075]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87201,7 +87433,7 @@ func (x *ConfigurePersonalIntegrationCredentialRequest) String() string {
 func (*ConfigurePersonalIntegrationCredentialRequest) ProtoMessage() {}
 
 func (x *ConfigurePersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1073]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1075]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87214,7 +87446,7 @@ func (x *ConfigurePersonalIntegrationCredentialRequest) ProtoReflect() protorefl
 
 // Deprecated: Use ConfigurePersonalIntegrationCredentialRequest.ProtoReflect.Descriptor instead.
 func (*ConfigurePersonalIntegrationCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1073}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1075}
 }
 
 func (x *ConfigurePersonalIntegrationCredentialRequest) GetMutation() *MutationContext {
@@ -87254,7 +87486,7 @@ type ConfigurePersonalIntegrationCredentialResponse struct {
 
 func (x *ConfigurePersonalIntegrationCredentialResponse) Reset() {
 	*x = ConfigurePersonalIntegrationCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1074]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1076]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87266,7 +87498,7 @@ func (x *ConfigurePersonalIntegrationCredentialResponse) String() string {
 func (*ConfigurePersonalIntegrationCredentialResponse) ProtoMessage() {}
 
 func (x *ConfigurePersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1074]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1076]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87279,7 +87511,7 @@ func (x *ConfigurePersonalIntegrationCredentialResponse) ProtoReflect() protoref
 
 // Deprecated: Use ConfigurePersonalIntegrationCredentialResponse.ProtoReflect.Descriptor instead.
 func (*ConfigurePersonalIntegrationCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1074}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1076}
 }
 
 func (x *ConfigurePersonalIntegrationCredentialResponse) GetCredential() *PersonalIntegrationCredentialView {
@@ -87299,7 +87531,7 @@ type RevokePersonalIntegrationCredentialRequest struct {
 
 func (x *RevokePersonalIntegrationCredentialRequest) Reset() {
 	*x = RevokePersonalIntegrationCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1075]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1077]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87311,7 +87543,7 @@ func (x *RevokePersonalIntegrationCredentialRequest) String() string {
 func (*RevokePersonalIntegrationCredentialRequest) ProtoMessage() {}
 
 func (x *RevokePersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1075]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1077]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87324,7 +87556,7 @@ func (x *RevokePersonalIntegrationCredentialRequest) ProtoReflect() protoreflect
 
 // Deprecated: Use RevokePersonalIntegrationCredentialRequest.ProtoReflect.Descriptor instead.
 func (*RevokePersonalIntegrationCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1075}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1077}
 }
 
 func (x *RevokePersonalIntegrationCredentialRequest) GetMutation() *MutationContext {
@@ -87350,7 +87582,7 @@ type RevokePersonalIntegrationCredentialResponse struct {
 
 func (x *RevokePersonalIntegrationCredentialResponse) Reset() {
 	*x = RevokePersonalIntegrationCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1076]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1078]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87362,7 +87594,7 @@ func (x *RevokePersonalIntegrationCredentialResponse) String() string {
 func (*RevokePersonalIntegrationCredentialResponse) ProtoMessage() {}
 
 func (x *RevokePersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1076]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1078]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87375,7 +87607,7 @@ func (x *RevokePersonalIntegrationCredentialResponse) ProtoReflect() protoreflec
 
 // Deprecated: Use RevokePersonalIntegrationCredentialResponse.ProtoReflect.Descriptor instead.
 func (*RevokePersonalIntegrationCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1076}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1078}
 }
 
 func (x *RevokePersonalIntegrationCredentialResponse) GetCredential() *PersonalIntegrationCredentialView {
@@ -87396,7 +87628,7 @@ type SetIntegrationCredentialPolicyRequest struct {
 
 func (x *SetIntegrationCredentialPolicyRequest) Reset() {
 	*x = SetIntegrationCredentialPolicyRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1077]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1079]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87408,7 +87640,7 @@ func (x *SetIntegrationCredentialPolicyRequest) String() string {
 func (*SetIntegrationCredentialPolicyRequest) ProtoMessage() {}
 
 func (x *SetIntegrationCredentialPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1077]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1079]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87421,7 +87653,7 @@ func (x *SetIntegrationCredentialPolicyRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use SetIntegrationCredentialPolicyRequest.ProtoReflect.Descriptor instead.
 func (*SetIntegrationCredentialPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1077}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1079}
 }
 
 func (x *SetIntegrationCredentialPolicyRequest) GetMutation() *MutationContext {
@@ -87454,7 +87686,7 @@ type SetIntegrationCredentialPolicyResponse struct {
 
 func (x *SetIntegrationCredentialPolicyResponse) Reset() {
 	*x = SetIntegrationCredentialPolicyResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1078]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1080]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87466,7 +87698,7 @@ func (x *SetIntegrationCredentialPolicyResponse) String() string {
 func (*SetIntegrationCredentialPolicyResponse) ProtoMessage() {}
 
 func (x *SetIntegrationCredentialPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1078]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1080]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87479,7 +87711,7 @@ func (x *SetIntegrationCredentialPolicyResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use SetIntegrationCredentialPolicyResponse.ProtoReflect.Descriptor instead.
 func (*SetIntegrationCredentialPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1078}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1080}
 }
 
 func (x *SetIntegrationCredentialPolicyResponse) GetConnection() *IntegrationConnection {
@@ -87507,7 +87739,7 @@ type PersonalIntegrationConnection struct {
 
 func (x *PersonalIntegrationConnection) Reset() {
 	*x = PersonalIntegrationConnection{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1079]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1081]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87519,7 +87751,7 @@ func (x *PersonalIntegrationConnection) String() string {
 func (*PersonalIntegrationConnection) ProtoMessage() {}
 
 func (x *PersonalIntegrationConnection) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1079]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1081]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87532,7 +87764,7 @@ func (x *PersonalIntegrationConnection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PersonalIntegrationConnection.ProtoReflect.Descriptor instead.
 func (*PersonalIntegrationConnection) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1079}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1081}
 }
 
 func (x *PersonalIntegrationConnection) GetConnectionRef() string {
@@ -87601,7 +87833,7 @@ type ListPersonalIntegrationConnectionsRequest struct {
 
 func (x *ListPersonalIntegrationConnectionsRequest) Reset() {
 	*x = ListPersonalIntegrationConnectionsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1080]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1082]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87613,7 +87845,7 @@ func (x *ListPersonalIntegrationConnectionsRequest) String() string {
 func (*ListPersonalIntegrationConnectionsRequest) ProtoMessage() {}
 
 func (x *ListPersonalIntegrationConnectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1080]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1082]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87626,7 +87858,7 @@ func (x *ListPersonalIntegrationConnectionsRequest) ProtoReflect() protoreflect.
 
 // Deprecated: Use ListPersonalIntegrationConnectionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPersonalIntegrationConnectionsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1080}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1082}
 }
 
 func (x *ListPersonalIntegrationConnectionsRequest) GetPage() *PageRequest {
@@ -87653,7 +87885,7 @@ type ListPersonalIntegrationConnectionsResponse struct {
 
 func (x *ListPersonalIntegrationConnectionsResponse) Reset() {
 	*x = ListPersonalIntegrationConnectionsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1081]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1083]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87665,7 +87897,7 @@ func (x *ListPersonalIntegrationConnectionsResponse) String() string {
 func (*ListPersonalIntegrationConnectionsResponse) ProtoMessage() {}
 
 func (x *ListPersonalIntegrationConnectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1081]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1083]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87678,7 +87910,7 @@ func (x *ListPersonalIntegrationConnectionsResponse) ProtoReflect() protoreflect
 
 // Deprecated: Use ListPersonalIntegrationConnectionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPersonalIntegrationConnectionsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1081}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1083}
 }
 
 func (x *ListPersonalIntegrationConnectionsResponse) GetConnections() []*PersonalIntegrationConnection {
@@ -87706,7 +87938,7 @@ type TestPersonalIntegrationCredentialRequest struct {
 
 func (x *TestPersonalIntegrationCredentialRequest) Reset() {
 	*x = TestPersonalIntegrationCredentialRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1082]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1084]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87718,7 +87950,7 @@ func (x *TestPersonalIntegrationCredentialRequest) String() string {
 func (*TestPersonalIntegrationCredentialRequest) ProtoMessage() {}
 
 func (x *TestPersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1082]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1084]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87731,7 +87963,7 @@ func (x *TestPersonalIntegrationCredentialRequest) ProtoReflect() protoreflect.M
 
 // Deprecated: Use TestPersonalIntegrationCredentialRequest.ProtoReflect.Descriptor instead.
 func (*TestPersonalIntegrationCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1082}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1084}
 }
 
 func (x *TestPersonalIntegrationCredentialRequest) GetMutation() *MutationContext {
@@ -87764,7 +87996,7 @@ type TestPersonalIntegrationCredentialResponse struct {
 
 func (x *TestPersonalIntegrationCredentialResponse) Reset() {
 	*x = TestPersonalIntegrationCredentialResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1083]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1085]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87776,7 +88008,7 @@ func (x *TestPersonalIntegrationCredentialResponse) String() string {
 func (*TestPersonalIntegrationCredentialResponse) ProtoMessage() {}
 
 func (x *TestPersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1083]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1085]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87789,7 +88021,7 @@ func (x *TestPersonalIntegrationCredentialResponse) ProtoReflect() protoreflect.
 
 // Deprecated: Use TestPersonalIntegrationCredentialResponse.ProtoReflect.Descriptor instead.
 func (*TestPersonalIntegrationCredentialResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1083}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1085}
 }
 
 func (x *TestPersonalIntegrationCredentialResponse) GetCredential() *PersonalIntegrationCredentialView {
@@ -87809,7 +88041,7 @@ type ClaimPersonalIntegrationCredentialTestsRequest struct {
 
 func (x *ClaimPersonalIntegrationCredentialTestsRequest) Reset() {
 	*x = ClaimPersonalIntegrationCredentialTestsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1084]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1086]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87821,7 +88053,7 @@ func (x *ClaimPersonalIntegrationCredentialTestsRequest) String() string {
 func (*ClaimPersonalIntegrationCredentialTestsRequest) ProtoMessage() {}
 
 func (x *ClaimPersonalIntegrationCredentialTestsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1084]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1086]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87834,7 +88066,7 @@ func (x *ClaimPersonalIntegrationCredentialTestsRequest) ProtoReflect() protoref
 
 // Deprecated: Use ClaimPersonalIntegrationCredentialTestsRequest.ProtoReflect.Descriptor instead.
 func (*ClaimPersonalIntegrationCredentialTestsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1084}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1086}
 }
 
 func (x *ClaimPersonalIntegrationCredentialTestsRequest) GetWorkloadInstance() string {
@@ -87860,7 +88092,7 @@ type ClaimPersonalIntegrationCredentialTestsResponse struct {
 
 func (x *ClaimPersonalIntegrationCredentialTestsResponse) Reset() {
 	*x = ClaimPersonalIntegrationCredentialTestsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1085]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1087]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87872,7 +88104,7 @@ func (x *ClaimPersonalIntegrationCredentialTestsResponse) String() string {
 func (*ClaimPersonalIntegrationCredentialTestsResponse) ProtoMessage() {}
 
 func (x *ClaimPersonalIntegrationCredentialTestsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1085]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1087]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87885,7 +88117,7 @@ func (x *ClaimPersonalIntegrationCredentialTestsResponse) ProtoReflect() protore
 
 // Deprecated: Use ClaimPersonalIntegrationCredentialTestsResponse.ProtoReflect.Descriptor instead.
 func (*ClaimPersonalIntegrationCredentialTestsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1085}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1087}
 }
 
 func (x *ClaimPersonalIntegrationCredentialTestsResponse) GetClaims() []*IntegrationConnectionTestClaim {
@@ -87907,7 +88139,7 @@ type BeginPersonalIntegrationCredentialProbeRequest struct {
 
 func (x *BeginPersonalIntegrationCredentialProbeRequest) Reset() {
 	*x = BeginPersonalIntegrationCredentialProbeRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1086]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1088]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87919,7 +88151,7 @@ func (x *BeginPersonalIntegrationCredentialProbeRequest) String() string {
 func (*BeginPersonalIntegrationCredentialProbeRequest) ProtoMessage() {}
 
 func (x *BeginPersonalIntegrationCredentialProbeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1086]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1088]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87932,7 +88164,7 @@ func (x *BeginPersonalIntegrationCredentialProbeRequest) ProtoReflect() protoref
 
 // Deprecated: Use BeginPersonalIntegrationCredentialProbeRequest.ProtoReflect.Descriptor instead.
 func (*BeginPersonalIntegrationCredentialProbeRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1086}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1088}
 }
 
 func (x *BeginPersonalIntegrationCredentialProbeRequest) GetTestRef() string {
@@ -87972,7 +88204,7 @@ type BeginPersonalIntegrationCredentialProbeResponse struct {
 
 func (x *BeginPersonalIntegrationCredentialProbeResponse) Reset() {
 	*x = BeginPersonalIntegrationCredentialProbeResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1087]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1089]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -87984,7 +88216,7 @@ func (x *BeginPersonalIntegrationCredentialProbeResponse) String() string {
 func (*BeginPersonalIntegrationCredentialProbeResponse) ProtoMessage() {}
 
 func (x *BeginPersonalIntegrationCredentialProbeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1087]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1089]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -87997,7 +88229,7 @@ func (x *BeginPersonalIntegrationCredentialProbeResponse) ProtoReflect() protore
 
 // Deprecated: Use BeginPersonalIntegrationCredentialProbeResponse.ProtoReflect.Descriptor instead.
 func (*BeginPersonalIntegrationCredentialProbeResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1087}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1089}
 }
 
 func (x *BeginPersonalIntegrationCredentialProbeResponse) GetAdmitted() bool {
@@ -88028,7 +88260,7 @@ type CompletePersonalIntegrationCredentialTestRequest struct {
 
 func (x *CompletePersonalIntegrationCredentialTestRequest) Reset() {
 	*x = CompletePersonalIntegrationCredentialTestRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1088]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1090]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88040,7 +88272,7 @@ func (x *CompletePersonalIntegrationCredentialTestRequest) String() string {
 func (*CompletePersonalIntegrationCredentialTestRequest) ProtoMessage() {}
 
 func (x *CompletePersonalIntegrationCredentialTestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1088]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1090]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88053,7 +88285,7 @@ func (x *CompletePersonalIntegrationCredentialTestRequest) ProtoReflect() protor
 
 // Deprecated: Use CompletePersonalIntegrationCredentialTestRequest.ProtoReflect.Descriptor instead.
 func (*CompletePersonalIntegrationCredentialTestRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1088}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1090}
 }
 
 func (x *CompletePersonalIntegrationCredentialTestRequest) GetMutation() *MutationContext {
@@ -88137,7 +88369,7 @@ type CompletePersonalIntegrationCredentialTestResponse struct {
 
 func (x *CompletePersonalIntegrationCredentialTestResponse) Reset() {
 	*x = CompletePersonalIntegrationCredentialTestResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1089]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1091]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88149,7 +88381,7 @@ func (x *CompletePersonalIntegrationCredentialTestResponse) String() string {
 func (*CompletePersonalIntegrationCredentialTestResponse) ProtoMessage() {}
 
 func (x *CompletePersonalIntegrationCredentialTestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1089]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1091]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88162,7 +88394,7 @@ func (x *CompletePersonalIntegrationCredentialTestResponse) ProtoReflect() proto
 
 // Deprecated: Use CompletePersonalIntegrationCredentialTestResponse.ProtoReflect.Descriptor instead.
 func (*CompletePersonalIntegrationCredentialTestResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1089}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1091}
 }
 
 func (x *CompletePersonalIntegrationCredentialTestResponse) GetTestRef() string {
@@ -88198,7 +88430,7 @@ type IntegrationCredentialPreflightIssue struct {
 
 func (x *IntegrationCredentialPreflightIssue) Reset() {
 	*x = IntegrationCredentialPreflightIssue{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1090]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1092]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88210,7 +88442,7 @@ func (x *IntegrationCredentialPreflightIssue) String() string {
 func (*IntegrationCredentialPreflightIssue) ProtoMessage() {}
 
 func (x *IntegrationCredentialPreflightIssue) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1090]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1092]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88223,7 +88455,7 @@ func (x *IntegrationCredentialPreflightIssue) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use IntegrationCredentialPreflightIssue.ProtoReflect.Descriptor instead.
 func (*IntegrationCredentialPreflightIssue) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1090}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1092}
 }
 
 func (x *IntegrationCredentialPreflightIssue) GetConnectionRef() string {
@@ -88263,7 +88495,7 @@ type IntegrationCredentialPreflightDetail struct {
 
 func (x *IntegrationCredentialPreflightDetail) Reset() {
 	*x = IntegrationCredentialPreflightDetail{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1091]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1093]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88275,7 +88507,7 @@ func (x *IntegrationCredentialPreflightDetail) String() string {
 func (*IntegrationCredentialPreflightDetail) ProtoMessage() {}
 
 func (x *IntegrationCredentialPreflightDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1091]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1093]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88288,7 +88520,7 @@ func (x *IntegrationCredentialPreflightDetail) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use IntegrationCredentialPreflightDetail.ProtoReflect.Descriptor instead.
 func (*IntegrationCredentialPreflightDetail) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1091}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1093}
 }
 
 func (x *IntegrationCredentialPreflightDetail) GetIssues() []*IntegrationCredentialPreflightIssue {
@@ -88323,7 +88555,7 @@ type IntegrationApprovalConsent struct {
 
 func (x *IntegrationApprovalConsent) Reset() {
 	*x = IntegrationApprovalConsent{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1092]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1094]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88335,7 +88567,7 @@ func (x *IntegrationApprovalConsent) String() string {
 func (*IntegrationApprovalConsent) ProtoMessage() {}
 
 func (x *IntegrationApprovalConsent) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1092]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1094]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88348,7 +88580,7 @@ func (x *IntegrationApprovalConsent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntegrationApprovalConsent.ProtoReflect.Descriptor instead.
 func (*IntegrationApprovalConsent) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1092}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1094}
 }
 
 func (x *IntegrationApprovalConsent) GetRef() string {
@@ -88472,7 +88704,7 @@ type ListIntegrationApprovalConsentsRequest struct {
 
 func (x *ListIntegrationApprovalConsentsRequest) Reset() {
 	*x = ListIntegrationApprovalConsentsRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1093]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1095]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88484,7 +88716,7 @@ func (x *ListIntegrationApprovalConsentsRequest) String() string {
 func (*ListIntegrationApprovalConsentsRequest) ProtoMessage() {}
 
 func (x *ListIntegrationApprovalConsentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1093]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1095]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88497,7 +88729,7 @@ func (x *ListIntegrationApprovalConsentsRequest) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use ListIntegrationApprovalConsentsRequest.ProtoReflect.Descriptor instead.
 func (*ListIntegrationApprovalConsentsRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1093}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1095}
 }
 
 func (x *ListIntegrationApprovalConsentsRequest) GetPage() *PageRequest {
@@ -88517,7 +88749,7 @@ type ListIntegrationApprovalConsentsResponse struct {
 
 func (x *ListIntegrationApprovalConsentsResponse) Reset() {
 	*x = ListIntegrationApprovalConsentsResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1094]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1096]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88529,7 +88761,7 @@ func (x *ListIntegrationApprovalConsentsResponse) String() string {
 func (*ListIntegrationApprovalConsentsResponse) ProtoMessage() {}
 
 func (x *ListIntegrationApprovalConsentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1094]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1096]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88542,7 +88774,7 @@ func (x *ListIntegrationApprovalConsentsResponse) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use ListIntegrationApprovalConsentsResponse.ProtoReflect.Descriptor instead.
 func (*ListIntegrationApprovalConsentsResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1094}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1096}
 }
 
 func (x *ListIntegrationApprovalConsentsResponse) GetConsents() []*IntegrationApprovalConsent {
@@ -88569,7 +88801,7 @@ type RevokeIntegrationApprovalConsentRequest struct {
 
 func (x *RevokeIntegrationApprovalConsentRequest) Reset() {
 	*x = RevokeIntegrationApprovalConsentRequest{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1095]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1097]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88581,7 +88813,7 @@ func (x *RevokeIntegrationApprovalConsentRequest) String() string {
 func (*RevokeIntegrationApprovalConsentRequest) ProtoMessage() {}
 
 func (x *RevokeIntegrationApprovalConsentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1095]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1097]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88594,7 +88826,7 @@ func (x *RevokeIntegrationApprovalConsentRequest) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use RevokeIntegrationApprovalConsentRequest.ProtoReflect.Descriptor instead.
 func (*RevokeIntegrationApprovalConsentRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1095}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1097}
 }
 
 func (x *RevokeIntegrationApprovalConsentRequest) GetMutation() *MutationContext {
@@ -88620,7 +88852,7 @@ type RevokeIntegrationApprovalConsentResponse struct {
 
 func (x *RevokeIntegrationApprovalConsentResponse) Reset() {
 	*x = RevokeIntegrationApprovalConsentResponse{}
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1096]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1098]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -88632,7 +88864,7 @@ func (x *RevokeIntegrationApprovalConsentResponse) String() string {
 func (*RevokeIntegrationApprovalConsentResponse) ProtoMessage() {}
 
 func (x *RevokeIntegrationApprovalConsentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1096]
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1098]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -88645,7 +88877,7 @@ func (x *RevokeIntegrationApprovalConsentResponse) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RevokeIntegrationApprovalConsentResponse.ProtoReflect.Descriptor instead.
 func (*RevokeIntegrationApprovalConsentResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1096}
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1098}
 }
 
 func (x *RevokeIntegrationApprovalConsentResponse) GetConsent() *IntegrationApprovalConsent {
@@ -88653,6 +88885,359 @@ func (x *RevokeIntegrationApprovalConsentResponse) GetConsent() *IntegrationAppr
 		return x.Consent
 	}
 	return nil
+}
+
+type NativeSessionCheckpoint struct {
+	state               protoimpl.MessageState `protogen:"open.v1"`
+	SessionId           string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Version             string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Generation          int64                  `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	RelativePath        string                 `protobuf:"bytes,4,opt,name=relative_path,json=relativePath,proto3" json:"relative_path,omitempty"`
+	Sha256              string                 `protobuf:"bytes,5,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	SizeBytes           int64                  `protobuf:"varint,6,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	WorkspaceRef        string                 `protobuf:"bytes,7,opt,name=workspace_ref,json=workspaceRef,proto3" json:"workspace_ref,omitempty"`
+	WorkspaceGeneration int64                  `protobuf:"varint,8,opt,name=workspace_generation,json=workspaceGeneration,proto3" json:"workspace_generation,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *NativeSessionCheckpoint) Reset() {
+	*x = NativeSessionCheckpoint{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1099]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NativeSessionCheckpoint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NativeSessionCheckpoint) ProtoMessage() {}
+
+func (x *NativeSessionCheckpoint) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1099]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NativeSessionCheckpoint.ProtoReflect.Descriptor instead.
+func (*NativeSessionCheckpoint) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1099}
+}
+
+func (x *NativeSessionCheckpoint) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *NativeSessionCheckpoint) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *NativeSessionCheckpoint) GetGeneration() int64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+func (x *NativeSessionCheckpoint) GetRelativePath() string {
+	if x != nil {
+		return x.RelativePath
+	}
+	return ""
+}
+
+func (x *NativeSessionCheckpoint) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *NativeSessionCheckpoint) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *NativeSessionCheckpoint) GetWorkspaceRef() string {
+	if x != nil {
+		return x.WorkspaceRef
+	}
+	return ""
+}
+
+func (x *NativeSessionCheckpoint) GetWorkspaceGeneration() int64 {
+	if x != nil {
+		return x.WorkspaceGeneration
+	}
+	return 0
+}
+
+// Отдельная несекретная проекция исполняемой Git-owned политики модели.
+type ModelExecutionPolicy struct {
+	state               protoimpl.MessageState     `protogen:"open.v1"`
+	ModelId             string                     `protobuf:"bytes,1,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	ContextWindowTokens int64                      `protobuf:"varint,2,opt,name=context_window_tokens,json=contextWindowTokens,proto3" json:"context_window_tokens,omitempty"`
+	MaximumOutputTokens int64                      `protobuf:"varint,3,opt,name=maximum_output_tokens,json=maximumOutputTokens,proto3" json:"maximum_output_tokens,omitempty"`
+	Context             *RuntimeModelContextPolicy `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	Cache               *ModelCacheResolution      `protobuf:"bytes,5,opt,name=cache,proto3" json:"cache,omitempty"`
+	Eligible            bool                       `protobuf:"varint,6,opt,name=eligible,proto3" json:"eligible,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *ModelExecutionPolicy) Reset() {
+	*x = ModelExecutionPolicy{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1100]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelExecutionPolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelExecutionPolicy) ProtoMessage() {}
+
+func (x *ModelExecutionPolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1100]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelExecutionPolicy.ProtoReflect.Descriptor instead.
+func (*ModelExecutionPolicy) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1100}
+}
+
+func (x *ModelExecutionPolicy) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *ModelExecutionPolicy) GetContextWindowTokens() int64 {
+	if x != nil {
+		return x.ContextWindowTokens
+	}
+	return 0
+}
+
+func (x *ModelExecutionPolicy) GetMaximumOutputTokens() int64 {
+	if x != nil {
+		return x.MaximumOutputTokens
+	}
+	return 0
+}
+
+func (x *ModelExecutionPolicy) GetContext() *RuntimeModelContextPolicy {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *ModelExecutionPolicy) GetCache() *ModelCacheResolution {
+	if x != nil {
+		return x.Cache
+	}
+	return nil
+}
+
+func (x *ModelExecutionPolicy) GetEligible() bool {
+	if x != nil {
+		return x.Eligible
+	}
+	return false
+}
+
+type RuntimeModelContextPolicy struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Revision       int32                  `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	AutoCompaction bool                   `protobuf:"varint,2,opt,name=auto_compaction,json=autoCompaction,proto3" json:"auto_compaction,omitempty"`
+	Prune          bool                   `protobuf:"varint,3,opt,name=prune,proto3" json:"prune,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RuntimeModelContextPolicy) Reset() {
+	*x = RuntimeModelContextPolicy{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1101]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RuntimeModelContextPolicy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RuntimeModelContextPolicy) ProtoMessage() {}
+
+func (x *RuntimeModelContextPolicy) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1101]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RuntimeModelContextPolicy.ProtoReflect.Descriptor instead.
+func (*RuntimeModelContextPolicy) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1101}
+}
+
+func (x *RuntimeModelContextPolicy) GetRevision() int32 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *RuntimeModelContextPolicy) GetAutoCompaction() bool {
+	if x != nil {
+		return x.AutoCompaction
+	}
+	return false
+}
+
+func (x *RuntimeModelContextPolicy) GetPrune() bool {
+	if x != nil {
+		return x.Prune
+	}
+	return false
+}
+
+type ModelCacheResolution struct {
+	state              protoimpl.MessageState   `protogen:"open.v1"`
+	Requested          *RuntimeModelCachePolicy `protobuf:"bytes,1,opt,name=requested,proto3" json:"requested,omitempty"`
+	Mechanism          string                   `protobuf:"bytes,2,opt,name=mechanism,proto3" json:"mechanism,omitempty"`
+	ReuseScope         string                   `protobuf:"bytes,3,opt,name=reuse_scope,json=reuseScope,proto3" json:"reuse_scope,omitempty"`
+	Status             string                   `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Reason             string                   `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	NoReuse            bool                     `protobuf:"varint,6,opt,name=no_reuse,json=noReuse,proto3" json:"no_reuse,omitempty"`
+	NoStore            bool                     `protobuf:"varint,7,opt,name=no_store,json=noStore,proto3" json:"no_store,omitempty"`
+	ProxyResponseCache string                   `protobuf:"bytes,8,opt,name=proxy_response_cache,json=proxyResponseCache,proto3" json:"proxy_response_cache,omitempty"`
+	PhysicalIsolation  string                   `protobuf:"bytes,9,opt,name=physical_isolation,json=physicalIsolation,proto3" json:"physical_isolation,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ModelCacheResolution) Reset() {
+	*x = ModelCacheResolution{}
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1102]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelCacheResolution) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelCacheResolution) ProtoMessage() {}
+
+func (x *ModelCacheResolution) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_control_plane_proto_msgTypes[1102]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelCacheResolution.ProtoReflect.Descriptor instead.
+func (*ModelCacheResolution) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_control_plane_proto_rawDescGZIP(), []int{1102}
+}
+
+func (x *ModelCacheResolution) GetRequested() *RuntimeModelCachePolicy {
+	if x != nil {
+		return x.Requested
+	}
+	return nil
+}
+
+func (x *ModelCacheResolution) GetMechanism() string {
+	if x != nil {
+		return x.Mechanism
+	}
+	return ""
+}
+
+func (x *ModelCacheResolution) GetReuseScope() string {
+	if x != nil {
+		return x.ReuseScope
+	}
+	return ""
+}
+
+func (x *ModelCacheResolution) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ModelCacheResolution) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ModelCacheResolution) GetNoReuse() bool {
+	if x != nil {
+		return x.NoReuse
+	}
+	return false
+}
+
+func (x *ModelCacheResolution) GetNoStore() bool {
+	if x != nil {
+		return x.NoStore
+	}
+	return false
+}
+
+func (x *ModelCacheResolution) GetProxyResponseCache() string {
+	if x != nil {
+		return x.ProxyResponseCache
+	}
+	return ""
+}
+
+func (x *ModelCacheResolution) GetPhysicalIsolation() string {
+	if x != nil {
+		return x.PhysicalIsolation
+	}
+	return ""
 }
 
 var File_controlplane_v1_control_plane_proto protoreflect.FileDescriptor
@@ -91071,7 +91656,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x18RuntimeExecutionDeadline\x12\x16\n" +
 	"\x06policy\x18\x01 \x01(\tR\x06policy\x12N\n" +
 	"\x15effective_deadline_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x13effectiveDeadlineAt\x12>\n" +
-	"\x06clocks\x18\x03 \x03(\v2&.controlplane.v1.RuntimeExecutionClockR\x06clocks\"\xe8%\n" +
+	"\x06clocks\x18\x03 \x03(\v2&.controlplane.v1.RuntimeExecutionClockR\x06clocks\"\xd5&\n" +
 	"\x17RuntimeRevisionSnapshot\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
@@ -91120,8 +91705,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x1benvironment_binding_version\x18+ \x01(\x03R\x19environmentBindingVersion\x12<\n" +
 	"\x1aenvironment_binding_digest\x18, \x01(\tR\x18environmentBindingDigest\x12W\n" +
 	"\x12environment_values\x18- \x03(\v2(.controlplane.v1.RuntimeEnvironmentValueR\x11environmentValues\x12W\n" +
-	"\x12secret_projections\x18. \x03(\v2(.controlplane.v1.RuntimeSecretDescriptorR\x11secretProjections\x12(\n" +
-	"\x10codex_session_id\x18/ \x01(\tR\x0ecodexSessionId\x12X\n" +
+	"\x12secret_projections\x18. \x03(\v2(.controlplane.v1.RuntimeSecretDescriptorR\x11secretProjections\x12X\n" +
 	"\x11assistant_context\x180 \x01(\v2+.controlplane.v1.AssistantContextDescriptorR\x10assistantContext\x12,\n" +
 	"\x12attachment_set_ref\x181 \x01(\tR\x10attachmentSetRef\x12C\n" +
 	"\x1eattachment_set_manifest_digest\x182 \x01(\tR\x1battachmentSetManifestDigest\x12N\n" +
@@ -91154,7 +91738,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x15assistant_profile_ref\x18M \x01(\tR\x13assistantProfileRef\x12T\n" +
 	"\x14managed_mcp_profiles\x18N \x03(\v2\".controlplane.v1.ManagedMCPProfileR\x12managedMcpProfiles\x12X\n" +
 	"\x12execution_deadline\x18O \x01(\v2).controlplane.v1.RuntimeExecutionDeadlineR\x11executionDeadline\x12U\n" +
-	"\x11workspace_storage\x18P \x01(\v2(.controlplane.v1.RuntimeWorkspaceStorageR\x10workspaceStorage\"\xa1\x01\n" +
+	"\x11workspace_storage\x18P \x01(\v2(.controlplane.v1.RuntimeWorkspaceStorageR\x10workspaceStorage\x12O\n" +
+	"\x0enative_session\x18Q \x01(\v2(.controlplane.v1.NativeSessionCheckpointR\rnativeSession\x12,\n" +
+	"\x12root_initiator_ref\x18R \x01(\tR\x10rootInitiatorRefJ\x04\b/\x100R\x10codex_session_id\"\xa1\x01\n" +
 	"\x15RuntimeWorkspaceScope\x12)\n" +
 	"\x10organization_ref\x18\x01 \x01(\tR\x0forganizationRef\x12\x1f\n" +
 	"\vproject_ref\x18\x02 \x01(\tR\n" +
@@ -91519,7 +92105,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x12\x18\n" +
 	"\acontent\x18\x04 \x01(\fR\acontent\x12\x16\n" +
-	"\x06sha256\x18\x05 \x01(\tR\x06sha256\"\xe2\x04\n" +
+	"\x06sha256\x18\x05 \x01(\tR\x06sha256\"\xc4\x04\n" +
 	"\x18CompleteExecutionRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +
@@ -91531,12 +92117,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x0eresult_summary\x18\x06 \x01(\tR\rresultSummary\x12&\n" +
 	"\x0fsafe_error_code\x18\a \x01(\tR\rsafeErrorCode\x12E\n" +
 	"\tartifacts\x18\b \x03(\v2'.controlplane.v1.CompletedArtifactInputR\tartifacts\x121\n" +
-	"\x05usage\x18\t \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\x12(\n" +
-	"\x10codex_session_id\x18\n" +
-	" \x01(\tR\x0ecodexSessionId\x12=\n" +
-	"\x1bcodex_archive_relative_path\x18\v \x01(\tR\x18codexArchiveRelativePath\x120\n" +
-	"\x14codex_archive_sha256\x18\f \x01(\tR\x12codexArchiveSha256\x127\n" +
-	"\x18codex_archive_size_bytes\x18\r \x01(\x03R\x15codexArchiveSizeBytes\"t\n" +
+	"\x05usage\x18\t \x01(\v2\x1b.controlplane.v1.TokenUsageR\x05usage\x12O\n" +
+	"\x0enative_session\x18\x0e \x01(\v2(.controlplane.v1.NativeSessionCheckpointR\rnativeSessionJ\x04\b\n" +
+	"\x10\x0eR\x10codex_session_idR\x1bcodex_archive_relative_pathR\x14codex_archive_sha256R\x18codex_archive_size_bytes\"t\n" +
 	"\x19CompleteExecutionResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
 	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xb2\x04\n" +
@@ -91584,7 +92167,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x14source_relative_path\x18\b \x01(\tR\x12sourceRelativePath\x12#\n" +
 	"\rsource_sha256\x18\t \x01(\tR\fsourceSha256\x12*\n" +
 	"\x11source_size_bytes\x18\n" +
-	" \x01(\x03R\x0fsourceSizeBytes\"\x83\b\n" +
+	" \x01(\x03R\x0fsourceSizeBytes\"\x9d\b\n" +
 	"\x12SessionArchiveTask\x12\x19\n" +
 	"\btask_ref\x18\x01 \x01(\tR\ataskRef\x12;\n" +
 	"\x04kind\x18\x02 \x01(\x0e2'.controlplane.v1.SessionArchiveTaskKindR\x04kind\x12)\n" +
@@ -91596,9 +92179,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x14provider_account_ref\x18\x06 \x01(\tR\x12providerAccountRef\x120\n" +
 	"\x14runtime_revision_ref\x18\a \x01(\tR\x12runtimeRevisionRef\x128\n" +
 	"\x18runtime_revision_version\x18\b \x01(\x03R\x16runtimeRevisionVersion\x126\n" +
-	"\x17runtime_revision_digest\x18\t \x01(\tR\x15runtimeRevisionDigest\x12(\n" +
-	"\x10codex_session_id\x18\n" +
-	" \x01(\tR\x0ecodexSessionId\x12-\n" +
+	"\x17runtime_revision_digest\x18\t \x01(\tR\x15runtimeRevisionDigest\x12-\n" +
 	"\x12content_generation\x18\v \x01(\x03R\x11contentGeneration\x12\x19\n" +
 	"\bpvc_name\x18\f \x01(\tR\apvcName\x12@\n" +
 	"\aarchive\x18\r \x01(\v2&.controlplane.v1.SessionArchiveBindingR\aarchive\x120\n" +
@@ -91610,7 +92191,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x11target_object_key\x18\x13 \x01(\tR\x0ftargetObjectKey\x122\n" +
 	"\x15target_object_version\x18\x14 \x01(\tR\x13targetObjectVersion\x12\x18\n" +
 	"\aattempt\x18\x15 \x01(\x05R\aattempt\x12J\n" +
-	"\tworkspace\x18\x16 \x01(\v2,.controlplane.v1.SessionWorkspaceArchiveTaskR\tworkspace\"\xf4\x02\n" +
+	"\tworkspace\x18\x16 \x01(\v2,.controlplane.v1.SessionWorkspaceArchiveTaskR\tworkspace\x12*\n" +
+	"\x11native_session_id\x18\x17 \x01(\tR\x0fnativeSessionIdJ\x04\b\n" +
+	"\x10\vR\x10codex_session_id\"\xf4\x02\n" +
 	"\x1bSessionWorkspaceArchiveTask\x12@\n" +
 	"\x06target\x18\x01 \x01(\v2(.controlplane.v1.RuntimeWorkspaceStorageR\x06target\x12%\n" +
 	"\x0echeckpoint_ref\x18\x02 \x01(\tR\rcheckpointRef\x12\x1e\n" +
@@ -93341,7 +93924,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
 	"value_type\x18\x02 \x01(\tR\tvalueType\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xa3\x03\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\"\xe4\x04\n" +
 	"\x12ProviderDefinition\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -93353,7 +93936,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x05ready\x18\b \x01(\bR\x05ready\x12-\n" +
 	"\x12readiness_blockers\x18\t \x03(\tR\x11readinessBlockers\x128\n" +
 	"\x06models\x18\n" +
-	" \x03(\v2 .controlplane.v1.ModelCapabilityR\x06models\"h\n" +
+	" \x03(\v2 .controlplane.v1.ModelCapabilityR\x06models\x12P\n" +
+	"\x10runtime_policies\x18\v \x03(\v2%.controlplane.v1.ModelExecutionPolicyR\x0fruntimePolicies\x12\x1d\n" +
+	"\n" +
+	"managed_by\x18\f \x01(\tR\tmanagedBy\x12'\n" +
+	"\x0fsource_revision\x18\r \x01(\tR\x0esourceRevision\x12%\n" +
+	"\x0eengine_version\x18\x0e \x01(\tR\rengineVersion\"h\n" +
 	"\x1eListProviderDefinitionsRequest\x120\n" +
 	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\"\x97\x01\n" +
@@ -95506,7 +96094,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"target_ref\x18\x03 \x01(\tR\ttargetRef\x12\x16\n" +
 	"\x06permit\x18\x04 \x01(\fR\x06permit\x12\x1d\n" +
 	"\n" +
-	"secret_ref\x18\x05 \x01(\tR\tsecretRef\"\x84\x03\n" +
+	"secret_ref\x18\x05 \x01(\tR\tsecretRef\"\xda\x03\n" +
 	"!RuntimeModelProviderConfiguration\x12\x16\n" +
 	"\x06schema\x18\x01 \x01(\tR\x06schema\x12\x1d\n" +
 	"\n" +
@@ -95520,11 +96108,33 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\raddress_cidrs\x18\b \x03(\tR\faddressCidrs\x12B\n" +
 	"\x06models\x18\t \x03(\v2*.controlplane.v1.RuntimeModelProviderModelR\x06models\x12\x1b\n" +
 	"\ttool_mode\x18\n" +
-	" \x01(\tR\btoolMode\"\x93\x01\n" +
+	" \x01(\tR\btoolMode\x12\x10\n" +
+	"\x03api\x18\v \x01(\tR\x03api\x12\x1d\n" +
+	"\n" +
+	"route_kind\x18\f \x01(\tR\trouteKind\x12#\n" +
+	"\rroute_version\x18\r \x01(\tR\frouteVersion\"\xb3\x02\n" +
 	"\x19RuntimeModelProviderModel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x122\n" +
 	"\x15context_window_tokens\x18\x02 \x01(\x03R\x13contextWindowTokens\x122\n" +
-	"\x15maximum_output_tokens\x18\x03 \x01(\x03R\x13maximumOutputTokens\"\xd2\x01\n" +
+	"\x15maximum_output_tokens\x18\x03 \x01(\x03R\x13maximumOutputTokens\x12K\n" +
+	"\fcache_policy\x18\x04 \x01(\v2(.controlplane.v1.RuntimeModelCachePolicyR\vcachePolicy\x12Q\n" +
+	"\x0econtext_policy\x18\x05 \x01(\v2*.controlplane.v1.RuntimeModelContextPolicyR\rcontextPolicy\"\xa3\x02\n" +
+	"\x17RuntimeModelCachePolicy\x12\x1a\n" +
+	"\brevision\x18\x01 \x01(\x05R\brevision\x12\"\n" +
+	"\foptimization\x18\x02 \x01(\tR\foptimization\x12\x1f\n" +
+	"\vreuse_scope\x18\x03 \x01(\tR\n" +
+	"reuseScope\x12\x19\n" +
+	"\bno_reuse\x18\x04 \x01(\bR\anoReuse\x12\x19\n" +
+	"\bno_store\x18\x05 \x01(\bR\anoStore\x12\x1a\n" +
+	"\brequired\x18\x06 \x01(\bR\brequired\x12U\n" +
+	"\rqualification\x18\a \x01(\v2/.controlplane.v1.RuntimeModelCacheQualificationR\rqualification\"\xe3\x01\n" +
+	"\x1eRuntimeModelCacheQualification\x12\x1c\n" +
+	"\tmechanism\x18\x01 \x01(\tR\tmechanism\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12'\n" +
+	"\x0fbackend_version\x18\x04 \x01(\tR\x0ebackendVersion\x12'\n" +
+	"\x0fevidence_sha256\x18\x05 \x01(\tR\x0eevidenceSha256\x12!\n" +
+	"\froute_sha256\x18\x06 \x01(\tR\vrouteSha256\"\xd2\x01\n" +
 	")BeginPersonalIntegrationInvocationRequest\x12%\n" +
 	"\x0einvocation_ref\x18\x01 \x01(\tR\rinvocationRef\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +
@@ -95689,7 +96299,42 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vconsent_ref\x18\x02 \x01(\tR\n" +
 	"consentRef\"q\n" +
 	"(RevokeIntegrationApprovalConsentResponse\x12E\n" +
-	"\aconsent\x18\x01 \x01(\v2+.controlplane.v1.IntegrationApprovalConsentR\aconsent*\x9e\x01\n" +
+	"\aconsent\x18\x01 \x01(\v2+.controlplane.v1.IntegrationApprovalConsentR\aconsent\"\xa6\x02\n" +
+	"\x17NativeSessionCheckpoint\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x03 \x01(\x03R\n" +
+	"generation\x12#\n" +
+	"\rrelative_path\x18\x04 \x01(\tR\frelativePath\x12\x16\n" +
+	"\x06sha256\x18\x05 \x01(\tR\x06sha256\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x06 \x01(\x03R\tsizeBytes\x12#\n" +
+	"\rworkspace_ref\x18\a \x01(\tR\fworkspaceRef\x121\n" +
+	"\x14workspace_generation\x18\b \x01(\x03R\x13workspaceGeneration\"\xb8\x02\n" +
+	"\x14ModelExecutionPolicy\x12\x19\n" +
+	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x122\n" +
+	"\x15context_window_tokens\x18\x02 \x01(\x03R\x13contextWindowTokens\x122\n" +
+	"\x15maximum_output_tokens\x18\x03 \x01(\x03R\x13maximumOutputTokens\x12D\n" +
+	"\acontext\x18\x04 \x01(\v2*.controlplane.v1.RuntimeModelContextPolicyR\acontext\x12;\n" +
+	"\x05cache\x18\x05 \x01(\v2%.controlplane.v1.ModelCacheResolutionR\x05cache\x12\x1a\n" +
+	"\beligible\x18\x06 \x01(\bR\beligible\"v\n" +
+	"\x19RuntimeModelContextPolicy\x12\x1a\n" +
+	"\brevision\x18\x01 \x01(\x05R\brevision\x12'\n" +
+	"\x0fauto_compaction\x18\x02 \x01(\bR\x0eautoCompaction\x12\x14\n" +
+	"\x05prune\x18\x03 \x01(\bR\x05prune\"\xe4\x02\n" +
+	"\x14ModelCacheResolution\x12F\n" +
+	"\trequested\x18\x01 \x01(\v2(.controlplane.v1.RuntimeModelCachePolicyR\trequested\x12\x1c\n" +
+	"\tmechanism\x18\x02 \x01(\tR\tmechanism\x12\x1f\n" +
+	"\vreuse_scope\x18\x03 \x01(\tR\n" +
+	"reuseScope\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x19\n" +
+	"\bno_reuse\x18\x06 \x01(\bR\anoReuse\x12\x19\n" +
+	"\bno_store\x18\a \x01(\bR\anoStore\x120\n" +
+	"\x14proxy_response_cache\x18\b \x01(\tR\x12proxyResponseCache\x12-\n" +
+	"\x12physical_isolation\x18\t \x01(\tR\x11physicalIsolation*\x9e\x01\n" +
 	"\x18RuntimeResourceScopeKind\x12+\n" +
 	"'RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED\x10\x00\x12,\n" +
 	"(RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION\x10\x01\x12'\n" +
@@ -97191,7 +97836,7 @@ func file_controlplane_v1_control_plane_proto_rawDescGZIP() []byte {
 }
 
 var file_controlplane_v1_control_plane_proto_enumTypes = make([]protoimpl.EnumInfo, 152)
-var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 1099)
+var file_controlplane_v1_control_plane_proto_msgTypes = make([]protoimpl.MessageInfo, 1105)
 var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(RuntimeResourceScopeKind)(0),                                                   // 0: controlplane.v1.RuntimeResourceScopeKind
 	(PlatformRole)(0),                                                               // 1: controlplane.v1.PlatformRole
@@ -98411,67 +99056,73 @@ var file_controlplane_v1_control_plane_proto_goTypes = []any{
 	(*ResolveSSHComposeCredentialProjectionResponse)(nil),                           // 1215: controlplane.v1.ResolveSSHComposeCredentialProjectionResponse
 	(*RuntimeModelProviderConfiguration)(nil),                                       // 1216: controlplane.v1.RuntimeModelProviderConfiguration
 	(*RuntimeModelProviderModel)(nil),                                               // 1217: controlplane.v1.RuntimeModelProviderModel
-	(*BeginPersonalIntegrationInvocationRequest)(nil),                               // 1218: controlplane.v1.BeginPersonalIntegrationInvocationRequest
-	(*BeginPersonalIntegrationInvocationResponse)(nil),                              // 1219: controlplane.v1.BeginPersonalIntegrationInvocationResponse
-	(*PersonalIntegrationCredentialView)(nil),                                       // 1220: controlplane.v1.PersonalIntegrationCredentialView
-	(*GetPersonalIntegrationCredentialRequest)(nil),                                 // 1221: controlplane.v1.GetPersonalIntegrationCredentialRequest
-	(*GetPersonalIntegrationCredentialResponse)(nil),                                // 1222: controlplane.v1.GetPersonalIntegrationCredentialResponse
-	(*CreatePersonalIntegrationCredentialRequest)(nil),                              // 1223: controlplane.v1.CreatePersonalIntegrationCredentialRequest
-	(*CreatePersonalIntegrationCredentialResponse)(nil),                             // 1224: controlplane.v1.CreatePersonalIntegrationCredentialResponse
-	(*ConfigurePersonalIntegrationCredentialRequest)(nil),                           // 1225: controlplane.v1.ConfigurePersonalIntegrationCredentialRequest
-	(*ConfigurePersonalIntegrationCredentialResponse)(nil),                          // 1226: controlplane.v1.ConfigurePersonalIntegrationCredentialResponse
-	(*RevokePersonalIntegrationCredentialRequest)(nil),                              // 1227: controlplane.v1.RevokePersonalIntegrationCredentialRequest
-	(*RevokePersonalIntegrationCredentialResponse)(nil),                             // 1228: controlplane.v1.RevokePersonalIntegrationCredentialResponse
-	(*SetIntegrationCredentialPolicyRequest)(nil),                                   // 1229: controlplane.v1.SetIntegrationCredentialPolicyRequest
-	(*SetIntegrationCredentialPolicyResponse)(nil),                                  // 1230: controlplane.v1.SetIntegrationCredentialPolicyResponse
-	(*PersonalIntegrationConnection)(nil),                                           // 1231: controlplane.v1.PersonalIntegrationConnection
-	(*ListPersonalIntegrationConnectionsRequest)(nil),                               // 1232: controlplane.v1.ListPersonalIntegrationConnectionsRequest
-	(*ListPersonalIntegrationConnectionsResponse)(nil),                              // 1233: controlplane.v1.ListPersonalIntegrationConnectionsResponse
-	(*TestPersonalIntegrationCredentialRequest)(nil),                                // 1234: controlplane.v1.TestPersonalIntegrationCredentialRequest
-	(*TestPersonalIntegrationCredentialResponse)(nil),                               // 1235: controlplane.v1.TestPersonalIntegrationCredentialResponse
-	(*ClaimPersonalIntegrationCredentialTestsRequest)(nil),                          // 1236: controlplane.v1.ClaimPersonalIntegrationCredentialTestsRequest
-	(*ClaimPersonalIntegrationCredentialTestsResponse)(nil),                         // 1237: controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse
-	(*BeginPersonalIntegrationCredentialProbeRequest)(nil),                          // 1238: controlplane.v1.BeginPersonalIntegrationCredentialProbeRequest
-	(*BeginPersonalIntegrationCredentialProbeResponse)(nil),                         // 1239: controlplane.v1.BeginPersonalIntegrationCredentialProbeResponse
-	(*CompletePersonalIntegrationCredentialTestRequest)(nil),                        // 1240: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest
-	(*CompletePersonalIntegrationCredentialTestResponse)(nil),                       // 1241: controlplane.v1.CompletePersonalIntegrationCredentialTestResponse
-	(*IntegrationCredentialPreflightIssue)(nil),                                     // 1242: controlplane.v1.IntegrationCredentialPreflightIssue
-	(*IntegrationCredentialPreflightDetail)(nil),                                    // 1243: controlplane.v1.IntegrationCredentialPreflightDetail
-	(*IntegrationApprovalConsent)(nil),                                              // 1244: controlplane.v1.IntegrationApprovalConsent
-	(*ListIntegrationApprovalConsentsRequest)(nil),                                  // 1245: controlplane.v1.ListIntegrationApprovalConsentsRequest
-	(*ListIntegrationApprovalConsentsResponse)(nil),                                 // 1246: controlplane.v1.ListIntegrationApprovalConsentsResponse
-	(*RevokeIntegrationApprovalConsentRequest)(nil),                                 // 1247: controlplane.v1.RevokeIntegrationApprovalConsentRequest
-	(*RevokeIntegrationApprovalConsentResponse)(nil),                                // 1248: controlplane.v1.RevokeIntegrationApprovalConsentResponse
-	nil,                           // 1249: controlplane.v1.IntegrationResourceScope.ValuesEntry
-	nil,                           // 1250: controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
-	(*timestamppb.Timestamp)(nil), // 1251: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),       // 1252: google.protobuf.Struct
-	(*structpb.Value)(nil),        // 1253: google.protobuf.Value
+	(*RuntimeModelCachePolicy)(nil),                                                 // 1218: controlplane.v1.RuntimeModelCachePolicy
+	(*RuntimeModelCacheQualification)(nil),                                          // 1219: controlplane.v1.RuntimeModelCacheQualification
+	(*BeginPersonalIntegrationInvocationRequest)(nil),                               // 1220: controlplane.v1.BeginPersonalIntegrationInvocationRequest
+	(*BeginPersonalIntegrationInvocationResponse)(nil),                              // 1221: controlplane.v1.BeginPersonalIntegrationInvocationResponse
+	(*PersonalIntegrationCredentialView)(nil),                                       // 1222: controlplane.v1.PersonalIntegrationCredentialView
+	(*GetPersonalIntegrationCredentialRequest)(nil),                                 // 1223: controlplane.v1.GetPersonalIntegrationCredentialRequest
+	(*GetPersonalIntegrationCredentialResponse)(nil),                                // 1224: controlplane.v1.GetPersonalIntegrationCredentialResponse
+	(*CreatePersonalIntegrationCredentialRequest)(nil),                              // 1225: controlplane.v1.CreatePersonalIntegrationCredentialRequest
+	(*CreatePersonalIntegrationCredentialResponse)(nil),                             // 1226: controlplane.v1.CreatePersonalIntegrationCredentialResponse
+	(*ConfigurePersonalIntegrationCredentialRequest)(nil),                           // 1227: controlplane.v1.ConfigurePersonalIntegrationCredentialRequest
+	(*ConfigurePersonalIntegrationCredentialResponse)(nil),                          // 1228: controlplane.v1.ConfigurePersonalIntegrationCredentialResponse
+	(*RevokePersonalIntegrationCredentialRequest)(nil),                              // 1229: controlplane.v1.RevokePersonalIntegrationCredentialRequest
+	(*RevokePersonalIntegrationCredentialResponse)(nil),                             // 1230: controlplane.v1.RevokePersonalIntegrationCredentialResponse
+	(*SetIntegrationCredentialPolicyRequest)(nil),                                   // 1231: controlplane.v1.SetIntegrationCredentialPolicyRequest
+	(*SetIntegrationCredentialPolicyResponse)(nil),                                  // 1232: controlplane.v1.SetIntegrationCredentialPolicyResponse
+	(*PersonalIntegrationConnection)(nil),                                           // 1233: controlplane.v1.PersonalIntegrationConnection
+	(*ListPersonalIntegrationConnectionsRequest)(nil),                               // 1234: controlplane.v1.ListPersonalIntegrationConnectionsRequest
+	(*ListPersonalIntegrationConnectionsResponse)(nil),                              // 1235: controlplane.v1.ListPersonalIntegrationConnectionsResponse
+	(*TestPersonalIntegrationCredentialRequest)(nil),                                // 1236: controlplane.v1.TestPersonalIntegrationCredentialRequest
+	(*TestPersonalIntegrationCredentialResponse)(nil),                               // 1237: controlplane.v1.TestPersonalIntegrationCredentialResponse
+	(*ClaimPersonalIntegrationCredentialTestsRequest)(nil),                          // 1238: controlplane.v1.ClaimPersonalIntegrationCredentialTestsRequest
+	(*ClaimPersonalIntegrationCredentialTestsResponse)(nil),                         // 1239: controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse
+	(*BeginPersonalIntegrationCredentialProbeRequest)(nil),                          // 1240: controlplane.v1.BeginPersonalIntegrationCredentialProbeRequest
+	(*BeginPersonalIntegrationCredentialProbeResponse)(nil),                         // 1241: controlplane.v1.BeginPersonalIntegrationCredentialProbeResponse
+	(*CompletePersonalIntegrationCredentialTestRequest)(nil),                        // 1242: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest
+	(*CompletePersonalIntegrationCredentialTestResponse)(nil),                       // 1243: controlplane.v1.CompletePersonalIntegrationCredentialTestResponse
+	(*IntegrationCredentialPreflightIssue)(nil),                                     // 1244: controlplane.v1.IntegrationCredentialPreflightIssue
+	(*IntegrationCredentialPreflightDetail)(nil),                                    // 1245: controlplane.v1.IntegrationCredentialPreflightDetail
+	(*IntegrationApprovalConsent)(nil),                                              // 1246: controlplane.v1.IntegrationApprovalConsent
+	(*ListIntegrationApprovalConsentsRequest)(nil),                                  // 1247: controlplane.v1.ListIntegrationApprovalConsentsRequest
+	(*ListIntegrationApprovalConsentsResponse)(nil),                                 // 1248: controlplane.v1.ListIntegrationApprovalConsentsResponse
+	(*RevokeIntegrationApprovalConsentRequest)(nil),                                 // 1249: controlplane.v1.RevokeIntegrationApprovalConsentRequest
+	(*RevokeIntegrationApprovalConsentResponse)(nil),                                // 1250: controlplane.v1.RevokeIntegrationApprovalConsentResponse
+	(*NativeSessionCheckpoint)(nil),                                                 // 1251: controlplane.v1.NativeSessionCheckpoint
+	(*ModelExecutionPolicy)(nil),                                                    // 1252: controlplane.v1.ModelExecutionPolicy
+	(*RuntimeModelContextPolicy)(nil),                                               // 1253: controlplane.v1.RuntimeModelContextPolicy
+	(*ModelCacheResolution)(nil),                                                    // 1254: controlplane.v1.ModelCacheResolution
+	nil,                                                                             // 1255: controlplane.v1.IntegrationResourceScope.ValuesEntry
+	nil,                                                                             // 1256: controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
+	(*timestamppb.Timestamp)(nil),                                                   // 1257: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),                                                         // 1258: google.protobuf.Struct
+	(*structpb.Value)(nil),                                                          // 1259: google.protobuf.Value
 }
 var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	155,  // 0: controlplane.v1.Membership.user:type_name -> controlplane.v1.UserSummary
 	1,    // 1: controlplane.v1.Membership.platform_role:type_name -> controlplane.v1.PlatformRole
 	2,    // 2: controlplane.v1.Membership.project_permissions:type_name -> controlplane.v1.ProjectPermission
-	1251, // 3: controlplane.v1.Membership.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 3: controlplane.v1.Membership.updated_at:type_name -> google.protobuf.Timestamp
 	3,    // 4: controlplane.v1.Membership.next_actions:type_name -> controlplane.v1.NextAction
 	4,    // 5: controlplane.v1.Project.lifecycle:type_name -> controlplane.v1.EntityLifecycle
-	1251, // 6: controlplane.v1.Project.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 7: controlplane.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 6: controlplane.v1.Project.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 7: controlplane.v1.Project.updated_at:type_name -> google.protobuf.Timestamp
 	3,    // 8: controlplane.v1.Project.next_actions:type_name -> controlplane.v1.NextAction
-	1251, // 9: controlplane.v1.Project.last_activity_at:type_name -> google.protobuf.Timestamp
-	1251, // 10: controlplane.v1.Project.deleted_at:type_name -> google.protobuf.Timestamp
-	1251, // 11: controlplane.v1.Project.purge_after:type_name -> google.protobuf.Timestamp
+	1257, // 9: controlplane.v1.Project.last_activity_at:type_name -> google.protobuf.Timestamp
+	1257, // 10: controlplane.v1.Project.deleted_at:type_name -> google.protobuf.Timestamp
+	1257, // 11: controlplane.v1.Project.purge_after:type_name -> google.protobuf.Timestamp
 	1216, // 12: controlplane.v1.RuntimeSelection.model_provider:type_name -> controlplane.v1.RuntimeModelProviderConfiguration
 	6,    // 13: controlplane.v1.InstructionVersion.state:type_name -> controlplane.v1.InstructionState
 	155,  // 14: controlplane.v1.InstructionVersion.changed_by:type_name -> controlplane.v1.UserSummary
-	1251, // 15: controlplane.v1.InstructionVersion.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 16: controlplane.v1.InstructionVersion.published_at:type_name -> google.protobuf.Timestamp
+	1257, // 15: controlplane.v1.InstructionVersion.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 16: controlplane.v1.InstructionVersion.published_at:type_name -> google.protobuf.Timestamp
 	5,    // 17: controlplane.v1.Agent.state:type_name -> controlplane.v1.AgentState
 	159,  // 18: controlplane.v1.Agent.runtime:type_name -> controlplane.v1.RuntimeSelection
 	160,  // 19: controlplane.v1.Agent.published_instructions:type_name -> controlplane.v1.InstructionVersion
 	160,  // 20: controlplane.v1.Agent.draft_instructions:type_name -> controlplane.v1.InstructionVersion
 	158,  // 21: controlplane.v1.Agent.capabilities:type_name -> controlplane.v1.PlatformCapability
-	1251, // 22: controlplane.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 22: controlplane.v1.Agent.updated_at:type_name -> google.protobuf.Timestamp
 	3,    // 23: controlplane.v1.Agent.next_actions:type_name -> controlplane.v1.NextAction
 	163,  // 24: controlplane.v1.Agent.avatar:type_name -> controlplane.v1.AgentAvatar
 	162,  // 25: controlplane.v1.Agent.instruction_binding:type_name -> controlplane.v1.AgentInstructionsBinding
@@ -98481,25 +99132,25 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	7,    // 29: controlplane.v1.WorkflowVersion.state:type_name -> controlplane.v1.WorkflowState
 	164,  // 30: controlplane.v1.WorkflowVersion.input_fields:type_name -> controlplane.v1.WorkflowInputField
 	166,  // 31: controlplane.v1.WorkflowVersion.steps:type_name -> controlplane.v1.WorkflowStep
-	1251, // 32: controlplane.v1.WorkflowVersion.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 33: controlplane.v1.WorkflowVersion.published_at:type_name -> google.protobuf.Timestamp
+	1257, // 32: controlplane.v1.WorkflowVersion.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 33: controlplane.v1.WorkflowVersion.published_at:type_name -> google.protobuf.Timestamp
 	7,    // 34: controlplane.v1.Workflow.state:type_name -> controlplane.v1.WorkflowState
 	167,  // 35: controlplane.v1.Workflow.published_version:type_name -> controlplane.v1.WorkflowVersion
 	167,  // 36: controlplane.v1.Workflow.draft_version:type_name -> controlplane.v1.WorkflowVersion
-	1251, // 37: controlplane.v1.Workflow.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 37: controlplane.v1.Workflow.updated_at:type_name -> google.protobuf.Timestamp
 	3,    // 38: controlplane.v1.Workflow.next_actions:type_name -> controlplane.v1.NextAction
 	170,  // 39: controlplane.v1.Workflow.launch_readiness:type_name -> controlplane.v1.WorkflowLaunchReadiness
 	169,  // 40: controlplane.v1.Workflow.card_summary:type_name -> controlplane.v1.WorkflowCardSummary
-	1251, // 41: controlplane.v1.WorkflowCardSummary.last_activity_at:type_name -> google.protobuf.Timestamp
+	1257, // 41: controlplane.v1.WorkflowCardSummary.last_activity_at:type_name -> google.protobuf.Timestamp
 	33,   // 42: controlplane.v1.TokenUsage.completeness:type_name -> controlplane.v1.UsageCompleteness
 	39,   // 43: controlplane.v1.AssistantRunPin.scope:type_name -> controlplane.v1.AssistantScope
 	171,  // 44: controlplane.v1.Run.target:type_name -> controlplane.v1.RunTarget
 	8,    // 45: controlplane.v1.Run.state:type_name -> controlplane.v1.RunState
 	9,    // 46: controlplane.v1.Run.source:type_name -> controlplane.v1.RunSource
 	155,  // 47: controlplane.v1.Run.initiator:type_name -> controlplane.v1.UserSummary
-	1251, // 48: controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 49: controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	1251, // 50: controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	1257, // 48: controlplane.v1.Run.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 49: controlplane.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	1257, // 50: controlplane.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	3,    // 51: controlplane.v1.Run.next_actions:type_name -> controlplane.v1.NextAction
 	223,  // 52: controlplane.v1.Run.incidents:type_name -> controlplane.v1.Incident
 	172,  // 53: controlplane.v1.Run.usage:type_name -> controlplane.v1.TokenUsage
@@ -98509,22 +99160,22 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	175,  // 57: controlplane.v1.WorkflowAttemptResult.evidence:type_name -> controlplane.v1.WorkflowAcceptedResult
 	10,   // 58: controlplane.v1.RunNode.type:type_name -> controlplane.v1.RunNodeType
 	11,   // 59: controlplane.v1.RunNode.state:type_name -> controlplane.v1.RunNodeState
-	1251, // 60: controlplane.v1.RunNode.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 61: controlplane.v1.RunNode.started_at:type_name -> google.protobuf.Timestamp
-	1251, // 62: controlplane.v1.RunNode.finished_at:type_name -> google.protobuf.Timestamp
+	1257, // 60: controlplane.v1.RunNode.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 61: controlplane.v1.RunNode.started_at:type_name -> google.protobuf.Timestamp
+	1257, // 62: controlplane.v1.RunNode.finished_at:type_name -> google.protobuf.Timestamp
 	3,    // 63: controlplane.v1.RunNode.next_actions:type_name -> controlplane.v1.NextAction
 	176,  // 64: controlplane.v1.RunNode.workflow_results:type_name -> controlplane.v1.WorkflowAttemptResult
 	12,   // 65: controlplane.v1.RunEdge.type:type_name -> controlplane.v1.RunEdgeType
 	1208, // 66: controlplane.v1.RunEdge.server_workflow_retry:type_name -> controlplane.v1.WorkflowRetryReadProof
 	8,    // 67: controlplane.v1.RunDelta.state:type_name -> controlplane.v1.RunState
-	1251, // 68: controlplane.v1.RunDelta.started_at:type_name -> google.protobuf.Timestamp
-	1251, // 69: controlplane.v1.RunDelta.finished_at:type_name -> google.protobuf.Timestamp
+	1257, // 68: controlplane.v1.RunDelta.started_at:type_name -> google.protobuf.Timestamp
+	1257, // 69: controlplane.v1.RunDelta.finished_at:type_name -> google.protobuf.Timestamp
 	3,    // 70: controlplane.v1.RunDelta.next_actions:type_name -> controlplane.v1.NextAction
 	172,  // 71: controlplane.v1.RunDelta.usage:type_name -> controlplane.v1.TokenUsage
 	13,   // 72: controlplane.v1.RunEvent.type:type_name -> controlplane.v1.RunEventType
 	8,    // 73: controlplane.v1.RunEvent.run_state:type_name -> controlplane.v1.RunState
 	11,   // 74: controlplane.v1.RunEvent.node_state:type_name -> controlplane.v1.RunNodeState
-	1251, // 75: controlplane.v1.RunEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	1257, // 75: controlplane.v1.RunEvent.occurred_at:type_name -> google.protobuf.Timestamp
 	179,  // 76: controlplane.v1.RunEvent.run:type_name -> controlplane.v1.RunDelta
 	177,  // 77: controlplane.v1.RunEvent.node:type_name -> controlplane.v1.RunNode
 	178,  // 78: controlplane.v1.RunEvent.edge:type_name -> controlplane.v1.RunEdge
@@ -98540,7 +99191,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	17,   // 88: controlplane.v1.RunMessage.phase:type_name -> controlplane.v1.RunMessagePhase
 	182,  // 89: controlplane.v1.RunMessage.source:type_name -> controlplane.v1.MessageSource
 	14,   // 90: controlplane.v1.RunEventActor.kind:type_name -> controlplane.v1.RunEventActorKind
-	1252, // 91: controlplane.v1.RunToolCall.safe_parameters:type_name -> google.protobuf.Struct
+	1258, // 91: controlplane.v1.RunToolCall.safe_parameters:type_name -> google.protobuf.Struct
 	16,   // 92: controlplane.v1.RunToolCall.state:type_name -> controlplane.v1.RunToolCallState
 	177,  // 93: controlplane.v1.RunGraph.nodes:type_name -> controlplane.v1.RunNode
 	178,  // 94: controlplane.v1.RunGraph.edges:type_name -> controlplane.v1.RunEdge
@@ -98549,9 +99200,9 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	19,   // 97: controlplane.v1.OwnerGate.allowed_decisions:type_name -> controlplane.v1.OwnerGateDecision
 	19,   // 98: controlplane.v1.OwnerGate.decision:type_name -> controlplane.v1.OwnerGateDecision
 	155,  // 99: controlplane.v1.OwnerGate.decided_by:type_name -> controlplane.v1.UserSummary
-	1251, // 100: controlplane.v1.OwnerGate.opened_at:type_name -> google.protobuf.Timestamp
-	1251, // 101: controlplane.v1.OwnerGate.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 102: controlplane.v1.OwnerGate.decided_at:type_name -> google.protobuf.Timestamp
+	1257, // 100: controlplane.v1.OwnerGate.opened_at:type_name -> google.protobuf.Timestamp
+	1257, // 101: controlplane.v1.OwnerGate.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 102: controlplane.v1.OwnerGate.decided_at:type_name -> google.protobuf.Timestamp
 	3,    // 103: controlplane.v1.OwnerGate.next_actions:type_name -> controlplane.v1.NextAction
 	188,  // 104: controlplane.v1.OwnerGate.decision_consequences:type_name -> controlplane.v1.OwnerGateDecisionConsequence
 	189,  // 105: controlplane.v1.OwnerGate.integration_intent:type_name -> controlplane.v1.IntegrationIntent
@@ -98559,15 +99210,15 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	1210, // 107: controlplane.v1.OwnerGate.rework_plan:type_name -> controlplane.v1.WorkflowReworkPreview
 	19,   // 108: controlplane.v1.OwnerGateDecisionConsequence.decision:type_name -> controlplane.v1.OwnerGateDecision
 	207,  // 109: controlplane.v1.IntegrationIntent.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
-	1252, // 110: controlplane.v1.IntegrationIntent.effect_preview:type_name -> google.protobuf.Struct
+	1258, // 110: controlplane.v1.IntegrationIntent.effect_preview:type_name -> google.protobuf.Struct
 	20,   // 111: controlplane.v1.Artifact.scan_state:type_name -> controlplane.v1.ArtifactScanState
 	21,   // 112: controlplane.v1.Artifact.source:type_name -> controlplane.v1.ArtifactSource
-	1251, // 113: controlplane.v1.Artifact.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 113: controlplane.v1.Artifact.created_at:type_name -> google.protobuf.Timestamp
 	3,    // 114: controlplane.v1.Artifact.next_actions:type_name -> controlplane.v1.NextAction
 	22,   // 115: controlplane.v1.Artifact.lifecycle_state:type_name -> controlplane.v1.ArtifactLifecycleState
-	1251, // 116: controlplane.v1.Artifact.deleted_at:type_name -> google.protobuf.Timestamp
-	1251, // 117: controlplane.v1.Artifact.purge_after:type_name -> google.protobuf.Timestamp
-	1251, // 118: controlplane.v1.ArtifactRevision.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 116: controlplane.v1.Artifact.deleted_at:type_name -> google.protobuf.Timestamp
+	1257, // 117: controlplane.v1.Artifact.purge_after:type_name -> google.protobuf.Timestamp
+	1257, // 118: controlplane.v1.ArtifactRevision.created_at:type_name -> google.protobuf.Timestamp
 	153,  // 119: controlplane.v1.ListArtifactRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
 	191,  // 120: controlplane.v1.ListArtifactRevisionsResponse.items:type_name -> controlplane.v1.ArtifactRevision
 	154,  // 121: controlplane.v1.ListArtifactRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
@@ -98577,19 +99228,19 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	24,   // 125: controlplane.v1.AttachmentSet.state:type_name -> controlplane.v1.AttachmentSetState
 	25,   // 126: controlplane.v1.AttachmentSet.purpose:type_name -> controlplane.v1.AttachmentSetPurpose
 	198,  // 127: controlplane.v1.AttachmentSet.items:type_name -> controlplane.v1.AttachmentSetItem
-	1251, // 128: controlplane.v1.AttachmentSet.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 129: controlplane.v1.AttachmentSet.finalized_at:type_name -> google.protobuf.Timestamp
+	1257, // 128: controlplane.v1.AttachmentSet.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 129: controlplane.v1.AttachmentSet.finalized_at:type_name -> google.protobuf.Timestamp
 	171,  // 130: controlplane.v1.Schedule.target:type_name -> controlplane.v1.RunTarget
 	26,   // 131: controlplane.v1.Schedule.state:type_name -> controlplane.v1.ScheduleState
-	1252, // 132: controlplane.v1.Schedule.input:type_name -> google.protobuf.Struct
-	1251, // 133: controlplane.v1.Schedule.next_run_at:type_name -> google.protobuf.Timestamp
+	1258, // 132: controlplane.v1.Schedule.input:type_name -> google.protobuf.Struct
+	1257, // 133: controlplane.v1.Schedule.next_run_at:type_name -> google.protobuf.Timestamp
 	3,    // 134: controlplane.v1.Schedule.next_actions:type_name -> controlplane.v1.NextAction
 	201,  // 135: controlplane.v1.Schedule.current_revision:type_name -> controlplane.v1.ScheduleRevision
-	1252, // 136: controlplane.v1.Schedule.prompt_inputs:type_name -> google.protobuf.Struct
+	1258, // 136: controlplane.v1.Schedule.prompt_inputs:type_name -> google.protobuf.Struct
 	171,  // 137: controlplane.v1.ScheduleRevision.target:type_name -> controlplane.v1.RunTarget
-	1252, // 138: controlplane.v1.ScheduleRevision.input:type_name -> google.protobuf.Struct
-	1251, // 139: controlplane.v1.ScheduleRevision.created_at:type_name -> google.protobuf.Timestamp
-	1252, // 140: controlplane.v1.ScheduleRevision.prompt_inputs:type_name -> google.protobuf.Struct
+	1258, // 138: controlplane.v1.ScheduleRevision.input:type_name -> google.protobuf.Struct
+	1257, // 139: controlplane.v1.ScheduleRevision.created_at:type_name -> google.protobuf.Timestamp
+	1258, // 140: controlplane.v1.ScheduleRevision.prompt_inputs:type_name -> google.protobuf.Struct
 	174,  // 141: controlplane.v1.ScheduleRunOccurrence.run:type_name -> controlplane.v1.Run
 	28,   // 142: controlplane.v1.IntegrationCapability.typed_risk:type_name -> controlplane.v1.IntegrationRisk
 	29,   // 143: controlplane.v1.IntegrationCapability.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
@@ -98602,59 +99253,59 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	205,  // 150: controlplane.v1.IntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
 	31,   // 151: controlplane.v1.IntegrationDefinition.origin:type_name -> controlplane.v1.IntegrationDefinitionOrigin
 	30,   // 152: controlplane.v1.IntegrationResourceScope.kind:type_name -> controlplane.v1.IntegrationResourceKind
-	1249, // 153: controlplane.v1.IntegrationResourceScope.values:type_name -> controlplane.v1.IntegrationResourceScope.ValuesEntry
-	1251, // 154: controlplane.v1.IntegrationCredentialRevision.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 155: controlplane.v1.IntegrationGrant.created_at:type_name -> google.protobuf.Timestamp
+	1255, // 153: controlplane.v1.IntegrationResourceScope.values:type_name -> controlplane.v1.IntegrationResourceScope.ValuesEntry
+	1257, // 154: controlplane.v1.IntegrationCredentialRevision.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 155: controlplane.v1.IntegrationGrant.created_at:type_name -> google.protobuf.Timestamp
 	28,   // 156: controlplane.v1.IntegrationGrant.typed_risk:type_name -> controlplane.v1.IntegrationRisk
 	29,   // 157: controlplane.v1.IntegrationGrant.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
 	207,  // 158: controlplane.v1.IntegrationGrant.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
 	27,   // 159: controlplane.v1.IntegrationConnection.state:type_name -> controlplane.v1.ConnectionState
-	1251, // 160: controlplane.v1.IntegrationConnection.last_tested_at:type_name -> google.protobuf.Timestamp
+	1257, // 160: controlplane.v1.IntegrationConnection.last_tested_at:type_name -> google.protobuf.Timestamp
 	203,  // 161: controlplane.v1.IntegrationConnection.capabilities:type_name -> controlplane.v1.IntegrationCapability
 	209,  // 162: controlplane.v1.IntegrationConnection.grants:type_name -> controlplane.v1.IntegrationGrant
 	3,    // 163: controlplane.v1.IntegrationConnection.next_actions:type_name -> controlplane.v1.NextAction
-	1252, // 164: controlplane.v1.IntegrationConnection.public_configuration:type_name -> google.protobuf.Struct
+	1258, // 164: controlplane.v1.IntegrationConnection.public_configuration:type_name -> google.protobuf.Struct
 	208,  // 165: controlplane.v1.IntegrationConnection.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1251, // 166: controlplane.v1.IntegrationConnection.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 167: controlplane.v1.IntegrationConnection.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 166: controlplane.v1.IntegrationConnection.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 167: controlplane.v1.IntegrationConnection.updated_at:type_name -> google.protobuf.Timestamp
 	211,  // 168: controlplane.v1.IntegrationConnection.definition_configuration_binding:type_name -> controlplane.v1.IntegrationDefinitionConfigurationBinding
 	143,  // 169: controlplane.v1.IntegrationConnection.credential_policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
 	149,  // 170: controlplane.v1.IntegrationDefinitionConfigurationBinding.state:type_name -> controlplane.v1.IntegrationDefinitionConfigurationBinding.State
 	150,  // 171: controlplane.v1.AssistantPlanOperation.type:type_name -> controlplane.v1.AssistantPlanOperation.Type
-	1252, // 172: controlplane.v1.AssistantPlanOperation.bounded_input:type_name -> google.protobuf.Struct
+	1258, // 172: controlplane.v1.AssistantPlanOperation.bounded_input:type_name -> google.protobuf.Struct
 	151,  // 173: controlplane.v1.AssistantPlanOperation.action:type_name -> controlplane.v1.AssistantPlanOperation.Action
-	1252, // 174: controlplane.v1.AssistantPlanOperation.parameters:type_name -> google.protobuf.Struct
-	1252, // 175: controlplane.v1.AssistantPlanOperation.before:type_name -> google.protobuf.Struct
-	1252, // 176: controlplane.v1.AssistantPlanOperation.after:type_name -> google.protobuf.Struct
+	1258, // 174: controlplane.v1.AssistantPlanOperation.parameters:type_name -> google.protobuf.Struct
+	1258, // 175: controlplane.v1.AssistantPlanOperation.before:type_name -> google.protobuf.Struct
+	1258, // 176: controlplane.v1.AssistantPlanOperation.after:type_name -> google.protobuf.Struct
 	212,  // 177: controlplane.v1.AssistantPlan.operations:type_name -> controlplane.v1.AssistantPlanOperation
 	3,    // 178: controlplane.v1.AssistantPlan.next_actions:type_name -> controlplane.v1.NextAction
 	36,   // 179: controlplane.v1.AssistantPlan.state:type_name -> controlplane.v1.AssistantPlanState
-	1251, // 180: controlplane.v1.AssistantPlan.validated_at:type_name -> google.protobuf.Timestamp
-	1251, // 181: controlplane.v1.AssistantPlan.applied_at:type_name -> google.protobuf.Timestamp
+	1257, // 180: controlplane.v1.AssistantPlan.validated_at:type_name -> google.protobuf.Timestamp
+	1257, // 181: controlplane.v1.AssistantPlan.applied_at:type_name -> google.protobuf.Timestamp
 	217,  // 182: controlplane.v1.AssistantPlan.receipt:type_name -> controlplane.v1.AssistantPlanReceipt
 	150,  // 183: controlplane.v1.AssistantContextDescriptor.allowed_operations:type_name -> controlplane.v1.AssistantPlanOperation.Type
 	191,  // 184: controlplane.v1.AssistantPlanOperationReceipt.artifact_revision:type_name -> controlplane.v1.ArtifactRevision
-	1253, // 185: controlplane.v1.AssistantPlanConflict.expected:type_name -> google.protobuf.Value
-	1253, // 186: controlplane.v1.AssistantPlanConflict.actual:type_name -> google.protobuf.Value
+	1259, // 185: controlplane.v1.AssistantPlanConflict.expected:type_name -> google.protobuf.Value
+	1259, // 186: controlplane.v1.AssistantPlanConflict.actual:type_name -> google.protobuf.Value
 	215,  // 187: controlplane.v1.AssistantPlanReceipt.operations:type_name -> controlplane.v1.AssistantPlanOperationReceipt
 	216,  // 188: controlplane.v1.AssistantPlanReceipt.conflicts:type_name -> controlplane.v1.AssistantPlanConflict
-	1251, // 189: controlplane.v1.AssistantPlanReceipt.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 189: controlplane.v1.AssistantPlanReceipt.created_at:type_name -> google.protobuf.Timestamp
 	213,  // 190: controlplane.v1.AssistantTurn.plan:type_name -> controlplane.v1.AssistantPlan
-	1251, // 191: controlplane.v1.AssistantTurn.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 191: controlplane.v1.AssistantTurn.created_at:type_name -> google.protobuf.Timestamp
 	182,  // 192: controlplane.v1.AssistantTurn.source:type_name -> controlplane.v1.MessageSource
-	1251, // 193: controlplane.v1.ProjectAssistantProfile.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 194: controlplane.v1.ProjectAssistantProfile.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 193: controlplane.v1.ProjectAssistantProfile.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 194: controlplane.v1.ProjectAssistantProfile.updated_at:type_name -> google.protobuf.Timestamp
 	218,  // 195: controlplane.v1.AssistantConversation.turns:type_name -> controlplane.v1.AssistantTurn
-	1251, // 196: controlplane.v1.AssistantConversation.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 196: controlplane.v1.AssistantConversation.updated_at:type_name -> google.protobuf.Timestamp
 	214,  // 197: controlplane.v1.AssistantConversation.context:type_name -> controlplane.v1.AssistantContextDescriptor
 	38,   // 198: controlplane.v1.AssistantConversation.state:type_name -> controlplane.v1.AssistantConversationState
 	39,   // 199: controlplane.v1.AssistantConversation.assistant_scope:type_name -> controlplane.v1.AssistantScope
 	32,   // 200: controlplane.v1.SystemAssistant.runtime_state:type_name -> controlplane.v1.AssistantRuntimeState
-	1251, // 201: controlplane.v1.SystemAssistant.last_heartbeat_at:type_name -> google.protobuf.Timestamp
+	1257, // 201: controlplane.v1.SystemAssistant.last_heartbeat_at:type_name -> google.protobuf.Timestamp
 	3,    // 202: controlplane.v1.SystemAssistant.next_actions:type_name -> controlplane.v1.NextAction
 	155,  // 203: controlplane.v1.AuditEvent.initiator:type_name -> controlplane.v1.UserSummary
-	1251, // 204: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
-	1251, // 205: controlplane.v1.Incident.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 204: controlplane.v1.AuditEvent.occurred_at:type_name -> google.protobuf.Timestamp
+	1257, // 205: controlplane.v1.Incident.created_at:type_name -> google.protobuf.Timestamp
 	221,  // 206: controlplane.v1.BootstrapState.assistant:type_name -> controlplane.v1.SystemAssistant
 	155,  // 207: controlplane.v1.BootstrapState.current_user:type_name -> controlplane.v1.UserSummary
 	3,    // 208: controlplane.v1.BootstrapState.next_actions:type_name -> controlplane.v1.NextAction
@@ -98667,13 +99318,13 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	159,  // 215: controlplane.v1.AdministrationState.runtimes:type_name -> controlplane.v1.RuntimeSelection
 	206,  // 216: controlplane.v1.AdministrationState.optional_adapters:type_name -> controlplane.v1.IntegrationDefinition
 	223,  // 217: controlplane.v1.AdministrationState.incidents:type_name -> controlplane.v1.Incident
-	1251, // 218: controlplane.v1.AdministrationState.observed_at:type_name -> google.protobuf.Timestamp
+	1257, // 218: controlplane.v1.AdministrationState.observed_at:type_name -> google.protobuf.Timestamp
 	224,  // 219: controlplane.v1.GetBootstrapStateResponse.state:type_name -> controlplane.v1.BootstrapState
 	226,  // 220: controlplane.v1.GetOverviewResponse.overview:type_name -> controlplane.v1.Overview
 	158,  // 221: controlplane.v1.ListPlatformCapabilitiesResponse.capabilities:type_name -> controlplane.v1.PlatformCapability
 	159,  // 222: controlplane.v1.ListRuntimeSelectionsResponse.runtimes:type_name -> controlplane.v1.RuntimeSelection
 	40,   // 223: controlplane.v1.SearchResult.kind:type_name -> controlplane.v1.SearchResultKind
-	1251, // 224: controlplane.v1.SearchResult.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 224: controlplane.v1.SearchResult.updated_at:type_name -> google.protobuf.Timestamp
 	153,  // 225: controlplane.v1.SearchPlatformRequest.page:type_name -> controlplane.v1.PageRequest
 	238,  // 226: controlplane.v1.SearchPlatformResponse.results:type_name -> controlplane.v1.SearchResult
 	154,  // 227: controlplane.v1.SearchPlatformResponse.page:type_name -> controlplane.v1.PageInfo
@@ -98714,7 +99365,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	254,  // 262: controlplane.v1.ImagePlatformToolInventory.tools:type_name -> controlplane.v1.ImageToolObservation
 	255,  // 263: controlplane.v1.ImageToolInventory.platforms:type_name -> controlplane.v1.ImagePlatformToolInventory
 	44,   // 264: controlplane.v1.VFSNode.kind:type_name -> controlplane.v1.VFSNodeKind
-	1251, // 265: controlplane.v1.VFSNode.modified_at:type_name -> google.protobuf.Timestamp
+	1257, // 265: controlplane.v1.VFSNode.modified_at:type_name -> google.protobuf.Timestamp
 	153,  // 266: controlplane.v1.ListVFSNodesRequest.page:type_name -> controlplane.v1.PageRequest
 	44,   // 267: controlplane.v1.ListVFSNodesRequest.kinds:type_name -> controlplane.v1.VFSNodeKind
 	257,  // 268: controlplane.v1.ListVFSNodesResponse.nodes:type_name -> controlplane.v1.VFSNode
@@ -98828,7 +99479,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	180,  // 376: controlplane.v1.ListRunEventsResponse.events:type_name -> controlplane.v1.RunEvent
 	152,  // 377: controlplane.v1.LaunchRunRequest.mutation:type_name -> controlplane.v1.MutationContext
 	171,  // 378: controlplane.v1.LaunchRunRequest.target:type_name -> controlplane.v1.RunTarget
-	1252, // 379: controlplane.v1.LaunchRunRequest.input:type_name -> google.protobuf.Struct
+	1258, // 379: controlplane.v1.LaunchRunRequest.input:type_name -> google.protobuf.Struct
 	9,    // 380: controlplane.v1.LaunchRunRequest.source:type_name -> controlplane.v1.RunSource
 	174,  // 381: controlplane.v1.LaunchRunResponse.run:type_name -> controlplane.v1.Run
 	186,  // 382: controlplane.v1.LaunchRunResponse.graph:type_name -> controlplane.v1.RunGraph
@@ -98903,13 +99554,13 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	154,  // 451: controlplane.v1.ListSchedulesResponse.page:type_name -> controlplane.v1.PageInfo
 	152,  // 452: controlplane.v1.CreateScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
 	171,  // 453: controlplane.v1.CreateScheduleRequest.target:type_name -> controlplane.v1.RunTarget
-	1252, // 454: controlplane.v1.CreateScheduleRequest.input:type_name -> google.protobuf.Struct
-	1252, // 455: controlplane.v1.CreateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
+	1258, // 454: controlplane.v1.CreateScheduleRequest.input:type_name -> google.protobuf.Struct
+	1258, // 455: controlplane.v1.CreateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
 	200,  // 456: controlplane.v1.CreateScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
 	152,  // 457: controlplane.v1.UpdateScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
 	171,  // 458: controlplane.v1.UpdateScheduleRequest.target:type_name -> controlplane.v1.RunTarget
-	1252, // 459: controlplane.v1.UpdateScheduleRequest.input:type_name -> google.protobuf.Struct
-	1252, // 460: controlplane.v1.UpdateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
+	1258, // 459: controlplane.v1.UpdateScheduleRequest.input:type_name -> google.protobuf.Struct
+	1258, // 460: controlplane.v1.UpdateScheduleRequest.prompt_inputs:type_name -> google.protobuf.Struct
 	200,  // 461: controlplane.v1.UpdateScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
 	152,  // 462: controlplane.v1.SetScheduleEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
 	200,  // 463: controlplane.v1.SetScheduleEnabledResponse.schedule:type_name -> controlplane.v1.Schedule
@@ -98921,7 +99572,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	210,  // 469: controlplane.v1.ListIntegrationConnectionsResponse.connections:type_name -> controlplane.v1.IntegrationConnection
 	154,  // 470: controlplane.v1.ListIntegrationConnectionsResponse.page:type_name -> controlplane.v1.PageInfo
 	47,   // 471: controlplane.v1.IntegrationGrantCandidateContext.recipient_kind:type_name -> controlplane.v1.IntegrationGrantRecipientKind
-	1250, // 472: controlplane.v1.IntegrationGrantConnectionCandidate.resource_scope:type_name -> controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
+	1256, // 472: controlplane.v1.IntegrationGrantConnectionCandidate.resource_scope:type_name -> controlplane.v1.IntegrationGrantConnectionCandidate.ResourceScopeEntry
 	48,   // 473: controlplane.v1.IntegrationGrantConnectionCandidate.reason:type_name -> controlplane.v1.IntegrationCandidateReason
 	412,  // 474: controlplane.v1.IntegrationGrantConnectionCandidate.pins:type_name -> controlplane.v1.IntegrationGrantCandidatePins
 	48,   // 475: controlplane.v1.IntegrationGrantProjectCandidate.reason:type_name -> controlplane.v1.IntegrationCandidateReason
@@ -98959,10 +99610,10 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	412,  // 507: controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse.pins:type_name -> controlplane.v1.IntegrationGrantCandidatePins
 	210,  // 508: controlplane.v1.GetIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	152,  // 509: controlplane.v1.CreateIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1252, // 510: controlplane.v1.CreateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
+	1258, // 510: controlplane.v1.CreateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
 	210,  // 511: controlplane.v1.CreateIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	152,  // 512: controlplane.v1.UpdateIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1252, // 513: controlplane.v1.UpdateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
+	1258, // 513: controlplane.v1.UpdateIntegrationConnectionRequest.public_configuration:type_name -> google.protobuf.Struct
 	210,  // 514: controlplane.v1.UpdateIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
 	152,  // 515: controlplane.v1.DeleteIntegrationConnectionRequest.mutation:type_name -> controlplane.v1.MutationContext
 	210,  // 516: controlplane.v1.DeleteIntegrationConnectionResponse.connection:type_name -> controlplane.v1.IntegrationConnection
@@ -99040,19 +99691,19 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	153,  // 588: controlplane.v1.ListAuditEventsRequest.page:type_name -> controlplane.v1.PageRequest
 	222,  // 589: controlplane.v1.ListAuditEventsResponse.events:type_name -> controlplane.v1.AuditEvent
 	154,  // 590: controlplane.v1.ListAuditEventsResponse.page:type_name -> controlplane.v1.PageInfo
-	1251, // 591: controlplane.v1.PublicRuntimeRevisionIdentity.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 591: controlplane.v1.PublicRuntimeRevisionIdentity.created_at:type_name -> google.protobuf.Timestamp
 	49,   // 592: controlplane.v1.RuntimeRevisionDiffChange.component:type_name -> controlplane.v1.RuntimeRevisionDiffComponent
 	491,  // 593: controlplane.v1.RuntimeRevisionDiffChange.previous:type_name -> controlplane.v1.RuntimeRevisionDiffValue
 	491,  // 594: controlplane.v1.RuntimeRevisionDiffChange.current:type_name -> controlplane.v1.RuntimeRevisionDiffValue
 	490,  // 595: controlplane.v1.GetRuntimeRevisionDiffResponse.current:type_name -> controlplane.v1.PublicRuntimeRevisionIdentity
 	490,  // 596: controlplane.v1.GetRuntimeRevisionDiffResponse.previous:type_name -> controlplane.v1.PublicRuntimeRevisionIdentity
 	492,  // 597: controlplane.v1.GetRuntimeRevisionDiffResponse.changes:type_name -> controlplane.v1.RuntimeRevisionDiffChange
-	1251, // 598: controlplane.v1.ManagedMCPHealthProof.checked_at:type_name -> google.protobuf.Timestamp
+	1257, // 598: controlplane.v1.ManagedMCPHealthProof.checked_at:type_name -> google.protobuf.Timestamp
 	51,   // 599: controlplane.v1.ManagedMCPProfile.scope_kind:type_name -> controlplane.v1.ManagedMCPScopeKind
 	495,  // 600: controlplane.v1.ManagedMCPProfile.health:type_name -> controlplane.v1.ManagedMCPHealthProof
-	1251, // 601: controlplane.v1.RuntimeExecutionClock.started_at:type_name -> google.protobuf.Timestamp
-	1251, // 602: controlplane.v1.RuntimeExecutionClock.deadline_at:type_name -> google.protobuf.Timestamp
-	1251, // 603: controlplane.v1.RuntimeExecutionDeadline.effective_deadline_at:type_name -> google.protobuf.Timestamp
+	1257, // 601: controlplane.v1.RuntimeExecutionClock.started_at:type_name -> google.protobuf.Timestamp
+	1257, // 602: controlplane.v1.RuntimeExecutionClock.deadline_at:type_name -> google.protobuf.Timestamp
+	1257, // 603: controlplane.v1.RuntimeExecutionDeadline.effective_deadline_at:type_name -> google.protobuf.Timestamp
 	497,  // 604: controlplane.v1.RuntimeExecutionDeadline.clocks:type_name -> controlplane.v1.RuntimeExecutionClock
 	159,  // 605: controlplane.v1.RuntimeRevisionSnapshot.runtime:type_name -> controlplane.v1.RuntimeSelection
 	158,  // 606: controlplane.v1.RuntimeRevisionSnapshot.capabilities:type_name -> controlplane.v1.PlatformCapability
@@ -99061,7 +99712,7 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	39,   // 609: controlplane.v1.RuntimeRevisionSnapshot.assistant_scope:type_name -> controlplane.v1.AssistantScope
 	541,  // 610: controlplane.v1.RuntimeRevisionSnapshot.delegation_targets:type_name -> controlplane.v1.DelegationTarget
 	542,  // 611: controlplane.v1.RuntimeRevisionSnapshot.session_context:type_name -> controlplane.v1.SessionContextMessage
-	1252, // 612: controlplane.v1.RuntimeRevisionSnapshot.bounded_input:type_name -> google.protobuf.Struct
+	1258, // 612: controlplane.v1.RuntimeRevisionSnapshot.bounded_input:type_name -> google.protobuf.Struct
 	540,  // 613: controlplane.v1.RuntimeRevisionSnapshot.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
 	792,  // 614: controlplane.v1.RuntimeRevisionSnapshot.environment_values:type_name -> controlplane.v1.RuntimeEnvironmentValue
 	806,  // 615: controlplane.v1.RuntimeRevisionSnapshot.secret_projections:type_name -> controlplane.v1.RuntimeSecretDescriptor
@@ -99079,1902 +99730,1911 @@ var file_controlplane_v1_control_plane_proto_depIdxs = []int32{
 	496,  // 627: controlplane.v1.RuntimeRevisionSnapshot.managed_mcp_profiles:type_name -> controlplane.v1.ManagedMCPProfile
 	498,  // 628: controlplane.v1.RuntimeRevisionSnapshot.execution_deadline:type_name -> controlplane.v1.RuntimeExecutionDeadline
 	503,  // 629: controlplane.v1.RuntimeRevisionSnapshot.workspace_storage:type_name -> controlplane.v1.RuntimeWorkspaceStorage
-	500,  // 630: controlplane.v1.RuntimeWorkspaceCheckpoint.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
-	501,  // 631: controlplane.v1.RuntimeWorkspaceCheckpoint.manifest:type_name -> controlplane.v1.RuntimeWorkspaceObject
-	500,  // 632: controlplane.v1.RuntimeWorkspaceStorage.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
-	502,  // 633: controlplane.v1.RuntimeWorkspaceStorage.source:type_name -> controlplane.v1.RuntimeWorkspaceCheckpoint
-	505,  // 634: controlplane.v1.RuntimeWorkspaceStorage.volume_ready:type_name -> controlplane.v1.RuntimeWorkspaceVolumeReady
-	500,  // 635: controlplane.v1.RuntimeWorkspaceVolumePreparation.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
-	504,  // 636: controlplane.v1.RuntimeWorkspaceVolumeReady.preparation:type_name -> controlplane.v1.RuntimeWorkspaceVolumePreparation
-	52,   // 637: controlplane.v1.RuntimeFileCatalog.purposes:type_name -> controlplane.v1.RuntimeFilePurpose
-	52,   // 638: controlplane.v1.ExecutionFileContext.purpose:type_name -> controlplane.v1.RuntimeFilePurpose
-	52,   // 639: controlplane.v1.ExecutionFileDescriptor.purpose:type_name -> controlplane.v1.RuntimeFilePurpose
-	507,  // 640: controlplane.v1.SearchExecutionFilesRequest.context:type_name -> controlplane.v1.ExecutionFileContext
-	153,  // 641: controlplane.v1.SearchExecutionFilesRequest.page:type_name -> controlplane.v1.PageRequest
-	506,  // 642: controlplane.v1.SearchExecutionFilesResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
-	509,  // 643: controlplane.v1.SearchExecutionFilesResponse.items:type_name -> controlplane.v1.ExecutionFileDescriptor
-	154,  // 644: controlplane.v1.SearchExecutionFilesResponse.page:type_name -> controlplane.v1.PageInfo
-	507,  // 645: controlplane.v1.GetExecutionFileMetadataRequest.context:type_name -> controlplane.v1.ExecutionFileContext
-	508,  // 646: controlplane.v1.GetExecutionFileMetadataRequest.file:type_name -> controlplane.v1.ExecutionFileRef
-	506,  // 647: controlplane.v1.GetExecutionFileMetadataResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
-	509,  // 648: controlplane.v1.GetExecutionFileMetadataResponse.file:type_name -> controlplane.v1.ExecutionFileDescriptor
-	507,  // 649: controlplane.v1.PreviewExecutionFileRequest.context:type_name -> controlplane.v1.ExecutionFileContext
-	508,  // 650: controlplane.v1.PreviewExecutionFileRequest.file:type_name -> controlplane.v1.ExecutionFileRef
-	506,  // 651: controlplane.v1.PreviewExecutionFileResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
-	509,  // 652: controlplane.v1.PreviewExecutionFileResponse.file:type_name -> controlplane.v1.ExecutionFileDescriptor
-	507,  // 653: controlplane.v1.GetExecutionFileManifestRequest.context:type_name -> controlplane.v1.ExecutionFileContext
-	153,  // 654: controlplane.v1.GetExecutionFileManifestRequest.page:type_name -> controlplane.v1.PageRequest
-	506,  // 655: controlplane.v1.GetExecutionFileManifestResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
-	509,  // 656: controlplane.v1.GetExecutionFileManifestResponse.items:type_name -> controlplane.v1.ExecutionFileDescriptor
-	154,  // 657: controlplane.v1.GetExecutionFileManifestResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 658: controlplane.v1.SavePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	915,  // 659: controlplane.v1.SavePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
-	917,  // 660: controlplane.v1.SavePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 661: controlplane.v1.SavePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 662: controlplane.v1.DiscardPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 663: controlplane.v1.DiscardPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 664: controlplane.v1.DiscardPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 665: controlplane.v1.SaveRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 666: controlplane.v1.SaveRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 667: controlplane.v1.SaveRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 668: controlplane.v1.DiscardRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 669: controlplane.v1.DiscardRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 670: controlplane.v1.DiscardRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 671: controlplane.v1.SaveIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 672: controlplane.v1.SaveIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 673: controlplane.v1.SaveIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 674: controlplane.v1.DiscardIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 675: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 676: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 677: controlplane.v1.SaveSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 678: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 679: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 680: controlplane.v1.DiscardSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 681: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 682: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	1251, // 683: controlplane.v1.RuntimeSkillBundleSnapshot.scanned_at:type_name -> google.protobuf.Timestamp
-	994,  // 684: controlplane.v1.RuntimeSkillBundleSnapshot.files:type_name -> controlplane.v1.SkillBundleFile
-	993,  // 685: controlplane.v1.RuntimeSkillBundleSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
-	1251, // 686: controlplane.v1.RuntimeMemoryRecordSnapshot.retention_until:type_name -> google.protobuf.Timestamp
-	993,  // 687: controlplane.v1.RuntimeMemoryRecordSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
-	53,   // 688: controlplane.v1.RuntimeWorkspacePathRule.access:type_name -> controlplane.v1.RuntimeWorkspaceAccess
-	536,  // 689: controlplane.v1.RuntimeWorkspacePolicy.rules:type_name -> controlplane.v1.RuntimeWorkspacePathRule
-	54,   // 690: controlplane.v1.RuntimeWorkspacePolicy.denial_reasons:type_name -> controlplane.v1.RuntimeWorkspaceDenialReason
-	190,  // 691: controlplane.v1.RuntimeInputArtifact.artifact:type_name -> controlplane.v1.Artifact
-	1251, // 692: controlplane.v1.WorkLease.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 693: controlplane.v1.RuntimeSchedulingCapacity.observed_at:type_name -> google.protobuf.Timestamp
-	544,  // 694: controlplane.v1.RuntimeSchedulingCapacity.nodes:type_name -> controlplane.v1.RuntimeNodeCapacity
-	544,  // 695: controlplane.v1.RuntimeSchedulingCapacity.overhead:type_name -> controlplane.v1.RuntimeNodeCapacity
-	545,  // 696: controlplane.v1.ClaimExecutionRequest.scheduling_capacity:type_name -> controlplane.v1.RuntimeSchedulingCapacity
-	174,  // 697: controlplane.v1.ClaimedExecution.run:type_name -> controlplane.v1.Run
-	177,  // 698: controlplane.v1.ClaimedExecution.node:type_name -> controlplane.v1.RunNode
-	499,  // 699: controlplane.v1.ClaimedExecution.revision:type_name -> controlplane.v1.RuntimeRevisionSnapshot
-	543,  // 700: controlplane.v1.ClaimedExecution.lease:type_name -> controlplane.v1.WorkLease
-	547,  // 701: controlplane.v1.ClaimExecutionResponse.executions:type_name -> controlplane.v1.ClaimedExecution
-	190,  // 702: controlplane.v1.ReadExecutionArtifactResponse.artifact:type_name -> controlplane.v1.Artifact
-	190,  // 703: controlplane.v1.StreamExecutionArtifactResponse.metadata:type_name -> controlplane.v1.Artifact
-	553,  // 704: controlplane.v1.StreamExecutionArtifactResponse.complete:type_name -> controlplane.v1.RuntimeArtifactTransferComplete
-	543,  // 705: controlplane.v1.RenewExecutionResponse.lease:type_name -> controlplane.v1.WorkLease
-	183,  // 706: controlplane.v1.ReportExecutionProgressRequest.message:type_name -> controlplane.v1.RunMessage
-	1204, // 707: controlplane.v1.ReportExecutionProgressRequest.financial:type_name -> controlplane.v1.ProviderFinancialObservation
-	174,  // 708: controlplane.v1.ReportExecutionProgressResponse.run:type_name -> controlplane.v1.Run
-	177,  // 709: controlplane.v1.ReportExecutionProgressResponse.node:type_name -> controlplane.v1.RunNode
-	180,  // 710: controlplane.v1.ReportExecutionProgressResponse.event:type_name -> controlplane.v1.RunEvent
-	152,  // 711: controlplane.v1.CompleteExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	558,  // 712: controlplane.v1.CompleteExecutionRequest.artifacts:type_name -> controlplane.v1.CompletedArtifactInput
-	172,  // 713: controlplane.v1.CompleteExecutionRequest.usage:type_name -> controlplane.v1.TokenUsage
-	174,  // 714: controlplane.v1.CompleteExecutionResponse.run:type_name -> controlplane.v1.Run
-	186,  // 715: controlplane.v1.CompleteExecutionResponse.graph:type_name -> controlplane.v1.RunGraph
-	152,  // 716: controlplane.v1.ObserveWorkspaceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	55,   // 717: controlplane.v1.ObserveWorkspaceRequest.phase:type_name -> controlplane.v1.RuntimeWorkspaceObservationPhase
-	56,   // 718: controlplane.v1.SessionArchiveTask.kind:type_name -> controlplane.v1.SessionArchiveTaskKind
-	563,  // 719: controlplane.v1.SessionArchiveTask.archive:type_name -> controlplane.v1.SessionArchiveBinding
-	543,  // 720: controlplane.v1.SessionArchiveTask.lease:type_name -> controlplane.v1.WorkLease
-	565,  // 721: controlplane.v1.SessionArchiveTask.workspace:type_name -> controlplane.v1.SessionWorkspaceArchiveTask
-	503,  // 722: controlplane.v1.SessionWorkspaceArchiveTask.target:type_name -> controlplane.v1.RuntimeWorkspaceStorage
-	537,  // 723: controlplane.v1.SessionWorkspaceArchiveTask.policy:type_name -> controlplane.v1.RuntimeWorkspacePolicy
-	502,  // 724: controlplane.v1.SessionWorkspaceArchiveTask.checkpoint:type_name -> controlplane.v1.RuntimeWorkspaceCheckpoint
-	564,  // 725: controlplane.v1.ClaimSessionArchiveTasksResponse.tasks:type_name -> controlplane.v1.SessionArchiveTask
-	543,  // 726: controlplane.v1.RenewSessionArchiveTaskResponse.lease:type_name -> controlplane.v1.WorkLease
-	152,  // 727: controlplane.v1.CompleteSessionSnapshotRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 728: controlplane.v1.CompleteSessionRestoreRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 729: controlplane.v1.CompleteSessionPVCDeletionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 730: controlplane.v1.CompleteSessionObjectDeletionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 731: controlplane.v1.FailSessionArchiveTaskRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 732: controlplane.v1.DelegateExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1252, // 733: controlplane.v1.DelegateExecutionRequest.input:type_name -> google.protobuf.Struct
-	174,  // 734: controlplane.v1.DelegateExecutionResponse.child_run:type_name -> controlplane.v1.Run
-	186,  // 735: controlplane.v1.DelegateExecutionResponse.root_graph:type_name -> controlplane.v1.RunGraph
-	152,  // 736: controlplane.v1.LaunchWorkflowExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1252, // 737: controlplane.v1.LaunchWorkflowExecutionRequest.input:type_name -> google.protobuf.Struct
-	587,  // 738: controlplane.v1.GetExecutionWorkflowCatalogRequest.publication_read:type_name -> controlplane.v1.ExecutionWorkflowPublicationRead
-	588,  // 739: controlplane.v1.GetExecutionWorkflowCatalogRequest.active_runs_read:type_name -> controlplane.v1.ExecutionWorkflowActiveRunsRead
-	586,  // 740: controlplane.v1.ExecutionWorkflowPublicationRead.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
-	586,  // 741: controlplane.v1.ExecutionWorkflowActiveRunsRead.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
-	1251, // 742: controlplane.v1.ExecutionWorkflowActiveRun.created_at:type_name -> google.protobuf.Timestamp
-	586,  // 743: controlplane.v1.ExecutionWorkflowActiveRuns.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
-	590,  // 744: controlplane.v1.ExecutionWorkflowActiveRuns.items:type_name -> controlplane.v1.ExecutionWorkflowActiveRun
-	164,  // 745: controlplane.v1.ExecutionWorkflowCatalogEntry.input_fields:type_name -> controlplane.v1.WorkflowInputField
-	170,  // 746: controlplane.v1.ExecutionWorkflowCatalogEntry.readiness:type_name -> controlplane.v1.WorkflowLaunchReadiness
-	592,  // 747: controlplane.v1.GetExecutionWorkflowCatalogResponse.items:type_name -> controlplane.v1.ExecutionWorkflowCatalogEntry
-	589,  // 748: controlplane.v1.GetExecutionWorkflowCatalogResponse.publication:type_name -> controlplane.v1.ExecutionWorkflowPublication
-	591,  // 749: controlplane.v1.GetExecutionWorkflowCatalogResponse.active_runs:type_name -> controlplane.v1.ExecutionWorkflowActiveRuns
-	174,  // 750: controlplane.v1.LaunchWorkflowExecutionResponse.run:type_name -> controlplane.v1.Run
-	186,  // 751: controlplane.v1.LaunchWorkflowExecutionResponse.graph:type_name -> controlplane.v1.RunGraph
-	152,  // 752: controlplane.v1.ProposeAssistantPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
-	212,  // 753: controlplane.v1.ProposeAssistantPlanRequest.operations:type_name -> controlplane.v1.AssistantPlanOperation
-	213,  // 754: controlplane.v1.ProposeAssistantPlanResponse.plan:type_name -> controlplane.v1.AssistantPlan
-	220,  // 755: controlplane.v1.ProposeAssistantPlanResponse.conversation:type_name -> controlplane.v1.AssistantConversation
-	152,  // 756: controlplane.v1.ProposeAssistantMetadataRequest.mutation:type_name -> controlplane.v1.MutationContext
-	220,  // 757: controlplane.v1.ProposeAssistantMetadataResponse.conversation:type_name -> controlplane.v1.AssistantConversation
-	152,  // 758: controlplane.v1.ProposeRunMetadataRequest.mutation:type_name -> controlplane.v1.MutationContext
-	174,  // 759: controlplane.v1.ProposeRunMetadataResponse.run:type_name -> controlplane.v1.Run
-	180,  // 760: controlplane.v1.ProposeRunMetadataResponse.event:type_name -> controlplane.v1.RunEvent
-	152,  // 761: controlplane.v1.RecordRunToolCallRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1252, // 762: controlplane.v1.RecordRunToolCallRequest.safe_parameters:type_name -> google.protobuf.Struct
-	16,   // 763: controlplane.v1.RecordRunToolCallRequest.state:type_name -> controlplane.v1.RunToolCallState
-	180,  // 764: controlplane.v1.RecordRunToolCallResponse.event:type_name -> controlplane.v1.RunEvent
-	221,  // 765: controlplane.v1.ReconcileWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
-	499,  // 766: controlplane.v1.ReconcileWarmRuntimeResponse.desired_revision:type_name -> controlplane.v1.RuntimeRevisionSnapshot
-	32,   // 767: controlplane.v1.ReportWarmRuntimeRequest.state:type_name -> controlplane.v1.AssistantRuntimeState
-	221,  // 768: controlplane.v1.ReportWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
-	200,  // 769: controlplane.v1.ScheduleClaim.schedule:type_name -> controlplane.v1.Schedule
-	543,  // 770: controlplane.v1.ScheduleClaim.lease:type_name -> controlplane.v1.WorkLease
-	1251, // 771: controlplane.v1.ScheduleClaim.scheduled_for:type_name -> google.protobuf.Timestamp
-	607,  // 772: controlplane.v1.ClaimDueSchedulesResponse.claims:type_name -> controlplane.v1.ScheduleClaim
-	152,  // 773: controlplane.v1.MaterializeScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	174,  // 774: controlplane.v1.MaterializeScheduleOccurrenceResponse.run:type_name -> controlplane.v1.Run
-	200,  // 775: controlplane.v1.MaterializeScheduleOccurrenceResponse.schedule:type_name -> controlplane.v1.Schedule
-	543,  // 776: controlplane.v1.RenewScheduleOccurrenceResponse.lease:type_name -> controlplane.v1.WorkLease
-	152,  // 777: controlplane.v1.FailScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1251, // 778: controlplane.v1.PreviewScheduleRequest.after:type_name -> google.protobuf.Timestamp
-	617,  // 779: controlplane.v1.PreviewScheduleRequest.materialization:type_name -> controlplane.v1.SchedulePromptPreviewContext
-	171,  // 780: controlplane.v1.SchedulePromptPreviewContext.target:type_name -> controlplane.v1.RunTarget
-	1252, // 781: controlplane.v1.SchedulePromptPreviewContext.input:type_name -> google.protobuf.Struct
-	1252, // 782: controlplane.v1.SchedulePromptPreviewContext.prompt_inputs:type_name -> google.protobuf.Struct
-	57,   // 783: controlplane.v1.SchedulePromptPreviewContext.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
-	1251, // 784: controlplane.v1.SchedulePromptPreviewPin.scheduled_for:type_name -> google.protobuf.Timestamp
-	57,   // 785: controlplane.v1.SchedulePromptPreviewPin.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
-	1251, // 786: controlplane.v1.PreviewScheduleResponse.occurrences:type_name -> google.protobuf.Timestamp
-	910,  // 787: controlplane.v1.PreviewScheduleResponse.materialized_prompt:type_name -> controlplane.v1.PreviewPromptTemplateResponse
-	835,  // 788: controlplane.v1.PreviewScheduleResponse.automation_variables:type_name -> controlplane.v1.TemplateVariable
-	618,  // 789: controlplane.v1.PreviewScheduleResponse.materialization_pin:type_name -> controlplane.v1.SchedulePromptPreviewPin
-	1252, // 790: controlplane.v1.IntegrationConnectionTestClaim.public_configuration:type_name -> google.protobuf.Struct
-	543,  // 791: controlplane.v1.IntegrationConnectionTestClaim.lease:type_name -> controlplane.v1.WorkLease
-	208,  // 792: controlplane.v1.IntegrationConnectionTestClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	58,   // 793: controlplane.v1.IntegrationConnectionTestClaim.personal_observation_profiles:type_name -> controlplane.v1.PersonalIntegrationCredentialObservationProfile
-	620,  // 794: controlplane.v1.ClaimIntegrationConnectionTestsResponse.claims:type_name -> controlplane.v1.IntegrationConnectionTestClaim
-	152,  // 795: controlplane.v1.CompleteIntegrationConnectionTestRequest.mutation:type_name -> controlplane.v1.MutationContext
-	210,  // 796: controlplane.v1.CompleteIntegrationConnectionTestResponse.connection:type_name -> controlplane.v1.IntegrationConnection
-	1252, // 797: controlplane.v1.ResolveIntegrationInvocationRequest.bounded_input:type_name -> google.protobuf.Struct
-	28,   // 798: controlplane.v1.ResolveIntegrationInvocationResponse.risk:type_name -> controlplane.v1.IntegrationRisk
-	207,  // 799: controlplane.v1.ResolveIntegrationInvocationResponse.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
-	1252, // 800: controlplane.v1.IntegrationInvocationClaim.public_configuration:type_name -> google.protobuf.Struct
-	1252, // 801: controlplane.v1.IntegrationInvocationClaim.bounded_input:type_name -> google.protobuf.Struct
-	543,  // 802: controlplane.v1.IntegrationInvocationClaim.lease:type_name -> controlplane.v1.WorkLease
-	208,  // 803: controlplane.v1.IntegrationInvocationClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	28,   // 804: controlplane.v1.IntegrationInvocationClaim.risk:type_name -> controlplane.v1.IntegrationRisk
-	29,   // 805: controlplane.v1.IntegrationInvocationClaim.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
-	207,  // 806: controlplane.v1.IntegrationInvocationClaim.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
-	59,   // 807: controlplane.v1.IntegrationInvocationClaim.work_mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
-	60,   // 808: controlplane.v1.IntegrationInvocationClaim.resource_permission_profile:type_name -> controlplane.v1.IntegrationCredentialResourcePermissionProfile
-	627,  // 809: controlplane.v1.ClaimSSHComposeInvocationsResponse.claims:type_name -> controlplane.v1.IntegrationInvocationClaim
-	627,  // 810: controlplane.v1.ClaimIntegrationInvocationsResponse.claims:type_name -> controlplane.v1.IntegrationInvocationClaim
-	61,   // 811: controlplane.v1.GetIntegrationInvocationResponse.admission_block_reason:type_name -> controlplane.v1.SSHComposeAdmissionBlockReason
-	152,  // 812: controlplane.v1.CompleteIntegrationInvocationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	634,  // 813: controlplane.v1.CompleteIntegrationInvocationRequest.effect_receipt:type_name -> controlplane.v1.IntegrationEffectReceipt
-	174,  // 814: controlplane.v1.CompleteIntegrationInvocationResponse.run:type_name -> controlplane.v1.Run
-	186,  // 815: controlplane.v1.CompleteIntegrationInvocationResponse.graph:type_name -> controlplane.v1.RunGraph
-	208,  // 816: controlplane.v1.InteractionSource.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
-	637,  // 817: controlplane.v1.ListInteractionSourcesResponse.sources:type_name -> controlplane.v1.InteractionSource
-	1252, // 818: controlplane.v1.InteractionDeliveryClaim.template_data:type_name -> google.protobuf.Struct
-	543,  // 819: controlplane.v1.InteractionDeliveryClaim.lease:type_name -> controlplane.v1.WorkLease
-	208,  // 820: controlplane.v1.InteractionDeliveryClaim.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
-	640,  // 821: controlplane.v1.ClaimInteractionDeliveriesResponse.claims:type_name -> controlplane.v1.InteractionDeliveryClaim
-	152,  // 822: controlplane.v1.CompleteInteractionDeliveryRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 823: controlplane.v1.AcceptInteractionMessageRequest.mutation:type_name -> controlplane.v1.MutationContext
-	19,   // 824: controlplane.v1.AcceptInteractionMessageRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
-	152,  // 825: controlplane.v1.BindInteractionIdentityRequest.mutation:type_name -> controlplane.v1.MutationContext
-	646,  // 826: controlplane.v1.BindInteractionIdentityResponse.identity:type_name -> controlplane.v1.InteractionIdentity
-	152,  // 827: controlplane.v1.RevokeInteractionIdentityRequest.mutation:type_name -> controlplane.v1.MutationContext
-	646,  // 828: controlplane.v1.RevokeInteractionIdentityResponse.identity:type_name -> controlplane.v1.InteractionIdentity
-	153,  // 829: controlplane.v1.ListInteractionIdentitiesRequest.page:type_name -> controlplane.v1.PageRequest
-	646,  // 830: controlplane.v1.ListInteractionIdentitiesResponse.identities:type_name -> controlplane.v1.InteractionIdentity
-	154,  // 831: controlplane.v1.ListInteractionIdentitiesResponse.page:type_name -> controlplane.v1.PageInfo
-	62,   // 832: controlplane.v1.AcceptInteractionMessageResponse.outcome:type_name -> controlplane.v1.InteractionMessageOutcome
-	153,  // 833: controlplane.v1.ListAgentInstructionVersionsRequest.page:type_name -> controlplane.v1.PageRequest
-	160,  // 834: controlplane.v1.ListAgentInstructionVersionsResponse.instruction_versions:type_name -> controlplane.v1.InstructionVersion
-	154,  // 835: controlplane.v1.ListAgentInstructionVersionsResponse.page:type_name -> controlplane.v1.PageInfo
-	200,  // 836: controlplane.v1.GetScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
-	152,  // 837: controlplane.v1.ArchiveScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	200,  // 838: controlplane.v1.ArchiveScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
-	834,  // 839: controlplane.v1.GetAgentRuntimeConfigurationResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	153,  // 840: controlplane.v1.GetAgentEffectiveCapabilitiesRequest.page:type_name -> controlplane.v1.PageRequest
-	5,    // 841: controlplane.v1.ArtifactBindingTarget.state:type_name -> controlplane.v1.AgentState
-	63,   // 842: controlplane.v1.ArtifactBindingTarget.bind_reason:type_name -> controlplane.v1.ArtifactBindingTargetReason
-	63,   // 843: controlplane.v1.ArtifactBindingTarget.unbind_reason:type_name -> controlplane.v1.ArtifactBindingTargetReason
-	153,  // 844: controlplane.v1.ListArtifactBindingTargetsRequest.page:type_name -> controlplane.v1.PageRequest
-	663,  // 845: controlplane.v1.ListArtifactBindingTargetsResponse.items:type_name -> controlplane.v1.ArtifactBindingTarget
-	154,  // 846: controlplane.v1.ListArtifactBindingTargetsResponse.page:type_name -> controlplane.v1.PageInfo
-	1251, // 847: controlplane.v1.ListArtifactBindingTargetsResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	171,  // 848: controlplane.v1.GetRunAttachmentEligibilityRequest.target:type_name -> controlplane.v1.RunTarget
-	171,  // 849: controlplane.v1.GetRunAttachmentEligibilityResponse.target:type_name -> controlplane.v1.RunTarget
-	64,   // 850: controlplane.v1.GetRunAttachmentEligibilityResponse.reason:type_name -> controlplane.v1.RunAttachmentEligibilityReason
-	1251, // 851: controlplane.v1.GetRunAttachmentEligibilityResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	1251, // 852: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.evaluated_at:type_name -> google.protobuf.Timestamp
-	668,  // 853: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.capabilities:type_name -> controlplane.v1.EffectiveCapability
-	154,  // 854: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 855: controlplane.v1.ListConfigOverlayRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	788,  // 856: controlplane.v1.ListConfigOverlayRevisionsResponse.revisions:type_name -> controlplane.v1.ConfigOverlayVersion
-	154,  // 857: controlplane.v1.ListConfigOverlayRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	788,  // 858: controlplane.v1.GetConfigOverlayRevisionResponse.revision:type_name -> controlplane.v1.ConfigOverlayVersion
-	153,  // 859: controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest.page:type_name -> controlplane.v1.PageRequest
-	787,  // 860: controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse.configurations:type_name -> controlplane.v1.AgentRuntimeConfiguration
-	154,  // 861: controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 862: controlplane.v1.ListRuntimeEnvironmentSetsRequest.page:type_name -> controlplane.v1.PageRequest
-	823,  // 863: controlplane.v1.ListRuntimeEnvironmentSetsResponse.environments:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	154,  // 864: controlplane.v1.ListRuntimeEnvironmentSetsResponse.page:type_name -> controlplane.v1.PageInfo
-	823,  // 865: controlplane.v1.GetRuntimeEnvironmentSetResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	153,  // 866: controlplane.v1.ListRuntimeEnvironmentVersionsRequest.page:type_name -> controlplane.v1.PageRequest
-	807,  // 867: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.versions:type_name -> controlplane.v1.RuntimeEnvironmentVersion
-	154,  // 868: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 869: controlplane.v1.ListTemplateVariablesRequest.page:type_name -> controlplane.v1.PageRequest
-	906,  // 870: controlplane.v1.ListTemplateVariablesRequest.context:type_name -> controlplane.v1.PromptPreviewContext
-	835,  // 871: controlplane.v1.ListTemplateVariablesResponse.variables:type_name -> controlplane.v1.TemplateVariable
-	154,  // 872: controlplane.v1.ListTemplateVariablesResponse.page:type_name -> controlplane.v1.PageInfo
-	909,  // 873: controlplane.v1.ListTemplateVariablesResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
-	65,   // 874: controlplane.v1.RuntimeSecretDraft.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	66,   // 875: controlplane.v1.RuntimeSecretDraft.state:type_name -> controlplane.v1.RuntimeSecretDraftState
-	1251, // 876: controlplane.v1.RuntimeSecretDraft.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 877: controlplane.v1.RuntimeSecretDraft.updated_at:type_name -> google.protobuf.Timestamp
-	1251, // 878: controlplane.v1.RuntimeSecretDraft.expires_at:type_name -> google.protobuf.Timestamp
-	0,    // 879: controlplane.v1.RuntimeSecretDraft.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	684,  // 880: controlplane.v1.GetRuntimeSecretDraftResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	152,  // 881: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	65,   // 882: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	696,  // 883: controlplane.v1.PrepareSaveRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
-	152,  // 884: controlplane.v1.PrepareValidateRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	696,  // 885: controlplane.v1.PrepareValidateRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
-	152,  // 886: controlplane.v1.PreparePublishRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	696,  // 887: controlplane.v1.PreparePublishRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
-	152,  // 888: controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	696,  // 889: controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
-	69,   // 890: controlplane.v1.RuntimeSecretDraftOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	1251, // 891: controlplane.v1.RuntimeSecretDraftOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
-	684,  // 892: controlplane.v1.RuntimeSecretDraftOperationReceipt.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	713,  // 893: controlplane.v1.RuntimeSecretDraftOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
-	70,   // 894: controlplane.v1.RuntimeSecretDraftOperationReceipt.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
-	67,   // 895: controlplane.v1.RuntimeSecretDraftWork.kind:type_name -> controlplane.v1.RuntimeSecretDraftOperationKind
-	684,  // 896: controlplane.v1.RuntimeSecretDraftWork.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	685,  // 897: controlplane.v1.RuntimeSecretDraftWork.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	1251, // 898: controlplane.v1.RuntimeSecretDraftWork.lease_deadline:type_name -> google.protobuf.Timestamp
-	1251, // 899: controlplane.v1.RuntimeSecretDraftWork.expires_at:type_name -> google.protobuf.Timestamp
-	739,  // 900: controlplane.v1.RuntimeSecretDraftWork.recovery_materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	685,  // 901: controlplane.v1.RuntimeSecretDraftWork.recovery_encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	697,  // 902: controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse.work:type_name -> controlplane.v1.RuntimeSecretDraftWork
-	685,  // 903: controlplane.v1.CompleteRuntimeSecretDraftOperationRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	739,  // 904: controlplane.v1.CompleteRuntimeSecretDraftOperationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	684,  // 905: controlplane.v1.CompleteRuntimeSecretDraftOperationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	713,  // 906: controlplane.v1.CompleteRuntimeSecretDraftOperationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
-	70,   // 907: controlplane.v1.FailRuntimeSecretDraftOperationRequest.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
-	69,   // 908: controlplane.v1.FailRuntimeSecretDraftOperationResponse.state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	684,  // 909: controlplane.v1.FailRuntimeSecretDraftOperationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	153,  // 910: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest.page:type_name -> controlplane.v1.PageRequest
-	697,  // 911: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse.operations:type_name -> controlplane.v1.RuntimeSecretDraftWork
-	154,  // 912: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse.page:type_name -> controlplane.v1.PageInfo
-	685,  // 913: controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	739,  // 914: controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	71,   // 915: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.encrypted_action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
-	71,   // 916: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.materialization_action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
-	684,  // 917: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
-	69,   // 918: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.operation_state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	685,  // 919: controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
-	739,  // 920: controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	65,   // 921: controlplane.v1.RuntimeSecret.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	712,  // 922: controlplane.v1.RuntimeSecret.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
-	1251, // 923: controlplane.v1.RuntimeSecret.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 924: controlplane.v1.RuntimeSecret.updated_at:type_name -> google.protobuf.Timestamp
-	738,  // 925: controlplane.v1.RuntimeSecret.current_revision_descriptor:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
-	3,    // 926: controlplane.v1.RuntimeSecret.next_actions:type_name -> controlplane.v1.NextAction
-	0,    // 927: controlplane.v1.RuntimeSecret.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	153,  // 928: controlplane.v1.ListRuntimeSecretsRequest.page:type_name -> controlplane.v1.PageRequest
-	713,  // 929: controlplane.v1.ListRuntimeSecretsResponse.secrets:type_name -> controlplane.v1.RuntimeSecret
-	154,  // 930: controlplane.v1.ListRuntimeSecretsResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 931: controlplane.v1.ListOrganizationRuntimeSecretsRequest.page:type_name -> controlplane.v1.PageRequest
-	713,  // 932: controlplane.v1.ListOrganizationRuntimeSecretsResponse.secrets:type_name -> controlplane.v1.RuntimeSecret
-	154,  // 933: controlplane.v1.ListOrganizationRuntimeSecretsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 934: controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	65,   // 935: controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	696,  // 936: controlplane.v1.PrepareOrganizationRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
-	713,  // 937: controlplane.v1.GetRuntimeSecretResponse.secret:type_name -> controlplane.v1.RuntimeSecret
-	152,  // 938: controlplane.v1.PrepareCreateRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
-	65,   // 939: controlplane.v1.PrepareCreateRuntimeSecretRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	730,  // 940: controlplane.v1.PrepareCreateRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
-	152,  // 941: controlplane.v1.PrepareRotateRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
-	65,   // 942: controlplane.v1.PrepareRotateRuntimeSecretRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	730,  // 943: controlplane.v1.PrepareRotateRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
-	152,  // 944: controlplane.v1.PrepareRevealRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
-	730,  // 945: controlplane.v1.PrepareRevealRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
-	152,  // 946: controlplane.v1.PrepareRevokeRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
-	730,  // 947: controlplane.v1.PrepareRevokeRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
-	1251, // 948: controlplane.v1.RuntimeSecretOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
-	65,   // 949: controlplane.v1.RuntimeSecretOperationReceipt.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	69,   // 950: controlplane.v1.RuntimeSecretOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	713,  // 951: controlplane.v1.RuntimeSecretOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
-	70,   // 952: controlplane.v1.RuntimeSecretOperationReceipt.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
-	153,  // 953: controlplane.v1.ListRuntimeSecretRecoveryWorkRequest.page:type_name -> controlplane.v1.PageRequest
-	68,   // 954: controlplane.v1.RuntimeSecretRecoveryWork.kind:type_name -> controlplane.v1.RuntimeSecretOperationKind
-	734,  // 955: controlplane.v1.ListRuntimeSecretRecoveryWorkResponse.operations:type_name -> controlplane.v1.RuntimeSecretRecoveryWork
-	154,  // 956: controlplane.v1.ListRuntimeSecretRecoveryWorkResponse.page:type_name -> controlplane.v1.PageInfo
-	68,   // 957: controlplane.v1.ConsumeRuntimeSecretOperationResponse.kind:type_name -> controlplane.v1.RuntimeSecretOperationKind
-	65,   // 958: controlplane.v1.ConsumeRuntimeSecretOperationResponse.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
-	1251, // 959: controlplane.v1.ConsumeRuntimeSecretOperationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 960: controlplane.v1.ConsumeRuntimeSecretOperationResponse.lease_deadline:type_name -> google.protobuf.Timestamp
-	738,  // 961: controlplane.v1.ConsumeRuntimeSecretOperationResponse.revision_descriptors:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
-	0,    // 962: controlplane.v1.ConsumeRuntimeSecretOperationResponse.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	712,  // 963: controlplane.v1.RuntimeSecretMaterialization.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
-	739,  // 964: controlplane.v1.CompleteRuntimeSecretOperationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	713,  // 965: controlplane.v1.CompleteRuntimeSecretOperationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
-	70,   // 966: controlplane.v1.FailRuntimeSecretOperationRequest.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
-	69,   // 967: controlplane.v1.FailRuntimeSecretOperationResponse.state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	70,   // 968: controlplane.v1.FailRuntimeSecretOperationResponse.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
-	739,  // 969: controlplane.v1.RecoverRuntimeSecretMaterializationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
-	71,   // 970: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
-	69,   // 971: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.operation_state:type_name -> controlplane.v1.RuntimeSecretOperationState
-	713,  // 972: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
-	152,  // 973: controlplane.v1.PublishAgentRuntimeConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	785,  // 974: controlplane.v1.PublishAgentRuntimeConfigurationRequest.provider_accounts:type_name -> controlplane.v1.ProviderAccountCandidate
-	834,  // 975: controlplane.v1.PublishAgentRuntimeConfigurationResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	152,  // 976: controlplane.v1.CreateConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	834,  // 977: controlplane.v1.CreateConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	152,  // 978: controlplane.v1.ValidateConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	834,  // 979: controlplane.v1.ValidateConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	152,  // 980: controlplane.v1.PublishConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	834,  // 981: controlplane.v1.PublishConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	152,  // 982: controlplane.v1.RollbackConfigOverlayRequest.mutation:type_name -> controlplane.v1.MutationContext
-	834,  // 983: controlplane.v1.RollbackConfigOverlayResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	152,  // 984: controlplane.v1.CreateRuntimeEnvironmentSetRequest.mutation:type_name -> controlplane.v1.MutationContext
-	792,  // 985: controlplane.v1.CreateRuntimeEnvironmentSetRequest.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
-	805,  // 986: controlplane.v1.CreateRuntimeEnvironmentSetRequest.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
-	822,  // 987: controlplane.v1.CreateRuntimeEnvironmentSetRequest.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
-	812,  // 988: controlplane.v1.CreateRuntimeEnvironmentSetRequest.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
-	792,  // 989: controlplane.v1.RuntimeEnvironmentDraftSpecification.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
-	805,  // 990: controlplane.v1.RuntimeEnvironmentDraftSpecification.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
-	822,  // 991: controlplane.v1.RuntimeEnvironmentDraftSpecification.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
-	812,  // 992: controlplane.v1.RuntimeEnvironmentDraftSpecification.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
-	757,  // 993: controlplane.v1.RuntimeEnvironmentDraft.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
-	1251, // 994: controlplane.v1.RuntimeEnvironmentDraft.saved_at:type_name -> google.protobuf.Timestamp
-	0,    // 995: controlplane.v1.RuntimeEnvironmentDraft.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	758,  // 996: controlplane.v1.GetRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	152,  // 997: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	757,  // 998: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
-	758,  // 999: controlplane.v1.CreateRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	152,  // 1000: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	757,  // 1001: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
-	758,  // 1002: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	152,  // 1003: controlplane.v1.SaveRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	757,  // 1004: controlplane.v1.SaveRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
-	758,  // 1005: controlplane.v1.SaveRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	152,  // 1006: controlplane.v1.ValidateRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	758,  // 1007: controlplane.v1.ValidateRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	152,  // 1008: controlplane.v1.PublishRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	758,  // 1009: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	823,  // 1010: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	953,  // 1011: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	152,  // 1012: controlplane.v1.DiscardRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	758,  // 1013: controlplane.v1.DiscardRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
-	823,  // 1014: controlplane.v1.CreateRuntimeEnvironmentSetResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	152,  // 1015: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	792,  // 1016: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
-	805,  // 1017: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
-	822,  // 1018: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
-	812,  // 1019: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
-	823,  // 1020: controlplane.v1.PublishRuntimeEnvironmentVersionResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	152,  // 1021: controlplane.v1.RollbackRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
-	823,  // 1022: controlplane.v1.RollbackRuntimeEnvironmentResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	152,  // 1023: controlplane.v1.BindAgentRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
-	834,  // 1024: controlplane.v1.BindAgentRuntimeEnvironmentResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
-	0,    // 1025: controlplane.v1.RuntimeEnvironmentConsumer.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	153,  // 1026: controlplane.v1.GetRuntimeEnvironmentImpactRequest.page:type_name -> controlplane.v1.PageRequest
-	780,  // 1027: controlplane.v1.GetRuntimeEnvironmentImpactResponse.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	154,  // 1028: controlplane.v1.GetRuntimeEnvironmentImpactResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1029: controlplane.v1.RebindRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
-	780,  // 1030: controlplane.v1.RebindRuntimeEnvironmentRequest.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	833,  // 1031: controlplane.v1.RebindRuntimeEnvironmentResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
-	785,  // 1032: controlplane.v1.ProviderAccountPolicyVersion.account_candidates:type_name -> controlplane.v1.ProviderAccountCandidate
-	1251, // 1033: controlplane.v1.ProviderAccountPolicyVersion.created_at:type_name -> google.protobuf.Timestamp
-	786,  // 1034: controlplane.v1.AgentRuntimeConfiguration.provider_policy:type_name -> controlplane.v1.ProviderAccountPolicyVersion
-	1251, // 1035: controlplane.v1.AgentRuntimeConfiguration.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1036: controlplane.v1.ConfigOverlayVersion.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1037: controlplane.v1.ConfigOverlayVersion.published_at:type_name -> google.protobuf.Timestamp
-	789,  // 1038: controlplane.v1.ConfigOverlayVersion.diagnostics:type_name -> controlplane.v1.ConfigOverlayDiagnostic
-	790,  // 1039: controlplane.v1.ConfigOverlaySchema.fields:type_name -> controlplane.v1.ConfigOverlayField
-	1251, // 1040: controlplane.v1.RuntimeSecretDraftImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
-	72,   // 1041: controlplane.v1.RuntimeSecretDraftImpactPlan.state:type_name -> controlplane.v1.RuntimeSecretDraftImpactState
-	799,  // 1042: controlplane.v1.RuntimeSecretDraftImpactItem.consumer:type_name -> controlplane.v1.RuntimeSecretImpactConsumer
-	73,   // 1043: controlplane.v1.RuntimeSecretDraftImpactItem.outcome:type_name -> controlplane.v1.RuntimeSecretDraftImpactOutcome
-	152,  // 1044: controlplane.v1.PrepareRuntimeSecretDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	793,  // 1045: controlplane.v1.PrepareRuntimeSecretDraftImpactResponse.plan:type_name -> controlplane.v1.RuntimeSecretDraftImpactPlan
-	153,  // 1046: controlplane.v1.GetRuntimeSecretDraftImpactRequest.page:type_name -> controlplane.v1.PageRequest
-	793,  // 1047: controlplane.v1.GetRuntimeSecretDraftImpactResponse.plan:type_name -> controlplane.v1.RuntimeSecretDraftImpactPlan
-	794,  // 1048: controlplane.v1.GetRuntimeSecretDraftImpactResponse.items:type_name -> controlplane.v1.RuntimeSecretDraftImpactItem
-	154,  // 1049: controlplane.v1.GetRuntimeSecretDraftImpactResponse.page:type_name -> controlplane.v1.PageInfo
-	780,  // 1050: controlplane.v1.RuntimeSecretImpactConsumer.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	0,    // 1051: controlplane.v1.RuntimeSecretImpactConsumer.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	153,  // 1052: controlplane.v1.GetRuntimeSecretImpactRequest.page:type_name -> controlplane.v1.PageRequest
-	799,  // 1053: controlplane.v1.GetRuntimeSecretImpactResponse.consumers:type_name -> controlplane.v1.RuntimeSecretImpactConsumer
-	154,  // 1054: controlplane.v1.GetRuntimeSecretImpactResponse.page:type_name -> controlplane.v1.PageInfo
-	780,  // 1055: controlplane.v1.RuntimeSecretRebindSelection.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	0,    // 1056: controlplane.v1.RuntimeSecretRebindSelection.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	152,  // 1057: controlplane.v1.RebindRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
-	802,  // 1058: controlplane.v1.RebindRuntimeSecretRequest.selections:type_name -> controlplane.v1.RuntimeSecretRebindSelection
-	823,  // 1059: controlplane.v1.RebindRuntimeSecretResponse.environments:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	833,  // 1060: controlplane.v1.RebindRuntimeSecretResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
-	792,  // 1061: controlplane.v1.RuntimeEnvironmentVersion.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
-	806,  // 1062: controlplane.v1.RuntimeEnvironmentVersion.secret_descriptors:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1251, // 1063: controlplane.v1.RuntimeEnvironmentVersion.created_at:type_name -> google.protobuf.Timestamp
-	821,  // 1064: controlplane.v1.RuntimeEnvironmentVersion.image:type_name -> controlplane.v1.RuntimeEnvironmentImage
-	822,  // 1065: controlplane.v1.RuntimeEnvironmentVersion.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
-	820,  // 1066: controlplane.v1.RuntimeEnvironmentVersion.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicy
-	809,  // 1067: controlplane.v1.RuntimeResourcePolicy.workspace_limits:type_name -> controlplane.v1.RuntimeWorkspaceLimits
-	74,   // 1068: controlplane.v1.RuntimeVolumeInput.kind:type_name -> controlplane.v1.RuntimeVolumeKind
-	74,   // 1069: controlplane.v1.RuntimeVolume.kind:type_name -> controlplane.v1.RuntimeVolumeKind
-	808,  // 1070: controlplane.v1.RuntimeEnvironmentPolicyInput.resources:type_name -> controlplane.v1.RuntimeResourcePolicy
-	810,  // 1071: controlplane.v1.RuntimeEnvironmentPolicyInput.volumes:type_name -> controlplane.v1.RuntimeVolumeInput
-	75,   // 1072: controlplane.v1.RuntimeEnvironmentPolicyInput.network_destinations:type_name -> controlplane.v1.RuntimeNetworkDestination
-	78,   // 1073: controlplane.v1.RuntimeEnvironmentPolicyInput.kubernetes_access:type_name -> controlplane.v1.RuntimeKubernetesAccessKind
-	816,  // 1074: controlplane.v1.RuntimeEnvironmentPolicyInput.web_access:type_name -> controlplane.v1.RuntimeWebAccess
-	75,   // 1075: controlplane.v1.RuntimeNetworkEgress.destination:type_name -> controlplane.v1.RuntimeNetworkDestination
-	76,   // 1076: controlplane.v1.RuntimeNetworkEgress.protocol:type_name -> controlplane.v1.RuntimeNetworkProtocol
-	813,  // 1077: controlplane.v1.RuntimeNetworkPolicy.egress:type_name -> controlplane.v1.RuntimeNetworkEgress
-	816,  // 1078: controlplane.v1.RuntimeNetworkPolicy.web_access:type_name -> controlplane.v1.RuntimeWebAccess
-	77,   // 1079: controlplane.v1.RuntimeWebAccess.mode:type_name -> controlplane.v1.RuntimeWebAccessMode
-	815,  // 1080: controlplane.v1.RuntimeWebAccess.rules:type_name -> controlplane.v1.RuntimeWebAccessRule
-	78,   // 1081: controlplane.v1.RuntimeKubernetesAccessProfile.kind:type_name -> controlplane.v1.RuntimeKubernetesAccessKind
-	817,  // 1082: controlplane.v1.RuntimeKubernetesAccess.profile:type_name -> controlplane.v1.RuntimeKubernetesAccessProfile
-	818,  // 1083: controlplane.v1.RuntimeKubernetesAccess.rules:type_name -> controlplane.v1.RuntimeKubernetesRule
-	808,  // 1084: controlplane.v1.RuntimeEnvironmentPolicy.resources:type_name -> controlplane.v1.RuntimeResourcePolicy
-	811,  // 1085: controlplane.v1.RuntimeEnvironmentPolicy.volumes:type_name -> controlplane.v1.RuntimeVolume
-	814,  // 1086: controlplane.v1.RuntimeEnvironmentPolicy.network:type_name -> controlplane.v1.RuntimeNetworkPolicy
-	817,  // 1087: controlplane.v1.RuntimeEnvironmentPolicy.kubernetes_access:type_name -> controlplane.v1.RuntimeKubernetesAccessProfile
-	807,  // 1088: controlplane.v1.RuntimeEnvironmentSet.current_version:type_name -> controlplane.v1.RuntimeEnvironmentVersion
-	1251, // 1089: controlplane.v1.RuntimeEnvironmentSet.updated_at:type_name -> google.protobuf.Timestamp
-	3,    // 1090: controlplane.v1.RuntimeEnvironmentSet.next_actions:type_name -> controlplane.v1.NextAction
-	0,    // 1091: controlplane.v1.RuntimeEnvironmentSet.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	1251, // 1092: controlplane.v1.RuntimeEnvironmentReadiness.observed_at:type_name -> google.protobuf.Timestamp
-	824,  // 1093: controlplane.v1.GetRuntimeEnvironmentReadinessResponse.readiness:type_name -> controlplane.v1.RuntimeEnvironmentReadiness
-	153,  // 1094: controlplane.v1.ListRuntimeEnvironmentAgentsRequest.page:type_name -> controlplane.v1.PageRequest
-	161,  // 1095: controlplane.v1.ListRuntimeEnvironmentAgentsResponse.agents:type_name -> controlplane.v1.Agent
-	154,  // 1096: controlplane.v1.ListRuntimeEnvironmentAgentsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1097: controlplane.v1.SetRuntimeEnvironmentEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
-	823,  // 1098: controlplane.v1.SetRuntimeEnvironmentEnabledResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	152,  // 1099: controlplane.v1.DeleteRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
-	823,  // 1100: controlplane.v1.DeleteRuntimeEnvironmentResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	787,  // 1101: controlplane.v1.AgentRuntimeConfigurationView.configuration:type_name -> controlplane.v1.AgentRuntimeConfiguration
-	788,  // 1102: controlplane.v1.AgentRuntimeConfigurationView.published_overlay:type_name -> controlplane.v1.ConfigOverlayVersion
-	788,  // 1103: controlplane.v1.AgentRuntimeConfigurationView.draft_overlay:type_name -> controlplane.v1.ConfigOverlayVersion
-	833,  // 1104: controlplane.v1.AgentRuntimeConfigurationView.environment_binding:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
-	823,  // 1105: controlplane.v1.AgentRuntimeConfigurationView.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
-	1052, // 1106: controlplane.v1.AgentRuntimeConfigurationView.skill_bindings:type_name -> controlplane.v1.AgentContextBinding
-	1052, // 1107: controlplane.v1.AgentRuntimeConfigurationView.memory_bindings:type_name -> controlplane.v1.AgentContextBinding
-	791,  // 1108: controlplane.v1.AgentRuntimeConfigurationView.overlay_schema:type_name -> controlplane.v1.ConfigOverlaySchema
-	836,  // 1109: controlplane.v1.TemplateVariable.item_fields:type_name -> controlplane.v1.TemplateVariableField
-	79,   // 1110: controlplane.v1.TemplateVariable.reason:type_name -> controlplane.v1.TemplateVariableAvailabilityReason
-	82,   // 1111: controlplane.v1.ProviderDefinition.authorization_methods:type_name -> controlplane.v1.ProviderAuthorizationMethod
-	840,  // 1112: controlplane.v1.ProviderDefinition.models:type_name -> controlplane.v1.ModelCapability
-	153,  // 1113: controlplane.v1.ListProviderDefinitionsRequest.page:type_name -> controlplane.v1.PageRequest
-	837,  // 1114: controlplane.v1.ListProviderDefinitionsResponse.definitions:type_name -> controlplane.v1.ProviderDefinition
-	154,  // 1115: controlplane.v1.ListProviderDefinitionsResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 1116: controlplane.v1.ListModelCapabilitiesRequest.page:type_name -> controlplane.v1.PageRequest
-	840,  // 1117: controlplane.v1.ListModelCapabilitiesResponse.models:type_name -> controlplane.v1.ModelCapability
-	154,  // 1118: controlplane.v1.ListModelCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
-	843,  // 1119: controlplane.v1.ListModelCapabilitiesResponse.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
-	80,   // 1120: controlplane.v1.ProviderModelCatalogStatus.state:type_name -> controlplane.v1.ProviderModelCatalogState
-	1251, // 1121: controlplane.v1.ProviderModelCatalogStatus.observed_at:type_name -> google.protobuf.Timestamp
-	1251, // 1122: controlplane.v1.ProviderModelCatalogStatus.expires_at:type_name -> google.protobuf.Timestamp
-	125,  // 1123: controlplane.v1.ProviderModelCatalogStatus.source:type_name -> controlplane.v1.ProviderModelCatalogSource
-	126,  // 1124: controlplane.v1.ProviderModelCatalogStatus.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
-	1251, // 1125: controlplane.v1.RoleImageRecipeRevision.created_at:type_name -> google.protobuf.Timestamp
-	153,  // 1126: controlplane.v1.ListRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	844,  // 1127: controlplane.v1.ListRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
-	154,  // 1128: controlplane.v1.ListRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1129: controlplane.v1.PromoteRoleImageRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1251, // 1130: controlplane.v1.RoleImagePromotionReceipt.created_at:type_name -> google.protobuf.Timestamp
-	848,  // 1131: controlplane.v1.PromoteRoleImageResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
-	82,   // 1132: controlplane.v1.ProviderAuthorization.method:type_name -> controlplane.v1.ProviderAuthorizationMethod
-	83,   // 1133: controlplane.v1.ProviderAuthorization.state:type_name -> controlplane.v1.ProviderAuthorizationState
-	1251, // 1134: controlplane.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
-	81,   // 1135: controlplane.v1.ProviderAccount.state:type_name -> controlplane.v1.ProviderAccountState
-	850,  // 1136: controlplane.v1.ProviderAccount.authorization:type_name -> controlplane.v1.ProviderAuthorization
-	3,    // 1137: controlplane.v1.ProviderAccount.next_actions:type_name -> controlplane.v1.NextAction
-	1251, // 1138: controlplane.v1.ProviderAccount.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1139: controlplane.v1.ProviderAccount.updated_at:type_name -> google.protobuf.Timestamp
-	860,  // 1140: controlplane.v1.ProviderAccount.usage:type_name -> controlplane.v1.ProviderAccountUsage
-	1205, // 1141: controlplane.v1.ProviderAccount.financial_summary:type_name -> controlplane.v1.ProviderFinancialSummary
-	853,  // 1142: controlplane.v1.ProviderAccount.deletion:type_name -> controlplane.v1.ProviderAccountDeletion
-	854,  // 1143: controlplane.v1.ProviderAccount.verification:type_name -> controlplane.v1.ProviderAccountVerification
-	84,   // 1144: controlplane.v1.ProviderAccountBlockerCount.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
-	85,   // 1145: controlplane.v1.ProviderAccountDeletion.state:type_name -> controlplane.v1.ProviderAccountDeletionState
-	852,  // 1146: controlplane.v1.ProviderAccountDeletion.blockers:type_name -> controlplane.v1.ProviderAccountBlockerCount
-	1251, // 1147: controlplane.v1.ProviderAccountDeletion.requested_at:type_name -> google.protobuf.Timestamp
-	1251, // 1148: controlplane.v1.ProviderAccountDeletion.completed_at:type_name -> google.protobuf.Timestamp
-	86,   // 1149: controlplane.v1.ProviderAccountVerification.state:type_name -> controlplane.v1.ProviderAccountVerificationState
-	87,   // 1150: controlplane.v1.ProviderAccountVerification.scope:type_name -> controlplane.v1.ProviderAccountVerificationScope
-	1251, // 1151: controlplane.v1.ProviderAccountVerification.requested_at:type_name -> google.protobuf.Timestamp
-	1251, // 1152: controlplane.v1.ProviderAccountVerification.completed_at:type_name -> google.protobuf.Timestamp
-	84,   // 1153: controlplane.v1.ProviderAccountBlocker.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
-	84,   // 1154: controlplane.v1.ListProviderAccountBlockersRequest.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
-	153,  // 1155: controlplane.v1.ListProviderAccountBlockersRequest.page:type_name -> controlplane.v1.PageRequest
-	855,  // 1156: controlplane.v1.ListProviderAccountBlockersResponse.items:type_name -> controlplane.v1.ProviderAccountBlocker
-	154,  // 1157: controlplane.v1.ListProviderAccountBlockersResponse.page:type_name -> controlplane.v1.PageInfo
-	88,   // 1158: controlplane.v1.ProviderAccountUsageContext.purpose:type_name -> controlplane.v1.ProviderAccountUsagePurpose
-	89,   // 1159: controlplane.v1.ProviderUsageDimension.state:type_name -> controlplane.v1.ProviderUsageState
-	90,   // 1160: controlplane.v1.ProviderUsageDimension.reason:type_name -> controlplane.v1.ProviderUsageReason
-	92,   // 1161: controlplane.v1.ProviderUsageDimension.remediation:type_name -> controlplane.v1.ProviderUsageRemediation
-	858,  // 1162: controlplane.v1.ProviderAccountUsage.context:type_name -> controlplane.v1.ProviderAccountUsageContext
-	859,  // 1163: controlplane.v1.ProviderAccountUsage.lifecycle:type_name -> controlplane.v1.ProviderUsageDimension
-	859,  // 1164: controlplane.v1.ProviderAccountUsage.credential:type_name -> controlplane.v1.ProviderUsageDimension
-	859,  // 1165: controlplane.v1.ProviderAccountUsage.provider_health:type_name -> controlplane.v1.ProviderUsageDimension
-	859,  // 1166: controlplane.v1.ProviderAccountUsage.model_compatibility:type_name -> controlplane.v1.ProviderUsageDimension
-	859,  // 1167: controlplane.v1.ProviderAccountUsage.capacity:type_name -> controlplane.v1.ProviderUsageDimension
-	859,  // 1168: controlplane.v1.ProviderAccountUsage.actor_eligibility:type_name -> controlplane.v1.ProviderUsageDimension
-	89,   // 1169: controlplane.v1.ProviderAccountUsage.operational_state:type_name -> controlplane.v1.ProviderUsageState
-	843,  // 1170: controlplane.v1.ProviderAccountUsage.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
-	1251, // 1171: controlplane.v1.ProviderAccountUsage.observed_at:type_name -> google.protobuf.Timestamp
-	1251, // 1172: controlplane.v1.ProviderAccountUsage.expires_at:type_name -> google.protobuf.Timestamp
-	91,   // 1173: controlplane.v1.ProviderAccountUsage.provider_health_scope:type_name -> controlplane.v1.ProviderHealthScope
-	1251, // 1174: controlplane.v1.ProviderAccountUsage.provider_health_observed_at:type_name -> google.protobuf.Timestamp
-	1251, // 1175: controlplane.v1.ProviderAccountUsage.provider_health_expires_at:type_name -> google.protobuf.Timestamp
-	153,  // 1176: controlplane.v1.ListProviderAccountsRequest.page:type_name -> controlplane.v1.PageRequest
-	81,   // 1177: controlplane.v1.ListProviderAccountsRequest.state:type_name -> controlplane.v1.ProviderAccountState
-	858,  // 1178: controlplane.v1.ListProviderAccountsRequest.usage_context:type_name -> controlplane.v1.ProviderAccountUsageContext
-	1207, // 1179: controlplane.v1.ListProviderAccountsResponse.financial_summary:type_name -> controlplane.v1.ProviderFinancialOverview
-	851,  // 1180: controlplane.v1.ListProviderAccountsResponse.accounts:type_name -> controlplane.v1.ProviderAccount
-	154,  // 1181: controlplane.v1.ListProviderAccountsResponse.page:type_name -> controlplane.v1.PageInfo
-	3,    // 1182: controlplane.v1.ListProviderAccountsResponse.next_actions:type_name -> controlplane.v1.NextAction
-	858,  // 1183: controlplane.v1.GetProviderAccountRequest.usage_context:type_name -> controlplane.v1.ProviderAccountUsageContext
-	851,  // 1184: controlplane.v1.GetProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1185: controlplane.v1.CreateProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1186: controlplane.v1.CreateProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1187: controlplane.v1.StartProviderAccountDeviceAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1188: controlplane.v1.StartProviderAccountDeviceAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1189: controlplane.v1.AuthorizeProviderAccountAPIKeyRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1190: controlplane.v1.AuthorizeProviderAccountAPIKeyResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1191: controlplane.v1.RefreshProviderAccountAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1192: controlplane.v1.RefreshProviderAccountAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1193: controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1194: controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1195: controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1196: controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1197: controlplane.v1.RevokeProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1198: controlplane.v1.RevokeProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1199: controlplane.v1.DeleteProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1200: controlplane.v1.DeleteProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1201: controlplane.v1.CancelProviderAccountQueuedWorkRequest.mutation:type_name -> controlplane.v1.MutationContext
-	93,   // 1202: controlplane.v1.ProviderAccountQueuedWorkResult.outcome:type_name -> controlplane.v1.ProviderAccountQueuedWorkOutcome
-	851,  // 1203: controlplane.v1.CancelProviderAccountQueuedWorkResponse.account:type_name -> controlplane.v1.ProviderAccount
-	882,  // 1204: controlplane.v1.CancelProviderAccountQueuedWorkResponse.outcomes:type_name -> controlplane.v1.ProviderAccountQueuedWorkResult
-	152,  // 1205: controlplane.v1.SetProviderAccountConcurrencyRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1206: controlplane.v1.SetProviderAccountConcurrencyResponse.account:type_name -> controlplane.v1.ProviderAccount
-	152,  // 1207: controlplane.v1.SetProviderAccountEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
-	851,  // 1208: controlplane.v1.SetProviderAccountEnabledResponse.account:type_name -> controlplane.v1.ProviderAccount
-	153,  // 1209: controlplane.v1.ListScheduleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	201,  // 1210: controlplane.v1.ListScheduleRevisionsResponse.revisions:type_name -> controlplane.v1.ScheduleRevision
-	154,  // 1211: controlplane.v1.ListScheduleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 1212: controlplane.v1.ListScheduleRunsRequest.page:type_name -> controlplane.v1.PageRequest
-	202,  // 1213: controlplane.v1.ListScheduleRunsResponse.occurrences:type_name -> controlplane.v1.ScheduleRunOccurrence
-	154,  // 1214: controlplane.v1.ListScheduleRunsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1215: controlplane.v1.DeleteScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	200,  // 1216: controlplane.v1.DeleteScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
-	94,   // 1217: controlplane.v1.ArtifactImpact.action:type_name -> controlplane.v1.ArtifactImpactAction
-	895,  // 1218: controlplane.v1.ArtifactImpact.active_runs:type_name -> controlplane.v1.ArtifactImpactRun
-	8,    // 1219: controlplane.v1.ArtifactImpactRun.state:type_name -> controlplane.v1.RunState
-	94,   // 1220: controlplane.v1.GetArtifactImpactRequest.action:type_name -> controlplane.v1.ArtifactImpactAction
-	894,  // 1221: controlplane.v1.GetArtifactImpactResponse.impact:type_name -> controlplane.v1.ArtifactImpact
-	152,  // 1222: controlplane.v1.SetAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
-	161,  // 1223: controlplane.v1.SetAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
-	152,  // 1224: controlplane.v1.RemoveAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
-	161,  // 1225: controlplane.v1.RemoveAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
-	906,  // 1226: controlplane.v1.ValidatePromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
-	902,  // 1227: controlplane.v1.ValidatePromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
-	909,  // 1228: controlplane.v1.ValidatePromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
-	906,  // 1229: controlplane.v1.PreviewPromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
-	1252, // 1230: controlplane.v1.PromptPreviewContext.input:type_name -> google.protobuf.Struct
-	95,   // 1231: controlplane.v1.PromptSlotProvenance.slot:type_name -> controlplane.v1.PromptSemanticSlot
-	96,   // 1232: controlplane.v1.PromptSlotProvenance.source:type_name -> controlplane.v1.PromptSectionSource
-	96,   // 1233: controlplane.v1.PromptPreviewSection.source:type_name -> controlplane.v1.PromptSectionSource
-	95,   // 1234: controlplane.v1.PromptPreviewSection.slot:type_name -> controlplane.v1.PromptSemanticSlot
-	97,   // 1235: controlplane.v1.PromptPreviewSection.user_kind:type_name -> controlplane.v1.PromptUserSectionKind
-	902,  // 1236: controlplane.v1.PreviewPromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
-	907,  // 1237: controlplane.v1.PreviewPromptTemplateResponse.slots:type_name -> controlplane.v1.PromptSlotProvenance
-	908,  // 1238: controlplane.v1.PreviewPromptTemplateResponse.sections:type_name -> controlplane.v1.PromptPreviewSection
-	909,  // 1239: controlplane.v1.PreviewPromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
-	913,  // 1240: controlplane.v1.PreviewPromptTemplateResponse.runtime_diff:type_name -> controlplane.v1.PromptRuntimeDiff
-	98,   // 1241: controlplane.v1.PromptRuntimeChange.component:type_name -> controlplane.v1.PromptRuntimeComponent
-	911,  // 1242: controlplane.v1.PromptRuntimeChange.previous:type_name -> controlplane.v1.PromptRuntimeDescriptor
-	911,  // 1243: controlplane.v1.PromptRuntimeChange.current:type_name -> controlplane.v1.PromptRuntimeDescriptor
-	99,   // 1244: controlplane.v1.PromptRuntimeChange.action:type_name -> controlplane.v1.PromptRuntimeAction
-	912,  // 1245: controlplane.v1.PromptRuntimeDiff.changes:type_name -> controlplane.v1.PromptRuntimeChange
-	101,  // 1246: controlplane.v1.ManagedConfigurationRevision.state:type_name -> controlplane.v1.ManagedConfigurationState
-	1251, // 1247: controlplane.v1.ManagedConfigurationRevision.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1248: controlplane.v1.ManagedConfigurationRevision.validated_at:type_name -> google.protobuf.Timestamp
-	1251, // 1249: controlplane.v1.ManagedConfigurationRevision.published_at:type_name -> google.protobuf.Timestamp
-	916,  // 1250: controlplane.v1.ManagedConfigurationRevision.prompt_scope:type_name -> controlplane.v1.PromptTemplateScope
-	103,  // 1251: controlplane.v1.PromptTemplateScopeInput.template_kind:type_name -> controlplane.v1.PromptTemplateKind
-	909,  // 1252: controlplane.v1.PromptTemplateScope.context_pin:type_name -> controlplane.v1.PromptContextPin
-	103,  // 1253: controlplane.v1.PromptTemplateScope.template_kind:type_name -> controlplane.v1.PromptTemplateKind
-	100,  // 1254: controlplane.v1.ManagedConfigurationSet.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	102,  // 1255: controlplane.v1.ManagedConfigurationSet.managed_by:type_name -> controlplane.v1.ManagedConfigurationOwner
-	914,  // 1256: controlplane.v1.ManagedConfigurationSet.current_revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	1251, // 1257: controlplane.v1.ManagedConfigurationSet.updated_at:type_name -> google.protobuf.Timestamp
-	1149, // 1258: controlplane.v1.ManagedConfigurationSet.git_source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	918,  // 1259: controlplane.v1.ManagedConfigurationSet.copy_provenance:type_name -> controlplane.v1.ManagedConfigurationCopyProvenance
-	104,  // 1260: controlplane.v1.ManagedConfigurationCopyProvenance.origin:type_name -> controlplane.v1.ManagedConfigurationCopyOrigin
-	152,  // 1261: controlplane.v1.CopyRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1262: controlplane.v1.CopyRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1263: controlplane.v1.CopyRoleImageConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1264: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	921,  // 1265: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.shipped:type_name -> controlplane.v1.ShippedIntegrationDefinitionCopySource
-	917,  // 1266: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1267: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1268: controlplane.v1.ArchiveRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1269: controlplane.v1.ArchiveRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	152,  // 1270: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1271: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	928,  // 1272: controlplane.v1.ManagedConfigurationImpact.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	154,  // 1273: controlplane.v1.ManagedConfigurationImpact.page:type_name -> controlplane.v1.PageInfo
-	917,  // 1274: controlplane.v1.ManagedConfigurationBindingSnapshot.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1275: controlplane.v1.ManagedConfigurationBindingSnapshot.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	930,  // 1276: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
-	930,  // 1277: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
-	152,  // 1278: controlplane.v1.CreatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	915,  // 1279: controlplane.v1.CreatePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
-	917,  // 1280: controlplane.v1.CreatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1281: controlplane.v1.CreatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1282: controlplane.v1.ValidatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1283: controlplane.v1.ValidatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1284: controlplane.v1.ValidatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1285: controlplane.v1.PublishPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1286: controlplane.v1.PublishPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1287: controlplane.v1.PublishPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	953,  // 1288: controlplane.v1.PublishPromptTemplateDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	152,  // 1289: controlplane.v1.RebindPromptTemplateConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	928,  // 1290: controlplane.v1.RebindPromptTemplateConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	917,  // 1291: controlplane.v1.RebindPromptTemplateConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1292: controlplane.v1.RebindPromptTemplateConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1293: controlplane.v1.CreateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1294: controlplane.v1.CreateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1295: controlplane.v1.CreateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1296: controlplane.v1.ValidateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1297: controlplane.v1.ValidateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1298: controlplane.v1.ValidateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1299: controlplane.v1.PublishRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1300: controlplane.v1.PublishRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1301: controlplane.v1.PublishRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1302: controlplane.v1.RebindRoleImageConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	928,  // 1303: controlplane.v1.RebindRoleImageConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	917,  // 1304: controlplane.v1.RebindRoleImageConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1305: controlplane.v1.RebindRoleImageConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	951,  // 1306: controlplane.v1.RebindRoleImageConsumersResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	105,  // 1307: controlplane.v1.RoleImageImpactPlan.state:type_name -> controlplane.v1.RoleImageImpactPlanState
-	1251, // 1308: controlplane.v1.RoleImageImpactPlan.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1309: controlplane.v1.RoleImageImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
-	780,  // 1310: controlplane.v1.RoleImageImpactItem.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
-	106,  // 1311: controlplane.v1.RoleImageImpactItem.outcome:type_name -> controlplane.v1.RoleImageImpactOutcome
-	107,  // 1312: controlplane.v1.RevisionImpactPlan.kind:type_name -> controlplane.v1.RevisionImpactKind
-	108,  // 1313: controlplane.v1.RevisionImpactPlan.state:type_name -> controlplane.v1.RevisionImpactState
-	1251, // 1314: controlplane.v1.RevisionImpactPlan.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1315: controlplane.v1.RevisionImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
-	110,  // 1316: controlplane.v1.RevisionImpactItem.consumer_kind:type_name -> controlplane.v1.RevisionImpactConsumerKind
-	109,  // 1317: controlplane.v1.RevisionImpactItem.outcome:type_name -> controlplane.v1.RevisionImpactOutcome
-	0,    // 1318: controlplane.v1.RevisionImpactItem.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	152,  // 1319: controlplane.v1.PrepareEnvironmentDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	953,  // 1320: controlplane.v1.PrepareEnvironmentDraftImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	152,  // 1321: controlplane.v1.PrepareInstructionsImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	953,  // 1322: controlplane.v1.PrepareInstructionsImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	152,  // 1323: controlplane.v1.PreparePromptTemplateImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
-	953,  // 1324: controlplane.v1.PreparePromptTemplateImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	153,  // 1325: controlplane.v1.GetRevisionImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
-	953,  // 1326: controlplane.v1.GetRevisionImpactPlanResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
-	954,  // 1327: controlplane.v1.GetRevisionImpactPlanResponse.items:type_name -> controlplane.v1.RevisionImpactItem
-	154,  // 1328: controlplane.v1.GetRevisionImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1329: controlplane.v1.PrepareRoleImageImpactPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
-	951,  // 1330: controlplane.v1.PrepareRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	153,  // 1331: controlplane.v1.GetRoleImageImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
-	951,  // 1332: controlplane.v1.GetRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
-	952,  // 1333: controlplane.v1.GetRoleImageImpactPlanResponse.items:type_name -> controlplane.v1.RoleImageImpactItem
-	154,  // 1334: controlplane.v1.GetRoleImageImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1335: controlplane.v1.CreateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1336: controlplane.v1.CreateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1337: controlplane.v1.CreateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1338: controlplane.v1.ValidateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1339: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1340: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1341: controlplane.v1.PublishIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1342: controlplane.v1.PublishIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1343: controlplane.v1.PublishIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1344: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	928,  // 1345: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	917,  // 1346: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1347: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1348: controlplane.v1.CreateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1349: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1350: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1351: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1352: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1353: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1354: controlplane.v1.PublishSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1355: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1356: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1357: controlplane.v1.RebindSystemSTTConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
-	928,  // 1358: controlplane.v1.RebindSystemSTTConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
-	917,  // 1359: controlplane.v1.RebindSystemSTTConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1360: controlplane.v1.RebindSystemSTTConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1361: controlplane.v1.DetachGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1362: controlplane.v1.DetachGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1363: controlplane.v1.DetachGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	152,  // 1364: controlplane.v1.CopyGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1365: controlplane.v1.CopyGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1366: controlplane.v1.CopyGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	153,  // 1367: controlplane.v1.ListManagedConfigurationHistoryRequest.page:type_name -> controlplane.v1.PageRequest
-	100,  // 1368: controlplane.v1.ListManagedConfigurationsRequest.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	153,  // 1369: controlplane.v1.ListManagedConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
-	917,  // 1370: controlplane.v1.ListManagedConfigurationsResponse.configurations:type_name -> controlplane.v1.ManagedConfigurationSet
-	154,  // 1371: controlplane.v1.ListManagedConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
-	917,  // 1372: controlplane.v1.ListManagedConfigurationHistoryResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1373: controlplane.v1.ListManagedConfigurationHistoryResponse.revisions:type_name -> controlplane.v1.ManagedConfigurationRevision
-	154,  // 1374: controlplane.v1.ListManagedConfigurationHistoryResponse.page:type_name -> controlplane.v1.PageInfo
-	153,  // 1375: controlplane.v1.GetManagedConfigurationImpactRequest.page:type_name -> controlplane.v1.PageRequest
-	929,  // 1376: controlplane.v1.GetManagedConfigurationImpactResponse.impact:type_name -> controlplane.v1.ManagedConfigurationImpact
-	1251, // 1377: controlplane.v1.ContextProvenance.created_at:type_name -> google.protobuf.Timestamp
-	995,  // 1378: controlplane.v1.SkillBundleSpecification.files:type_name -> controlplane.v1.SkillBundleFileInput
-	112,  // 1379: controlplane.v1.SkillBundleRevision.state:type_name -> controlplane.v1.SkillRevisionState
-	994,  // 1380: controlplane.v1.SkillBundleRevision.files:type_name -> controlplane.v1.SkillBundleFile
-	993,  // 1381: controlplane.v1.SkillBundleRevision.provenance:type_name -> controlplane.v1.ContextProvenance
-	113,  // 1382: controlplane.v1.SkillBundleRevision.scan_state:type_name -> controlplane.v1.SkillScanState
-	1251, // 1383: controlplane.v1.SkillBundleRevision.scanned_at:type_name -> google.protobuf.Timestamp
-	1251, // 1384: controlplane.v1.SkillBundleRevision.reviewed_at:type_name -> google.protobuf.Timestamp
-	111,  // 1385: controlplane.v1.SkillBundle.state:type_name -> controlplane.v1.ContextResourceState
-	997,  // 1386: controlplane.v1.SkillBundle.current_revision:type_name -> controlplane.v1.SkillBundleRevision
-	997,  // 1387: controlplane.v1.SkillBundle.draft_revision:type_name -> controlplane.v1.SkillBundleRevision
-	1251, // 1388: controlplane.v1.SkillBundle.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1389: controlplane.v1.SkillBundle.updated_at:type_name -> google.protobuf.Timestamp
-	117,  // 1390: controlplane.v1.EmailMailboxEndpoint.tls_mode:type_name -> controlplane.v1.EmailMailboxTLSMode
-	118,  // 1391: controlplane.v1.EmailMailboxEndpoint.auth_method:type_name -> controlplane.v1.EmailMailboxAuthMethod
-	999,  // 1392: controlplane.v1.EmailMailboxEndpoint.ca:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	999,  // 1393: controlplane.v1.EmailMailboxEndpoint.username:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	999,  // 1394: controlplane.v1.EmailMailboxEndpoint.secret:type_name -> controlplane.v1.EmailMailboxCredentialReference
-	115,  // 1395: controlplane.v1.EmailMailboxOperationPolicy.operation:type_name -> controlplane.v1.EmailOperation
-	123,  // 1396: controlplane.v1.EmailMailboxOperationPolicy.policy:type_name -> controlplane.v1.EmailApprovalPolicy
-	116,  // 1397: controlplane.v1.EmailMailboxSpecification.receive_protocol:type_name -> controlplane.v1.EmailMailboxReceiveProtocol
-	1000, // 1398: controlplane.v1.EmailMailboxSpecification.smtp:type_name -> controlplane.v1.EmailMailboxEndpoint
-	1000, // 1399: controlplane.v1.EmailMailboxSpecification.imap:type_name -> controlplane.v1.EmailMailboxEndpoint
-	1000, // 1400: controlplane.v1.EmailMailboxSpecification.pop:type_name -> controlplane.v1.EmailMailboxEndpoint
-	1001, // 1401: controlplane.v1.EmailMailboxSpecification.limits:type_name -> controlplane.v1.EmailMailboxLimits
-	1002, // 1402: controlplane.v1.EmailMailboxSpecification.policies:type_name -> controlplane.v1.EmailMailboxOperationPolicy
-	1003, // 1403: controlplane.v1.EmailMailboxDraftContent.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	119,  // 1404: controlplane.v1.EmailMailboxPublication.state:type_name -> controlplane.v1.EmailMailboxPublicationState
-	1251, // 1405: controlplane.v1.EmailMailboxPublication.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1406: controlplane.v1.EmailMailboxPublication.ready_at:type_name -> google.protobuf.Timestamp
-	917,  // 1407: controlplane.v1.EmailMailboxConfigurationView.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	914,  // 1408: controlplane.v1.EmailMailboxConfigurationView.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
-	1003, // 1409: controlplane.v1.EmailMailboxConfigurationView.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	1006, // 1410: controlplane.v1.EmailMailboxConfigurationView.publication:type_name -> controlplane.v1.EmailMailboxPublication
-	1005, // 1411: controlplane.v1.EmailMailboxConfigurationView.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
-	1008, // 1412: controlplane.v1.EmailMailboxConfigurationView.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
-	120,  // 1413: controlplane.v1.EmailMailboxActionAvailability.action:type_name -> controlplane.v1.EmailMailboxAction
-	121,  // 1414: controlplane.v1.EmailMailboxActionAvailability.reason:type_name -> controlplane.v1.EmailMailboxActionReason
-	153,  // 1415: controlplane.v1.ListEmailMailboxConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
-	1007, // 1416: controlplane.v1.ListEmailMailboxConfigurationsResponse.items:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	154,  // 1417: controlplane.v1.ListEmailMailboxConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
-	1008, // 1418: controlplane.v1.ListEmailMailboxConfigurationsResponse.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
-	1007, // 1419: controlplane.v1.GetEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	122,  // 1420: controlplane.v1.ListEmailMailboxCredentialsRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	153,  // 1421: controlplane.v1.ListEmailMailboxCredentialsRequest.page:type_name -> controlplane.v1.PageRequest
-	1035, // 1422: controlplane.v1.ListEmailMailboxCredentialsResponse.items:type_name -> controlplane.v1.EmailMailboxCredential
-	154,  // 1423: controlplane.v1.ListEmailMailboxCredentialsResponse.page:type_name -> controlplane.v1.PageInfo
-	1035, // 1424: controlplane.v1.GetEmailMailboxCredentialReceiptResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
-	1004, // 1425: controlplane.v1.PreviewEmailMailboxConfigurationRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	1003, // 1426: controlplane.v1.PreviewEmailMailboxConfigurationResponse.specification:type_name -> controlplane.v1.EmailMailboxSpecification
-	1005, // 1427: controlplane.v1.PreviewEmailMailboxConfigurationResponse.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
-	152,  // 1428: controlplane.v1.CreateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1004, // 1429: controlplane.v1.CreateEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	1007, // 1430: controlplane.v1.CreateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1431: controlplane.v1.SaveEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1004, // 1432: controlplane.v1.SaveEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
-	1007, // 1433: controlplane.v1.SaveEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1434: controlplane.v1.ValidateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1007, // 1435: controlplane.v1.ValidateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1436: controlplane.v1.PublishEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1007, // 1437: controlplane.v1.PublishEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1438: controlplane.v1.DiscardEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1007, // 1439: controlplane.v1.DiscardEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1440: controlplane.v1.BindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1007, // 1441: controlplane.v1.BindEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
-	152,  // 1442: controlplane.v1.UnbindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1006, // 1443: controlplane.v1.UnbindEmailMailboxConfigurationResponse.publication:type_name -> controlplane.v1.EmailMailboxPublication
-	122,  // 1444: controlplane.v1.EmailMailboxCredential.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	152,  // 1445: controlplane.v1.ConfigureEmailMailboxCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	122,  // 1446: controlplane.v1.ConfigureEmailMailboxCredentialRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
-	1035, // 1447: controlplane.v1.ConfigureEmailMailboxCredentialResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
-	543,  // 1448: controlplane.v1.EmailExecutionBinding.lease:type_name -> controlplane.v1.WorkLease
-	115,  // 1449: controlplane.v1.EmailAuthorizationScope.operations:type_name -> controlplane.v1.EmailOperation
-	1038, // 1450: controlplane.v1.ResolveEmailAuthorizationRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	115,  // 1451: controlplane.v1.ResolveEmailAuthorizationRequest.operation:type_name -> controlplane.v1.EmailOperation
-	115,  // 1452: controlplane.v1.ResolveEmailAuthorizationResponse.operation:type_name -> controlplane.v1.EmailOperation
-	123,  // 1453: controlplane.v1.ResolveEmailAuthorizationResponse.policy:type_name -> controlplane.v1.EmailApprovalPolicy
-	1039, // 1454: controlplane.v1.ResolveEmailAuthorizationResponse.user_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	1039, // 1455: controlplane.v1.ResolveEmailAuthorizationResponse.agent_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	1039, // 1456: controlplane.v1.ResolveEmailAuthorizationResponse.connection_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	1039, // 1457: controlplane.v1.ResolveEmailAuthorizationResponse.resource_scope:type_name -> controlplane.v1.EmailAuthorizationScope
-	1251, // 1458: controlplane.v1.ResolveEmailAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1038, // 1459: controlplane.v1.ResolveEmailAuthorizationResponse.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	124,  // 1460: controlplane.v1.EmailEffectReceipt.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1251, // 1461: controlplane.v1.EmailEffectReceipt.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1462: controlplane.v1.EmailEffectReceipt.updated_at:type_name -> google.protobuf.Timestamp
-	152,  // 1463: controlplane.v1.ReportEmailEffectReceiptRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1038, // 1464: controlplane.v1.ReportEmailEffectReceiptRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
-	124,  // 1465: controlplane.v1.ReportEmailEffectReceiptRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1042, // 1466: controlplane.v1.ReportEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	124,  // 1467: controlplane.v1.EmailReconciliationDecision.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1251, // 1468: controlplane.v1.EmailReconciliationDecision.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1469: controlplane.v1.EmailReconciliationDecision.expires_at:type_name -> google.protobuf.Timestamp
-	152,  // 1470: controlplane.v1.ReconcileEmailEffectRequest.mutation:type_name -> controlplane.v1.MutationContext
-	124,  // 1471: controlplane.v1.ReconcileEmailEffectRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
-	1045, // 1472: controlplane.v1.ReconcileEmailEffectResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	1045, // 1473: controlplane.v1.ResolveEmailReconciliationResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	1042, // 1474: controlplane.v1.ResolveEmailReconciliationResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	1042, // 1475: controlplane.v1.GetEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
-	1045, // 1476: controlplane.v1.GetEmailEffectReceiptResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
-	1251, // 1477: controlplane.v1.MemoryRecordSpecification.retention_until:type_name -> google.protobuf.Timestamp
-	993,  // 1478: controlplane.v1.MemoryRecordRevision.provenance:type_name -> controlplane.v1.ContextProvenance
-	1251, // 1479: controlplane.v1.MemoryRecordRevision.retention_until:type_name -> google.protobuf.Timestamp
-	111,  // 1480: controlplane.v1.KodexMemoryRecord.state:type_name -> controlplane.v1.ContextResourceState
-	1054, // 1481: controlplane.v1.KodexMemoryRecord.current_revision:type_name -> controlplane.v1.MemoryRecordRevision
-	1251, // 1482: controlplane.v1.KodexMemoryRecord.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1483: controlplane.v1.KodexMemoryRecord.updated_at:type_name -> google.protobuf.Timestamp
-	111,  // 1484: controlplane.v1.ListSkillBundlesRequest.state:type_name -> controlplane.v1.ContextResourceState
-	153,  // 1485: controlplane.v1.ListSkillBundlesRequest.page:type_name -> controlplane.v1.PageRequest
-	998,  // 1486: controlplane.v1.ListSkillBundlesResponse.bundles:type_name -> controlplane.v1.SkillBundle
-	154,  // 1487: controlplane.v1.ListSkillBundlesResponse.page:type_name -> controlplane.v1.PageInfo
-	998,  // 1488: controlplane.v1.GetSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	153,  // 1489: controlplane.v1.ListSkillBundleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	997,  // 1490: controlplane.v1.ListSkillBundleRevisionsResponse.revisions:type_name -> controlplane.v1.SkillBundleRevision
-	154,  // 1491: controlplane.v1.ListSkillBundleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	111,  // 1492: controlplane.v1.ListMemoryRecordsRequest.state:type_name -> controlplane.v1.ContextResourceState
-	153,  // 1493: controlplane.v1.ListMemoryRecordsRequest.page:type_name -> controlplane.v1.PageRequest
-	1055, // 1494: controlplane.v1.ListMemoryRecordsResponse.records:type_name -> controlplane.v1.KodexMemoryRecord
-	154,  // 1495: controlplane.v1.ListMemoryRecordsResponse.page:type_name -> controlplane.v1.PageInfo
-	1055, // 1496: controlplane.v1.GetMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	153,  // 1497: controlplane.v1.ListMemoryRecordRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	1054, // 1498: controlplane.v1.ListMemoryRecordRevisionsResponse.revisions:type_name -> controlplane.v1.MemoryRecordRevision
-	154,  // 1499: controlplane.v1.ListMemoryRecordRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1500: controlplane.v1.CreateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	996,  // 1501: controlplane.v1.CreateSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
-	152,  // 1502: controlplane.v1.SaveSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	996,  // 1503: controlplane.v1.SaveSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
-	152,  // 1504: controlplane.v1.ReviewSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	114,  // 1505: controlplane.v1.ReviewSkillBundleDraftRequest.decision:type_name -> controlplane.v1.SkillReviewDecision
-	152,  // 1506: controlplane.v1.CreateMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1053, // 1507: controlplane.v1.CreateMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
-	152,  // 1508: controlplane.v1.ReviseMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1053, // 1509: controlplane.v1.ReviseMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
-	152,  // 1510: controlplane.v1.ValidateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1511: controlplane.v1.PublishSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1512: controlplane.v1.DiscardSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1513: controlplane.v1.ArchiveSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1514: controlplane.v1.RestoreSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1515: controlplane.v1.PurgeSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1516: controlplane.v1.BindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1052, // 1517: controlplane.v1.BindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	152,  // 1518: controlplane.v1.UnbindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1052, // 1519: controlplane.v1.UnbindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	152,  // 1520: controlplane.v1.ArchiveMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1521: controlplane.v1.RestoreMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1522: controlplane.v1.PurgeMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	152,  // 1523: controlplane.v1.BindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1052, // 1524: controlplane.v1.BindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	152,  // 1525: controlplane.v1.UnbindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1052, // 1526: controlplane.v1.UnbindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
-	998,  // 1527: controlplane.v1.CreateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1528: controlplane.v1.SaveSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1529: controlplane.v1.ValidateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1530: controlplane.v1.ReviewSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1531: controlplane.v1.PublishSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1532: controlplane.v1.DiscardSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1533: controlplane.v1.ArchiveSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1534: controlplane.v1.RestoreSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	998,  // 1535: controlplane.v1.PurgeSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
-	1055, // 1536: controlplane.v1.CreateMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	1055, // 1537: controlplane.v1.ReviseMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	1055, // 1538: controlplane.v1.ArchiveMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	1055, // 1539: controlplane.v1.RestoreMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	1055, // 1540: controlplane.v1.PurgeMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
-	1104, // 1541: controlplane.v1.SystemSTTConfiguration.parameters:type_name -> controlplane.v1.SystemSTTParameters
-	1105, // 1542: controlplane.v1.GetSystemSTTConfigurationResponse.configuration:type_name -> controlplane.v1.SystemSTTConfiguration
-	1108, // 1543: controlplane.v1.ProviderCredentialRenewalBinding.previous_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1251, // 1544: controlplane.v1.ProviderCredentialRenewalBinding.expires_at:type_name -> google.protobuf.Timestamp
-	1111, // 1545: controlplane.v1.RenewManagedProviderCredentialRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
-	127,  // 1546: controlplane.v1.RenewManagedProviderCredentialResponse.state:type_name -> controlplane.v1.ProviderCredentialRenewalState
-	1108, // 1547: controlplane.v1.RenewManagedProviderCredentialResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1111, // 1548: controlplane.v1.ObserveManagedProviderCredentialRenewalRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
-	127,  // 1549: controlplane.v1.ObserveManagedProviderCredentialRenewalResponse.state:type_name -> controlplane.v1.ProviderCredentialRenewalState
-	1108, // 1550: controlplane.v1.ObserveManagedProviderCredentialRenewalResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1111, // 1551: controlplane.v1.AuthorizeProviderCredentialRenewalRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
-	1111, // 1552: controlplane.v1.ValidateProviderCredentialRenewalObservationRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
-	1108, // 1553: controlplane.v1.ObserveProviderModelCatalogRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	82,   // 1554: controlplane.v1.ObserveProviderModelCatalogRequest.authorization_method:type_name -> controlplane.v1.ProviderAuthorizationMethod
-	1251, // 1555: controlplane.v1.ObserveProviderModelCatalogRequest.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 1556: controlplane.v1.ObserveProviderModelCatalogResponse.observed_at:type_name -> google.protobuf.Timestamp
-	125,  // 1557: controlplane.v1.ObserveProviderModelCatalogResponse.source:type_name -> controlplane.v1.ProviderModelCatalogSource
-	1110, // 1558: controlplane.v1.ObserveProviderModelCatalogResponse.models:type_name -> controlplane.v1.ProviderModelCatalogRecord
-	126,  // 1559: controlplane.v1.ObserveProviderModelCatalogResponse.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
-	1251, // 1560: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
-	128,  // 1561: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest.mode:type_name -> controlplane.v1.ProviderAuthorizationObservationMode
-	83,   // 1562: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.state:type_name -> controlplane.v1.ProviderAuthorizationState
-	1108, // 1563: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	129,  // 1564: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.object_state:type_name -> controlplane.v1.ProviderAuthorizationObjectState
-	1128, // 1565: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
-	1127, // 1566: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
-	1108, // 1567: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1108, // 1568: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	152,  // 1569: controlplane.v1.CommitProviderCredentialRefreshRequest.mutation:type_name -> controlplane.v1.MutationContext
-	540,  // 1570: controlplane.v1.CommitProviderCredentialRefreshResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	1108, // 1571: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1128, // 1572: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
-	130,  // 1573: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.target_kind:type_name -> controlplane.v1.ProviderCredentialCleanupTargetKind
-	1127, // 1574: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
-	1137, // 1575: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.recovery_identity:type_name -> controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
-	1108, // 1576: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse.produced_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
-	1251, // 1577: controlplane.v1.CredentialProjectionAuthority.expires_at:type_name -> google.protobuf.Timestamp
-	1140, // 1578: controlplane.v1.ResolveRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	540,  // 1579: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	806,  // 1580: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1251, // 1581: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1140, // 1582: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	1140, // 1583: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	540,  // 1584: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	806,  // 1585: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
-	1140, // 1586: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
-	540,  // 1587: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
-	1251, // 1588: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
-	131,  // 1589: controlplane.v1.ManagedConfigurationGitSource.state:type_name -> controlplane.v1.ManagedConfigurationSourceState
-	1251, // 1590: controlplane.v1.ManagedConfigurationGitSource.synced_at:type_name -> google.protobuf.Timestamp
-	133,  // 1591: controlplane.v1.ManagedConfigurationGitSource.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
-	152,  // 1592: controlplane.v1.ConfigureRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1150, // 1593: controlplane.v1.ConfigureRoleImageGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
-	917,  // 1594: controlplane.v1.ConfigureRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	152,  // 1595: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1150, // 1596: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
-	917,  // 1597: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	152,  // 1598: controlplane.v1.RefreshRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1599: controlplane.v1.RefreshRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	152,  // 1600: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
-	917,  // 1601: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
-	1251, // 1602: controlplane.v1.ManagedConfigurationSourceLease.expires_at:type_name -> google.protobuf.Timestamp
-	1159, // 1603: controlplane.v1.ManagedConfigurationSourceWork.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	100,  // 1604: controlplane.v1.ManagedConfigurationSourceWork.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	1252, // 1605: controlplane.v1.ManagedConfigurationSourceWork.public_configuration:type_name -> google.protobuf.Struct
-	208,  // 1606: controlplane.v1.ManagedConfigurationSourceWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1251, // 1607: controlplane.v1.ManagedConfigurationSourceWork.deadline:type_name -> google.protobuf.Timestamp
-	1160, // 1608: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationSourceWork
-	1159, // 1609: controlplane.v1.RenewManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	1159, // 1610: controlplane.v1.RenewManagedConfigurationSourceWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	1159, // 1611: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	132,  // 1612: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.ancestry:type_name -> controlplane.v1.ManagedConfigurationSourceAncestry
-	1149, // 1613: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	1159, // 1614: controlplane.v1.FailManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
-	133,  // 1615: controlplane.v1.FailManagedConfigurationSourceWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
-	1149, // 1616: controlplane.v1.FailManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
-	137,  // 1617: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.action:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackAction
-	138,  // 1618: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.reason:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionReason
-	100,  // 1619: controlplane.v1.ManagedConfigurationGitWriteBack.kind:type_name -> controlplane.v1.ManagedConfigurationKind
-	134,  // 1620: controlplane.v1.ManagedConfigurationGitWriteBack.state:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackState
-	136,  // 1621: controlplane.v1.ManagedConfigurationGitWriteBack.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
-	1251, // 1622: controlplane.v1.ManagedConfigurationGitWriteBack.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1623: controlplane.v1.ManagedConfigurationGitWriteBack.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 1624: controlplane.v1.ManagedConfigurationGitWriteBack.approved_at:type_name -> google.protobuf.Timestamp
-	1251, // 1625: controlplane.v1.ManagedConfigurationGitWriteBack.completed_at:type_name -> google.protobuf.Timestamp
-	1169, // 1626: controlplane.v1.ManagedConfigurationGitWriteBack.next_actions:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
-	1251, // 1627: controlplane.v1.ManagedConfigurationGitWriteBack.branch_confirmed_at:type_name -> google.protobuf.Timestamp
-	1251, // 1628: controlplane.v1.ManagedConfigurationGitWriteBack.pull_request_confirmed_at:type_name -> google.protobuf.Timestamp
-	152,  // 1629: controlplane.v1.PrepareRoleImageGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1170, // 1630: controlplane.v1.PrepareRoleImageGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	152,  // 1631: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1170, // 1632: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	152,  // 1633: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1170, // 1634: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	152,  // 1635: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1170, // 1636: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	152,  // 1637: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1170, // 1638: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1170, // 1639: controlplane.v1.GetManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	153,  // 1640: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest.page:type_name -> controlplane.v1.PageRequest
-	1170, // 1641: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.proposals:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	154,  // 1642: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.page:type_name -> controlplane.v1.PageInfo
-	1251, // 1643: controlplane.v1.ManagedConfigurationGitWriteBackLease.expires_at:type_name -> google.protobuf.Timestamp
-	1185, // 1644: controlplane.v1.ManagedConfigurationGitWriteBackWork.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1170, // 1645: controlplane.v1.ManagedConfigurationGitWriteBackWork.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	139,  // 1646: controlplane.v1.ManagedConfigurationGitWriteBackWork.mode:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWorkMode
-	135,  // 1647: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1252, // 1648: controlplane.v1.ManagedConfigurationGitWriteBackWork.public_configuration:type_name -> google.protobuf.Struct
-	208,  // 1649: controlplane.v1.ManagedConfigurationGitWriteBackWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	1251, // 1650: controlplane.v1.ManagedConfigurationGitWriteBackWork.commit_time:type_name -> google.protobuf.Timestamp
-	1251, // 1651: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect_started_at:type_name -> google.protobuf.Timestamp
-	1251, // 1652: controlplane.v1.ManagedConfigurationGitWriteBackWork.deadline:type_name -> google.protobuf.Timestamp
-	1186, // 1653: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWork
-	1185, // 1654: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1185, // 1655: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	1185, // 1656: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	135,  // 1657: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1170, // 1658: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1185, // 1659: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	135,  // 1660: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
-	1170, // 1661: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	1185, // 1662: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
-	136,  // 1663: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
-	1170, // 1664: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
-	205,  // 1665: controlplane.v1.AssistantIntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
-	140,  // 1666: controlplane.v1.RunSessionReadiness.storage_state:type_name -> controlplane.v1.RunSessionStorageState
-	141,  // 1667: controlplane.v1.RunSessionReadiness.reason:type_name -> controlplane.v1.RunSessionReadinessReason
-	1199, // 1668: controlplane.v1.RunSessionReadiness.latest_archive_task:type_name -> controlplane.v1.RunSessionArchiveTask
-	56,   // 1669: controlplane.v1.RunSessionArchiveTask.kind:type_name -> controlplane.v1.SessionArchiveTaskKind
-	142,  // 1670: controlplane.v1.RunSessionArchiveTask.state:type_name -> controlplane.v1.RunSessionArchiveTaskState
-	1202, // 1671: controlplane.v1.ProviderFinancialObservation.windows:type_name -> controlplane.v1.ProviderFinancialWindow
-	1203, // 1672: controlplane.v1.ProviderFinancialObservation.credits:type_name -> controlplane.v1.ProviderFinancialCredits
-	1204, // 1673: controlplane.v1.ProviderFinancialSummary.observation:type_name -> controlplane.v1.ProviderFinancialObservation
-	1251, // 1674: controlplane.v1.ProviderFinancialSummary.received_at:type_name -> google.protobuf.Timestamp
-	1205, // 1675: controlplane.v1.ProviderFinancialDisplayAccount.financial_summary:type_name -> controlplane.v1.ProviderFinancialSummary
-	1206, // 1676: controlplane.v1.ProviderFinancialOverview.accounts:type_name -> controlplane.v1.ProviderFinancialDisplayAccount
-	1251, // 1677: controlplane.v1.ProviderFinancialOverview.observed_at:type_name -> google.protobuf.Timestamp
-	1251, // 1678: controlplane.v1.ProviderFinancialOverview.valid_until:type_name -> google.protobuf.Timestamp
-	1209, // 1679: controlplane.v1.WorkflowReworkPreview.authors:type_name -> controlplane.v1.WorkflowReworkStepPreview
-	1209, // 1680: controlplane.v1.WorkflowReworkPreview.rechecks:type_name -> controlplane.v1.WorkflowReworkStepPreview
-	1211, // 1681: controlplane.v1.RenewSSHComposeInvocationRequest.binding:type_name -> controlplane.v1.SSHComposeLeaseBinding
-	543,  // 1682: controlplane.v1.RenewSSHComposeInvocationResponse.lease:type_name -> controlplane.v1.WorkLease
-	1211, // 1683: controlplane.v1.ResolveSSHComposeCredentialProjectionRequest.binding:type_name -> controlplane.v1.SSHComposeLeaseBinding
-	738,  // 1684: controlplane.v1.ResolveSSHComposeCredentialProjectionResponse.secret_revision:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
-	1251, // 1685: controlplane.v1.ResolveSSHComposeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
-	1217, // 1686: controlplane.v1.RuntimeModelProviderConfiguration.models:type_name -> controlplane.v1.RuntimeModelProviderModel
-	208,  // 1687: controlplane.v1.BeginPersonalIntegrationInvocationResponse.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
-	59,   // 1688: controlplane.v1.BeginPersonalIntegrationInvocationResponse.work_mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
-	60,   // 1689: controlplane.v1.BeginPersonalIntegrationInvocationResponse.resource_permission_profile:type_name -> controlplane.v1.IntegrationCredentialResourcePermissionProfile
-	143,  // 1690: controlplane.v1.PersonalIntegrationCredentialView.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
-	144,  // 1691: controlplane.v1.PersonalIntegrationCredentialView.state:type_name -> controlplane.v1.PersonalIntegrationCredentialState
-	1251, // 1692: controlplane.v1.PersonalIntegrationCredentialView.expires_at:type_name -> google.protobuf.Timestamp
-	1220, // 1693: controlplane.v1.GetPersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	152,  // 1694: controlplane.v1.CreatePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1220, // 1695: controlplane.v1.CreatePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	152,  // 1696: controlplane.v1.ConfigurePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1220, // 1697: controlplane.v1.ConfigurePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	152,  // 1698: controlplane.v1.RevokePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1220, // 1699: controlplane.v1.RevokePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	152,  // 1700: controlplane.v1.SetIntegrationCredentialPolicyRequest.mutation:type_name -> controlplane.v1.MutationContext
-	143,  // 1701: controlplane.v1.SetIntegrationCredentialPolicyRequest.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
-	210,  // 1702: controlplane.v1.SetIntegrationCredentialPolicyResponse.connection:type_name -> controlplane.v1.IntegrationConnection
-	143,  // 1703: controlplane.v1.PersonalIntegrationConnection.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
-	1220, // 1704: controlplane.v1.PersonalIntegrationConnection.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	153,  // 1705: controlplane.v1.ListPersonalIntegrationConnectionsRequest.page:type_name -> controlplane.v1.PageRequest
-	1231, // 1706: controlplane.v1.ListPersonalIntegrationConnectionsResponse.connections:type_name -> controlplane.v1.PersonalIntegrationConnection
-	154,  // 1707: controlplane.v1.ListPersonalIntegrationConnectionsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1708: controlplane.v1.TestPersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1220, // 1709: controlplane.v1.TestPersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
-	620,  // 1710: controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse.claims:type_name -> controlplane.v1.IntegrationConnectionTestClaim
-	152,  // 1711: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.mutation:type_name -> controlplane.v1.MutationContext
-	145,  // 1712: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.result:type_name -> controlplane.v1.PersonalIntegrationCredentialTestResult
-	58,   // 1713: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.observed_permission_profiles:type_name -> controlplane.v1.PersonalIntegrationCredentialObservationProfile
-	1251, // 1714: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.expires_at:type_name -> google.protobuf.Timestamp
-	146,  // 1715: controlplane.v1.IntegrationCredentialPreflightIssue.problem:type_name -> controlplane.v1.IntegrationCredentialPreflightProblem
-	1242, // 1716: controlplane.v1.IntegrationCredentialPreflightDetail.issues:type_name -> controlplane.v1.IntegrationCredentialPreflightIssue
-	35,   // 1717: controlplane.v1.IntegrationApprovalConsent.lifetime:type_name -> controlplane.v1.IntegrationApprovalScopeLifetime
-	147,  // 1718: controlplane.v1.IntegrationApprovalConsent.state:type_name -> controlplane.v1.IntegrationApprovalConsentState
-	1251, // 1719: controlplane.v1.IntegrationApprovalConsent.created_at:type_name -> google.protobuf.Timestamp
-	1251, // 1720: controlplane.v1.IntegrationApprovalConsent.expires_at:type_name -> google.protobuf.Timestamp
-	1251, // 1721: controlplane.v1.IntegrationApprovalConsent.revoked_at:type_name -> google.protobuf.Timestamp
-	153,  // 1722: controlplane.v1.ListIntegrationApprovalConsentsRequest.page:type_name -> controlplane.v1.PageRequest
-	1244, // 1723: controlplane.v1.ListIntegrationApprovalConsentsResponse.consents:type_name -> controlplane.v1.IntegrationApprovalConsent
-	154,  // 1724: controlplane.v1.ListIntegrationApprovalConsentsResponse.page:type_name -> controlplane.v1.PageInfo
-	152,  // 1725: controlplane.v1.RevokeIntegrationApprovalConsentRequest.mutation:type_name -> controlplane.v1.MutationContext
-	1244, // 1726: controlplane.v1.RevokeIntegrationApprovalConsentResponse.consent:type_name -> controlplane.v1.IntegrationApprovalConsent
-	1009, // 1727: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:input_type -> controlplane.v1.ListEmailMailboxConfigurationsRequest
-	1011, // 1728: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:input_type -> controlplane.v1.GetEmailMailboxConfigurationRequest
-	1013, // 1729: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:input_type -> controlplane.v1.ListEmailMailboxCredentialsRequest
-	1015, // 1730: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:input_type -> controlplane.v1.GetEmailMailboxCredentialReceiptRequest
-	1017, // 1731: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:input_type -> controlplane.v1.PreviewEmailMailboxConfigurationRequest
-	797,  // 1732: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:input_type -> controlplane.v1.GetRuntimeSecretDraftImpactRequest
-	686,  // 1733: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:input_type -> controlplane.v1.GetRuntimeSecretDraftRequest
-	493,  // 1734: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:input_type -> controlplane.v1.GetRuntimeRevisionDiffRequest
-	1050, // 1735: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:input_type -> controlplane.v1.GetEmailEffectReceiptRequest
-	1056, // 1736: controlplane.v1.PlatformQueryService.ListSkillBundles:input_type -> controlplane.v1.ListSkillBundlesRequest
-	1058, // 1737: controlplane.v1.PlatformQueryService.GetSkillBundle:input_type -> controlplane.v1.GetSkillBundleRequest
-	1060, // 1738: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:input_type -> controlplane.v1.ListSkillBundleRevisionsRequest
-	1062, // 1739: controlplane.v1.PlatformQueryService.ListMemoryRecords:input_type -> controlplane.v1.ListMemoryRecordsRequest
-	1064, // 1740: controlplane.v1.PlatformQueryService.GetMemoryRecord:input_type -> controlplane.v1.GetMemoryRecordRequest
-	1066, // 1741: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:input_type -> controlplane.v1.ListMemoryRecordRevisionsRequest
-	228,  // 1742: controlplane.v1.PlatformQueryService.GetBootstrapState:input_type -> controlplane.v1.GetBootstrapStateRequest
-	230,  // 1743: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:input_type -> controlplane.v1.GetPlatformEventCursorRequest
-	232,  // 1744: controlplane.v1.PlatformQueryService.GetOverview:input_type -> controlplane.v1.GetOverviewRequest
-	234,  // 1745: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:input_type -> controlplane.v1.ListPlatformCapabilitiesRequest
-	236,  // 1746: controlplane.v1.PlatformQueryService.ListRuntimeSelections:input_type -> controlplane.v1.ListRuntimeSelectionsRequest
-	239,  // 1747: controlplane.v1.PlatformQueryService.SearchPlatform:input_type -> controlplane.v1.SearchPlatformRequest
-	258,  // 1748: controlplane.v1.PlatformQueryService.ListVFSNodes:input_type -> controlplane.v1.ListVFSNodesRequest
-	260,  // 1749: controlplane.v1.PlatformQueryService.SearchVFS:input_type -> controlplane.v1.SearchVFSRequest
-	262,  // 1750: controlplane.v1.PlatformQueryService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
-	264,  // 1751: controlplane.v1.PlatformQueryService.ListTrashedProjects:input_type -> controlplane.v1.ListTrashedProjectsRequest
-	279,  // 1752: controlplane.v1.PlatformQueryService.GetProjectPurgeRecovery:input_type -> controlplane.v1.GetProjectPurgeRecoveryRequest
-	266,  // 1753: controlplane.v1.PlatformQueryService.GetProject:input_type -> controlplane.v1.GetProjectRequest
-	283,  // 1754: controlplane.v1.PlatformQueryService.ListPlatformMemberships:input_type -> controlplane.v1.ListPlatformMembershipsRequest
-	285,  // 1755: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:input_type -> controlplane.v1.ListPlatformMembershipCandidatesRequest
-	293,  // 1756: controlplane.v1.PlatformQueryService.ListProjectMemberships:input_type -> controlplane.v1.ListProjectMembershipsRequest
-	295,  // 1757: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:input_type -> controlplane.v1.ListProjectMembershipCandidatesRequest
-	303,  // 1758: controlplane.v1.PlatformQueryService.ListAgents:input_type -> controlplane.v1.ListAgentsRequest
-	305,  // 1759: controlplane.v1.PlatformQueryService.GetAgent:input_type -> controlplane.v1.GetAgentRequest
-	654,  // 1760: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:input_type -> controlplane.v1.ListAgentInstructionVersionsRequest
-	327,  // 1761: controlplane.v1.PlatformQueryService.ListWorkflows:input_type -> controlplane.v1.ListWorkflowsRequest
-	329,  // 1762: controlplane.v1.PlatformQueryService.GetWorkflow:input_type -> controlplane.v1.GetWorkflowRequest
-	341,  // 1763: controlplane.v1.PlatformQueryService.ListRuns:input_type -> controlplane.v1.ListRunsRequest
-	343,  // 1764: controlplane.v1.PlatformQueryService.GetRun:input_type -> controlplane.v1.GetRunRequest
-	345,  // 1765: controlplane.v1.PlatformQueryService.GetRunGraph:input_type -> controlplane.v1.GetRunGraphRequest
-	347,  // 1766: controlplane.v1.PlatformQueryService.ListRunEvents:input_type -> controlplane.v1.ListRunEventsRequest
-	357,  // 1767: controlplane.v1.PlatformQueryService.ListOwnerGates:input_type -> controlplane.v1.ListOwnerGatesRequest
-	1245, // 1768: controlplane.v1.PlatformQueryService.ListIntegrationApprovalConsents:input_type -> controlplane.v1.ListIntegrationApprovalConsentsRequest
-	359,  // 1769: controlplane.v1.PlatformQueryService.GetOwnerGate:input_type -> controlplane.v1.GetOwnerGateRequest
-	364,  // 1770: controlplane.v1.PlatformQueryService.ListArtifacts:input_type -> controlplane.v1.ListArtifactsRequest
-	366,  // 1771: controlplane.v1.PlatformQueryService.GetArtifact:input_type -> controlplane.v1.GetArtifactRequest
-	192,  // 1772: controlplane.v1.PlatformQueryService.ListArtifactRevisions:input_type -> controlplane.v1.ListArtifactRevisionsRequest
-	194,  // 1773: controlplane.v1.PlatformQueryService.GetArtifactRevision:input_type -> controlplane.v1.GetArtifactRevisionRequest
-	896,  // 1774: controlplane.v1.PlatformQueryService.GetArtifactImpact:input_type -> controlplane.v1.GetArtifactImpactRequest
-	368,  // 1775: controlplane.v1.PlatformQueryService.GetAttachmentSet:input_type -> controlplane.v1.GetAttachmentSetRequest
-	399,  // 1776: controlplane.v1.PlatformQueryService.ListSchedules:input_type -> controlplane.v1.ListSchedulesRequest
-	656,  // 1777: controlplane.v1.PlatformQueryService.GetSchedule:input_type -> controlplane.v1.GetScheduleRequest
-	888,  // 1778: controlplane.v1.PlatformQueryService.ListScheduleRevisions:input_type -> controlplane.v1.ListScheduleRevisionsRequest
-	890,  // 1779: controlplane.v1.PlatformQueryService.ListScheduleRuns:input_type -> controlplane.v1.ListScheduleRunsRequest
-	616,  // 1780: controlplane.v1.PlatformQueryService.PreviewSchedule:input_type -> controlplane.v1.PreviewScheduleRequest
-	861,  // 1781: controlplane.v1.PlatformQueryService.ListProviderAccounts:input_type -> controlplane.v1.ListProviderAccountsRequest
-	863,  // 1782: controlplane.v1.PlatformQueryService.GetProviderAccount:input_type -> controlplane.v1.GetProviderAccountRequest
-	856,  // 1783: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:input_type -> controlplane.v1.ListProviderAccountBlockersRequest
-	407,  // 1784: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:input_type -> controlplane.v1.ListIntegrationDefinitionsRequest
-	409,  // 1785: controlplane.v1.PlatformQueryService.ListIntegrationConnections:input_type -> controlplane.v1.ListIntegrationConnectionsRequest
-	417,  // 1786: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:input_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesRequest
-	419,  // 1787: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:input_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesRequest
-	421,  // 1788: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:input_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesRequest
-	423,  // 1789: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:input_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesRequest
-	443,  // 1790: controlplane.v1.PlatformQueryService.GetSystemAssistantIntegrationGrantCandidates:input_type -> controlplane.v1.GetSystemAssistantIntegrationGrantCandidatesRequest
-	444,  // 1791: controlplane.v1.PlatformQueryService.GetProjectAssistantIntegrationGrantCandidates:input_type -> controlplane.v1.GetProjectAssistantIntegrationGrantCandidatesRequest
-	425,  // 1792: controlplane.v1.PlatformQueryService.GetIntegrationConnection:input_type -> controlplane.v1.GetIntegrationConnectionRequest
-	486,  // 1793: controlplane.v1.PlatformQueryService.GetAdministration:input_type -> controlplane.v1.GetAdministrationRequest
-	488,  // 1794: controlplane.v1.PlatformQueryService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
-	660,  // 1795: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:input_type -> controlplane.v1.GetAgentRuntimeConfigurationRequest
-	662,  // 1796: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:input_type -> controlplane.v1.GetAgentEffectiveCapabilitiesRequest
-	664,  // 1797: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:input_type -> controlplane.v1.ListArtifactBindingTargetsRequest
-	666,  // 1798: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:input_type -> controlplane.v1.GetRunAttachmentEligibilityRequest
-	670,  // 1799: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:input_type -> controlplane.v1.ListConfigOverlayRevisionsRequest
-	672,  // 1800: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:input_type -> controlplane.v1.GetConfigOverlayRevisionRequest
-	674,  // 1801: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:input_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest
-	676,  // 1802: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:input_type -> controlplane.v1.ListRuntimeEnvironmentSetsRequest
-	678,  // 1803: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:input_type -> controlplane.v1.GetRuntimeEnvironmentSetRequest
-	680,  // 1804: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:input_type -> controlplane.v1.ListRuntimeEnvironmentVersionsRequest
-	825,  // 1805: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:input_type -> controlplane.v1.GetRuntimeEnvironmentReadinessRequest
-	827,  // 1806: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:input_type -> controlplane.v1.ListRuntimeEnvironmentAgentsRequest
-	682,  // 1807: controlplane.v1.PlatformQueryService.ListTemplateVariables:input_type -> controlplane.v1.ListTemplateVariablesRequest
-	838,  // 1808: controlplane.v1.PlatformQueryService.ListProviderDefinitions:input_type -> controlplane.v1.ListProviderDefinitionsRequest
-	841,  // 1809: controlplane.v1.PlatformQueryService.ListModelCapabilities:input_type -> controlplane.v1.ListModelCapabilitiesRequest
-	845,  // 1810: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:input_type -> controlplane.v1.ListRoleImageRecipeRevisionsRequest
-	903,  // 1811: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:input_type -> controlplane.v1.ValidatePromptTemplateRequest
-	905,  // 1812: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:input_type -> controlplane.v1.PreviewPromptTemplateRequest
-	714,  // 1813: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:input_type -> controlplane.v1.ListRuntimeSecretsRequest
-	716,  // 1814: controlplane.v1.PlatformQueryService.ListOrganizationRuntimeSecrets:input_type -> controlplane.v1.ListOrganizationRuntimeSecretsRequest
-	720,  // 1815: controlplane.v1.PlatformQueryService.GetRuntimeSecret:input_type -> controlplane.v1.GetRuntimeSecretRequest
-	987,  // 1816: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:input_type -> controlplane.v1.ListManagedConfigurationHistoryRequest
-	988,  // 1817: controlplane.v1.PlatformQueryService.ListManagedConfigurations:input_type -> controlplane.v1.ListManagedConfigurationsRequest
-	991,  // 1818: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:input_type -> controlplane.v1.GetManagedConfigurationImpactRequest
-	965,  // 1819: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:input_type -> controlplane.v1.GetRoleImageImpactPlanRequest
-	961,  // 1820: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:input_type -> controlplane.v1.GetRevisionImpactPlanRequest
-	1181, // 1821: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:input_type -> controlplane.v1.GetManagedConfigurationGitWriteBackRequest
-	1183, // 1822: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:input_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
-	1106, // 1823: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:input_type -> controlplane.v1.GetSystemSTTConfigurationRequest
-	759,  // 1824: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:input_type -> controlplane.v1.GetRuntimeEnvironmentDraftRequest
-	781,  // 1825: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:input_type -> controlplane.v1.GetRuntimeEnvironmentImpactRequest
-	800,  // 1826: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:input_type -> controlplane.v1.GetRuntimeSecretImpactRequest
-	651,  // 1827: controlplane.v1.PlatformQueryService.ListInteractionIdentities:input_type -> controlplane.v1.ListInteractionIdentitiesRequest
-	1019, // 1828: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:input_type -> controlplane.v1.CreateEmailMailboxDraftRequest
-	1021, // 1829: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:input_type -> controlplane.v1.SaveEmailMailboxDraftRequest
-	1023, // 1830: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:input_type -> controlplane.v1.ValidateEmailMailboxDraftRequest
-	1025, // 1831: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:input_type -> controlplane.v1.PublishEmailMailboxDraftRequest
-	1027, // 1832: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:input_type -> controlplane.v1.DiscardEmailMailboxDraftRequest
-	1029, // 1833: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:input_type -> controlplane.v1.BindEmailMailboxConfigurationRequest
-	1031, // 1834: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:input_type -> controlplane.v1.UnbindEmailMailboxConfigurationRequest
-	795,  // 1835: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:input_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactRequest
-	688,  // 1836: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:input_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftRequest
-	718,  // 1837: controlplane.v1.PlatformCommandService.PrepareOrganizationRuntimeSecretDraft:input_type -> controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest
-	690,  // 1838: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:input_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftRequest
-	692,  // 1839: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:input_type -> controlplane.v1.PreparePublishRuntimeSecretDraftRequest
-	694,  // 1840: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:input_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest
-	518,  // 1841: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:input_type -> controlplane.v1.SavePromptTemplateDraftRequest
-	520,  // 1842: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:input_type -> controlplane.v1.DiscardPromptTemplateDraftRequest
-	522,  // 1843: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:input_type -> controlplane.v1.SaveRoleImageRevisionDraftRequest
-	524,  // 1844: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:input_type -> controlplane.v1.DiscardRoleImageRevisionDraftRequest
-	526,  // 1845: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:input_type -> controlplane.v1.SaveIntegrationDefinitionDraftRequest
-	528,  // 1846: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:input_type -> controlplane.v1.DiscardIntegrationDefinitionDraftRequest
-	530,  // 1847: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:input_type -> controlplane.v1.SaveSystemSTTConfigurationDraftRequest
-	532,  // 1848: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:input_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftRequest
-	1046, // 1849: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:input_type -> controlplane.v1.ReconcileEmailEffectRequest
-	1036, // 1850: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:input_type -> controlplane.v1.ConfigureEmailMailboxCredentialRequest
-	1068, // 1851: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:input_type -> controlplane.v1.CreateSkillBundleDraftRequest
-	1069, // 1852: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:input_type -> controlplane.v1.SaveSkillBundleDraftRequest
-	1073, // 1853: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:input_type -> controlplane.v1.ValidateSkillBundleDraftRequest
-	1070, // 1854: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:input_type -> controlplane.v1.ReviewSkillBundleDraftRequest
-	1074, // 1855: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:input_type -> controlplane.v1.PublishSkillBundleDraftRequest
-	1075, // 1856: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:input_type -> controlplane.v1.DiscardSkillBundleDraftRequest
-	1076, // 1857: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:input_type -> controlplane.v1.ArchiveSkillBundleRequest
-	1077, // 1858: controlplane.v1.PlatformCommandService.RestoreSkillBundle:input_type -> controlplane.v1.RestoreSkillBundleRequest
-	1078, // 1859: controlplane.v1.PlatformCommandService.PurgeSkillBundle:input_type -> controlplane.v1.PurgeSkillBundleRequest
-	1079, // 1860: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:input_type -> controlplane.v1.BindAgentSkillBundleRequest
-	1081, // 1861: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:input_type -> controlplane.v1.UnbindAgentSkillBundleRequest
-	1071, // 1862: controlplane.v1.PlatformCommandService.CreateMemoryRecord:input_type -> controlplane.v1.CreateMemoryRecordRequest
-	1072, // 1863: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:input_type -> controlplane.v1.ReviseMemoryRecordRequest
-	1083, // 1864: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:input_type -> controlplane.v1.ArchiveMemoryRecordRequest
-	1084, // 1865: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:input_type -> controlplane.v1.RestoreMemoryRecordRequest
-	1085, // 1866: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:input_type -> controlplane.v1.PurgeMemoryRecordRequest
-	1086, // 1867: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:input_type -> controlplane.v1.BindAgentMemoryRecordRequest
-	1088, // 1868: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:input_type -> controlplane.v1.UnbindAgentMemoryRecordRequest
-	761,  // 1869: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateRuntimeEnvironmentDraftRequest
-	763,  // 1870: controlplane.v1.PlatformCommandService.CreateOrganizationRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest
-	765,  // 1871: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:input_type -> controlplane.v1.SaveRuntimeEnvironmentDraftRequest
-	767,  // 1872: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:input_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftRequest
-	769,  // 1873: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:input_type -> controlplane.v1.PublishRuntimeEnvironmentDraftRequest
-	771,  // 1874: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:input_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftRequest
-	783,  // 1875: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:input_type -> controlplane.v1.RebindRuntimeEnvironmentRequest
-	803,  // 1876: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:input_type -> controlplane.v1.RebindRuntimeSecretRequest
-	647,  // 1877: controlplane.v1.PlatformCommandService.BindInteractionIdentity:input_type -> controlplane.v1.BindInteractionIdentityRequest
-	649,  // 1878: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:input_type -> controlplane.v1.RevokeInteractionIdentityRequest
-	484,  // 1879: controlplane.v1.PlatformCommandService.CompleteOnboarding:input_type -> controlplane.v1.CompleteOnboardingRequest
-	268,  // 1880: controlplane.v1.PlatformCommandService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
-	270,  // 1881: controlplane.v1.PlatformCommandService.UpdateProject:input_type -> controlplane.v1.UpdateProjectRequest
-	272,  // 1882: controlplane.v1.PlatformCommandService.TrashProject:input_type -> controlplane.v1.TrashProjectRequest
-	274,  // 1883: controlplane.v1.PlatformCommandService.RestoreProject:input_type -> controlplane.v1.RestoreProjectRequest
-	276,  // 1884: controlplane.v1.PlatformCommandService.PurgeProject:input_type -> controlplane.v1.PurgeProjectRequest
-	281,  // 1885: controlplane.v1.PlatformCommandService.ResolveProjectPurgeRecovery:input_type -> controlplane.v1.ResolveProjectPurgeRecoveryRequest
-	287,  // 1886: controlplane.v1.PlatformCommandService.AddPlatformMembership:input_type -> controlplane.v1.AddPlatformMembershipRequest
-	289,  // 1887: controlplane.v1.PlatformCommandService.ChangePlatformMembership:input_type -> controlplane.v1.ChangePlatformMembershipRequest
-	291,  // 1888: controlplane.v1.PlatformCommandService.RemovePlatformMembership:input_type -> controlplane.v1.RemovePlatformMembershipRequest
-	297,  // 1889: controlplane.v1.PlatformCommandService.AddProjectMembership:input_type -> controlplane.v1.AddProjectMembershipRequest
-	299,  // 1890: controlplane.v1.PlatformCommandService.ChangeProjectMembership:input_type -> controlplane.v1.ChangeProjectMembershipRequest
-	301,  // 1891: controlplane.v1.PlatformCommandService.RemoveProjectMembership:input_type -> controlplane.v1.RemoveProjectMembershipRequest
-	307,  // 1892: controlplane.v1.PlatformCommandService.CreateAgent:input_type -> controlplane.v1.CreateAgentRequest
-	309,  // 1893: controlplane.v1.PlatformCommandService.UpdateAgent:input_type -> controlplane.v1.UpdateAgentRequest
-	311,  // 1894: controlplane.v1.PlatformCommandService.SetAgentEnabled:input_type -> controlplane.v1.SetAgentEnabledRequest
-	313,  // 1895: controlplane.v1.PlatformCommandService.ArchiveAgent:input_type -> controlplane.v1.ArchiveAgentRequest
-	898,  // 1896: controlplane.v1.PlatformCommandService.SetAgentAvatar:input_type -> controlplane.v1.SetAgentAvatarRequest
-	900,  // 1897: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:input_type -> controlplane.v1.RemoveAgentAvatarRequest
-	315,  // 1898: controlplane.v1.PlatformCommandService.CreateInstructionDraft:input_type -> controlplane.v1.CreateInstructionDraftRequest
-	317,  // 1899: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:input_type -> controlplane.v1.ValidateInstructionDraftRequest
-	319,  // 1900: controlplane.v1.PlatformCommandService.PublishInstructionDraft:input_type -> controlplane.v1.PublishInstructionDraftRequest
-	321,  // 1901: controlplane.v1.PlatformCommandService.RollbackInstructions:input_type -> controlplane.v1.RollbackInstructionsRequest
-	323,  // 1902: controlplane.v1.PlatformCommandService.ChangeAgentCapability:input_type -> controlplane.v1.ChangeAgentCapabilityRequest
-	325,  // 1903: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:input_type -> controlplane.v1.ChangeAgentIntegrationGrantRequest
-	331,  // 1904: controlplane.v1.PlatformCommandService.CreateWorkflow:input_type -> controlplane.v1.CreateWorkflowRequest
-	333,  // 1905: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:input_type -> controlplane.v1.UpdateWorkflowDraftRequest
-	335,  // 1906: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:input_type -> controlplane.v1.ValidateWorkflowDraftRequest
-	337,  // 1907: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:input_type -> controlplane.v1.PublishWorkflowDraftRequest
-	339,  // 1908: controlplane.v1.PlatformCommandService.ArchiveWorkflow:input_type -> controlplane.v1.ArchiveWorkflowRequest
-	349,  // 1909: controlplane.v1.PlatformCommandService.LaunchRun:input_type -> controlplane.v1.LaunchRunRequest
-	351,  // 1910: controlplane.v1.PlatformCommandService.AddSessionTurn:input_type -> controlplane.v1.AddSessionTurnRequest
-	353,  // 1911: controlplane.v1.PlatformCommandService.CancelRun:input_type -> controlplane.v1.CancelRunRequest
-	355,  // 1912: controlplane.v1.PlatformCommandService.RetryRun:input_type -> controlplane.v1.RetryRunRequest
-	361,  // 1913: controlplane.v1.PlatformCommandService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
-	1247, // 1914: controlplane.v1.PlatformCommandService.RevokeIntegrationApprovalConsent:input_type -> controlplane.v1.RevokeIntegrationApprovalConsentRequest
-	385,  // 1915: controlplane.v1.PlatformCommandService.UploadAgentAvatar:input_type -> controlplane.v1.UploadAgentAvatarRequest
-	382,  // 1916: controlplane.v1.PlatformCommandService.UploadArtifact:input_type -> controlplane.v1.UploadArtifactRequest
-	387,  // 1917: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:input_type -> controlplane.v1.UploadOrganizationArtifactRequest
-	389,  // 1918: controlplane.v1.PlatformCommandService.DownloadArtifact:input_type -> controlplane.v1.DownloadArtifactRequest
-	196,  // 1919: controlplane.v1.PlatformCommandService.DownloadArtifactRevision:input_type -> controlplane.v1.DownloadArtifactRevisionRequest
-	391,  // 1920: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:input_type -> controlplane.v1.ChangeArtifactBindingRequest
-	393,  // 1921: controlplane.v1.PlatformCommandService.DeleteArtifact:input_type -> controlplane.v1.DeleteArtifactRequest
-	395,  // 1922: controlplane.v1.PlatformCommandService.RestoreArtifact:input_type -> controlplane.v1.RestoreArtifactRequest
-	397,  // 1923: controlplane.v1.PlatformCommandService.PurgeArtifact:input_type -> controlplane.v1.PurgeArtifactRequest
-	370,  // 1924: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:input_type -> controlplane.v1.CreateAttachmentSetDraftRequest
-	372,  // 1925: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:input_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftRequest
-	374,  // 1926: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:input_type -> controlplane.v1.AddAttachmentSetItemsRequest
-	376,  // 1927: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:input_type -> controlplane.v1.RemoveAttachmentSetItemsRequest
-	378,  // 1928: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:input_type -> controlplane.v1.FinalizeAttachmentSetRequest
-	401,  // 1929: controlplane.v1.PlatformCommandService.CreateSchedule:input_type -> controlplane.v1.CreateScheduleRequest
-	403,  // 1930: controlplane.v1.PlatformCommandService.UpdateSchedule:input_type -> controlplane.v1.UpdateScheduleRequest
-	405,  // 1931: controlplane.v1.PlatformCommandService.SetScheduleEnabled:input_type -> controlplane.v1.SetScheduleEnabledRequest
-	658,  // 1932: controlplane.v1.PlatformCommandService.ArchiveSchedule:input_type -> controlplane.v1.ArchiveScheduleRequest
-	892,  // 1933: controlplane.v1.PlatformCommandService.DeleteSchedule:input_type -> controlplane.v1.DeleteScheduleRequest
-	865,  // 1934: controlplane.v1.PlatformCommandService.CreateProviderAccount:input_type -> controlplane.v1.CreateProviderAccountRequest
-	867,  // 1935: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:input_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationRequest
-	869,  // 1936: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:input_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyRequest
-	871,  // 1937: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:input_type -> controlplane.v1.RefreshProviderAccountAuthorizationRequest
-	873,  // 1938: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:input_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
-	875,  // 1939: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:input_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
-	877,  // 1940: controlplane.v1.PlatformCommandService.RevokeProviderAccount:input_type -> controlplane.v1.RevokeProviderAccountRequest
-	879,  // 1941: controlplane.v1.PlatformCommandService.DeleteProviderAccount:input_type -> controlplane.v1.DeleteProviderAccountRequest
-	881,  // 1942: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:input_type -> controlplane.v1.CancelProviderAccountQueuedWorkRequest
-	886,  // 1943: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:input_type -> controlplane.v1.SetProviderAccountEnabledRequest
-	884,  // 1944: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:input_type -> controlplane.v1.SetProviderAccountConcurrencyRequest
-	427,  // 1945: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:input_type -> controlplane.v1.CreateIntegrationConnectionRequest
-	429,  // 1946: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:input_type -> controlplane.v1.UpdateIntegrationConnectionRequest
-	431,  // 1947: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:input_type -> controlplane.v1.DeleteIntegrationConnectionRequest
-	433,  // 1948: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:input_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialRequest
-	435,  // 1949: controlplane.v1.PlatformCommandService.TestIntegrationConnection:input_type -> controlplane.v1.TestIntegrationConnectionRequest
-	437,  // 1950: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:input_type -> controlplane.v1.SetIntegrationConnectionEnabledRequest
-	439,  // 1951: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:input_type -> controlplane.v1.ChangeIntegrationGrantRequest
-	441,  // 1952: controlplane.v1.PlatformCommandService.ChangeSystemAssistantIntegrationGrant:input_type -> controlplane.v1.ChangeSystemAssistantIntegrationGrantRequest
-	746,  // 1953: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:input_type -> controlplane.v1.PublishAgentRuntimeConfigurationRequest
-	748,  // 1954: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:input_type -> controlplane.v1.CreateConfigOverlayDraftRequest
-	750,  // 1955: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:input_type -> controlplane.v1.ValidateConfigOverlayDraftRequest
-	752,  // 1956: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:input_type -> controlplane.v1.PublishConfigOverlayDraftRequest
-	754,  // 1957: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:input_type -> controlplane.v1.RollbackConfigOverlayRequest
-	756,  // 1958: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:input_type -> controlplane.v1.CreateRuntimeEnvironmentSetRequest
-	774,  // 1959: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:input_type -> controlplane.v1.PublishRuntimeEnvironmentVersionRequest
-	776,  // 1960: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:input_type -> controlplane.v1.RollbackRuntimeEnvironmentRequest
-	829,  // 1961: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:input_type -> controlplane.v1.SetRuntimeEnvironmentEnabledRequest
-	831,  // 1962: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:input_type -> controlplane.v1.DeleteRuntimeEnvironmentRequest
-	778,  // 1963: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:input_type -> controlplane.v1.BindAgentRuntimeEnvironmentRequest
-	847,  // 1964: controlplane.v1.PlatformCommandService.PromoteRoleImage:input_type -> controlplane.v1.PromoteRoleImageRequest
-	722,  // 1965: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:input_type -> controlplane.v1.PrepareCreateRuntimeSecretRequest
-	724,  // 1966: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:input_type -> controlplane.v1.PrepareRotateRuntimeSecretRequest
-	726,  // 1967: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:input_type -> controlplane.v1.PrepareRevealRuntimeSecretRequest
-	728,  // 1968: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:input_type -> controlplane.v1.PrepareRevokeRuntimeSecretRequest
-	935,  // 1969: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:input_type -> controlplane.v1.CreatePromptTemplateDraftRequest
-	937,  // 1970: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:input_type -> controlplane.v1.ValidatePromptTemplateDraftRequest
-	939,  // 1971: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:input_type -> controlplane.v1.PublishPromptTemplateDraftRequest
-	941,  // 1972: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:input_type -> controlplane.v1.RebindPromptTemplateConsumersRequest
-	943,  // 1973: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:input_type -> controlplane.v1.CreateRoleImageRevisionDraftRequest
-	945,  // 1974: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:input_type -> controlplane.v1.ValidateRoleImageRevisionDraftRequest
-	947,  // 1975: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:input_type -> controlplane.v1.PublishRoleImageRevisionDraftRequest
-	949,  // 1976: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:input_type -> controlplane.v1.RebindRoleImageConsumersRequest
-	963,  // 1977: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:input_type -> controlplane.v1.PrepareRoleImageImpactPlanRequest
-	955,  // 1978: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:input_type -> controlplane.v1.PrepareEnvironmentDraftImpactRequest
-	957,  // 1979: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:input_type -> controlplane.v1.PrepareInstructionsImpactRequest
-	959,  // 1980: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:input_type -> controlplane.v1.PreparePromptTemplateImpactRequest
-	967,  // 1981: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:input_type -> controlplane.v1.CreateIntegrationDefinitionDraftRequest
-	969,  // 1982: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:input_type -> controlplane.v1.ValidateIntegrationDefinitionDraftRequest
-	971,  // 1983: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:input_type -> controlplane.v1.PublishIntegrationDefinitionDraftRequest
-	973,  // 1984: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:input_type -> controlplane.v1.RebindIntegrationDefinitionConsumersRequest
-	975,  // 1985: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:input_type -> controlplane.v1.CreateSystemSTTConfigurationDraftRequest
-	977,  // 1986: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:input_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
-	979,  // 1987: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:input_type -> controlplane.v1.PublishSystemSTTConfigurationDraftRequest
-	981,  // 1988: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:input_type -> controlplane.v1.RebindSystemSTTConsumersRequest
-	983,  // 1989: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:input_type -> controlplane.v1.DetachGitManagedConfigurationRequest
-	985,  // 1990: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:input_type -> controlplane.v1.CopyGitManagedConfigurationRequest
-	919,  // 1991: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:input_type -> controlplane.v1.CopyRoleImageConfigurationRequest
-	922,  // 1992: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:input_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
-	924,  // 1993: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:input_type -> controlplane.v1.ArchiveRoleImageConfigurationRequest
-	926,  // 1994: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:input_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
-	1151, // 1995: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:input_type -> controlplane.v1.ConfigureRoleImageGitSourceRequest
-	1153, // 1996: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:input_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
-	1155, // 1997: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:input_type -> controlplane.v1.RefreshRoleImageGitSourceRequest
-	1157, // 1998: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:input_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
-	1171, // 1999: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:input_type -> controlplane.v1.PrepareRoleImageGitWriteBackRequest
-	1173, // 2000: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:input_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
-	1175, // 2001: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:input_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
-	1177, // 2002: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:input_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
-	1179, // 2003: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:input_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
-	1187, // 2004: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
-	1189, // 2005: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
-	1191, // 2006: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
-	1193, // 2007: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
-	1195, // 2008: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
-	1161, // 2009: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:input_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
-	1163, // 2010: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:input_type -> controlplane.v1.RenewManagedConfigurationSourceWorkRequest
-	1165, // 2011: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:input_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
-	1167, // 2012: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:input_type -> controlplane.v1.FailManagedConfigurationSourceWorkRequest
-	698,  // 2013: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessRequest
-	700,  // 2014: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationRequest
-	702,  // 2015: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:input_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationRequest
-	704,  // 2016: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:input_type -> controlplane.v1.FailRuntimeSecretDraftOperationRequest
-	706,  // 2017: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest
-	708,  // 2018: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest
-	710,  // 2019: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:input_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest
-	1116, // 2020: controlplane.v1.ProviderCredentialRenewalWorkService.CheckProviderCredentialRenewalWorkReadiness:input_type -> controlplane.v1.CheckProviderCredentialRenewalWorkReadinessRequest
-	1118, // 2021: controlplane.v1.ProviderCredentialRenewalWorkService.AuthorizeProviderCredentialRenewal:input_type -> controlplane.v1.AuthorizeProviderCredentialRenewalRequest
-	1120, // 2022: controlplane.v1.ProviderCredentialRenewalWorkService.ValidateProviderCredentialRenewalObservation:input_type -> controlplane.v1.ValidateProviderCredentialRenewalObservationRequest
-	731,  // 2023: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessRequest
-	1141, // 2024: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:input_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
-	733,  // 2025: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkRequest
-	736,  // 2026: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretOperationRequest
-	740,  // 2027: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:input_type -> controlplane.v1.CompleteRuntimeSecretOperationRequest
-	742,  // 2028: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:input_type -> controlplane.v1.FailRuntimeSecretOperationRequest
-	744,  // 2029: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretMaterializationRequest
-	1143, // 2030: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:input_type -> controlplane.v1.ResolveRuntimeCredentialProjectionRequest
-	1145, // 2031: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:input_type -> controlplane.v1.ValidateRuntimeCredentialProjectionRequest
-	1147, // 2032: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:input_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
-	1214, // 2033: controlplane.v1.RuntimeSecretWorkService.ResolveSSHComposeCredentialProjection:input_type -> controlplane.v1.ResolveSSHComposeCredentialProjectionRequest
-	448,  // 2034: controlplane.v1.SystemAssistantService.GetSystemAssistant:input_type -> controlplane.v1.GetSystemAssistantRequest
-	450,  // 2035: controlplane.v1.SystemAssistantService.CreateProjectAssistant:input_type -> controlplane.v1.CreateProjectAssistantRequest
-	452,  // 2036: controlplane.v1.SystemAssistantService.GetProjectAssistant:input_type -> controlplane.v1.GetProjectAssistantRequest
-	454,  // 2037: controlplane.v1.SystemAssistantService.ListAssistantConversations:input_type -> controlplane.v1.ListAssistantConversationsRequest
-	456,  // 2038: controlplane.v1.SystemAssistantService.CreateAssistantConversation:input_type -> controlplane.v1.CreateAssistantConversationRequest
-	466,  // 2039: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:input_type -> controlplane.v1.UpdateAssistantConversationTitleRequest
-	458,  // 2040: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:input_type -> controlplane.v1.ArchiveAssistantConversationRequest
-	460,  // 2041: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:input_type -> controlplane.v1.RestoreAssistantConversationRequest
-	462,  // 2042: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:input_type -> controlplane.v1.PurgeAssistantConversationRequest
-	464,  // 2043: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:input_type -> controlplane.v1.MoveAssistantConversationToProjectRequest
-	468,  // 2044: controlplane.v1.SystemAssistantService.AddAssistantTurn:input_type -> controlplane.v1.AddAssistantTurnRequest
-	470,  // 2045: controlplane.v1.SystemAssistantService.CancelAssistantTurn:input_type -> controlplane.v1.CancelAssistantTurnRequest
-	472,  // 2046: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:input_type -> controlplane.v1.UpdateAssistantPlanDraftRequest
-	474,  // 2047: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:input_type -> controlplane.v1.ValidateAssistantPlanRequest
-	476,  // 2048: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:input_type -> controlplane.v1.ApplyAssistantPlanRequest
-	478,  // 2049: controlplane.v1.SystemAssistantService.RejectAssistantPlan:input_type -> controlplane.v1.RejectAssistantPlanRequest
-	480,  // 2050: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:input_type -> controlplane.v1.UpdateAssistantOwnerInstructionsRequest
-	482,  // 2051: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:input_type -> controlplane.v1.RecoverSystemAssistantRequest
-	1033, // 2052: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:input_type -> controlplane.v1.ReportEmailConfigurationReadbackRequest
-	1040, // 2053: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:input_type -> controlplane.v1.ResolveEmailAuthorizationRequest
-	1043, // 2054: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:input_type -> controlplane.v1.ReportEmailEffectReceiptRequest
-	1048, // 2055: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:input_type -> controlplane.v1.ResolveEmailReconciliationRequest
-	546,  // 2056: controlplane.v1.RuntimeWorkService.ClaimExecution:input_type -> controlplane.v1.ClaimExecutionRequest
-	931,  // 2057: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:input_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
-	549,  // 2058: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:input_type -> controlplane.v1.ReadExecutionArtifactRequest
-	551,  // 2059: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:input_type -> controlplane.v1.StreamExecutionArtifactRequest
-	510,  // 2060: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:input_type -> controlplane.v1.SearchExecutionFilesRequest
-	241,  // 2061: controlplane.v1.RuntimeWorkService.SearchAssistantResources:input_type -> controlplane.v1.SearchAssistantResourcesRequest
-	512,  // 2062: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:input_type -> controlplane.v1.GetExecutionFileMetadataRequest
-	514,  // 2063: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:input_type -> controlplane.v1.PreviewExecutionFileRequest
-	516,  // 2064: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:input_type -> controlplane.v1.GetExecutionFileManifestRequest
-	554,  // 2065: controlplane.v1.RuntimeWorkService.RenewExecution:input_type -> controlplane.v1.RenewExecutionRequest
-	556,  // 2066: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:input_type -> controlplane.v1.ReportExecutionProgressRequest
-	1135, // 2067: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:input_type -> controlplane.v1.CommitProviderCredentialRefreshRequest
-	559,  // 2068: controlplane.v1.RuntimeWorkService.CompleteExecution:input_type -> controlplane.v1.CompleteExecutionRequest
-	561,  // 2069: controlplane.v1.RuntimeWorkService.ObserveWorkspace:input_type -> controlplane.v1.ObserveWorkspaceRequest
-	580,  // 2070: controlplane.v1.RuntimeWorkService.DelegateExecution:input_type -> controlplane.v1.DelegateExecutionRequest
-	582,  // 2071: controlplane.v1.RuntimeWorkService.LaunchWorkflowExecution:input_type -> controlplane.v1.LaunchWorkflowExecutionRequest
-	585,  // 2072: controlplane.v1.RuntimeWorkService.GetExecutionWorkflowCatalog:input_type -> controlplane.v1.GetExecutionWorkflowCatalogRequest
-	583,  // 2073: controlplane.v1.RuntimeWorkService.GetExecutionIntegrationOutcomes:input_type -> controlplane.v1.GetExecutionIntegrationOutcomesRequest
-	595,  // 2074: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:input_type -> controlplane.v1.ProposeAssistantPlanRequest
-	597,  // 2075: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:input_type -> controlplane.v1.ProposeAssistantMetadataRequest
-	599,  // 2076: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:input_type -> controlplane.v1.ProposeRunMetadataRequest
-	601,  // 2077: controlplane.v1.RuntimeWorkService.RecordRunToolCall:input_type -> controlplane.v1.RecordRunToolCallRequest
-	603,  // 2078: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:input_type -> controlplane.v1.ReconcileWarmRuntimeRequest
-	605,  // 2079: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:input_type -> controlplane.v1.ReportWarmRuntimeRequest
-	608,  // 2080: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
-	612,  // 2081: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:input_type -> controlplane.v1.RenewScheduleOccurrenceRequest
-	610,  // 2082: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:input_type -> controlplane.v1.MaterializeScheduleOccurrenceRequest
-	614,  // 2083: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:input_type -> controlplane.v1.FailScheduleOccurrenceRequest
-	621,  // 2084: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:input_type -> controlplane.v1.ClaimIntegrationConnectionTestsRequest
-	933,  // 2085: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:input_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
-	623,  // 2086: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:input_type -> controlplane.v1.CompleteIntegrationConnectionTestRequest
-	625,  // 2087: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:input_type -> controlplane.v1.ResolveIntegrationInvocationRequest
-	630,  // 2088: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:input_type -> controlplane.v1.ClaimIntegrationInvocationsRequest
-	628,  // 2089: controlplane.v1.RuntimeWorkService.ClaimSSHComposeInvocations:input_type -> controlplane.v1.ClaimSSHComposeInvocationsRequest
-	1212, // 2090: controlplane.v1.RuntimeWorkService.RenewSSHComposeInvocation:input_type -> controlplane.v1.RenewSSHComposeInvocationRequest
-	632,  // 2091: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:input_type -> controlplane.v1.GetIntegrationInvocationRequest
-	635,  // 2092: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:input_type -> controlplane.v1.CompleteIntegrationInvocationRequest
-	566,  // 2093: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:input_type -> controlplane.v1.ClaimSessionArchiveTasksRequest
-	568,  // 2094: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:input_type -> controlplane.v1.RenewSessionArchiveTaskRequest
-	570,  // 2095: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:input_type -> controlplane.v1.CompleteSessionSnapshotRequest
-	571,  // 2096: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:input_type -> controlplane.v1.CompleteSessionRestoreRequest
-	572,  // 2097: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:input_type -> controlplane.v1.CompleteSessionPVCDeletionRequest
-	573,  // 2098: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:input_type -> controlplane.v1.CompleteSessionObjectDeletionRequest
-	574,  // 2099: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:input_type -> controlplane.v1.FailSessionArchiveTaskRequest
-	638,  // 2100: controlplane.v1.InteractionWorkService.ListInteractionSources:input_type -> controlplane.v1.ListInteractionSourcesRequest
-	641,  // 2101: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:input_type -> controlplane.v1.ClaimInteractionDeliveriesRequest
-	643,  // 2102: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:input_type -> controlplane.v1.CompleteInteractionDeliveryRequest
-	645,  // 2103: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:input_type -> controlplane.v1.AcceptInteractionMessageRequest
-	1112, // 2104: controlplane.v1.ProviderCredentialMaterializerService.RenewManagedProviderCredential:input_type -> controlplane.v1.RenewManagedProviderCredentialRequest
-	1114, // 2105: controlplane.v1.ProviderCredentialMaterializerService.ObserveManagedProviderCredentialRenewal:input_type -> controlplane.v1.ObserveManagedProviderCredentialRenewalRequest
-	1122, // 2106: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:input_type -> controlplane.v1.ObserveProviderModelCatalogRequest
-	1109, // 2107: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:input_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
-	1125, // 2108: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
-	1129, // 2109: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
-	1131, // 2110: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
-	1133, // 2111: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
-	1138, // 2112: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
-	1232, // 2113: controlplane.v1.PersonalIntegrationCredentialService.ListPersonalIntegrationConnections:input_type -> controlplane.v1.ListPersonalIntegrationConnectionsRequest
-	1221, // 2114: controlplane.v1.PersonalIntegrationCredentialService.GetPersonalIntegrationCredential:input_type -> controlplane.v1.GetPersonalIntegrationCredentialRequest
-	1223, // 2115: controlplane.v1.PersonalIntegrationCredentialService.CreatePersonalIntegrationCredential:input_type -> controlplane.v1.CreatePersonalIntegrationCredentialRequest
-	1225, // 2116: controlplane.v1.PersonalIntegrationCredentialService.ConfigurePersonalIntegrationCredential:input_type -> controlplane.v1.ConfigurePersonalIntegrationCredentialRequest
-	1227, // 2117: controlplane.v1.PersonalIntegrationCredentialService.RevokePersonalIntegrationCredential:input_type -> controlplane.v1.RevokePersonalIntegrationCredentialRequest
-	1229, // 2118: controlplane.v1.PersonalIntegrationCredentialService.SetIntegrationCredentialPolicy:input_type -> controlplane.v1.SetIntegrationCredentialPolicyRequest
-	1234, // 2119: controlplane.v1.PersonalIntegrationCredentialService.TestPersonalIntegrationCredential:input_type -> controlplane.v1.TestPersonalIntegrationCredentialRequest
-	1236, // 2120: controlplane.v1.PersonalIntegrationCredentialService.ClaimPersonalIntegrationCredentialTests:input_type -> controlplane.v1.ClaimPersonalIntegrationCredentialTestsRequest
-	1238, // 2121: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationCredentialProbe:input_type -> controlplane.v1.BeginPersonalIntegrationCredentialProbeRequest
-	1240, // 2122: controlplane.v1.PersonalIntegrationCredentialService.CompletePersonalIntegrationCredentialTest:input_type -> controlplane.v1.CompletePersonalIntegrationCredentialTestRequest
-	1218, // 2123: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationInvocation:input_type -> controlplane.v1.BeginPersonalIntegrationInvocationRequest
-	1010, // 2124: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:output_type -> controlplane.v1.ListEmailMailboxConfigurationsResponse
-	1012, // 2125: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:output_type -> controlplane.v1.GetEmailMailboxConfigurationResponse
-	1014, // 2126: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:output_type -> controlplane.v1.ListEmailMailboxCredentialsResponse
-	1016, // 2127: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:output_type -> controlplane.v1.GetEmailMailboxCredentialReceiptResponse
-	1018, // 2128: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:output_type -> controlplane.v1.PreviewEmailMailboxConfigurationResponse
-	798,  // 2129: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:output_type -> controlplane.v1.GetRuntimeSecretDraftImpactResponse
-	687,  // 2130: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:output_type -> controlplane.v1.GetRuntimeSecretDraftResponse
-	494,  // 2131: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:output_type -> controlplane.v1.GetRuntimeRevisionDiffResponse
-	1051, // 2132: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:output_type -> controlplane.v1.GetEmailEffectReceiptResponse
-	1057, // 2133: controlplane.v1.PlatformQueryService.ListSkillBundles:output_type -> controlplane.v1.ListSkillBundlesResponse
-	1059, // 2134: controlplane.v1.PlatformQueryService.GetSkillBundle:output_type -> controlplane.v1.GetSkillBundleResponse
-	1061, // 2135: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:output_type -> controlplane.v1.ListSkillBundleRevisionsResponse
-	1063, // 2136: controlplane.v1.PlatformQueryService.ListMemoryRecords:output_type -> controlplane.v1.ListMemoryRecordsResponse
-	1065, // 2137: controlplane.v1.PlatformQueryService.GetMemoryRecord:output_type -> controlplane.v1.GetMemoryRecordResponse
-	1067, // 2138: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:output_type -> controlplane.v1.ListMemoryRecordRevisionsResponse
-	229,  // 2139: controlplane.v1.PlatformQueryService.GetBootstrapState:output_type -> controlplane.v1.GetBootstrapStateResponse
-	231,  // 2140: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:output_type -> controlplane.v1.GetPlatformEventCursorResponse
-	233,  // 2141: controlplane.v1.PlatformQueryService.GetOverview:output_type -> controlplane.v1.GetOverviewResponse
-	235,  // 2142: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:output_type -> controlplane.v1.ListPlatformCapabilitiesResponse
-	237,  // 2143: controlplane.v1.PlatformQueryService.ListRuntimeSelections:output_type -> controlplane.v1.ListRuntimeSelectionsResponse
-	240,  // 2144: controlplane.v1.PlatformQueryService.SearchPlatform:output_type -> controlplane.v1.SearchPlatformResponse
-	259,  // 2145: controlplane.v1.PlatformQueryService.ListVFSNodes:output_type -> controlplane.v1.ListVFSNodesResponse
-	261,  // 2146: controlplane.v1.PlatformQueryService.SearchVFS:output_type -> controlplane.v1.SearchVFSResponse
-	263,  // 2147: controlplane.v1.PlatformQueryService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
-	265,  // 2148: controlplane.v1.PlatformQueryService.ListTrashedProjects:output_type -> controlplane.v1.ListTrashedProjectsResponse
-	280,  // 2149: controlplane.v1.PlatformQueryService.GetProjectPurgeRecovery:output_type -> controlplane.v1.GetProjectPurgeRecoveryResponse
-	267,  // 2150: controlplane.v1.PlatformQueryService.GetProject:output_type -> controlplane.v1.GetProjectResponse
-	284,  // 2151: controlplane.v1.PlatformQueryService.ListPlatformMemberships:output_type -> controlplane.v1.ListPlatformMembershipsResponse
-	286,  // 2152: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:output_type -> controlplane.v1.ListPlatformMembershipCandidatesResponse
-	294,  // 2153: controlplane.v1.PlatformQueryService.ListProjectMemberships:output_type -> controlplane.v1.ListProjectMembershipsResponse
-	296,  // 2154: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:output_type -> controlplane.v1.ListProjectMembershipCandidatesResponse
-	304,  // 2155: controlplane.v1.PlatformQueryService.ListAgents:output_type -> controlplane.v1.ListAgentsResponse
-	306,  // 2156: controlplane.v1.PlatformQueryService.GetAgent:output_type -> controlplane.v1.GetAgentResponse
-	655,  // 2157: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:output_type -> controlplane.v1.ListAgentInstructionVersionsResponse
-	328,  // 2158: controlplane.v1.PlatformQueryService.ListWorkflows:output_type -> controlplane.v1.ListWorkflowsResponse
-	330,  // 2159: controlplane.v1.PlatformQueryService.GetWorkflow:output_type -> controlplane.v1.GetWorkflowResponse
-	342,  // 2160: controlplane.v1.PlatformQueryService.ListRuns:output_type -> controlplane.v1.ListRunsResponse
-	344,  // 2161: controlplane.v1.PlatformQueryService.GetRun:output_type -> controlplane.v1.GetRunResponse
-	346,  // 2162: controlplane.v1.PlatformQueryService.GetRunGraph:output_type -> controlplane.v1.GetRunGraphResponse
-	348,  // 2163: controlplane.v1.PlatformQueryService.ListRunEvents:output_type -> controlplane.v1.ListRunEventsResponse
-	358,  // 2164: controlplane.v1.PlatformQueryService.ListOwnerGates:output_type -> controlplane.v1.ListOwnerGatesResponse
-	1246, // 2165: controlplane.v1.PlatformQueryService.ListIntegrationApprovalConsents:output_type -> controlplane.v1.ListIntegrationApprovalConsentsResponse
-	360,  // 2166: controlplane.v1.PlatformQueryService.GetOwnerGate:output_type -> controlplane.v1.GetOwnerGateResponse
-	365,  // 2167: controlplane.v1.PlatformQueryService.ListArtifacts:output_type -> controlplane.v1.ListArtifactsResponse
-	367,  // 2168: controlplane.v1.PlatformQueryService.GetArtifact:output_type -> controlplane.v1.GetArtifactResponse
-	193,  // 2169: controlplane.v1.PlatformQueryService.ListArtifactRevisions:output_type -> controlplane.v1.ListArtifactRevisionsResponse
-	195,  // 2170: controlplane.v1.PlatformQueryService.GetArtifactRevision:output_type -> controlplane.v1.GetArtifactRevisionResponse
-	897,  // 2171: controlplane.v1.PlatformQueryService.GetArtifactImpact:output_type -> controlplane.v1.GetArtifactImpactResponse
-	369,  // 2172: controlplane.v1.PlatformQueryService.GetAttachmentSet:output_type -> controlplane.v1.GetAttachmentSetResponse
-	400,  // 2173: controlplane.v1.PlatformQueryService.ListSchedules:output_type -> controlplane.v1.ListSchedulesResponse
-	657,  // 2174: controlplane.v1.PlatformQueryService.GetSchedule:output_type -> controlplane.v1.GetScheduleResponse
-	889,  // 2175: controlplane.v1.PlatformQueryService.ListScheduleRevisions:output_type -> controlplane.v1.ListScheduleRevisionsResponse
-	891,  // 2176: controlplane.v1.PlatformQueryService.ListScheduleRuns:output_type -> controlplane.v1.ListScheduleRunsResponse
-	619,  // 2177: controlplane.v1.PlatformQueryService.PreviewSchedule:output_type -> controlplane.v1.PreviewScheduleResponse
-	862,  // 2178: controlplane.v1.PlatformQueryService.ListProviderAccounts:output_type -> controlplane.v1.ListProviderAccountsResponse
-	864,  // 2179: controlplane.v1.PlatformQueryService.GetProviderAccount:output_type -> controlplane.v1.GetProviderAccountResponse
-	857,  // 2180: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:output_type -> controlplane.v1.ListProviderAccountBlockersResponse
-	408,  // 2181: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:output_type -> controlplane.v1.ListIntegrationDefinitionsResponse
-	410,  // 2182: controlplane.v1.PlatformQueryService.ListIntegrationConnections:output_type -> controlplane.v1.ListIntegrationConnectionsResponse
-	418,  // 2183: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:output_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesResponse
-	420,  // 2184: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:output_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesResponse
-	422,  // 2185: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:output_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesResponse
-	424,  // 2186: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:output_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse
-	447,  // 2187: controlplane.v1.PlatformQueryService.GetSystemAssistantIntegrationGrantCandidates:output_type -> controlplane.v1.GetSystemAssistantIntegrationGrantCandidatesResponse
-	445,  // 2188: controlplane.v1.PlatformQueryService.GetProjectAssistantIntegrationGrantCandidates:output_type -> controlplane.v1.GetProjectAssistantIntegrationGrantCandidatesResponse
-	426,  // 2189: controlplane.v1.PlatformQueryService.GetIntegrationConnection:output_type -> controlplane.v1.GetIntegrationConnectionResponse
-	487,  // 2190: controlplane.v1.PlatformQueryService.GetAdministration:output_type -> controlplane.v1.GetAdministrationResponse
-	489,  // 2191: controlplane.v1.PlatformQueryService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
-	661,  // 2192: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:output_type -> controlplane.v1.GetAgentRuntimeConfigurationResponse
-	669,  // 2193: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:output_type -> controlplane.v1.GetAgentEffectiveCapabilitiesResponse
-	665,  // 2194: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:output_type -> controlplane.v1.ListArtifactBindingTargetsResponse
-	667,  // 2195: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:output_type -> controlplane.v1.GetRunAttachmentEligibilityResponse
-	671,  // 2196: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:output_type -> controlplane.v1.ListConfigOverlayRevisionsResponse
-	673,  // 2197: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:output_type -> controlplane.v1.GetConfigOverlayRevisionResponse
-	675,  // 2198: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:output_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse
-	677,  // 2199: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:output_type -> controlplane.v1.ListRuntimeEnvironmentSetsResponse
-	679,  // 2200: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:output_type -> controlplane.v1.GetRuntimeEnvironmentSetResponse
-	681,  // 2201: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:output_type -> controlplane.v1.ListRuntimeEnvironmentVersionsResponse
-	826,  // 2202: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:output_type -> controlplane.v1.GetRuntimeEnvironmentReadinessResponse
-	828,  // 2203: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:output_type -> controlplane.v1.ListRuntimeEnvironmentAgentsResponse
-	683,  // 2204: controlplane.v1.PlatformQueryService.ListTemplateVariables:output_type -> controlplane.v1.ListTemplateVariablesResponse
-	839,  // 2205: controlplane.v1.PlatformQueryService.ListProviderDefinitions:output_type -> controlplane.v1.ListProviderDefinitionsResponse
-	842,  // 2206: controlplane.v1.PlatformQueryService.ListModelCapabilities:output_type -> controlplane.v1.ListModelCapabilitiesResponse
-	846,  // 2207: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:output_type -> controlplane.v1.ListRoleImageRecipeRevisionsResponse
-	904,  // 2208: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:output_type -> controlplane.v1.ValidatePromptTemplateResponse
-	910,  // 2209: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:output_type -> controlplane.v1.PreviewPromptTemplateResponse
-	715,  // 2210: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:output_type -> controlplane.v1.ListRuntimeSecretsResponse
-	717,  // 2211: controlplane.v1.PlatformQueryService.ListOrganizationRuntimeSecrets:output_type -> controlplane.v1.ListOrganizationRuntimeSecretsResponse
-	721,  // 2212: controlplane.v1.PlatformQueryService.GetRuntimeSecret:output_type -> controlplane.v1.GetRuntimeSecretResponse
-	990,  // 2213: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:output_type -> controlplane.v1.ListManagedConfigurationHistoryResponse
-	989,  // 2214: controlplane.v1.PlatformQueryService.ListManagedConfigurations:output_type -> controlplane.v1.ListManagedConfigurationsResponse
-	992,  // 2215: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:output_type -> controlplane.v1.GetManagedConfigurationImpactResponse
-	966,  // 2216: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:output_type -> controlplane.v1.GetRoleImageImpactPlanResponse
-	962,  // 2217: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:output_type -> controlplane.v1.GetRevisionImpactPlanResponse
-	1182, // 2218: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:output_type -> controlplane.v1.GetManagedConfigurationGitWriteBackResponse
-	1184, // 2219: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:output_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
-	1107, // 2220: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:output_type -> controlplane.v1.GetSystemSTTConfigurationResponse
-	760,  // 2221: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:output_type -> controlplane.v1.GetRuntimeEnvironmentDraftResponse
-	782,  // 2222: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:output_type -> controlplane.v1.GetRuntimeEnvironmentImpactResponse
-	801,  // 2223: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:output_type -> controlplane.v1.GetRuntimeSecretImpactResponse
-	652,  // 2224: controlplane.v1.PlatformQueryService.ListInteractionIdentities:output_type -> controlplane.v1.ListInteractionIdentitiesResponse
-	1020, // 2225: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:output_type -> controlplane.v1.CreateEmailMailboxDraftResponse
-	1022, // 2226: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:output_type -> controlplane.v1.SaveEmailMailboxDraftResponse
-	1024, // 2227: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:output_type -> controlplane.v1.ValidateEmailMailboxDraftResponse
-	1026, // 2228: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:output_type -> controlplane.v1.PublishEmailMailboxDraftResponse
-	1028, // 2229: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:output_type -> controlplane.v1.DiscardEmailMailboxDraftResponse
-	1030, // 2230: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:output_type -> controlplane.v1.BindEmailMailboxConfigurationResponse
-	1032, // 2231: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:output_type -> controlplane.v1.UnbindEmailMailboxConfigurationResponse
-	796,  // 2232: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:output_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactResponse
-	689,  // 2233: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:output_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftResponse
-	719,  // 2234: controlplane.v1.PlatformCommandService.PrepareOrganizationRuntimeSecretDraft:output_type -> controlplane.v1.PrepareOrganizationRuntimeSecretDraftResponse
-	691,  // 2235: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:output_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftResponse
-	693,  // 2236: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:output_type -> controlplane.v1.PreparePublishRuntimeSecretDraftResponse
-	695,  // 2237: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:output_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse
-	519,  // 2238: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:output_type -> controlplane.v1.SavePromptTemplateDraftResponse
-	521,  // 2239: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:output_type -> controlplane.v1.DiscardPromptTemplateDraftResponse
-	523,  // 2240: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:output_type -> controlplane.v1.SaveRoleImageRevisionDraftResponse
-	525,  // 2241: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:output_type -> controlplane.v1.DiscardRoleImageRevisionDraftResponse
-	527,  // 2242: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:output_type -> controlplane.v1.SaveIntegrationDefinitionDraftResponse
-	529,  // 2243: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:output_type -> controlplane.v1.DiscardIntegrationDefinitionDraftResponse
-	531,  // 2244: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:output_type -> controlplane.v1.SaveSystemSTTConfigurationDraftResponse
-	533,  // 2245: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:output_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftResponse
-	1047, // 2246: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:output_type -> controlplane.v1.ReconcileEmailEffectResponse
-	1037, // 2247: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:output_type -> controlplane.v1.ConfigureEmailMailboxCredentialResponse
-	1090, // 2248: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:output_type -> controlplane.v1.CreateSkillBundleDraftResponse
-	1091, // 2249: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:output_type -> controlplane.v1.SaveSkillBundleDraftResponse
-	1092, // 2250: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:output_type -> controlplane.v1.ValidateSkillBundleDraftResponse
-	1093, // 2251: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:output_type -> controlplane.v1.ReviewSkillBundleDraftResponse
-	1094, // 2252: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:output_type -> controlplane.v1.PublishSkillBundleDraftResponse
-	1095, // 2253: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:output_type -> controlplane.v1.DiscardSkillBundleDraftResponse
-	1096, // 2254: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:output_type -> controlplane.v1.ArchiveSkillBundleResponse
-	1097, // 2255: controlplane.v1.PlatformCommandService.RestoreSkillBundle:output_type -> controlplane.v1.RestoreSkillBundleResponse
-	1098, // 2256: controlplane.v1.PlatformCommandService.PurgeSkillBundle:output_type -> controlplane.v1.PurgeSkillBundleResponse
-	1080, // 2257: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:output_type -> controlplane.v1.BindAgentSkillBundleResponse
-	1082, // 2258: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:output_type -> controlplane.v1.UnbindAgentSkillBundleResponse
-	1099, // 2259: controlplane.v1.PlatformCommandService.CreateMemoryRecord:output_type -> controlplane.v1.CreateMemoryRecordResponse
-	1100, // 2260: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:output_type -> controlplane.v1.ReviseMemoryRecordResponse
-	1101, // 2261: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:output_type -> controlplane.v1.ArchiveMemoryRecordResponse
-	1102, // 2262: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:output_type -> controlplane.v1.RestoreMemoryRecordResponse
-	1103, // 2263: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:output_type -> controlplane.v1.PurgeMemoryRecordResponse
-	1087, // 2264: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:output_type -> controlplane.v1.BindAgentMemoryRecordResponse
-	1089, // 2265: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:output_type -> controlplane.v1.UnbindAgentMemoryRecordResponse
-	762,  // 2266: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateRuntimeEnvironmentDraftResponse
-	764,  // 2267: controlplane.v1.PlatformCommandService.CreateOrganizationRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftResponse
-	766,  // 2268: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:output_type -> controlplane.v1.SaveRuntimeEnvironmentDraftResponse
-	768,  // 2269: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:output_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftResponse
-	770,  // 2270: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:output_type -> controlplane.v1.PublishRuntimeEnvironmentDraftResponse
-	772,  // 2271: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:output_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftResponse
-	784,  // 2272: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:output_type -> controlplane.v1.RebindRuntimeEnvironmentResponse
-	804,  // 2273: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:output_type -> controlplane.v1.RebindRuntimeSecretResponse
-	648,  // 2274: controlplane.v1.PlatformCommandService.BindInteractionIdentity:output_type -> controlplane.v1.BindInteractionIdentityResponse
-	650,  // 2275: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:output_type -> controlplane.v1.RevokeInteractionIdentityResponse
-	485,  // 2276: controlplane.v1.PlatformCommandService.CompleteOnboarding:output_type -> controlplane.v1.CompleteOnboardingResponse
-	269,  // 2277: controlplane.v1.PlatformCommandService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
-	271,  // 2278: controlplane.v1.PlatformCommandService.UpdateProject:output_type -> controlplane.v1.UpdateProjectResponse
-	273,  // 2279: controlplane.v1.PlatformCommandService.TrashProject:output_type -> controlplane.v1.TrashProjectResponse
-	275,  // 2280: controlplane.v1.PlatformCommandService.RestoreProject:output_type -> controlplane.v1.RestoreProjectResponse
-	277,  // 2281: controlplane.v1.PlatformCommandService.PurgeProject:output_type -> controlplane.v1.PurgeProjectResponse
-	282,  // 2282: controlplane.v1.PlatformCommandService.ResolveProjectPurgeRecovery:output_type -> controlplane.v1.ResolveProjectPurgeRecoveryResponse
-	288,  // 2283: controlplane.v1.PlatformCommandService.AddPlatformMembership:output_type -> controlplane.v1.AddPlatformMembershipResponse
-	290,  // 2284: controlplane.v1.PlatformCommandService.ChangePlatformMembership:output_type -> controlplane.v1.ChangePlatformMembershipResponse
-	292,  // 2285: controlplane.v1.PlatformCommandService.RemovePlatformMembership:output_type -> controlplane.v1.RemovePlatformMembershipResponse
-	298,  // 2286: controlplane.v1.PlatformCommandService.AddProjectMembership:output_type -> controlplane.v1.AddProjectMembershipResponse
-	300,  // 2287: controlplane.v1.PlatformCommandService.ChangeProjectMembership:output_type -> controlplane.v1.ChangeProjectMembershipResponse
-	302,  // 2288: controlplane.v1.PlatformCommandService.RemoveProjectMembership:output_type -> controlplane.v1.RemoveProjectMembershipResponse
-	308,  // 2289: controlplane.v1.PlatformCommandService.CreateAgent:output_type -> controlplane.v1.CreateAgentResponse
-	310,  // 2290: controlplane.v1.PlatformCommandService.UpdateAgent:output_type -> controlplane.v1.UpdateAgentResponse
-	312,  // 2291: controlplane.v1.PlatformCommandService.SetAgentEnabled:output_type -> controlplane.v1.SetAgentEnabledResponse
-	314,  // 2292: controlplane.v1.PlatformCommandService.ArchiveAgent:output_type -> controlplane.v1.ArchiveAgentResponse
-	899,  // 2293: controlplane.v1.PlatformCommandService.SetAgentAvatar:output_type -> controlplane.v1.SetAgentAvatarResponse
-	901,  // 2294: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:output_type -> controlplane.v1.RemoveAgentAvatarResponse
-	316,  // 2295: controlplane.v1.PlatformCommandService.CreateInstructionDraft:output_type -> controlplane.v1.CreateInstructionDraftResponse
-	318,  // 2296: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:output_type -> controlplane.v1.ValidateInstructionDraftResponse
-	320,  // 2297: controlplane.v1.PlatformCommandService.PublishInstructionDraft:output_type -> controlplane.v1.PublishInstructionDraftResponse
-	322,  // 2298: controlplane.v1.PlatformCommandService.RollbackInstructions:output_type -> controlplane.v1.RollbackInstructionsResponse
-	324,  // 2299: controlplane.v1.PlatformCommandService.ChangeAgentCapability:output_type -> controlplane.v1.ChangeAgentCapabilityResponse
-	326,  // 2300: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:output_type -> controlplane.v1.ChangeAgentIntegrationGrantResponse
-	332,  // 2301: controlplane.v1.PlatformCommandService.CreateWorkflow:output_type -> controlplane.v1.CreateWorkflowResponse
-	334,  // 2302: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:output_type -> controlplane.v1.UpdateWorkflowDraftResponse
-	336,  // 2303: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:output_type -> controlplane.v1.ValidateWorkflowDraftResponse
-	338,  // 2304: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:output_type -> controlplane.v1.PublishWorkflowDraftResponse
-	340,  // 2305: controlplane.v1.PlatformCommandService.ArchiveWorkflow:output_type -> controlplane.v1.ArchiveWorkflowResponse
-	350,  // 2306: controlplane.v1.PlatformCommandService.LaunchRun:output_type -> controlplane.v1.LaunchRunResponse
-	352,  // 2307: controlplane.v1.PlatformCommandService.AddSessionTurn:output_type -> controlplane.v1.AddSessionTurnResponse
-	354,  // 2308: controlplane.v1.PlatformCommandService.CancelRun:output_type -> controlplane.v1.CancelRunResponse
-	356,  // 2309: controlplane.v1.PlatformCommandService.RetryRun:output_type -> controlplane.v1.RetryRunResponse
-	363,  // 2310: controlplane.v1.PlatformCommandService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
-	1248, // 2311: controlplane.v1.PlatformCommandService.RevokeIntegrationApprovalConsent:output_type -> controlplane.v1.RevokeIntegrationApprovalConsentResponse
-	386,  // 2312: controlplane.v1.PlatformCommandService.UploadAgentAvatar:output_type -> controlplane.v1.UploadAgentAvatarResponse
-	383,  // 2313: controlplane.v1.PlatformCommandService.UploadArtifact:output_type -> controlplane.v1.UploadArtifactResponse
-	388,  // 2314: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:output_type -> controlplane.v1.UploadOrganizationArtifactResponse
-	390,  // 2315: controlplane.v1.PlatformCommandService.DownloadArtifact:output_type -> controlplane.v1.DownloadArtifactResponse
-	197,  // 2316: controlplane.v1.PlatformCommandService.DownloadArtifactRevision:output_type -> controlplane.v1.DownloadArtifactRevisionResponse
-	392,  // 2317: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:output_type -> controlplane.v1.ChangeArtifactBindingResponse
-	394,  // 2318: controlplane.v1.PlatformCommandService.DeleteArtifact:output_type -> controlplane.v1.DeleteArtifactResponse
-	396,  // 2319: controlplane.v1.PlatformCommandService.RestoreArtifact:output_type -> controlplane.v1.RestoreArtifactResponse
-	398,  // 2320: controlplane.v1.PlatformCommandService.PurgeArtifact:output_type -> controlplane.v1.PurgeArtifactResponse
-	371,  // 2321: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:output_type -> controlplane.v1.CreateAttachmentSetDraftResponse
-	373,  // 2322: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:output_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftResponse
-	375,  // 2323: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:output_type -> controlplane.v1.AddAttachmentSetItemsResponse
-	377,  // 2324: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:output_type -> controlplane.v1.RemoveAttachmentSetItemsResponse
-	379,  // 2325: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:output_type -> controlplane.v1.FinalizeAttachmentSetResponse
-	402,  // 2326: controlplane.v1.PlatformCommandService.CreateSchedule:output_type -> controlplane.v1.CreateScheduleResponse
-	404,  // 2327: controlplane.v1.PlatformCommandService.UpdateSchedule:output_type -> controlplane.v1.UpdateScheduleResponse
-	406,  // 2328: controlplane.v1.PlatformCommandService.SetScheduleEnabled:output_type -> controlplane.v1.SetScheduleEnabledResponse
-	659,  // 2329: controlplane.v1.PlatformCommandService.ArchiveSchedule:output_type -> controlplane.v1.ArchiveScheduleResponse
-	893,  // 2330: controlplane.v1.PlatformCommandService.DeleteSchedule:output_type -> controlplane.v1.DeleteScheduleResponse
-	866,  // 2331: controlplane.v1.PlatformCommandService.CreateProviderAccount:output_type -> controlplane.v1.CreateProviderAccountResponse
-	868,  // 2332: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:output_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationResponse
-	870,  // 2333: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:output_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
-	872,  // 2334: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:output_type -> controlplane.v1.RefreshProviderAccountAuthorizationResponse
-	874,  // 2335: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:output_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
-	876,  // 2336: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:output_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
-	878,  // 2337: controlplane.v1.PlatformCommandService.RevokeProviderAccount:output_type -> controlplane.v1.RevokeProviderAccountResponse
-	880,  // 2338: controlplane.v1.PlatformCommandService.DeleteProviderAccount:output_type -> controlplane.v1.DeleteProviderAccountResponse
-	883,  // 2339: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:output_type -> controlplane.v1.CancelProviderAccountQueuedWorkResponse
-	887,  // 2340: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:output_type -> controlplane.v1.SetProviderAccountEnabledResponse
-	885,  // 2341: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:output_type -> controlplane.v1.SetProviderAccountConcurrencyResponse
-	428,  // 2342: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:output_type -> controlplane.v1.CreateIntegrationConnectionResponse
-	430,  // 2343: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:output_type -> controlplane.v1.UpdateIntegrationConnectionResponse
-	432,  // 2344: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:output_type -> controlplane.v1.DeleteIntegrationConnectionResponse
-	434,  // 2345: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:output_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialResponse
-	436,  // 2346: controlplane.v1.PlatformCommandService.TestIntegrationConnection:output_type -> controlplane.v1.TestIntegrationConnectionResponse
-	438,  // 2347: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:output_type -> controlplane.v1.SetIntegrationConnectionEnabledResponse
-	440,  // 2348: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:output_type -> controlplane.v1.ChangeIntegrationGrantResponse
-	442,  // 2349: controlplane.v1.PlatformCommandService.ChangeSystemAssistantIntegrationGrant:output_type -> controlplane.v1.ChangeSystemAssistantIntegrationGrantResponse
-	747,  // 2350: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:output_type -> controlplane.v1.PublishAgentRuntimeConfigurationResponse
-	749,  // 2351: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:output_type -> controlplane.v1.CreateConfigOverlayDraftResponse
-	751,  // 2352: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:output_type -> controlplane.v1.ValidateConfigOverlayDraftResponse
-	753,  // 2353: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:output_type -> controlplane.v1.PublishConfigOverlayDraftResponse
-	755,  // 2354: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:output_type -> controlplane.v1.RollbackConfigOverlayResponse
-	773,  // 2355: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:output_type -> controlplane.v1.CreateRuntimeEnvironmentSetResponse
-	775,  // 2356: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:output_type -> controlplane.v1.PublishRuntimeEnvironmentVersionResponse
-	777,  // 2357: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:output_type -> controlplane.v1.RollbackRuntimeEnvironmentResponse
-	830,  // 2358: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:output_type -> controlplane.v1.SetRuntimeEnvironmentEnabledResponse
-	832,  // 2359: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:output_type -> controlplane.v1.DeleteRuntimeEnvironmentResponse
-	779,  // 2360: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:output_type -> controlplane.v1.BindAgentRuntimeEnvironmentResponse
-	849,  // 2361: controlplane.v1.PlatformCommandService.PromoteRoleImage:output_type -> controlplane.v1.PromoteRoleImageResponse
-	723,  // 2362: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:output_type -> controlplane.v1.PrepareCreateRuntimeSecretResponse
-	725,  // 2363: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:output_type -> controlplane.v1.PrepareRotateRuntimeSecretResponse
-	727,  // 2364: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:output_type -> controlplane.v1.PrepareRevealRuntimeSecretResponse
-	729,  // 2365: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:output_type -> controlplane.v1.PrepareRevokeRuntimeSecretResponse
-	936,  // 2366: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:output_type -> controlplane.v1.CreatePromptTemplateDraftResponse
-	938,  // 2367: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:output_type -> controlplane.v1.ValidatePromptTemplateDraftResponse
-	940,  // 2368: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:output_type -> controlplane.v1.PublishPromptTemplateDraftResponse
-	942,  // 2369: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:output_type -> controlplane.v1.RebindPromptTemplateConsumersResponse
-	944,  // 2370: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:output_type -> controlplane.v1.CreateRoleImageRevisionDraftResponse
-	946,  // 2371: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:output_type -> controlplane.v1.ValidateRoleImageRevisionDraftResponse
-	948,  // 2372: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:output_type -> controlplane.v1.PublishRoleImageRevisionDraftResponse
-	950,  // 2373: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:output_type -> controlplane.v1.RebindRoleImageConsumersResponse
-	964,  // 2374: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:output_type -> controlplane.v1.PrepareRoleImageImpactPlanResponse
-	956,  // 2375: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:output_type -> controlplane.v1.PrepareEnvironmentDraftImpactResponse
-	958,  // 2376: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:output_type -> controlplane.v1.PrepareInstructionsImpactResponse
-	960,  // 2377: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:output_type -> controlplane.v1.PreparePromptTemplateImpactResponse
-	968,  // 2378: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:output_type -> controlplane.v1.CreateIntegrationDefinitionDraftResponse
-	970,  // 2379: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:output_type -> controlplane.v1.ValidateIntegrationDefinitionDraftResponse
-	972,  // 2380: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:output_type -> controlplane.v1.PublishIntegrationDefinitionDraftResponse
-	974,  // 2381: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:output_type -> controlplane.v1.RebindIntegrationDefinitionConsumersResponse
-	976,  // 2382: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:output_type -> controlplane.v1.CreateSystemSTTConfigurationDraftResponse
-	978,  // 2383: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:output_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
-	980,  // 2384: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:output_type -> controlplane.v1.PublishSystemSTTConfigurationDraftResponse
-	982,  // 2385: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:output_type -> controlplane.v1.RebindSystemSTTConsumersResponse
-	984,  // 2386: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:output_type -> controlplane.v1.DetachGitManagedConfigurationResponse
-	986,  // 2387: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:output_type -> controlplane.v1.CopyGitManagedConfigurationResponse
-	920,  // 2388: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:output_type -> controlplane.v1.CopyRoleImageConfigurationResponse
-	923,  // 2389: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:output_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
-	925,  // 2390: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:output_type -> controlplane.v1.ArchiveRoleImageConfigurationResponse
-	927,  // 2391: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:output_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
-	1152, // 2392: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:output_type -> controlplane.v1.ConfigureRoleImageGitSourceResponse
-	1154, // 2393: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:output_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
-	1156, // 2394: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:output_type -> controlplane.v1.RefreshRoleImageGitSourceResponse
-	1158, // 2395: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:output_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
-	1172, // 2396: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:output_type -> controlplane.v1.PrepareRoleImageGitWriteBackResponse
-	1174, // 2397: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:output_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
-	1176, // 2398: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:output_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
-	1178, // 2399: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:output_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
-	1180, // 2400: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:output_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
-	1188, // 2401: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
-	1190, // 2402: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
-	1192, // 2403: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
-	1194, // 2404: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
-	1196, // 2405: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
-	1162, // 2406: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:output_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
-	1164, // 2407: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:output_type -> controlplane.v1.RenewManagedConfigurationSourceWorkResponse
-	1166, // 2408: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:output_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
-	1168, // 2409: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:output_type -> controlplane.v1.FailManagedConfigurationSourceWorkResponse
-	699,  // 2410: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessResponse
-	701,  // 2411: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse
-	703,  // 2412: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:output_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationResponse
-	705,  // 2413: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:output_type -> controlplane.v1.FailRuntimeSecretDraftOperationResponse
-	707,  // 2414: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse
-	709,  // 2415: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse
-	711,  // 2416: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:output_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupResponse
-	1117, // 2417: controlplane.v1.ProviderCredentialRenewalWorkService.CheckProviderCredentialRenewalWorkReadiness:output_type -> controlplane.v1.CheckProviderCredentialRenewalWorkReadinessResponse
-	1119, // 2418: controlplane.v1.ProviderCredentialRenewalWorkService.AuthorizeProviderCredentialRenewal:output_type -> controlplane.v1.AuthorizeProviderCredentialRenewalResponse
-	1121, // 2419: controlplane.v1.ProviderCredentialRenewalWorkService.ValidateProviderCredentialRenewalObservation:output_type -> controlplane.v1.ValidateProviderCredentialRenewalObservationResponse
-	732,  // 2420: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessResponse
-	1142, // 2421: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:output_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
-	735,  // 2422: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkResponse
-	737,  // 2423: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretOperationResponse
-	741,  // 2424: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:output_type -> controlplane.v1.CompleteRuntimeSecretOperationResponse
-	743,  // 2425: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:output_type -> controlplane.v1.FailRuntimeSecretOperationResponse
-	745,  // 2426: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretMaterializationResponse
-	1144, // 2427: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:output_type -> controlplane.v1.ResolveRuntimeCredentialProjectionResponse
-	1146, // 2428: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:output_type -> controlplane.v1.ValidateRuntimeCredentialProjectionResponse
-	1148, // 2429: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:output_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
-	1215, // 2430: controlplane.v1.RuntimeSecretWorkService.ResolveSSHComposeCredentialProjection:output_type -> controlplane.v1.ResolveSSHComposeCredentialProjectionResponse
-	449,  // 2431: controlplane.v1.SystemAssistantService.GetSystemAssistant:output_type -> controlplane.v1.GetSystemAssistantResponse
-	451,  // 2432: controlplane.v1.SystemAssistantService.CreateProjectAssistant:output_type -> controlplane.v1.CreateProjectAssistantResponse
-	453,  // 2433: controlplane.v1.SystemAssistantService.GetProjectAssistant:output_type -> controlplane.v1.GetProjectAssistantResponse
-	455,  // 2434: controlplane.v1.SystemAssistantService.ListAssistantConversations:output_type -> controlplane.v1.ListAssistantConversationsResponse
-	457,  // 2435: controlplane.v1.SystemAssistantService.CreateAssistantConversation:output_type -> controlplane.v1.CreateAssistantConversationResponse
-	467,  // 2436: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:output_type -> controlplane.v1.UpdateAssistantConversationTitleResponse
-	459,  // 2437: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:output_type -> controlplane.v1.ArchiveAssistantConversationResponse
-	461,  // 2438: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:output_type -> controlplane.v1.RestoreAssistantConversationResponse
-	463,  // 2439: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:output_type -> controlplane.v1.PurgeAssistantConversationResponse
-	465,  // 2440: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:output_type -> controlplane.v1.MoveAssistantConversationToProjectResponse
-	469,  // 2441: controlplane.v1.SystemAssistantService.AddAssistantTurn:output_type -> controlplane.v1.AddAssistantTurnResponse
-	471,  // 2442: controlplane.v1.SystemAssistantService.CancelAssistantTurn:output_type -> controlplane.v1.CancelAssistantTurnResponse
-	473,  // 2443: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:output_type -> controlplane.v1.UpdateAssistantPlanDraftResponse
-	475,  // 2444: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:output_type -> controlplane.v1.ValidateAssistantPlanResponse
-	477,  // 2445: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:output_type -> controlplane.v1.ApplyAssistantPlanResponse
-	479,  // 2446: controlplane.v1.SystemAssistantService.RejectAssistantPlan:output_type -> controlplane.v1.RejectAssistantPlanResponse
-	481,  // 2447: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:output_type -> controlplane.v1.UpdateAssistantOwnerInstructionsResponse
-	483,  // 2448: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:output_type -> controlplane.v1.RecoverSystemAssistantResponse
-	1034, // 2449: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:output_type -> controlplane.v1.ReportEmailConfigurationReadbackResponse
-	1041, // 2450: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:output_type -> controlplane.v1.ResolveEmailAuthorizationResponse
-	1044, // 2451: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:output_type -> controlplane.v1.ReportEmailEffectReceiptResponse
-	1049, // 2452: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:output_type -> controlplane.v1.ResolveEmailReconciliationResponse
-	548,  // 2453: controlplane.v1.RuntimeWorkService.ClaimExecution:output_type -> controlplane.v1.ClaimExecutionResponse
-	932,  // 2454: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:output_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
-	550,  // 2455: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:output_type -> controlplane.v1.ReadExecutionArtifactResponse
-	552,  // 2456: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:output_type -> controlplane.v1.StreamExecutionArtifactResponse
-	511,  // 2457: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:output_type -> controlplane.v1.SearchExecutionFilesResponse
-	242,  // 2458: controlplane.v1.RuntimeWorkService.SearchAssistantResources:output_type -> controlplane.v1.SearchAssistantResourcesResponse
-	513,  // 2459: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:output_type -> controlplane.v1.GetExecutionFileMetadataResponse
-	515,  // 2460: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:output_type -> controlplane.v1.PreviewExecutionFileResponse
-	517,  // 2461: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:output_type -> controlplane.v1.GetExecutionFileManifestResponse
-	555,  // 2462: controlplane.v1.RuntimeWorkService.RenewExecution:output_type -> controlplane.v1.RenewExecutionResponse
-	557,  // 2463: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:output_type -> controlplane.v1.ReportExecutionProgressResponse
-	1136, // 2464: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:output_type -> controlplane.v1.CommitProviderCredentialRefreshResponse
-	560,  // 2465: controlplane.v1.RuntimeWorkService.CompleteExecution:output_type -> controlplane.v1.CompleteExecutionResponse
-	562,  // 2466: controlplane.v1.RuntimeWorkService.ObserveWorkspace:output_type -> controlplane.v1.ObserveWorkspaceResponse
-	581,  // 2467: controlplane.v1.RuntimeWorkService.DelegateExecution:output_type -> controlplane.v1.DelegateExecutionResponse
-	594,  // 2468: controlplane.v1.RuntimeWorkService.LaunchWorkflowExecution:output_type -> controlplane.v1.LaunchWorkflowExecutionResponse
-	593,  // 2469: controlplane.v1.RuntimeWorkService.GetExecutionWorkflowCatalog:output_type -> controlplane.v1.GetExecutionWorkflowCatalogResponse
-	584,  // 2470: controlplane.v1.RuntimeWorkService.GetExecutionIntegrationOutcomes:output_type -> controlplane.v1.GetExecutionIntegrationOutcomesResponse
-	596,  // 2471: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:output_type -> controlplane.v1.ProposeAssistantPlanResponse
-	598,  // 2472: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:output_type -> controlplane.v1.ProposeAssistantMetadataResponse
-	600,  // 2473: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:output_type -> controlplane.v1.ProposeRunMetadataResponse
-	602,  // 2474: controlplane.v1.RuntimeWorkService.RecordRunToolCall:output_type -> controlplane.v1.RecordRunToolCallResponse
-	604,  // 2475: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:output_type -> controlplane.v1.ReconcileWarmRuntimeResponse
-	606,  // 2476: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:output_type -> controlplane.v1.ReportWarmRuntimeResponse
-	609,  // 2477: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
-	613,  // 2478: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:output_type -> controlplane.v1.RenewScheduleOccurrenceResponse
-	611,  // 2479: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:output_type -> controlplane.v1.MaterializeScheduleOccurrenceResponse
-	615,  // 2480: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:output_type -> controlplane.v1.FailScheduleOccurrenceResponse
-	622,  // 2481: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:output_type -> controlplane.v1.ClaimIntegrationConnectionTestsResponse
-	934,  // 2482: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:output_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
-	624,  // 2483: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:output_type -> controlplane.v1.CompleteIntegrationConnectionTestResponse
-	626,  // 2484: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:output_type -> controlplane.v1.ResolveIntegrationInvocationResponse
-	631,  // 2485: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:output_type -> controlplane.v1.ClaimIntegrationInvocationsResponse
-	629,  // 2486: controlplane.v1.RuntimeWorkService.ClaimSSHComposeInvocations:output_type -> controlplane.v1.ClaimSSHComposeInvocationsResponse
-	1213, // 2487: controlplane.v1.RuntimeWorkService.RenewSSHComposeInvocation:output_type -> controlplane.v1.RenewSSHComposeInvocationResponse
-	633,  // 2488: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:output_type -> controlplane.v1.GetIntegrationInvocationResponse
-	636,  // 2489: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:output_type -> controlplane.v1.CompleteIntegrationInvocationResponse
-	567,  // 2490: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:output_type -> controlplane.v1.ClaimSessionArchiveTasksResponse
-	569,  // 2491: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:output_type -> controlplane.v1.RenewSessionArchiveTaskResponse
-	575,  // 2492: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:output_type -> controlplane.v1.CompleteSessionSnapshotResponse
-	576,  // 2493: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:output_type -> controlplane.v1.CompleteSessionRestoreResponse
-	577,  // 2494: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:output_type -> controlplane.v1.CompleteSessionPVCDeletionResponse
-	578,  // 2495: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:output_type -> controlplane.v1.CompleteSessionObjectDeletionResponse
-	579,  // 2496: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:output_type -> controlplane.v1.FailSessionArchiveTaskResponse
-	639,  // 2497: controlplane.v1.InteractionWorkService.ListInteractionSources:output_type -> controlplane.v1.ListInteractionSourcesResponse
-	642,  // 2498: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:output_type -> controlplane.v1.ClaimInteractionDeliveriesResponse
-	644,  // 2499: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:output_type -> controlplane.v1.CompleteInteractionDeliveryResponse
-	653,  // 2500: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:output_type -> controlplane.v1.AcceptInteractionMessageResponse
-	1113, // 2501: controlplane.v1.ProviderCredentialMaterializerService.RenewManagedProviderCredential:output_type -> controlplane.v1.RenewManagedProviderCredentialResponse
-	1115, // 2502: controlplane.v1.ProviderCredentialMaterializerService.ObserveManagedProviderCredentialRenewal:output_type -> controlplane.v1.ObserveManagedProviderCredentialRenewalResponse
-	1123, // 2503: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:output_type -> controlplane.v1.ObserveProviderModelCatalogResponse
-	1124, // 2504: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:output_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
-	1126, // 2505: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
-	1130, // 2506: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
-	1132, // 2507: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
-	1134, // 2508: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
-	1139, // 2509: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
-	1233, // 2510: controlplane.v1.PersonalIntegrationCredentialService.ListPersonalIntegrationConnections:output_type -> controlplane.v1.ListPersonalIntegrationConnectionsResponse
-	1222, // 2511: controlplane.v1.PersonalIntegrationCredentialService.GetPersonalIntegrationCredential:output_type -> controlplane.v1.GetPersonalIntegrationCredentialResponse
-	1224, // 2512: controlplane.v1.PersonalIntegrationCredentialService.CreatePersonalIntegrationCredential:output_type -> controlplane.v1.CreatePersonalIntegrationCredentialResponse
-	1226, // 2513: controlplane.v1.PersonalIntegrationCredentialService.ConfigurePersonalIntegrationCredential:output_type -> controlplane.v1.ConfigurePersonalIntegrationCredentialResponse
-	1228, // 2514: controlplane.v1.PersonalIntegrationCredentialService.RevokePersonalIntegrationCredential:output_type -> controlplane.v1.RevokePersonalIntegrationCredentialResponse
-	1230, // 2515: controlplane.v1.PersonalIntegrationCredentialService.SetIntegrationCredentialPolicy:output_type -> controlplane.v1.SetIntegrationCredentialPolicyResponse
-	1235, // 2516: controlplane.v1.PersonalIntegrationCredentialService.TestPersonalIntegrationCredential:output_type -> controlplane.v1.TestPersonalIntegrationCredentialResponse
-	1237, // 2517: controlplane.v1.PersonalIntegrationCredentialService.ClaimPersonalIntegrationCredentialTests:output_type -> controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse
-	1239, // 2518: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationCredentialProbe:output_type -> controlplane.v1.BeginPersonalIntegrationCredentialProbeResponse
-	1241, // 2519: controlplane.v1.PersonalIntegrationCredentialService.CompletePersonalIntegrationCredentialTest:output_type -> controlplane.v1.CompletePersonalIntegrationCredentialTestResponse
-	1219, // 2520: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationInvocation:output_type -> controlplane.v1.BeginPersonalIntegrationInvocationResponse
-	2124, // [2124:2521] is the sub-list for method output_type
-	1727, // [1727:2124] is the sub-list for method input_type
-	1727, // [1727:1727] is the sub-list for extension type_name
-	1727, // [1727:1727] is the sub-list for extension extendee
-	0,    // [0:1727] is the sub-list for field type_name
+	1251, // 630: controlplane.v1.RuntimeRevisionSnapshot.native_session:type_name -> controlplane.v1.NativeSessionCheckpoint
+	500,  // 631: controlplane.v1.RuntimeWorkspaceCheckpoint.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
+	501,  // 632: controlplane.v1.RuntimeWorkspaceCheckpoint.manifest:type_name -> controlplane.v1.RuntimeWorkspaceObject
+	500,  // 633: controlplane.v1.RuntimeWorkspaceStorage.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
+	502,  // 634: controlplane.v1.RuntimeWorkspaceStorage.source:type_name -> controlplane.v1.RuntimeWorkspaceCheckpoint
+	505,  // 635: controlplane.v1.RuntimeWorkspaceStorage.volume_ready:type_name -> controlplane.v1.RuntimeWorkspaceVolumeReady
+	500,  // 636: controlplane.v1.RuntimeWorkspaceVolumePreparation.scope:type_name -> controlplane.v1.RuntimeWorkspaceScope
+	504,  // 637: controlplane.v1.RuntimeWorkspaceVolumeReady.preparation:type_name -> controlplane.v1.RuntimeWorkspaceVolumePreparation
+	52,   // 638: controlplane.v1.RuntimeFileCatalog.purposes:type_name -> controlplane.v1.RuntimeFilePurpose
+	52,   // 639: controlplane.v1.ExecutionFileContext.purpose:type_name -> controlplane.v1.RuntimeFilePurpose
+	52,   // 640: controlplane.v1.ExecutionFileDescriptor.purpose:type_name -> controlplane.v1.RuntimeFilePurpose
+	507,  // 641: controlplane.v1.SearchExecutionFilesRequest.context:type_name -> controlplane.v1.ExecutionFileContext
+	153,  // 642: controlplane.v1.SearchExecutionFilesRequest.page:type_name -> controlplane.v1.PageRequest
+	506,  // 643: controlplane.v1.SearchExecutionFilesResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
+	509,  // 644: controlplane.v1.SearchExecutionFilesResponse.items:type_name -> controlplane.v1.ExecutionFileDescriptor
+	154,  // 645: controlplane.v1.SearchExecutionFilesResponse.page:type_name -> controlplane.v1.PageInfo
+	507,  // 646: controlplane.v1.GetExecutionFileMetadataRequest.context:type_name -> controlplane.v1.ExecutionFileContext
+	508,  // 647: controlplane.v1.GetExecutionFileMetadataRequest.file:type_name -> controlplane.v1.ExecutionFileRef
+	506,  // 648: controlplane.v1.GetExecutionFileMetadataResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
+	509,  // 649: controlplane.v1.GetExecutionFileMetadataResponse.file:type_name -> controlplane.v1.ExecutionFileDescriptor
+	507,  // 650: controlplane.v1.PreviewExecutionFileRequest.context:type_name -> controlplane.v1.ExecutionFileContext
+	508,  // 651: controlplane.v1.PreviewExecutionFileRequest.file:type_name -> controlplane.v1.ExecutionFileRef
+	506,  // 652: controlplane.v1.PreviewExecutionFileResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
+	509,  // 653: controlplane.v1.PreviewExecutionFileResponse.file:type_name -> controlplane.v1.ExecutionFileDescriptor
+	507,  // 654: controlplane.v1.GetExecutionFileManifestRequest.context:type_name -> controlplane.v1.ExecutionFileContext
+	153,  // 655: controlplane.v1.GetExecutionFileManifestRequest.page:type_name -> controlplane.v1.PageRequest
+	506,  // 656: controlplane.v1.GetExecutionFileManifestResponse.catalog:type_name -> controlplane.v1.RuntimeFileCatalog
+	509,  // 657: controlplane.v1.GetExecutionFileManifestResponse.items:type_name -> controlplane.v1.ExecutionFileDescriptor
+	154,  // 658: controlplane.v1.GetExecutionFileManifestResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 659: controlplane.v1.SavePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	915,  // 660: controlplane.v1.SavePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
+	917,  // 661: controlplane.v1.SavePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 662: controlplane.v1.SavePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 663: controlplane.v1.DiscardPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 664: controlplane.v1.DiscardPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 665: controlplane.v1.DiscardPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 666: controlplane.v1.SaveRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 667: controlplane.v1.SaveRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 668: controlplane.v1.SaveRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 669: controlplane.v1.DiscardRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 670: controlplane.v1.DiscardRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 671: controlplane.v1.DiscardRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 672: controlplane.v1.SaveIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 673: controlplane.v1.SaveIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 674: controlplane.v1.SaveIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 675: controlplane.v1.DiscardIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 676: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 677: controlplane.v1.DiscardIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 678: controlplane.v1.SaveSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 679: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 680: controlplane.v1.SaveSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 681: controlplane.v1.DiscardSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 682: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 683: controlplane.v1.DiscardSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	1257, // 684: controlplane.v1.RuntimeSkillBundleSnapshot.scanned_at:type_name -> google.protobuf.Timestamp
+	994,  // 685: controlplane.v1.RuntimeSkillBundleSnapshot.files:type_name -> controlplane.v1.SkillBundleFile
+	993,  // 686: controlplane.v1.RuntimeSkillBundleSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
+	1257, // 687: controlplane.v1.RuntimeMemoryRecordSnapshot.retention_until:type_name -> google.protobuf.Timestamp
+	993,  // 688: controlplane.v1.RuntimeMemoryRecordSnapshot.provenance:type_name -> controlplane.v1.ContextProvenance
+	53,   // 689: controlplane.v1.RuntimeWorkspacePathRule.access:type_name -> controlplane.v1.RuntimeWorkspaceAccess
+	536,  // 690: controlplane.v1.RuntimeWorkspacePolicy.rules:type_name -> controlplane.v1.RuntimeWorkspacePathRule
+	54,   // 691: controlplane.v1.RuntimeWorkspacePolicy.denial_reasons:type_name -> controlplane.v1.RuntimeWorkspaceDenialReason
+	190,  // 692: controlplane.v1.RuntimeInputArtifact.artifact:type_name -> controlplane.v1.Artifact
+	1257, // 693: controlplane.v1.WorkLease.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 694: controlplane.v1.RuntimeSchedulingCapacity.observed_at:type_name -> google.protobuf.Timestamp
+	544,  // 695: controlplane.v1.RuntimeSchedulingCapacity.nodes:type_name -> controlplane.v1.RuntimeNodeCapacity
+	544,  // 696: controlplane.v1.RuntimeSchedulingCapacity.overhead:type_name -> controlplane.v1.RuntimeNodeCapacity
+	545,  // 697: controlplane.v1.ClaimExecutionRequest.scheduling_capacity:type_name -> controlplane.v1.RuntimeSchedulingCapacity
+	174,  // 698: controlplane.v1.ClaimedExecution.run:type_name -> controlplane.v1.Run
+	177,  // 699: controlplane.v1.ClaimedExecution.node:type_name -> controlplane.v1.RunNode
+	499,  // 700: controlplane.v1.ClaimedExecution.revision:type_name -> controlplane.v1.RuntimeRevisionSnapshot
+	543,  // 701: controlplane.v1.ClaimedExecution.lease:type_name -> controlplane.v1.WorkLease
+	547,  // 702: controlplane.v1.ClaimExecutionResponse.executions:type_name -> controlplane.v1.ClaimedExecution
+	190,  // 703: controlplane.v1.ReadExecutionArtifactResponse.artifact:type_name -> controlplane.v1.Artifact
+	190,  // 704: controlplane.v1.StreamExecutionArtifactResponse.metadata:type_name -> controlplane.v1.Artifact
+	553,  // 705: controlplane.v1.StreamExecutionArtifactResponse.complete:type_name -> controlplane.v1.RuntimeArtifactTransferComplete
+	543,  // 706: controlplane.v1.RenewExecutionResponse.lease:type_name -> controlplane.v1.WorkLease
+	183,  // 707: controlplane.v1.ReportExecutionProgressRequest.message:type_name -> controlplane.v1.RunMessage
+	1204, // 708: controlplane.v1.ReportExecutionProgressRequest.financial:type_name -> controlplane.v1.ProviderFinancialObservation
+	174,  // 709: controlplane.v1.ReportExecutionProgressResponse.run:type_name -> controlplane.v1.Run
+	177,  // 710: controlplane.v1.ReportExecutionProgressResponse.node:type_name -> controlplane.v1.RunNode
+	180,  // 711: controlplane.v1.ReportExecutionProgressResponse.event:type_name -> controlplane.v1.RunEvent
+	152,  // 712: controlplane.v1.CompleteExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	558,  // 713: controlplane.v1.CompleteExecutionRequest.artifacts:type_name -> controlplane.v1.CompletedArtifactInput
+	172,  // 714: controlplane.v1.CompleteExecutionRequest.usage:type_name -> controlplane.v1.TokenUsage
+	1251, // 715: controlplane.v1.CompleteExecutionRequest.native_session:type_name -> controlplane.v1.NativeSessionCheckpoint
+	174,  // 716: controlplane.v1.CompleteExecutionResponse.run:type_name -> controlplane.v1.Run
+	186,  // 717: controlplane.v1.CompleteExecutionResponse.graph:type_name -> controlplane.v1.RunGraph
+	152,  // 718: controlplane.v1.ObserveWorkspaceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	55,   // 719: controlplane.v1.ObserveWorkspaceRequest.phase:type_name -> controlplane.v1.RuntimeWorkspaceObservationPhase
+	56,   // 720: controlplane.v1.SessionArchiveTask.kind:type_name -> controlplane.v1.SessionArchiveTaskKind
+	563,  // 721: controlplane.v1.SessionArchiveTask.archive:type_name -> controlplane.v1.SessionArchiveBinding
+	543,  // 722: controlplane.v1.SessionArchiveTask.lease:type_name -> controlplane.v1.WorkLease
+	565,  // 723: controlplane.v1.SessionArchiveTask.workspace:type_name -> controlplane.v1.SessionWorkspaceArchiveTask
+	503,  // 724: controlplane.v1.SessionWorkspaceArchiveTask.target:type_name -> controlplane.v1.RuntimeWorkspaceStorage
+	537,  // 725: controlplane.v1.SessionWorkspaceArchiveTask.policy:type_name -> controlplane.v1.RuntimeWorkspacePolicy
+	502,  // 726: controlplane.v1.SessionWorkspaceArchiveTask.checkpoint:type_name -> controlplane.v1.RuntimeWorkspaceCheckpoint
+	564,  // 727: controlplane.v1.ClaimSessionArchiveTasksResponse.tasks:type_name -> controlplane.v1.SessionArchiveTask
+	543,  // 728: controlplane.v1.RenewSessionArchiveTaskResponse.lease:type_name -> controlplane.v1.WorkLease
+	152,  // 729: controlplane.v1.CompleteSessionSnapshotRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 730: controlplane.v1.CompleteSessionRestoreRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 731: controlplane.v1.CompleteSessionPVCDeletionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 732: controlplane.v1.CompleteSessionObjectDeletionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 733: controlplane.v1.FailSessionArchiveTaskRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 734: controlplane.v1.DelegateExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1258, // 735: controlplane.v1.DelegateExecutionRequest.input:type_name -> google.protobuf.Struct
+	174,  // 736: controlplane.v1.DelegateExecutionResponse.child_run:type_name -> controlplane.v1.Run
+	186,  // 737: controlplane.v1.DelegateExecutionResponse.root_graph:type_name -> controlplane.v1.RunGraph
+	152,  // 738: controlplane.v1.LaunchWorkflowExecutionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1258, // 739: controlplane.v1.LaunchWorkflowExecutionRequest.input:type_name -> google.protobuf.Struct
+	587,  // 740: controlplane.v1.GetExecutionWorkflowCatalogRequest.publication_read:type_name -> controlplane.v1.ExecutionWorkflowPublicationRead
+	588,  // 741: controlplane.v1.GetExecutionWorkflowCatalogRequest.active_runs_read:type_name -> controlplane.v1.ExecutionWorkflowActiveRunsRead
+	586,  // 742: controlplane.v1.ExecutionWorkflowPublicationRead.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
+	586,  // 743: controlplane.v1.ExecutionWorkflowActiveRunsRead.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
+	1257, // 744: controlplane.v1.ExecutionWorkflowActiveRun.created_at:type_name -> google.protobuf.Timestamp
+	586,  // 745: controlplane.v1.ExecutionWorkflowActiveRuns.pins:type_name -> controlplane.v1.ExecutionWorkflowReadPins
+	590,  // 746: controlplane.v1.ExecutionWorkflowActiveRuns.items:type_name -> controlplane.v1.ExecutionWorkflowActiveRun
+	164,  // 747: controlplane.v1.ExecutionWorkflowCatalogEntry.input_fields:type_name -> controlplane.v1.WorkflowInputField
+	170,  // 748: controlplane.v1.ExecutionWorkflowCatalogEntry.readiness:type_name -> controlplane.v1.WorkflowLaunchReadiness
+	592,  // 749: controlplane.v1.GetExecutionWorkflowCatalogResponse.items:type_name -> controlplane.v1.ExecutionWorkflowCatalogEntry
+	589,  // 750: controlplane.v1.GetExecutionWorkflowCatalogResponse.publication:type_name -> controlplane.v1.ExecutionWorkflowPublication
+	591,  // 751: controlplane.v1.GetExecutionWorkflowCatalogResponse.active_runs:type_name -> controlplane.v1.ExecutionWorkflowActiveRuns
+	174,  // 752: controlplane.v1.LaunchWorkflowExecutionResponse.run:type_name -> controlplane.v1.Run
+	186,  // 753: controlplane.v1.LaunchWorkflowExecutionResponse.graph:type_name -> controlplane.v1.RunGraph
+	152,  // 754: controlplane.v1.ProposeAssistantPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
+	212,  // 755: controlplane.v1.ProposeAssistantPlanRequest.operations:type_name -> controlplane.v1.AssistantPlanOperation
+	213,  // 756: controlplane.v1.ProposeAssistantPlanResponse.plan:type_name -> controlplane.v1.AssistantPlan
+	220,  // 757: controlplane.v1.ProposeAssistantPlanResponse.conversation:type_name -> controlplane.v1.AssistantConversation
+	152,  // 758: controlplane.v1.ProposeAssistantMetadataRequest.mutation:type_name -> controlplane.v1.MutationContext
+	220,  // 759: controlplane.v1.ProposeAssistantMetadataResponse.conversation:type_name -> controlplane.v1.AssistantConversation
+	152,  // 760: controlplane.v1.ProposeRunMetadataRequest.mutation:type_name -> controlplane.v1.MutationContext
+	174,  // 761: controlplane.v1.ProposeRunMetadataResponse.run:type_name -> controlplane.v1.Run
+	180,  // 762: controlplane.v1.ProposeRunMetadataResponse.event:type_name -> controlplane.v1.RunEvent
+	152,  // 763: controlplane.v1.RecordRunToolCallRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1258, // 764: controlplane.v1.RecordRunToolCallRequest.safe_parameters:type_name -> google.protobuf.Struct
+	16,   // 765: controlplane.v1.RecordRunToolCallRequest.state:type_name -> controlplane.v1.RunToolCallState
+	180,  // 766: controlplane.v1.RecordRunToolCallResponse.event:type_name -> controlplane.v1.RunEvent
+	221,  // 767: controlplane.v1.ReconcileWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
+	499,  // 768: controlplane.v1.ReconcileWarmRuntimeResponse.desired_revision:type_name -> controlplane.v1.RuntimeRevisionSnapshot
+	32,   // 769: controlplane.v1.ReportWarmRuntimeRequest.state:type_name -> controlplane.v1.AssistantRuntimeState
+	221,  // 770: controlplane.v1.ReportWarmRuntimeResponse.assistant:type_name -> controlplane.v1.SystemAssistant
+	200,  // 771: controlplane.v1.ScheduleClaim.schedule:type_name -> controlplane.v1.Schedule
+	543,  // 772: controlplane.v1.ScheduleClaim.lease:type_name -> controlplane.v1.WorkLease
+	1257, // 773: controlplane.v1.ScheduleClaim.scheduled_for:type_name -> google.protobuf.Timestamp
+	607,  // 774: controlplane.v1.ClaimDueSchedulesResponse.claims:type_name -> controlplane.v1.ScheduleClaim
+	152,  // 775: controlplane.v1.MaterializeScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	174,  // 776: controlplane.v1.MaterializeScheduleOccurrenceResponse.run:type_name -> controlplane.v1.Run
+	200,  // 777: controlplane.v1.MaterializeScheduleOccurrenceResponse.schedule:type_name -> controlplane.v1.Schedule
+	543,  // 778: controlplane.v1.RenewScheduleOccurrenceResponse.lease:type_name -> controlplane.v1.WorkLease
+	152,  // 779: controlplane.v1.FailScheduleOccurrenceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1257, // 780: controlplane.v1.PreviewScheduleRequest.after:type_name -> google.protobuf.Timestamp
+	617,  // 781: controlplane.v1.PreviewScheduleRequest.materialization:type_name -> controlplane.v1.SchedulePromptPreviewContext
+	171,  // 782: controlplane.v1.SchedulePromptPreviewContext.target:type_name -> controlplane.v1.RunTarget
+	1258, // 783: controlplane.v1.SchedulePromptPreviewContext.input:type_name -> google.protobuf.Struct
+	1258, // 784: controlplane.v1.SchedulePromptPreviewContext.prompt_inputs:type_name -> google.protobuf.Struct
+	57,   // 785: controlplane.v1.SchedulePromptPreviewContext.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
+	1257, // 786: controlplane.v1.SchedulePromptPreviewPin.scheduled_for:type_name -> google.protobuf.Timestamp
+	57,   // 787: controlplane.v1.SchedulePromptPreviewPin.mode:type_name -> controlplane.v1.SchedulePromptPreviewMode
+	1257, // 788: controlplane.v1.PreviewScheduleResponse.occurrences:type_name -> google.protobuf.Timestamp
+	910,  // 789: controlplane.v1.PreviewScheduleResponse.materialized_prompt:type_name -> controlplane.v1.PreviewPromptTemplateResponse
+	835,  // 790: controlplane.v1.PreviewScheduleResponse.automation_variables:type_name -> controlplane.v1.TemplateVariable
+	618,  // 791: controlplane.v1.PreviewScheduleResponse.materialization_pin:type_name -> controlplane.v1.SchedulePromptPreviewPin
+	1258, // 792: controlplane.v1.IntegrationConnectionTestClaim.public_configuration:type_name -> google.protobuf.Struct
+	543,  // 793: controlplane.v1.IntegrationConnectionTestClaim.lease:type_name -> controlplane.v1.WorkLease
+	208,  // 794: controlplane.v1.IntegrationConnectionTestClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	58,   // 795: controlplane.v1.IntegrationConnectionTestClaim.personal_observation_profiles:type_name -> controlplane.v1.PersonalIntegrationCredentialObservationProfile
+	620,  // 796: controlplane.v1.ClaimIntegrationConnectionTestsResponse.claims:type_name -> controlplane.v1.IntegrationConnectionTestClaim
+	152,  // 797: controlplane.v1.CompleteIntegrationConnectionTestRequest.mutation:type_name -> controlplane.v1.MutationContext
+	210,  // 798: controlplane.v1.CompleteIntegrationConnectionTestResponse.connection:type_name -> controlplane.v1.IntegrationConnection
+	1258, // 799: controlplane.v1.ResolveIntegrationInvocationRequest.bounded_input:type_name -> google.protobuf.Struct
+	28,   // 800: controlplane.v1.ResolveIntegrationInvocationResponse.risk:type_name -> controlplane.v1.IntegrationRisk
+	207,  // 801: controlplane.v1.ResolveIntegrationInvocationResponse.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
+	1258, // 802: controlplane.v1.IntegrationInvocationClaim.public_configuration:type_name -> google.protobuf.Struct
+	1258, // 803: controlplane.v1.IntegrationInvocationClaim.bounded_input:type_name -> google.protobuf.Struct
+	543,  // 804: controlplane.v1.IntegrationInvocationClaim.lease:type_name -> controlplane.v1.WorkLease
+	208,  // 805: controlplane.v1.IntegrationInvocationClaim.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	28,   // 806: controlplane.v1.IntegrationInvocationClaim.risk:type_name -> controlplane.v1.IntegrationRisk
+	29,   // 807: controlplane.v1.IntegrationInvocationClaim.approval_policy:type_name -> controlplane.v1.IntegrationApprovalPolicy
+	207,  // 808: controlplane.v1.IntegrationInvocationClaim.resource_scope:type_name -> controlplane.v1.IntegrationResourceScope
+	59,   // 809: controlplane.v1.IntegrationInvocationClaim.work_mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
+	60,   // 810: controlplane.v1.IntegrationInvocationClaim.resource_permission_profile:type_name -> controlplane.v1.IntegrationCredentialResourcePermissionProfile
+	627,  // 811: controlplane.v1.ClaimSSHComposeInvocationsResponse.claims:type_name -> controlplane.v1.IntegrationInvocationClaim
+	627,  // 812: controlplane.v1.ClaimIntegrationInvocationsResponse.claims:type_name -> controlplane.v1.IntegrationInvocationClaim
+	61,   // 813: controlplane.v1.GetIntegrationInvocationResponse.admission_block_reason:type_name -> controlplane.v1.SSHComposeAdmissionBlockReason
+	152,  // 814: controlplane.v1.CompleteIntegrationInvocationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	634,  // 815: controlplane.v1.CompleteIntegrationInvocationRequest.effect_receipt:type_name -> controlplane.v1.IntegrationEffectReceipt
+	174,  // 816: controlplane.v1.CompleteIntegrationInvocationResponse.run:type_name -> controlplane.v1.Run
+	186,  // 817: controlplane.v1.CompleteIntegrationInvocationResponse.graph:type_name -> controlplane.v1.RunGraph
+	208,  // 818: controlplane.v1.InteractionSource.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
+	637,  // 819: controlplane.v1.ListInteractionSourcesResponse.sources:type_name -> controlplane.v1.InteractionSource
+	1258, // 820: controlplane.v1.InteractionDeliveryClaim.template_data:type_name -> google.protobuf.Struct
+	543,  // 821: controlplane.v1.InteractionDeliveryClaim.lease:type_name -> controlplane.v1.WorkLease
+	208,  // 822: controlplane.v1.InteractionDeliveryClaim.credential_descriptor:type_name -> controlplane.v1.IntegrationCredentialRevision
+	640,  // 823: controlplane.v1.ClaimInteractionDeliveriesResponse.claims:type_name -> controlplane.v1.InteractionDeliveryClaim
+	152,  // 824: controlplane.v1.CompleteInteractionDeliveryRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 825: controlplane.v1.AcceptInteractionMessageRequest.mutation:type_name -> controlplane.v1.MutationContext
+	19,   // 826: controlplane.v1.AcceptInteractionMessageRequest.decision:type_name -> controlplane.v1.OwnerGateDecision
+	152,  // 827: controlplane.v1.BindInteractionIdentityRequest.mutation:type_name -> controlplane.v1.MutationContext
+	646,  // 828: controlplane.v1.BindInteractionIdentityResponse.identity:type_name -> controlplane.v1.InteractionIdentity
+	152,  // 829: controlplane.v1.RevokeInteractionIdentityRequest.mutation:type_name -> controlplane.v1.MutationContext
+	646,  // 830: controlplane.v1.RevokeInteractionIdentityResponse.identity:type_name -> controlplane.v1.InteractionIdentity
+	153,  // 831: controlplane.v1.ListInteractionIdentitiesRequest.page:type_name -> controlplane.v1.PageRequest
+	646,  // 832: controlplane.v1.ListInteractionIdentitiesResponse.identities:type_name -> controlplane.v1.InteractionIdentity
+	154,  // 833: controlplane.v1.ListInteractionIdentitiesResponse.page:type_name -> controlplane.v1.PageInfo
+	62,   // 834: controlplane.v1.AcceptInteractionMessageResponse.outcome:type_name -> controlplane.v1.InteractionMessageOutcome
+	153,  // 835: controlplane.v1.ListAgentInstructionVersionsRequest.page:type_name -> controlplane.v1.PageRequest
+	160,  // 836: controlplane.v1.ListAgentInstructionVersionsResponse.instruction_versions:type_name -> controlplane.v1.InstructionVersion
+	154,  // 837: controlplane.v1.ListAgentInstructionVersionsResponse.page:type_name -> controlplane.v1.PageInfo
+	200,  // 838: controlplane.v1.GetScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
+	152,  // 839: controlplane.v1.ArchiveScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	200,  // 840: controlplane.v1.ArchiveScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
+	834,  // 841: controlplane.v1.GetAgentRuntimeConfigurationResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	153,  // 842: controlplane.v1.GetAgentEffectiveCapabilitiesRequest.page:type_name -> controlplane.v1.PageRequest
+	5,    // 843: controlplane.v1.ArtifactBindingTarget.state:type_name -> controlplane.v1.AgentState
+	63,   // 844: controlplane.v1.ArtifactBindingTarget.bind_reason:type_name -> controlplane.v1.ArtifactBindingTargetReason
+	63,   // 845: controlplane.v1.ArtifactBindingTarget.unbind_reason:type_name -> controlplane.v1.ArtifactBindingTargetReason
+	153,  // 846: controlplane.v1.ListArtifactBindingTargetsRequest.page:type_name -> controlplane.v1.PageRequest
+	663,  // 847: controlplane.v1.ListArtifactBindingTargetsResponse.items:type_name -> controlplane.v1.ArtifactBindingTarget
+	154,  // 848: controlplane.v1.ListArtifactBindingTargetsResponse.page:type_name -> controlplane.v1.PageInfo
+	1257, // 849: controlplane.v1.ListArtifactBindingTargetsResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	171,  // 850: controlplane.v1.GetRunAttachmentEligibilityRequest.target:type_name -> controlplane.v1.RunTarget
+	171,  // 851: controlplane.v1.GetRunAttachmentEligibilityResponse.target:type_name -> controlplane.v1.RunTarget
+	64,   // 852: controlplane.v1.GetRunAttachmentEligibilityResponse.reason:type_name -> controlplane.v1.RunAttachmentEligibilityReason
+	1257, // 853: controlplane.v1.GetRunAttachmentEligibilityResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	1257, // 854: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.evaluated_at:type_name -> google.protobuf.Timestamp
+	668,  // 855: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.capabilities:type_name -> controlplane.v1.EffectiveCapability
+	154,  // 856: controlplane.v1.GetAgentEffectiveCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 857: controlplane.v1.ListConfigOverlayRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	788,  // 858: controlplane.v1.ListConfigOverlayRevisionsResponse.revisions:type_name -> controlplane.v1.ConfigOverlayVersion
+	154,  // 859: controlplane.v1.ListConfigOverlayRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	788,  // 860: controlplane.v1.GetConfigOverlayRevisionResponse.revision:type_name -> controlplane.v1.ConfigOverlayVersion
+	153,  // 861: controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest.page:type_name -> controlplane.v1.PageRequest
+	787,  // 862: controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse.configurations:type_name -> controlplane.v1.AgentRuntimeConfiguration
+	154,  // 863: controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 864: controlplane.v1.ListRuntimeEnvironmentSetsRequest.page:type_name -> controlplane.v1.PageRequest
+	823,  // 865: controlplane.v1.ListRuntimeEnvironmentSetsResponse.environments:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	154,  // 866: controlplane.v1.ListRuntimeEnvironmentSetsResponse.page:type_name -> controlplane.v1.PageInfo
+	823,  // 867: controlplane.v1.GetRuntimeEnvironmentSetResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	153,  // 868: controlplane.v1.ListRuntimeEnvironmentVersionsRequest.page:type_name -> controlplane.v1.PageRequest
+	807,  // 869: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.versions:type_name -> controlplane.v1.RuntimeEnvironmentVersion
+	154,  // 870: controlplane.v1.ListRuntimeEnvironmentVersionsResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 871: controlplane.v1.ListTemplateVariablesRequest.page:type_name -> controlplane.v1.PageRequest
+	906,  // 872: controlplane.v1.ListTemplateVariablesRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	835,  // 873: controlplane.v1.ListTemplateVariablesResponse.variables:type_name -> controlplane.v1.TemplateVariable
+	154,  // 874: controlplane.v1.ListTemplateVariablesResponse.page:type_name -> controlplane.v1.PageInfo
+	909,  // 875: controlplane.v1.ListTemplateVariablesResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	65,   // 876: controlplane.v1.RuntimeSecretDraft.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	66,   // 877: controlplane.v1.RuntimeSecretDraft.state:type_name -> controlplane.v1.RuntimeSecretDraftState
+	1257, // 878: controlplane.v1.RuntimeSecretDraft.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 879: controlplane.v1.RuntimeSecretDraft.updated_at:type_name -> google.protobuf.Timestamp
+	1257, // 880: controlplane.v1.RuntimeSecretDraft.expires_at:type_name -> google.protobuf.Timestamp
+	0,    // 881: controlplane.v1.RuntimeSecretDraft.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	684,  // 882: controlplane.v1.GetRuntimeSecretDraftResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	152,  // 883: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	65,   // 884: controlplane.v1.PrepareSaveRuntimeSecretDraftRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	696,  // 885: controlplane.v1.PrepareSaveRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
+	152,  // 886: controlplane.v1.PrepareValidateRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	696,  // 887: controlplane.v1.PrepareValidateRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
+	152,  // 888: controlplane.v1.PreparePublishRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	696,  // 889: controlplane.v1.PreparePublishRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
+	152,  // 890: controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	696,  // 891: controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
+	69,   // 892: controlplane.v1.RuntimeSecretDraftOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	1257, // 893: controlplane.v1.RuntimeSecretDraftOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
+	684,  // 894: controlplane.v1.RuntimeSecretDraftOperationReceipt.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	713,  // 895: controlplane.v1.RuntimeSecretDraftOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
+	70,   // 896: controlplane.v1.RuntimeSecretDraftOperationReceipt.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
+	67,   // 897: controlplane.v1.RuntimeSecretDraftWork.kind:type_name -> controlplane.v1.RuntimeSecretDraftOperationKind
+	684,  // 898: controlplane.v1.RuntimeSecretDraftWork.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	685,  // 899: controlplane.v1.RuntimeSecretDraftWork.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
+	1257, // 900: controlplane.v1.RuntimeSecretDraftWork.lease_deadline:type_name -> google.protobuf.Timestamp
+	1257, // 901: controlplane.v1.RuntimeSecretDraftWork.expires_at:type_name -> google.protobuf.Timestamp
+	739,  // 902: controlplane.v1.RuntimeSecretDraftWork.recovery_materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	685,  // 903: controlplane.v1.RuntimeSecretDraftWork.recovery_encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
+	697,  // 904: controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse.work:type_name -> controlplane.v1.RuntimeSecretDraftWork
+	685,  // 905: controlplane.v1.CompleteRuntimeSecretDraftOperationRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
+	739,  // 906: controlplane.v1.CompleteRuntimeSecretDraftOperationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	684,  // 907: controlplane.v1.CompleteRuntimeSecretDraftOperationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	713,  // 908: controlplane.v1.CompleteRuntimeSecretDraftOperationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
+	70,   // 909: controlplane.v1.FailRuntimeSecretDraftOperationRequest.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
+	69,   // 910: controlplane.v1.FailRuntimeSecretDraftOperationResponse.state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	684,  // 911: controlplane.v1.FailRuntimeSecretDraftOperationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	153,  // 912: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest.page:type_name -> controlplane.v1.PageRequest
+	697,  // 913: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse.operations:type_name -> controlplane.v1.RuntimeSecretDraftWork
+	154,  // 914: controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse.page:type_name -> controlplane.v1.PageInfo
+	685,  // 915: controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
+	739,  // 916: controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	71,   // 917: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.encrypted_action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
+	71,   // 918: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.materialization_action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
+	684,  // 919: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.draft:type_name -> controlplane.v1.RuntimeSecretDraft
+	69,   // 920: controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse.operation_state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	685,  // 921: controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest.encrypted:type_name -> controlplane.v1.RuntimeSecretDraftEncryptedDescriptor
+	739,  // 922: controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	65,   // 923: controlplane.v1.RuntimeSecret.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	712,  // 924: controlplane.v1.RuntimeSecret.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
+	1257, // 925: controlplane.v1.RuntimeSecret.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 926: controlplane.v1.RuntimeSecret.updated_at:type_name -> google.protobuf.Timestamp
+	738,  // 927: controlplane.v1.RuntimeSecret.current_revision_descriptor:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
+	3,    // 928: controlplane.v1.RuntimeSecret.next_actions:type_name -> controlplane.v1.NextAction
+	0,    // 929: controlplane.v1.RuntimeSecret.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	153,  // 930: controlplane.v1.ListRuntimeSecretsRequest.page:type_name -> controlplane.v1.PageRequest
+	713,  // 931: controlplane.v1.ListRuntimeSecretsResponse.secrets:type_name -> controlplane.v1.RuntimeSecret
+	154,  // 932: controlplane.v1.ListRuntimeSecretsResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 933: controlplane.v1.ListOrganizationRuntimeSecretsRequest.page:type_name -> controlplane.v1.PageRequest
+	713,  // 934: controlplane.v1.ListOrganizationRuntimeSecretsResponse.secrets:type_name -> controlplane.v1.RuntimeSecret
+	154,  // 935: controlplane.v1.ListOrganizationRuntimeSecretsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 936: controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	65,   // 937: controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	696,  // 938: controlplane.v1.PrepareOrganizationRuntimeSecretDraftResponse.operation:type_name -> controlplane.v1.RuntimeSecretDraftOperationReceipt
+	713,  // 939: controlplane.v1.GetRuntimeSecretResponse.secret:type_name -> controlplane.v1.RuntimeSecret
+	152,  // 940: controlplane.v1.PrepareCreateRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
+	65,   // 941: controlplane.v1.PrepareCreateRuntimeSecretRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	730,  // 942: controlplane.v1.PrepareCreateRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
+	152,  // 943: controlplane.v1.PrepareRotateRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
+	65,   // 944: controlplane.v1.PrepareRotateRuntimeSecretRequest.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	730,  // 945: controlplane.v1.PrepareRotateRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
+	152,  // 946: controlplane.v1.PrepareRevealRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
+	730,  // 947: controlplane.v1.PrepareRevealRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
+	152,  // 948: controlplane.v1.PrepareRevokeRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
+	730,  // 949: controlplane.v1.PrepareRevokeRuntimeSecretResponse.operation:type_name -> controlplane.v1.RuntimeSecretOperationReceipt
+	1257, // 950: controlplane.v1.RuntimeSecretOperationReceipt.expires_at:type_name -> google.protobuf.Timestamp
+	65,   // 951: controlplane.v1.RuntimeSecretOperationReceipt.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	69,   // 952: controlplane.v1.RuntimeSecretOperationReceipt.state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	713,  // 953: controlplane.v1.RuntimeSecretOperationReceipt.terminal_secret:type_name -> controlplane.v1.RuntimeSecret
+	70,   // 954: controlplane.v1.RuntimeSecretOperationReceipt.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
+	153,  // 955: controlplane.v1.ListRuntimeSecretRecoveryWorkRequest.page:type_name -> controlplane.v1.PageRequest
+	68,   // 956: controlplane.v1.RuntimeSecretRecoveryWork.kind:type_name -> controlplane.v1.RuntimeSecretOperationKind
+	734,  // 957: controlplane.v1.ListRuntimeSecretRecoveryWorkResponse.operations:type_name -> controlplane.v1.RuntimeSecretRecoveryWork
+	154,  // 958: controlplane.v1.ListRuntimeSecretRecoveryWorkResponse.page:type_name -> controlplane.v1.PageInfo
+	68,   // 959: controlplane.v1.ConsumeRuntimeSecretOperationResponse.kind:type_name -> controlplane.v1.RuntimeSecretOperationKind
+	65,   // 960: controlplane.v1.ConsumeRuntimeSecretOperationResponse.value_type:type_name -> controlplane.v1.RuntimeSecretValueType
+	1257, // 961: controlplane.v1.ConsumeRuntimeSecretOperationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 962: controlplane.v1.ConsumeRuntimeSecretOperationResponse.lease_deadline:type_name -> google.protobuf.Timestamp
+	738,  // 963: controlplane.v1.ConsumeRuntimeSecretOperationResponse.revision_descriptors:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
+	0,    // 964: controlplane.v1.ConsumeRuntimeSecretOperationResponse.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	712,  // 965: controlplane.v1.RuntimeSecretMaterialization.display_hint:type_name -> controlplane.v1.RuntimeSecretDisplayHint
+	739,  // 966: controlplane.v1.CompleteRuntimeSecretOperationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	713,  // 967: controlplane.v1.CompleteRuntimeSecretOperationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
+	70,   // 968: controlplane.v1.FailRuntimeSecretOperationRequest.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
+	69,   // 969: controlplane.v1.FailRuntimeSecretOperationResponse.state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	70,   // 970: controlplane.v1.FailRuntimeSecretOperationResponse.failure_code:type_name -> controlplane.v1.RuntimeSecretFailureCode
+	739,  // 971: controlplane.v1.RecoverRuntimeSecretMaterializationRequest.materialization:type_name -> controlplane.v1.RuntimeSecretMaterialization
+	71,   // 972: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.action:type_name -> controlplane.v1.RuntimeSecretRecoveryAction
+	69,   // 973: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.operation_state:type_name -> controlplane.v1.RuntimeSecretOperationState
+	713,  // 974: controlplane.v1.RecoverRuntimeSecretMaterializationResponse.secret:type_name -> controlplane.v1.RuntimeSecret
+	152,  // 975: controlplane.v1.PublishAgentRuntimeConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	785,  // 976: controlplane.v1.PublishAgentRuntimeConfigurationRequest.provider_accounts:type_name -> controlplane.v1.ProviderAccountCandidate
+	834,  // 977: controlplane.v1.PublishAgentRuntimeConfigurationResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	152,  // 978: controlplane.v1.CreateConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	834,  // 979: controlplane.v1.CreateConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	152,  // 980: controlplane.v1.ValidateConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	834,  // 981: controlplane.v1.ValidateConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	152,  // 982: controlplane.v1.PublishConfigOverlayDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	834,  // 983: controlplane.v1.PublishConfigOverlayDraftResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	152,  // 984: controlplane.v1.RollbackConfigOverlayRequest.mutation:type_name -> controlplane.v1.MutationContext
+	834,  // 985: controlplane.v1.RollbackConfigOverlayResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	152,  // 986: controlplane.v1.CreateRuntimeEnvironmentSetRequest.mutation:type_name -> controlplane.v1.MutationContext
+	792,  // 987: controlplane.v1.CreateRuntimeEnvironmentSetRequest.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
+	805,  // 988: controlplane.v1.CreateRuntimeEnvironmentSetRequest.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
+	822,  // 989: controlplane.v1.CreateRuntimeEnvironmentSetRequest.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
+	812,  // 990: controlplane.v1.CreateRuntimeEnvironmentSetRequest.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
+	792,  // 991: controlplane.v1.RuntimeEnvironmentDraftSpecification.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
+	805,  // 992: controlplane.v1.RuntimeEnvironmentDraftSpecification.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
+	822,  // 993: controlplane.v1.RuntimeEnvironmentDraftSpecification.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
+	812,  // 994: controlplane.v1.RuntimeEnvironmentDraftSpecification.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
+	757,  // 995: controlplane.v1.RuntimeEnvironmentDraft.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
+	1257, // 996: controlplane.v1.RuntimeEnvironmentDraft.saved_at:type_name -> google.protobuf.Timestamp
+	0,    // 997: controlplane.v1.RuntimeEnvironmentDraft.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	758,  // 998: controlplane.v1.GetRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	152,  // 999: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	757,  // 1000: controlplane.v1.CreateRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
+	758,  // 1001: controlplane.v1.CreateRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	152,  // 1002: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	757,  // 1003: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
+	758,  // 1004: controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	152,  // 1005: controlplane.v1.SaveRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	757,  // 1006: controlplane.v1.SaveRuntimeEnvironmentDraftRequest.specification:type_name -> controlplane.v1.RuntimeEnvironmentDraftSpecification
+	758,  // 1007: controlplane.v1.SaveRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	152,  // 1008: controlplane.v1.ValidateRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	758,  // 1009: controlplane.v1.ValidateRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	152,  // 1010: controlplane.v1.PublishRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	758,  // 1011: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	823,  // 1012: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	953,  // 1013: controlplane.v1.PublishRuntimeEnvironmentDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	152,  // 1014: controlplane.v1.DiscardRuntimeEnvironmentDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	758,  // 1015: controlplane.v1.DiscardRuntimeEnvironmentDraftResponse.draft:type_name -> controlplane.v1.RuntimeEnvironmentDraft
+	823,  // 1016: controlplane.v1.CreateRuntimeEnvironmentSetResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	152,  // 1017: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	792,  // 1018: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
+	805,  // 1019: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.secret_bindings:type_name -> controlplane.v1.RuntimeSecretBinding
+	822,  // 1020: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
+	812,  // 1021: controlplane.v1.PublishRuntimeEnvironmentVersionRequest.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicyInput
+	823,  // 1022: controlplane.v1.PublishRuntimeEnvironmentVersionResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	152,  // 1023: controlplane.v1.RollbackRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
+	823,  // 1024: controlplane.v1.RollbackRuntimeEnvironmentResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	152,  // 1025: controlplane.v1.BindAgentRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
+	834,  // 1026: controlplane.v1.BindAgentRuntimeEnvironmentResponse.runtime_configuration:type_name -> controlplane.v1.AgentRuntimeConfigurationView
+	0,    // 1027: controlplane.v1.RuntimeEnvironmentConsumer.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	153,  // 1028: controlplane.v1.GetRuntimeEnvironmentImpactRequest.page:type_name -> controlplane.v1.PageRequest
+	780,  // 1029: controlplane.v1.GetRuntimeEnvironmentImpactResponse.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	154,  // 1030: controlplane.v1.GetRuntimeEnvironmentImpactResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1031: controlplane.v1.RebindRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
+	780,  // 1032: controlplane.v1.RebindRuntimeEnvironmentRequest.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	833,  // 1033: controlplane.v1.RebindRuntimeEnvironmentResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
+	785,  // 1034: controlplane.v1.ProviderAccountPolicyVersion.account_candidates:type_name -> controlplane.v1.ProviderAccountCandidate
+	1257, // 1035: controlplane.v1.ProviderAccountPolicyVersion.created_at:type_name -> google.protobuf.Timestamp
+	786,  // 1036: controlplane.v1.AgentRuntimeConfiguration.provider_policy:type_name -> controlplane.v1.ProviderAccountPolicyVersion
+	1257, // 1037: controlplane.v1.AgentRuntimeConfiguration.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1038: controlplane.v1.ConfigOverlayVersion.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1039: controlplane.v1.ConfigOverlayVersion.published_at:type_name -> google.protobuf.Timestamp
+	789,  // 1040: controlplane.v1.ConfigOverlayVersion.diagnostics:type_name -> controlplane.v1.ConfigOverlayDiagnostic
+	790,  // 1041: controlplane.v1.ConfigOverlaySchema.fields:type_name -> controlplane.v1.ConfigOverlayField
+	1257, // 1042: controlplane.v1.RuntimeSecretDraftImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	72,   // 1043: controlplane.v1.RuntimeSecretDraftImpactPlan.state:type_name -> controlplane.v1.RuntimeSecretDraftImpactState
+	799,  // 1044: controlplane.v1.RuntimeSecretDraftImpactItem.consumer:type_name -> controlplane.v1.RuntimeSecretImpactConsumer
+	73,   // 1045: controlplane.v1.RuntimeSecretDraftImpactItem.outcome:type_name -> controlplane.v1.RuntimeSecretDraftImpactOutcome
+	152,  // 1046: controlplane.v1.PrepareRuntimeSecretDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	793,  // 1047: controlplane.v1.PrepareRuntimeSecretDraftImpactResponse.plan:type_name -> controlplane.v1.RuntimeSecretDraftImpactPlan
+	153,  // 1048: controlplane.v1.GetRuntimeSecretDraftImpactRequest.page:type_name -> controlplane.v1.PageRequest
+	793,  // 1049: controlplane.v1.GetRuntimeSecretDraftImpactResponse.plan:type_name -> controlplane.v1.RuntimeSecretDraftImpactPlan
+	794,  // 1050: controlplane.v1.GetRuntimeSecretDraftImpactResponse.items:type_name -> controlplane.v1.RuntimeSecretDraftImpactItem
+	154,  // 1051: controlplane.v1.GetRuntimeSecretDraftImpactResponse.page:type_name -> controlplane.v1.PageInfo
+	780,  // 1052: controlplane.v1.RuntimeSecretImpactConsumer.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	0,    // 1053: controlplane.v1.RuntimeSecretImpactConsumer.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	153,  // 1054: controlplane.v1.GetRuntimeSecretImpactRequest.page:type_name -> controlplane.v1.PageRequest
+	799,  // 1055: controlplane.v1.GetRuntimeSecretImpactResponse.consumers:type_name -> controlplane.v1.RuntimeSecretImpactConsumer
+	154,  // 1056: controlplane.v1.GetRuntimeSecretImpactResponse.page:type_name -> controlplane.v1.PageInfo
+	780,  // 1057: controlplane.v1.RuntimeSecretRebindSelection.consumers:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	0,    // 1058: controlplane.v1.RuntimeSecretRebindSelection.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	152,  // 1059: controlplane.v1.RebindRuntimeSecretRequest.mutation:type_name -> controlplane.v1.MutationContext
+	802,  // 1060: controlplane.v1.RebindRuntimeSecretRequest.selections:type_name -> controlplane.v1.RuntimeSecretRebindSelection
+	823,  // 1061: controlplane.v1.RebindRuntimeSecretResponse.environments:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	833,  // 1062: controlplane.v1.RebindRuntimeSecretResponse.bindings:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
+	792,  // 1063: controlplane.v1.RuntimeEnvironmentVersion.values:type_name -> controlplane.v1.RuntimeEnvironmentValue
+	806,  // 1064: controlplane.v1.RuntimeEnvironmentVersion.secret_descriptors:type_name -> controlplane.v1.RuntimeSecretDescriptor
+	1257, // 1065: controlplane.v1.RuntimeEnvironmentVersion.created_at:type_name -> google.protobuf.Timestamp
+	821,  // 1066: controlplane.v1.RuntimeEnvironmentVersion.image:type_name -> controlplane.v1.RuntimeEnvironmentImage
+	822,  // 1067: controlplane.v1.RuntimeEnvironmentVersion.tools:type_name -> controlplane.v1.RuntimeEnvironmentTool
+	820,  // 1068: controlplane.v1.RuntimeEnvironmentVersion.policy:type_name -> controlplane.v1.RuntimeEnvironmentPolicy
+	809,  // 1069: controlplane.v1.RuntimeResourcePolicy.workspace_limits:type_name -> controlplane.v1.RuntimeWorkspaceLimits
+	74,   // 1070: controlplane.v1.RuntimeVolumeInput.kind:type_name -> controlplane.v1.RuntimeVolumeKind
+	74,   // 1071: controlplane.v1.RuntimeVolume.kind:type_name -> controlplane.v1.RuntimeVolumeKind
+	808,  // 1072: controlplane.v1.RuntimeEnvironmentPolicyInput.resources:type_name -> controlplane.v1.RuntimeResourcePolicy
+	810,  // 1073: controlplane.v1.RuntimeEnvironmentPolicyInput.volumes:type_name -> controlplane.v1.RuntimeVolumeInput
+	75,   // 1074: controlplane.v1.RuntimeEnvironmentPolicyInput.network_destinations:type_name -> controlplane.v1.RuntimeNetworkDestination
+	78,   // 1075: controlplane.v1.RuntimeEnvironmentPolicyInput.kubernetes_access:type_name -> controlplane.v1.RuntimeKubernetesAccessKind
+	816,  // 1076: controlplane.v1.RuntimeEnvironmentPolicyInput.web_access:type_name -> controlplane.v1.RuntimeWebAccess
+	75,   // 1077: controlplane.v1.RuntimeNetworkEgress.destination:type_name -> controlplane.v1.RuntimeNetworkDestination
+	76,   // 1078: controlplane.v1.RuntimeNetworkEgress.protocol:type_name -> controlplane.v1.RuntimeNetworkProtocol
+	813,  // 1079: controlplane.v1.RuntimeNetworkPolicy.egress:type_name -> controlplane.v1.RuntimeNetworkEgress
+	816,  // 1080: controlplane.v1.RuntimeNetworkPolicy.web_access:type_name -> controlplane.v1.RuntimeWebAccess
+	77,   // 1081: controlplane.v1.RuntimeWebAccess.mode:type_name -> controlplane.v1.RuntimeWebAccessMode
+	815,  // 1082: controlplane.v1.RuntimeWebAccess.rules:type_name -> controlplane.v1.RuntimeWebAccessRule
+	78,   // 1083: controlplane.v1.RuntimeKubernetesAccessProfile.kind:type_name -> controlplane.v1.RuntimeKubernetesAccessKind
+	817,  // 1084: controlplane.v1.RuntimeKubernetesAccess.profile:type_name -> controlplane.v1.RuntimeKubernetesAccessProfile
+	818,  // 1085: controlplane.v1.RuntimeKubernetesAccess.rules:type_name -> controlplane.v1.RuntimeKubernetesRule
+	808,  // 1086: controlplane.v1.RuntimeEnvironmentPolicy.resources:type_name -> controlplane.v1.RuntimeResourcePolicy
+	811,  // 1087: controlplane.v1.RuntimeEnvironmentPolicy.volumes:type_name -> controlplane.v1.RuntimeVolume
+	814,  // 1088: controlplane.v1.RuntimeEnvironmentPolicy.network:type_name -> controlplane.v1.RuntimeNetworkPolicy
+	817,  // 1089: controlplane.v1.RuntimeEnvironmentPolicy.kubernetes_access:type_name -> controlplane.v1.RuntimeKubernetesAccessProfile
+	807,  // 1090: controlplane.v1.RuntimeEnvironmentSet.current_version:type_name -> controlplane.v1.RuntimeEnvironmentVersion
+	1257, // 1091: controlplane.v1.RuntimeEnvironmentSet.updated_at:type_name -> google.protobuf.Timestamp
+	3,    // 1092: controlplane.v1.RuntimeEnvironmentSet.next_actions:type_name -> controlplane.v1.NextAction
+	0,    // 1093: controlplane.v1.RuntimeEnvironmentSet.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	1257, // 1094: controlplane.v1.RuntimeEnvironmentReadiness.observed_at:type_name -> google.protobuf.Timestamp
+	824,  // 1095: controlplane.v1.GetRuntimeEnvironmentReadinessResponse.readiness:type_name -> controlplane.v1.RuntimeEnvironmentReadiness
+	153,  // 1096: controlplane.v1.ListRuntimeEnvironmentAgentsRequest.page:type_name -> controlplane.v1.PageRequest
+	161,  // 1097: controlplane.v1.ListRuntimeEnvironmentAgentsResponse.agents:type_name -> controlplane.v1.Agent
+	154,  // 1098: controlplane.v1.ListRuntimeEnvironmentAgentsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1099: controlplane.v1.SetRuntimeEnvironmentEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
+	823,  // 1100: controlplane.v1.SetRuntimeEnvironmentEnabledResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	152,  // 1101: controlplane.v1.DeleteRuntimeEnvironmentRequest.mutation:type_name -> controlplane.v1.MutationContext
+	823,  // 1102: controlplane.v1.DeleteRuntimeEnvironmentResponse.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	787,  // 1103: controlplane.v1.AgentRuntimeConfigurationView.configuration:type_name -> controlplane.v1.AgentRuntimeConfiguration
+	788,  // 1104: controlplane.v1.AgentRuntimeConfigurationView.published_overlay:type_name -> controlplane.v1.ConfigOverlayVersion
+	788,  // 1105: controlplane.v1.AgentRuntimeConfigurationView.draft_overlay:type_name -> controlplane.v1.ConfigOverlayVersion
+	833,  // 1106: controlplane.v1.AgentRuntimeConfigurationView.environment_binding:type_name -> controlplane.v1.AgentRuntimeEnvironmentBinding
+	823,  // 1107: controlplane.v1.AgentRuntimeConfigurationView.environment:type_name -> controlplane.v1.RuntimeEnvironmentSet
+	1052, // 1108: controlplane.v1.AgentRuntimeConfigurationView.skill_bindings:type_name -> controlplane.v1.AgentContextBinding
+	1052, // 1109: controlplane.v1.AgentRuntimeConfigurationView.memory_bindings:type_name -> controlplane.v1.AgentContextBinding
+	791,  // 1110: controlplane.v1.AgentRuntimeConfigurationView.overlay_schema:type_name -> controlplane.v1.ConfigOverlaySchema
+	836,  // 1111: controlplane.v1.TemplateVariable.item_fields:type_name -> controlplane.v1.TemplateVariableField
+	79,   // 1112: controlplane.v1.TemplateVariable.reason:type_name -> controlplane.v1.TemplateVariableAvailabilityReason
+	82,   // 1113: controlplane.v1.ProviderDefinition.authorization_methods:type_name -> controlplane.v1.ProviderAuthorizationMethod
+	840,  // 1114: controlplane.v1.ProviderDefinition.models:type_name -> controlplane.v1.ModelCapability
+	1252, // 1115: controlplane.v1.ProviderDefinition.runtime_policies:type_name -> controlplane.v1.ModelExecutionPolicy
+	153,  // 1116: controlplane.v1.ListProviderDefinitionsRequest.page:type_name -> controlplane.v1.PageRequest
+	837,  // 1117: controlplane.v1.ListProviderDefinitionsResponse.definitions:type_name -> controlplane.v1.ProviderDefinition
+	154,  // 1118: controlplane.v1.ListProviderDefinitionsResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 1119: controlplane.v1.ListModelCapabilitiesRequest.page:type_name -> controlplane.v1.PageRequest
+	840,  // 1120: controlplane.v1.ListModelCapabilitiesResponse.models:type_name -> controlplane.v1.ModelCapability
+	154,  // 1121: controlplane.v1.ListModelCapabilitiesResponse.page:type_name -> controlplane.v1.PageInfo
+	843,  // 1122: controlplane.v1.ListModelCapabilitiesResponse.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
+	80,   // 1123: controlplane.v1.ProviderModelCatalogStatus.state:type_name -> controlplane.v1.ProviderModelCatalogState
+	1257, // 1124: controlplane.v1.ProviderModelCatalogStatus.observed_at:type_name -> google.protobuf.Timestamp
+	1257, // 1125: controlplane.v1.ProviderModelCatalogStatus.expires_at:type_name -> google.protobuf.Timestamp
+	125,  // 1126: controlplane.v1.ProviderModelCatalogStatus.source:type_name -> controlplane.v1.ProviderModelCatalogSource
+	126,  // 1127: controlplane.v1.ProviderModelCatalogStatus.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
+	1257, // 1128: controlplane.v1.RoleImageRecipeRevision.created_at:type_name -> google.protobuf.Timestamp
+	153,  // 1129: controlplane.v1.ListRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	844,  // 1130: controlplane.v1.ListRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
+	154,  // 1131: controlplane.v1.ListRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1132: controlplane.v1.PromoteRoleImageRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1257, // 1133: controlplane.v1.RoleImagePromotionReceipt.created_at:type_name -> google.protobuf.Timestamp
+	848,  // 1134: controlplane.v1.PromoteRoleImageResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
+	82,   // 1135: controlplane.v1.ProviderAuthorization.method:type_name -> controlplane.v1.ProviderAuthorizationMethod
+	83,   // 1136: controlplane.v1.ProviderAuthorization.state:type_name -> controlplane.v1.ProviderAuthorizationState
+	1257, // 1137: controlplane.v1.ProviderAuthorization.expires_at:type_name -> google.protobuf.Timestamp
+	81,   // 1138: controlplane.v1.ProviderAccount.state:type_name -> controlplane.v1.ProviderAccountState
+	850,  // 1139: controlplane.v1.ProviderAccount.authorization:type_name -> controlplane.v1.ProviderAuthorization
+	3,    // 1140: controlplane.v1.ProviderAccount.next_actions:type_name -> controlplane.v1.NextAction
+	1257, // 1141: controlplane.v1.ProviderAccount.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1142: controlplane.v1.ProviderAccount.updated_at:type_name -> google.protobuf.Timestamp
+	860,  // 1143: controlplane.v1.ProviderAccount.usage:type_name -> controlplane.v1.ProviderAccountUsage
+	1205, // 1144: controlplane.v1.ProviderAccount.financial_summary:type_name -> controlplane.v1.ProviderFinancialSummary
+	853,  // 1145: controlplane.v1.ProviderAccount.deletion:type_name -> controlplane.v1.ProviderAccountDeletion
+	854,  // 1146: controlplane.v1.ProviderAccount.verification:type_name -> controlplane.v1.ProviderAccountVerification
+	84,   // 1147: controlplane.v1.ProviderAccountBlockerCount.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
+	85,   // 1148: controlplane.v1.ProviderAccountDeletion.state:type_name -> controlplane.v1.ProviderAccountDeletionState
+	852,  // 1149: controlplane.v1.ProviderAccountDeletion.blockers:type_name -> controlplane.v1.ProviderAccountBlockerCount
+	1257, // 1150: controlplane.v1.ProviderAccountDeletion.requested_at:type_name -> google.protobuf.Timestamp
+	1257, // 1151: controlplane.v1.ProviderAccountDeletion.completed_at:type_name -> google.protobuf.Timestamp
+	86,   // 1152: controlplane.v1.ProviderAccountVerification.state:type_name -> controlplane.v1.ProviderAccountVerificationState
+	87,   // 1153: controlplane.v1.ProviderAccountVerification.scope:type_name -> controlplane.v1.ProviderAccountVerificationScope
+	1257, // 1154: controlplane.v1.ProviderAccountVerification.requested_at:type_name -> google.protobuf.Timestamp
+	1257, // 1155: controlplane.v1.ProviderAccountVerification.completed_at:type_name -> google.protobuf.Timestamp
+	84,   // 1156: controlplane.v1.ProviderAccountBlocker.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
+	84,   // 1157: controlplane.v1.ListProviderAccountBlockersRequest.kind:type_name -> controlplane.v1.ProviderAccountBlockerKind
+	153,  // 1158: controlplane.v1.ListProviderAccountBlockersRequest.page:type_name -> controlplane.v1.PageRequest
+	855,  // 1159: controlplane.v1.ListProviderAccountBlockersResponse.items:type_name -> controlplane.v1.ProviderAccountBlocker
+	154,  // 1160: controlplane.v1.ListProviderAccountBlockersResponse.page:type_name -> controlplane.v1.PageInfo
+	88,   // 1161: controlplane.v1.ProviderAccountUsageContext.purpose:type_name -> controlplane.v1.ProviderAccountUsagePurpose
+	89,   // 1162: controlplane.v1.ProviderUsageDimension.state:type_name -> controlplane.v1.ProviderUsageState
+	90,   // 1163: controlplane.v1.ProviderUsageDimension.reason:type_name -> controlplane.v1.ProviderUsageReason
+	92,   // 1164: controlplane.v1.ProviderUsageDimension.remediation:type_name -> controlplane.v1.ProviderUsageRemediation
+	858,  // 1165: controlplane.v1.ProviderAccountUsage.context:type_name -> controlplane.v1.ProviderAccountUsageContext
+	859,  // 1166: controlplane.v1.ProviderAccountUsage.lifecycle:type_name -> controlplane.v1.ProviderUsageDimension
+	859,  // 1167: controlplane.v1.ProviderAccountUsage.credential:type_name -> controlplane.v1.ProviderUsageDimension
+	859,  // 1168: controlplane.v1.ProviderAccountUsage.provider_health:type_name -> controlplane.v1.ProviderUsageDimension
+	859,  // 1169: controlplane.v1.ProviderAccountUsage.model_compatibility:type_name -> controlplane.v1.ProviderUsageDimension
+	859,  // 1170: controlplane.v1.ProviderAccountUsage.capacity:type_name -> controlplane.v1.ProviderUsageDimension
+	859,  // 1171: controlplane.v1.ProviderAccountUsage.actor_eligibility:type_name -> controlplane.v1.ProviderUsageDimension
+	89,   // 1172: controlplane.v1.ProviderAccountUsage.operational_state:type_name -> controlplane.v1.ProviderUsageState
+	843,  // 1173: controlplane.v1.ProviderAccountUsage.catalog_status:type_name -> controlplane.v1.ProviderModelCatalogStatus
+	1257, // 1174: controlplane.v1.ProviderAccountUsage.observed_at:type_name -> google.protobuf.Timestamp
+	1257, // 1175: controlplane.v1.ProviderAccountUsage.expires_at:type_name -> google.protobuf.Timestamp
+	91,   // 1176: controlplane.v1.ProviderAccountUsage.provider_health_scope:type_name -> controlplane.v1.ProviderHealthScope
+	1257, // 1177: controlplane.v1.ProviderAccountUsage.provider_health_observed_at:type_name -> google.protobuf.Timestamp
+	1257, // 1178: controlplane.v1.ProviderAccountUsage.provider_health_expires_at:type_name -> google.protobuf.Timestamp
+	153,  // 1179: controlplane.v1.ListProviderAccountsRequest.page:type_name -> controlplane.v1.PageRequest
+	81,   // 1180: controlplane.v1.ListProviderAccountsRequest.state:type_name -> controlplane.v1.ProviderAccountState
+	858,  // 1181: controlplane.v1.ListProviderAccountsRequest.usage_context:type_name -> controlplane.v1.ProviderAccountUsageContext
+	1207, // 1182: controlplane.v1.ListProviderAccountsResponse.financial_summary:type_name -> controlplane.v1.ProviderFinancialOverview
+	851,  // 1183: controlplane.v1.ListProviderAccountsResponse.accounts:type_name -> controlplane.v1.ProviderAccount
+	154,  // 1184: controlplane.v1.ListProviderAccountsResponse.page:type_name -> controlplane.v1.PageInfo
+	3,    // 1185: controlplane.v1.ListProviderAccountsResponse.next_actions:type_name -> controlplane.v1.NextAction
+	858,  // 1186: controlplane.v1.GetProviderAccountRequest.usage_context:type_name -> controlplane.v1.ProviderAccountUsageContext
+	851,  // 1187: controlplane.v1.GetProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1188: controlplane.v1.CreateProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1189: controlplane.v1.CreateProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1190: controlplane.v1.StartProviderAccountDeviceAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1191: controlplane.v1.StartProviderAccountDeviceAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1192: controlplane.v1.AuthorizeProviderAccountAPIKeyRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1193: controlplane.v1.AuthorizeProviderAccountAPIKeyResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1194: controlplane.v1.RefreshProviderAccountAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1195: controlplane.v1.RefreshProviderAccountAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1196: controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1197: controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1198: controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1199: controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1200: controlplane.v1.RevokeProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1201: controlplane.v1.RevokeProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1202: controlplane.v1.DeleteProviderAccountRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1203: controlplane.v1.DeleteProviderAccountResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1204: controlplane.v1.CancelProviderAccountQueuedWorkRequest.mutation:type_name -> controlplane.v1.MutationContext
+	93,   // 1205: controlplane.v1.ProviderAccountQueuedWorkResult.outcome:type_name -> controlplane.v1.ProviderAccountQueuedWorkOutcome
+	851,  // 1206: controlplane.v1.CancelProviderAccountQueuedWorkResponse.account:type_name -> controlplane.v1.ProviderAccount
+	882,  // 1207: controlplane.v1.CancelProviderAccountQueuedWorkResponse.outcomes:type_name -> controlplane.v1.ProviderAccountQueuedWorkResult
+	152,  // 1208: controlplane.v1.SetProviderAccountConcurrencyRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1209: controlplane.v1.SetProviderAccountConcurrencyResponse.account:type_name -> controlplane.v1.ProviderAccount
+	152,  // 1210: controlplane.v1.SetProviderAccountEnabledRequest.mutation:type_name -> controlplane.v1.MutationContext
+	851,  // 1211: controlplane.v1.SetProviderAccountEnabledResponse.account:type_name -> controlplane.v1.ProviderAccount
+	153,  // 1212: controlplane.v1.ListScheduleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	201,  // 1213: controlplane.v1.ListScheduleRevisionsResponse.revisions:type_name -> controlplane.v1.ScheduleRevision
+	154,  // 1214: controlplane.v1.ListScheduleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 1215: controlplane.v1.ListScheduleRunsRequest.page:type_name -> controlplane.v1.PageRequest
+	202,  // 1216: controlplane.v1.ListScheduleRunsResponse.occurrences:type_name -> controlplane.v1.ScheduleRunOccurrence
+	154,  // 1217: controlplane.v1.ListScheduleRunsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1218: controlplane.v1.DeleteScheduleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	200,  // 1219: controlplane.v1.DeleteScheduleResponse.schedule:type_name -> controlplane.v1.Schedule
+	94,   // 1220: controlplane.v1.ArtifactImpact.action:type_name -> controlplane.v1.ArtifactImpactAction
+	895,  // 1221: controlplane.v1.ArtifactImpact.active_runs:type_name -> controlplane.v1.ArtifactImpactRun
+	8,    // 1222: controlplane.v1.ArtifactImpactRun.state:type_name -> controlplane.v1.RunState
+	94,   // 1223: controlplane.v1.GetArtifactImpactRequest.action:type_name -> controlplane.v1.ArtifactImpactAction
+	894,  // 1224: controlplane.v1.GetArtifactImpactResponse.impact:type_name -> controlplane.v1.ArtifactImpact
+	152,  // 1225: controlplane.v1.SetAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
+	161,  // 1226: controlplane.v1.SetAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
+	152,  // 1227: controlplane.v1.RemoveAgentAvatarRequest.mutation:type_name -> controlplane.v1.MutationContext
+	161,  // 1228: controlplane.v1.RemoveAgentAvatarResponse.agent:type_name -> controlplane.v1.Agent
+	906,  // 1229: controlplane.v1.ValidatePromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	902,  // 1230: controlplane.v1.ValidatePromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
+	909,  // 1231: controlplane.v1.ValidatePromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	906,  // 1232: controlplane.v1.PreviewPromptTemplateRequest.context:type_name -> controlplane.v1.PromptPreviewContext
+	1258, // 1233: controlplane.v1.PromptPreviewContext.input:type_name -> google.protobuf.Struct
+	95,   // 1234: controlplane.v1.PromptSlotProvenance.slot:type_name -> controlplane.v1.PromptSemanticSlot
+	96,   // 1235: controlplane.v1.PromptSlotProvenance.source:type_name -> controlplane.v1.PromptSectionSource
+	96,   // 1236: controlplane.v1.PromptPreviewSection.source:type_name -> controlplane.v1.PromptSectionSource
+	95,   // 1237: controlplane.v1.PromptPreviewSection.slot:type_name -> controlplane.v1.PromptSemanticSlot
+	97,   // 1238: controlplane.v1.PromptPreviewSection.user_kind:type_name -> controlplane.v1.PromptUserSectionKind
+	902,  // 1239: controlplane.v1.PreviewPromptTemplateResponse.diagnostics:type_name -> controlplane.v1.PromptTemplateDiagnostic
+	907,  // 1240: controlplane.v1.PreviewPromptTemplateResponse.slots:type_name -> controlplane.v1.PromptSlotProvenance
+	908,  // 1241: controlplane.v1.PreviewPromptTemplateResponse.sections:type_name -> controlplane.v1.PromptPreviewSection
+	909,  // 1242: controlplane.v1.PreviewPromptTemplateResponse.context_pin:type_name -> controlplane.v1.PromptContextPin
+	913,  // 1243: controlplane.v1.PreviewPromptTemplateResponse.runtime_diff:type_name -> controlplane.v1.PromptRuntimeDiff
+	98,   // 1244: controlplane.v1.PromptRuntimeChange.component:type_name -> controlplane.v1.PromptRuntimeComponent
+	911,  // 1245: controlplane.v1.PromptRuntimeChange.previous:type_name -> controlplane.v1.PromptRuntimeDescriptor
+	911,  // 1246: controlplane.v1.PromptRuntimeChange.current:type_name -> controlplane.v1.PromptRuntimeDescriptor
+	99,   // 1247: controlplane.v1.PromptRuntimeChange.action:type_name -> controlplane.v1.PromptRuntimeAction
+	912,  // 1248: controlplane.v1.PromptRuntimeDiff.changes:type_name -> controlplane.v1.PromptRuntimeChange
+	101,  // 1249: controlplane.v1.ManagedConfigurationRevision.state:type_name -> controlplane.v1.ManagedConfigurationState
+	1257, // 1250: controlplane.v1.ManagedConfigurationRevision.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1251: controlplane.v1.ManagedConfigurationRevision.validated_at:type_name -> google.protobuf.Timestamp
+	1257, // 1252: controlplane.v1.ManagedConfigurationRevision.published_at:type_name -> google.protobuf.Timestamp
+	916,  // 1253: controlplane.v1.ManagedConfigurationRevision.prompt_scope:type_name -> controlplane.v1.PromptTemplateScope
+	103,  // 1254: controlplane.v1.PromptTemplateScopeInput.template_kind:type_name -> controlplane.v1.PromptTemplateKind
+	909,  // 1255: controlplane.v1.PromptTemplateScope.context_pin:type_name -> controlplane.v1.PromptContextPin
+	103,  // 1256: controlplane.v1.PromptTemplateScope.template_kind:type_name -> controlplane.v1.PromptTemplateKind
+	100,  // 1257: controlplane.v1.ManagedConfigurationSet.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	102,  // 1258: controlplane.v1.ManagedConfigurationSet.managed_by:type_name -> controlplane.v1.ManagedConfigurationOwner
+	914,  // 1259: controlplane.v1.ManagedConfigurationSet.current_revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	1257, // 1260: controlplane.v1.ManagedConfigurationSet.updated_at:type_name -> google.protobuf.Timestamp
+	1149, // 1261: controlplane.v1.ManagedConfigurationSet.git_source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	918,  // 1262: controlplane.v1.ManagedConfigurationSet.copy_provenance:type_name -> controlplane.v1.ManagedConfigurationCopyProvenance
+	104,  // 1263: controlplane.v1.ManagedConfigurationCopyProvenance.origin:type_name -> controlplane.v1.ManagedConfigurationCopyOrigin
+	152,  // 1264: controlplane.v1.CopyRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1265: controlplane.v1.CopyRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1266: controlplane.v1.CopyRoleImageConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1267: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	921,  // 1268: controlplane.v1.CopyIntegrationDefinitionConfigurationRequest.shipped:type_name -> controlplane.v1.ShippedIntegrationDefinitionCopySource
+	917,  // 1269: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1270: controlplane.v1.CopyIntegrationDefinitionConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1271: controlplane.v1.ArchiveRoleImageConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1272: controlplane.v1.ArchiveRoleImageConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	152,  // 1273: controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1274: controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	928,  // 1275: controlplane.v1.ManagedConfigurationImpact.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	154,  // 1276: controlplane.v1.ManagedConfigurationImpact.page:type_name -> controlplane.v1.PageInfo
+	917,  // 1277: controlplane.v1.ManagedConfigurationBindingSnapshot.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1278: controlplane.v1.ManagedConfigurationBindingSnapshot.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	930,  // 1279: controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
+	930,  // 1280: controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse.binding:type_name -> controlplane.v1.ManagedConfigurationBindingSnapshot
+	152,  // 1281: controlplane.v1.CreatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	915,  // 1282: controlplane.v1.CreatePromptTemplateDraftRequest.prompt_scope:type_name -> controlplane.v1.PromptTemplateScopeInput
+	917,  // 1283: controlplane.v1.CreatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1284: controlplane.v1.CreatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1285: controlplane.v1.ValidatePromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1286: controlplane.v1.ValidatePromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1287: controlplane.v1.ValidatePromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1288: controlplane.v1.PublishPromptTemplateDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1289: controlplane.v1.PublishPromptTemplateDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1290: controlplane.v1.PublishPromptTemplateDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	953,  // 1291: controlplane.v1.PublishPromptTemplateDraftResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	152,  // 1292: controlplane.v1.RebindPromptTemplateConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	928,  // 1293: controlplane.v1.RebindPromptTemplateConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	917,  // 1294: controlplane.v1.RebindPromptTemplateConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1295: controlplane.v1.RebindPromptTemplateConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1296: controlplane.v1.CreateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1297: controlplane.v1.CreateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1298: controlplane.v1.CreateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1299: controlplane.v1.ValidateRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1300: controlplane.v1.ValidateRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1301: controlplane.v1.ValidateRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1302: controlplane.v1.PublishRoleImageRevisionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1303: controlplane.v1.PublishRoleImageRevisionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1304: controlplane.v1.PublishRoleImageRevisionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1305: controlplane.v1.RebindRoleImageConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	928,  // 1306: controlplane.v1.RebindRoleImageConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	917,  // 1307: controlplane.v1.RebindRoleImageConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1308: controlplane.v1.RebindRoleImageConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	951,  // 1309: controlplane.v1.RebindRoleImageConsumersResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	105,  // 1310: controlplane.v1.RoleImageImpactPlan.state:type_name -> controlplane.v1.RoleImageImpactPlanState
+	1257, // 1311: controlplane.v1.RoleImageImpactPlan.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1312: controlplane.v1.RoleImageImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	780,  // 1313: controlplane.v1.RoleImageImpactItem.consumer:type_name -> controlplane.v1.RuntimeEnvironmentConsumer
+	106,  // 1314: controlplane.v1.RoleImageImpactItem.outcome:type_name -> controlplane.v1.RoleImageImpactOutcome
+	107,  // 1315: controlplane.v1.RevisionImpactPlan.kind:type_name -> controlplane.v1.RevisionImpactKind
+	108,  // 1316: controlplane.v1.RevisionImpactPlan.state:type_name -> controlplane.v1.RevisionImpactState
+	1257, // 1317: controlplane.v1.RevisionImpactPlan.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1318: controlplane.v1.RevisionImpactPlan.expires_at:type_name -> google.protobuf.Timestamp
+	110,  // 1319: controlplane.v1.RevisionImpactItem.consumer_kind:type_name -> controlplane.v1.RevisionImpactConsumerKind
+	109,  // 1320: controlplane.v1.RevisionImpactItem.outcome:type_name -> controlplane.v1.RevisionImpactOutcome
+	0,    // 1321: controlplane.v1.RevisionImpactItem.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	152,  // 1322: controlplane.v1.PrepareEnvironmentDraftImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	953,  // 1323: controlplane.v1.PrepareEnvironmentDraftImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	152,  // 1324: controlplane.v1.PrepareInstructionsImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	953,  // 1325: controlplane.v1.PrepareInstructionsImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	152,  // 1326: controlplane.v1.PreparePromptTemplateImpactRequest.mutation:type_name -> controlplane.v1.MutationContext
+	953,  // 1327: controlplane.v1.PreparePromptTemplateImpactResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	153,  // 1328: controlplane.v1.GetRevisionImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
+	953,  // 1329: controlplane.v1.GetRevisionImpactPlanResponse.plan:type_name -> controlplane.v1.RevisionImpactPlan
+	954,  // 1330: controlplane.v1.GetRevisionImpactPlanResponse.items:type_name -> controlplane.v1.RevisionImpactItem
+	154,  // 1331: controlplane.v1.GetRevisionImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1332: controlplane.v1.PrepareRoleImageImpactPlanRequest.mutation:type_name -> controlplane.v1.MutationContext
+	951,  // 1333: controlplane.v1.PrepareRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	153,  // 1334: controlplane.v1.GetRoleImageImpactPlanRequest.page:type_name -> controlplane.v1.PageRequest
+	951,  // 1335: controlplane.v1.GetRoleImageImpactPlanResponse.plan:type_name -> controlplane.v1.RoleImageImpactPlan
+	952,  // 1336: controlplane.v1.GetRoleImageImpactPlanResponse.items:type_name -> controlplane.v1.RoleImageImpactItem
+	154,  // 1337: controlplane.v1.GetRoleImageImpactPlanResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1338: controlplane.v1.CreateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1339: controlplane.v1.CreateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1340: controlplane.v1.CreateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1341: controlplane.v1.ValidateIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1342: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1343: controlplane.v1.ValidateIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1344: controlplane.v1.PublishIntegrationDefinitionDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1345: controlplane.v1.PublishIntegrationDefinitionDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1346: controlplane.v1.PublishIntegrationDefinitionDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1347: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	928,  // 1348: controlplane.v1.RebindIntegrationDefinitionConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	917,  // 1349: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1350: controlplane.v1.RebindIntegrationDefinitionConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1351: controlplane.v1.CreateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1352: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1353: controlplane.v1.CreateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1354: controlplane.v1.ValidateSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1355: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1356: controlplane.v1.ValidateSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1357: controlplane.v1.PublishSystemSTTConfigurationDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1358: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1359: controlplane.v1.PublishSystemSTTConfigurationDraftResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1360: controlplane.v1.RebindSystemSTTConsumersRequest.mutation:type_name -> controlplane.v1.MutationContext
+	928,  // 1361: controlplane.v1.RebindSystemSTTConsumersRequest.consumers:type_name -> controlplane.v1.ManagedConfigurationConsumer
+	917,  // 1362: controlplane.v1.RebindSystemSTTConsumersResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1363: controlplane.v1.RebindSystemSTTConsumersResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1364: controlplane.v1.DetachGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1365: controlplane.v1.DetachGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1366: controlplane.v1.DetachGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	152,  // 1367: controlplane.v1.CopyGitManagedConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1368: controlplane.v1.CopyGitManagedConfigurationResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1369: controlplane.v1.CopyGitManagedConfigurationResponse.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	153,  // 1370: controlplane.v1.ListManagedConfigurationHistoryRequest.page:type_name -> controlplane.v1.PageRequest
+	100,  // 1371: controlplane.v1.ListManagedConfigurationsRequest.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	153,  // 1372: controlplane.v1.ListManagedConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
+	917,  // 1373: controlplane.v1.ListManagedConfigurationsResponse.configurations:type_name -> controlplane.v1.ManagedConfigurationSet
+	154,  // 1374: controlplane.v1.ListManagedConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
+	917,  // 1375: controlplane.v1.ListManagedConfigurationHistoryResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1376: controlplane.v1.ListManagedConfigurationHistoryResponse.revisions:type_name -> controlplane.v1.ManagedConfigurationRevision
+	154,  // 1377: controlplane.v1.ListManagedConfigurationHistoryResponse.page:type_name -> controlplane.v1.PageInfo
+	153,  // 1378: controlplane.v1.GetManagedConfigurationImpactRequest.page:type_name -> controlplane.v1.PageRequest
+	929,  // 1379: controlplane.v1.GetManagedConfigurationImpactResponse.impact:type_name -> controlplane.v1.ManagedConfigurationImpact
+	1257, // 1380: controlplane.v1.ContextProvenance.created_at:type_name -> google.protobuf.Timestamp
+	995,  // 1381: controlplane.v1.SkillBundleSpecification.files:type_name -> controlplane.v1.SkillBundleFileInput
+	112,  // 1382: controlplane.v1.SkillBundleRevision.state:type_name -> controlplane.v1.SkillRevisionState
+	994,  // 1383: controlplane.v1.SkillBundleRevision.files:type_name -> controlplane.v1.SkillBundleFile
+	993,  // 1384: controlplane.v1.SkillBundleRevision.provenance:type_name -> controlplane.v1.ContextProvenance
+	113,  // 1385: controlplane.v1.SkillBundleRevision.scan_state:type_name -> controlplane.v1.SkillScanState
+	1257, // 1386: controlplane.v1.SkillBundleRevision.scanned_at:type_name -> google.protobuf.Timestamp
+	1257, // 1387: controlplane.v1.SkillBundleRevision.reviewed_at:type_name -> google.protobuf.Timestamp
+	111,  // 1388: controlplane.v1.SkillBundle.state:type_name -> controlplane.v1.ContextResourceState
+	997,  // 1389: controlplane.v1.SkillBundle.current_revision:type_name -> controlplane.v1.SkillBundleRevision
+	997,  // 1390: controlplane.v1.SkillBundle.draft_revision:type_name -> controlplane.v1.SkillBundleRevision
+	1257, // 1391: controlplane.v1.SkillBundle.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1392: controlplane.v1.SkillBundle.updated_at:type_name -> google.protobuf.Timestamp
+	117,  // 1393: controlplane.v1.EmailMailboxEndpoint.tls_mode:type_name -> controlplane.v1.EmailMailboxTLSMode
+	118,  // 1394: controlplane.v1.EmailMailboxEndpoint.auth_method:type_name -> controlplane.v1.EmailMailboxAuthMethod
+	999,  // 1395: controlplane.v1.EmailMailboxEndpoint.ca:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	999,  // 1396: controlplane.v1.EmailMailboxEndpoint.username:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	999,  // 1397: controlplane.v1.EmailMailboxEndpoint.secret:type_name -> controlplane.v1.EmailMailboxCredentialReference
+	115,  // 1398: controlplane.v1.EmailMailboxOperationPolicy.operation:type_name -> controlplane.v1.EmailOperation
+	123,  // 1399: controlplane.v1.EmailMailboxOperationPolicy.policy:type_name -> controlplane.v1.EmailApprovalPolicy
+	116,  // 1400: controlplane.v1.EmailMailboxSpecification.receive_protocol:type_name -> controlplane.v1.EmailMailboxReceiveProtocol
+	1000, // 1401: controlplane.v1.EmailMailboxSpecification.smtp:type_name -> controlplane.v1.EmailMailboxEndpoint
+	1000, // 1402: controlplane.v1.EmailMailboxSpecification.imap:type_name -> controlplane.v1.EmailMailboxEndpoint
+	1000, // 1403: controlplane.v1.EmailMailboxSpecification.pop:type_name -> controlplane.v1.EmailMailboxEndpoint
+	1001, // 1404: controlplane.v1.EmailMailboxSpecification.limits:type_name -> controlplane.v1.EmailMailboxLimits
+	1002, // 1405: controlplane.v1.EmailMailboxSpecification.policies:type_name -> controlplane.v1.EmailMailboxOperationPolicy
+	1003, // 1406: controlplane.v1.EmailMailboxDraftContent.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	119,  // 1407: controlplane.v1.EmailMailboxPublication.state:type_name -> controlplane.v1.EmailMailboxPublicationState
+	1257, // 1408: controlplane.v1.EmailMailboxPublication.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1409: controlplane.v1.EmailMailboxPublication.ready_at:type_name -> google.protobuf.Timestamp
+	917,  // 1410: controlplane.v1.EmailMailboxConfigurationView.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	914,  // 1411: controlplane.v1.EmailMailboxConfigurationView.revision:type_name -> controlplane.v1.ManagedConfigurationRevision
+	1003, // 1412: controlplane.v1.EmailMailboxConfigurationView.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	1006, // 1413: controlplane.v1.EmailMailboxConfigurationView.publication:type_name -> controlplane.v1.EmailMailboxPublication
+	1005, // 1414: controlplane.v1.EmailMailboxConfigurationView.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
+	1008, // 1415: controlplane.v1.EmailMailboxConfigurationView.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
+	120,  // 1416: controlplane.v1.EmailMailboxActionAvailability.action:type_name -> controlplane.v1.EmailMailboxAction
+	121,  // 1417: controlplane.v1.EmailMailboxActionAvailability.reason:type_name -> controlplane.v1.EmailMailboxActionReason
+	153,  // 1418: controlplane.v1.ListEmailMailboxConfigurationsRequest.page:type_name -> controlplane.v1.PageRequest
+	1007, // 1419: controlplane.v1.ListEmailMailboxConfigurationsResponse.items:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	154,  // 1420: controlplane.v1.ListEmailMailboxConfigurationsResponse.page:type_name -> controlplane.v1.PageInfo
+	1008, // 1421: controlplane.v1.ListEmailMailboxConfigurationsResponse.next_actions:type_name -> controlplane.v1.EmailMailboxActionAvailability
+	1007, // 1422: controlplane.v1.GetEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	122,  // 1423: controlplane.v1.ListEmailMailboxCredentialsRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	153,  // 1424: controlplane.v1.ListEmailMailboxCredentialsRequest.page:type_name -> controlplane.v1.PageRequest
+	1035, // 1425: controlplane.v1.ListEmailMailboxCredentialsResponse.items:type_name -> controlplane.v1.EmailMailboxCredential
+	154,  // 1426: controlplane.v1.ListEmailMailboxCredentialsResponse.page:type_name -> controlplane.v1.PageInfo
+	1035, // 1427: controlplane.v1.GetEmailMailboxCredentialReceiptResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
+	1004, // 1428: controlplane.v1.PreviewEmailMailboxConfigurationRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	1003, // 1429: controlplane.v1.PreviewEmailMailboxConfigurationResponse.specification:type_name -> controlplane.v1.EmailMailboxSpecification
+	1005, // 1430: controlplane.v1.PreviewEmailMailboxConfigurationResponse.diagnostics:type_name -> controlplane.v1.EmailMailboxDiagnostic
+	152,  // 1431: controlplane.v1.CreateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1004, // 1432: controlplane.v1.CreateEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	1007, // 1433: controlplane.v1.CreateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1434: controlplane.v1.SaveEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1004, // 1435: controlplane.v1.SaveEmailMailboxDraftRequest.content:type_name -> controlplane.v1.EmailMailboxDraftContent
+	1007, // 1436: controlplane.v1.SaveEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1437: controlplane.v1.ValidateEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1007, // 1438: controlplane.v1.ValidateEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1439: controlplane.v1.PublishEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1007, // 1440: controlplane.v1.PublishEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1441: controlplane.v1.DiscardEmailMailboxDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1007, // 1442: controlplane.v1.DiscardEmailMailboxDraftResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1443: controlplane.v1.BindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1007, // 1444: controlplane.v1.BindEmailMailboxConfigurationResponse.configuration:type_name -> controlplane.v1.EmailMailboxConfigurationView
+	152,  // 1445: controlplane.v1.UnbindEmailMailboxConfigurationRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1006, // 1446: controlplane.v1.UnbindEmailMailboxConfigurationResponse.publication:type_name -> controlplane.v1.EmailMailboxPublication
+	122,  // 1447: controlplane.v1.EmailMailboxCredential.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	152,  // 1448: controlplane.v1.ConfigureEmailMailboxCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	122,  // 1449: controlplane.v1.ConfigureEmailMailboxCredentialRequest.kind:type_name -> controlplane.v1.EmailMailboxCredentialKind
+	1035, // 1450: controlplane.v1.ConfigureEmailMailboxCredentialResponse.credential:type_name -> controlplane.v1.EmailMailboxCredential
+	543,  // 1451: controlplane.v1.EmailExecutionBinding.lease:type_name -> controlplane.v1.WorkLease
+	115,  // 1452: controlplane.v1.EmailAuthorizationScope.operations:type_name -> controlplane.v1.EmailOperation
+	1038, // 1453: controlplane.v1.ResolveEmailAuthorizationRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	115,  // 1454: controlplane.v1.ResolveEmailAuthorizationRequest.operation:type_name -> controlplane.v1.EmailOperation
+	115,  // 1455: controlplane.v1.ResolveEmailAuthorizationResponse.operation:type_name -> controlplane.v1.EmailOperation
+	123,  // 1456: controlplane.v1.ResolveEmailAuthorizationResponse.policy:type_name -> controlplane.v1.EmailApprovalPolicy
+	1039, // 1457: controlplane.v1.ResolveEmailAuthorizationResponse.user_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	1039, // 1458: controlplane.v1.ResolveEmailAuthorizationResponse.agent_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	1039, // 1459: controlplane.v1.ResolveEmailAuthorizationResponse.connection_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	1039, // 1460: controlplane.v1.ResolveEmailAuthorizationResponse.resource_scope:type_name -> controlplane.v1.EmailAuthorizationScope
+	1257, // 1461: controlplane.v1.ResolveEmailAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1038, // 1462: controlplane.v1.ResolveEmailAuthorizationResponse.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	124,  // 1463: controlplane.v1.EmailEffectReceipt.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1257, // 1464: controlplane.v1.EmailEffectReceipt.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1465: controlplane.v1.EmailEffectReceipt.updated_at:type_name -> google.protobuf.Timestamp
+	152,  // 1466: controlplane.v1.ReportEmailEffectReceiptRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1038, // 1467: controlplane.v1.ReportEmailEffectReceiptRequest.binding:type_name -> controlplane.v1.EmailExecutionBinding
+	124,  // 1468: controlplane.v1.ReportEmailEffectReceiptRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1042, // 1469: controlplane.v1.ReportEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	124,  // 1470: controlplane.v1.EmailReconciliationDecision.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1257, // 1471: controlplane.v1.EmailReconciliationDecision.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1472: controlplane.v1.EmailReconciliationDecision.expires_at:type_name -> google.protobuf.Timestamp
+	152,  // 1473: controlplane.v1.ReconcileEmailEffectRequest.mutation:type_name -> controlplane.v1.MutationContext
+	124,  // 1474: controlplane.v1.ReconcileEmailEffectRequest.outcome:type_name -> controlplane.v1.EmailEffectOutcome
+	1045, // 1475: controlplane.v1.ReconcileEmailEffectResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	1045, // 1476: controlplane.v1.ResolveEmailReconciliationResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	1042, // 1477: controlplane.v1.ResolveEmailReconciliationResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	1042, // 1478: controlplane.v1.GetEmailEffectReceiptResponse.receipt:type_name -> controlplane.v1.EmailEffectReceipt
+	1045, // 1479: controlplane.v1.GetEmailEffectReceiptResponse.decision:type_name -> controlplane.v1.EmailReconciliationDecision
+	1257, // 1480: controlplane.v1.MemoryRecordSpecification.retention_until:type_name -> google.protobuf.Timestamp
+	993,  // 1481: controlplane.v1.MemoryRecordRevision.provenance:type_name -> controlplane.v1.ContextProvenance
+	1257, // 1482: controlplane.v1.MemoryRecordRevision.retention_until:type_name -> google.protobuf.Timestamp
+	111,  // 1483: controlplane.v1.KodexMemoryRecord.state:type_name -> controlplane.v1.ContextResourceState
+	1054, // 1484: controlplane.v1.KodexMemoryRecord.current_revision:type_name -> controlplane.v1.MemoryRecordRevision
+	1257, // 1485: controlplane.v1.KodexMemoryRecord.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1486: controlplane.v1.KodexMemoryRecord.updated_at:type_name -> google.protobuf.Timestamp
+	111,  // 1487: controlplane.v1.ListSkillBundlesRequest.state:type_name -> controlplane.v1.ContextResourceState
+	153,  // 1488: controlplane.v1.ListSkillBundlesRequest.page:type_name -> controlplane.v1.PageRequest
+	998,  // 1489: controlplane.v1.ListSkillBundlesResponse.bundles:type_name -> controlplane.v1.SkillBundle
+	154,  // 1490: controlplane.v1.ListSkillBundlesResponse.page:type_name -> controlplane.v1.PageInfo
+	998,  // 1491: controlplane.v1.GetSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	153,  // 1492: controlplane.v1.ListSkillBundleRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	997,  // 1493: controlplane.v1.ListSkillBundleRevisionsResponse.revisions:type_name -> controlplane.v1.SkillBundleRevision
+	154,  // 1494: controlplane.v1.ListSkillBundleRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	111,  // 1495: controlplane.v1.ListMemoryRecordsRequest.state:type_name -> controlplane.v1.ContextResourceState
+	153,  // 1496: controlplane.v1.ListMemoryRecordsRequest.page:type_name -> controlplane.v1.PageRequest
+	1055, // 1497: controlplane.v1.ListMemoryRecordsResponse.records:type_name -> controlplane.v1.KodexMemoryRecord
+	154,  // 1498: controlplane.v1.ListMemoryRecordsResponse.page:type_name -> controlplane.v1.PageInfo
+	1055, // 1499: controlplane.v1.GetMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	153,  // 1500: controlplane.v1.ListMemoryRecordRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	1054, // 1501: controlplane.v1.ListMemoryRecordRevisionsResponse.revisions:type_name -> controlplane.v1.MemoryRecordRevision
+	154,  // 1502: controlplane.v1.ListMemoryRecordRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1503: controlplane.v1.CreateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	996,  // 1504: controlplane.v1.CreateSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
+	152,  // 1505: controlplane.v1.SaveSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	996,  // 1506: controlplane.v1.SaveSkillBundleDraftRequest.specification:type_name -> controlplane.v1.SkillBundleSpecification
+	152,  // 1507: controlplane.v1.ReviewSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	114,  // 1508: controlplane.v1.ReviewSkillBundleDraftRequest.decision:type_name -> controlplane.v1.SkillReviewDecision
+	152,  // 1509: controlplane.v1.CreateMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1053, // 1510: controlplane.v1.CreateMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
+	152,  // 1511: controlplane.v1.ReviseMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1053, // 1512: controlplane.v1.ReviseMemoryRecordRequest.specification:type_name -> controlplane.v1.MemoryRecordSpecification
+	152,  // 1513: controlplane.v1.ValidateSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1514: controlplane.v1.PublishSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1515: controlplane.v1.DiscardSkillBundleDraftRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1516: controlplane.v1.ArchiveSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1517: controlplane.v1.RestoreSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1518: controlplane.v1.PurgeSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1519: controlplane.v1.BindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1052, // 1520: controlplane.v1.BindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	152,  // 1521: controlplane.v1.UnbindAgentSkillBundleRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1052, // 1522: controlplane.v1.UnbindAgentSkillBundleResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	152,  // 1523: controlplane.v1.ArchiveMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1524: controlplane.v1.RestoreMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1525: controlplane.v1.PurgeMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	152,  // 1526: controlplane.v1.BindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1052, // 1527: controlplane.v1.BindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	152,  // 1528: controlplane.v1.UnbindAgentMemoryRecordRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1052, // 1529: controlplane.v1.UnbindAgentMemoryRecordResponse.binding:type_name -> controlplane.v1.AgentContextBinding
+	998,  // 1530: controlplane.v1.CreateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1531: controlplane.v1.SaveSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1532: controlplane.v1.ValidateSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1533: controlplane.v1.ReviewSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1534: controlplane.v1.PublishSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1535: controlplane.v1.DiscardSkillBundleDraftResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1536: controlplane.v1.ArchiveSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1537: controlplane.v1.RestoreSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	998,  // 1538: controlplane.v1.PurgeSkillBundleResponse.bundle:type_name -> controlplane.v1.SkillBundle
+	1055, // 1539: controlplane.v1.CreateMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	1055, // 1540: controlplane.v1.ReviseMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	1055, // 1541: controlplane.v1.ArchiveMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	1055, // 1542: controlplane.v1.RestoreMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	1055, // 1543: controlplane.v1.PurgeMemoryRecordResponse.record:type_name -> controlplane.v1.KodexMemoryRecord
+	1104, // 1544: controlplane.v1.SystemSTTConfiguration.parameters:type_name -> controlplane.v1.SystemSTTParameters
+	1105, // 1545: controlplane.v1.GetSystemSTTConfigurationResponse.configuration:type_name -> controlplane.v1.SystemSTTConfiguration
+	1108, // 1546: controlplane.v1.ProviderCredentialRenewalBinding.previous_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1257, // 1547: controlplane.v1.ProviderCredentialRenewalBinding.expires_at:type_name -> google.protobuf.Timestamp
+	1111, // 1548: controlplane.v1.RenewManagedProviderCredentialRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
+	127,  // 1549: controlplane.v1.RenewManagedProviderCredentialResponse.state:type_name -> controlplane.v1.ProviderCredentialRenewalState
+	1108, // 1550: controlplane.v1.RenewManagedProviderCredentialResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1111, // 1551: controlplane.v1.ObserveManagedProviderCredentialRenewalRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
+	127,  // 1552: controlplane.v1.ObserveManagedProviderCredentialRenewalResponse.state:type_name -> controlplane.v1.ProviderCredentialRenewalState
+	1108, // 1553: controlplane.v1.ObserveManagedProviderCredentialRenewalResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1111, // 1554: controlplane.v1.AuthorizeProviderCredentialRenewalRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
+	1111, // 1555: controlplane.v1.ValidateProviderCredentialRenewalObservationRequest.binding:type_name -> controlplane.v1.ProviderCredentialRenewalBinding
+	1108, // 1556: controlplane.v1.ObserveProviderModelCatalogRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	82,   // 1557: controlplane.v1.ObserveProviderModelCatalogRequest.authorization_method:type_name -> controlplane.v1.ProviderAuthorizationMethod
+	1257, // 1558: controlplane.v1.ObserveProviderModelCatalogRequest.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 1559: controlplane.v1.ObserveProviderModelCatalogResponse.observed_at:type_name -> google.protobuf.Timestamp
+	125,  // 1560: controlplane.v1.ObserveProviderModelCatalogResponse.source:type_name -> controlplane.v1.ProviderModelCatalogSource
+	1110, // 1561: controlplane.v1.ObserveProviderModelCatalogResponse.models:type_name -> controlplane.v1.ProviderModelCatalogRecord
+	126,  // 1562: controlplane.v1.ObserveProviderModelCatalogResponse.failure:type_name -> controlplane.v1.ProviderModelCatalogFailure
+	1257, // 1563: controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse.expires_at:type_name -> google.protobuf.Timestamp
+	128,  // 1564: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest.mode:type_name -> controlplane.v1.ProviderAuthorizationObservationMode
+	83,   // 1565: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.state:type_name -> controlplane.v1.ProviderAuthorizationState
+	1108, // 1566: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	129,  // 1567: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.object_state:type_name -> controlplane.v1.ProviderAuthorizationObjectState
+	1128, // 1568: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
+	1127, // 1569: controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
+	1108, // 1570: controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1108, // 1571: controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	152,  // 1572: controlplane.v1.CommitProviderCredentialRefreshRequest.mutation:type_name -> controlplane.v1.MutationContext
+	540,  // 1573: controlplane.v1.CommitProviderCredentialRefreshResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	1108, // 1574: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1128, // 1575: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.pending_object:type_name -> controlplane.v1.ProviderAuthorizationObjectDescriptor
+	130,  // 1576: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.target_kind:type_name -> controlplane.v1.ProviderCredentialCleanupTargetKind
+	1127, // 1577: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.absent_object:type_name -> controlplane.v1.ProviderAuthorizationAbsenceDescriptor
+	1137, // 1578: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest.recovery_identity:type_name -> controlplane.v1.ProviderCredentialCleanupRecoveryIdentity
+	1108, // 1579: controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse.produced_credential:type_name -> controlplane.v1.ProviderCredentialDescriptor
+	1257, // 1580: controlplane.v1.CredentialProjectionAuthority.expires_at:type_name -> google.protobuf.Timestamp
+	1140, // 1581: controlplane.v1.ResolveRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	540,  // 1582: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	806,  // 1583: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
+	1257, // 1584: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1140, // 1585: controlplane.v1.ResolveRuntimeCredentialProjectionResponse.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	1140, // 1586: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	540,  // 1587: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	806,  // 1588: controlplane.v1.ValidateRuntimeCredentialProjectionRequest.runtime_secrets:type_name -> controlplane.v1.RuntimeSecretDescriptor
+	1140, // 1589: controlplane.v1.ResolveTranscriptionCredentialProjectionRequest.authority:type_name -> controlplane.v1.CredentialProjectionAuthority
+	540,  // 1590: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.provider_credential:type_name -> controlplane.v1.ProviderCredentialBinding
+	1257, // 1591: controlplane.v1.ResolveTranscriptionCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	131,  // 1592: controlplane.v1.ManagedConfigurationGitSource.state:type_name -> controlplane.v1.ManagedConfigurationSourceState
+	1257, // 1593: controlplane.v1.ManagedConfigurationGitSource.synced_at:type_name -> google.protobuf.Timestamp
+	133,  // 1594: controlplane.v1.ManagedConfigurationGitSource.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
+	152,  // 1595: controlplane.v1.ConfigureRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1150, // 1596: controlplane.v1.ConfigureRoleImageGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
+	917,  // 1597: controlplane.v1.ConfigureRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	152,  // 1598: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1150, // 1599: controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest.source:type_name -> controlplane.v1.ManagedConfigurationGitSourceInput
+	917,  // 1600: controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	152,  // 1601: controlplane.v1.RefreshRoleImageGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1602: controlplane.v1.RefreshRoleImageGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	152,  // 1603: controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest.mutation:type_name -> controlplane.v1.MutationContext
+	917,  // 1604: controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse.configuration:type_name -> controlplane.v1.ManagedConfigurationSet
+	1257, // 1605: controlplane.v1.ManagedConfigurationSourceLease.expires_at:type_name -> google.protobuf.Timestamp
+	1159, // 1606: controlplane.v1.ManagedConfigurationSourceWork.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	100,  // 1607: controlplane.v1.ManagedConfigurationSourceWork.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	1258, // 1608: controlplane.v1.ManagedConfigurationSourceWork.public_configuration:type_name -> google.protobuf.Struct
+	208,  // 1609: controlplane.v1.ManagedConfigurationSourceWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	1257, // 1610: controlplane.v1.ManagedConfigurationSourceWork.deadline:type_name -> google.protobuf.Timestamp
+	1160, // 1611: controlplane.v1.ClaimManagedConfigurationSourceWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationSourceWork
+	1159, // 1612: controlplane.v1.RenewManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	1159, // 1613: controlplane.v1.RenewManagedConfigurationSourceWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	1159, // 1614: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	132,  // 1615: controlplane.v1.CompleteManagedConfigurationSourceWorkRequest.ancestry:type_name -> controlplane.v1.ManagedConfigurationSourceAncestry
+	1149, // 1616: controlplane.v1.CompleteManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	1159, // 1617: controlplane.v1.FailManagedConfigurationSourceWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationSourceLease
+	133,  // 1618: controlplane.v1.FailManagedConfigurationSourceWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationSourceFailure
+	1149, // 1619: controlplane.v1.FailManagedConfigurationSourceWorkResponse.source:type_name -> controlplane.v1.ManagedConfigurationGitSource
+	137,  // 1620: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.action:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackAction
+	138,  // 1621: controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability.reason:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionReason
+	100,  // 1622: controlplane.v1.ManagedConfigurationGitWriteBack.kind:type_name -> controlplane.v1.ManagedConfigurationKind
+	134,  // 1623: controlplane.v1.ManagedConfigurationGitWriteBack.state:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackState
+	136,  // 1624: controlplane.v1.ManagedConfigurationGitWriteBack.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
+	1257, // 1625: controlplane.v1.ManagedConfigurationGitWriteBack.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1626: controlplane.v1.ManagedConfigurationGitWriteBack.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 1627: controlplane.v1.ManagedConfigurationGitWriteBack.approved_at:type_name -> google.protobuf.Timestamp
+	1257, // 1628: controlplane.v1.ManagedConfigurationGitWriteBack.completed_at:type_name -> google.protobuf.Timestamp
+	1169, // 1629: controlplane.v1.ManagedConfigurationGitWriteBack.next_actions:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackActionAvailability
+	1257, // 1630: controlplane.v1.ManagedConfigurationGitWriteBack.branch_confirmed_at:type_name -> google.protobuf.Timestamp
+	1257, // 1631: controlplane.v1.ManagedConfigurationGitWriteBack.pull_request_confirmed_at:type_name -> google.protobuf.Timestamp
+	152,  // 1632: controlplane.v1.PrepareRoleImageGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1170, // 1633: controlplane.v1.PrepareRoleImageGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	152,  // 1634: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1170, // 1635: controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	152,  // 1636: controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1170, // 1637: controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	152,  // 1638: controlplane.v1.RejectManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1170, // 1639: controlplane.v1.RejectManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	152,  // 1640: controlplane.v1.CancelManagedConfigurationGitWriteBackRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1170, // 1641: controlplane.v1.CancelManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1170, // 1642: controlplane.v1.GetManagedConfigurationGitWriteBackResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	153,  // 1643: controlplane.v1.ListManagedConfigurationGitWriteBacksRequest.page:type_name -> controlplane.v1.PageRequest
+	1170, // 1644: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.proposals:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	154,  // 1645: controlplane.v1.ListManagedConfigurationGitWriteBacksResponse.page:type_name -> controlplane.v1.PageInfo
+	1257, // 1646: controlplane.v1.ManagedConfigurationGitWriteBackLease.expires_at:type_name -> google.protobuf.Timestamp
+	1185, // 1647: controlplane.v1.ManagedConfigurationGitWriteBackWork.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1170, // 1648: controlplane.v1.ManagedConfigurationGitWriteBackWork.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	139,  // 1649: controlplane.v1.ManagedConfigurationGitWriteBackWork.mode:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWorkMode
+	135,  // 1650: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1258, // 1651: controlplane.v1.ManagedConfigurationGitWriteBackWork.public_configuration:type_name -> google.protobuf.Struct
+	208,  // 1652: controlplane.v1.ManagedConfigurationGitWriteBackWork.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	1257, // 1653: controlplane.v1.ManagedConfigurationGitWriteBackWork.commit_time:type_name -> google.protobuf.Timestamp
+	1257, // 1654: controlplane.v1.ManagedConfigurationGitWriteBackWork.effect_started_at:type_name -> google.protobuf.Timestamp
+	1257, // 1655: controlplane.v1.ManagedConfigurationGitWriteBackWork.deadline:type_name -> google.protobuf.Timestamp
+	1186, // 1656: controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse.work:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackWork
+	1185, // 1657: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1185, // 1658: controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	1185, // 1659: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	135,  // 1660: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1170, // 1661: controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1185, // 1662: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	135,  // 1663: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest.effect:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackEffect
+	1170, // 1664: controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	1185, // 1665: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.lease:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackLease
+	136,  // 1666: controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest.failure_code:type_name -> controlplane.v1.ManagedConfigurationGitWriteBackFailure
+	1170, // 1667: controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse.proposal:type_name -> controlplane.v1.ManagedConfigurationGitWriteBack
+	205,  // 1668: controlplane.v1.AssistantIntegrationDefinition.configuration_fields:type_name -> controlplane.v1.IntegrationConfigurationField
+	140,  // 1669: controlplane.v1.RunSessionReadiness.storage_state:type_name -> controlplane.v1.RunSessionStorageState
+	141,  // 1670: controlplane.v1.RunSessionReadiness.reason:type_name -> controlplane.v1.RunSessionReadinessReason
+	1199, // 1671: controlplane.v1.RunSessionReadiness.latest_archive_task:type_name -> controlplane.v1.RunSessionArchiveTask
+	56,   // 1672: controlplane.v1.RunSessionArchiveTask.kind:type_name -> controlplane.v1.SessionArchiveTaskKind
+	142,  // 1673: controlplane.v1.RunSessionArchiveTask.state:type_name -> controlplane.v1.RunSessionArchiveTaskState
+	1202, // 1674: controlplane.v1.ProviderFinancialObservation.windows:type_name -> controlplane.v1.ProviderFinancialWindow
+	1203, // 1675: controlplane.v1.ProviderFinancialObservation.credits:type_name -> controlplane.v1.ProviderFinancialCredits
+	1204, // 1676: controlplane.v1.ProviderFinancialSummary.observation:type_name -> controlplane.v1.ProviderFinancialObservation
+	1257, // 1677: controlplane.v1.ProviderFinancialSummary.received_at:type_name -> google.protobuf.Timestamp
+	1205, // 1678: controlplane.v1.ProviderFinancialDisplayAccount.financial_summary:type_name -> controlplane.v1.ProviderFinancialSummary
+	1206, // 1679: controlplane.v1.ProviderFinancialOverview.accounts:type_name -> controlplane.v1.ProviderFinancialDisplayAccount
+	1257, // 1680: controlplane.v1.ProviderFinancialOverview.observed_at:type_name -> google.protobuf.Timestamp
+	1257, // 1681: controlplane.v1.ProviderFinancialOverview.valid_until:type_name -> google.protobuf.Timestamp
+	1209, // 1682: controlplane.v1.WorkflowReworkPreview.authors:type_name -> controlplane.v1.WorkflowReworkStepPreview
+	1209, // 1683: controlplane.v1.WorkflowReworkPreview.rechecks:type_name -> controlplane.v1.WorkflowReworkStepPreview
+	1211, // 1684: controlplane.v1.RenewSSHComposeInvocationRequest.binding:type_name -> controlplane.v1.SSHComposeLeaseBinding
+	543,  // 1685: controlplane.v1.RenewSSHComposeInvocationResponse.lease:type_name -> controlplane.v1.WorkLease
+	1211, // 1686: controlplane.v1.ResolveSSHComposeCredentialProjectionRequest.binding:type_name -> controlplane.v1.SSHComposeLeaseBinding
+	738,  // 1687: controlplane.v1.ResolveSSHComposeCredentialProjectionResponse.secret_revision:type_name -> controlplane.v1.RuntimeSecretRevisionDescriptor
+	1257, // 1688: controlplane.v1.ResolveSSHComposeCredentialProjectionResponse.expires_at:type_name -> google.protobuf.Timestamp
+	1217, // 1689: controlplane.v1.RuntimeModelProviderConfiguration.models:type_name -> controlplane.v1.RuntimeModelProviderModel
+	1218, // 1690: controlplane.v1.RuntimeModelProviderModel.cache_policy:type_name -> controlplane.v1.RuntimeModelCachePolicy
+	1253, // 1691: controlplane.v1.RuntimeModelProviderModel.context_policy:type_name -> controlplane.v1.RuntimeModelContextPolicy
+	1219, // 1692: controlplane.v1.RuntimeModelCachePolicy.qualification:type_name -> controlplane.v1.RuntimeModelCacheQualification
+	208,  // 1693: controlplane.v1.BeginPersonalIntegrationInvocationResponse.credential_revision:type_name -> controlplane.v1.IntegrationCredentialRevision
+	59,   // 1694: controlplane.v1.BeginPersonalIntegrationInvocationResponse.work_mode:type_name -> controlplane.v1.IntegrationInvocationWorkMode
+	60,   // 1695: controlplane.v1.BeginPersonalIntegrationInvocationResponse.resource_permission_profile:type_name -> controlplane.v1.IntegrationCredentialResourcePermissionProfile
+	143,  // 1696: controlplane.v1.PersonalIntegrationCredentialView.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
+	144,  // 1697: controlplane.v1.PersonalIntegrationCredentialView.state:type_name -> controlplane.v1.PersonalIntegrationCredentialState
+	1257, // 1698: controlplane.v1.PersonalIntegrationCredentialView.expires_at:type_name -> google.protobuf.Timestamp
+	1222, // 1699: controlplane.v1.GetPersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	152,  // 1700: controlplane.v1.CreatePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1222, // 1701: controlplane.v1.CreatePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	152,  // 1702: controlplane.v1.ConfigurePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1222, // 1703: controlplane.v1.ConfigurePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	152,  // 1704: controlplane.v1.RevokePersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1222, // 1705: controlplane.v1.RevokePersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	152,  // 1706: controlplane.v1.SetIntegrationCredentialPolicyRequest.mutation:type_name -> controlplane.v1.MutationContext
+	143,  // 1707: controlplane.v1.SetIntegrationCredentialPolicyRequest.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
+	210,  // 1708: controlplane.v1.SetIntegrationCredentialPolicyResponse.connection:type_name -> controlplane.v1.IntegrationConnection
+	143,  // 1709: controlplane.v1.PersonalIntegrationConnection.policy:type_name -> controlplane.v1.IntegrationCredentialPolicy
+	1222, // 1710: controlplane.v1.PersonalIntegrationConnection.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	153,  // 1711: controlplane.v1.ListPersonalIntegrationConnectionsRequest.page:type_name -> controlplane.v1.PageRequest
+	1233, // 1712: controlplane.v1.ListPersonalIntegrationConnectionsResponse.connections:type_name -> controlplane.v1.PersonalIntegrationConnection
+	154,  // 1713: controlplane.v1.ListPersonalIntegrationConnectionsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1714: controlplane.v1.TestPersonalIntegrationCredentialRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1222, // 1715: controlplane.v1.TestPersonalIntegrationCredentialResponse.credential:type_name -> controlplane.v1.PersonalIntegrationCredentialView
+	620,  // 1716: controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse.claims:type_name -> controlplane.v1.IntegrationConnectionTestClaim
+	152,  // 1717: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.mutation:type_name -> controlplane.v1.MutationContext
+	145,  // 1718: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.result:type_name -> controlplane.v1.PersonalIntegrationCredentialTestResult
+	58,   // 1719: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.observed_permission_profiles:type_name -> controlplane.v1.PersonalIntegrationCredentialObservationProfile
+	1257, // 1720: controlplane.v1.CompletePersonalIntegrationCredentialTestRequest.expires_at:type_name -> google.protobuf.Timestamp
+	146,  // 1721: controlplane.v1.IntegrationCredentialPreflightIssue.problem:type_name -> controlplane.v1.IntegrationCredentialPreflightProblem
+	1244, // 1722: controlplane.v1.IntegrationCredentialPreflightDetail.issues:type_name -> controlplane.v1.IntegrationCredentialPreflightIssue
+	35,   // 1723: controlplane.v1.IntegrationApprovalConsent.lifetime:type_name -> controlplane.v1.IntegrationApprovalScopeLifetime
+	147,  // 1724: controlplane.v1.IntegrationApprovalConsent.state:type_name -> controlplane.v1.IntegrationApprovalConsentState
+	1257, // 1725: controlplane.v1.IntegrationApprovalConsent.created_at:type_name -> google.protobuf.Timestamp
+	1257, // 1726: controlplane.v1.IntegrationApprovalConsent.expires_at:type_name -> google.protobuf.Timestamp
+	1257, // 1727: controlplane.v1.IntegrationApprovalConsent.revoked_at:type_name -> google.protobuf.Timestamp
+	153,  // 1728: controlplane.v1.ListIntegrationApprovalConsentsRequest.page:type_name -> controlplane.v1.PageRequest
+	1246, // 1729: controlplane.v1.ListIntegrationApprovalConsentsResponse.consents:type_name -> controlplane.v1.IntegrationApprovalConsent
+	154,  // 1730: controlplane.v1.ListIntegrationApprovalConsentsResponse.page:type_name -> controlplane.v1.PageInfo
+	152,  // 1731: controlplane.v1.RevokeIntegrationApprovalConsentRequest.mutation:type_name -> controlplane.v1.MutationContext
+	1246, // 1732: controlplane.v1.RevokeIntegrationApprovalConsentResponse.consent:type_name -> controlplane.v1.IntegrationApprovalConsent
+	1253, // 1733: controlplane.v1.ModelExecutionPolicy.context:type_name -> controlplane.v1.RuntimeModelContextPolicy
+	1254, // 1734: controlplane.v1.ModelExecutionPolicy.cache:type_name -> controlplane.v1.ModelCacheResolution
+	1218, // 1735: controlplane.v1.ModelCacheResolution.requested:type_name -> controlplane.v1.RuntimeModelCachePolicy
+	1009, // 1736: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:input_type -> controlplane.v1.ListEmailMailboxConfigurationsRequest
+	1011, // 1737: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:input_type -> controlplane.v1.GetEmailMailboxConfigurationRequest
+	1013, // 1738: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:input_type -> controlplane.v1.ListEmailMailboxCredentialsRequest
+	1015, // 1739: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:input_type -> controlplane.v1.GetEmailMailboxCredentialReceiptRequest
+	1017, // 1740: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:input_type -> controlplane.v1.PreviewEmailMailboxConfigurationRequest
+	797,  // 1741: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:input_type -> controlplane.v1.GetRuntimeSecretDraftImpactRequest
+	686,  // 1742: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:input_type -> controlplane.v1.GetRuntimeSecretDraftRequest
+	493,  // 1743: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:input_type -> controlplane.v1.GetRuntimeRevisionDiffRequest
+	1050, // 1744: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:input_type -> controlplane.v1.GetEmailEffectReceiptRequest
+	1056, // 1745: controlplane.v1.PlatformQueryService.ListSkillBundles:input_type -> controlplane.v1.ListSkillBundlesRequest
+	1058, // 1746: controlplane.v1.PlatformQueryService.GetSkillBundle:input_type -> controlplane.v1.GetSkillBundleRequest
+	1060, // 1747: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:input_type -> controlplane.v1.ListSkillBundleRevisionsRequest
+	1062, // 1748: controlplane.v1.PlatformQueryService.ListMemoryRecords:input_type -> controlplane.v1.ListMemoryRecordsRequest
+	1064, // 1749: controlplane.v1.PlatformQueryService.GetMemoryRecord:input_type -> controlplane.v1.GetMemoryRecordRequest
+	1066, // 1750: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:input_type -> controlplane.v1.ListMemoryRecordRevisionsRequest
+	228,  // 1751: controlplane.v1.PlatformQueryService.GetBootstrapState:input_type -> controlplane.v1.GetBootstrapStateRequest
+	230,  // 1752: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:input_type -> controlplane.v1.GetPlatformEventCursorRequest
+	232,  // 1753: controlplane.v1.PlatformQueryService.GetOverview:input_type -> controlplane.v1.GetOverviewRequest
+	234,  // 1754: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:input_type -> controlplane.v1.ListPlatformCapabilitiesRequest
+	236,  // 1755: controlplane.v1.PlatformQueryService.ListRuntimeSelections:input_type -> controlplane.v1.ListRuntimeSelectionsRequest
+	239,  // 1756: controlplane.v1.PlatformQueryService.SearchPlatform:input_type -> controlplane.v1.SearchPlatformRequest
+	258,  // 1757: controlplane.v1.PlatformQueryService.ListVFSNodes:input_type -> controlplane.v1.ListVFSNodesRequest
+	260,  // 1758: controlplane.v1.PlatformQueryService.SearchVFS:input_type -> controlplane.v1.SearchVFSRequest
+	262,  // 1759: controlplane.v1.PlatformQueryService.ListProjects:input_type -> controlplane.v1.ListProjectsRequest
+	264,  // 1760: controlplane.v1.PlatformQueryService.ListTrashedProjects:input_type -> controlplane.v1.ListTrashedProjectsRequest
+	279,  // 1761: controlplane.v1.PlatformQueryService.GetProjectPurgeRecovery:input_type -> controlplane.v1.GetProjectPurgeRecoveryRequest
+	266,  // 1762: controlplane.v1.PlatformQueryService.GetProject:input_type -> controlplane.v1.GetProjectRequest
+	283,  // 1763: controlplane.v1.PlatformQueryService.ListPlatformMemberships:input_type -> controlplane.v1.ListPlatformMembershipsRequest
+	285,  // 1764: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:input_type -> controlplane.v1.ListPlatformMembershipCandidatesRequest
+	293,  // 1765: controlplane.v1.PlatformQueryService.ListProjectMemberships:input_type -> controlplane.v1.ListProjectMembershipsRequest
+	295,  // 1766: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:input_type -> controlplane.v1.ListProjectMembershipCandidatesRequest
+	303,  // 1767: controlplane.v1.PlatformQueryService.ListAgents:input_type -> controlplane.v1.ListAgentsRequest
+	305,  // 1768: controlplane.v1.PlatformQueryService.GetAgent:input_type -> controlplane.v1.GetAgentRequest
+	654,  // 1769: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:input_type -> controlplane.v1.ListAgentInstructionVersionsRequest
+	327,  // 1770: controlplane.v1.PlatformQueryService.ListWorkflows:input_type -> controlplane.v1.ListWorkflowsRequest
+	329,  // 1771: controlplane.v1.PlatformQueryService.GetWorkflow:input_type -> controlplane.v1.GetWorkflowRequest
+	341,  // 1772: controlplane.v1.PlatformQueryService.ListRuns:input_type -> controlplane.v1.ListRunsRequest
+	343,  // 1773: controlplane.v1.PlatformQueryService.GetRun:input_type -> controlplane.v1.GetRunRequest
+	345,  // 1774: controlplane.v1.PlatformQueryService.GetRunGraph:input_type -> controlplane.v1.GetRunGraphRequest
+	347,  // 1775: controlplane.v1.PlatformQueryService.ListRunEvents:input_type -> controlplane.v1.ListRunEventsRequest
+	357,  // 1776: controlplane.v1.PlatformQueryService.ListOwnerGates:input_type -> controlplane.v1.ListOwnerGatesRequest
+	1247, // 1777: controlplane.v1.PlatformQueryService.ListIntegrationApprovalConsents:input_type -> controlplane.v1.ListIntegrationApprovalConsentsRequest
+	359,  // 1778: controlplane.v1.PlatformQueryService.GetOwnerGate:input_type -> controlplane.v1.GetOwnerGateRequest
+	364,  // 1779: controlplane.v1.PlatformQueryService.ListArtifacts:input_type -> controlplane.v1.ListArtifactsRequest
+	366,  // 1780: controlplane.v1.PlatformQueryService.GetArtifact:input_type -> controlplane.v1.GetArtifactRequest
+	192,  // 1781: controlplane.v1.PlatformQueryService.ListArtifactRevisions:input_type -> controlplane.v1.ListArtifactRevisionsRequest
+	194,  // 1782: controlplane.v1.PlatformQueryService.GetArtifactRevision:input_type -> controlplane.v1.GetArtifactRevisionRequest
+	896,  // 1783: controlplane.v1.PlatformQueryService.GetArtifactImpact:input_type -> controlplane.v1.GetArtifactImpactRequest
+	368,  // 1784: controlplane.v1.PlatformQueryService.GetAttachmentSet:input_type -> controlplane.v1.GetAttachmentSetRequest
+	399,  // 1785: controlplane.v1.PlatformQueryService.ListSchedules:input_type -> controlplane.v1.ListSchedulesRequest
+	656,  // 1786: controlplane.v1.PlatformQueryService.GetSchedule:input_type -> controlplane.v1.GetScheduleRequest
+	888,  // 1787: controlplane.v1.PlatformQueryService.ListScheduleRevisions:input_type -> controlplane.v1.ListScheduleRevisionsRequest
+	890,  // 1788: controlplane.v1.PlatformQueryService.ListScheduleRuns:input_type -> controlplane.v1.ListScheduleRunsRequest
+	616,  // 1789: controlplane.v1.PlatformQueryService.PreviewSchedule:input_type -> controlplane.v1.PreviewScheduleRequest
+	861,  // 1790: controlplane.v1.PlatformQueryService.ListProviderAccounts:input_type -> controlplane.v1.ListProviderAccountsRequest
+	863,  // 1791: controlplane.v1.PlatformQueryService.GetProviderAccount:input_type -> controlplane.v1.GetProviderAccountRequest
+	856,  // 1792: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:input_type -> controlplane.v1.ListProviderAccountBlockersRequest
+	407,  // 1793: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:input_type -> controlplane.v1.ListIntegrationDefinitionsRequest
+	409,  // 1794: controlplane.v1.PlatformQueryService.ListIntegrationConnections:input_type -> controlplane.v1.ListIntegrationConnectionsRequest
+	417,  // 1795: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:input_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesRequest
+	419,  // 1796: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:input_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesRequest
+	421,  // 1797: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:input_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesRequest
+	423,  // 1798: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:input_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesRequest
+	443,  // 1799: controlplane.v1.PlatformQueryService.GetSystemAssistantIntegrationGrantCandidates:input_type -> controlplane.v1.GetSystemAssistantIntegrationGrantCandidatesRequest
+	444,  // 1800: controlplane.v1.PlatformQueryService.GetProjectAssistantIntegrationGrantCandidates:input_type -> controlplane.v1.GetProjectAssistantIntegrationGrantCandidatesRequest
+	425,  // 1801: controlplane.v1.PlatformQueryService.GetIntegrationConnection:input_type -> controlplane.v1.GetIntegrationConnectionRequest
+	486,  // 1802: controlplane.v1.PlatformQueryService.GetAdministration:input_type -> controlplane.v1.GetAdministrationRequest
+	488,  // 1803: controlplane.v1.PlatformQueryService.ListAuditEvents:input_type -> controlplane.v1.ListAuditEventsRequest
+	660,  // 1804: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:input_type -> controlplane.v1.GetAgentRuntimeConfigurationRequest
+	662,  // 1805: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:input_type -> controlplane.v1.GetAgentEffectiveCapabilitiesRequest
+	664,  // 1806: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:input_type -> controlplane.v1.ListArtifactBindingTargetsRequest
+	666,  // 1807: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:input_type -> controlplane.v1.GetRunAttachmentEligibilityRequest
+	670,  // 1808: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:input_type -> controlplane.v1.ListConfigOverlayRevisionsRequest
+	672,  // 1809: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:input_type -> controlplane.v1.GetConfigOverlayRevisionRequest
+	674,  // 1810: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:input_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsRequest
+	676,  // 1811: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:input_type -> controlplane.v1.ListRuntimeEnvironmentSetsRequest
+	678,  // 1812: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:input_type -> controlplane.v1.GetRuntimeEnvironmentSetRequest
+	680,  // 1813: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:input_type -> controlplane.v1.ListRuntimeEnvironmentVersionsRequest
+	825,  // 1814: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:input_type -> controlplane.v1.GetRuntimeEnvironmentReadinessRequest
+	827,  // 1815: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:input_type -> controlplane.v1.ListRuntimeEnvironmentAgentsRequest
+	682,  // 1816: controlplane.v1.PlatformQueryService.ListTemplateVariables:input_type -> controlplane.v1.ListTemplateVariablesRequest
+	838,  // 1817: controlplane.v1.PlatformQueryService.ListProviderDefinitions:input_type -> controlplane.v1.ListProviderDefinitionsRequest
+	841,  // 1818: controlplane.v1.PlatformQueryService.ListModelCapabilities:input_type -> controlplane.v1.ListModelCapabilitiesRequest
+	845,  // 1819: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:input_type -> controlplane.v1.ListRoleImageRecipeRevisionsRequest
+	903,  // 1820: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:input_type -> controlplane.v1.ValidatePromptTemplateRequest
+	905,  // 1821: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:input_type -> controlplane.v1.PreviewPromptTemplateRequest
+	714,  // 1822: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:input_type -> controlplane.v1.ListRuntimeSecretsRequest
+	716,  // 1823: controlplane.v1.PlatformQueryService.ListOrganizationRuntimeSecrets:input_type -> controlplane.v1.ListOrganizationRuntimeSecretsRequest
+	720,  // 1824: controlplane.v1.PlatformQueryService.GetRuntimeSecret:input_type -> controlplane.v1.GetRuntimeSecretRequest
+	987,  // 1825: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:input_type -> controlplane.v1.ListManagedConfigurationHistoryRequest
+	988,  // 1826: controlplane.v1.PlatformQueryService.ListManagedConfigurations:input_type -> controlplane.v1.ListManagedConfigurationsRequest
+	991,  // 1827: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:input_type -> controlplane.v1.GetManagedConfigurationImpactRequest
+	965,  // 1828: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:input_type -> controlplane.v1.GetRoleImageImpactPlanRequest
+	961,  // 1829: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:input_type -> controlplane.v1.GetRevisionImpactPlanRequest
+	1181, // 1830: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:input_type -> controlplane.v1.GetManagedConfigurationGitWriteBackRequest
+	1183, // 1831: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:input_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksRequest
+	1106, // 1832: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:input_type -> controlplane.v1.GetSystemSTTConfigurationRequest
+	759,  // 1833: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:input_type -> controlplane.v1.GetRuntimeEnvironmentDraftRequest
+	781,  // 1834: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:input_type -> controlplane.v1.GetRuntimeEnvironmentImpactRequest
+	800,  // 1835: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:input_type -> controlplane.v1.GetRuntimeSecretImpactRequest
+	651,  // 1836: controlplane.v1.PlatformQueryService.ListInteractionIdentities:input_type -> controlplane.v1.ListInteractionIdentitiesRequest
+	1019, // 1837: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:input_type -> controlplane.v1.CreateEmailMailboxDraftRequest
+	1021, // 1838: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:input_type -> controlplane.v1.SaveEmailMailboxDraftRequest
+	1023, // 1839: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:input_type -> controlplane.v1.ValidateEmailMailboxDraftRequest
+	1025, // 1840: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:input_type -> controlplane.v1.PublishEmailMailboxDraftRequest
+	1027, // 1841: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:input_type -> controlplane.v1.DiscardEmailMailboxDraftRequest
+	1029, // 1842: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:input_type -> controlplane.v1.BindEmailMailboxConfigurationRequest
+	1031, // 1843: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:input_type -> controlplane.v1.UnbindEmailMailboxConfigurationRequest
+	795,  // 1844: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:input_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactRequest
+	688,  // 1845: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:input_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftRequest
+	718,  // 1846: controlplane.v1.PlatformCommandService.PrepareOrganizationRuntimeSecretDraft:input_type -> controlplane.v1.PrepareOrganizationRuntimeSecretDraftRequest
+	690,  // 1847: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:input_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftRequest
+	692,  // 1848: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:input_type -> controlplane.v1.PreparePublishRuntimeSecretDraftRequest
+	694,  // 1849: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:input_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftRequest
+	518,  // 1850: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:input_type -> controlplane.v1.SavePromptTemplateDraftRequest
+	520,  // 1851: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:input_type -> controlplane.v1.DiscardPromptTemplateDraftRequest
+	522,  // 1852: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:input_type -> controlplane.v1.SaveRoleImageRevisionDraftRequest
+	524,  // 1853: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:input_type -> controlplane.v1.DiscardRoleImageRevisionDraftRequest
+	526,  // 1854: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:input_type -> controlplane.v1.SaveIntegrationDefinitionDraftRequest
+	528,  // 1855: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:input_type -> controlplane.v1.DiscardIntegrationDefinitionDraftRequest
+	530,  // 1856: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:input_type -> controlplane.v1.SaveSystemSTTConfigurationDraftRequest
+	532,  // 1857: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:input_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftRequest
+	1046, // 1858: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:input_type -> controlplane.v1.ReconcileEmailEffectRequest
+	1036, // 1859: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:input_type -> controlplane.v1.ConfigureEmailMailboxCredentialRequest
+	1068, // 1860: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:input_type -> controlplane.v1.CreateSkillBundleDraftRequest
+	1069, // 1861: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:input_type -> controlplane.v1.SaveSkillBundleDraftRequest
+	1073, // 1862: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:input_type -> controlplane.v1.ValidateSkillBundleDraftRequest
+	1070, // 1863: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:input_type -> controlplane.v1.ReviewSkillBundleDraftRequest
+	1074, // 1864: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:input_type -> controlplane.v1.PublishSkillBundleDraftRequest
+	1075, // 1865: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:input_type -> controlplane.v1.DiscardSkillBundleDraftRequest
+	1076, // 1866: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:input_type -> controlplane.v1.ArchiveSkillBundleRequest
+	1077, // 1867: controlplane.v1.PlatformCommandService.RestoreSkillBundle:input_type -> controlplane.v1.RestoreSkillBundleRequest
+	1078, // 1868: controlplane.v1.PlatformCommandService.PurgeSkillBundle:input_type -> controlplane.v1.PurgeSkillBundleRequest
+	1079, // 1869: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:input_type -> controlplane.v1.BindAgentSkillBundleRequest
+	1081, // 1870: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:input_type -> controlplane.v1.UnbindAgentSkillBundleRequest
+	1071, // 1871: controlplane.v1.PlatformCommandService.CreateMemoryRecord:input_type -> controlplane.v1.CreateMemoryRecordRequest
+	1072, // 1872: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:input_type -> controlplane.v1.ReviseMemoryRecordRequest
+	1083, // 1873: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:input_type -> controlplane.v1.ArchiveMemoryRecordRequest
+	1084, // 1874: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:input_type -> controlplane.v1.RestoreMemoryRecordRequest
+	1085, // 1875: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:input_type -> controlplane.v1.PurgeMemoryRecordRequest
+	1086, // 1876: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:input_type -> controlplane.v1.BindAgentMemoryRecordRequest
+	1088, // 1877: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:input_type -> controlplane.v1.UnbindAgentMemoryRecordRequest
+	761,  // 1878: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateRuntimeEnvironmentDraftRequest
+	763,  // 1879: controlplane.v1.PlatformCommandService.CreateOrganizationRuntimeEnvironmentDraft:input_type -> controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftRequest
+	765,  // 1880: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:input_type -> controlplane.v1.SaveRuntimeEnvironmentDraftRequest
+	767,  // 1881: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:input_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftRequest
+	769,  // 1882: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:input_type -> controlplane.v1.PublishRuntimeEnvironmentDraftRequest
+	771,  // 1883: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:input_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftRequest
+	783,  // 1884: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:input_type -> controlplane.v1.RebindRuntimeEnvironmentRequest
+	803,  // 1885: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:input_type -> controlplane.v1.RebindRuntimeSecretRequest
+	647,  // 1886: controlplane.v1.PlatformCommandService.BindInteractionIdentity:input_type -> controlplane.v1.BindInteractionIdentityRequest
+	649,  // 1887: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:input_type -> controlplane.v1.RevokeInteractionIdentityRequest
+	484,  // 1888: controlplane.v1.PlatformCommandService.CompleteOnboarding:input_type -> controlplane.v1.CompleteOnboardingRequest
+	268,  // 1889: controlplane.v1.PlatformCommandService.CreateProject:input_type -> controlplane.v1.CreateProjectRequest
+	270,  // 1890: controlplane.v1.PlatformCommandService.UpdateProject:input_type -> controlplane.v1.UpdateProjectRequest
+	272,  // 1891: controlplane.v1.PlatformCommandService.TrashProject:input_type -> controlplane.v1.TrashProjectRequest
+	274,  // 1892: controlplane.v1.PlatformCommandService.RestoreProject:input_type -> controlplane.v1.RestoreProjectRequest
+	276,  // 1893: controlplane.v1.PlatformCommandService.PurgeProject:input_type -> controlplane.v1.PurgeProjectRequest
+	281,  // 1894: controlplane.v1.PlatformCommandService.ResolveProjectPurgeRecovery:input_type -> controlplane.v1.ResolveProjectPurgeRecoveryRequest
+	287,  // 1895: controlplane.v1.PlatformCommandService.AddPlatformMembership:input_type -> controlplane.v1.AddPlatformMembershipRequest
+	289,  // 1896: controlplane.v1.PlatformCommandService.ChangePlatformMembership:input_type -> controlplane.v1.ChangePlatformMembershipRequest
+	291,  // 1897: controlplane.v1.PlatformCommandService.RemovePlatformMembership:input_type -> controlplane.v1.RemovePlatformMembershipRequest
+	297,  // 1898: controlplane.v1.PlatformCommandService.AddProjectMembership:input_type -> controlplane.v1.AddProjectMembershipRequest
+	299,  // 1899: controlplane.v1.PlatformCommandService.ChangeProjectMembership:input_type -> controlplane.v1.ChangeProjectMembershipRequest
+	301,  // 1900: controlplane.v1.PlatformCommandService.RemoveProjectMembership:input_type -> controlplane.v1.RemoveProjectMembershipRequest
+	307,  // 1901: controlplane.v1.PlatformCommandService.CreateAgent:input_type -> controlplane.v1.CreateAgentRequest
+	309,  // 1902: controlplane.v1.PlatformCommandService.UpdateAgent:input_type -> controlplane.v1.UpdateAgentRequest
+	311,  // 1903: controlplane.v1.PlatformCommandService.SetAgentEnabled:input_type -> controlplane.v1.SetAgentEnabledRequest
+	313,  // 1904: controlplane.v1.PlatformCommandService.ArchiveAgent:input_type -> controlplane.v1.ArchiveAgentRequest
+	898,  // 1905: controlplane.v1.PlatformCommandService.SetAgentAvatar:input_type -> controlplane.v1.SetAgentAvatarRequest
+	900,  // 1906: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:input_type -> controlplane.v1.RemoveAgentAvatarRequest
+	315,  // 1907: controlplane.v1.PlatformCommandService.CreateInstructionDraft:input_type -> controlplane.v1.CreateInstructionDraftRequest
+	317,  // 1908: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:input_type -> controlplane.v1.ValidateInstructionDraftRequest
+	319,  // 1909: controlplane.v1.PlatformCommandService.PublishInstructionDraft:input_type -> controlplane.v1.PublishInstructionDraftRequest
+	321,  // 1910: controlplane.v1.PlatformCommandService.RollbackInstructions:input_type -> controlplane.v1.RollbackInstructionsRequest
+	323,  // 1911: controlplane.v1.PlatformCommandService.ChangeAgentCapability:input_type -> controlplane.v1.ChangeAgentCapabilityRequest
+	325,  // 1912: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:input_type -> controlplane.v1.ChangeAgentIntegrationGrantRequest
+	331,  // 1913: controlplane.v1.PlatformCommandService.CreateWorkflow:input_type -> controlplane.v1.CreateWorkflowRequest
+	333,  // 1914: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:input_type -> controlplane.v1.UpdateWorkflowDraftRequest
+	335,  // 1915: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:input_type -> controlplane.v1.ValidateWorkflowDraftRequest
+	337,  // 1916: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:input_type -> controlplane.v1.PublishWorkflowDraftRequest
+	339,  // 1917: controlplane.v1.PlatformCommandService.ArchiveWorkflow:input_type -> controlplane.v1.ArchiveWorkflowRequest
+	349,  // 1918: controlplane.v1.PlatformCommandService.LaunchRun:input_type -> controlplane.v1.LaunchRunRequest
+	351,  // 1919: controlplane.v1.PlatformCommandService.AddSessionTurn:input_type -> controlplane.v1.AddSessionTurnRequest
+	353,  // 1920: controlplane.v1.PlatformCommandService.CancelRun:input_type -> controlplane.v1.CancelRunRequest
+	355,  // 1921: controlplane.v1.PlatformCommandService.RetryRun:input_type -> controlplane.v1.RetryRunRequest
+	361,  // 1922: controlplane.v1.PlatformCommandService.ResolveOwnerGate:input_type -> controlplane.v1.ResolveOwnerGateRequest
+	1249, // 1923: controlplane.v1.PlatformCommandService.RevokeIntegrationApprovalConsent:input_type -> controlplane.v1.RevokeIntegrationApprovalConsentRequest
+	385,  // 1924: controlplane.v1.PlatformCommandService.UploadAgentAvatar:input_type -> controlplane.v1.UploadAgentAvatarRequest
+	382,  // 1925: controlplane.v1.PlatformCommandService.UploadArtifact:input_type -> controlplane.v1.UploadArtifactRequest
+	387,  // 1926: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:input_type -> controlplane.v1.UploadOrganizationArtifactRequest
+	389,  // 1927: controlplane.v1.PlatformCommandService.DownloadArtifact:input_type -> controlplane.v1.DownloadArtifactRequest
+	196,  // 1928: controlplane.v1.PlatformCommandService.DownloadArtifactRevision:input_type -> controlplane.v1.DownloadArtifactRevisionRequest
+	391,  // 1929: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:input_type -> controlplane.v1.ChangeArtifactBindingRequest
+	393,  // 1930: controlplane.v1.PlatformCommandService.DeleteArtifact:input_type -> controlplane.v1.DeleteArtifactRequest
+	395,  // 1931: controlplane.v1.PlatformCommandService.RestoreArtifact:input_type -> controlplane.v1.RestoreArtifactRequest
+	397,  // 1932: controlplane.v1.PlatformCommandService.PurgeArtifact:input_type -> controlplane.v1.PurgeArtifactRequest
+	370,  // 1933: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:input_type -> controlplane.v1.CreateAttachmentSetDraftRequest
+	372,  // 1934: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:input_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftRequest
+	374,  // 1935: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:input_type -> controlplane.v1.AddAttachmentSetItemsRequest
+	376,  // 1936: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:input_type -> controlplane.v1.RemoveAttachmentSetItemsRequest
+	378,  // 1937: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:input_type -> controlplane.v1.FinalizeAttachmentSetRequest
+	401,  // 1938: controlplane.v1.PlatformCommandService.CreateSchedule:input_type -> controlplane.v1.CreateScheduleRequest
+	403,  // 1939: controlplane.v1.PlatformCommandService.UpdateSchedule:input_type -> controlplane.v1.UpdateScheduleRequest
+	405,  // 1940: controlplane.v1.PlatformCommandService.SetScheduleEnabled:input_type -> controlplane.v1.SetScheduleEnabledRequest
+	658,  // 1941: controlplane.v1.PlatformCommandService.ArchiveSchedule:input_type -> controlplane.v1.ArchiveScheduleRequest
+	892,  // 1942: controlplane.v1.PlatformCommandService.DeleteSchedule:input_type -> controlplane.v1.DeleteScheduleRequest
+	865,  // 1943: controlplane.v1.PlatformCommandService.CreateProviderAccount:input_type -> controlplane.v1.CreateProviderAccountRequest
+	867,  // 1944: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:input_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationRequest
+	869,  // 1945: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:input_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyRequest
+	871,  // 1946: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:input_type -> controlplane.v1.RefreshProviderAccountAuthorizationRequest
+	873,  // 1947: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:input_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationRequest
+	875,  // 1948: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:input_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeRequest
+	877,  // 1949: controlplane.v1.PlatformCommandService.RevokeProviderAccount:input_type -> controlplane.v1.RevokeProviderAccountRequest
+	879,  // 1950: controlplane.v1.PlatformCommandService.DeleteProviderAccount:input_type -> controlplane.v1.DeleteProviderAccountRequest
+	881,  // 1951: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:input_type -> controlplane.v1.CancelProviderAccountQueuedWorkRequest
+	886,  // 1952: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:input_type -> controlplane.v1.SetProviderAccountEnabledRequest
+	884,  // 1953: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:input_type -> controlplane.v1.SetProviderAccountConcurrencyRequest
+	427,  // 1954: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:input_type -> controlplane.v1.CreateIntegrationConnectionRequest
+	429,  // 1955: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:input_type -> controlplane.v1.UpdateIntegrationConnectionRequest
+	431,  // 1956: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:input_type -> controlplane.v1.DeleteIntegrationConnectionRequest
+	433,  // 1957: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:input_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialRequest
+	435,  // 1958: controlplane.v1.PlatformCommandService.TestIntegrationConnection:input_type -> controlplane.v1.TestIntegrationConnectionRequest
+	437,  // 1959: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:input_type -> controlplane.v1.SetIntegrationConnectionEnabledRequest
+	439,  // 1960: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:input_type -> controlplane.v1.ChangeIntegrationGrantRequest
+	441,  // 1961: controlplane.v1.PlatformCommandService.ChangeSystemAssistantIntegrationGrant:input_type -> controlplane.v1.ChangeSystemAssistantIntegrationGrantRequest
+	746,  // 1962: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:input_type -> controlplane.v1.PublishAgentRuntimeConfigurationRequest
+	748,  // 1963: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:input_type -> controlplane.v1.CreateConfigOverlayDraftRequest
+	750,  // 1964: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:input_type -> controlplane.v1.ValidateConfigOverlayDraftRequest
+	752,  // 1965: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:input_type -> controlplane.v1.PublishConfigOverlayDraftRequest
+	754,  // 1966: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:input_type -> controlplane.v1.RollbackConfigOverlayRequest
+	756,  // 1967: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:input_type -> controlplane.v1.CreateRuntimeEnvironmentSetRequest
+	774,  // 1968: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:input_type -> controlplane.v1.PublishRuntimeEnvironmentVersionRequest
+	776,  // 1969: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:input_type -> controlplane.v1.RollbackRuntimeEnvironmentRequest
+	829,  // 1970: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:input_type -> controlplane.v1.SetRuntimeEnvironmentEnabledRequest
+	831,  // 1971: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:input_type -> controlplane.v1.DeleteRuntimeEnvironmentRequest
+	778,  // 1972: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:input_type -> controlplane.v1.BindAgentRuntimeEnvironmentRequest
+	847,  // 1973: controlplane.v1.PlatformCommandService.PromoteRoleImage:input_type -> controlplane.v1.PromoteRoleImageRequest
+	722,  // 1974: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:input_type -> controlplane.v1.PrepareCreateRuntimeSecretRequest
+	724,  // 1975: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:input_type -> controlplane.v1.PrepareRotateRuntimeSecretRequest
+	726,  // 1976: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:input_type -> controlplane.v1.PrepareRevealRuntimeSecretRequest
+	728,  // 1977: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:input_type -> controlplane.v1.PrepareRevokeRuntimeSecretRequest
+	935,  // 1978: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:input_type -> controlplane.v1.CreatePromptTemplateDraftRequest
+	937,  // 1979: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:input_type -> controlplane.v1.ValidatePromptTemplateDraftRequest
+	939,  // 1980: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:input_type -> controlplane.v1.PublishPromptTemplateDraftRequest
+	941,  // 1981: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:input_type -> controlplane.v1.RebindPromptTemplateConsumersRequest
+	943,  // 1982: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:input_type -> controlplane.v1.CreateRoleImageRevisionDraftRequest
+	945,  // 1983: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:input_type -> controlplane.v1.ValidateRoleImageRevisionDraftRequest
+	947,  // 1984: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:input_type -> controlplane.v1.PublishRoleImageRevisionDraftRequest
+	949,  // 1985: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:input_type -> controlplane.v1.RebindRoleImageConsumersRequest
+	963,  // 1986: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:input_type -> controlplane.v1.PrepareRoleImageImpactPlanRequest
+	955,  // 1987: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:input_type -> controlplane.v1.PrepareEnvironmentDraftImpactRequest
+	957,  // 1988: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:input_type -> controlplane.v1.PrepareInstructionsImpactRequest
+	959,  // 1989: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:input_type -> controlplane.v1.PreparePromptTemplateImpactRequest
+	967,  // 1990: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:input_type -> controlplane.v1.CreateIntegrationDefinitionDraftRequest
+	969,  // 1991: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:input_type -> controlplane.v1.ValidateIntegrationDefinitionDraftRequest
+	971,  // 1992: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:input_type -> controlplane.v1.PublishIntegrationDefinitionDraftRequest
+	973,  // 1993: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:input_type -> controlplane.v1.RebindIntegrationDefinitionConsumersRequest
+	975,  // 1994: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:input_type -> controlplane.v1.CreateSystemSTTConfigurationDraftRequest
+	977,  // 1995: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:input_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftRequest
+	979,  // 1996: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:input_type -> controlplane.v1.PublishSystemSTTConfigurationDraftRequest
+	981,  // 1997: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:input_type -> controlplane.v1.RebindSystemSTTConsumersRequest
+	983,  // 1998: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:input_type -> controlplane.v1.DetachGitManagedConfigurationRequest
+	985,  // 1999: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:input_type -> controlplane.v1.CopyGitManagedConfigurationRequest
+	919,  // 2000: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:input_type -> controlplane.v1.CopyRoleImageConfigurationRequest
+	922,  // 2001: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:input_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationRequest
+	924,  // 2002: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:input_type -> controlplane.v1.ArchiveRoleImageConfigurationRequest
+	926,  // 2003: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:input_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationRequest
+	1151, // 2004: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:input_type -> controlplane.v1.ConfigureRoleImageGitSourceRequest
+	1153, // 2005: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:input_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceRequest
+	1155, // 2006: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:input_type -> controlplane.v1.RefreshRoleImageGitSourceRequest
+	1157, // 2007: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:input_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceRequest
+	1171, // 2008: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:input_type -> controlplane.v1.PrepareRoleImageGitWriteBackRequest
+	1173, // 2009: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:input_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackRequest
+	1175, // 2010: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:input_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackRequest
+	1177, // 2011: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:input_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackRequest
+	1179, // 2012: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:input_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackRequest
+	1187, // 2013: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkRequest
+	1189, // 2014: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkRequest
+	1191, // 2015: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectRequest
+	1193, // 2016: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:input_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectRequest
+	1195, // 2017: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:input_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkRequest
+	1161, // 2018: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:input_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkRequest
+	1163, // 2019: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:input_type -> controlplane.v1.RenewManagedConfigurationSourceWorkRequest
+	1165, // 2020: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:input_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkRequest
+	1167, // 2021: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:input_type -> controlplane.v1.FailManagedConfigurationSourceWorkRequest
+	698,  // 2022: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessRequest
+	700,  // 2023: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationRequest
+	702,  // 2024: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:input_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationRequest
+	704,  // 2025: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:input_type -> controlplane.v1.FailRuntimeSecretDraftOperationRequest
+	706,  // 2026: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkRequest
+	708,  // 2027: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationRequest
+	710,  // 2028: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:input_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupRequest
+	1116, // 2029: controlplane.v1.ProviderCredentialRenewalWorkService.CheckProviderCredentialRenewalWorkReadiness:input_type -> controlplane.v1.CheckProviderCredentialRenewalWorkReadinessRequest
+	1118, // 2030: controlplane.v1.ProviderCredentialRenewalWorkService.AuthorizeProviderCredentialRenewal:input_type -> controlplane.v1.AuthorizeProviderCredentialRenewalRequest
+	1120, // 2031: controlplane.v1.ProviderCredentialRenewalWorkService.ValidateProviderCredentialRenewalObservation:input_type -> controlplane.v1.ValidateProviderCredentialRenewalObservationRequest
+	731,  // 2032: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:input_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessRequest
+	1141, // 2033: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:input_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessRequest
+	733,  // 2034: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:input_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkRequest
+	736,  // 2035: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:input_type -> controlplane.v1.ConsumeRuntimeSecretOperationRequest
+	740,  // 2036: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:input_type -> controlplane.v1.CompleteRuntimeSecretOperationRequest
+	742,  // 2037: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:input_type -> controlplane.v1.FailRuntimeSecretOperationRequest
+	744,  // 2038: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:input_type -> controlplane.v1.RecoverRuntimeSecretMaterializationRequest
+	1143, // 2039: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:input_type -> controlplane.v1.ResolveRuntimeCredentialProjectionRequest
+	1145, // 2040: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:input_type -> controlplane.v1.ValidateRuntimeCredentialProjectionRequest
+	1147, // 2041: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:input_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionRequest
+	1214, // 2042: controlplane.v1.RuntimeSecretWorkService.ResolveSSHComposeCredentialProjection:input_type -> controlplane.v1.ResolveSSHComposeCredentialProjectionRequest
+	448,  // 2043: controlplane.v1.SystemAssistantService.GetSystemAssistant:input_type -> controlplane.v1.GetSystemAssistantRequest
+	450,  // 2044: controlplane.v1.SystemAssistantService.CreateProjectAssistant:input_type -> controlplane.v1.CreateProjectAssistantRequest
+	452,  // 2045: controlplane.v1.SystemAssistantService.GetProjectAssistant:input_type -> controlplane.v1.GetProjectAssistantRequest
+	454,  // 2046: controlplane.v1.SystemAssistantService.ListAssistantConversations:input_type -> controlplane.v1.ListAssistantConversationsRequest
+	456,  // 2047: controlplane.v1.SystemAssistantService.CreateAssistantConversation:input_type -> controlplane.v1.CreateAssistantConversationRequest
+	466,  // 2048: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:input_type -> controlplane.v1.UpdateAssistantConversationTitleRequest
+	458,  // 2049: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:input_type -> controlplane.v1.ArchiveAssistantConversationRequest
+	460,  // 2050: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:input_type -> controlplane.v1.RestoreAssistantConversationRequest
+	462,  // 2051: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:input_type -> controlplane.v1.PurgeAssistantConversationRequest
+	464,  // 2052: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:input_type -> controlplane.v1.MoveAssistantConversationToProjectRequest
+	468,  // 2053: controlplane.v1.SystemAssistantService.AddAssistantTurn:input_type -> controlplane.v1.AddAssistantTurnRequest
+	470,  // 2054: controlplane.v1.SystemAssistantService.CancelAssistantTurn:input_type -> controlplane.v1.CancelAssistantTurnRequest
+	472,  // 2055: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:input_type -> controlplane.v1.UpdateAssistantPlanDraftRequest
+	474,  // 2056: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:input_type -> controlplane.v1.ValidateAssistantPlanRequest
+	476,  // 2057: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:input_type -> controlplane.v1.ApplyAssistantPlanRequest
+	478,  // 2058: controlplane.v1.SystemAssistantService.RejectAssistantPlan:input_type -> controlplane.v1.RejectAssistantPlanRequest
+	480,  // 2059: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:input_type -> controlplane.v1.UpdateAssistantOwnerInstructionsRequest
+	482,  // 2060: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:input_type -> controlplane.v1.RecoverSystemAssistantRequest
+	1033, // 2061: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:input_type -> controlplane.v1.ReportEmailConfigurationReadbackRequest
+	1040, // 2062: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:input_type -> controlplane.v1.ResolveEmailAuthorizationRequest
+	1043, // 2063: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:input_type -> controlplane.v1.ReportEmailEffectReceiptRequest
+	1048, // 2064: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:input_type -> controlplane.v1.ResolveEmailReconciliationRequest
+	546,  // 2065: controlplane.v1.RuntimeWorkService.ClaimExecution:input_type -> controlplane.v1.ClaimExecutionRequest
+	931,  // 2066: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:input_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationRequest
+	549,  // 2067: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:input_type -> controlplane.v1.ReadExecutionArtifactRequest
+	551,  // 2068: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:input_type -> controlplane.v1.StreamExecutionArtifactRequest
+	510,  // 2069: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:input_type -> controlplane.v1.SearchExecutionFilesRequest
+	241,  // 2070: controlplane.v1.RuntimeWorkService.SearchAssistantResources:input_type -> controlplane.v1.SearchAssistantResourcesRequest
+	512,  // 2071: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:input_type -> controlplane.v1.GetExecutionFileMetadataRequest
+	514,  // 2072: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:input_type -> controlplane.v1.PreviewExecutionFileRequest
+	516,  // 2073: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:input_type -> controlplane.v1.GetExecutionFileManifestRequest
+	554,  // 2074: controlplane.v1.RuntimeWorkService.RenewExecution:input_type -> controlplane.v1.RenewExecutionRequest
+	556,  // 2075: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:input_type -> controlplane.v1.ReportExecutionProgressRequest
+	1135, // 2076: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:input_type -> controlplane.v1.CommitProviderCredentialRefreshRequest
+	559,  // 2077: controlplane.v1.RuntimeWorkService.CompleteExecution:input_type -> controlplane.v1.CompleteExecutionRequest
+	561,  // 2078: controlplane.v1.RuntimeWorkService.ObserveWorkspace:input_type -> controlplane.v1.ObserveWorkspaceRequest
+	580,  // 2079: controlplane.v1.RuntimeWorkService.DelegateExecution:input_type -> controlplane.v1.DelegateExecutionRequest
+	582,  // 2080: controlplane.v1.RuntimeWorkService.LaunchWorkflowExecution:input_type -> controlplane.v1.LaunchWorkflowExecutionRequest
+	585,  // 2081: controlplane.v1.RuntimeWorkService.GetExecutionWorkflowCatalog:input_type -> controlplane.v1.GetExecutionWorkflowCatalogRequest
+	583,  // 2082: controlplane.v1.RuntimeWorkService.GetExecutionIntegrationOutcomes:input_type -> controlplane.v1.GetExecutionIntegrationOutcomesRequest
+	595,  // 2083: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:input_type -> controlplane.v1.ProposeAssistantPlanRequest
+	597,  // 2084: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:input_type -> controlplane.v1.ProposeAssistantMetadataRequest
+	599,  // 2085: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:input_type -> controlplane.v1.ProposeRunMetadataRequest
+	601,  // 2086: controlplane.v1.RuntimeWorkService.RecordRunToolCall:input_type -> controlplane.v1.RecordRunToolCallRequest
+	603,  // 2087: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:input_type -> controlplane.v1.ReconcileWarmRuntimeRequest
+	605,  // 2088: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:input_type -> controlplane.v1.ReportWarmRuntimeRequest
+	608,  // 2089: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:input_type -> controlplane.v1.ClaimDueSchedulesRequest
+	612,  // 2090: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:input_type -> controlplane.v1.RenewScheduleOccurrenceRequest
+	610,  // 2091: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:input_type -> controlplane.v1.MaterializeScheduleOccurrenceRequest
+	614,  // 2092: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:input_type -> controlplane.v1.FailScheduleOccurrenceRequest
+	621,  // 2093: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:input_type -> controlplane.v1.ClaimIntegrationConnectionTestsRequest
+	933,  // 2094: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:input_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationRequest
+	623,  // 2095: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:input_type -> controlplane.v1.CompleteIntegrationConnectionTestRequest
+	625,  // 2096: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:input_type -> controlplane.v1.ResolveIntegrationInvocationRequest
+	630,  // 2097: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:input_type -> controlplane.v1.ClaimIntegrationInvocationsRequest
+	628,  // 2098: controlplane.v1.RuntimeWorkService.ClaimSSHComposeInvocations:input_type -> controlplane.v1.ClaimSSHComposeInvocationsRequest
+	1212, // 2099: controlplane.v1.RuntimeWorkService.RenewSSHComposeInvocation:input_type -> controlplane.v1.RenewSSHComposeInvocationRequest
+	632,  // 2100: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:input_type -> controlplane.v1.GetIntegrationInvocationRequest
+	635,  // 2101: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:input_type -> controlplane.v1.CompleteIntegrationInvocationRequest
+	566,  // 2102: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:input_type -> controlplane.v1.ClaimSessionArchiveTasksRequest
+	568,  // 2103: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:input_type -> controlplane.v1.RenewSessionArchiveTaskRequest
+	570,  // 2104: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:input_type -> controlplane.v1.CompleteSessionSnapshotRequest
+	571,  // 2105: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:input_type -> controlplane.v1.CompleteSessionRestoreRequest
+	572,  // 2106: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:input_type -> controlplane.v1.CompleteSessionPVCDeletionRequest
+	573,  // 2107: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:input_type -> controlplane.v1.CompleteSessionObjectDeletionRequest
+	574,  // 2108: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:input_type -> controlplane.v1.FailSessionArchiveTaskRequest
+	638,  // 2109: controlplane.v1.InteractionWorkService.ListInteractionSources:input_type -> controlplane.v1.ListInteractionSourcesRequest
+	641,  // 2110: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:input_type -> controlplane.v1.ClaimInteractionDeliveriesRequest
+	643,  // 2111: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:input_type -> controlplane.v1.CompleteInteractionDeliveryRequest
+	645,  // 2112: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:input_type -> controlplane.v1.AcceptInteractionMessageRequest
+	1112, // 2113: controlplane.v1.ProviderCredentialMaterializerService.RenewManagedProviderCredential:input_type -> controlplane.v1.RenewManagedProviderCredentialRequest
+	1114, // 2114: controlplane.v1.ProviderCredentialMaterializerService.ObserveManagedProviderCredentialRenewal:input_type -> controlplane.v1.ObserveManagedProviderCredentialRenewalRequest
+	1122, // 2115: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:input_type -> controlplane.v1.ObserveProviderModelCatalogRequest
+	1109, // 2116: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:input_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessRequest
+	1125, // 2117: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest
+	1129, // 2118: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationRequest
+	1131, // 2119: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyRequest
+	1133, // 2120: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationRequest
+	1138, // 2121: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:input_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialRequest
+	1234, // 2122: controlplane.v1.PersonalIntegrationCredentialService.ListPersonalIntegrationConnections:input_type -> controlplane.v1.ListPersonalIntegrationConnectionsRequest
+	1223, // 2123: controlplane.v1.PersonalIntegrationCredentialService.GetPersonalIntegrationCredential:input_type -> controlplane.v1.GetPersonalIntegrationCredentialRequest
+	1225, // 2124: controlplane.v1.PersonalIntegrationCredentialService.CreatePersonalIntegrationCredential:input_type -> controlplane.v1.CreatePersonalIntegrationCredentialRequest
+	1227, // 2125: controlplane.v1.PersonalIntegrationCredentialService.ConfigurePersonalIntegrationCredential:input_type -> controlplane.v1.ConfigurePersonalIntegrationCredentialRequest
+	1229, // 2126: controlplane.v1.PersonalIntegrationCredentialService.RevokePersonalIntegrationCredential:input_type -> controlplane.v1.RevokePersonalIntegrationCredentialRequest
+	1231, // 2127: controlplane.v1.PersonalIntegrationCredentialService.SetIntegrationCredentialPolicy:input_type -> controlplane.v1.SetIntegrationCredentialPolicyRequest
+	1236, // 2128: controlplane.v1.PersonalIntegrationCredentialService.TestPersonalIntegrationCredential:input_type -> controlplane.v1.TestPersonalIntegrationCredentialRequest
+	1238, // 2129: controlplane.v1.PersonalIntegrationCredentialService.ClaimPersonalIntegrationCredentialTests:input_type -> controlplane.v1.ClaimPersonalIntegrationCredentialTestsRequest
+	1240, // 2130: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationCredentialProbe:input_type -> controlplane.v1.BeginPersonalIntegrationCredentialProbeRequest
+	1242, // 2131: controlplane.v1.PersonalIntegrationCredentialService.CompletePersonalIntegrationCredentialTest:input_type -> controlplane.v1.CompletePersonalIntegrationCredentialTestRequest
+	1220, // 2132: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationInvocation:input_type -> controlplane.v1.BeginPersonalIntegrationInvocationRequest
+	1010, // 2133: controlplane.v1.PlatformQueryService.ListEmailMailboxConfigurations:output_type -> controlplane.v1.ListEmailMailboxConfigurationsResponse
+	1012, // 2134: controlplane.v1.PlatformQueryService.GetEmailMailboxConfiguration:output_type -> controlplane.v1.GetEmailMailboxConfigurationResponse
+	1014, // 2135: controlplane.v1.PlatformQueryService.ListEmailMailboxCredentials:output_type -> controlplane.v1.ListEmailMailboxCredentialsResponse
+	1016, // 2136: controlplane.v1.PlatformQueryService.GetEmailMailboxCredentialReceipt:output_type -> controlplane.v1.GetEmailMailboxCredentialReceiptResponse
+	1018, // 2137: controlplane.v1.PlatformQueryService.PreviewEmailMailboxConfiguration:output_type -> controlplane.v1.PreviewEmailMailboxConfigurationResponse
+	798,  // 2138: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraftImpact:output_type -> controlplane.v1.GetRuntimeSecretDraftImpactResponse
+	687,  // 2139: controlplane.v1.PlatformQueryService.GetRuntimeSecretDraft:output_type -> controlplane.v1.GetRuntimeSecretDraftResponse
+	494,  // 2140: controlplane.v1.PlatformQueryService.GetRuntimeRevisionDiff:output_type -> controlplane.v1.GetRuntimeRevisionDiffResponse
+	1051, // 2141: controlplane.v1.PlatformQueryService.GetEmailEffectReceipt:output_type -> controlplane.v1.GetEmailEffectReceiptResponse
+	1057, // 2142: controlplane.v1.PlatformQueryService.ListSkillBundles:output_type -> controlplane.v1.ListSkillBundlesResponse
+	1059, // 2143: controlplane.v1.PlatformQueryService.GetSkillBundle:output_type -> controlplane.v1.GetSkillBundleResponse
+	1061, // 2144: controlplane.v1.PlatformQueryService.ListSkillBundleRevisions:output_type -> controlplane.v1.ListSkillBundleRevisionsResponse
+	1063, // 2145: controlplane.v1.PlatformQueryService.ListMemoryRecords:output_type -> controlplane.v1.ListMemoryRecordsResponse
+	1065, // 2146: controlplane.v1.PlatformQueryService.GetMemoryRecord:output_type -> controlplane.v1.GetMemoryRecordResponse
+	1067, // 2147: controlplane.v1.PlatformQueryService.ListMemoryRecordRevisions:output_type -> controlplane.v1.ListMemoryRecordRevisionsResponse
+	229,  // 2148: controlplane.v1.PlatformQueryService.GetBootstrapState:output_type -> controlplane.v1.GetBootstrapStateResponse
+	231,  // 2149: controlplane.v1.PlatformQueryService.GetPlatformEventCursor:output_type -> controlplane.v1.GetPlatformEventCursorResponse
+	233,  // 2150: controlplane.v1.PlatformQueryService.GetOverview:output_type -> controlplane.v1.GetOverviewResponse
+	235,  // 2151: controlplane.v1.PlatformQueryService.ListPlatformCapabilities:output_type -> controlplane.v1.ListPlatformCapabilitiesResponse
+	237,  // 2152: controlplane.v1.PlatformQueryService.ListRuntimeSelections:output_type -> controlplane.v1.ListRuntimeSelectionsResponse
+	240,  // 2153: controlplane.v1.PlatformQueryService.SearchPlatform:output_type -> controlplane.v1.SearchPlatformResponse
+	259,  // 2154: controlplane.v1.PlatformQueryService.ListVFSNodes:output_type -> controlplane.v1.ListVFSNodesResponse
+	261,  // 2155: controlplane.v1.PlatformQueryService.SearchVFS:output_type -> controlplane.v1.SearchVFSResponse
+	263,  // 2156: controlplane.v1.PlatformQueryService.ListProjects:output_type -> controlplane.v1.ListProjectsResponse
+	265,  // 2157: controlplane.v1.PlatformQueryService.ListTrashedProjects:output_type -> controlplane.v1.ListTrashedProjectsResponse
+	280,  // 2158: controlplane.v1.PlatformQueryService.GetProjectPurgeRecovery:output_type -> controlplane.v1.GetProjectPurgeRecoveryResponse
+	267,  // 2159: controlplane.v1.PlatformQueryService.GetProject:output_type -> controlplane.v1.GetProjectResponse
+	284,  // 2160: controlplane.v1.PlatformQueryService.ListPlatformMemberships:output_type -> controlplane.v1.ListPlatformMembershipsResponse
+	286,  // 2161: controlplane.v1.PlatformQueryService.ListPlatformMembershipCandidates:output_type -> controlplane.v1.ListPlatformMembershipCandidatesResponse
+	294,  // 2162: controlplane.v1.PlatformQueryService.ListProjectMemberships:output_type -> controlplane.v1.ListProjectMembershipsResponse
+	296,  // 2163: controlplane.v1.PlatformQueryService.ListProjectMembershipCandidates:output_type -> controlplane.v1.ListProjectMembershipCandidatesResponse
+	304,  // 2164: controlplane.v1.PlatformQueryService.ListAgents:output_type -> controlplane.v1.ListAgentsResponse
+	306,  // 2165: controlplane.v1.PlatformQueryService.GetAgent:output_type -> controlplane.v1.GetAgentResponse
+	655,  // 2166: controlplane.v1.PlatformQueryService.ListAgentInstructionVersions:output_type -> controlplane.v1.ListAgentInstructionVersionsResponse
+	328,  // 2167: controlplane.v1.PlatformQueryService.ListWorkflows:output_type -> controlplane.v1.ListWorkflowsResponse
+	330,  // 2168: controlplane.v1.PlatformQueryService.GetWorkflow:output_type -> controlplane.v1.GetWorkflowResponse
+	342,  // 2169: controlplane.v1.PlatformQueryService.ListRuns:output_type -> controlplane.v1.ListRunsResponse
+	344,  // 2170: controlplane.v1.PlatformQueryService.GetRun:output_type -> controlplane.v1.GetRunResponse
+	346,  // 2171: controlplane.v1.PlatformQueryService.GetRunGraph:output_type -> controlplane.v1.GetRunGraphResponse
+	348,  // 2172: controlplane.v1.PlatformQueryService.ListRunEvents:output_type -> controlplane.v1.ListRunEventsResponse
+	358,  // 2173: controlplane.v1.PlatformQueryService.ListOwnerGates:output_type -> controlplane.v1.ListOwnerGatesResponse
+	1248, // 2174: controlplane.v1.PlatformQueryService.ListIntegrationApprovalConsents:output_type -> controlplane.v1.ListIntegrationApprovalConsentsResponse
+	360,  // 2175: controlplane.v1.PlatformQueryService.GetOwnerGate:output_type -> controlplane.v1.GetOwnerGateResponse
+	365,  // 2176: controlplane.v1.PlatformQueryService.ListArtifacts:output_type -> controlplane.v1.ListArtifactsResponse
+	367,  // 2177: controlplane.v1.PlatformQueryService.GetArtifact:output_type -> controlplane.v1.GetArtifactResponse
+	193,  // 2178: controlplane.v1.PlatformQueryService.ListArtifactRevisions:output_type -> controlplane.v1.ListArtifactRevisionsResponse
+	195,  // 2179: controlplane.v1.PlatformQueryService.GetArtifactRevision:output_type -> controlplane.v1.GetArtifactRevisionResponse
+	897,  // 2180: controlplane.v1.PlatformQueryService.GetArtifactImpact:output_type -> controlplane.v1.GetArtifactImpactResponse
+	369,  // 2181: controlplane.v1.PlatformQueryService.GetAttachmentSet:output_type -> controlplane.v1.GetAttachmentSetResponse
+	400,  // 2182: controlplane.v1.PlatformQueryService.ListSchedules:output_type -> controlplane.v1.ListSchedulesResponse
+	657,  // 2183: controlplane.v1.PlatformQueryService.GetSchedule:output_type -> controlplane.v1.GetScheduleResponse
+	889,  // 2184: controlplane.v1.PlatformQueryService.ListScheduleRevisions:output_type -> controlplane.v1.ListScheduleRevisionsResponse
+	891,  // 2185: controlplane.v1.PlatformQueryService.ListScheduleRuns:output_type -> controlplane.v1.ListScheduleRunsResponse
+	619,  // 2186: controlplane.v1.PlatformQueryService.PreviewSchedule:output_type -> controlplane.v1.PreviewScheduleResponse
+	862,  // 2187: controlplane.v1.PlatformQueryService.ListProviderAccounts:output_type -> controlplane.v1.ListProviderAccountsResponse
+	864,  // 2188: controlplane.v1.PlatformQueryService.GetProviderAccount:output_type -> controlplane.v1.GetProviderAccountResponse
+	857,  // 2189: controlplane.v1.PlatformQueryService.ListProviderAccountBlockers:output_type -> controlplane.v1.ListProviderAccountBlockersResponse
+	408,  // 2190: controlplane.v1.PlatformQueryService.ListIntegrationDefinitions:output_type -> controlplane.v1.ListIntegrationDefinitionsResponse
+	410,  // 2191: controlplane.v1.PlatformQueryService.ListIntegrationConnections:output_type -> controlplane.v1.ListIntegrationConnectionsResponse
+	418,  // 2192: controlplane.v1.PlatformQueryService.ListIntegrationGrantConnectionCandidates:output_type -> controlplane.v1.ListIntegrationGrantConnectionCandidatesResponse
+	420,  // 2193: controlplane.v1.PlatformQueryService.ListIntegrationGrantProjectCandidates:output_type -> controlplane.v1.ListIntegrationGrantProjectCandidatesResponse
+	422,  // 2194: controlplane.v1.PlatformQueryService.ListIntegrationGrantRecipientCandidates:output_type -> controlplane.v1.ListIntegrationGrantRecipientCandidatesResponse
+	424,  // 2195: controlplane.v1.PlatformQueryService.ListIntegrationGrantCapabilityCandidates:output_type -> controlplane.v1.ListIntegrationGrantCapabilityCandidatesResponse
+	447,  // 2196: controlplane.v1.PlatformQueryService.GetSystemAssistantIntegrationGrantCandidates:output_type -> controlplane.v1.GetSystemAssistantIntegrationGrantCandidatesResponse
+	445,  // 2197: controlplane.v1.PlatformQueryService.GetProjectAssistantIntegrationGrantCandidates:output_type -> controlplane.v1.GetProjectAssistantIntegrationGrantCandidatesResponse
+	426,  // 2198: controlplane.v1.PlatformQueryService.GetIntegrationConnection:output_type -> controlplane.v1.GetIntegrationConnectionResponse
+	487,  // 2199: controlplane.v1.PlatformQueryService.GetAdministration:output_type -> controlplane.v1.GetAdministrationResponse
+	489,  // 2200: controlplane.v1.PlatformQueryService.ListAuditEvents:output_type -> controlplane.v1.ListAuditEventsResponse
+	661,  // 2201: controlplane.v1.PlatformQueryService.GetAgentRuntimeConfiguration:output_type -> controlplane.v1.GetAgentRuntimeConfigurationResponse
+	669,  // 2202: controlplane.v1.PlatformQueryService.GetAgentEffectiveCapabilities:output_type -> controlplane.v1.GetAgentEffectiveCapabilitiesResponse
+	665,  // 2203: controlplane.v1.PlatformQueryService.ListArtifactBindingTargets:output_type -> controlplane.v1.ListArtifactBindingTargetsResponse
+	667,  // 2204: controlplane.v1.PlatformQueryService.GetRunAttachmentEligibility:output_type -> controlplane.v1.GetRunAttachmentEligibilityResponse
+	671,  // 2205: controlplane.v1.PlatformQueryService.ListConfigOverlayRevisions:output_type -> controlplane.v1.ListConfigOverlayRevisionsResponse
+	673,  // 2206: controlplane.v1.PlatformQueryService.GetConfigOverlayRevision:output_type -> controlplane.v1.GetConfigOverlayRevisionResponse
+	675,  // 2207: controlplane.v1.PlatformQueryService.ListAgentRuntimeConfigurationVersions:output_type -> controlplane.v1.ListAgentRuntimeConfigurationVersionsResponse
+	677,  // 2208: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentSets:output_type -> controlplane.v1.ListRuntimeEnvironmentSetsResponse
+	679,  // 2209: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentSet:output_type -> controlplane.v1.GetRuntimeEnvironmentSetResponse
+	681,  // 2210: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentVersions:output_type -> controlplane.v1.ListRuntimeEnvironmentVersionsResponse
+	826,  // 2211: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentReadiness:output_type -> controlplane.v1.GetRuntimeEnvironmentReadinessResponse
+	828,  // 2212: controlplane.v1.PlatformQueryService.ListRuntimeEnvironmentAgents:output_type -> controlplane.v1.ListRuntimeEnvironmentAgentsResponse
+	683,  // 2213: controlplane.v1.PlatformQueryService.ListTemplateVariables:output_type -> controlplane.v1.ListTemplateVariablesResponse
+	839,  // 2214: controlplane.v1.PlatformQueryService.ListProviderDefinitions:output_type -> controlplane.v1.ListProviderDefinitionsResponse
+	842,  // 2215: controlplane.v1.PlatformQueryService.ListModelCapabilities:output_type -> controlplane.v1.ListModelCapabilitiesResponse
+	846,  // 2216: controlplane.v1.PlatformQueryService.ListRoleImageRecipeRevisions:output_type -> controlplane.v1.ListRoleImageRecipeRevisionsResponse
+	904,  // 2217: controlplane.v1.PlatformQueryService.ValidatePromptTemplate:output_type -> controlplane.v1.ValidatePromptTemplateResponse
+	910,  // 2218: controlplane.v1.PlatformQueryService.PreviewPromptTemplate:output_type -> controlplane.v1.PreviewPromptTemplateResponse
+	715,  // 2219: controlplane.v1.PlatformQueryService.ListRuntimeSecrets:output_type -> controlplane.v1.ListRuntimeSecretsResponse
+	717,  // 2220: controlplane.v1.PlatformQueryService.ListOrganizationRuntimeSecrets:output_type -> controlplane.v1.ListOrganizationRuntimeSecretsResponse
+	721,  // 2221: controlplane.v1.PlatformQueryService.GetRuntimeSecret:output_type -> controlplane.v1.GetRuntimeSecretResponse
+	990,  // 2222: controlplane.v1.PlatformQueryService.ListManagedConfigurationHistory:output_type -> controlplane.v1.ListManagedConfigurationHistoryResponse
+	989,  // 2223: controlplane.v1.PlatformQueryService.ListManagedConfigurations:output_type -> controlplane.v1.ListManagedConfigurationsResponse
+	992,  // 2224: controlplane.v1.PlatformQueryService.GetManagedConfigurationImpact:output_type -> controlplane.v1.GetManagedConfigurationImpactResponse
+	966,  // 2225: controlplane.v1.PlatformQueryService.GetRoleImageImpactPlan:output_type -> controlplane.v1.GetRoleImageImpactPlanResponse
+	962,  // 2226: controlplane.v1.PlatformQueryService.GetRevisionImpactPlan:output_type -> controlplane.v1.GetRevisionImpactPlanResponse
+	1182, // 2227: controlplane.v1.PlatformQueryService.GetManagedConfigurationGitWriteBack:output_type -> controlplane.v1.GetManagedConfigurationGitWriteBackResponse
+	1184, // 2228: controlplane.v1.PlatformQueryService.ListManagedConfigurationGitWriteBacks:output_type -> controlplane.v1.ListManagedConfigurationGitWriteBacksResponse
+	1107, // 2229: controlplane.v1.PlatformQueryService.GetSystemSTTConfiguration:output_type -> controlplane.v1.GetSystemSTTConfigurationResponse
+	760,  // 2230: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentDraft:output_type -> controlplane.v1.GetRuntimeEnvironmentDraftResponse
+	782,  // 2231: controlplane.v1.PlatformQueryService.GetRuntimeEnvironmentImpact:output_type -> controlplane.v1.GetRuntimeEnvironmentImpactResponse
+	801,  // 2232: controlplane.v1.PlatformQueryService.GetRuntimeSecretImpact:output_type -> controlplane.v1.GetRuntimeSecretImpactResponse
+	652,  // 2233: controlplane.v1.PlatformQueryService.ListInteractionIdentities:output_type -> controlplane.v1.ListInteractionIdentitiesResponse
+	1020, // 2234: controlplane.v1.PlatformCommandService.CreateEmailMailboxDraft:output_type -> controlplane.v1.CreateEmailMailboxDraftResponse
+	1022, // 2235: controlplane.v1.PlatformCommandService.SaveEmailMailboxDraft:output_type -> controlplane.v1.SaveEmailMailboxDraftResponse
+	1024, // 2236: controlplane.v1.PlatformCommandService.ValidateEmailMailboxDraft:output_type -> controlplane.v1.ValidateEmailMailboxDraftResponse
+	1026, // 2237: controlplane.v1.PlatformCommandService.PublishEmailMailboxDraft:output_type -> controlplane.v1.PublishEmailMailboxDraftResponse
+	1028, // 2238: controlplane.v1.PlatformCommandService.DiscardEmailMailboxDraft:output_type -> controlplane.v1.DiscardEmailMailboxDraftResponse
+	1030, // 2239: controlplane.v1.PlatformCommandService.BindEmailMailboxConfiguration:output_type -> controlplane.v1.BindEmailMailboxConfigurationResponse
+	1032, // 2240: controlplane.v1.PlatformCommandService.UnbindEmailMailboxConfiguration:output_type -> controlplane.v1.UnbindEmailMailboxConfigurationResponse
+	796,  // 2241: controlplane.v1.PlatformCommandService.PrepareRuntimeSecretDraftImpact:output_type -> controlplane.v1.PrepareRuntimeSecretDraftImpactResponse
+	689,  // 2242: controlplane.v1.PlatformCommandService.PrepareSaveRuntimeSecretDraft:output_type -> controlplane.v1.PrepareSaveRuntimeSecretDraftResponse
+	719,  // 2243: controlplane.v1.PlatformCommandService.PrepareOrganizationRuntimeSecretDraft:output_type -> controlplane.v1.PrepareOrganizationRuntimeSecretDraftResponse
+	691,  // 2244: controlplane.v1.PlatformCommandService.PrepareValidateRuntimeSecretDraft:output_type -> controlplane.v1.PrepareValidateRuntimeSecretDraftResponse
+	693,  // 2245: controlplane.v1.PlatformCommandService.PreparePublishRuntimeSecretDraft:output_type -> controlplane.v1.PreparePublishRuntimeSecretDraftResponse
+	695,  // 2246: controlplane.v1.PlatformCommandService.PrepareDiscardRuntimeSecretDraft:output_type -> controlplane.v1.PrepareDiscardRuntimeSecretDraftResponse
+	519,  // 2247: controlplane.v1.PlatformCommandService.SavePromptTemplateDraft:output_type -> controlplane.v1.SavePromptTemplateDraftResponse
+	521,  // 2248: controlplane.v1.PlatformCommandService.DiscardPromptTemplateDraft:output_type -> controlplane.v1.DiscardPromptTemplateDraftResponse
+	523,  // 2249: controlplane.v1.PlatformCommandService.SaveRoleImageRevisionDraft:output_type -> controlplane.v1.SaveRoleImageRevisionDraftResponse
+	525,  // 2250: controlplane.v1.PlatformCommandService.DiscardRoleImageRevisionDraft:output_type -> controlplane.v1.DiscardRoleImageRevisionDraftResponse
+	527,  // 2251: controlplane.v1.PlatformCommandService.SaveIntegrationDefinitionDraft:output_type -> controlplane.v1.SaveIntegrationDefinitionDraftResponse
+	529,  // 2252: controlplane.v1.PlatformCommandService.DiscardIntegrationDefinitionDraft:output_type -> controlplane.v1.DiscardIntegrationDefinitionDraftResponse
+	531,  // 2253: controlplane.v1.PlatformCommandService.SaveSystemSTTConfigurationDraft:output_type -> controlplane.v1.SaveSystemSTTConfigurationDraftResponse
+	533,  // 2254: controlplane.v1.PlatformCommandService.DiscardSystemSTTConfigurationDraft:output_type -> controlplane.v1.DiscardSystemSTTConfigurationDraftResponse
+	1047, // 2255: controlplane.v1.PlatformCommandService.ReconcileEmailEffect:output_type -> controlplane.v1.ReconcileEmailEffectResponse
+	1037, // 2256: controlplane.v1.PlatformCommandService.ConfigureEmailMailboxCredential:output_type -> controlplane.v1.ConfigureEmailMailboxCredentialResponse
+	1090, // 2257: controlplane.v1.PlatformCommandService.CreateSkillBundleDraft:output_type -> controlplane.v1.CreateSkillBundleDraftResponse
+	1091, // 2258: controlplane.v1.PlatformCommandService.SaveSkillBundleDraft:output_type -> controlplane.v1.SaveSkillBundleDraftResponse
+	1092, // 2259: controlplane.v1.PlatformCommandService.ValidateSkillBundleDraft:output_type -> controlplane.v1.ValidateSkillBundleDraftResponse
+	1093, // 2260: controlplane.v1.PlatformCommandService.ReviewSkillBundleDraft:output_type -> controlplane.v1.ReviewSkillBundleDraftResponse
+	1094, // 2261: controlplane.v1.PlatformCommandService.PublishSkillBundleDraft:output_type -> controlplane.v1.PublishSkillBundleDraftResponse
+	1095, // 2262: controlplane.v1.PlatformCommandService.DiscardSkillBundleDraft:output_type -> controlplane.v1.DiscardSkillBundleDraftResponse
+	1096, // 2263: controlplane.v1.PlatformCommandService.ArchiveSkillBundle:output_type -> controlplane.v1.ArchiveSkillBundleResponse
+	1097, // 2264: controlplane.v1.PlatformCommandService.RestoreSkillBundle:output_type -> controlplane.v1.RestoreSkillBundleResponse
+	1098, // 2265: controlplane.v1.PlatformCommandService.PurgeSkillBundle:output_type -> controlplane.v1.PurgeSkillBundleResponse
+	1080, // 2266: controlplane.v1.PlatformCommandService.BindAgentSkillBundle:output_type -> controlplane.v1.BindAgentSkillBundleResponse
+	1082, // 2267: controlplane.v1.PlatformCommandService.UnbindAgentSkillBundle:output_type -> controlplane.v1.UnbindAgentSkillBundleResponse
+	1099, // 2268: controlplane.v1.PlatformCommandService.CreateMemoryRecord:output_type -> controlplane.v1.CreateMemoryRecordResponse
+	1100, // 2269: controlplane.v1.PlatformCommandService.ReviseMemoryRecord:output_type -> controlplane.v1.ReviseMemoryRecordResponse
+	1101, // 2270: controlplane.v1.PlatformCommandService.ArchiveMemoryRecord:output_type -> controlplane.v1.ArchiveMemoryRecordResponse
+	1102, // 2271: controlplane.v1.PlatformCommandService.RestoreMemoryRecord:output_type -> controlplane.v1.RestoreMemoryRecordResponse
+	1103, // 2272: controlplane.v1.PlatformCommandService.PurgeMemoryRecord:output_type -> controlplane.v1.PurgeMemoryRecordResponse
+	1087, // 2273: controlplane.v1.PlatformCommandService.BindAgentMemoryRecord:output_type -> controlplane.v1.BindAgentMemoryRecordResponse
+	1089, // 2274: controlplane.v1.PlatformCommandService.UnbindAgentMemoryRecord:output_type -> controlplane.v1.UnbindAgentMemoryRecordResponse
+	762,  // 2275: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateRuntimeEnvironmentDraftResponse
+	764,  // 2276: controlplane.v1.PlatformCommandService.CreateOrganizationRuntimeEnvironmentDraft:output_type -> controlplane.v1.CreateOrganizationRuntimeEnvironmentDraftResponse
+	766,  // 2277: controlplane.v1.PlatformCommandService.SaveRuntimeEnvironmentDraft:output_type -> controlplane.v1.SaveRuntimeEnvironmentDraftResponse
+	768,  // 2278: controlplane.v1.PlatformCommandService.ValidateRuntimeEnvironmentDraft:output_type -> controlplane.v1.ValidateRuntimeEnvironmentDraftResponse
+	770,  // 2279: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentDraft:output_type -> controlplane.v1.PublishRuntimeEnvironmentDraftResponse
+	772,  // 2280: controlplane.v1.PlatformCommandService.DiscardRuntimeEnvironmentDraft:output_type -> controlplane.v1.DiscardRuntimeEnvironmentDraftResponse
+	784,  // 2281: controlplane.v1.PlatformCommandService.RebindRuntimeEnvironment:output_type -> controlplane.v1.RebindRuntimeEnvironmentResponse
+	804,  // 2282: controlplane.v1.PlatformCommandService.RebindRuntimeSecret:output_type -> controlplane.v1.RebindRuntimeSecretResponse
+	648,  // 2283: controlplane.v1.PlatformCommandService.BindInteractionIdentity:output_type -> controlplane.v1.BindInteractionIdentityResponse
+	650,  // 2284: controlplane.v1.PlatformCommandService.RevokeInteractionIdentity:output_type -> controlplane.v1.RevokeInteractionIdentityResponse
+	485,  // 2285: controlplane.v1.PlatformCommandService.CompleteOnboarding:output_type -> controlplane.v1.CompleteOnboardingResponse
+	269,  // 2286: controlplane.v1.PlatformCommandService.CreateProject:output_type -> controlplane.v1.CreateProjectResponse
+	271,  // 2287: controlplane.v1.PlatformCommandService.UpdateProject:output_type -> controlplane.v1.UpdateProjectResponse
+	273,  // 2288: controlplane.v1.PlatformCommandService.TrashProject:output_type -> controlplane.v1.TrashProjectResponse
+	275,  // 2289: controlplane.v1.PlatformCommandService.RestoreProject:output_type -> controlplane.v1.RestoreProjectResponse
+	277,  // 2290: controlplane.v1.PlatformCommandService.PurgeProject:output_type -> controlplane.v1.PurgeProjectResponse
+	282,  // 2291: controlplane.v1.PlatformCommandService.ResolveProjectPurgeRecovery:output_type -> controlplane.v1.ResolveProjectPurgeRecoveryResponse
+	288,  // 2292: controlplane.v1.PlatformCommandService.AddPlatformMembership:output_type -> controlplane.v1.AddPlatformMembershipResponse
+	290,  // 2293: controlplane.v1.PlatformCommandService.ChangePlatformMembership:output_type -> controlplane.v1.ChangePlatformMembershipResponse
+	292,  // 2294: controlplane.v1.PlatformCommandService.RemovePlatformMembership:output_type -> controlplane.v1.RemovePlatformMembershipResponse
+	298,  // 2295: controlplane.v1.PlatformCommandService.AddProjectMembership:output_type -> controlplane.v1.AddProjectMembershipResponse
+	300,  // 2296: controlplane.v1.PlatformCommandService.ChangeProjectMembership:output_type -> controlplane.v1.ChangeProjectMembershipResponse
+	302,  // 2297: controlplane.v1.PlatformCommandService.RemoveProjectMembership:output_type -> controlplane.v1.RemoveProjectMembershipResponse
+	308,  // 2298: controlplane.v1.PlatformCommandService.CreateAgent:output_type -> controlplane.v1.CreateAgentResponse
+	310,  // 2299: controlplane.v1.PlatformCommandService.UpdateAgent:output_type -> controlplane.v1.UpdateAgentResponse
+	312,  // 2300: controlplane.v1.PlatformCommandService.SetAgentEnabled:output_type -> controlplane.v1.SetAgentEnabledResponse
+	314,  // 2301: controlplane.v1.PlatformCommandService.ArchiveAgent:output_type -> controlplane.v1.ArchiveAgentResponse
+	899,  // 2302: controlplane.v1.PlatformCommandService.SetAgentAvatar:output_type -> controlplane.v1.SetAgentAvatarResponse
+	901,  // 2303: controlplane.v1.PlatformCommandService.RemoveAgentAvatar:output_type -> controlplane.v1.RemoveAgentAvatarResponse
+	316,  // 2304: controlplane.v1.PlatformCommandService.CreateInstructionDraft:output_type -> controlplane.v1.CreateInstructionDraftResponse
+	318,  // 2305: controlplane.v1.PlatformCommandService.ValidateInstructionDraft:output_type -> controlplane.v1.ValidateInstructionDraftResponse
+	320,  // 2306: controlplane.v1.PlatformCommandService.PublishInstructionDraft:output_type -> controlplane.v1.PublishInstructionDraftResponse
+	322,  // 2307: controlplane.v1.PlatformCommandService.RollbackInstructions:output_type -> controlplane.v1.RollbackInstructionsResponse
+	324,  // 2308: controlplane.v1.PlatformCommandService.ChangeAgentCapability:output_type -> controlplane.v1.ChangeAgentCapabilityResponse
+	326,  // 2309: controlplane.v1.PlatformCommandService.ChangeAgentIntegrationGrant:output_type -> controlplane.v1.ChangeAgentIntegrationGrantResponse
+	332,  // 2310: controlplane.v1.PlatformCommandService.CreateWorkflow:output_type -> controlplane.v1.CreateWorkflowResponse
+	334,  // 2311: controlplane.v1.PlatformCommandService.UpdateWorkflowDraft:output_type -> controlplane.v1.UpdateWorkflowDraftResponse
+	336,  // 2312: controlplane.v1.PlatformCommandService.ValidateWorkflowDraft:output_type -> controlplane.v1.ValidateWorkflowDraftResponse
+	338,  // 2313: controlplane.v1.PlatformCommandService.PublishWorkflowDraft:output_type -> controlplane.v1.PublishWorkflowDraftResponse
+	340,  // 2314: controlplane.v1.PlatformCommandService.ArchiveWorkflow:output_type -> controlplane.v1.ArchiveWorkflowResponse
+	350,  // 2315: controlplane.v1.PlatformCommandService.LaunchRun:output_type -> controlplane.v1.LaunchRunResponse
+	352,  // 2316: controlplane.v1.PlatformCommandService.AddSessionTurn:output_type -> controlplane.v1.AddSessionTurnResponse
+	354,  // 2317: controlplane.v1.PlatformCommandService.CancelRun:output_type -> controlplane.v1.CancelRunResponse
+	356,  // 2318: controlplane.v1.PlatformCommandService.RetryRun:output_type -> controlplane.v1.RetryRunResponse
+	363,  // 2319: controlplane.v1.PlatformCommandService.ResolveOwnerGate:output_type -> controlplane.v1.ResolveOwnerGateResponse
+	1250, // 2320: controlplane.v1.PlatformCommandService.RevokeIntegrationApprovalConsent:output_type -> controlplane.v1.RevokeIntegrationApprovalConsentResponse
+	386,  // 2321: controlplane.v1.PlatformCommandService.UploadAgentAvatar:output_type -> controlplane.v1.UploadAgentAvatarResponse
+	383,  // 2322: controlplane.v1.PlatformCommandService.UploadArtifact:output_type -> controlplane.v1.UploadArtifactResponse
+	388,  // 2323: controlplane.v1.PlatformCommandService.UploadOrganizationArtifact:output_type -> controlplane.v1.UploadOrganizationArtifactResponse
+	390,  // 2324: controlplane.v1.PlatformCommandService.DownloadArtifact:output_type -> controlplane.v1.DownloadArtifactResponse
+	197,  // 2325: controlplane.v1.PlatformCommandService.DownloadArtifactRevision:output_type -> controlplane.v1.DownloadArtifactRevisionResponse
+	392,  // 2326: controlplane.v1.PlatformCommandService.ChangeArtifactBinding:output_type -> controlplane.v1.ChangeArtifactBindingResponse
+	394,  // 2327: controlplane.v1.PlatformCommandService.DeleteArtifact:output_type -> controlplane.v1.DeleteArtifactResponse
+	396,  // 2328: controlplane.v1.PlatformCommandService.RestoreArtifact:output_type -> controlplane.v1.RestoreArtifactResponse
+	398,  // 2329: controlplane.v1.PlatformCommandService.PurgeArtifact:output_type -> controlplane.v1.PurgeArtifactResponse
+	371,  // 2330: controlplane.v1.PlatformCommandService.CreateAttachmentSetDraft:output_type -> controlplane.v1.CreateAttachmentSetDraftResponse
+	373,  // 2331: controlplane.v1.PlatformCommandService.CreateOrganizationAttachmentSetDraft:output_type -> controlplane.v1.CreateOrganizationAttachmentSetDraftResponse
+	375,  // 2332: controlplane.v1.PlatformCommandService.AddAttachmentSetItems:output_type -> controlplane.v1.AddAttachmentSetItemsResponse
+	377,  // 2333: controlplane.v1.PlatformCommandService.RemoveAttachmentSetItems:output_type -> controlplane.v1.RemoveAttachmentSetItemsResponse
+	379,  // 2334: controlplane.v1.PlatformCommandService.FinalizeAttachmentSet:output_type -> controlplane.v1.FinalizeAttachmentSetResponse
+	402,  // 2335: controlplane.v1.PlatformCommandService.CreateSchedule:output_type -> controlplane.v1.CreateScheduleResponse
+	404,  // 2336: controlplane.v1.PlatformCommandService.UpdateSchedule:output_type -> controlplane.v1.UpdateScheduleResponse
+	406,  // 2337: controlplane.v1.PlatformCommandService.SetScheduleEnabled:output_type -> controlplane.v1.SetScheduleEnabledResponse
+	659,  // 2338: controlplane.v1.PlatformCommandService.ArchiveSchedule:output_type -> controlplane.v1.ArchiveScheduleResponse
+	893,  // 2339: controlplane.v1.PlatformCommandService.DeleteSchedule:output_type -> controlplane.v1.DeleteScheduleResponse
+	866,  // 2340: controlplane.v1.PlatformCommandService.CreateProviderAccount:output_type -> controlplane.v1.CreateProviderAccountResponse
+	868,  // 2341: controlplane.v1.PlatformCommandService.StartProviderAccountDeviceAuthorization:output_type -> controlplane.v1.StartProviderAccountDeviceAuthorizationResponse
+	870,  // 2342: controlplane.v1.PlatformCommandService.AuthorizeProviderAccountAPIKey:output_type -> controlplane.v1.AuthorizeProviderAccountAPIKeyResponse
+	872,  // 2343: controlplane.v1.PlatformCommandService.RefreshProviderAccountAuthorization:output_type -> controlplane.v1.RefreshProviderAccountAuthorizationResponse
+	874,  // 2344: controlplane.v1.PlatformCommandService.VerifyProviderAccountDeviceAuthorization:output_type -> controlplane.v1.VerifyProviderAccountDeviceAuthorizationResponse
+	876,  // 2345: controlplane.v1.PlatformCommandService.ReauthorizeProviderAccountDeviceCode:output_type -> controlplane.v1.ReauthorizeProviderAccountDeviceCodeResponse
+	878,  // 2346: controlplane.v1.PlatformCommandService.RevokeProviderAccount:output_type -> controlplane.v1.RevokeProviderAccountResponse
+	880,  // 2347: controlplane.v1.PlatformCommandService.DeleteProviderAccount:output_type -> controlplane.v1.DeleteProviderAccountResponse
+	883,  // 2348: controlplane.v1.PlatformCommandService.CancelProviderAccountQueuedWork:output_type -> controlplane.v1.CancelProviderAccountQueuedWorkResponse
+	887,  // 2349: controlplane.v1.PlatformCommandService.SetProviderAccountEnabled:output_type -> controlplane.v1.SetProviderAccountEnabledResponse
+	885,  // 2350: controlplane.v1.PlatformCommandService.SetProviderAccountConcurrency:output_type -> controlplane.v1.SetProviderAccountConcurrencyResponse
+	428,  // 2351: controlplane.v1.PlatformCommandService.CreateIntegrationConnection:output_type -> controlplane.v1.CreateIntegrationConnectionResponse
+	430,  // 2352: controlplane.v1.PlatformCommandService.UpdateIntegrationConnection:output_type -> controlplane.v1.UpdateIntegrationConnectionResponse
+	432,  // 2353: controlplane.v1.PlatformCommandService.DeleteIntegrationConnection:output_type -> controlplane.v1.DeleteIntegrationConnectionResponse
+	434,  // 2354: controlplane.v1.PlatformCommandService.ConfigureIntegrationConnectionCredential:output_type -> controlplane.v1.ConfigureIntegrationConnectionCredentialResponse
+	436,  // 2355: controlplane.v1.PlatformCommandService.TestIntegrationConnection:output_type -> controlplane.v1.TestIntegrationConnectionResponse
+	438,  // 2356: controlplane.v1.PlatformCommandService.SetIntegrationConnectionEnabled:output_type -> controlplane.v1.SetIntegrationConnectionEnabledResponse
+	440,  // 2357: controlplane.v1.PlatformCommandService.ChangeIntegrationGrant:output_type -> controlplane.v1.ChangeIntegrationGrantResponse
+	442,  // 2358: controlplane.v1.PlatformCommandService.ChangeSystemAssistantIntegrationGrant:output_type -> controlplane.v1.ChangeSystemAssistantIntegrationGrantResponse
+	747,  // 2359: controlplane.v1.PlatformCommandService.PublishAgentRuntimeConfiguration:output_type -> controlplane.v1.PublishAgentRuntimeConfigurationResponse
+	749,  // 2360: controlplane.v1.PlatformCommandService.CreateConfigOverlayDraft:output_type -> controlplane.v1.CreateConfigOverlayDraftResponse
+	751,  // 2361: controlplane.v1.PlatformCommandService.ValidateConfigOverlayDraft:output_type -> controlplane.v1.ValidateConfigOverlayDraftResponse
+	753,  // 2362: controlplane.v1.PlatformCommandService.PublishConfigOverlayDraft:output_type -> controlplane.v1.PublishConfigOverlayDraftResponse
+	755,  // 2363: controlplane.v1.PlatformCommandService.RollbackConfigOverlay:output_type -> controlplane.v1.RollbackConfigOverlayResponse
+	773,  // 2364: controlplane.v1.PlatformCommandService.CreateRuntimeEnvironmentSet:output_type -> controlplane.v1.CreateRuntimeEnvironmentSetResponse
+	775,  // 2365: controlplane.v1.PlatformCommandService.PublishRuntimeEnvironmentVersion:output_type -> controlplane.v1.PublishRuntimeEnvironmentVersionResponse
+	777,  // 2366: controlplane.v1.PlatformCommandService.RollbackRuntimeEnvironment:output_type -> controlplane.v1.RollbackRuntimeEnvironmentResponse
+	830,  // 2367: controlplane.v1.PlatformCommandService.SetRuntimeEnvironmentEnabled:output_type -> controlplane.v1.SetRuntimeEnvironmentEnabledResponse
+	832,  // 2368: controlplane.v1.PlatformCommandService.DeleteRuntimeEnvironment:output_type -> controlplane.v1.DeleteRuntimeEnvironmentResponse
+	779,  // 2369: controlplane.v1.PlatformCommandService.BindAgentRuntimeEnvironment:output_type -> controlplane.v1.BindAgentRuntimeEnvironmentResponse
+	849,  // 2370: controlplane.v1.PlatformCommandService.PromoteRoleImage:output_type -> controlplane.v1.PromoteRoleImageResponse
+	723,  // 2371: controlplane.v1.PlatformCommandService.PrepareCreateRuntimeSecret:output_type -> controlplane.v1.PrepareCreateRuntimeSecretResponse
+	725,  // 2372: controlplane.v1.PlatformCommandService.PrepareRotateRuntimeSecret:output_type -> controlplane.v1.PrepareRotateRuntimeSecretResponse
+	727,  // 2373: controlplane.v1.PlatformCommandService.PrepareRevealRuntimeSecret:output_type -> controlplane.v1.PrepareRevealRuntimeSecretResponse
+	729,  // 2374: controlplane.v1.PlatformCommandService.PrepareRevokeRuntimeSecret:output_type -> controlplane.v1.PrepareRevokeRuntimeSecretResponse
+	936,  // 2375: controlplane.v1.PlatformCommandService.CreatePromptTemplateDraft:output_type -> controlplane.v1.CreatePromptTemplateDraftResponse
+	938,  // 2376: controlplane.v1.PlatformCommandService.ValidatePromptTemplateDraft:output_type -> controlplane.v1.ValidatePromptTemplateDraftResponse
+	940,  // 2377: controlplane.v1.PlatformCommandService.PublishPromptTemplateDraft:output_type -> controlplane.v1.PublishPromptTemplateDraftResponse
+	942,  // 2378: controlplane.v1.PlatformCommandService.RebindPromptTemplateConsumers:output_type -> controlplane.v1.RebindPromptTemplateConsumersResponse
+	944,  // 2379: controlplane.v1.PlatformCommandService.CreateRoleImageRevisionDraft:output_type -> controlplane.v1.CreateRoleImageRevisionDraftResponse
+	946,  // 2380: controlplane.v1.PlatformCommandService.ValidateRoleImageRevisionDraft:output_type -> controlplane.v1.ValidateRoleImageRevisionDraftResponse
+	948,  // 2381: controlplane.v1.PlatformCommandService.PublishRoleImageRevisionDraft:output_type -> controlplane.v1.PublishRoleImageRevisionDraftResponse
+	950,  // 2382: controlplane.v1.PlatformCommandService.RebindRoleImageConsumers:output_type -> controlplane.v1.RebindRoleImageConsumersResponse
+	964,  // 2383: controlplane.v1.PlatformCommandService.PrepareRoleImageImpactPlan:output_type -> controlplane.v1.PrepareRoleImageImpactPlanResponse
+	956,  // 2384: controlplane.v1.PlatformCommandService.PrepareEnvironmentDraftImpact:output_type -> controlplane.v1.PrepareEnvironmentDraftImpactResponse
+	958,  // 2385: controlplane.v1.PlatformCommandService.PrepareInstructionsImpact:output_type -> controlplane.v1.PrepareInstructionsImpactResponse
+	960,  // 2386: controlplane.v1.PlatformCommandService.PreparePromptTemplateImpact:output_type -> controlplane.v1.PreparePromptTemplateImpactResponse
+	968,  // 2387: controlplane.v1.PlatformCommandService.CreateIntegrationDefinitionDraft:output_type -> controlplane.v1.CreateIntegrationDefinitionDraftResponse
+	970,  // 2388: controlplane.v1.PlatformCommandService.ValidateIntegrationDefinitionDraft:output_type -> controlplane.v1.ValidateIntegrationDefinitionDraftResponse
+	972,  // 2389: controlplane.v1.PlatformCommandService.PublishIntegrationDefinitionDraft:output_type -> controlplane.v1.PublishIntegrationDefinitionDraftResponse
+	974,  // 2390: controlplane.v1.PlatformCommandService.RebindIntegrationDefinitionConsumers:output_type -> controlplane.v1.RebindIntegrationDefinitionConsumersResponse
+	976,  // 2391: controlplane.v1.PlatformCommandService.CreateSystemSTTConfigurationDraft:output_type -> controlplane.v1.CreateSystemSTTConfigurationDraftResponse
+	978,  // 2392: controlplane.v1.PlatformCommandService.ValidateSystemSTTConfigurationDraft:output_type -> controlplane.v1.ValidateSystemSTTConfigurationDraftResponse
+	980,  // 2393: controlplane.v1.PlatformCommandService.PublishSystemSTTConfigurationDraft:output_type -> controlplane.v1.PublishSystemSTTConfigurationDraftResponse
+	982,  // 2394: controlplane.v1.PlatformCommandService.RebindSystemSTTConsumers:output_type -> controlplane.v1.RebindSystemSTTConsumersResponse
+	984,  // 2395: controlplane.v1.PlatformCommandService.DetachGitManagedConfiguration:output_type -> controlplane.v1.DetachGitManagedConfigurationResponse
+	986,  // 2396: controlplane.v1.PlatformCommandService.CopyGitManagedConfiguration:output_type -> controlplane.v1.CopyGitManagedConfigurationResponse
+	920,  // 2397: controlplane.v1.PlatformCommandService.CopyRoleImageConfiguration:output_type -> controlplane.v1.CopyRoleImageConfigurationResponse
+	923,  // 2398: controlplane.v1.PlatformCommandService.CopyIntegrationDefinitionConfiguration:output_type -> controlplane.v1.CopyIntegrationDefinitionConfigurationResponse
+	925,  // 2399: controlplane.v1.PlatformCommandService.ArchiveRoleImageConfiguration:output_type -> controlplane.v1.ArchiveRoleImageConfigurationResponse
+	927,  // 2400: controlplane.v1.PlatformCommandService.ArchiveIntegrationDefinitionConfiguration:output_type -> controlplane.v1.ArchiveIntegrationDefinitionConfigurationResponse
+	1152, // 2401: controlplane.v1.PlatformCommandService.ConfigureRoleImageGitSource:output_type -> controlplane.v1.ConfigureRoleImageGitSourceResponse
+	1154, // 2402: controlplane.v1.PlatformCommandService.ConfigureIntegrationDefinitionGitSource:output_type -> controlplane.v1.ConfigureIntegrationDefinitionGitSourceResponse
+	1156, // 2403: controlplane.v1.PlatformCommandService.RefreshRoleImageGitSource:output_type -> controlplane.v1.RefreshRoleImageGitSourceResponse
+	1158, // 2404: controlplane.v1.PlatformCommandService.RefreshIntegrationDefinitionGitSource:output_type -> controlplane.v1.RefreshIntegrationDefinitionGitSourceResponse
+	1172, // 2405: controlplane.v1.PlatformCommandService.PrepareRoleImageGitWriteBack:output_type -> controlplane.v1.PrepareRoleImageGitWriteBackResponse
+	1174, // 2406: controlplane.v1.PlatformCommandService.PrepareIntegrationDefinitionGitWriteBack:output_type -> controlplane.v1.PrepareIntegrationDefinitionGitWriteBackResponse
+	1176, // 2407: controlplane.v1.PlatformCommandService.ApproveManagedConfigurationGitWriteBack:output_type -> controlplane.v1.ApproveManagedConfigurationGitWriteBackResponse
+	1178, // 2408: controlplane.v1.PlatformCommandService.RejectManagedConfigurationGitWriteBack:output_type -> controlplane.v1.RejectManagedConfigurationGitWriteBackResponse
+	1180, // 2409: controlplane.v1.PlatformCommandService.CancelManagedConfigurationGitWriteBack:output_type -> controlplane.v1.CancelManagedConfigurationGitWriteBackResponse
+	1188, // 2410: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.ClaimManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.ClaimManagedConfigurationGitWriteBackWorkResponse
+	1190, // 2411: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.RenewManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.RenewManagedConfigurationGitWriteBackWorkResponse
+	1192, // 2412: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.BeginManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.BeginManagedConfigurationGitWriteBackEffectResponse
+	1194, // 2413: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.CompleteManagedConfigurationGitWriteBackEffect:output_type -> controlplane.v1.CompleteManagedConfigurationGitWriteBackEffectResponse
+	1196, // 2414: controlplane.v1.ManagedConfigurationGitWriteBackWorkService.FailManagedConfigurationGitWriteBackWork:output_type -> controlplane.v1.FailManagedConfigurationGitWriteBackWorkResponse
+	1162, // 2415: controlplane.v1.ManagedConfigurationSourceWorkService.ClaimManagedConfigurationSourceWork:output_type -> controlplane.v1.ClaimManagedConfigurationSourceWorkResponse
+	1164, // 2416: controlplane.v1.ManagedConfigurationSourceWorkService.RenewManagedConfigurationSourceWork:output_type -> controlplane.v1.RenewManagedConfigurationSourceWorkResponse
+	1166, // 2417: controlplane.v1.ManagedConfigurationSourceWorkService.CompleteManagedConfigurationSourceWork:output_type -> controlplane.v1.CompleteManagedConfigurationSourceWorkResponse
+	1168, // 2418: controlplane.v1.ManagedConfigurationSourceWorkService.FailManagedConfigurationSourceWork:output_type -> controlplane.v1.FailManagedConfigurationSourceWorkResponse
+	699,  // 2419: controlplane.v1.RuntimeSecretDraftWorkService.CheckRuntimeSecretDraftWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretDraftWorkReadinessResponse
+	701,  // 2420: controlplane.v1.RuntimeSecretDraftWorkService.ConsumeRuntimeSecretDraftOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretDraftOperationResponse
+	703,  // 2421: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftOperation:output_type -> controlplane.v1.CompleteRuntimeSecretDraftOperationResponse
+	705,  // 2422: controlplane.v1.RuntimeSecretDraftWorkService.FailRuntimeSecretDraftOperation:output_type -> controlplane.v1.FailRuntimeSecretDraftOperationResponse
+	707,  // 2423: controlplane.v1.RuntimeSecretDraftWorkService.ListRuntimeSecretDraftRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretDraftRecoveryWorkResponse
+	709,  // 2424: controlplane.v1.RuntimeSecretDraftWorkService.RecoverRuntimeSecretDraftMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretDraftMaterializationResponse
+	711,  // 2425: controlplane.v1.RuntimeSecretDraftWorkService.CompleteRuntimeSecretDraftCleanup:output_type -> controlplane.v1.CompleteRuntimeSecretDraftCleanupResponse
+	1117, // 2426: controlplane.v1.ProviderCredentialRenewalWorkService.CheckProviderCredentialRenewalWorkReadiness:output_type -> controlplane.v1.CheckProviderCredentialRenewalWorkReadinessResponse
+	1119, // 2427: controlplane.v1.ProviderCredentialRenewalWorkService.AuthorizeProviderCredentialRenewal:output_type -> controlplane.v1.AuthorizeProviderCredentialRenewalResponse
+	1121, // 2428: controlplane.v1.ProviderCredentialRenewalWorkService.ValidateProviderCredentialRenewalObservation:output_type -> controlplane.v1.ValidateProviderCredentialRenewalObservationResponse
+	732,  // 2429: controlplane.v1.RuntimeSecretWorkService.CheckRuntimeSecretWorkReadiness:output_type -> controlplane.v1.CheckRuntimeSecretWorkReadinessResponse
+	1142, // 2430: controlplane.v1.RuntimeSecretWorkService.CheckCredentialProjectionWorkReadiness:output_type -> controlplane.v1.CheckCredentialProjectionWorkReadinessResponse
+	735,  // 2431: controlplane.v1.RuntimeSecretWorkService.ListRuntimeSecretRecoveryWork:output_type -> controlplane.v1.ListRuntimeSecretRecoveryWorkResponse
+	737,  // 2432: controlplane.v1.RuntimeSecretWorkService.ConsumeRuntimeSecretOperation:output_type -> controlplane.v1.ConsumeRuntimeSecretOperationResponse
+	741,  // 2433: controlplane.v1.RuntimeSecretWorkService.CompleteRuntimeSecretOperation:output_type -> controlplane.v1.CompleteRuntimeSecretOperationResponse
+	743,  // 2434: controlplane.v1.RuntimeSecretWorkService.FailRuntimeSecretOperation:output_type -> controlplane.v1.FailRuntimeSecretOperationResponse
+	745,  // 2435: controlplane.v1.RuntimeSecretWorkService.RecoverRuntimeSecretMaterialization:output_type -> controlplane.v1.RecoverRuntimeSecretMaterializationResponse
+	1144, // 2436: controlplane.v1.RuntimeSecretWorkService.ResolveRuntimeCredentialProjection:output_type -> controlplane.v1.ResolveRuntimeCredentialProjectionResponse
+	1146, // 2437: controlplane.v1.RuntimeSecretWorkService.ValidateRuntimeCredentialProjection:output_type -> controlplane.v1.ValidateRuntimeCredentialProjectionResponse
+	1148, // 2438: controlplane.v1.RuntimeSecretWorkService.ResolveTranscriptionCredentialProjection:output_type -> controlplane.v1.ResolveTranscriptionCredentialProjectionResponse
+	1215, // 2439: controlplane.v1.RuntimeSecretWorkService.ResolveSSHComposeCredentialProjection:output_type -> controlplane.v1.ResolveSSHComposeCredentialProjectionResponse
+	449,  // 2440: controlplane.v1.SystemAssistantService.GetSystemAssistant:output_type -> controlplane.v1.GetSystemAssistantResponse
+	451,  // 2441: controlplane.v1.SystemAssistantService.CreateProjectAssistant:output_type -> controlplane.v1.CreateProjectAssistantResponse
+	453,  // 2442: controlplane.v1.SystemAssistantService.GetProjectAssistant:output_type -> controlplane.v1.GetProjectAssistantResponse
+	455,  // 2443: controlplane.v1.SystemAssistantService.ListAssistantConversations:output_type -> controlplane.v1.ListAssistantConversationsResponse
+	457,  // 2444: controlplane.v1.SystemAssistantService.CreateAssistantConversation:output_type -> controlplane.v1.CreateAssistantConversationResponse
+	467,  // 2445: controlplane.v1.SystemAssistantService.UpdateAssistantConversationTitle:output_type -> controlplane.v1.UpdateAssistantConversationTitleResponse
+	459,  // 2446: controlplane.v1.SystemAssistantService.ArchiveAssistantConversation:output_type -> controlplane.v1.ArchiveAssistantConversationResponse
+	461,  // 2447: controlplane.v1.SystemAssistantService.RestoreAssistantConversation:output_type -> controlplane.v1.RestoreAssistantConversationResponse
+	463,  // 2448: controlplane.v1.SystemAssistantService.PurgeAssistantConversation:output_type -> controlplane.v1.PurgeAssistantConversationResponse
+	465,  // 2449: controlplane.v1.SystemAssistantService.MoveAssistantConversationToProject:output_type -> controlplane.v1.MoveAssistantConversationToProjectResponse
+	469,  // 2450: controlplane.v1.SystemAssistantService.AddAssistantTurn:output_type -> controlplane.v1.AddAssistantTurnResponse
+	471,  // 2451: controlplane.v1.SystemAssistantService.CancelAssistantTurn:output_type -> controlplane.v1.CancelAssistantTurnResponse
+	473,  // 2452: controlplane.v1.SystemAssistantService.UpdateAssistantPlanDraft:output_type -> controlplane.v1.UpdateAssistantPlanDraftResponse
+	475,  // 2453: controlplane.v1.SystemAssistantService.ValidateAssistantPlan:output_type -> controlplane.v1.ValidateAssistantPlanResponse
+	477,  // 2454: controlplane.v1.SystemAssistantService.ApplyAssistantPlan:output_type -> controlplane.v1.ApplyAssistantPlanResponse
+	479,  // 2455: controlplane.v1.SystemAssistantService.RejectAssistantPlan:output_type -> controlplane.v1.RejectAssistantPlanResponse
+	481,  // 2456: controlplane.v1.SystemAssistantService.UpdateAssistantOwnerInstructions:output_type -> controlplane.v1.UpdateAssistantOwnerInstructionsResponse
+	483,  // 2457: controlplane.v1.SystemAssistantService.RecoverSystemAssistant:output_type -> controlplane.v1.RecoverSystemAssistantResponse
+	1034, // 2458: controlplane.v1.RuntimeWorkService.ReportEmailConfigurationReadback:output_type -> controlplane.v1.ReportEmailConfigurationReadbackResponse
+	1041, // 2459: controlplane.v1.RuntimeWorkService.ResolveEmailAuthorization:output_type -> controlplane.v1.ResolveEmailAuthorizationResponse
+	1044, // 2460: controlplane.v1.RuntimeWorkService.ReportEmailEffectReceipt:output_type -> controlplane.v1.ReportEmailEffectReceiptResponse
+	1049, // 2461: controlplane.v1.RuntimeWorkService.ResolveEmailReconciliation:output_type -> controlplane.v1.ResolveEmailReconciliationResponse
+	548,  // 2462: controlplane.v1.RuntimeWorkService.ClaimExecution:output_type -> controlplane.v1.ClaimExecutionResponse
+	932,  // 2463: controlplane.v1.RuntimeWorkService.GetRuntimeEnvironmentRoleImageConfiguration:output_type -> controlplane.v1.GetRuntimeEnvironmentRoleImageConfigurationResponse
+	550,  // 2464: controlplane.v1.RuntimeWorkService.ReadExecutionArtifact:output_type -> controlplane.v1.ReadExecutionArtifactResponse
+	552,  // 2465: controlplane.v1.RuntimeWorkService.StreamExecutionArtifact:output_type -> controlplane.v1.StreamExecutionArtifactResponse
+	511,  // 2466: controlplane.v1.RuntimeWorkService.SearchExecutionFiles:output_type -> controlplane.v1.SearchExecutionFilesResponse
+	242,  // 2467: controlplane.v1.RuntimeWorkService.SearchAssistantResources:output_type -> controlplane.v1.SearchAssistantResourcesResponse
+	513,  // 2468: controlplane.v1.RuntimeWorkService.GetExecutionFileMetadata:output_type -> controlplane.v1.GetExecutionFileMetadataResponse
+	515,  // 2469: controlplane.v1.RuntimeWorkService.PreviewExecutionFile:output_type -> controlplane.v1.PreviewExecutionFileResponse
+	517,  // 2470: controlplane.v1.RuntimeWorkService.GetExecutionFileManifest:output_type -> controlplane.v1.GetExecutionFileManifestResponse
+	555,  // 2471: controlplane.v1.RuntimeWorkService.RenewExecution:output_type -> controlplane.v1.RenewExecutionResponse
+	557,  // 2472: controlplane.v1.RuntimeWorkService.ReportExecutionProgress:output_type -> controlplane.v1.ReportExecutionProgressResponse
+	1136, // 2473: controlplane.v1.RuntimeWorkService.CommitProviderCredentialRefresh:output_type -> controlplane.v1.CommitProviderCredentialRefreshResponse
+	560,  // 2474: controlplane.v1.RuntimeWorkService.CompleteExecution:output_type -> controlplane.v1.CompleteExecutionResponse
+	562,  // 2475: controlplane.v1.RuntimeWorkService.ObserveWorkspace:output_type -> controlplane.v1.ObserveWorkspaceResponse
+	581,  // 2476: controlplane.v1.RuntimeWorkService.DelegateExecution:output_type -> controlplane.v1.DelegateExecutionResponse
+	594,  // 2477: controlplane.v1.RuntimeWorkService.LaunchWorkflowExecution:output_type -> controlplane.v1.LaunchWorkflowExecutionResponse
+	593,  // 2478: controlplane.v1.RuntimeWorkService.GetExecutionWorkflowCatalog:output_type -> controlplane.v1.GetExecutionWorkflowCatalogResponse
+	584,  // 2479: controlplane.v1.RuntimeWorkService.GetExecutionIntegrationOutcomes:output_type -> controlplane.v1.GetExecutionIntegrationOutcomesResponse
+	596,  // 2480: controlplane.v1.RuntimeWorkService.ProposeAssistantPlan:output_type -> controlplane.v1.ProposeAssistantPlanResponse
+	598,  // 2481: controlplane.v1.RuntimeWorkService.ProposeAssistantMetadata:output_type -> controlplane.v1.ProposeAssistantMetadataResponse
+	600,  // 2482: controlplane.v1.RuntimeWorkService.ProposeRunMetadata:output_type -> controlplane.v1.ProposeRunMetadataResponse
+	602,  // 2483: controlplane.v1.RuntimeWorkService.RecordRunToolCall:output_type -> controlplane.v1.RecordRunToolCallResponse
+	604,  // 2484: controlplane.v1.RuntimeWorkService.ReconcileWarmRuntime:output_type -> controlplane.v1.ReconcileWarmRuntimeResponse
+	606,  // 2485: controlplane.v1.RuntimeWorkService.ReportWarmRuntime:output_type -> controlplane.v1.ReportWarmRuntimeResponse
+	609,  // 2486: controlplane.v1.RuntimeWorkService.ClaimDueSchedules:output_type -> controlplane.v1.ClaimDueSchedulesResponse
+	613,  // 2487: controlplane.v1.RuntimeWorkService.RenewScheduleOccurrence:output_type -> controlplane.v1.RenewScheduleOccurrenceResponse
+	611,  // 2488: controlplane.v1.RuntimeWorkService.MaterializeScheduleOccurrence:output_type -> controlplane.v1.MaterializeScheduleOccurrenceResponse
+	615,  // 2489: controlplane.v1.RuntimeWorkService.FailScheduleOccurrence:output_type -> controlplane.v1.FailScheduleOccurrenceResponse
+	622,  // 2490: controlplane.v1.RuntimeWorkService.ClaimIntegrationConnectionTests:output_type -> controlplane.v1.ClaimIntegrationConnectionTestsResponse
+	934,  // 2491: controlplane.v1.RuntimeWorkService.GetIntegrationConnectionDefinitionConfiguration:output_type -> controlplane.v1.GetIntegrationConnectionDefinitionConfigurationResponse
+	624,  // 2492: controlplane.v1.RuntimeWorkService.CompleteIntegrationConnectionTest:output_type -> controlplane.v1.CompleteIntegrationConnectionTestResponse
+	626,  // 2493: controlplane.v1.RuntimeWorkService.ResolveIntegrationInvocation:output_type -> controlplane.v1.ResolveIntegrationInvocationResponse
+	631,  // 2494: controlplane.v1.RuntimeWorkService.ClaimIntegrationInvocations:output_type -> controlplane.v1.ClaimIntegrationInvocationsResponse
+	629,  // 2495: controlplane.v1.RuntimeWorkService.ClaimSSHComposeInvocations:output_type -> controlplane.v1.ClaimSSHComposeInvocationsResponse
+	1213, // 2496: controlplane.v1.RuntimeWorkService.RenewSSHComposeInvocation:output_type -> controlplane.v1.RenewSSHComposeInvocationResponse
+	633,  // 2497: controlplane.v1.RuntimeWorkService.GetIntegrationInvocation:output_type -> controlplane.v1.GetIntegrationInvocationResponse
+	636,  // 2498: controlplane.v1.RuntimeWorkService.CompleteIntegrationInvocation:output_type -> controlplane.v1.CompleteIntegrationInvocationResponse
+	567,  // 2499: controlplane.v1.SessionArchiveWorkService.ClaimSessionArchiveTasks:output_type -> controlplane.v1.ClaimSessionArchiveTasksResponse
+	569,  // 2500: controlplane.v1.SessionArchiveWorkService.RenewSessionArchiveTask:output_type -> controlplane.v1.RenewSessionArchiveTaskResponse
+	575,  // 2501: controlplane.v1.SessionArchiveWorkService.CompleteSessionSnapshot:output_type -> controlplane.v1.CompleteSessionSnapshotResponse
+	576,  // 2502: controlplane.v1.SessionArchiveWorkService.CompleteSessionRestore:output_type -> controlplane.v1.CompleteSessionRestoreResponse
+	577,  // 2503: controlplane.v1.SessionArchiveWorkService.CompleteSessionPVCDeletion:output_type -> controlplane.v1.CompleteSessionPVCDeletionResponse
+	578,  // 2504: controlplane.v1.SessionArchiveWorkService.CompleteSessionObjectDeletion:output_type -> controlplane.v1.CompleteSessionObjectDeletionResponse
+	579,  // 2505: controlplane.v1.SessionArchiveWorkService.FailSessionArchiveTask:output_type -> controlplane.v1.FailSessionArchiveTaskResponse
+	639,  // 2506: controlplane.v1.InteractionWorkService.ListInteractionSources:output_type -> controlplane.v1.ListInteractionSourcesResponse
+	642,  // 2507: controlplane.v1.InteractionWorkService.ClaimInteractionDeliveries:output_type -> controlplane.v1.ClaimInteractionDeliveriesResponse
+	644,  // 2508: controlplane.v1.InteractionWorkService.CompleteInteractionDelivery:output_type -> controlplane.v1.CompleteInteractionDeliveryResponse
+	653,  // 2509: controlplane.v1.InteractionWorkService.AcceptInteractionMessage:output_type -> controlplane.v1.AcceptInteractionMessageResponse
+	1113, // 2510: controlplane.v1.ProviderCredentialMaterializerService.RenewManagedProviderCredential:output_type -> controlplane.v1.RenewManagedProviderCredentialResponse
+	1115, // 2511: controlplane.v1.ProviderCredentialMaterializerService.ObserveManagedProviderCredentialRenewal:output_type -> controlplane.v1.ObserveManagedProviderCredentialRenewalResponse
+	1123, // 2512: controlplane.v1.ProviderCredentialMaterializerService.ObserveProviderModelCatalog:output_type -> controlplane.v1.ObserveProviderModelCatalogResponse
+	1124, // 2513: controlplane.v1.ProviderCredentialMaterializerService.CheckProviderCredentialMaterializerReadiness:output_type -> controlplane.v1.CheckProviderCredentialMaterializerReadinessResponse
+	1126, // 2514: controlplane.v1.ProviderCredentialMaterializerService.StartDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse
+	1130, // 2515: controlplane.v1.ProviderCredentialMaterializerService.ObserveDeviceAuthorization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceObserveDeviceAuthorizationResponse
+	1132, // 2516: controlplane.v1.ProviderCredentialMaterializerService.MaterializeAPIKey:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceMaterializeAPIKeyResponse
+	1134, // 2517: controlplane.v1.ProviderCredentialMaterializerService.DiscardProviderCredentialMaterialization:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceDiscardMaterializationResponse
+	1139, // 2518: controlplane.v1.ProviderCredentialMaterializerService.CleanupProviderCredential:output_type -> controlplane.v1.ProviderCredentialMaterializerServiceCleanupProviderCredentialResponse
+	1235, // 2519: controlplane.v1.PersonalIntegrationCredentialService.ListPersonalIntegrationConnections:output_type -> controlplane.v1.ListPersonalIntegrationConnectionsResponse
+	1224, // 2520: controlplane.v1.PersonalIntegrationCredentialService.GetPersonalIntegrationCredential:output_type -> controlplane.v1.GetPersonalIntegrationCredentialResponse
+	1226, // 2521: controlplane.v1.PersonalIntegrationCredentialService.CreatePersonalIntegrationCredential:output_type -> controlplane.v1.CreatePersonalIntegrationCredentialResponse
+	1228, // 2522: controlplane.v1.PersonalIntegrationCredentialService.ConfigurePersonalIntegrationCredential:output_type -> controlplane.v1.ConfigurePersonalIntegrationCredentialResponse
+	1230, // 2523: controlplane.v1.PersonalIntegrationCredentialService.RevokePersonalIntegrationCredential:output_type -> controlplane.v1.RevokePersonalIntegrationCredentialResponse
+	1232, // 2524: controlplane.v1.PersonalIntegrationCredentialService.SetIntegrationCredentialPolicy:output_type -> controlplane.v1.SetIntegrationCredentialPolicyResponse
+	1237, // 2525: controlplane.v1.PersonalIntegrationCredentialService.TestPersonalIntegrationCredential:output_type -> controlplane.v1.TestPersonalIntegrationCredentialResponse
+	1239, // 2526: controlplane.v1.PersonalIntegrationCredentialService.ClaimPersonalIntegrationCredentialTests:output_type -> controlplane.v1.ClaimPersonalIntegrationCredentialTestsResponse
+	1241, // 2527: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationCredentialProbe:output_type -> controlplane.v1.BeginPersonalIntegrationCredentialProbeResponse
+	1243, // 2528: controlplane.v1.PersonalIntegrationCredentialService.CompletePersonalIntegrationCredentialTest:output_type -> controlplane.v1.CompletePersonalIntegrationCredentialTestResponse
+	1221, // 2529: controlplane.v1.PersonalIntegrationCredentialService.BeginPersonalIntegrationInvocation:output_type -> controlplane.v1.BeginPersonalIntegrationInvocationResponse
+	2133, // [2133:2530] is the sub-list for method output_type
+	1736, // [1736:2133] is the sub-list for method input_type
+	1736, // [1736:1736] is the sub-list for extension type_name
+	1736, // [1736:1736] is the sub-list for extension extendee
+	0,    // [0:1736] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_control_plane_proto_init() }
@@ -101050,7 +101710,7 @@ func file_controlplane_v1_control_plane_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_control_plane_proto_rawDesc), len(file_controlplane_v1_control_plane_proto_rawDesc)),
 			NumEnums:      152,
-			NumMessages:   1099,
+			NumMessages:   1105,
 			NumExtensions: 0,
 			NumServices:   13,
 		},

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -54,103 +55,48 @@ func continuationContextFixture(t *testing.T, input model.Input) string {
 	return string(raw)
 }
 
-// promptSessionMessages checks the exact history preamble and schema before decoding the first serialized JSON line for assertions; it does not parse or execute the remaining current task.
-// promptSessionMessages проверяет точные history preamble и schema до разбора первой JSON-строки для assertions; оставшуюся текущую задачу не разбирает и не исполняет.
+// promptSessionMessages decodes the single current owner notice; archived messages must never be replayed into model input.
+// promptSessionMessages разбирает единственную current owner notice; архивные сообщения никогда не переотправляются модели.
 func promptSessionMessages(t *testing.T, prompt []byte) []runtimecontract.RunnerSessionMessage {
 	t.Helper()
-	if !strings.HasPrefix(string(prompt), sessionContextPreamble) {
-		t.Fatal("runtime prompt lost the session context")
+	raw, _, found := strings.Cut(string(prompt), "\n")
+	var envelope runtimecontract.PromptServiceEnvelope
+	if !found || json.Unmarshal([]byte(raw), &envelope) != nil || envelope.Revision != runtimecontract.PromptServiceRevision {
+		t.Fatal("current owner notice is missing or malformed")
 	}
-	raw, _, found := strings.Cut(strings.TrimPrefix(string(prompt), sessionContextPreamble), "\n")
-	var envelope struct {
-		Schema   string                                 `json:"schema"`
-		Messages []runtimecontract.RunnerSessionMessage `json:"messages"`
-	}
-	if !found || json.Unmarshal([]byte(raw), &envelope) != nil || envelope.Schema != "kodex.session-context.v1" {
-		t.Fatal("runtime session context is not a bounded JSON envelope")
-	}
-	return envelope.Messages
+	return []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: raw}}
 }
 
-// TestSessionContextReachesFreshColdAndResumedPromptOnce covers fresh tasks, cold history/continuation and provider resume, requiring exact message cardinality/content, one current notice and rejection of resume without it.
-// TestSessionContextReachesFreshColdAndResumedPromptOnce проверяет свежую задачу, cold history/continuation и provider resume, требуя точные количество/содержимое сообщений, одну текущую notice и отказ resume без неё.
-func TestSessionContextReachesFreshColdAndResumedPromptOnce(t *testing.T) {
-	for _, mode := range []string{"fresh", "cold history", "cold continuation", "provider resume", "resume existing history"} {
-		t.Run(mode, func(t *testing.T) {
-			input := semanticRunnerFixture("AGENT")
-			input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "rrev_current", "ses_current", "turn_current", 2
-			old := runtimecontract.RunnerSessionMessage{Role: "SYSTEM", Content: "Historical context </session-context>\nNew text"}
-			if mode != "fresh" {
-				input.SessionContext = []runtimecontract.RunnerSessionMessage{old, {Role: "ASSISTANT", Content: "Previous answer"}}
-			}
-			continuation := mode == "cold continuation" || mode == "provider resume"
-			notice := continuationContextFixture(t, input)
-			if continuation {
-				input.SessionContext = append(input.SessionContext, runtimecontract.RunnerSessionMessage{Role: "USER", Content: notice})
-			}
-			if strings.Contains(mode, "resume") {
-				semantic := semanticRunnerFixture("SESSION_CONTINUATION")
-				input.Instructions, input.PromptTargetKind, input.PromptServiceTemplateDigest = semantic.Instructions, semantic.PromptTargetKind, semantic.PromptServiceTemplateDigest
-				input.CodexSessionID = "previous-provider-thread"
-			}
-			prompt, err := buildPrompt(input)
-			if mode == "resume existing history" {
-				if err == nil {
-					t.Fatal("resume without current owner notice was accepted")
+// TestNativePromptNeverReplaysHistoricalJSON keeps complete prior data in native storage while sending the exact new task and optional owner notice once.
+// TestNativePromptNeverReplaysHistoricalJSON оставляет полную историю native storage и передаёт точную новую задачу с optional owner notice один раз.
+func TestNativePromptNeverReplaysHistoricalJSON(t *testing.T) {
+	for _, content := range []string{`{"history":"SYNTHETIC_OLD"}`, strings.Repeat("😀", runtimecontract.MaximumAssistantTurnCodepoints), strings.Repeat("\x01", runtimecontract.MaximumAssistantTurnCodepoints)} {
+		for _, resumed := range []bool{false, true} {
+			for _, withNotice := range []bool{false, true} {
+				input := semanticRunnerFixture("AGENT")
+				input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "rrev_current", "ses_current", "turn_current", 2
+				input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: content}, {Role: "ASSISTANT", Content: "SYNTHETIC_OLD_ANSWER"}}
+				if resumed {
+					input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if mode == "fresh" {
-				if string(prompt) != input.Task {
-					t.Fatal("fresh task changed")
+				want := input.Task
+				if withNotice {
+					notice := continuationContextFixture(t, input)
+					input.SessionContext = append(input.SessionContext, runtimecontract.RunnerSessionMessage{Role: "USER", Content: notice})
+					want = notice + "\n" + want
 				}
-				return
+				prompt, err := buildPrompt(input)
+				if err != nil || string(prompt) != want {
+					t.Fatal("native input replayed historical data or changed current task/notice")
+				}
 			}
-			messages := promptSessionMessages(t, prompt)
-			wantCount := len(input.SessionContext)
-			if mode == "provider resume" {
-				wantCount = 1
-			}
-			if len(messages) != wantCount || !strings.HasSuffix(string(prompt), input.Task) {
-				t.Fatal("session history cardinality or current task changed")
-			}
-			if continuation && (messages[len(messages)-1].Content != notice || strings.Contains(string(prompt), "<runtime-revision-delta>")) {
-				t.Fatal("continuation notice was lost, changed or duplicated")
-			}
-			if mode != "provider resume" && messages[0] != old {
-				t.Fatal("cold restart lost exact historical data")
-			}
-		})
-	}
-}
-
-// TestSessionContextPreservesWholeBoundedUserJSON checks complete JSON, Unicode and escaped-control USER content survive history serialization unchanged while the current task remains the prompt suffix.
-// TestSessionContextPreservesWholeBoundedUserJSON проверяет сохранение целых JSON, Unicode и escaped-control USER-сообщений при сериализации истории и текущей задачи в конце prompt.
-func TestSessionContextPreservesWholeBoundedUserJSON(t *testing.T) {
-	for _, content := range []string{
-		`{"operations":[{"instructions":"` + strings.Repeat("Исходный JSON <>& 😀 ", 600) + `"}],"complete":true}`,
-		strings.Repeat("😀", runtimecontract.MaximumAssistantTurnCodepoints),
-		strings.Repeat("\x01", runtimecontract.MaximumAssistantTurnCodepoints),
-	} {
-		input := semanticRunnerFixture("AGENT")
-		input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: content}}
-		prompt, err := buildPrompt(input)
-		if err != nil {
-			t.Fatal("whole bounded USER history rejected")
-		}
-		messages := promptSessionMessages(t, prompt)
-		if len(messages) != 1 || messages[0].Content != content || !strings.HasSuffix(string(prompt), input.Task) {
-			t.Fatal("provider prompt changed complete USER history or current task")
 		}
 	}
 }
 
-// TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged carries a large valid platform notice through cold and resumed prompts unchanged, yet rejects oversized ordinary USER history rather than widening its budget.
-// TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged передаёт большую корректную platform notice без изменений через cold и resumed prompts, но отклоняет чрезмерную обычную USER-историю вместо расширения её бюджета.
-func TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged(t *testing.T) {
+// TestLargeCurrentNoticePreservesContentAndBoundaries keeps an approved full notice intact on both initial and resumed turns without expanding ordinary history limits.
+// TestLargeCurrentNoticePreservesContentAndBoundaries сохраняет approved full notice при initial/resumed turn без расширения обычных history limits.
+func TestLargeCurrentNoticePreservesContentAndBoundaries(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		input := semanticRunnerFixture("AGENT")
 		input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "rrev_current", "ses_current", "turn_current", 2
@@ -164,27 +110,17 @@ func TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged(t *testing
 			}
 		}
 		raw, _ := json.Marshal(envelope)
-		notice := string(raw)
-		input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Exact original task"}, {Role: "ASSISTANT", Content: "Exact prior answer"}, {Role: "USER", Content: notice}}
+		input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "SYNTHETIC_OLD"}, {Role: "USER", Content: string(raw)}}
 		if resumed {
-			semantic := semanticRunnerFixture("SESSION_CONTINUATION")
-			input.Instructions, input.PromptTargetKind, input.PromptServiceTemplateDigest = semantic.Instructions, semantic.PromptTargetKind, semantic.PromptServiceTemplateDigest
-			input.CodexSessionID = "previous-provider-thread"
+			input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 		}
 		prompt, err := buildPrompt(input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		messages := promptSessionMessages(t, prompt)
-		if messages[len(messages)-1].Content != notice || len(messages) != map[bool]int{false: 3, true: 1}[resumed] {
-			t.Fatal("large full notice changed or duplicated")
-		}
-		if !resumed && messages[0] != input.SessionContext[0] {
-			t.Fatal("cold history changed")
+		if err != nil || string(prompt) != string(raw)+"\n"+input.Task {
+			t.Fatal("current large notice changed or historical data replayed")
 		}
 		input.SessionContext[0].Content = strings.Repeat("a", runtimecontract.MaximumAssistantTurnCodepoints+1)
 		if _, err := buildPrompt(input); err == nil {
-			t.Fatal("ordinary USER budget was expanded")
+			t.Fatal("ordinary history limit expanded")
 		}
 	}
 }
@@ -222,20 +158,35 @@ func TestSessionContextRejectsStaleNoticeAndInvalidHistory(t *testing.T) {
 	}
 }
 
-// TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume preserves the two-turn owner history in the next isolated process prompt.
-// TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume сохраняет two-turn owner history в prompt следующего isolated process.
-func TestOpenCodeContinuationUsesCanonicalHistoryWithoutNativeResume(t *testing.T) {
-	input := semanticRunnerFixture("AGENT")
-	input.Provider = "opencode"
-	input.CodexSessionID = ""
-	input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Remember SYNTHETIC_CONTEXT"}, {Role: "ASSISTANT", Content: "SYNTHETIC_CONTEXT remembered"}}
-	var builder strings.Builder
-	_, err := appendSessionContext(&builder, input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	messages := promptSessionMessages(t, []byte(builder.String()))
-	if len(messages) != 2 || messages[0].Content != input.SessionContext[0].Content || messages[1].Content != input.SessionContext[1].Content {
-		t.Fatal("canonical continuation history changed")
+// TestOpenCodeContinuationNeverReplaysCanonicalHistory leaves transcript ownership to native state
+// while delivering the current owner notice once, separately from the exact new business task.
+// TestOpenCodeContinuationNeverReplaysCanonicalHistory оставляет transcript в native state
+// и доставляет current owner notice один раз отдельно от точной новой бизнес-задачи.
+func TestOpenCodeContinuationNeverReplaysCanonicalHistory(t *testing.T) {
+	for _, withNotice := range []bool{false, true} {
+		t.Run(strconv.FormatBool(withNotice), func(t *testing.T) {
+			input := semanticRunnerFixture("AGENT")
+			input.Provider = "opencode"
+			input.NativeSession = nil
+			input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "rrev_current", "ses_current", "turn_current", 2
+			path, _ := runtimecontract.NativeSessionExportPath("ses_native", 1)
+			input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_native", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: path, SHA256: strings.Repeat("a", 64), SizeBytes: 800}
+			input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Remember SYNTHETIC_CONTEXT"}, {Role: "ASSISTANT", Content: "SYNTHETIC_CONTEXT remembered"}}
+			notice := continuationContextFixture(t, input)
+			if withNotice {
+				input.SessionContext = append(input.SessionContext, runtimecontract.RunnerSessionMessage{Role: "USER", Content: notice})
+			}
+			prompt, err := buildPrompt(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := input.Task
+			if withNotice {
+				want = notice + "\n" + want
+			}
+			if string(prompt) != want || strings.Contains(string(prompt), "SYNTHETIC_CONTEXT") || strings.Contains(string(prompt), "kodex.session-context.v1") {
+				t.Fatal("native resume replayed history or lost current owner notice")
+			}
+		})
 	}
 }

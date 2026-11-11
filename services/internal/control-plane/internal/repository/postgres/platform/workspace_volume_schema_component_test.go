@@ -48,11 +48,11 @@ func readWorkspaceVolumeSchemaProof(t *testing.T, ctx context.Context, conn *pgx
 		profile, filename = "JIRA_CREATE_FIELDS_V1", "jira-create-fields-migration-postcondition.sql"
 	case 20261108000100:
 		profile, filename = "AUTHORITY_PROOF_COUNTER_V1", "authority-proof-counter-migration-postcondition.sql"
-	case 20261109000100:
+	case 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200:
 		profile, filename = "WORKSPACE_SCHEMA_REGRESSION_V1", "workspace_schema_regression.sql"
 	}
 	path := "../../../../../../../tools/release/" + filename
-	if version == 20261109000100 {
+	if version >= 20261109000100 {
 		path = "testdata/sql/" + filename
 	}
 	source, err := os.ReadFile(path)
@@ -102,7 +102,7 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 	}
 	switch version {
 	case 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100,
-		20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100:
+		20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200:
 	default:
 		t.Fatal("unregistered disposable workspace schema")
 	}
@@ -116,9 +116,13 @@ func workspaceComponentSchemaVersion(t *testing.T, ctx context.Context, conn *pg
 func assertWorkspaceVolumeSchemaCanonical(t *testing.T, actual map[string]any) {
 	t.Helper()
 	if actual["profile"] == "WORKSPACE_SCHEMA_REGRESSION_V1" {
+		edges, edgeDigest := float64(306), "19782286a860f9e05cdaad7b6e5f8ef3"
+		if actual["gooseVersion"] == float64(20261111000200) {
+			edges, edgeDigest = 308, "d6aa5b9aa21c5e065c3106f2a6119e0f"
+		}
 		for key, expected := range map[string]any{
-			"purgeNodes": float64(111), "purgeEdges": float64(306), "workspacePurgeGuard": true,
-			"purgeNodeFingerprint": "3eb558fae167872ba6bd17bc68f7a303", "purgeEdgeFingerprint": "19782286a860f9e05cdaad7b6e5f8ef3",
+			"purgeNodes": float64(111), "purgeEdges": edges, "workspacePurgeGuard": true,
+			"purgeNodeFingerprint": "3eb558fae167872ba6bd17bc68f7a303", "purgeEdgeFingerprint": edgeDigest,
 			"sshComposeProfile": "SSH_COMPOSE_V1", "sshColumns": true, "sshConstraints": true,
 			"sshFunctions": true, "sshTriggers": true, "sshRuntimeColumns": true,
 		} {

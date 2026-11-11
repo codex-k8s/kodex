@@ -234,7 +234,7 @@ func testAssistantParallelAdmission(t *testing.T, ctx context.Context, repositor
 		t.Fatal("stop ignored the lowered limit")
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "parallel-stopped-late-complete"}, Payload: command.CompleteExecutionInput{
+		Mutation: value.Mutation{IdempotencyKey: "parallel-stopped-late-complete"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(stoppedLease),
 			LeaseRef: stringMap(stoppedLease, "leaseRef"), Fence: stringMap(stoppedLease, "fence"), Generation: stoppedLease["generation"].(int64),
 			Success: true, ResultSummary: "Must not complete a stopped chat", Usage: turnUsageFixture()}})
 	if !errors.Is(err, errs.ErrForbidden) {

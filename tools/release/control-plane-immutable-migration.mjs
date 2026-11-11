@@ -17,6 +17,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'opencode-native-sessions': {
+    version:'20261111000200',file:'20261111000200_opencode_native_sessions.sql',
+    annotation:'kodex.dev/cp-opencode-native-migration-plan',previousVersion:20261111000100,
+    emptyField:'sessionDataEmpty',preconditionFile:'opencode-native-sessions-migration-precondition.sql',
+    postconditionFile:'opencode-native-sessions-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261111000200_opencode_native_sessions.sql']),
+  },
   'workflow-workspace': {
     version:'20261111000100',file:'20261111000100_workflow_workspace_scope.sql',
     annotation:'kodex.dev/cp-workflow-workspace-migration-plan',previousVersion:20261110000200,
@@ -346,6 +353,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'opencode-native-sessions')
+      ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-workspace')
       ensure(validWorkflowWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'managed-workspace')
@@ -999,6 +1008,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'opencode-native-sessions': return validOpenCodeNativeMigrationPostcondition(proof);
     case 'workflow-workspace': return validWorkflowWorkspaceMigrationPostcondition(proof);
     case 'managed-workspace': return validManagedWorkspaceMigrationPostcondition(proof);
     case 'artifact-optional-antivirus': return validArtifactOptionalAntivirusMigrationPostcondition(proof);
@@ -1234,6 +1244,20 @@ export function validWorkflowWorkspaceMigrationPostcondition(proof) {
     proof.readOnly === 'on' && proof.gooseVersion === 20261111000100 &&
     proof.workflowVersionColumnReady === true && proof.rootVersionReferenceReady === true &&
     proof.scopeFunctionReady === true && proof.workspaceGuardReady === true && proof.archiveTaskGuardReady === true;
+}
+
+// Новый runtime допускается только после отдельно разрешённой очистки session data.
+export function validOpenCodeNativeMigrationPrecondition(proof) {
+  return proof?.profile==='OPENCODE_NATIVE_PREDECESSOR_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000100 && proof.sessionDataEmpty===true &&
+    proof.nativeColumnsAbsent===true && proof.activeRuntimeLeases===0;
+}
+
+// Metadata проверяет именно новый native contract; старый schema proof не заменяет его.
+export function validOpenCodeNativeMigrationPostcondition(proof) {
+  return proof?.profile==='OPENCODE_NATIVE_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000200 &&
+    ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady'].every(key=>proof[key]===true);
 }
 
 // Переход039 расширяет immutable policy при выключенном opt-in и не требует dump либо новых ACL.

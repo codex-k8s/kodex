@@ -17,8 +17,8 @@ const restoreTaskFile = "/var/run/config/kodex/session-archive/task.json"
 // RU: errRestorePreparation скрывает конкретную причину отказа идентичности, пути либо владельца каталога при подготовке.
 var errRestorePreparation = errors.New("session restore directory preparation is invalid")
 
-// PrepareRestore uses fixed paths and the trusted init UID to create and verify only the shared Codex home directory.
-// RU: PrepareRestore использует фиксированные пути и доверенный UID init для создания и проверки лишь общего каталога Codex home.
+// PrepareRestore uses fixed paths and the trusted init UID to create and verify only the shared OpenCode state directory.
+// RU: PrepareRestore использует фиксированные пути и доверенный UID init для создания и проверки лишь общего каталога OpenCode state.
 func PrepareRestore(ctx context.Context) error {
 	if os.Geteuid() != 10001 || ctx.Err() != nil {
 		return errRestorePreparation
@@ -45,10 +45,10 @@ func PrepareRestore(ctx context.Context) error {
 		stat.Mode&unix.S_IFMT != unix.S_IFDIR || stat.Mode&0o070 != 0o070 || ctx.Err() != nil {
 		return errRestorePreparation
 	}
-	if err := unix.Mkdirat(root, "codex-home", 0o2770); err != nil && !errors.Is(err, unix.EEXIST) {
+	if err := unix.Mkdirat(root, "opencode", 0o2770); err != nil && !errors.Is(err, unix.EEXIST) {
 		return errRestorePreparation
 	}
-	home, err := unix.Openat(root, "codex-home", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	home, err := unix.Openat(root, "opencode", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return errRestorePreparation
 	}

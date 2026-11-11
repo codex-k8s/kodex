@@ -76,7 +76,7 @@ func TestAuthorizationWorkerClassifiesTerminalFailure(t *testing.T) {
 			attempt := pendingProviderAttempt(time.Now().Add(time.Minute))
 			store := &providerCredentialStoreStub{attempt: attempt}
 			session := &cleanupDeviceSession{closed: make(chan struct{}), waitErr: fixture.err}
-			service, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+			service, err := New(t.Context(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,7 +109,7 @@ func TestAuthorizationWorkerDoesNotStartAfterPendingFence(t *testing.T) {
 		change(&current)
 		store := &providerCredentialStoreStub{attempt: current}
 		session := &cleanupDeviceSession{closed: make(chan struct{})}
-		service, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+		service, err := New(t.Context(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,12 +136,12 @@ func (session *cleanupDeviceSession) Close() error {
 	return nil
 }
 
-// cleanupAppServer overrides only device-session start to return a supplied synthetic session while
+// cleanupCredentialBackend overrides only device-session start to return a supplied synthetic session while
 // inheriting fail-closed defaults for unrelated app-server operations.
-// cleanupAppServer подменяет только device-session start возвратом переданной synthetic сессии, сохраняя
+// cleanupCredentialBackend подменяет только device-session start возвратом переданной synthetic сессии, сохраняя
 // закрытые defaults остальных app-server операций.
-type cleanupAppServer struct {
-	providerAppServerStub
+type cleanupCredentialBackend struct {
+	providerCredentialBackendStub
 	session *cleanupDeviceSession
 }
 
@@ -149,7 +149,7 @@ type cleanupAppServer struct {
 // private home or external authorization request.
 // StartDeviceAuthorization возвращает настроенную local fixture сессию без процесса, private home и
 // внешнего authorization запроса.
-func (server *cleanupAppServer) StartDeviceAuthorization(context.Context, string, string) (DeviceAuthorizationSession, error) {
+func (server *cleanupCredentialBackend) StartDeviceAuthorization(context.Context, string, string) (DeviceAuthorizationSession, error) {
 	return server.session, nil
 }
 
@@ -201,7 +201,7 @@ func TestCleanupAuthorizationJoinsStartedWorkerAndRecoversProducedCredential(t *
 	}
 	store := &pausedMaterializationStore{Store: realStore, entered: make(chan struct{}), release: make(chan struct{})}
 	session := &cleanupDeviceSession{closed: make(chan struct{})}
-	service, err := New(t.Context(), store, &cleanupAppServer{session: session}, DefaultDeviceAuthorizationTTL())
+	service, err := New(t.Context(), store, &cleanupCredentialBackend{session: session}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +248,7 @@ func TestCleanupAuthorizationJoinsStartedWorkerAndRecoversProducedCredential(t *
 	if err != nil || cleaned.ProducedCredential != nil || cleaned.TerminalReceipt == "" {
 		t.Fatalf("produced credential cleanup failed: %v", err)
 	}
-	restarted, err := New(t.Context(), realStore, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	restarted, err := New(t.Context(), realStore, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}

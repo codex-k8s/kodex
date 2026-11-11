@@ -107,7 +107,7 @@ copy_exact() {
 copy_exact "$CONTROL_PLANE_SOURCE_REF" kodex/control-plane "$CONTROL_PLANE_DIGEST"
 copy_exact "$DOCKERFILE_SOURCE_REF" kodex/dockerfile "$DOCKERFILE_DIGEST"
 case "${AGENT_RUNNER_DESTINATION_REPOSITORY:-kodex/agent-runner}" in
-  kodex/agent-runner|kodex/agent-runner-opencode) ;;
+  kodex/agent-runner) ;;
   *) fail 'agent runner destination repository is invalid' ;;
 esac
 copy_exact "$AGENT_RUNNER_SOURCE_REF" "${AGENT_RUNNER_DESTINATION_REPOSITORY:-kodex/agent-runner}" "$AGENT_RUNNER_DIGEST"

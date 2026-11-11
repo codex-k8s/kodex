@@ -81,7 +81,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 			t.Fatal("context fixture did not claim exact published producer")
 		}
 		workflowExceptionArtifactWriteAuthority(t, f, producer, claims[0])
-		payload := command.CompleteExecutionInput{LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact(name, []byte("Точные данные "+name+"\n"))}}
+		payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(claims[0]), LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact(name, []byte("Точные данные "+name+"\n"))}}
 		if mode == "invalid-manager-complete" && index == 1 {
 			payload.ResultSummary = "Not a closed result declaration; the captured file remains data."
 		}

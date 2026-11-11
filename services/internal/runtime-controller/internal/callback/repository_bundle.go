@@ -95,7 +95,7 @@ func (server *Server) prepareRepositoryBundle(ctx context.Context, input runtime
 	if decoder.Decode(&pins) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
 		return nil, status.Error(codes.InvalidArgument, "repository bundle input is invalid")
 	}
-	request := &cp.PrepareRepositoryBundlePublicationRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, GrantRef: grant.Ref, IdempotencyKey: stableKey(input.LeaseRef, string(callID)), BaseCommitSha: pins.BaseCommitSHA,
+	request := &cp.PrepareRepositoryBundlePublicationRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, GrantRef: grant.Ref, IdempotencyKey: runtimeToolMutationKey(input, callID), BaseCommitSha: pins.BaseCommitSHA,
 		Archive:  &cp.RepositoryBundleArtifactPin{Ref: pins.ArchiveRef, Revision: pins.ArchiveRevision, Version: pins.ArchiveVersion, Sha256: pins.ArchiveSHA256, SizeBytes: pins.ArchiveSize},
 		Manifest: &cp.RepositoryBundleArtifactPin{Ref: pins.ManifestRef, Revision: pins.ManifestRevision, Version: pins.ManifestVersion, Sha256: pins.ManifestSHA256, SizeBytes: pins.ManifestSize}}
 	bounded, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)

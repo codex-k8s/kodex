@@ -66,7 +66,7 @@ func TestPostJoinWorkspaceOutcomeAndIndependentBudget(t *testing.T) {
 				type contextKey struct{}
 				ctx, cancel := context.WithCancel(context.WithValue(t.Context(), contextKey{}, "bound execution"))
 				cancel()
-				want := Result{Outcome: outcome, FailureCode: "provider_bad_request", FinalMessage: "original failure", SessionID: "unchanged session", ArchiveRelativePath: "unchanged source", ArchiveSHA256: "unchanged digest", ArchiveSizeBytes: 1,
+				want := Result{Outcome: outcome, FailureCode: "provider_bad_request", FinalMessage: "original failure", NativeSession: &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_unchanged"},
 					Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}}
 				called := false
 				var cleanup context.Context

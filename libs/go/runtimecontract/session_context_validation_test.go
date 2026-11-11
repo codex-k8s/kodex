@@ -44,7 +44,8 @@ func TestStrictLastContinuationRoundtripPreservesFullContent(t *testing.T) {
 		for _, resumed := range []bool{false, true} {
 			input := strictContinuationFixture(t, revision)
 			if resumed {
-				input.CodexSessionID = "123e4567-e89b-42d3-a456-426614174000"
+				path, _ := NativeSessionExportPath("ses_fixture", 1)
+				input.NativeSession = &NativeSessionCheckpoint{SessionID: "ses_fixture", Version: OpenCodeVersion, Generation: 1, RelativePath: path, SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 				refreshRunnerInputBindings(&input)
 			}
 			content := input.SessionContext[2].Content

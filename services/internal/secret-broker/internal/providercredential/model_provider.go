@@ -19,8 +19,11 @@ func (service *Service) ConfigureModelProvider(config runtimecontract.ModelProvi
 	if config.Validate() != nil {
 		return ErrInvalidInput
 	}
-	config.Models = append([]runtimecontract.ModelProviderModel(nil), config.Models...)
-	config.AddressCIDRs = append([]string(nil), config.AddressCIDRs...)
+	cloned, err := config.Clone()
+	if err != nil {
+		return err
+	}
+	config = cloned
 	service.modelProvider = &config
 	service.gatewayHTTP = newGatewayCatalogHTTPClient(config)
 	return nil

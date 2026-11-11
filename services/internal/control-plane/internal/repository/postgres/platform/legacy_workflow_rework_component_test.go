@@ -127,7 +127,7 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 			t.Fatal("unsupported native completion stage")
 		}
 		t.Log("legacy_completion_stage", stage)
-		payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary}
+		payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary}
 		if file != "" {
 			if !contains(runtimeRevisionStringSlice(lease["capabilities"]), runtimecontract.ArtifactCapability) {
 				t.Fatal("native artifact completion lacks its published runtime capability", stage)
@@ -415,7 +415,7 @@ func runLegacyWorkflowReworkScenario(t *testing.T, decision string) {
 		}
 		execute(owner, command.ChangeIntegrationGrant, "revoke-read", &freshConnection.Version, command.IntegrationGrantInput{ConnectionRef: connectionRef, CapabilityKey: "github.issue.read", AgentRef: agent.Ref, Enabled: false, ApprovalPolicy: "NONE"})
 		frozen := read()
-		_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "legacy-rework-revoked-completion"}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(reworked[0], "leaseRef"), Fence: stringMap(reworked[0], "fence"), Generation: runtimeRevisionMapInt64(reworked[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: "Не выдавать новый grant после отзыва READ."}})
+		_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "legacy-rework-revoked-completion"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(reworked[0]), LeaseRef: stringMap(reworked[0], "leaseRef"), Fence: stringMap(reworked[0], "fence"), Generation: runtimeRevisionMapInt64(reworked[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: "Не выдавать новый grant после отзыва READ."}})
 		if !errors.Is(err, errs.ErrLegacyReworkDeliveryBlocked) || read() != frozen {
 			t.Fatal("rejoin used historical READ grant as current authority", completionOutcomeClass(err))
 		}

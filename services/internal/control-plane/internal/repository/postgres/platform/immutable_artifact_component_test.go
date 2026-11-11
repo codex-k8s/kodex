@@ -313,7 +313,7 @@ func TestImmutableArtifactRevisionComponent(t *testing.T) {
 			t.Fatal("immutable metadata mutation accepted")
 		}
 	}
-	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "immutable-complete"}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic immutable read complete"}})
+	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "immutable-complete"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic immutable read complete"}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" {
 		t.Fatalf("complete: %v", err)
 	}

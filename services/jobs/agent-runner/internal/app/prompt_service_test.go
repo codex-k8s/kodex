@@ -50,7 +50,7 @@ func TestSemanticContinuationUsesPlatformSectionsOnly(t *testing.T) {
 	}
 	input = semanticRunnerFixture("SESSION_CONTINUATION")
 	prompt, err = buildPrompt(input)
-	if err != nil || !strings.Contains(string(prompt), `"slot":"RUNTIME_CHANGES"`) || strings.Contains(string(prompt), "user-marker") || !strings.Contains(string(prompt), "<runtime-revision-delta>") {
+	if err != nil || string(prompt) != input.Task || !strings.Contains(input.Instructions, `"slot":"RUNTIME_CHANGES"`) {
 		t.Fatal("typed continuation was not materialized")
 	}
 	input.Capabilities = []string{"admin"}

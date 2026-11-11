@@ -2,27 +2,11 @@ package platform
 
 import (
 	"bytes"
-	"context"
-	_ "embed"
 	"encoding/json"
-	"errors"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	"github.com/jackc/pgx/v5"
 )
-
-// queryRuntimeSessionResumeSnapshot embeds the confirmed LIVE storage snapshot for an exact
-// tenant/session/provider codex-session identity with nonempty source size/digest. The linked
-// immutable RuntimeRevision, not current task/history/lease, supplies previous configuration under
-// a shared storage lock.
-// queryRuntimeSessionResumeSnapshot встраивает подтверждённый LIVE storage snapshot точных
-// организации, сессии и provider codex-session identity с непустыми размером и дайджестом
-// источника. Прежнюю конфигурацию под разделяемой блокировкой storage задаёт связанная
-// неизменяемая RuntimeRevision, а не текущие task/history/lease.
-//
-//go:embed sql/runtime_session_resume_snapshot.sql
-var queryRuntimeSessionResumeSnapshot string
 
 // runtimeSessionResumeCompatible requires recognized assistant scope, OpenAI runtime and mandatory
 // provenance in both snapshots, then JSON-normalizes and compares the closed
@@ -164,33 +148,4 @@ func runtimeSessionMCPDependencies(snapshot map[string]any) (any, error) {
 		}
 	}
 	return selected, nil
-}
-
-// runtimeSessionResumeID returns no resume ID for an empty ID, missing confirmed storage,
-// malformed snapshot or incompatible dependencies, preserving the cold path. Backend errors are
-// Unavailable; a compatible owner snapshot returns the same ID without renewing a lease, changing
-// storage or authorizing execution.
-// runtimeSessionResumeID не возвращает resume ID при пустом ID, отсутствии подтверждённого
-// storage, повреждённом снимке или несовместимых зависимостях, сохраняя cold path. Ошибка
-// хранилища даёт Unavailable; совместимый owner snapshot возвращает тот же ID без продления
-// аренды, изменения storage и разрешения исполнения.
-func runtimeSessionResumeID(ctx context.Context, tx pgx.Tx, current scope, snapshot map[string]any, sessionID string) (string, error) {
-	if sessionID == "" {
-		return "", nil
-	}
-	var raw []byte
-	err := tx.QueryRow(ctx, queryRuntimeSessionResumeSnapshot, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "session_ref": stringMap(snapshot, "sessionRef"), "codex_session_id": sessionID,
-	}).Scan(&raw)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", errs.ErrUnavailable
-	}
-	var previous map[string]any
-	if json.Unmarshal(raw, &previous) != nil || !runtimeSessionResumeCompatible(previous, snapshot) {
-		return "", nil
-	}
-	return sessionID, nil
 }

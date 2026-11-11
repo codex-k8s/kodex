@@ -65,8 +65,8 @@ func fullArchiveTask() model.Task {
 	task.OrganizationRef, task.SessionRef = "org_fixture01", "ses_fixture01"
 	task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionVersion = "pva_fixture01", "rrev_fixture01", 1
 	task.RuntimeRevisionDigest, task.InputDigest, task.SourceSHA256 = strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
-	task.CodexSessionID = "00000000-0000-4000-8000-000000000003"
-	task.SourceRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + task.CodexSessionID + ".jsonl"
+	task.NativeSessionID = "ses_NativeFixture3"
+	task.SourceRelativePath = ".kodex/state/opencode/checkpoints/g1/" + task.NativeSessionID + ".json"
 	task.SourceSizeBytes, task.TargetObjectKey = 1024, "fixture/object-a1.tar"
 	task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
 	return task

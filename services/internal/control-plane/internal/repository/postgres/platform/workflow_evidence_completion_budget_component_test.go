@@ -45,7 +45,7 @@ func TestWorkflowEvidenceCompletionBudgetComponent(t *testing.T) {
 				}
 				fixture.finishEffect(invocation, "github-commit:"+head, string(asJSON(map[string]any{"sha": head, "path": "docs/requirements.md"})))
 			}
-			payload := command.CompleteExecutionInput{
+			payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 				LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
 				Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true,
 				Usage: turnUsageFixture(), ResultSummary: "Документ обновлён, передать подтверждённые результаты.",

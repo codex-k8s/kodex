@@ -191,7 +191,7 @@ func testWorkflowCaptureCompletion(t *testing.T, withArtifact bool) {
 	// Completion must persist RESULT_INVALID itself; this fixture never supplies a business verdict.
 	// Plain summary намеренно не проходит финальный контракт даже при наличии файла в capture.
 	// Completion сам сохраняет RESULT_INVALID; оснастка не назначает бизнес-исход.
-	payload := command.CompleteExecutionInput{LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"),
+	payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(claimed), LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"),
 		Generation: runtimeRevisionMapInt64(claimed, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: "Capture boundary."}
 	body := []byte("Проверенный материал capture boundary.\n")
 	sum := sha256.Sum256(body)

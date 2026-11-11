@@ -6322,7 +6322,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("fail parallel child: run=%#v err=%v", failedChild.Run, err)
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{
+		Mutation: value.Mutation{IdempotencyKey: "delegation-failed-sibling-coordinator-late"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(failedCoordinatorLease),
 			LeaseRef: stringMap(failedCoordinatorLease, "leaseRef"), Fence: stringMap(failedCoordinatorLease, "fence"),
 			Generation: failedCoordinatorLease["generation"].(int64), Success: true,
 			ResultSummary: "Late coordinator completion must be rejected", Usage: turnUsageFixture(),
@@ -6347,7 +6347,7 @@ func testNestedDelegation(t *testing.T, ctx context.Context, repository *Reposit
 		t.Fatalf("terminal root did not cancel sibling node: graph=%#v", failedChild.Graph)
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{
+		Mutation: value.Mutation{IdempotencyKey: "delegation-late-gated-child"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lateGatedLease),
 			LeaseRef: stringMap(lateGatedLease, "leaseRef"), Fence: stringMap(lateGatedLease, "fence"),
 			Generation: lateGatedLease["generation"].(int64), Success: true,
 			ResultSummary: "Late completion must be rejected", Usage: turnUsageFixture(),
@@ -7586,7 +7586,7 @@ func completeClaimedExecutionWithSummary(t *testing.T, ctx context.Context, serv
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
-			Success: true, ResultSummary: resultSummary, Artifacts: artifacts,
+			Success: true, ResultSummary: resultSummary, Artifacts: artifacts, NativeSession: nativeCheckpointForClaimFixture(lease),
 			Usage: turnUsageFixture(),
 		}})
 	if err != nil {
@@ -7922,7 +7922,7 @@ func testSystemAssistantTypedPlan(t *testing.T, ctx context.Context, repository 
 	assistantOutputBody := []byte("Assistant result\n")
 	assistantOutputDigest := sha256.Sum256(assistantOutputBody)
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: "assistant-complete-1"}, Payload: command.CompleteExecutionInput{
+		Mutation: value.Mutation{IdempotencyKey: "assistant-complete-1"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
 			Success: true, ResultSummary: "The configuration plan is ready for review.", Artifacts: []command.CompletedArtifact{{
 				FileName: "assistant-result.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(assistantOutputDigest[:]),

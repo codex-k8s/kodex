@@ -138,18 +138,14 @@ func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[s
 		"runtime_config_ref": input.RuntimeConfigRef, "runtime_config_version": input.RuntimeConfigVersion, "runtime_config_digest": input.RuntimeConfigDigest,
 		"environment_ref": input.RuntimeEnvironmentRef, "environment_version": input.RuntimeEnvironmentVersion, "environment_digest": input.RuntimeEnvironmentDigest,
 		"image_reference": input.ImageReference, "image_manifest_digest": input.ImageManifestDigest,
-		"provider_process": map[string]any{"status": "UNKNOWN", "provider": "CODEX"},
+		"provider_process": map[string]any{"status": "UNKNOWN", "provider": "OPENCODE"},
 		"instruction_ref":  input.InstructionRef, "instruction_digest": input.InstructionDigest, "prompt_template_ref": input.PromptTemplateRef,
 		"prompt_template_digest": input.PromptTemplateDigest, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort,
 		"workspace_policy": workspace, "hosted_native_search": search}, nil
 }
 
-// assistantHostedSearchDiscovery parses the overlay and reports the requested mode
-// or the pinned SDK's cached default with provenance. It explicitly marks actual call
-// verification false and does not claim effective provider behavior or shell access.
-// assistantHostedSearchDiscovery разбирает overlay и сообщает requested mode либо cached
-// default закреплённого SDK с provenance. Actual call verification явно false;
-// effective provider behavior и shell access не утверждаются.
+// assistantHostedSearchDiscovery reports requested settings without claiming native hosted search support; managed tools have their own grants.
+// assistantHostedSearchDiscovery сообщает requested settings без обещания native hosted search; managed tools имеют отдельные grants.
 func assistantHostedSearchDiscovery(raw string) (map[string]any, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(raw)
 	if err != nil {
@@ -157,10 +153,9 @@ func assistantHostedSearchDiscovery(raw string) (map[string]any, error) {
 	}
 	mode, source := overlay.WebSearchMode, "PUBLISHED_CONFIG_OVERLAY"
 	if mode == "" {
-		mode, source = "cached", "SDK_DEFAULT_CACHED"
+		mode, source = "NONE", "OPENCODE_MANAGED_TOOLS"
 	}
-	return map[string]any{"configuration_source": source, "requested_mode": mode, "owner_editable": true,
-		"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}, nil
+	return map[string]any{"configuration_source": source, "requested_mode": mode, "effective_status": "UNSUPPORTED", "owner_editable": false, "sandbox_domain_allowlist_applies": false, "actual_call_verified": false}, nil
 }
 
 // validAssistantCurrentImage allows a wholly unset image only for SYSTEM bootstrap;

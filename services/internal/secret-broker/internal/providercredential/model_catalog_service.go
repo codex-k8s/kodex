@@ -3,8 +3,9 @@ package providercredential
 import (
 	"context"
 	"errors"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
@@ -37,7 +38,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 	}
 	defer clear(raw)
 	var result ModelCatalog
-	if definitionKey != "" && definitionKey != "openai-codex" {
+	if definitionKey != "" {
 		if method != CatalogMethodAPIKey || service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
 			return catalogFailure(ctx, errModelCatalogUnverified)
 		}
@@ -48,7 +49,7 @@ func (service *Service) ObserveModelCatalogForDefinition(ctx context.Context, ac
 		}
 		result, err = service.observeGatewayCatalog(ctx, raw)
 	} else {
-		result, err = service.appServer.ObserveModelCatalog(ctx, raw, method)
+		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
 	if err != nil {
 		return catalogFailure(ctx, err)

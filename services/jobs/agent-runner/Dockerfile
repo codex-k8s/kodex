@@ -29,22 +29,24 @@ RUN --mount=type=tmpfs,target=/tmp,size=4294967296 \
 # Локальный runtime сохраняет тот же защищенный entrypoint и UID-контракт, но
 # не собирает полный набор инструментов роли. Production-образ остается
 # последним stage этого Dockerfile и не зависит от local-runtime.
-FROM docker.io/library/node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS local-codex-cli
+FROM docker.io/library/node:24.22.1-bookworm@sha256:d862bb5d082c5ae0210ac07e8c0344cb8cf7bef6d78e9b8c50c179da923108ea AS opencode-binary
 
-ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0
-RUN set -eu; \
-	npm install --global "${KODEX_CODEX_PACKAGE}"; \
-	binary=$(find /usr/local/lib/node_modules/@openai/codex -type f \
-		-path '*/vendor/*/bin/codex' -print -quit); \
-	code_mode_host=$(find /usr/local/lib/node_modules/@openai/codex -type f \
-		-path '*/vendor/*/bin/codex-code-mode-host' -print -quit); \
-	test -n "$binary" && test -x "$binary"; \
-	test -n "$code_mode_host" && test -x "$code_mode_host"; \
-	"$binary" --version >/dev/null; \
-	"$code_mode_host" --help >/dev/null; \
-	install -D -m 0555 "$binary" /out/codex; \
-	install -D -m 0555 "$code_mode_host" /out/codex-code-mode-host; \
-	npm cache clean --force
+# Версия и checksum принадлежат source; private configuration не попадает в build.
+RUN command -v curl \
+	&& test -s /etc/ssl/certs/ca-certificates.crt \
+	&& curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
+		--connect-timeout 15 --max-time 180 \
+		--output /tmp/opencode.tar.gz \
+		https://github.com/anomalyco/opencode/releases/download/v1.19.5/opencode-linux-x64-baseline.tar.gz \
+	&& echo '17c200fd4b2289954cc01552559f9b6d03ec157b2ddfb5eb54144f491656333d  /tmp/opencode.tar.gz' | sha256sum -c - \
+	&& mkdir /out \
+	&& tar -xzf /tmp/opencode.tar.gz -C /out -- opencode \
+	&& chmod 0555 /out/opencode \
+	&& test "$(/out/opencode --version)" = '1.19.5' \
+	&& rm -f /tmp/opencode.tar.gz
+
+
+FROM docker.io/library/node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS node-runtime
 
 FROM docker.io/library/debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171 AS local-runtime
 
@@ -55,25 +57,21 @@ RUN set -eu; \
 	apt-get install -y --no-install-recommends bubblewrap ca-certificates git libpcre2-8-0 openssh-client tini; \
 	groupadd --gid 10001 kodex; \
 	useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin kodex; \
-	mkdir -p /home/kodex /workspace /codex-home /run/secrets/kodex/runtime/provider; \
+	mkdir -p /home/kodex /workspace /run/secrets/kodex/runtime/provider; \
 	touch /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256; \
 	chmod 0755 /run/secrets/kodex/runtime/provider; \
 	chmod 0400 /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256; \
-	chown -R 10001:10001 /home/kodex /workspace /codex-home; \
+	chown -R 10001:10001 /home/kodex /workspace; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
-COPY --from=local-codex-cli --chmod=0555 /out/codex /usr/local/bin/codex
-COPY --from=local-codex-cli --chmod=0555 /out/codex-code-mode-host /usr/local/bin/codex-code-mode-host
-# CODEX_SHELL должен уметь исполнять JavaScript, который платформа передаёт
-# агенту для штатной проверки workspace. Native Codex binaries не включают
-# отдельный Node.js runtime.
-COPY --from=local-codex-cli --chmod=0555 /usr/local/bin/node /usr/local/bin/node
+COPY --from=opencode-binary --chown=0:0 --chmod=0555 /out/opencode /usr/local/bin/opencode
+# Node.js принадлежит инструментам роли и не является отдельным agent runtime.
+COPY --from=node-runtime --chmod=0555 /usr/local/bin/node /usr/local/bin/node
 COPY --chmod=0555 --from=build /out/kodex-go-toolchain-guard /usr/local/bin/kodex-init
 COPY --chmod=0555 --from=runner-build /out/kodex-protected/kodex-agent-runner /usr/local/bin/kodex-agent-runner
 
 RUN node --version >/dev/null \
-	&& codex --version >/dev/null \
-	&& codex-code-mode-host --help >/dev/null
+	&& test "$(OPENCODE_DISABLE_MODELS_FETCH=true OPENCODE_DISABLE_AUTOUPDATE=true opencode --version)" = '1.19.5'
 
 ENV HOME=/home/kodex \
 	NPM_CONFIG_CACHE=/home/kodex/.npm \
@@ -150,23 +148,10 @@ RUN --mount=type=cache,id=kodex-public-go-mod,target=/go/pkg/mod,sharing=shared 
 	test "$(printf '%s\n' "$client_version" | sed -n 's/.*"gitVersion": "\([^"]*\)".*/\1/p')" = "${KUBECTL_VERSION}"; \
 	test "$("${GOBIN}/helm" version --template '{{.Version}} {{.GoVersion}}')" = "${HELM_VERSION} go1.26.10"
 
-FROM docker.io/library/node:24.22.1-bookworm@sha256:d862bb5d082c5ae0210ac07e8c0344cb8cf7bef6d78e9b8c50c179da923108ea AS opencode-binary
-
-# Версия и checksum принадлежат source; private configuration не попадает в build.
-RUN command -v curl \
-	&& test -s /etc/ssl/certs/ca-certificates.crt \
-	&& curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' \
-		--connect-timeout 15 --max-time 180 \
-		--output /tmp/opencode.tar.gz \
-		https://github.com/anomalyco/opencode/releases/download/v1.19.5/opencode-linux-x64-baseline.tar.gz \
-	&& echo '17c200fd4b2289954cc01552559f9b6d03ec157b2ddfb5eb54144f491656333d  /tmp/opencode.tar.gz' | sha256sum -c - \
-	&& mkdir /out \
-	&& tar -xzf /tmp/opencode.tar.gz -C /out -- opencode \
-	&& chmod 0555 /out/opencode \
-	&& test "$(/out/opencode --version)" = '1.19.5' \
-	&& rm -f /tmp/opencode.tar.gz
 
 FROM docker.io/library/node:24.22.1-bookworm@sha256:d862bb5d082c5ae0210ac07e8c0344cb8cf7bef6d78e9b8c50c179da923108ea AS full-runtime
+
+COPY --from=opencode-binary --chown=0:0 --chmod=0555 /out/opencode /usr/local/bin/opencode
 
 ENV GOTOOLCHAIN=local
 
@@ -300,8 +285,7 @@ RUN set -eu; \
 	playwright --version >/dev/null; \
 	command -v playwright-mcp >/dev/null; \
 	wait-on --version >/dev/null; \
-	codex --version >/dev/null; \
-	codex-code-mode-host --help >/dev/null; \
+	test "$(OPENCODE_DISABLE_MODELS_FETCH=true OPENCODE_DISABLE_AUTOUPDATE=true opencode --version)" = '1.19.5'; \
 	npm cache clean --force; \
 	rm -rf /var/lib/apt/lists/* /root/.cache
 
@@ -310,11 +294,11 @@ RUN test "$(yarn --version)" = "$(node -p 'require("/opt/kodex/npm-toolchain/pac
 
 RUN groupadd --gid "${KODEX_AGENT_RUNNER_GID}" kodex \
 	&& useradd --uid "${KODEX_AGENT_RUNNER_UID}" --gid "${KODEX_AGENT_RUNNER_GID}" --no-create-home --shell /usr/sbin/nologin kodex \
-	&& mkdir -p /home/kodex/.npm /home/kodex/.config /home/kodex/.cache /workspace /codex-home /run/secrets/kodex/runtime/provider \
+	&& mkdir -p /home/kodex/.npm /home/kodex/.config /home/kodex/.cache /workspace /run/secrets/kodex/runtime/provider \
 	&& touch /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256 \
 	&& chmod 0755 /run/secrets/kodex/runtime/provider \
 	&& chmod 0400 /run/secrets/kodex/runtime/provider/auth.json /run/secrets/kodex/runtime/provider/auth.sha256 \
-	&& chown -R "${KODEX_AGENT_RUNNER_UID}:${KODEX_AGENT_RUNNER_GID}" /home/kodex /workspace /codex-home
+	&& chown -R "${KODEX_AGENT_RUNNER_UID}:${KODEX_AGENT_RUNNER_GID}" /home/kodex /workspace
 
 ENV HOME=/home/kodex \
 	NPM_CONFIG_CACHE=/home/kodex/.npm \
@@ -350,10 +334,7 @@ USER 10001:10001
 
 ENTRYPOINT ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]
 
-# Выбирается отдельно по exact target; обычный образ сохраняет прежний набор binaries.
+# Совместимое имя build target; оба профиля содержат только OpenCode.
 FROM full-runtime AS opencode-runtime
-COPY --from=opencode-binary --chown=0:0 --chmod=0555 /out/opencode /usr/local/bin/opencode
-RUN OPENCODE_DISABLE_MODELS_FETCH=true OPENCODE_DISABLE_AUTOUPDATE=true \
-	test "$(OPENCODE_DISABLE_MODELS_FETCH=true OPENCODE_DISABLE_AUTOUPDATE=true opencode --version)" = '1.19.5'
 
 FROM full-runtime AS default-runtime

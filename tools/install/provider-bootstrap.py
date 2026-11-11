@@ -39,32 +39,36 @@ def gateway_definition(value):
 
 def bootstrap_key(raw):
     value = json.loads(auth_valid(raw))
-    return "default-" + gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "default-openai-codex"
+    return "default-" + gateway_definition(value)
 
 
 def require_definition(raw, definition):
     # Тип credential проверяется до любого create/CAS; имя account не выбирает provider.
     value = json.loads(auth_valid(raw))
-    selected = gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "openai-codex"
+    selected = gateway_definition(value)
     require(selected == definition)
 
 
 def auth_valid(raw):
     require(0 < len(raw) <= 1048576)
-    value = json.loads(raw)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value)
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
     require(isinstance(value, dict))
     mode = value.get("auth_mode")
     if mode == "gateway-api-key":
         gateway_definition(value)
         key = value.get("API_KEY")
-        require(set(value) == {"auth_mode", "provider_definition_key", "API_KEY"} and isinstance(key, str)
+        namespace = value.get("cache_namespace_key", "")
+        require(isinstance(namespace, str) and (not namespace or re.fullmatch(r"[a-f0-9]{64}", namespace)))
+        require(set(value) - {"cache_namespace_key"} == {"auth_mode", "provider_definition_key", "API_KEY"} and isinstance(key, str)
                 and 8 <= len(key.encode()) <= 16384 and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in key))
         return raw
-    require((mode in ("apikey", "api-key") and isinstance(value.get("OPENAI_API_KEY"), str)
-             and bool(value["OPENAI_API_KEY"])) or
-            (mode in ("chatgpt", "chatgptAuthTokens") and isinstance(value.get("tokens"), dict)
-             and bool(value["tokens"])))
-    return raw
+    raise Rejected("unsupported credential mode")
 
 
 def read_private_auth(path):
@@ -151,7 +155,7 @@ def seed_manifest(epoch, raw):
 
 
 class Operator:
-    def __init__(self, context, bootstrap_account_key="default-openai-codex"):
+    def __init__(self, context, bootstrap_account_key=""):
         self.context = context
         self.bootstrap_account_key = bootstrap_account_key
 
@@ -185,8 +189,7 @@ class Operator:
                 row["state"] in ("AUTHORIZED", "REAUTHORIZATION_REQUIRED", "PENDING_AUTHORIZATION") and
                 row["enabled"] is True and row["version"] >= 1)
         definition = row["definitionKey"]
-        require(definition == "openai-codex" or
-                re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
+        require(re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
         return row
 
     def owner_state(self):
@@ -335,7 +338,7 @@ def main():
         if args.mode == "seed" and probe.owner_state() == "FRESH":
             args.account_key = bootstrap_key(read_private_auth(args.auth_file))
         else:
-            args.account_key = (metadata or {}).get("metadata", {}).get("annotations", {}).get("kodex.dev/provider-account-key", "default-openai-codex")
+            args.account_key = (metadata or {}).get("metadata", {}).get("annotations", {}).get("kodex.dev/provider-account-key", "")
     require(args.context and re.fullmatch(r"[a-z][a-z0-9_-]{1,95}", args.account_key))
     require((args.mode in ("seed", "import")) == bool(args.auth_file))
     operator = Operator(args.context, args.account_key)

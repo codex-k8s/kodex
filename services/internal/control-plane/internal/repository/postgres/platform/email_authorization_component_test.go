@@ -342,7 +342,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	// Модель завершила ход до человеческого решения; effect сохраняет exact origin.
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: runtime,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-original-complete"},
-		Payload: command.CompleteExecutionInput{LeaseRef: stringMap(execution, "leaseRef"), Fence: stringMap(execution, "fence"),
+		Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(execution), LeaseRef: stringMap(execution, "leaseRef"), Fence: stringMap(execution, "fence"),
 			Generation: runtimeRevisionMapInt64(execution, "generation"), Success: true,
 			ResultSummary: "Waiting for the mailbox approval", Usage: turnUsageFixture()}}); err != nil {
 		t.Fatalf("complete email model turn before mailbox approval: %v", err)

@@ -116,11 +116,13 @@ func TestCastRuntimeRevisionCarriesExactEnvironmentImageAndTools(t *testing.T) {
 func TestCastRuntimeRevisionCarriesProviderSessionForContinuation(t *testing.T) {
 	t.Parallel()
 
-	const sessionID = "00000000-0000-4000-8000-000000000003"
-	revision := castRuntimeRevision(map[string]any{"codexSessionID": sessionID})
-	if revision.GetCodexSessionId() != sessionID {
-		t.Fatalf("provider session binding потерян: %q", revision.GetCodexSessionId())
+	path, _ := runtimecontract.NativeSessionExportPath("ses_fixture", 1)
+	checkpoint := runtimecontract.NativeSessionCheckpoint{SessionID: "ses_fixture", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: path, SHA256: strings.Repeat("a", 64), SizeBytes: 800}
+	revision := castRuntimeRevision(map[string]any{"nativeSession": checkpoint})
+	if revision == nil || revision.GetNativeSession().GetSessionId() != checkpoint.SessionID {
+		t.Fatal("native identity lost in runtime projection")
 	}
+
 }
 
 // TestCastClaimPreservesAuthoritativeProjectBinding checks that the owner project reference is

@@ -14,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,139 +21,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/callback"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
-	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/testfixture"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 )
-
-// TestExecutedTurnFailurePreservesUsageInRetriedCallback exercises successful and post-execution failure modes against a synthetic TLS callback that loses its first acknowledgement, requiring byte-identical retries with exact usage, archive policy and no forged private diagnostic.
-// TestExecutedTurnFailurePreservesUsageInRetriedCallback проверяет success и post-execution failures через синтетический TLS callback с потерей первого acknowledgement, требуя побайтно одинаковые повторы с точным usage, archive policy и без поддельной private diagnostic.
-func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
-	usage := runtimecontract.TokenUsage{TotalTokens: 150, InputTokens: 100, CachedInputTokens: 30, CacheWriteInputTokens: 10, OutputTokens: 50, ReasoningOutputTokens: 20, ModelContextWindow: 32768}
-	for _, mode := range []string{"workspace", "cancelled workspace", "empty message", "oversized message", "invalid utf8", "publish result", "collect artifacts", "completion archive", "provider failure", "provider outbox failure", "success", "before execution"} {
-		t.Run(mode, func(t *testing.T) {
-			input := model.Input{RuntimeRevisionRef: "rrev_fixture", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64), WorkspaceRoot: t.TempDir(), WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}
-			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage,
-				SessionID:           "00000000-0000-4000-8000-000000000001",
-				ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-00000000-0000-4000-8000-000000000001.jsonl",
-				ArchiveSHA256:       strings.Repeat("d", 64), ArchiveSizeBytes: 26276}
-			// JSON не может присвоить private proof даже при правильных input pins.
-			if json.Unmarshal([]byte(`{"providerDiagnostic":{"stage":"PRIVATE_SENTINEL"},"provider_diagnostic":{"stage":"PRIVATE_SENTINEL"}}`), &result) != nil {
-				t.Fatal("synthetic result decode failed")
-			}
-			check := func(context.Context) error { return nil }
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			wantCode := "PROVIDER_RESPONSE_INVALID"
-			switch mode {
-			case "workspace", "cancelled workspace":
-				check = func(context.Context) error { return errors.New("synthetic quota denial") }
-				wantCode = "RUNTIME_ARTIFACT_INVALID"
-				if mode == "cancelled workspace" {
-					cancel()
-				}
-			case "empty message":
-				result.FinalMessage = " "
-			case "oversized message":
-				result.FinalMessage = strings.Repeat("x", 64<<10+1)
-			case "invalid utf8":
-				result.FinalMessage = string([]byte{0xff})
-			case "publish result":
-				input.CodexSandbox = "workspace-write"
-				input.Capabilities = []string{runtimecontract.ArtifactCapability}
-				wantCode = "RUNTIME_ARTIFACT_INVALID"
-			case "collect artifacts":
-				input.Capabilities = []string{runtimecontract.ArtifactCapability}
-				wantCode = "RUNTIME_ARTIFACT_INVALID"
-			case "completion archive":
-				result.SessionID = "incomplete-archive-binding"
-			case "provider failure":
-				result.Outcome, result.FailureCode = "FAILED", "usage_limit_exceeded"
-				wantCode = "PROVIDER_RATE_LIMITED"
-			case "provider outbox failure":
-				result.Outcome, result.FailureCode = "FAILED", "RUNTIME_ARTIFACT_INVALID"
-				wantCode = "RUNTIME_ARTIFACT_INVALID"
-			case "success":
-				wantCode = ""
-			case "before execution":
-				wantCode = "RUNTIME_INPUT_INVALID"
-			}
-			// Ненулевое качество обязано пройти настоящий TLS callback и byte-identical retry.
-			if mode == "success" {
-				result.UsageCompleteness = codex.UsageComplete
-			} else if mode == "workspace" || mode == "provider failure" {
-				result.UsageCompleteness = codex.UsagePartial
-			}
-			wantUsage := usage
-			wantUsage.Completeness = result.UsageCompleteness
-			wantArchive := mode != "before execution" && mode != "completion archive"
-			if mode == "before execution" {
-				wantUsage = runtimecontract.TokenUsage{}
-			}
-			var mu sync.Mutex
-			var receipt []byte
-			attempts := 0
-			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-				if err != nil {
-					t.Error(err)
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-				if r.Method != http.MethodPost || r.URL.Path != "/v1/executions/lease_fixture/complete" || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("c", 64) || r.Header.Get("X-Kodex-Attempt") != "3" || r.Header.Get("X-Kodex-Runtime-Revision-Digest") != input.RuntimeRevisionDigest || r.TLS == nil || len(r.TLS.PeerCertificates) != 1 {
-					t.Error("completion lost authenticated execution binding")
-				}
-				var payload runtimecontract.RunnerCompletionRequest
-				if json.Unmarshal(raw, &payload) != nil || payload.Validate() != nil || payload.Usage != wantUsage || payload.SafeErrorCode != wantCode || payload.Success != (mode == "success") || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt || len(payload.Artifacts) != 0 {
-					t.Error("completion lost measured usage or terminal provenance")
-				}
-				if payload.ProviderDiagnostic != nil || bytes.Contains(raw, []byte("PRIVATE_SENTINEL")) {
-					t.Error("completion accepted forged diagnostic")
-				}
-				if wantArchive {
-					if payload.CodexSessionID != result.SessionID || payload.ArchiveRelativePath != result.ArchiveRelativePath || payload.ArchiveSHA256 != result.ArchiveSHA256 || payload.ArchiveSizeBytes != result.ArchiveSizeBytes {
-						t.Error("completion lost confirmed archive binding")
-					}
-				} else if payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0 {
-					t.Error("completion published an unconfirmed archive binding")
-				}
-				if wantCode == "RUNTIME_ARTIFACT_INVALID" && payload.ResultSummary != "i18n:RUNTIME_ARTIFACT_INVALID" {
-					t.Error("artifact completion lost its closed failure summary")
-				}
-				mu.Lock()
-				defer mu.Unlock()
-				attempts++
-				if receipt == nil {
-					receipt = append([]byte(nil), raw...)
-					// Receipt уже принят; потеря ACK не должна менять расход при повторе.
-					w.WriteHeader(http.StatusServiceUnavailable)
-					return
-				}
-				if !bytes.Equal(receipt, raw) {
-					t.Error("retried completion changed committed receipt")
-				}
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
-			server.StartTLS()
-			defer server.Close()
-			client := completionTestClient(t, &input, server)
-			var err error
-			if mode == "before execution" {
-				err = completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
-			} else {
-				err = completeExecutedTurn(ctx, input, client, result, check, nil)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			if attempts != 2 || len(receipt) == 0 {
-				t.Fatal("completion retry did not preserve accepted receipt")
-			}
-		})
-	}
-}
 
 // completionTestClient creates temporary trust/client-identity/ticket files from the synthetic server, updates only the supplied fixture input and registers callback-client cleanup; the authentication bytes never come from live accounts.
 // completionTestClient создаёт временные trust/client-identity/ticket файлы из синтетического сервера, меняет лишь переданный fixture input и регистрирует callback-client cleanup; auth bytes не берутся из живых аккаунтов.
@@ -208,233 +76,6 @@ func (proxy *turnProxyFixture) Close(ctx context.Context) error {
 	return nil
 }
 
-// TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures injects preparation, execution, activity, cancellation and deadline outcomes while using real synthetic source capture only in verified cases. It requires one provider attempt, correct usage/archive projection, stable terminal retry and independent proxy/context cleanup.
-// TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures задаёт preparation, execution, activity, cancellation и deadline outcomes с настоящим synthetic source capture лишь для verified-случаев. Требует одну попытку provider, верные usage/archive projection, стабильный terminal retry и независимую proxy/context cleanup.
-func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T) {
-	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "verified timeline", "verified broker", "verified deadline", "success", "preparation", "provider before effect"} {
-		t.Run(mode, func(t *testing.T) {
-			usage := runtimecontract.TokenUsage{TotalTokens: 70, InputTokens: 60, CachedInputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
-			input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "synthetic task", RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64)}
-			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage,
-				ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Revision: 2, Kind: runtimecontract.NativeToolKindSleep, State: runtimecontract.NativeToolStateSucceeded,
-					SafeResult: runtimecontract.NativeToolResultCompleted, DurationMS: 25, SafeParameters: map[string]any{"requested_duration_ms": int64(25)}}},
-				SessionID:           "00000000-0000-4000-8000-000000000001",
-				ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-00000000-0000-4000-8000-000000000001.jsonl",
-				ArchiveSHA256:       strings.Repeat("d", 64), ArchiveSizeBytes: 39301}
-			wantCode := "PROVIDER_UNAVAILABLE"
-			wantUsage := usage
-			if strings.Contains(mode, "timeline") {
-				wantCode = "RUNTIME_UNAVAILABLE"
-			}
-			if mode == "success" {
-				wantCode = ""
-			}
-			if mode == "verified deadline" {
-				wantCode = "RUNTIME_TIMEOUT"
-				input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{}
-			}
-			if mode == "preparation" || mode == "provider before effect" {
-				wantUsage = runtimecontract.TokenUsage{}
-			}
-			if mode == "preparation" {
-				wantCode = "RUNTIME_INPUT_INVALID"
-			}
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			var mu sync.Mutex
-			var receipt []byte
-			progress, timeline, completions := 0, 0, 0
-			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				mu.Lock()
-				defer mu.Unlock()
-				if r.Method != http.MethodPost || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("c", 64) || r.Header.Get("X-Kodex-Attempt") != "3" ||
-					r.Header.Get("X-Kodex-Runtime-Revision-Digest") != input.RuntimeRevisionDigest || r.TLS == nil || len(r.TLS.PeerCertificates) != 1 {
-					t.Error("turn callback lost exact authenticated binding")
-				}
-				switch r.URL.Path {
-				case "/v1/executions/lease_fixture/progress":
-					progress++
-					w.WriteHeader(http.StatusNoContent)
-				case "/v1/executions/lease_fixture/native-tool-call":
-					timeline++
-					if mode == "timeline" || mode == "verified timeline" {
-						w.WriteHeader(http.StatusForbidden)
-						return
-					}
-					w.WriteHeader(http.StatusNoContent)
-				case "/v1/executions/lease_fixture/complete":
-					raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-					var payload runtimecontract.RunnerCompletionRequest
-					if err != nil || json.Unmarshal(raw, &payload) != nil || payload.Validate() != nil || payload.Usage != wantUsage ||
-						payload.Success != (mode == "success") || payload.SafeErrorCode != wantCode || payload.Attempt != input.Attempt || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || len(payload.Artifacts) != 0 {
-						t.Error("turn completion lost measured usage or terminal outcome")
-					}
-					if mode == "success" || strings.HasPrefix(mode, "verified") {
-						if payload.CodexSessionID != result.SessionID || payload.ArchiveRelativePath != result.ArchiveRelativePath || payload.ArchiveSHA256 != result.ArchiveSHA256 || payload.ArchiveSizeBytes != result.ArchiveSizeBytes {
-							t.Error("successful execution lost confirmed archive binding")
-						}
-					} else if payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0 {
-						t.Error("failed execution published an unconfirmed archive binding")
-					}
-					completions++
-					if completions == 1 {
-						receipt = append([]byte(nil), raw...)
-						w.WriteHeader(http.StatusServiceUnavailable)
-						return
-					}
-					if !bytes.Equal(receipt, raw) {
-						t.Error("lost ACK changed turn receipt")
-					}
-					w.WriteHeader(http.StatusNoContent)
-				default:
-					t.Error("unexpected callback route")
-					w.WriteHeader(http.StatusNotFound)
-				}
-			}))
-			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
-			server.StartTLS()
-			defer server.Close()
-			client := completionTestClient(t, &input, server)
-			if strings.HasPrefix(mode, "verified") {
-				input.WorkspaceRoot = t.TempDir()
-				input.CodexHome = filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
-				input.InputDigest, input.SessionRef, input.TurnRef = strings.Repeat("e", 64), "ses_fixture", "turn_fixture"
-				path := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
-				testfixture.WriteRolloutSource(t, path)
-				captured, err := codex.CaptureStoppedRollout(input, result.SessionID, path)
-				if err != nil {
-					t.Fatal("actual source capture failed")
-				}
-				captured.Outcome, captured.FinalMessage, captured.Usage, captured.ToolCalls = result.Outcome, result.FinalMessage, result.Usage, result.ToolCalls
-				result = captured
-			}
-			proxy := &turnProxyFixture{t: t}
-			ready, executions, cleaned := false, 0, false
-			runtime := turnRuntime{
-				prepare: func(ctx context.Context, _ model.Input, _ *callback.Client) (preparedTurn, string, error) {
-					if mode == "preparation" {
-						return preparedTurn{}, "RUNTIME_INPUT_INVALID", errors.New("synthetic preparation failure")
-					}
-					if mode == "verified deadline" {
-						input.ExecutionDeadline.EffectiveDeadlineAt = time.Now().UTC().Add(100 * time.Millisecond)
-						bounded, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
-						return preparedTurn{ctx: bounded, proxy: proxy, cancel: func() { cancelDeadline(); cleaned = true }}, "", nil
-					}
-					return preparedTurn{ctx: ctx, proxy: proxy, cancel: func() { cleaned = true }}, "", nil
-				},
-				execute: func(executionContext context.Context, _ model.Input, prompt []byte, socket, token string, onActivity func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
-					executions++
-					mu.Lock()
-					if !ready || progress != 1 || string(prompt) != input.Task || socket != proxy.SocketPath() || token != proxy.LocalBearerToken() {
-						t.Error("provider started before readiness or lost prepared binding")
-					}
-					mu.Unlock()
-					if strings.HasPrefix(mode, "cancelled") {
-						cancel()
-					}
-					if mode == "provider before effect" {
-						return codex.Result{}, errors.New("synthetic pre-effect failure")
-					}
-					if mode == "verified deadline" {
-						<-executionContext.Done()
-						return result, executionContext.Err()
-					}
-					if mode != "cancelled broker" {
-						if err := onActivity(runtimecontract.RuntimeActivity{ToolCall: &result.ToolCalls[0]}); err != nil {
-							return result, err
-						}
-					}
-					if strings.Contains(mode, "broker") {
-						if mode == "cancelled broker" {
-							result.ToolCalls = nil
-						}
-						return result, errors.New("synthetic credential commit failure")
-					}
-					return result, nil
-				},
-				checkWorkspace: func(context.Context) error { return nil },
-			}
-			if err := runTurn(ctx, input, client, func() { ready = true }, runtime); err != nil {
-				t.Fatal(err)
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			wantExecutions := 1
-			if mode == "preparation" {
-				wantExecutions = 0
-			}
-			wantTimeline := 1
-			if mode == "preparation" || mode == "provider before effect" || strings.HasPrefix(mode, "cancelled") || mode == "verified deadline" {
-				wantTimeline = 0
-			}
-			if executions != wantExecutions || progress != wantExecutions || completions != 2 || timeline != wantTimeline ||
-				cleaned != (wantExecutions == 1) || proxy.closed != (wantExecutions == 1) {
-				t.Fatal("turn retried provider, lost timeline, terminal delivery or cleanup")
-			}
-		})
-	}
-}
-
-// TestExecutedTurnRejectsInvalidArchiveBindings corrupts archive tuples, outcomes or usage and verifies failed completions either drop invalid archive metadata or fail validation before transport, preserving the expected public failure code.
-// TestExecutedTurnRejectsInvalidArchiveBindings повреждает archive tuples, outcomes или usage и проверяет удаление неверной archive metadata из failed completion либо validation-отказ до транспорта с ожидаемым public failure code.
-func TestExecutedTurnRejectsInvalidArchiveBindings(t *testing.T) {
-	for _, mode := range []string{"partial", "foreign session", "unsafe path", "invalid digest", "zero size", "oversized", "unknown outcome", "terminal failed", "invalid usage", "success partial"} {
-		t.Run(mode, func(t *testing.T) {
-			input := model.Input{RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture"}
-			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: runtimecontract.TokenUsage{InputTokens: 3, OutputTokens: 2, TotalTokens: 5},
-				SessionID:           "00000000-0000-4000-8000-000000000001",
-				ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-00000000-0000-4000-8000-000000000001.jsonl",
-				ArchiveSHA256:       strings.Repeat("d", 64), ArchiveSizeBytes: 26276}
-			check := func(context.Context) error { return errors.New("synthetic workspace rejection") }
-			wantCode := "RUNTIME_ARTIFACT_INVALID"
-			switch mode {
-			case "partial":
-				result.ArchiveSHA256 = ""
-			case "foreign session":
-				result.SessionID = "00000000-0000-4000-8000-000000000002"
-			case "unsafe path":
-				result.ArchiveRelativePath = "../rollout.jsonl"
-			case "invalid digest":
-				result.ArchiveSHA256 = strings.Repeat("z", 64)
-			case "zero size":
-				result.ArchiveSizeBytes = 0
-			case "oversized":
-				result.ArchiveSizeBytes = runtimecontract.MaximumSessionSourceBytes + 1
-			case "unknown outcome":
-				result.Outcome = "UNKNOWN"
-			case "terminal failed":
-				result.Outcome, result.FailureCode, result.ArchiveSHA256 = "FAILED", "usage_limit_exceeded", ""
-				check = func(context.Context) error { return nil }
-			case "invalid usage":
-				result.Usage.InputTokens = -1
-			case "success partial":
-				result.ArchiveSHA256 = ""
-				check = func(context.Context) error { return nil }
-				wantCode = "PROVIDER_RESPONSE_INVALID"
-			}
-			calls := 0
-			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				calls++
-				var payload runtimecontract.RunnerCompletionRequest
-				if json.NewDecoder(r.Body).Decode(&payload) != nil || payload.Validate() != nil || payload.Success || payload.SafeErrorCode != wantCode || payload.Usage != result.Usage ||
-					payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0 {
-					t.Error("invalid result escaped the failure boundary")
-				}
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
-			server.StartTLS()
-			defer server.Close()
-			client := completionTestClient(t, &input, server)
-			err := completeExecutedTurn(t.Context(), input, client, result, check, nil)
-			wantRejection := mode == "terminal failed" || mode == "invalid usage"
-			if (err != nil) != wantRejection || calls != map[bool]int{true: 0, false: 1}[wantRejection] {
-				t.Fatal("completion validation or terminal failure semantics changed")
-			}
-		})
-	}
-}
-
 // TestWorkspaceDiagnosticCompletion checks the authenticated callback with complete
 // execution pins, preserving measured usage and the guard-selected failure cause.
 // TestWorkspaceDiagnosticCompletion проверяет авторизованный callback с полными
@@ -466,5 +107,66 @@ func TestWorkspaceDiagnosticCompletion(t *testing.T) {
 	}
 	if err := completeExecutedTurn(t.Context(), input, client, result, check, nil); err != nil || calls != 1 {
 		t.Fatalf("workspace completion failed: calls=%d err=%v", calls, err)
+	}
+}
+
+// TestNativeFailureCompletionPreservesUsageAndExactReceipt checks each post-execution callback path against real TLS and a lost first acknowledgement.
+// TestNativeFailureCompletionPreservesUsageAndExactReceipt проверяет callback после исполнения через настоящий TLS и потерянный первый acknowledgement.
+func TestNativeFailureCompletionPreservesUsageAndExactReceipt(t *testing.T) {
+	for _, mode := range []string{"cancel", "workspace", "provider", "missing checkpoint", "forged checkpoint"} {
+		t.Run(mode, func(t *testing.T) {
+			input := model.Input{Provider: "opencode", RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture"}
+			usage := runtimecontract.TokenUsage{InputTokens: 100, CachedInputTokens: 20, OutputTokens: 50, TotalTokens: 150}
+			result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "готово", Usage: usage, UsageCompleteness: codex.UsageComplete}
+			if mode == "provider" {
+				result.Outcome, result.FailureCode = "FAILED", "provider_interrupted"
+			}
+			if mode == "forged checkpoint" {
+				result.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_forged"}
+			}
+			var receipt []byte
+			attempts := 0
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				raw, _ := io.ReadAll(r.Body)
+				var payload runtimecontract.RunnerCompletionRequest
+				expectedUsage := usage
+				expectedUsage.Completeness = runtimecontract.UsageComplete
+				if json.Unmarshal(raw, &payload) != nil || payload.Validate() != nil || payload.Success || payload.Usage != expectedUsage || payload.NativeSession != nil || payload.Attempt != 3 ||
+					r.Method != http.MethodPost || r.URL.Path != "/v1/executions/lease_fixture/complete" || r.Header.Get("Authorization") != "Bearer "+strings.Repeat("c", 64) || r.TLS == nil || len(r.TLS.PeerCertificates) != 1 {
+					t.Error("failure callback lost measurements, identity or checkpoint boundary")
+				}
+				if receipt == nil {
+					receipt = append([]byte(nil), raw...)
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				if !bytes.Equal(receipt, raw) {
+					t.Error("retry changed completion receipt")
+				}
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
+			server.StartTLS()
+			defer server.Close()
+			client := completionTestClient(t, &input, server)
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var err error
+			switch mode {
+			case "cancel":
+				cancel()
+				err = completeMeasuredFailure(ctx, input, client, result, "RUNTIME_CANCELLED")
+			case "workspace":
+				err = completeExecutedTurn(ctx, input, client, result, func(context.Context) error { return errors.New("synthetic workspace denial") }, nil)
+			case "provider":
+				err = completeResultFailure(ctx, input, client, result, "i18n:PROVIDER_RESPONSE_INVALID")
+			default:
+				err = completeExecutedTurn(ctx, input, client, result, func(context.Context) error { return nil }, nil)
+			}
+			if err != nil || attempts != 2 {
+				t.Fatalf("completion retry failed: attempts=%d err=%v", attempts, err)
+			}
+		})
 	}
 }

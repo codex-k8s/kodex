@@ -3,7 +3,6 @@ package providercredential
 import (
 	"context"
 	"errors"
-	"time"
 
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
@@ -37,18 +36,6 @@ type managedRenewalStore interface {
 	RecoverProviderRenewalCredential(context.Context, kubernetesstore.ProviderRenewalIdentity) (kubernetesstore.ProviderCredentialDescriptor, bool, error)
 }
 
-// managedRenewer exposes the write-only native refresh operation with a durable persistence callback;
-// callers reserve authority and an effect before entering it.
-// managedRenewer предоставляет native refresh операцию записи с callback durable сохранения; полномочия
-// и эффект резервируются вызывающим до входа.
-type managedRenewer interface {
-	// renewManagedCredential receives a private original auth copy and must pass validated produced bytes to
-	// persist before private process state is removed; an uncertain outcome cannot authorize retry.
-	// renewManagedCredential получает приватную исходную auth копию и передаёт проверенные произведённые
-	// байты в persist до удаления приватного состояния процесса; неопределённый исход не разрешает повтор.
-	renewManagedCredential(context.Context, []byte, func(context.Context, []byte) error) error
-}
-
 // ManagedRenewalResult reports observed state, an optional exact credential descriptor and receipt
 // UID/version without tokens; observed success does not itself activate the credential in the owner's
 // account.
@@ -59,58 +46,6 @@ type ManagedRenewalResult struct {
 	State                      string
 	Credential                 *kubernetesstore.ProviderCredentialDescriptor
 	ReceiptUID, ReceiptVersion string
-}
-
-// RenewManagedCredential is entered through the write transport after fresh owner authorization. It ties
-// work to task and service deadlines, validates the exact seed, then starts refresh only for a newly
-// acknowledged durable reservation. Errors trigger read-only outcome recovery, never another native
-// refresh.
-// RenewManagedCredential вызывается write transport после свежей owner авторизации. Он связывает работу
-// с task и service дедлайнами, проверяет точный seed и запускает refresh только при новом подтверждённом
-// durable резервировании. Ошибки вызывают read-only восстановление исхода, а не повторный native
-// refresh.
-func (service *Service) RenewManagedCredential(ctx context.Context, identity kubernetesstore.ProviderRenewalIdentity) (ManagedRenewalResult, error) {
-	store, storeOK := service.store.(managedRenewalStore)
-	renewer, processOK := service.appServer.(managedRenewer)
-	if ctx == nil || ctx.Err() != nil || service.lifecycle.Err() != nil || !storeOK || !processOK || !identity.ExpiresAt.After(time.Now()) {
-		return ManagedRenewalResult{}, ErrInvalidInput
-	}
-	ctx, cancel := context.WithDeadline(ctx, identity.ExpiresAt)
-	defer cancel()
-	stop := context.AfterFunc(service.lifecycle, cancel)
-	defer stop()
-	original, err := service.store.ReadProviderCredentialExact(ctx, identity.AccountRef, identity.Previous)
-	if err != nil {
-		return ManagedRenewalResult{}, ErrConflict
-	}
-	defer clear(original)
-	if _, err := parseManagedRenewalAuth(original); err != nil {
-		return ManagedRenewalResult{}, ErrInvalidInput
-	}
-	receipt, created, err := store.BeginProviderCredentialRenewal(ctx, identity)
-	if err != nil {
-		return ManagedRenewalResult{}, errManagedRenewalUnknown
-	}
-	if !created {
-		return service.ObserveManagedRenewal(ctx, identity)
-	}
-	err = renewer.renewManagedCredential(ctx, original, func(persistCtx context.Context, raw []byte) error {
-		produced, err := service.store.CreateProviderCredential(persistCtx, identity.TaskRef, identity.AccountRef, raw)
-		if err != nil {
-			return err
-		}
-		_, err = store.CompleteProviderCredentialRenewal(persistCtx, receipt, produced)
-		return err
-	})
-	if err != nil {
-		// Не повторяем эффект при ошибке/потерянном ACK. Только metadata/immutable READ.
-		result, recoveryErr := service.ObserveManagedRenewal(ctx, identity)
-		if recoveryErr == nil && result.State == kubernetesstore.ProviderRenewalSucceeded {
-			return result, nil
-		}
-		return ManagedRenewalResult{}, errManagedRenewalUnknown
-	}
-	return service.ObserveManagedRenewal(ctx, identity)
 }
 
 // ObserveManagedRenewal reads receipt and immutable output without writing either or starting refresh. A
@@ -145,4 +80,10 @@ func (service *Service) ObserveManagedRenewal(ctx context.Context, identity kube
 		return ManagedRenewalResult{}, ErrConflict
 	}
 	return result, errors.Join(errManagedRenewalUnknown, ErrConflict)
+}
+
+// RenewManagedCredential rejects the removed CLI OAuth refresh before reserving or performing an external effect.
+// RenewManagedCredential отклоняет удалённый CLI OAuth refresh до резервирования или внешнего эффекта.
+func (service *Service) RenewManagedCredential(context.Context, kubernetesstore.ProviderRenewalIdentity) (ManagedRenewalResult, error) {
+	return ManagedRenewalResult{}, ErrInvalidInput
 }

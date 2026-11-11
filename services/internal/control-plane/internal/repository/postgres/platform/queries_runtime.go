@@ -96,10 +96,7 @@ var (
 	// queryRuntimeCompleteexecutionSelectRunsId содержит чтение ID сессии и вида цели по разрешённому ID запуска для выбора пути завершения; чтение по ID полагается на предварительное разрешение владельцем данных.
 	//go:embed sql/runtime_completeexecution_select_runs_id.sql
 	queryRuntimeCompleteexecutionSelectRunsId string
-	// queryRuntimeCompleteexecutionUpsertSessionStorage embeds LIVE session-storage upsert bound to the exact tenant/session/provider runtime revision, increasing content generation and superseding an AVAILABLE current archive with retained lifetime; object archiving itself is separate.
-	// queryRuntimeCompleteexecutionUpsertSessionStorage содержит создание или обновление LIVE хранилища сессии, связанного с точными организацией, сессией, провайдером и ревизией runtime, увеличивая поколение содержимого и переводя текущий AVAILABLE архив в SUPERSEDED с сохранением срока; само архивирование объектов выполняется отдельно.
-	//go:embed sql/runtime_completeexecution_upsert_session_storage.sql
-	queryRuntimeCompleteexecutionUpsertSessionStorage string
+
 	// queryRuntimeCompleteexecutionSelectAgentCapability embeds capability intersection between current agent and pinned runtime snapshot plus active root-actor resolution on the exact tenant/node/lease; this read does not replace lease freshness validation.
 	// queryRuntimeCompleteexecutionSelectAgentCapability содержит пересечение возможностей текущего сотрудника и закреплённого снимка runtime с разрешением активного автора корня для точных организации, узла и аренды; проверку свежести аренды этим чтением не заменяют.
 	//go:embed sql/runtime_completeexecution_select_agent_capability.sql

@@ -21,8 +21,7 @@ jq -e '
       (.component == "integration-synthetic" and .target == "synthetic") or
       (.component == "registry-pull-authorizer" and .target == "registry-pull-runtime") or
       (.component == "image-admission" and .target == "admission-runtime") or
-      (.component == "image-admission-controller" and .target == "admission-controller-runtime") or
-      (.component == "agent-runner-opencode" and .target == "opencode-runtime")))
+      (.component == "image-admission-controller" and .target == "admission-controller-runtime")))
 ' "$repository_root/tools/release/images.json" >/dev/null || {
   printf 'Release image inventory is invalid\n' >&2
   exit 1

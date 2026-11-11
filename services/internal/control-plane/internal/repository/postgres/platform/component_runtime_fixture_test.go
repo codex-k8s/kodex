@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -112,6 +113,11 @@ func newRunComponentFixture(t *testing.T, ctx context.Context, pool *pgxpool.Poo
 // управляет жизненным циклом вызывающего.
 func configureSyntheticRuntimeComponentRepository(t *testing.T, r *Repository) {
 	t.Helper()
+	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "gpt-5", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	if err := r.ConfigureModelProvider(profile, "gpt-5"); err != nil {
+		t.Fatal(err)
+	}
+
 	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
 		t.Fatal(err)
 	}

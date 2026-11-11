@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"regexp"
 	"strings"
 	"time"
@@ -333,9 +334,23 @@ func (store *Store) CreateProviderCredential(
 		len(authJSON) == 0 || len(authJSON) > providerCredentialMaximumSize || !json.Valid(authJSON) {
 		return ProviderCredentialDescriptor{}, ErrProviderCredentialInputInvalid
 	}
+	name := providerCredentialName(accountRef, attemptRef)
+	if runtimecontract.SameGeneratedGatewayCredential(authJSON, authJSON) {
+		prior, readErr := store.client.CoreV1().Secrets(store.namespace).Get(ctx, name, metav1.GetOptions{})
+		if readErr == nil {
+			defer clearSecretData(prior)
+			if !runtimecontract.SameGeneratedGatewayCredential(authJSON, prior.Data[providerAuthJSONKey]) {
+				return ProviderCredentialDescriptor{}, ErrProviderCredentialConflict
+			}
+			stored := sha256.Sum256(prior.Data[providerAuthJSONKey])
+			return providerCredentialDescriptor(prior, attemptRef, accountRef, hex.EncodeToString(stored[:]))
+		}
+		if !apierrors.IsNotFound(readErr) {
+			return ProviderCredentialDescriptor{}, errors.New("read existing generated provider credential")
+		}
+	}
 	digest := sha256.Sum256(authJSON)
 	digestText := hex.EncodeToString(digest[:])
-	name := providerCredentialName(accountRef, attemptRef)
 	immutable := true
 	wanted := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -362,6 +377,15 @@ func (store *Store) CreateProviderCredential(
 	created, err := store.client.CoreV1().Secrets(store.namespace).Create(ctx, wanted, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		created, err = store.client.CoreV1().Secrets(store.namespace).Get(ctx, name, metav1.GetOptions{})
+		if err == nil && runtimecontract.SameGeneratedGatewayCredential(authJSON, created.Data[providerAuthJSONKey]) {
+			storedDigest := sha256.Sum256(created.Data[providerAuthJSONKey])
+			storedText := hex.EncodeToString(storedDigest[:])
+			if _, validationErr := providerCredentialDescriptor(created, attemptRef, accountRef, storedText); validationErr != nil {
+				clearSecretData(created)
+				return ProviderCredentialDescriptor{}, validationErr
+			}
+			digestText = storedText
+		}
 	}
 	if err != nil {
 		return ProviderCredentialDescriptor{}, errors.New("create immutable provider credential")

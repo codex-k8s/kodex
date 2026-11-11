@@ -145,7 +145,7 @@ func testArtifactReadWriteBoundary(t *testing.T, ctx context.Context, repository
 	content := []byte("Readonly context is not write authority.")
 	digest := sha256.Sum256(content)
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: prefix + "output-denied"}, Payload: command.CompleteExecutionInput{
+		Mutation: value.Mutation{IdempotencyKey: prefix + "output-denied"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Success: true, ResultSummary: "Readonly output",
 			Artifacts: []command.CompletedArtifact{{FileName: "result.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content)), Content: content}}}})
 	if !errors.Is(err, errs.ErrForbidden) {

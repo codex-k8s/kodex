@@ -83,7 +83,7 @@ func TestWorkspaceTaskWireIsClosedAndCannotDowngrade(t *testing.T) {
 		t.Fatal("valid work-only task rejected")
 	}
 	var decoded Task
-	if json.Unmarshal(raw, &decoded) != nil || decoded.Validate() != nil || decoded.Workspace == nil || decoded.CodexSessionID != "" {
+	if json.Unmarshal(raw, &decoded) != nil || decoded.Validate() != nil || decoded.Workspace == nil || decoded.NativeSessionID != "" {
 		t.Fatal("work-only task lost binding or invented Codex identity")
 	}
 	for _, invalid := range [][]byte{
@@ -109,7 +109,7 @@ func TestWorkspaceTaskWireIsClosedAndCannotDowngrade(t *testing.T) {
 		TaskRef, Kind, OrganizationRef, ProjectRef, SessionRef string
 		ProviderAccountRef, RuntimeRevisionRef                 string
 		RuntimeRevisionVersion, ContentGeneration              int64
-		RuntimeRevisionDigest, CodexSessionID                  string
+		RuntimeRevisionDigest, NativeSessionID                 string
 		PVCName, InputDigest                                   string
 		SourceRelativePath, SourceSHA256                       string
 		SourceSizeBytes                                        int64
@@ -146,7 +146,7 @@ func TestWorkspaceTaskRequiresExactRecordAndReadOnlyRecoveryCredit(t *testing.T)
 			case "key":
 				task.TargetObjectKey = "session-archive/v2/foreign/manifest.json"
 			case "codex":
-				task.CodexSessionID = "synthetic-unrelated-identity"
+				task.NativeSessionID = "synthetic-unrelated-identity"
 			case "retry_credit":
 				task.Attempt++
 			}

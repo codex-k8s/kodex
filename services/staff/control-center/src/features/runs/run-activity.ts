@@ -35,7 +35,11 @@ export interface RunActivityItem {
   revision?: number;
   historical: boolean;
   eventType?: RunEvent["type"];
-  serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
+  serviceProgressCode?:
+    | "WORKLOAD_SCHEDULED"
+    | "MODEL_REQUEST_RUNNING"
+    | "MODEL_CONTEXT_COMPACTING"
+    | "NATIVE_SESSION_RECOVERING";
   serviceCancellationCode?: RunEvent["serviceCode"];
   serviceCompletionCode?: "ROOT_PROCESS_COMPLETED";
   executionNodeType?: RunNode["type"];
@@ -531,6 +535,8 @@ const serviceTerminalEvents = new Set([
 const serviceProgressCodes = new Set([
   "WORKLOAD_SCHEDULED",
   "MODEL_REQUEST_RUNNING",
+  "MODEL_CONTEXT_COMPACTING",
+  "NATIVE_SESSION_RECOVERING",
 ]);
 export function assistantFailureMessageKey(
   value: string | undefined,
@@ -546,7 +552,10 @@ function transcriptServiceProgressCode(
   value: string | undefined,
 ): RunActivityItem["serviceProgressCode"] {
   const code = value?.trim().replace(/^i18n:/, "");
-  return code === "WORKLOAD_SCHEDULED" || code === "MODEL_REQUEST_RUNNING"
+  return code === "WORKLOAD_SCHEDULED" ||
+    code === "MODEL_REQUEST_RUNNING" ||
+    code === "MODEL_CONTEXT_COMPACTING" ||
+    code === "NATIVE_SESSION_RECOVERING"
     ? code
     : undefined;
 }

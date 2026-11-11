@@ -60,7 +60,7 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 	retryScheduled := false
 	switch input.Kind {
 	case command.CompleteSessionSnapshot:
-		if locked.kind != "SNAPSHOT" || payload.FormatVersion != 1 || payload.SnapshotSourceSHA256 != "" || payload.SourceEntryCount != 0 || payload.ObjectKey != locked.objectKey ||
+		if locked.kind != "SNAPSHOT" || payload.FormatVersion != 3 || payload.SnapshotSourceSHA256 != "" || payload.SourceEntryCount != 0 || payload.ObjectKey != locked.objectKey ||
 			len(payload.ObjectVersion) > 1024 || payload.ObjectETag == "" ||
 			!validSessionArchiveDigest(payload.ObjectDigest) || payload.ObjectSizeBytes < 1 || payload.ObjectSizeBytes > 68<<20 ||
 			payload.SourceSizeBytes != locked.sourceSizeBytes {
@@ -80,7 +80,7 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 		}).Scan(&archiveRef)
 		state = "SUCCEEDED"
 	case command.CompleteSessionRestore:
-		if locked.kind != "RESTORE" || payload.FormatVersion != 1 || payload.ObjectKey == "" ||
+		if locked.kind != "RESTORE" || payload.FormatVersion != 3 || payload.ObjectKey == "" ||
 			len(payload.ObjectVersion) > 1024 || payload.ObjectETag == "" ||
 			!validSessionArchiveDigest(payload.ObjectDigest) || payload.ObjectSizeBytes < 1 ||
 			payload.RestoredSourceSHA256 != locked.sourceSHA256 || payload.SourceSizeBytes != locked.sourceSizeBytes {

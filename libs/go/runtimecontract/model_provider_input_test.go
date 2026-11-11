@@ -29,7 +29,6 @@ func TestRunnerInputRequiresMatchingManagedProvider(t *testing.T) {
 		"missing descriptor": func(i *RunnerInput) { i.ModelProvider = nil },
 		"wrong model":        func(i *RunnerInput) { i.Model = "unconfigured-model" },
 		"wrong engine":       func(i *RunnerInput) { i.Provider = "openai" },
-		"native session":     func(i *RunnerInput) { i.CodexSessionID = "00000000-0000-4000-8000-000000000001" },
 		"native selection": func(i *RunnerInput) {
 			i.EnvironmentTools = []RuntimeEnvironmentTool{{Name: "shell", Command: "bash", Description: "Synthetic selected tool"}}
 		},
@@ -42,5 +41,22 @@ func TestRunnerInputRequiresMatchingManagedProvider(t *testing.T) {
 				t.Fatal("incompatible managed provider input accepted")
 			}
 		})
+	}
+}
+
+// TestCoordinatorPersistsWorkspaceWithoutReceivingFileAuthority distinguishes environment inventory
+// from grants: a delegate-only coordinator may retain files but must advertise no local file/command tool.
+// TestCoordinatorPersistsWorkspaceWithoutReceivingFileAuthority отделяет environment inventory
+// от grants: delegate-only coordinator сохраняет файлы без выдачи локальных file/command tools.
+func TestCoordinatorPersistsWorkspaceWithoutReceivingFileAuthority(t *testing.T) {
+	input := modelProviderRunnerFixture()
+	input.EnvironmentPolicy.ManagedWorkspace = true
+	input.EnvironmentTools = []RuntimeEnvironmentTool{{Name: "Go", Command: "go", Description: "Synthetic installed tool"}}
+	input.Capabilities = []string{"platform.run.delegate"}
+	if input.validateModelProvider() != nil {
+		t.Fatal("workspace persistence incorrectly requires artifact authority")
+	}
+	if RuntimeWorkspaceToolsAvailable(input) || len(RuntimeWorkspaceToolNames(input)) != 0 || RuntimeWorkspaceCommandAllowed(input, "go") {
+		t.Fatal("coordinator received file or command authority")
 	}
 }

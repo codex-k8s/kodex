@@ -13,7 +13,7 @@ import (
 const (
 	// FormatVersion identifies the supported archive manifest and payload layout.
 	// RU: FormatVersion определяет поддерживаемый формат манифеста и содержимого архива.
-	FormatVersion = 1
+	FormatVersion = 3
 	// MaximumTaskBytes limits accepted task files and embedded archive manifest bytes.
 	// RU: MaximumTaskBytes ограничивает принимаемые файлы заданий и байты встроенного манифеста архива.
 	MaximumTaskBytes = 64 << 10
@@ -52,7 +52,7 @@ type Task struct {
 	TaskRef, Kind, OrganizationRef, ProjectRef, SessionRef string
 	ProviderAccountRef, RuntimeRevisionRef                 string
 	RuntimeRevisionVersion, ContentGeneration              int64
-	RuntimeRevisionDigest, CodexSessionID                  string
+	RuntimeRevisionDigest, NativeSessionID                 string
 	PVCName, InputDigest                                   string
 	SourceRelativePath, SourceSHA256                       string
 	SourceSizeBytes                                        int64
@@ -95,7 +95,7 @@ func FromProto(input *controlplanev1.SessionArchiveTask) (Task, error) {
 	task := Task{TaskRef: input.GetTaskRef(), Kind: kinds[input.GetKind()], OrganizationRef: input.GetOrganizationRef(),
 		ProjectRef: input.GetProjectRef(), SessionRef: input.GetSessionRef(), ProviderAccountRef: input.GetProviderAccountRef(),
 		RuntimeRevisionRef: input.GetRuntimeRevisionRef(), RuntimeRevisionVersion: input.GetRuntimeRevisionVersion(),
-		RuntimeRevisionDigest: input.GetRuntimeRevisionDigest(), CodexSessionID: input.GetCodexSessionId(),
+		RuntimeRevisionDigest: input.GetRuntimeRevisionDigest(), NativeSessionID: input.GetNativeSessionId(),
 		ContentGeneration: input.GetContentGeneration(), PVCName: input.GetPvcName(), InputDigest: input.GetInputDigest(),
 		SourceRelativePath: input.GetSourceRelativePath(), SourceSHA256: input.GetSourceSha256(),
 		SourceSizeBytes: input.GetSourceSizeBytes(), TargetObjectKey: input.GetTargetObjectKey(),
@@ -127,9 +127,9 @@ func DecodeFile(path string) (Task, error) {
 	return DecodeTask(raw)
 }
 
-// DecodeTask validates bounded task bytes while preserving legacy wire and enforcing strict V2 interpretation.
+// DecodeTask validates closed native/V2 task bytes; no legacy runtime decoder is supported.
 // It proves no lease, writer or object access; callers still require the current owner-assigned task.
-// DecodeTask валидирует bounded task bytes, сохраняя legacy wire и strict V2 interpretation.
+// DecodeTask валидирует закрытые native/V2 task bytes без legacy runtime decoder.
 // Это не lease/writer/object authority; caller отдельно требует current owner-assigned task.
 func DecodeTask(raw []byte) (Task, error) {
 	task, err := decodeWorkspaceAwareTask(raw)
@@ -146,7 +146,7 @@ func (task Task) Validate() error {
 		return task.validateWorkspace()
 	}
 	for _, required := range []string{task.TaskRef, task.Kind, task.OrganizationRef, task.SessionRef,
-		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionDigest, task.CodexSessionID,
+		task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionDigest, task.NativeSessionID,
 		task.PVCName, task.InputDigest, task.SourceRelativePath, task.SourceSHA256} {
 		if strings.TrimSpace(required) == "" || len(required) > 1024 {
 			return errors.New("session archive task identity is invalid")
@@ -155,7 +155,7 @@ func (task Task) Validate() error {
 	if task.RuntimeRevisionVersion < 1 || task.ContentGeneration < 1 || task.Attempt < 1 ||
 		task.SourceSizeBytes < 1 || task.SourceSizeBytes > MaximumSourceBytes ||
 		len(task.RuntimeRevisionDigest) != 64 || len(task.SourceSHA256) != 64 || len(task.InputDigest) != 64 ||
-		runtimecontract.ValidateCodexArchiveIdentity(task.CodexSessionID, task.SourceRelativePath) != nil {
+		validateNativeSource(task) != nil {
 		return errors.New("session archive task binding is invalid")
 	}
 	expectedPVCName, err := runtimecontract.SessionPVCName(task.SessionRef)

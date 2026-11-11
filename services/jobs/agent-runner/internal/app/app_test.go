@@ -186,7 +186,7 @@ func TestBuildInitialPromptUsesExactServerTask(t *testing.T) {
 // TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks checks synthetic revision/model/reasoning/tool/config/environment pins and the required continuation/capability blocks appear in the existing continuation prompt.
 // TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks проверяет synthetic revision/model/reasoning/tool/config/environment pins и обязательные continuation/capability blocks в прежнем continuation prompt.
 func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *testing.T) {
-	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", CodexSessionID: "00000000-0000-4000-8000-000000000001",
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "Continue with the changes.", NativeSession: &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800},
 		Attempt: 2, RuntimeRevisionRef: "rrev_abcdefgh", RuntimeRevisionVersion: 3, RuntimeRevisionDigest: strings.Repeat("a", 64),
 		Model: "gpt-5-codex", ImageReference: "registry.example/role@sha256:" + strings.Repeat("b", 64), ImageManifestDigest: "sha256:" + strings.Repeat("b", 64),
 		RuntimeConfigRef: "rconf_abcdefgh", RuntimeConfigVersion: 4, RuntimeConfigDigest: strings.Repeat("c", 64),
@@ -203,16 +203,8 @@ func TestBuildContinuationPromptIncludesExactRevisionDeltaAndServiceBlocks(t *te
 	if err != nil {
 		t.Fatalf("buildPrompt() error = %v", err)
 	}
-	for _, expected := range []string{
-		"<runtime-revision-delta>", "attempt=2", "model=gpt-5-codex", "reasoning=high",
-		"tools=Shell:sh", "mcp=" + input.MCPBindingDigest, "files=::",
-		"config=rconf_abcdefgh:4:", "environment=renv_abcdefgh:7:",
-		`<session-continuation used="true">configured</session-continuation>`,
-		`<effective-capabilities used="true">platform.artifact.manage</effective-capabilities>`,
-	} {
-		if !strings.Contains(string(prompt), expected) {
-			t.Fatalf("continuation prompt does not contain %q: %s", expected, prompt)
-		}
+	if string(prompt) != input.Task || !strings.Contains(input.Instructions, `session-continuation used="true"`) {
+		t.Fatal("native prompt changed current task or current instructions")
 	}
 }
 
@@ -245,7 +237,7 @@ func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
 				EnvironmentBindingRef: "ebind_abcdefgh", EnvironmentBindingDigest: strings.Repeat("2", 64),
 			}
 			if test.resumeThread {
-				input.CodexSessionID = "00000000-0000-4000-8000-000000000001"
+				input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 			}
 			if err := validateMaterializedInstructions(input); err != nil {
 				t.Fatalf("launch prompt rejected: %v", err)
@@ -254,9 +246,8 @@ func TestMaterializedPromptCoversAllRunnerLaunchKinds(t *testing.T) {
 			if err != nil {
 				t.Fatalf("buildPrompt() error = %v", err)
 			}
-			hasDelta := strings.Contains(string(prompt), "<runtime-revision-delta>")
-			if hasDelta != test.continued {
-				t.Fatalf("continuation delta presence = %v, want %v: %s", hasDelta, test.continued, prompt)
+			if string(prompt) != input.Task {
+				t.Fatal("native launch generated a second history or revision envelope")
 			}
 		})
 	}

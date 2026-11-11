@@ -134,7 +134,7 @@ func testSSHComposeWorkflow(t *testing.T, mode string) {
 	}
 	completeModel := func(key string, lease map[string]any, declaration string, artifact bool) {
 		t.Helper()
-		payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration}
+		payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration}
 		if artifact {
 			payload.Artifacts = []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Exact native SSH owner receipt.\n"))}
 		}

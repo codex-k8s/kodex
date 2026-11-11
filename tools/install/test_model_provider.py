@@ -78,20 +78,26 @@ class ModelProviderTests(unittest.TestCase):
             self.assertEqual(secret['auth_mode'], 'gateway-api-key')
             self.assertEqual(secret['provider_definition_key'], 'opencode-test-gateway')
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-            with self.assertRaises(FileExistsError):
+            first = output.read_bytes()
+            MODULE.prepare_auth(value, key, output)
+            self.assertEqual(first, output.read_bytes())
+            self.assertRegex(secret['cache_namespace_key'], r'^[a-f0-9]{64}$')
+            key.write_text('synthetic-other-key')
+            with self.assertRaises(ValueError):
                 MODULE.prepare_auth(value, key, output)
+            self.assertEqual(first, output.read_bytes())
             invalid = fixture()
             invalid['API_KEY'] = 'synthetic-gateway-key'
             config.write_text(json.dumps(invalid))
             with self.assertRaises(Exception):
                 MODULE.configuration(config)
 
-    def test_missing_opencode_role_base_profile_is_rejected_before_render(self):
+    def test_unsupported_role_base_engine_is_rejected_before_render(self):
         with tempfile.TemporaryDirectory()as temporary:
-            directory=Path(temporary);lock=directory/'lock.json';lock.write_text('{}')
+            directory=Path(temporary);lock=directory/'lock.json';lock.write_text('{"role_base_runtime_engine":"codex"}')
             config=directory/'provider.json';config.write_text(json.dumps(fixture()))
             value=subprocess.run([str(ROOT/'tools/release/render-web-only.sh'),'--lock',str(lock),'--lock-sha256',hashlib.sha256(lock.read_bytes()).hexdigest(),
-                '--output',str(directory/'render.yaml'),'--model-provider-configuration',str(config),'--model-provider-default-model','vendor/model-v1'],capture_output=True,timeout=15)
+                '--output',str(directory/'render.yaml'),'--public-host','console.example.invalid','--public-origin','https://console.example.invalid','--model-provider-configuration',str(config),'--model-provider-default-model','vendor/model-v1'],capture_output=True,timeout=15)
             self.assertNotEqual(value.returncode,0)
             self.assertIn(b'OpenCode requires a matching role-base runtime profile',value.stderr)
 
@@ -147,10 +153,13 @@ class ModelProviderTests(unittest.TestCase):
                 self.assertTrue(any(item.get('configMap', {}).get('name') == projections[0]['metadata']['name'] for item in pod['volumes']))
             policy = next(json.loads(item['data']['policy.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('egress-gateway-policy-'))
             self.assertEqual(policy['spec']['modelProvider'], fixture())
+            first_render = output.read_bytes()
+            MODULE.render(fixture(), output, 'vendor/model-v1')
+            self.assertEqual(first_render, output.read_bytes())
             catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
             standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
-            self.assertTrue(standard['baseImageReference'].endswith('/agent-runner-opencode'))
-            self.assert_role_catalog_authority(resources, 'agent-runner-opencode')
+            self.assertTrue(standard['baseImageReference'].endswith('/agent-runner'))
+            self.assert_role_catalog_authority(resources, 'agent-runner')
             import provider_sandbox_profile
             for selected in (provider_sandbox_profile.PROFILE, ''):
                 policy_arguments = ['--image-policy-inputs-mode', 'versioned'] if selected == provider_sandbox_profile.PROFILE else []

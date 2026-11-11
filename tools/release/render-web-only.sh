@@ -136,7 +136,7 @@ fi
 case "$image_policy_inputs_mode" in direct|versioned) ;; *) fail 'image policy inputs mode is invalid' ;; esac
 if [[ -n "$model_provider_configuration" ]]; then
   python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null || fail 'model provider configuration is invalid'
-  agent_runner_component=agent-runner-opencode
+  agent_runner_component=agent-runner
 elif [[ -n "$model_provider_default_model" ]]; then
   fail 'model provider default requires configuration'
 fi
@@ -169,7 +169,7 @@ fi
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
 if [[ -n "$model_provider_configuration" ]]; then
-  [[ "$(jq -r '.role_base_runtime_engine // "codex"' "$lock_file")" == opencode ]] || fail 'OpenCode requires a matching role-base runtime profile'
+  [[ "$(jq -r '.role_base_runtime_engine // "opencode"' "$lock_file")" == opencode ]] || fail 'OpenCode requires a matching role-base runtime profile'
 fi
 [[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ "$lock_sha256" =~ ^[a-f0-9]{64}$ && "$lock_sha256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -446,7 +446,7 @@ if [[ "$profile" == "web-with-mattermost" ]]; then
   ' "$rendered"
 fi
 
-runtime_contract_file="$repository_root/contracts/runtime-controller/v9/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v10/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -491,7 +491,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.builderSHA256 = "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(LOCK_DIGEST) |
-    .data.roleRuntimeContractRevision = "3" |
+    .data.roleRuntimeContractRevision = "5" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");

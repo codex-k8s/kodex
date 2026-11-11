@@ -18,6 +18,10 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounte
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --opencode-native-upgrade ]]; then
+  upgrade_test='^TestOpenCodeNativeSessionCutover$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --workflow-workspace-upgrade ]]; then
   upgrade_test='^TestWorkflowWorkspaceScopeUpgrade$'
   test_pattern=--review-qa-upgrade
@@ -375,6 +379,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261111000200) schema_proof=opencode-native-sessions-migration-postcondition.sql; schema_verifier=validOpenCodeNativeMigrationPostcondition ;;
     20261111000100) schema_proof=workflow-workspace-migration-postcondition.sql; schema_verifier=validWorkflowWorkspaceMigrationPostcondition ;;
     20261110000200) schema_proof=managed-workspace-migration-postcondition.sql; schema_verifier=validManagedWorkspaceMigrationPostcondition ;;
     20261110000100) schema_proof=artifact-optional-antivirus-migration-postcondition.sql; schema_verifier=validArtifactOptionalAntivirusMigrationPostcondition ;;

@@ -369,7 +369,7 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
       contains("variables.admissionId")))
 ' >/dev/null || fail 'image-admission admission policy does not bind Job and PodTemplate identities'
 expected_runtime_contract_digest=$(
-  jq -cS . "$source_root/contracts/runtime-controller/v9/agent-runner-input.schema.json" |
+  jq -cS . "$source_root/contracts/runtime-controller/v10/agent-runner-input.schema.json" |
     sha256sum | awk '{print $1}'
 )
 actual_policy_digest=$(jq -cS '.data | del(.orchestrationRevision, .policySHA256)' \

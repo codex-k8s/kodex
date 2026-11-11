@@ -123,9 +123,7 @@ func TestOpenCodeWorkspaceJoinRequiresPhysicalWaitAndBrokerPeer(t *testing.T) {
 			if _, ok := result.WorkspaceQuiescence(input, ack); !ok {
 				t.Fatal("OpenCode lost its private join proof")
 			}
-			if result.HasVerifiedRollout(input) || result.SessionID != "" {
-				t.Fatal("OpenCode fabricated Codex archive provenance")
-			}
+
 			legacy := input
 			legacy.WorkspaceStorage = nil
 			legacyResult, legacyJoined := finishOpenCodeProcess(legacy, result, command, waitErr)

@@ -183,7 +183,7 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 		return items[0]
 	}
 	completion := func(lease map[string]any, text string) command.CompleteExecutionInput {
-		result := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
+		result := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
 			Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified fixture", Usage: turnUsageFixture()}
 		if text != "" {
 			digest := sha256.Sum256([]byte(text))

@@ -2,13 +2,13 @@
 WITH archive_inserted AS (
     INSERT INTO control_plane.session_archives (
         ref, organization_id, project_id, session_id, provider_account_id,
-        runtime_revision_id, codex_session_id, content_generation, format_version,
+        runtime_revision_id, native_session_id, native_checkpoint, content_generation, format_version,
         source_relative_path, source_sha256, source_size_bytes, object_key,
         object_version, object_etag, object_digest, object_size_bytes,
         lifecycle_state, retention_until
     )
     SELECT @archive_ref, storage.organization_id, storage.project_id, storage.session_id,
-           storage.provider_account_id, storage.runtime_revision_id, storage.codex_session_id,
+           storage.provider_account_id, storage.runtime_revision_id, storage.native_session_id, storage.native_checkpoint,
            storage.content_generation, @format_version, storage.source_relative_path,
            storage.source_sha256, storage.source_size_bytes, @object_key, @object_version,
            @object_etag, @object_digest, @object_size_bytes,

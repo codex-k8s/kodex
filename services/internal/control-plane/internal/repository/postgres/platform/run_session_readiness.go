@@ -75,7 +75,7 @@ func attachRunSessionReadiness(ctx context.Context, runner queryRunner, scope sc
 // хранилища.
 func validSessionReadinessStorage(state string) bool {
 	switch state {
-	case "UNTRACKED", "LIVE", "SNAPSHOT_READY", "SNAPSHOTTING", "DELETE_PVC_READY", "ARCHIVED", "RESTORE_READY", "RESTORING", "ERROR", "PURGED":
+	case "INITIALIZING", "UNTRACKED", "LIVE", "SNAPSHOT_READY", "SNAPSHOTTING", "DELETE_PVC_READY", "ARCHIVED", "RESTORE_READY", "RESTORING", "ERROR", "PURGED":
 		return true
 	default:
 		return false

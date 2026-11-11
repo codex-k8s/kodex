@@ -29,14 +29,14 @@ func TestCanonicalContinuationConsumerPreservesBasePromptKind(t *testing.T) {
 			if err != nil || !notice.Complete {
 				t.Fatal("continuation producer failed")
 			}
-			input := runtimecontract.RunnerInput{Instructions: base.Prompt, Capabilities: base.EffectiveCapabilities,
+			input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, Instructions: base.Prompt, Capabilities: base.EffectiveCapabilities,
 				PromptServiceTemplateRevision: base.ServiceTemplateRevision, PromptServiceTemplateDigest: base.ServiceTemplateDigest, PromptTargetKind: kind,
-				CodexSessionID: "previous-provider-thread", RuntimeRevisionRef: diff.CurrentRevisionRef, SessionRef: diff.SessionRef, TurnRef: diff.TurnRef, Attempt: diff.Attempt,
+				NativeSession: &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_synthetic", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_synthetic.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}, RuntimeRevisionRef: diff.CurrentRevisionRef, SessionRef: diff.SessionRef, TurnRef: diff.TurnRef, Attempt: diff.Attempt,
 				SessionContext: []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Prior task"}, {Role: "USER", Content: notice.Prompt}}}
 			for _, cold := range []bool{false, true} {
 				candidate := input
 				if cold {
-					candidate.CodexSessionID = ""
+					candidate.NativeSession = nil
 				}
 				if _, err := runtimecontract.DecodePromptService(candidate); err != nil {
 					t.Fatalf("owner producer cannot materialize provider continuation: %v", err)
@@ -90,6 +90,15 @@ func TestCanonicalContinuationConsumerPreservesBasePromptKind(t *testing.T) {
 							t.Fatal(err)
 						}
 						last.Content = string(raw)
+					}
+					if failure == "missing" || failure == "historical" {
+						if found, err := runtimecontract.CurrentContinuationNotice(candidate); err != nil || found {
+							t.Fatal("plain native continuation invented a current notice")
+						}
+						if _, err := runtimecontract.DecodePromptService(candidate); err != nil {
+							t.Fatal("plain native continuation lost fresh base instructions")
+						}
+						return
 					}
 					if _, err := runtimecontract.DecodePromptService(candidate); err == nil {
 						t.Fatal("invalid continuation authorized provider resume")

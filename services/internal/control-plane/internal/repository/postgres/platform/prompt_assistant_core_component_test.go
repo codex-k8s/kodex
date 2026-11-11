@@ -154,7 +154,7 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 				return items[0]
 			}
 			complete := func(turn string, item map[string]any) {
-				execute(command.CompleteExecution, worker, key+turn+"-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()})
+				execute(command.CompleteExecution, worker, key+turn+"-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(item), LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()})
 			}
 			first := claim("first")
 			stored, err := r.GetPromptMaterializationSnapshot(ctx, resolved, "RUN", stringMap(first, "runRef"))

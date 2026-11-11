@@ -171,17 +171,10 @@ func pullProfiles() map[string]pullProfile {
 // pullProfilesForRuntime opts the base reader and installer/node pull policy into one shipped runtime repository; other identities retain their scopes.
 // pullProfilesForRuntime добавляет один штатный runtime-репозиторий читателю базы и политике installer/node pull; остальные права сохраняются.
 func pullProfilesForRuntime(engine string) (map[string]pullProfile, bool) {
-	if engine != "" && engine != "codex" && engine != "opencode" {
+	if engine != "" && engine != "opencode" {
 		return nil, false
 	}
 	profiles := pullProfiles()
-	if engine == "opencode" {
-		for _, name := range []string{"kodex-buildkit-base-pull", "kodex-node-pull-installer"} {
-			profile := profiles[name]
-			profile.repositories = append(profile.repositories, "kodex/agent-runner-opencode")
-			profiles[name] = profile
-		}
-	}
 	return profiles, true
 }
 

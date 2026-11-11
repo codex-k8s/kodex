@@ -37,7 +37,7 @@ const ordinary = computed(() =>
 
 <template>
   <section class="provider-finance" :aria-label="t('providers.finance.label')">
-    <strong>Codex</strong>
+    <strong>{{ t("providers.finance.label") }}</strong>
     <span v-if="!summary.total">{{ t("providers.finance.unavailable") }}</span>
     <ul v-else>
       <li v-if="exhausted.length" class="exhausted-group">

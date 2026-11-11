@@ -39,8 +39,8 @@ done
 case "$security_profile" in protected|trusted-cluster) ;; *) fail 'security profile is invalid' ;; esac
 case "$provider_mode" in configured|deferred) ;; *) fail 'provider mode is invalid' ;; esac
 if [[ "$provider_mode" == deferred ]]; then
-  [[ "$security_profile" == trusted-cluster && -z "$provider_auth_file" ]] ||
-    fail 'deferred provider requires explicit trusted-cluster and no authorization file'
+  [[ -z "$provider_auth_file" ]] ||
+    fail 'deferred provider requires no authorization file'
 fi
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 if [[ "$security_profile" == trusted-cluster ]]; then
@@ -78,12 +78,8 @@ openssl x509 -in "$oidc_ca_file" -noout -checkend 3600 >/dev/null ||
   fail 'OIDC trust certificate is invalid or expires too soon'
 if [[ "$provider_mode" == configured ]]; then
 jq -e '
-  type == "object" and
-  ((.auth_mode == "chatgpt" and (.tokens | type == "object")) or
-   (.auth_mode == "chatgptAuthTokens" and (.tokens | type == "object")) or
-   (.auth_mode == "gateway-api-key" and (.provider_definition_key | type == "string") and (.API_KEY | type == "string" and length >= 8)) or
-   (.auth_mode == "apikey" and
-     (.OPENAI_API_KEY | type == "string" and length > 0)))
+  type == "object" and .auth_mode == "gateway-api-key" and
+  (.provider_definition_key | type == "string") and (.API_KEY | type == "string" and length >= 8)
 ' "$provider_auth_file" >/dev/null ||
   fail 'provider authorization JSON is invalid'
 fi

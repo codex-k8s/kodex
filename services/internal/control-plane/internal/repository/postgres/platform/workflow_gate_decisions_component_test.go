@@ -124,7 +124,7 @@ func TestWorkflowGateDecisionsComponent(t *testing.T) {
 				return items[0]
 			}
 			complete := func(name string, lease map[string]any) command.Result {
-				return execute(t, worker, command.CompleteExecution, key+name, nil, command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified synthetic result", Usage: turnUsageFixture()})
+				return execute(t, worker, command.CompleteExecution, key+name, nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified synthetic result", Usage: turnUsageFixture()})
 			}
 			current := claim("coordinator", run.Ref)
 			if scenario.incomplete {

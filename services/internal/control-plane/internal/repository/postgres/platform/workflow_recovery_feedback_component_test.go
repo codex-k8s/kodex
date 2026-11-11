@@ -81,7 +81,7 @@ func TestWorkflowRecoveryFeedbackComponent(t *testing.T) {
 		t.Fatal("attempt-zero manager claim unavailable")
 	}
 	managerSummary := "The dependent worker was disabled. Restore its eligibility before a fresh first materialization."
-	completion := command.CompleteExecutionInput{LeaseRef: stringMap(analysis[0], "leaseRef"), Fence: stringMap(analysis[0], "fence"), Generation: runtimeRevisionMapInt64(analysis[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: managerSummary}
+	completion := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(analysis[0]), LeaseRef: stringMap(analysis[0], "leaseRef"), Fence: stringMap(analysis[0], "fence"), Generation: runtimeRevisionMapInt64(analysis[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: managerSummary}
 	f.execute(command.CompleteExecution, "feedback-analysis", nil, completion)
 	snapshot = f.read()
 	gate := f.recoveryGate(snapshot)

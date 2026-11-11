@@ -754,6 +754,8 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 			return "", field.JSONName() == "externalAccountMasked"
 		case "controlplane.v1.ModelCapability":
 			return "", field.JSONName() == "defaultReasoningEffort"
+		case "controlplane.v1.RuntimeModelCacheQualification":
+			return "", field.JSONName() == "backendVersion" || field.JSONName() == "evidenceSha256" || field.JSONName() == "routeSha256"
 		case "controlplane.v1.ProviderDefinition":
 			return "", field.JSONName() == "description" || field.JSONName() == "defaultModelId"
 		}
@@ -798,6 +800,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 			return false, field.JSONName() == "builtIn" || field.JSONName() == "available"
 		case "controlplane.v1.IntegrationConnection":
 			return false, field.JSONName() == "credentialsConfigured"
+		}
+	}
+	if field.Kind() == protoreflect.BoolKind {
+		switch descriptor.FullName() {
+		case "controlplane.v1.ModelExecutionPolicy", "controlplane.v1.ModelCacheResolution", "controlplane.v1.RuntimeModelCachePolicy", "controlplane.v1.RuntimeModelContextPolicy":
+			return false, true
 		}
 	}
 	if (descriptor.FullName() == "controlplane.v1.ModelCapability" || descriptor.FullName() == "controlplane.v1.ProviderDefinition") && field.Kind() == protoreflect.BoolKind {

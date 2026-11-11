@@ -12,7 +12,7 @@ usage() {
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
     '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' \
-    '  [--parallelism <1..4>] [--build-recipe-source-sha <40-hex>] [--role-base-runtime-engine codex|opencode]' >&2
+    '  [--parallelism <1..4>] [--build-recipe-source-sha <40-hex>] [--role-base-runtime-engine opencode]' >&2
 }
 
 source_sha=""
@@ -27,7 +27,7 @@ build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
 profile="web-only"
 parallelism=2
-role_base_runtime_engine=codex
+role_base_runtime_engine=opencode
 
 while (($# > 0)); do
   case "$1" in
@@ -48,9 +48,8 @@ while (($# > 0)); do
   esac
 done
 
-[[ "$role_base_runtime_engine" == codex || "$role_base_runtime_engine" == opencode ]] || fail 'unsupported role base runtime engine'
+[[ "$role_base_runtime_engine" == opencode ]] || fail 'unsupported role base runtime engine'
 role_base_component=agent-runner
-[[ "$role_base_runtime_engine" != opencode ]] || role_base_component=agent-runner-opencode
 
 valid_registry_path() {
   [[ "$1" =~ ^[a-z0-9][a-z0-9.:-]*(/[a-z0-9][a-z0-9._/-]*)?$ ]] &&
@@ -172,12 +171,12 @@ build_component() {
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in
-    agent-runner-opencode:opencode-runtime|role-image-builder:runtime|image-admission:admission-runtime|image-admission-controller:admission-controller-runtime|registry-pull-authorizer:registry-pull-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
+    role-image-builder:runtime|image-admission:admission-runtime|image-admission-controller:admission-controller-runtime|registry-pull-authorizer:registry-pull-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
     *) fail "unexpected Dockerfile target for $component" ;;
   esac
 
   destination="$registry_push/$repository_prefix/$component:$source_sha"
-  if [[ "$component" == agent-runner || "$component" == agent-runner-opencode ]]; then
+  if [[ "$component" == agent-runner ]]; then
     [[ -z "$target" ]] || target_options=(--target "$target")
     env -u BASH_ENV -u ENV \
       PATH="$repository_root/tools/release/shims:$PATH" \
@@ -215,7 +214,7 @@ build_component() {
 }
 
 while IFS=$'\t' read -r component dockerfile target; do
-  if [[ "$component" == agent-runner || "$component" == agent-runner-opencode ]]; then
+  if [[ "$component" == agent-runner ]]; then
     # Специализированная сборка runner владеет собственной цепочкой процессов.
     # Она не входит в параллельный пул обычных buildctl процессов.
     wait_build_batch
@@ -284,5 +283,5 @@ jq -n \
     role_image_input:{repository:$role_input_repository,manifest_digest:$role_input_manifest_digest,
       payload_sha256:$role_input_payload_sha256,source_sha256:$role_input_source_sha256,pull_ref:$role_input_pull_ref},
     images:$images[0]} + (if $build_recipe == null then {} else {build_recipe:$build_recipe} end) +
-    (if $role_base_runtime_engine == "codex" then {} else {role_base_runtime_engine:$role_base_runtime_engine} end)' | jq -S . >"$output"
+    {role_base_runtime_engine:$role_base_runtime_engine}' | jq -S . >"$output"
 printf 'Release lock created: %s\n' "$output"

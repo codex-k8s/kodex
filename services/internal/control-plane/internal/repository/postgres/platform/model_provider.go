@@ -39,8 +39,11 @@ func (repository *Repository) ConfigureModelProvider(config runtimecontract.Mode
 			return runtimecontract.ErrModelProviderConfiguration
 		}
 	}
-	config.Models = append([]runtimecontract.ModelProviderModel(nil), config.Models...)
-	config.AddressCIDRs = append([]string(nil), config.AddressCIDRs...)
+	cloned, err := config.Clone()
+	if err != nil {
+		return err
+	}
+	config = cloned
 	repository.modelProvider, repository.modelProviderDefaultModel = &config, defaultModel
 	return nil
 }
@@ -78,9 +81,6 @@ func modelProviderProfileKey(config runtimecontract.ModelProviderConfiguration, 
 // runtimeProviderSelection разрешает только registered engine и exact allowlisted model действующей конфигурации.
 // Возвращает копию descriptor для immutable snapshot без credential values.
 func (repository *Repository) runtimeProviderSelection(definitionKey, model string) (string, *runtimecontract.ModelProviderConfiguration, error) {
-	if definitionKey == "openai-codex" {
-		return "openai", nil, nil
-	}
 	if repository.modelProvider == nil || repository.modelProvider.DefinitionKey() != definitionKey {
 		return "", nil, errs.ErrConflict
 	}
@@ -91,9 +91,14 @@ func (repository *Repository) runtimeProviderSelection(definitionKey, model stri
 	if _, found := config.Model(model); !found {
 		return "", nil, errs.ErrConflict
 	}
-	config.AddressCIDRs = append([]string(nil), config.AddressCIDRs...)
-	config.Models = append([]runtimecontract.ModelProviderModel(nil), config.Models...)
-	return "opencode", &config, nil
+	if _, err := config.ResolveModelCache(model); err != nil {
+		return "", nil, errs.ErrConflict
+	}
+	cloned, err := config.Clone()
+	if err != nil {
+		return "", nil, errs.ErrConflict
+	}
+	return "opencode", &cloned, nil
 }
 
 // reconcileModelProvider runs inside the installation lock; it never adopts foreign definitions or changes an endpoint under existing credentials.

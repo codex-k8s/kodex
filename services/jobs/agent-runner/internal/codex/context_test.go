@@ -1,12 +1,7 @@
 package codex
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"io"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +13,7 @@ import (
 // TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume checks resumed input keeps the exact prompt and explicit empty records, then rejects a changed snapshot digest rather than reusing prior memory.
 // TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume проверяет точный prompt и явные empty records resumed input, затем отклоняет изменённый snapshot digest вместо повторного использования прежней памяти.
 func TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume(t *testing.T) {
-	input := model.Input{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh", CodexSessionID: "previous-thread", RuntimeRevisionRef: "rrev_abcdefgh"}
+	input := model.Input{OrganizationRef: "org_abcdefgh", ProjectRef: "proj_abcdefgh", AgentRef: "agt_abcdefgh", NativeSession: &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}, RuntimeRevisionRef: "rrev_abcdefgh"}
 	snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
 	snapshot.Digest, _ = snapshot.ComputeDigest()
 	items, err := contextInputItems(input, snapshot, []byte("server-owned prompt"), time.Now())
@@ -28,15 +23,6 @@ func TestProviderContextPreservesPromptAndExplicitEmptyMemoryOnResume(t *testing
 	snapshot.Digest = strings.Repeat("f", 64)
 	if _, err := contextInputItems(input, snapshot, nil, time.Now()); err == nil {
 		t.Fatal("corrupt snapshot reached provider mapping")
-	}
-}
-
-// TestMissingContextCannotStartProviderProcess invokes the local execution entrypoint with missing context and requires ErrRuntimeContext before credential loading or provider process creation.
-// TestMissingContextCannotStartProviderProcess вызывает local execution entrypoint без контекста и требует ErrRuntimeContext до credential loading и создания provider process.
-func TestMissingContextCannotStartProviderProcess(t *testing.T) {
-	input := model.Input{Provider: "openai", Model: "gpt-6-astra", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "medium"}
-	if _, err := executeLocal(t.Context(), input, []byte("task"), "", nil); !errors.Is(err, runtimecontract.ErrRuntimeContext) {
-		t.Fatalf("missing context reached credential/process: %v", err)
 	}
 }
 
@@ -60,7 +46,7 @@ func TestProviderContextUsesNativeSkillAndExactMemoryPins(t *testing.T) {
 	snapshot.Digest, _ = snapshot.ComputeDigest()
 	for _, resumed := range []bool{false, true} {
 		if resumed {
-			input.CodexSessionID = "previous-thread"
+			input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 			input.RuntimeRevisionRef = "rrev_ijklmnop"
 			input.RuntimeRevisionDigest = strings.Repeat("9", 64)
 		}
@@ -88,116 +74,5 @@ func TestProviderContextUsesNativeSkillAndExactMemoryPins(t *testing.T) {
 			projection.Records[0].Path != "/workspace/context/memory/memr_abcdefgh.md" {
 			t.Fatal("memory projection lost immutable pins or used previous revision")
 		}
-	}
-}
-
-// TestContextDiscoveryProcessFixture is inert without its explicit mode; a bounded parent-controlled test child implements only synthetic skill-root/list/enable RPC replies for success, missing, changed metadata or persistent-unbound-enable cases, without a real provider.
-// TestContextDiscoveryProcessFixture неактивен без явного mode; ограниченный parent-controlled test child реализует лишь synthetic skill-root/list/enable RPC replies для success, missing, changed metadata или persistent-unbound-enable без настоящего провайдера.
-func TestContextDiscoveryProcessFixture(t *testing.T) {
-	mode := os.Getenv("KODEX_SKILL_DISCOVERY_FIXTURE")
-	if mode == "" {
-		return
-	}
-	decoder, encoder := json.NewDecoder(os.Stdin), json.NewEncoder(os.Stdout)
-	enabled := true
-	for {
-		var request struct {
-			ID     int64           `json:"id"`
-			Method string          `json:"method"`
-			Params json.RawMessage `json:"params"`
-		}
-		if err := decoder.Decode(&request); err == io.EOF {
-			return
-		} else if err != nil {
-			t.Fatal(err)
-		}
-		var result any
-		switch request.Method {
-		case "skills/extraRoots/set":
-			var params struct {
-				ExtraRoots []string `json:"extraRoots"`
-			}
-			if json.Unmarshal(request.Params, &params) != nil || len(params.ExtraRoots) != 1 || params.ExtraRoots[0] != runtimecontract.RuntimeContextRoot+"/skills" {
-				t.Fatal("unexpected skill root")
-			}
-			result = map[string]any{}
-		case "skills/list":
-			var params struct {
-				CWDs        []string `json:"cwds"`
-				ForceReload bool     `json:"forceReload"`
-			}
-			if json.Unmarshal(request.Params, &params) != nil || len(params.CWDs) != 1 || params.CWDs[0] != runtimecontract.RuntimeWorkspaceWorkingRoot || !params.ForceReload {
-				t.Fatal("unexpected discovery request")
-			}
-			skills := []discoveredSkill{{Name: "local-unbound", Description: "Not authorized", Path: "/etc/codex/skills/local/SKILL.md", Enabled: enabled, Scope: "admin"}}
-			if mode != "missing" {
-				skills = append(skills, discoveredSkill{Name: "fixture", Description: "Approved fixture", Path: runtimecontract.RuntimeContextRoot + "/skills/sklb_abcdefgh/SKILL.md", Enabled: true, Scope: "user"})
-			}
-			if mode == "wrong metadata" {
-				skills[len(skills)-1].Description = "Changed"
-			}
-			result = map[string]any{"data": []any{map[string]any{"cwd": runtimecontract.RuntimeWorkspaceWorkingRoot, "skills": skills, "errors": []any{}}}}
-		case "skills/config/write":
-			var params struct {
-				Path    string `json:"path"`
-				Enabled bool   `json:"enabled"`
-			}
-			if json.Unmarshal(request.Params, &params) != nil || params.Path != "/etc/codex/skills/local/SKILL.md" || params.Enabled {
-				t.Fatal("unexpected skill state mutation")
-			}
-			if mode != "remains enabled" {
-				enabled = false
-			}
-			result = map[string]any{"effectiveEnabled": enabled}
-		default:
-			t.Fatal("unexpected provider operation")
-		}
-		if err := encoder.Encode(map[string]any{"id": request.ID, "result": result}); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-// TestProviderDiscoveryReconcilesExactSkillsInRealProcess runs four synthetic protocol-child modes, requiring exact skill reconciliation success only for the valid case and joining stdin, process and reader without invoking Codex CLI or network.
-// TestProviderDiscoveryReconcilesExactSkillsInRealProcess выполняет четыре synthetic protocol-child modes, требуя успех exact skill reconciliation лишь для корректного случая и ожидая stdin, process и reader без Codex CLI и сети.
-func TestProviderDiscoveryReconcilesExactSkillsInRealProcess(t *testing.T) {
-	for _, mode := range []string{"success", "missing", "wrong metadata", "remains enabled"} {
-		t.Run(mode, func(t *testing.T) {
-			executable, err := os.Executable()
-			if err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-			command := exec.CommandContext(ctx, executable, "-test.run=^TestContextDiscoveryProcessFixture$")
-			command.Env = []string{"KODEX_SKILL_DISCOVERY_FIXTURE=" + mode}
-			stdin, err := command.StdinPipe()
-			if err != nil {
-				t.Fatal(err)
-			}
-			stdout, err := command.StdoutPipe()
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := command.Start(); err != nil {
-				t.Fatal(err)
-			}
-			messages := make(chan streamEvent, 64)
-			readDone := make(chan struct{})
-			go func() { defer close(readDone); readAppServerMessages(stdout, messages) }()
-			server := &appServer{stdin: stdin, messages: messages}
-			input := model.Input{WorkspaceRoot: "/workspace"}
-			snapshot := runtimecontract.RuntimeContextSnapshot{Skills: []runtimecontract.RuntimeSkillBundle{{BundleRef: "sklb_abcdefgh", Name: "fixture", Description: "Approved fixture"}}}
-			err = server.configureContextSkills(ctx, newProtocolState(""), input, snapshot)
-			_ = stdin.Close()
-			waitErr := command.Wait()
-			<-readDone
-			if waitErr != nil {
-				t.Fatal("provider fixture failed")
-			}
-			if (err == nil) != (mode == "success") {
-				t.Fatalf("unexpected discovery outcome: %v", err)
-			}
-		})
 	}
 }

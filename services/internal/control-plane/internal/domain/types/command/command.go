@@ -1641,13 +1641,11 @@ type ProviderCredentialRefreshInput struct {
 // результат.
 type CompleteExecutionInput struct {
 	LeaseRef, Fence, ResultSummary, SafeErrorCode string
-	CodexSessionID, ArchiveRelativePath           string
-	ArchiveSHA256                                 string
-	ArchiveSizeBytes                              int64
 	Generation                                    int64
 	Success                                       bool
 	Usage                                         entity.TokenUsage
 	Artifacts                                     []CompletedArtifact
+	NativeSession                                 *runtimecontract.NativeSessionCheckpoint
 }
 
 // WorkspaceObservationInput carries trusted controller observations, never model-selected storage scope.

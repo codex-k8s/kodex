@@ -121,11 +121,8 @@ func TestRuntimeTurnContextWorkspaceAndRetriedCompletion(t *testing.T) {
 					}
 					if continuation {
 						messages := promptSessionMessages(t, prompt)
-						count := 3
-						if mode == "provider resume" {
-							count = 1
-						}
-						if len(messages) != count || messages[len(messages)-1].Content != notice || strings.Contains(string(prompt), "<runtime-revision-delta>") {
+
+						if len(messages) != 1 || messages[len(messages)-1].Content != notice || strings.Contains(string(prompt), "<runtime-revision-delta>") {
 							t.Fatal("ordinary runTurn lost or duplicated continuation")
 						}
 					} else if string(prompt) != input.Task {
@@ -174,11 +171,11 @@ func acceptanceTurnFixture(t *testing.T, mode string) model.Input {
 		input.AssistantScope = runtimecontract.AssistantScopeSystem
 	}
 	if mode == "provider resume" {
-		input.CodexSessionID = "previous-provider-thread"
+		input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 	}
 	if !input.IsSystemAssistant() {
 		input.Capabilities = []string{runtimecontract.ArtifactCapability}
-		input.CodexSandbox = "workspace-write"
+		input.WorkspaceAccess = "workspace-write"
 	}
 	slots := []string{"PURPOSE", "INPUT", "CONSTRAINTS", "EFFECTIVE_CAPABILITIES", "FILES", "TOOLS", "INTEGRATIONS"}
 	if kind == "WORKFLOW_STAGE" {

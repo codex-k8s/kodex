@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -189,9 +190,12 @@ func completionPayloadFromWire(t *testing.T, wire []byte) (value command.Complet
 	if proto.Unmarshal(wire, &request) != nil {
 		t.Fatal("decode native completion fixture")
 	}
-	value = command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode(), CodexSessionID: request.GetCodexSessionId(), ArchiveRelativePath: request.GetCodexArchiveRelativePath(), ArchiveSHA256: request.GetCodexArchiveSha256(), ArchiveSizeBytes: request.GetCodexArchiveSizeBytes()}
+	value = command.CompleteExecutionInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Success: request.GetSuccess(), ResultSummary: request.GetResultSummary(), SafeErrorCode: request.GetSafeErrorCode()}
 	if usage := request.GetUsage(); usage != nil {
 		value.Usage = entity.TokenUsage{TotalTokens: usage.GetTotalTokens(), InputTokens: usage.GetInputTokens(), CachedInputTokens: usage.GetCachedInputTokens(), CacheWriteInputTokens: usage.GetCacheWriteInputTokens(), OutputTokens: usage.GetOutputTokens(), ReasoningOutputTokens: usage.GetReasoningOutputTokens(), ModelContextWindow: usage.GetModelContextWindow()}
+	}
+	if n := request.GetNativeSession(); n != nil {
+		value.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: n.GetSessionId(), Version: n.GetVersion(), Generation: n.GetGeneration(), RelativePath: n.GetRelativePath(), SHA256: n.GetSha256(), SizeBytes: n.GetSizeBytes(), WorkspaceRef: n.GetWorkspaceRef(), WorkspaceGeneration: n.GetWorkspaceGeneration()}
 	}
 	for _, artifact := range request.GetArtifacts() {
 		value.Artifacts = append(value.Artifacts, command.CompletedArtifact{FileName: artifact.GetFileName(), MediaType: artifact.GetMediaType(), SizeBytes: artifact.GetSizeBytes(), SHA256: artifact.GetSha256(), Content: artifact.GetContent()})

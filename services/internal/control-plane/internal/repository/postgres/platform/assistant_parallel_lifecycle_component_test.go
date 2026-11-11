@@ -102,7 +102,7 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	assertLateRejected := func(lease map[string]any, key string) {
 		t.Helper()
 		_, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-			Mutation: value.Mutation{IdempotencyKey: "parallel-lifecycle-late-" + key}, Payload: command.CompleteExecutionInput{
+			Mutation: value.Mutation{IdempotencyKey: "parallel-lifecycle-late-" + key}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 				LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Success: true,
 				ResultSummary: "Rejected synthetic stale callback", Usage: turnUsageFixture(),
 			}})

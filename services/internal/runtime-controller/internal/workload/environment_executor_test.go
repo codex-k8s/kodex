@@ -36,6 +36,7 @@ func executorEnvironmentPod(t *testing.T, mode string) *corev1.Pod {
 		execution.Revision = testWarmRevision()
 	}
 	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	policy.ManagedWorkspace = mode != "warm"
 	policy.Volumes = []runtimecontract.RuntimeVolume{{Name: "scratch", Kind: runtimecontract.RuntimeVolumeEphemeralDisk, SizeMiB: 64}, {Name: "cache", Kind: runtimecontract.RuntimeVolumeEphemeralMemory, SizeMiB: 32}}
 	policy, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
 	if err != nil {
@@ -78,10 +79,14 @@ func TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes(t *te
 	for _, mode := range []string{"turn", "warm"} {
 		t.Run(mode, func(t *testing.T) {
 			pod := executorEnvironmentPod(t, mode)
-			if !reflect.DeepEqual(pod.Spec.Containers[1].Resources, runtimePolicyResourceRequirements(runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources)) ||
-				!reflect.DeepEqual(pod.Spec.Containers[0].Resources, smallResources()) || !reflect.DeepEqual(pod.Spec.Containers[2].Resources, smallResources()) {
-				t.Fatal("configured resources were doubled or assigned to the driver")
+			expectedProvider := runtimePolicyResourceRequirements(runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources)
+			if mode == "turn" {
+				expectedProvider, _ = splitManagedWorkspaceResources(runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources)
 			}
+			if !reflect.DeepEqual(pod.Spec.Containers[1].Resources, expectedProvider) || !reflect.DeepEqual(pod.Spec.Containers[0].Resources, smallResources()) || !reflect.DeepEqual(pod.Spec.Containers[2].Resources, smallResources()) {
+				t.Fatal("configured resource partition changed")
+			}
+
 			for _, name := range []string{"scratch", "cache"} {
 				volumeName := "environment-" + shortHash(name)
 				var mounts []corev1.VolumeMount

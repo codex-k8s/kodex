@@ -1,6 +1,23 @@
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
+import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+
+test('native cutover требует пустые session data и точный новый schema proof', () => {
+  const before={profile:'OPENCODE_NATIVE_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000100,sessionDataEmpty:true,nativeColumnsAbsent:true,activeRuntimeLeases:0};
+  assert.equal(validOpenCodeNativeMigrationPrecondition(before),true);
+  for (const change of [{sessionDataEmpty:false},{activeRuntimeLeases:1},{nativeColumnsAbsent:false},{gooseVersion:20261110000200},{readOnly:'off'},{database:'foreign'}])
+    assert.equal(validOpenCodeNativeMigrationPrecondition({...before,...change}),false);
+  const after={profile:'OPENCODE_NATIVE_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,nativeColumnsReady:true,legacyIdentityAbsent:true,nativeShapeReady:true,nativeIdentityGuardReady:true,nativeConstraintsReady:true};
+  assert.equal(validOpenCodeNativeMigrationPostcondition(after),true);
+  assert.equal(validImmutableMigrationPostcondition('opencode-native-sessions',after),true);
+  assert.equal(validImmutableMigrationPostcondition('workflow-workspace',after),false);
+  for (const key of ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady']) {
+    assert.equal(validOpenCodeNativeMigrationPostcondition({...after,[key]:false}),false);
+    const missing={...after};delete missing[key];
+    assert.equal(validOpenCodeNativeMigrationPostcondition(missing),false);
+  }
+});
 import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

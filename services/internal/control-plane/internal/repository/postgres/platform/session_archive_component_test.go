@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -61,14 +62,14 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 		t.Fatalf("claim session archive runtime: claims=%d err=%v", len(claimed.RuntimeItems), err)
 	}
 	lease := claimed.RuntimeItems[0]
-	const codexSessionID = "00000000-0000-4000-8000-000000000003"
-	const sourcePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-00000000-0000-4000-8000-000000000003.jsonl"
+	const nativeSessionID = "ses_NativeFixture3"
+	const sourcePath = ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture3.json"
 	const sourceSize = int64(128)
 	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: runtimeWorker,
 		Mutation: value.Mutation{IdempotencyKey: "session-archive-runtime-complete"}, Payload: command.CompleteExecutionInput{
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64),
-			Success: true, ResultSummary: "Archive fixture prepared", Usage: turnUsageFixture(), CodexSessionID: codexSessionID,
-			ArchiveRelativePath: sourcePath, ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: sourceSize,
+			Success: true, ResultSummary: "Archive fixture prepared", Usage: turnUsageFixture(), NativeSession: &runtimecontract.NativeSessionCheckpoint{
+				SessionID: nativeSessionID, Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: sourcePath, SHA256: strings.Repeat("a", 64), SizeBytes: sourceSize},
 		}})
 	if err != nil || completed.Run == nil || completed.Run.State != "SUCCEEDED" {
 		t.Fatalf("complete session archive runtime: run=%#v err=%v", completed.Run, err)
@@ -94,7 +95,7 @@ func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *
 	snapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
 	testWorkspaceArchiveLegacyFence(t, ctx, pool, launched.Run.SessionRef, snapshot)
 	snapshotPayload := claimedSessionArchivePayload(snapshot)
-	snapshotPayload.FormatVersion = 1
+	snapshotPayload.FormatVersion = 3
 	snapshotPayload.ObjectKey = stringMap(snapshot, "objectKey")
 	snapshotPayload.ObjectVersion = "seaweed-version-1"
 	snapshotPayload.ObjectETag = "session-archive-etag"

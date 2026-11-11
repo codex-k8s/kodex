@@ -854,8 +854,8 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV9, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
-		OrganizationRef:    revision.GetOrganizationRef(),
+		Schema: runtimecontract.RunnerInputSchemaV10, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		RootInitiatorRef: revision.GetRootInitiatorRef(), OrganizationRef: revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
 		EnvironmentImage: runtimecontract.RuntimeEnvironmentImage{
@@ -869,7 +869,6 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		PromptServiceTemplateRevision: revision.GetPromptServiceTemplateRevision(), PromptServiceTemplateDigest: revision.GetPromptServiceTemplateDigest(), PromptTargetKind: revision.GetPromptTargetKind(),
 		SystemSTTConfigurationRef: revision.GetSystemSttConfigurationRef(), SystemSTTConfigurationRevisionRef: revision.GetSystemSttConfigurationRevisionRef(), SystemSTTConfigurationVersion: revision.GetSystemSttConfigurationVersion(), SystemSTTConfigurationDigest: revision.GetSystemSttConfigurationDigest(),
 		AssistantScope: assistantScope, AssistantProfileRef: revision.GetAssistantProfileRef(), Instructions: revision.GetInstructions(), Provider: revision.GetRuntime().GetProvider(), Model: revision.GetRuntime().GetModel(),
-		CodexSessionID:             revision.GetCodexSessionId(),
 		ProviderAccountRef:         revision.GetProviderCredential().GetAccountRef(),
 		ProviderCredentialRef:      revision.GetProviderCredential().GetCredentialRevisionRef(),
 		ProviderCredentialRevision: revision.GetProviderCredential().GetCredentialRevision(),
@@ -894,13 +893,12 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		EnvironmentBindingDigest:   revision.GetEnvironmentBindingDigest(),
 		EnvironmentPolicy:          environmentPolicy,
 		EffectiveKubernetesAccess:  effectiveAccess,
-		CodexSandbox:               "workspace-write", CodexApprovalPolicy: "never",
-		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
+		WorkspaceAccess:            "workspace-write", CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
 			CAFile: "/var/run/config/kodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/kodex/runtime/callback-client/tls.key"},
 		ExecutionTicketFile: "/var/run/secrets/kodex/runtime/ticket/token",
 		ProviderAuthFile:    "/run/secrets/kodex/runtime/provider/auth.json", ProviderAuthSHA256File: "/run/secrets/kodex/runtime/provider/auth.sha256",
-		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", CodexHome: "/workspace/.kodex/state/codex-home",
+		WorkspaceRoot: "/workspace", OutboxRoot: "/workspace/.kodex/outbox", NativeStateRoot: "/workspace/.kodex/state/opencode",
 	}
 	if manager.config.RPCProfile == runtimecontract.CallbackProfileTrustedCluster {
 		input.CallbackURL = "http://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444")
@@ -916,6 +914,10 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 	}
 	input.WorkspacePolicy = workspacePolicy
 	input.WorkspaceStorage, err = workspaceStorageFromProto(revision.GetWorkspaceStorage())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
+	input.NativeSession, err = nativeSessionFromProto(revision.GetNativeSession())
 	if err != nil {
 		return runtimecontract.RunnerInput{}, err
 	}
@@ -2452,7 +2454,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
 		WorkingDir: runtimecontract.RuntimeWorkspaceWorkingRoot,
-		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
+		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.NativeStateRoot},
 			{Name: "HTTPS_PROXY", Value: providerProxy}, {Name: "HTTP_PROXY", Value: providerProxy},
 			{Name: "SSL_CERT_FILE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},
 			{Name: "CURL_CA_BUNDLE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},

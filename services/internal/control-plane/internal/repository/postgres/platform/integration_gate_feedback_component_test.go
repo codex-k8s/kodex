@@ -180,7 +180,7 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 				return
 			}
 			completeOrigin := func() {
-				execute(t, command.CompleteExecution, worker, decision+"-complete-origin", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, ResultSummary: "Waiting for owner", Usage: turnUsageFixture()})
+				execute(t, command.CompleteExecution, worker, decision+"-complete-origin", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(origin), LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, ResultSummary: "Waiting for owner", Usage: turnUsageFixture()})
 			}
 			early := decision == "APPROVE_EARLY_ALIAS" || decision == "APPROVE_NEW_INTENT" || decision == "APPROVE_UNKNOWN_ALIAS"
 			if !early {

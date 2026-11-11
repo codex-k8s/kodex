@@ -147,7 +147,7 @@ func testWorkflowUpstreamScenario(t *testing.T, scenario string) {
 		return execute(command.ClaimExecution, key, nil, command.LeaseInput{WorkloadInstance: "workflow-upstream-fixture", Limit: 2}).RuntimeItems
 	}
 	completion := func(lease map[string]any, summary string, artifacts []command.CompletedArtifact) command.CompleteExecutionInput {
-		return command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary, Artifacts: artifacts}
+		return command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary, Artifacts: artifacts}
 	}
 	complete := func(key string, lease map[string]any, summary string, artifacts []command.CompletedArtifact) {
 		execute(command.CompleteExecution, key, nil, completion(lease, summary, artifacts))

@@ -114,6 +114,8 @@ func TestCompletionReceiptComponent(t *testing.T) {
 	digest := hex.EncodeToString(sum[:])
 	usage := turnUsageFixture()
 	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: "completion-receipt-exact"}, LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"), Generation: runtimeRevisionMapInt64(claimed, "generation"), Success: true, ResultSummary: "Verified completion fixture", Artifacts: []*controlplanev1.CompletedArtifactInput{{FileName: "report.md", MediaType: "text/markdown", SizeBytes: int64(len(body)), Content: body, Sha256: digest}}, Usage: &controlplanev1.TokenUsage{TotalTokens: usage.TotalTokens, InputTokens: usage.InputTokens, CachedInputTokens: usage.CachedInputTokens, CacheWriteInputTokens: usage.CacheWriteInputTokens, OutputTokens: usage.OutputTokens, ReasoningOutputTokens: usage.ReasoningOutputTokens, ModelContextWindow: usage.ModelContextWindow}}
+	checkpoint := nativeCheckpointForClaimFixture(claimed)
+	request.NativeSession = &controlplanev1.NativeSessionCheckpoint{SessionId: checkpoint.SessionID, Version: checkpoint.Version, Generation: checkpoint.Generation, RelativePath: checkpoint.RelativePath, Sha256: checkpoint.SHA256, SizeBytes: checkpoint.SizeBytes}
 	wire, err := proto.Marshal(request)
 	if err != nil {
 		t.Fatal("encode native completion fixture")

@@ -1,12 +1,7 @@
 package codex
 
 import (
-	"os"
-	"slices"
 	"testing"
-
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 // syntheticRuntimeProxy is a nonworking fixture credential for exact URL-shape checks, not a live token.
@@ -50,41 +45,5 @@ func TestRuntimeTransportEnvironmentRejectsMissingOrForeignAuthority(t *testing.
 				t.Fatal("foreign or missing runtime transport authority was accepted")
 			}
 		})
-	}
-}
-
-// TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance verifies the child receives
-// only fixed runtime settings and explicitly projected secrets, without unrelated inherited values;
-// user values and secret projections cannot overwrite server-owned transport or disable TLS checks.
-// TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance проверяет передачу дочернему
-// процессу только заданного окружения и явно спроецированных секретов без посторонних переменных;
-// пользовательские значения и secret projections не подменяют транспорт и не отключают TLS-проверки.
-func TestAppServerEnvironmentPreservesExactTrustWithoutCredentialInheritance(t *testing.T) {
-	setRuntimeTransportFixture(t)
-	t.Setenv("UNRELATED_SECRET", "synthetic-unrelated")
-	t.Setenv("SSL_CERT_DIR", "/tmp/foreign")
-	t.Setenv("GIT_SSL_NO_VERIFY", "true")
-	t.Setenv("SERVICE_TOKEN", "synthetic-bound-secret")
-	input := model.Input{CodexHome: "/workspace/.kodex", SecretProjections: []runtimecontract.RuntimeSecretProjection{{Name: "SERVICE_TOKEN"}}}
-	actual := appServerEnvironment(input, "synthetic-mcp-token")
-	for _, name := range runtimeTransportEnvironmentNames {
-		if !slices.Contains(actual, name+"="+os.Getenv(name)) {
-			t.Fatalf("server-owned transport variable %s is missing", name)
-		}
-	}
-	if !slices.Contains(actual, "SERVICE_TOKEN=synthetic-bound-secret") ||
-		!slices.Contains(actual, "GOROOT=/usr/local/go") || len(actual) != 5+len(runtimeTransportEnvironmentNames)+1 {
-		t.Fatal("child environment is not the exact approved set")
-	}
-	for _, name := range []string{"CURL_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_NO_VERIFY", "HTTP_PROXY"} {
-		input.EnvironmentValues = []runtimecontract.RuntimeEnvironmentValue{{Name: name, Value: "override"}}
-		if appServerEnvironment(input, "synthetic-mcp-token") != nil {
-			t.Fatal("user environment overrode server-owned transport")
-		}
-		input.EnvironmentValues = nil
-		input.SecretProjections = []runtimecontract.RuntimeSecretProjection{{Name: name}}
-		if appServerEnvironment(input, "synthetic-mcp-token") != nil {
-			t.Fatal("Secret projection overrode server-owned transport")
-		}
 	}
 }

@@ -55,9 +55,9 @@ def bind(resources, lock):
     require(isinstance(host, str) and re.fullmatch('[a-z0-9][a-z0-9.-]*[a-z0-9]', host))
     require(data['promotionRepository'] == 'kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles')
     base = 'kodex-image-registry.kodex-system.svc.cluster.local:5000/'
-    engine = lock.get('role_base_runtime_engine', 'codex')
-    require(engine in ('codex', 'opencode'))
-    component = 'agent-runner-opencode' if engine == 'opencode' else 'agent-runner'
+    engine = lock.get('role_base_runtime_engine', 'opencode')
+    require(engine == 'opencode')
+    component = 'agent-runner'
     destination = 'kodex/' + component
     promoted_base = host + '/' + destination
     accepted_bases = (base + destination, promoted_base)
@@ -100,11 +100,7 @@ def bind(resources, lock):
     authorizer = [v for v in registry['spec']['template']['spec']['containers'] if v['name'] == 'pull-authorizer']
     require(len(authorizer) == 1)
     from component_image_profile import select_runtime, RUNTIME_ENV
-    if engine == 'opencode':
-        select_runtime(authorizer[0], engine)
-    else:
-        existing = [v for v in authorizer[0].get('env', []) if v.get('name') == RUNTIME_ENV]
-        require(not existing or existing == [{'name': RUNTIME_ENV, 'value': 'codex'}])
+    select_runtime(authorizer[0], engine)
     guard = next((v for v in registry['spec']['template']['spec']['containers'] if v['name'] == 'certificate-guard'))
     readback = [v for v in guard['env'] if v['name'] == 'READBACK_IMAGE']
     require(len(readback) == 1)

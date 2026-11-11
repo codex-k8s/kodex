@@ -188,7 +188,10 @@ async function searchDefinitions(
   };
 }
 function chooseDefinition(value: unknown): void {
-  createForm.definitionKey = value === "openai-codex" ? value : "";
+  createForm.definitionKey =
+    typeof value === "string" && /^[a-z][a-z0-9-]{0,95}$/.test(value)
+      ? value
+      : "";
 }
 const authorizationDefinition = computed(() =>
   definitions.value.find(

@@ -1521,7 +1521,7 @@ paths:
         - name: definitionKey
           in: query
           required: false
-          schema: { type: string, enum: [openai-codex] }
+          schema: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
         - { $ref: "#/components/parameters/PageToken" }
@@ -14305,7 +14305,14 @@ components:
           readinessBlockers,
         ]
       properties:
-        key: { type: string, enum: [openai-codex] }
+        managedBy: { type: string, enum: [git] }
+        sourceRevision: { type: string, pattern: '^[a-f0-9]{40}$' }
+        engineVersion: { type: string, enum: ['1.19.5'] }
+        runtimePolicies:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/ModelExecutionPolicy' }
+        key: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, maxLength: 160 }
         description: { type: string, maxLength: 500 }
         authorizationMethods:
@@ -14335,6 +14342,62 @@ components:
             maxItems: 16,
             items: { type: string, pattern: "^[A-Z0-9_]+$", maxLength: 80 },
           }
+    ModelContextPolicy:
+      type: object
+      additionalProperties: false
+      required: [revision, autoCompaction, prune]
+      properties:
+        revision: { type: integer, enum: [1] }
+        autoCompaction: { type: boolean }
+        prune: { type: boolean }
+    ModelCacheQualification:
+      type: object
+      additionalProperties: false
+      required: [mechanism, status, source, backendVersion, evidenceSha256, routeSha256]
+      properties:
+        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
+        status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        source: { type: string, enum: [NONE, DECLARED, OBSERVED] }
+        backendVersion: { type: string, maxLength: 64 }
+        evidenceSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
+        routeSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
+    ModelCachePolicy:
+      type: object
+      additionalProperties: false
+      required: [revision, optimization, reuseScope, noReuse, noStore, required, qualification]
+      properties:
+        revision: { type: integer, enum: [1] }
+        optimization: { type: string, enum: [PROVIDER_DEFAULT, NO_HINTS, OPTIMIZE] }
+        reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION] }
+        noReuse: { type: boolean }
+        noStore: { type: boolean }
+        required: { type: boolean }
+        qualification: { $ref: '#/components/schemas/ModelCacheQualification' }
+    ModelCacheResolution:
+      type: object
+      additionalProperties: false
+      required: [mechanism, reuseScope, status, reason, noReuse, noStore, proxyResponseCache, physicalIsolation]
+      properties:
+        requested: { $ref: '#/components/schemas/ModelCachePolicy' }
+        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
+        reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION, PROVIDER_BOUNDARY, PROVIDER_ACCOUNT_ROUTING_KEY, PROVIDER_ACCOUNT] }
+        status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        reason: { type: string, maxLength: 80 }
+        noReuse: { type: boolean }
+        noStore: { type: boolean }
+        proxyResponseCache: { type: string, enum: [NOT_APPLICABLE, BYPASS_READ_WRITE, UNQUALIFIED] }
+        physicalIsolation: { type: string, enum: [NOT_PROVEN] }
+    ModelExecutionPolicy:
+      type: object
+      additionalProperties: false
+      required: [modelId, contextWindowTokens, maximumOutputTokens, context, cache, eligible]
+      properties:
+        modelId: { type: string, maxLength: 128 }
+        contextWindowTokens: { type: integer, minimum: 1, maximum: 2000000 }
+        maximumOutputTokens: { type: integer, minimum: 1, maximum: 2000000 }
+        context: { $ref: '#/components/schemas/ModelContextPolicy' }
+        cache: { $ref: '#/components/schemas/ModelCacheResolution' }
+        eligible: { type: boolean }
     ProviderDefinitionPage:
       type: object
       additionalProperties: false
@@ -17023,6 +17086,7 @@ components:
           type: string
           enum:
             [
+              INITIALIZING,
               UNTRACKED,
               LIVE,
               SNAPSHOT_READY,
@@ -18408,7 +18472,7 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        definitionKey: { type: string, enum: [openai-codex] }
+        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, minLength: 1, maxLength: 160 }
         externalAccountMasked: { type: string, maxLength: 200 }
         safeStatusReason:
@@ -18909,7 +18973,7 @@ components:
       additionalProperties: false
       required: [definitionKey, name]
       properties:
-        definitionKey: { type: string, enum: [openai-codex] }
+        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, minLength: 1, maxLength: 160 }
     ProviderApiKeyInput:
       type: object

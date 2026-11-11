@@ -36,8 +36,8 @@ func TestRuntimePolicyDoesNotTreatGenericBaseDestinationsAsProviderAuthority(t *
 		}
 		for _, host := range []string{"api.openai.com", "chatgpt.com", "auth.openai.com"} {
 			access, ok := active.AuthorizeAuthenticated(host, 443, grant)
-			if !ok || !access.ProviderAccess || access.WebAccess.Mode != web.Mode {
-				t.Fatal("provider route inherited user restrictions")
+			if ok || access.ProviderAccess {
+				t.Fatal("implicit provider destination bypassed explicit signed configuration")
 			}
 		}
 		for _, host := range []string{"github.com", "api.github.com", "unknown.example", "127.0.0.1"} {

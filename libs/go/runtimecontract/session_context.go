@@ -84,6 +84,9 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	var diffContent string
 	found := false
 	for _, section := range envelope.Sections {
+		if section.Slot == "RUNTIME_CHANGES" && section.Source != "PLATFORM" {
+			return false, errPromptService
+		}
 		if section.Source == "PLATFORM" && section.Slot == "RUNTIME_CHANGES" {
 			if found {
 				return false, errPromptService
@@ -105,7 +108,8 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	// Notice имеет собственный semantic kind, в отличие от базового Agent,
 	// Workflow или Automation prompt. Пустой provider ID исключает рекурсию.
 	consumer := input
-	consumer.CodexSessionID = ""
+	consumer.NativeSession = nil
+	consumer.SessionContext = nil
 	consumer.Instructions = message.Content
 	consumer.PromptServiceTemplateRevision = envelope.Revision
 	consumer.PromptTargetKind = "SESSION_CONTINUATION"

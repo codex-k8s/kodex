@@ -139,7 +139,7 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 				t.Fatal("active grant policy changed")
 			}
 			if policy != "NONE" {
-				execute(command.CompleteExecution, worker, policy+"-original-complete", nil, command.CompleteExecutionInput{
+				execute(command.CompleteExecution, worker, policy+"-original-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(claimed[0]),
 					LeaseRef: stringMap(claimed[0], "leaseRef"), Fence: stringMap(claimed[0], "fence"),
 					Generation: runtimeRevisionMapInt64(claimed[0], "generation"), Success: true,
 					ResultSummary: "Waiting for the synthetic integration result", Usage: turnUsageFixture(),
@@ -196,7 +196,7 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				execute(command.CompleteExecution, worker, "reject-original-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(claimed[0], "leaseRef"), Fence: stringMap(claimed[0], "fence"), Generation: runtimeRevisionMapInt64(claimed[0], "generation"), Success: true, ResultSummary: "Waiting for the owner decision", Usage: turnUsageFixture()})
+				execute(command.CompleteExecution, worker, "reject-original-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(claimed[0]), LeaseRef: stringMap(claimed[0], "leaseRef"), Fence: stringMap(claimed[0], "fence"), Generation: runtimeRevisionMapInt64(claimed[0], "generation"), Success: true, ResultSummary: "Waiting for the owner decision", Usage: turnUsageFixture()})
 				gate, err := service.GetOwnerGate(ctx, owner, stringMap(rejected, "gateRef"))
 				if err != nil {
 					t.Fatal(err)

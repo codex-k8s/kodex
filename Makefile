@@ -278,6 +278,15 @@ test-runtime-mcp-catalog:
 test-agent-runner:
 	@./scripts/tests/agent-runner-test.sh
 
+.PHONY: test-opencode-native
+test-opencode-native: check-go-toolchain
+	@test -n "$${KODEX_TEST_OPENCODE_BINARY:-}" || { echo 'KODEX_TEST_OPENCODE_BINARY must select the pinned qualification executable' >&2; exit 1; }
+	@cd services/jobs/agent-runner && env -u GOFLAGS GOENV=off GOWORK=off timeout 180s go test -count=1 -race -timeout=120s -v ./internal/opencode
+
+.PHONY: test-opencode-native-postgres
+test-opencode-native-postgres: check-go-toolchain
+	@./scripts/tests/control-plane-postgres-test.sh --opencode-native-upgrade
+
 .PHONY: test-runtime-controller-artifact-transfer
 test-runtime-controller-artifact-transfer:
 	@bash ./scripts/tests/runtime-controller-artifact-transfer-test.sh

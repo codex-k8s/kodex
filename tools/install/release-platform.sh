@@ -16,11 +16,15 @@ owner_pat_file=""
 workflow_sha_file=""
 profile=web-only
 public_tls_mode=enabled
+model_provider_configuration=""
+model_provider_default_model=""
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
     --owner-pat-file) owner_pat_file="${2:-}"; shift 2 ;;
     --workflow-sha-file) workflow_sha_file="${2:-}"; shift 2 ;;
+    --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
+    --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
@@ -191,6 +195,16 @@ render_sha_file="$temporary_directory/render/release.sha256"
 [[ -s "$render_file" && -s "$render_sha_file" ]] || fail 'release render artifact is incomplete'
 [[ "$(sha256sum "$render_file" | awk '{print $1}')" == "$(<"$render_sha_file")" ]] ||
   fail 'release render digest mismatch'
+
+# Public CI sees only the synthetic release render; deployment-specific routing stays in this local overlay.
+# Public CI получает лишь synthetic release render; deployment-specific routing остаётся в local overlay.
+if [[ -n "$model_provider_configuration" ]]; then
+  python3 "$repository_root/tools/install/model-provider.py" render --configuration "$model_provider_configuration" \
+    --render "$render_file" --default-model "$model_provider_default_model" >/dev/null || fail 'local model provider overlay rejected'
+  sha256sum "$render_file" | awk '{print $1}' >"$render_sha_file"
+elif [[ -n "$model_provider_default_model" ]]; then
+  fail 'model provider default requires configuration'
+fi
 
 if [[ "$public_tls_mode" == deferred ]]; then
   "$repository_root/tools/install/deploy-platform.sh" --context "$context" \

@@ -93,8 +93,8 @@ func TestArchiveProcessObservesOwnerFailureWithoutErrorText(t *testing.T) {
 	claim := &controlplanev1.SessionArchiveTask{TaskRef: "sat_public_fixture", SessionRef: sessionRef, OrganizationRef: "org_public_fixture",
 		Kind: controlplanev1.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_SNAPSHOT, ProviderAccountRef: "pacc_fixture",
 		RuntimeRevisionRef: "rrev_fixture", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64),
-		CodexSessionId: "00000000-0000-4000-8000-000000000003", ContentGeneration: 3, PvcName: pvc, InputDigest: strings.Repeat("b", 64),
-		SourceRelativePath: ".kodex/state/codex-home/sessions/2026/10/04/rollout-2026-10-04T00-00-00-00000000-0000-4000-8000-000000000003.jsonl",
+		NativeSessionId: "ses_NativeFixture3", ContentGeneration: 3, PvcName: pvc, InputDigest: strings.Repeat("b", 64),
+		SourceRelativePath: ".kodex/state/opencode/checkpoints/g3/ses_NativeFixture3.json",
 		SourceSha256:       strings.Repeat("c", 64), SourceSizeBytes: 128, TargetObjectKey: "SENTINEL_PRIVATE_OBJECT", Attempt: 4,
 		Lease: &controlplanev1.WorkLease{Ref: "SENTINEL_LEASE", Fence: "SENTINEL_FENCE", Generation: 4}}
 	client := &archiveRPCFailureFixture{}

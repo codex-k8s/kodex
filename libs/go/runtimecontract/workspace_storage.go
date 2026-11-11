@@ -41,7 +41,7 @@ var errWorkspaceStorageInvalid = errors.New("runtime workspace storage binding i
 
 // WorkspaceStorageRuntimeContractRevision pins the first complete V2 role ABI; legacy images are not upgraded by opt-in.
 // WorkspaceStorageRuntimeContractRevision закрепляет первый полный V2 role ABI; opt-in не повышает legacy image.
-const WorkspaceStorageRuntimeContractRevision uint64 = 4
+const WorkspaceStorageRuntimeContractRevision uint64 = 5
 
 // workspaceStorageRefPattern closes the owner-assigned work identity used in mount subpaths.
 // workspaceStorageRefPattern замыкает owner-assigned work identity в mount subpaths.

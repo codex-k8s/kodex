@@ -198,3 +198,12 @@ func catalogFailure(ctx context.Context, err error) (ModelCatalog, error) {
 	_ = errors.As(err, &diagnostic)
 	return ModelCatalog{ObservedAt: time.Now().UTC(), Failure: failure, stage: diagnostic.stage}, nil
 }
+
+const (
+	// CatalogMethodAPIKey identifies explicit API-key material without selecting an executable runtime.
+	// CatalogMethodAPIKey обозначает explicit API-key material без выбора executable runtime.
+	CatalogMethodAPIKey = "API_KEY"
+	// CatalogMethodDeviceCode is retained only for terminal cleanup of retired credential attempts.
+	// CatalogMethodDeviceCode сохраняется лишь для terminal cleanup снятых credential attempts.
+	CatalogMethodDeviceCode = "DEVICE_CODE"
+)

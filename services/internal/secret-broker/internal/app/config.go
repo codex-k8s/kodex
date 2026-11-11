@@ -79,7 +79,6 @@ type Config struct {
 	MaximumSecretBytes             int           `env:"SECRET_BROKER_MAXIMUM_SECRET_BYTES"`
 	RecoveryInterval               time.Duration `env:"SECRET_BROKER_RECOVERY_INTERVAL"`
 	RecoveryTimeout                time.Duration `env:"SECRET_BROKER_RECOVERY_TIMEOUT"`
-	CodexBinary                    string        `env:"SECRET_BROKER_CODEX_BINARY"`
 	ProviderAuthorizationRoot      string        `env:"SECRET_BROKER_PROVIDER_AUTHORIZATION_ROOT"`
 	ProviderDeviceAuthTTL          time.Duration `env:"SECRET_BROKER_PROVIDER_DEVICE_AUTH_TTL"`
 	ProviderHTTPSProxy             string        `env:"HTTPS_PROXY"`
@@ -114,8 +113,8 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/secret-broker/application-grant/application-grant.jws",
 		RequestTimeout:              5 * time.Second, ShutdownTimeout: 20 * time.Second, MaximumSecretBytes: 512 << 10,
 		RecoveryInterval: 30 * time.Second, RecoveryTimeout: 10 * time.Second,
-		CodexBinary: "/usr/local/bin/codex", ProviderAuthorizationRoot: "/var/lib/kodex-provider-auth/sessions",
-		ProviderDeviceAuthTTL: 15 * time.Minute, ProviderHTTPSProxy: defaultProviderEgressProxy,
+		ProviderAuthorizationRoot: "/var/lib/kodex-provider-auth/sessions",
+		ProviderDeviceAuthTTL:     15 * time.Minute, ProviderHTTPSProxy: defaultProviderEgressProxy,
 		ProviderHTTPProxy: defaultProviderEgressProxy, AuthorityVerifierSocket: "/run/kodex/internal-rpc-authority/verifier.sock",
 		AuthorityVerifierUID: 29002, AuthorityVerifierGID: 29000,
 	}
@@ -168,7 +167,7 @@ func (config Config) validate() error {
 	}
 	for _, path := range []string{config.ServerCertificateFile, config.ServerPrivateKeyFile, config.ClientCAFile,
 		config.ControlPlaneCAFile, config.ControlPlaneCertificateFile, config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile,
-		config.CodexBinary, config.ProviderAuthorizationRoot, config.AuthorityVerifierSocket, config.DraftKeyringFile} {
+		config.ProviderAuthorizationRoot, config.AuthorityVerifierSocket, config.DraftKeyringFile} {
 		if !filepath.IsAbs(path) {
 			return errors.New("secret broker file path is invalid")
 		}

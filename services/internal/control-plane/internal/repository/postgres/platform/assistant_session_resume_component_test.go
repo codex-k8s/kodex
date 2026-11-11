@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
-	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -42,232 +42,6 @@ func prepareAssistantSessionResumeRepository(t *testing.T, ctx context.Context, 
 	}
 	warm := reportReadyUsingWorkerFixture(t, ctx, service, owner, worker)
 	return r, service, owner, worker, warm
-}
-
-// TestAssistantSessionResumeComponent checks system and project conversations for exact original JSON history, native-session reuse after archive/restore, incompatible-runtime cold starts, cancellation, rejection of late ACKs and idempotent retry. It uses an isolated PostgreSQL fixture and synthetic provider/archive tuples; it does not start Codex or verify rollout bytes independently.
-// TestAssistantSessionResumeComponent проверяет системные и проектные диалоги по точной исходной JSON-истории, повторному использованию native-сессии после архивации и восстановления, холодному старту при несовместимом runtime, отмене, отклонению поздних ACK и идемпотентному retry. Используются изолированная PostgreSQL-оснастка и синтетические tuples провайдера и архива; Codex не запускается, байты rollout независимо не проверяются.
-func TestAssistantSessionResumeComponent(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
-	defer cancel()
-	pool := newIsolatedAssistantComponentPool(t, ctx)
-	defer pool.Close()
-	r, service, owner, worker, warm := prepareAssistantSessionResumeRepository(t, ctx, pool)
-	invoke := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
-		t.Helper()
-		result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "resume-" + key}, Payload: payload})
-		if err != nil {
-			t.Fatalf("%s %s: %v", kind, key, err)
-		}
-		return result
-	}
-	for _, scopeKind := range []string{"SYSTEM", "PROJECT"} {
-		t.Run(scopeKind, func(t *testing.T) {
-			projectRef := ""
-			if scopeKind == "PROJECT" {
-				projectRef = invoke(command.CreateProject, owner, "project", command.ProjectInput{Name: "Resume fixture", Language: "en"}).Project.Ref
-				invoke(command.CreateProjectAssistant, owner, "profile", command.ProjectAssistantInput{ProjectRef: projectRef, Name: "Project helper", Purpose: "Synthetic session resume", Instructions: "Use approved resources."})
-			}
-			conversation := invoke(command.CreateAssistantConversation, owner, scopeKind+"-create", command.AssistantConversationInput{AssistantScope: scopeKind, ProjectRef: projectRef}).Conversation
-			var restoreWhenQueued func()
-			originalJSON := `{"operations":[{"instructions":"` + strings.Repeat("Полный исходный JSON 😀 <>& ", 600) + `"}],"complete":true}`
-			claim := func(key string) map[string]any {
-				t.Helper()
-				content := "Synthetic " + key
-				if key == "first" {
-					content = originalJSON
-				}
-				invoke(command.AddAssistantTurn, owner, scopeKind+key+"-turn", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: content, DeliveryMode: "QUEUE"})
-				if restoreWhenQueued != nil {
-					restoreWhenQueued()
-					restoreWhenQueued = nil
-				}
-				items := invoke(command.ClaimExecution, worker, scopeKind+key+"-claim", command.LeaseInput{WorkloadInstance: "resume-worker", Limit: 1}).RuntimeItems
-				if len(items) != 1 {
-					t.Fatalf("expected exact claim, got %d", len(items))
-				}
-				return items[0]
-			}
-			first := claim("first")
-			if stringMap(first, "codexSessionID") != "" {
-				t.Fatal("new conversation resumed a foreign provider thread")
-			}
-			threadID := "00000000-0000-4000-8000-000000000003"
-			if scopeKind == "PROJECT" {
-				threadID = "00000000-0000-4000-8000-000000000004"
-			}
-			payload := command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: first["generation"].(int64), Success: true, ResultSummary: "Synthetic final", Usage: turnUsageFixture(), CodexSessionID: threadID, ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/04/rollout-2026-10-04T00-00-00-" + threadID + ".jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128}
-			invoke(command.CompleteExecution, worker, scopeKind+"-complete", payload)
-			invoke(command.CompleteExecution, worker, scopeKind+"-complete", payload)
-			var generation int64
-			if err := pool.QueryRow(ctx, `SELECT storage.content_generation FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation); err != nil || generation != 1 {
-				t.Fatalf("confirmed helper binding missing or duplicated: %d %v", generation, err)
-			}
-			restoreWhenQueued = prepareAssistantSessionArchiveRoundTrip(t, ctx, r, service, worker, owner, conversation.Ref, conversation.SessionRef, scopeKind)
-			second := claim("second")
-			messages := runtimeRevisionSessionContext(second["sessionContext"])
-			if len(messages) < 2 || messages[0].Role != "USER" || messages[0].Content != originalJSON || !json.Valid([]byte(messages[0].Content)) {
-				t.Fatal("next turn received a truncated or foreign original USER JSON")
-			}
-			var persistedHistory []byte
-			if err := pool.QueryRow(ctx, `SELECT safe_snapshot->'sessionContext' FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(second, "runtimeRevisionRef")).Scan(&persistedHistory); err != nil {
-				t.Fatal(err)
-			}
-			var persistedMessages []map[string]string
-			if json.Unmarshal(persistedHistory, &persistedMessages) != nil || len(persistedMessages) < 2 || persistedMessages[0]["content"] != originalJSON {
-				t.Fatal("immutable runtime snapshot lost exact original USER JSON")
-			}
-			if stringMap(second, "codexSessionID") != threadID {
-				var raw []byte
-				pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(first, "runtimeRevisionRef")).Scan(&raw)
-				var before map[string]any
-				_ = json.Unmarshal(raw, &before)
-				pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(second, "runtimeRevisionRef")).Scan(&raw)
-				var after map[string]any
-				_ = json.Unmarshal(raw, &after)
-				t.Log("decoded compatibility", runtimeSessionResumeCompatible(before, after))
-				for _, key := range []string{"organizationRef", "sessionRef", "agentRef", "providerAccountRef", "runtimeModel", "promptTemplateRef", "promptTemplateDigest", "roleRuntimeContractSHA256", "imageManifestDigest", "runtimeEnvironmentDigest"} {
-					if stringMap(before, key) == "" {
-						t.Log("missing required", key)
-					}
-				}
-				for key, value := range before {
-					if other, present := after[key]; present {
-						a, _ := json.Marshal(value)
-						b, _ := json.Marshal(other)
-						if string(a) != string(b) {
-							t.Log("changed snapshot key", key)
-						}
-					}
-				}
-				t.Fatal("unchanged exact helper session cold-started instead of native resume")
-			}
-			for _, field := range []string{"runtimeModel", "providerAccountRef", "runtimeRevision", "promptTemplateDigest", "runtimeEnvironmentDigest", "imageManifestDigest", "assistantProfileRef", "sessionRef", "integrationGrants"} {
-				changed := map[string]any{}
-				for key, value := range second {
-					changed[key] = value
-				}
-				changed[field] = "changed"
-				if runtimeSessionResumeCompatible(second, changed) {
-					t.Fatalf("changed %s retained native history", field)
-				}
-			}
-			var rawCurrent []byte
-			if err := pool.QueryRow(ctx, `SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(second, "runtimeRevisionRef")).Scan(&rawCurrent); err != nil {
-				t.Fatal(err)
-			}
-			var currentSnapshot map[string]any
-			if json.Unmarshal(rawCurrent, &currentSnapshot) != nil || !runtimeSessionResumeCompatible(currentSnapshot, currentSnapshot) {
-				t.Fatal("current complete compatibility snapshot rejected")
-			}
-			var historyOnly map[string]any
-			if json.Unmarshal(rawCurrent, &historyOnly) != nil {
-				t.Fatal("synthetic history snapshot cannot be decoded")
-			}
-			historyOnly["task"], historyOnly["turnRef"], historyOnly["sessionContext"] = "Next user message", "trn_next0001", map[string]any{"message_count": 20}
-			if !runtimeSessionResumeCompatible(currentSnapshot, historyOnly) {
-				t.Fatal("new turn/history reset unchanged native configuration")
-			}
-			historyOnly["promptSnapshot"].(map[string]any)["variables"].(map[string]any)["user.ref"] = "usr_foreign01"
-			if runtimeSessionResumeCompatible(currentSnapshot, historyOnly) {
-				t.Fatal("foreign root actor reused native context")
-			}
-			for _, field := range []string{"runtimeKey", "providerAccountRef", "runtimeEnvironmentDigest", "integrationGrants"} {
-				missing := map[string]any{}
-				for key, value := range currentSnapshot {
-					missing[key] = value
-				}
-				delete(missing, field)
-				if runtimeSessionResumeCompatible(currentSnapshot, missing) {
-					t.Fatal("incomplete runtime snapshot resumed")
-				}
-			}
-			unsupported := map[string]any{}
-			for key, value := range currentSnapshot {
-				unsupported[key] = value
-			}
-			unsupported["runtimeProvider"] = "unsupported"
-			if runtimeSessionResumeCompatible(unsupported, unsupported) {
-				t.Fatal("unsupported native provider resumed")
-			}
-			run, err := service.GetRun(ctx, owner, stringMap(second, "runRef"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, err = service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "-cancel", ExpectedVersion: &run.Version}, Payload: command.RunCommandInput{RunRef: run.Ref}})
-			if err != nil {
-				t.Fatal(err)
-			}
-			payload.LeaseRef, payload.Fence, payload.Generation = stringMap(second, "leaseRef"), stringMap(second, "fence"), second["generation"].(int64)
-			_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "-late"}, Payload: payload})
-			if !errors.Is(err, errs.ErrForbidden) {
-				t.Fatalf("late ACK accepted: %v", err)
-			}
-			if err := pool.QueryRow(ctx, `SELECT storage.content_generation FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation); err != nil || generation != 1 {
-				t.Fatal("cancelled late ACK changed private storage")
-			}
-			cancelled, err := service.GetRun(ctx, owner, run.Ref)
-			if err != nil {
-				t.Fatal(err)
-			}
-			retryCommand := command.Command{Kind: command.RetryRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "retry", ExpectedVersion: &cancelled.Version}, Payload: command.RunCommandInput{RunRef: cancelled.Ref}}
-			retried, err := service.Execute(ctx, retryCommand)
-			if err != nil || retried.Run == nil || retried.Run.SessionRef != conversation.SessionRef {
-				t.Fatalf("retry changed the exact helper session: %v", err)
-			}
-			retryItems := invoke(command.ClaimExecution, worker, scopeKind+"retry-claim", command.LeaseInput{WorkloadInstance: "resume-worker", Limit: 1}).RuntimeItems
-			if len(retryItems) != 1 || stringMap(retryItems[0], "runRef") != retried.Run.Ref || stringMap(retryItems[0], "codexSessionID") != threadID {
-				t.Fatal("retry lost unchanged native context or crossed helper conversation")
-			}
-			retryRun, err := service.GetRun(ctx, owner, retried.Run.Ref)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "retry-cancel", ExpectedVersion: &retryRun.Version}, Payload: command.RunCommandInput{RunRef: retryRun.Ref}}); err != nil {
-				t.Fatal(err)
-			}
-			replayed, err := service.Execute(ctx, retryCommand)
-			if err != nil || replayed.Run == nil || replayed.Run.Ref != retried.Run.Ref {
-				t.Fatal("retry replay created new session work")
-			}
-			view, err := service.GetAgentRuntimeConfiguration(ctx, owner, stringMap(second, "agentRef"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			candidates := append([]entity.ProviderAccountCandidate(nil), view.Configuration.ProviderPolicy.AccountCandidates...)
-			for index := range candidates {
-				candidates[index].DefaultReasoningEffort, candidates[index].ModelCapabilityDigest = "", ""
-			}
-			_, err = service.Execute(ctx, command.Command{Kind: command.PublishAgentRuntimeConfig, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "policy-change", ExpectedVersion: &view.AgentVersion}, Payload: command.AgentRuntimeConfigurationInput{AgentRef: stringMap(second, "agentRef"), RuntimeProfileRef: view.Configuration.RuntimeProfileRef, Model: view.Configuration.Model, ProviderPolicyMode: "LEAST_USED", ProviderAccounts: candidates}})
-			if err != nil {
-				t.Fatalf("canonical runtime policy change: %v", err)
-			}
-			if scopeKind == "SYSTEM" {
-				updated, err := service.GetSystemAssistant(ctx, owner)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: updated.DesiredRuntimeRevision, State: "READY"}); err != nil {
-					t.Fatal(err)
-				}
-			}
-			cold := claim("changed")
-			if stringMap(cold, "codexSessionID") != "" {
-				t.Fatal("changed canonical runtime policy resumed old native context")
-			}
-			coldRun, err := service.GetRun(ctx, owner, stringMap(cold, "runRef"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "resume-" + scopeKind + "coldcancel", ExpectedVersion: &coldRun.Version}, Payload: command.RunCommandInput{RunRef: coldRun.Ref}}); err != nil {
-				t.Fatal(err)
-			}
-			// Возвращаем synthetic idle clock, чтобы следующий scope не архивировал
-			// уже проверенную сессию повторно по намеренно состаренному fixture.
-			if _, err := pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp() WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, conversation.SessionRef); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
 }
 
 // TestAssistantFailedRolloutStorageComponent checks that a failed turn can publish its exact newer storage tuple atomically with terminal graph, audit, receipt and events, while rejecting foreign or stale claims and preserving replay identity. Both assistant scopes also cover snapshot revocation/retry and superseded deletion authority. Tuples and object receipts are synthetic; rollout-byte provenance belongs to the runner, not PostgreSQL or this fixture.
@@ -323,7 +97,7 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			}
 			snapshotPayload := func(task map[string]any, size int64) command.SessionArchiveTaskInput {
 				payload := claimedSessionArchivePayload(task)
-				payload.FormatVersion, payload.ObjectKey = 1, stringMap(task, "objectKey")
+				payload.FormatVersion, payload.ObjectKey = 3, stringMap(task, "objectKey")
 				payload.ObjectVersion, payload.ObjectETag = "synthetic-version", "synthetic-etag"
 				payload.ObjectDigest, payload.ObjectSizeBytes, payload.SourceSizeBytes = "sha256:"+strings.Repeat("c", 64), size+1024, size
 				return payload
@@ -331,11 +105,11 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			queue("-first")
 			first := claim("-first")
 			thread := fmt.Sprintf("00000000-0000-4000-8000-%012d", index+20)
-			initial := command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"), Success: true, ResultSummary: "Synthetic initial result", Usage: turnUsageFixture(), CodexSessionID: thread, ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/04/rollout-2026-10-04T00-00-00-" + thread + ".jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128}
+			initial := command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"), Success: true, ResultSummary: "Synthetic initial result", Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture(thread, 1, strings.Repeat("a", 64), 128)}
 			execute(command.CompleteExecution, worker, "-initial-complete", initial)
 			idle()
 			oldSnapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
-			oldSnapshotPayload := snapshotPayload(oldSnapshot, initial.ArchiveSizeBytes)
+			oldSnapshotPayload := snapshotPayload(oldSnapshot, initial.NativeSession.SizeBytes)
 			oldArchive := stringMap(execute(command.CompleteSessionSnapshot, snapshotPrincipal, "-old-snapshot", oldSnapshotPayload).Runtime, "archiveRef")
 			var oldDeleteRef string
 			if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.session_archive_tasks WHERE archive_id=(SELECT id FROM control_plane.session_archives WHERE ref=$1) AND kind='DELETE_PVC' AND state='READY'`, oldArchive).Scan(&oldDeleteRef); err != nil {
@@ -358,20 +132,22 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			}
 			t.Run("cancelled-task", func(t *testing.T) { forbiddenDelete("-cancelled-delete") })
 			second := claim("-failed")
-			if stringMap(second, "runtimeRevisionRef") == stringMap(first, "runtimeRevisionRef") || stringMap(second, "codexSessionID") != thread {
+			if stringMap(second, "runtimeRevisionRef") == stringMap(first, "runtimeRevisionRef") || stringMap(second, "nativeSessionID") != thread {
 				t.Fatal("failed turn did not receive a fresh exact native-resume snapshot")
 			}
 			failed := initial
 			failed.LeaseRef, failed.Fence, failed.Generation = stringMap(second, "leaseRef"), stringMap(second, "fence"), runtimeRevisionMapInt64(second, "generation")
 			failed.Success, failed.SafeErrorCode, failed.ResultSummary = false, "PROVIDER_RESPONSE_INVALID", "Synthetic failed result"
-			failed.ArchiveRelativePath, failed.ArchiveSHA256, failed.ArchiveSizeBytes = ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-"+thread+".jsonl", strings.Repeat("b", 64), 193
+			failed.NativeSession.RelativePath, failed.NativeSession.SHA256, failed.NativeSession.SizeBytes = ".kodex/state/opencode/sessions/2026/10/07/rollout-2026-10-07T00-00-00-"+thread+".jsonl", strings.Repeat("b", 64), 193
 			before := storage()
 			for _, test := range []struct {
 				name   string
 				mutate func(*command.CompleteExecutionInput)
 				want   error
 			}{
-				{"thread-path", func(p *command.CompleteExecutionInput) { p.CodexSessionID = "00000000-0000-4000-8000-000000000099" }, errs.ErrInvalid},
+				{"thread-path", func(p *command.CompleteExecutionInput) {
+					p.NativeSession.SessionID = "00000000-0000-4000-8000-000000000099"
+				}, errs.ErrInvalid},
 				{"unknown-lease", func(p *command.CompleteExecutionInput) { p.LeaseRef = "rls_foreign_fixture" }, errs.ErrNotFound},
 				{"foreign-fence", func(p *command.CompleteExecutionInput) { p.Fence += "-foreign" }, errs.ErrForbidden},
 				{"stale-generation", func(p *command.CompleteExecutionInput) { p.Generation++ }, errs.ErrForbidden},
@@ -407,7 +183,7 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			var generation, sourceSize int64
 			var sourcePath, sourceSHA, codexID, revisionRef, state string
 			var currentArchiveNull bool
-			if err := pool.QueryRow(ctx, `SELECT storage.content_generation,storage.source_relative_path,storage.source_sha256,storage.source_size_bytes,storage.codex_session_id::text,revision.ref,storage.state,storage.current_archive_id IS NULL FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id JOIN control_plane.runtime_revisions revision ON revision.id=storage.runtime_revision_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize, &codexID, &revisionRef, &state, &currentArchiveNull); err != nil || generation != 2 || sourcePath != failed.ArchiveRelativePath || sourceSHA != failed.ArchiveSHA256 || sourceSize != failed.ArchiveSizeBytes || codexID != failed.CodexSessionID || revisionRef != stringMap(second, "runtimeRevisionRef") || state != "LIVE" || !currentArchiveNull {
+			if err := pool.QueryRow(ctx, `SELECT storage.content_generation,storage.source_relative_path,storage.source_sha256,storage.source_size_bytes,storage.native_session_id::text,revision.ref,storage.state,storage.current_archive_id IS NULL FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id JOIN control_plane.runtime_revisions revision ON revision.id=storage.runtime_revision_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize, &codexID, &revisionRef, &state, &currentArchiveNull); err != nil || generation != 2 || sourcePath != failed.NativeSession.RelativePath || sourceSHA != failed.NativeSession.SHA256 || sourceSize != failed.NativeSession.SizeBytes || codexID != failed.NativeSession.SessionID || revisionRef != stringMap(second, "runtimeRevisionRef") || state != "LIVE" || !currentArchiveNull {
 				t.Fatal("FAILED completion did not publish exact fresh generation and tuple")
 			}
 			var oldDeleteState, oldArchiveState string
@@ -441,7 +217,7 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			}
 			changed := completion
 			changedTuple := failed
-			changedTuple.ArchiveSHA256 = strings.Repeat("d", 64)
+			changedTuple.NativeSession.SHA256 = strings.Repeat("d", 64)
 			changed.Payload = changedTuple
 			if _, err := service.Execute(ctx, changed); !errors.Is(err, errs.ErrIdempotencyReuse) || storage() != completedStorage || counts() != durableCounts {
 				t.Fatal("changed failed tuple reused accepted idempotency key")
@@ -454,10 +230,10 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 			}
 			idle()
 			freshSnapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
-			if freshSnapshot["contentGeneration"].(int64) != 2 || stringMap(freshSnapshot, "sourceRelativePath") != failed.ArchiveRelativePath || stringMap(freshSnapshot, "sourceSHA256") != failed.ArchiveSHA256 || freshSnapshot["sourceSizeBytes"].(int64) != failed.ArchiveSizeBytes || stringMap(freshSnapshot, "runtimeRevisionRef") != stringMap(second, "runtimeRevisionRef") || stringMap(freshSnapshot, "inputDigest") == stringMap(oldSnapshot, "inputDigest") {
+			if freshSnapshot["contentGeneration"].(int64) != 2 || stringMap(freshSnapshot, "sourceRelativePath") != failed.NativeSession.RelativePath || stringMap(freshSnapshot, "sourceSHA256") != failed.NativeSession.SHA256 || freshSnapshot["sourceSizeBytes"].(int64) != failed.NativeSession.SizeBytes || stringMap(freshSnapshot, "runtimeRevisionRef") != stringMap(second, "runtimeRevisionRef") || stringMap(freshSnapshot, "inputDigest") == stringMap(oldSnapshot, "inputDigest") {
 				t.Fatal("fresh snapshot reused the old failed source tuple or revision")
 			}
-			freshPayload := snapshotPayload(freshSnapshot, failed.ArchiveSizeBytes)
+			freshPayload := snapshotPayload(freshSnapshot, failed.NativeSession.SizeBytes)
 			// Штатный retry отзывает весь старый claim, не нарушая schema CHECK.
 			failPayload := claimedSessionArchivePayload(freshSnapshot)
 			failPayload.SafeErrorCode = "SESSION_ARCHIVE_WORKER_FAILED"
@@ -478,17 +254,17 @@ func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
 				t.Fatal("advance exact disposable retry clock")
 			}
 			reclaimed := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
-			if stringMap(reclaimed, "taskRef") != stringMap(freshSnapshot, "taskRef") || reclaimed["contentGeneration"].(int64) != 2 || reclaimed["generation"].(int64) != freshSnapshot["generation"].(int64)+1 || reclaimed["attempt"].(int32) != freshSnapshot["attempt"].(int32)+1 || stringMap(reclaimed, "sourceSHA256") != failed.ArchiveSHA256 || stringMap(reclaimed, "leaseRef") == stringMap(freshSnapshot, "leaseRef") {
+			if stringMap(reclaimed, "taskRef") != stringMap(freshSnapshot, "taskRef") || reclaimed["contentGeneration"].(int64) != 2 || reclaimed["generation"].(int64) != freshSnapshot["generation"].(int64)+1 || reclaimed["attempt"].(int32) != freshSnapshot["attempt"].(int32)+1 || stringMap(reclaimed, "sourceSHA256") != failed.NativeSession.SHA256 || stringMap(reclaimed, "leaseRef") == stringMap(freshSnapshot, "leaseRef") {
 				t.Fatal("fresh snapshot retry changed source or reused revoked claim")
 			}
-			freshPayload = snapshotPayload(reclaimed, failed.ArchiveSizeBytes)
+			freshPayload = snapshotPayload(reclaimed, failed.NativeSession.SizeBytes)
 			badSnapshot := freshPayload
-			badSnapshot.SourceSizeBytes = initial.ArchiveSizeBytes
+			badSnapshot.SourceSizeBytes = initial.NativeSession.SizeBytes
 			if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteSessionSnapshot, Principal: snapshotPrincipal, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-old-source-size"}, Payload: badSnapshot}); !errors.Is(err, errs.ErrInvalid) {
 				t.Fatal("new snapshot accepted old source size")
 			}
 			freshArchive := stringMap(execute(command.CompleteSessionSnapshot, snapshotPrincipal, "-fresh-snapshot", freshPayload).Runtime, "archiveRef")
-			if err := pool.QueryRow(ctx, `SELECT content_generation,source_relative_path,source_sha256,source_size_bytes FROM control_plane.session_archives WHERE ref=$1`, freshArchive).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize); err != nil || generation != 2 || sourcePath != failed.ArchiveRelativePath || sourceSHA != failed.ArchiveSHA256 || sourceSize != failed.ArchiveSizeBytes {
+			if err := pool.QueryRow(ctx, `SELECT content_generation,source_relative_path,source_sha256,source_size_bytes FROM control_plane.session_archives WHERE ref=$1`, freshArchive).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize); err != nil || generation != 2 || sourcePath != failed.NativeSession.RelativePath || sourceSHA != failed.NativeSession.SHA256 || sourceSize != failed.NativeSession.SizeBytes {
 				t.Fatal("fresh archive receipt did not retain exact FAILED rollout tuple")
 			}
 			// Потерянный ACK completion не оживляет LIVE после последующей публикации.
@@ -561,7 +337,7 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 		t.Fatal("archive task crossed helper conversation")
 	}
 	payload := claimedSessionArchivePayload(snapshot)
-	payload.FormatVersion = 1
+	payload.FormatVersion = 3
 	payload.ObjectKey = stringMap(snapshot, "objectKey")
 	payload.ObjectVersion = "synthetic-version"
 	payload.ObjectETag = "synthetic-etag"
@@ -575,7 +351,7 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 	cancelQueued("snapshot-race")
 	snapshot = claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
 	payload = claimedSessionArchivePayload(snapshot)
-	payload.FormatVersion = 1
+	payload.FormatVersion = 3
 	payload.ObjectKey = stringMap(snapshot, "objectKey")
 	payload.ObjectVersion = "synthetic-second-version"
 	payload.ObjectETag = "synthetic-second-etag"
@@ -660,7 +436,7 @@ func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, 
 		}
 		republished := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
 		republishedPayload := claimedSessionArchivePayload(republished)
-		republishedPayload.FormatVersion = 1
+		republishedPayload.FormatVersion = 3
 		republishedPayload.ObjectKey = stringMap(republished, "objectKey")
 		republishedPayload.ObjectETag = "synthetic-republished-etag"
 		republishedPayload.ObjectDigest = "sha256:" + strings.Repeat("b", 64)
@@ -713,4 +489,73 @@ func snapshotGeneration(t *testing.T, ctx context.Context, r *Repository, sessio
 		t.Fatal("snapshot generation fixture read failed")
 	}
 	return generation
+}
+
+// TestAssistantSessionResumeComponent preserves exact native state for both assistant scopes without replaying old model input.
+// These owner/storage receipts are synthetic; native byte custody is qualified separately by the real OpenCode harness.
+// TestAssistantSessionResumeComponent сохраняет exact native state обоих assistant scopes без повторной подачи старого model input.
+// Owner/storage receipts синтетические; сохранность native bytes отдельно проверяет harness настоящего OpenCode.
+func TestAssistantSessionResumeComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	defer pool.Close()
+	r, service, owner, worker, _ := prepareAssistantSessionResumeRepository(t, ctx, pool)
+	for _, scope := range []string{"SYSTEM", "PROJECT"} {
+		t.Run(scope, func(t *testing.T) {
+			invoke := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
+				t.Helper()
+				result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "native-assistant-" + scope + key}, Payload: payload})
+				if err != nil {
+					t.Fatalf("%s: %v", kind, err)
+				}
+				return result
+			}
+			project := ""
+			if scope == "PROJECT" {
+				project = invoke(command.CreateProject, owner, "project", command.ProjectInput{Name: "Native assistant fixture", Language: "ru"}).Project.Ref
+				invoke(command.CreateProjectAssistant, owner, "profile", command.ProjectAssistantInput{ProjectRef: project, Name: "Assistant", Purpose: "Native continuity", Instructions: "Use current grants."})
+			}
+			conversation := invoke(command.CreateAssistantConversation, owner, "conversation", command.AssistantConversationInput{AssistantScope: scope, ProjectRef: project}).Conversation
+			original := `{"instruction":"` + strings.Repeat("Сохранить исходные байты 😀 ", 600) + `"}`
+			invoke(command.AddAssistantTurn, owner, "first", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: original, DeliveryMode: "QUEUE"})
+			claim := func(key string) map[string]any {
+				t.Helper()
+				items := invoke(command.ClaimExecution, worker, key, command.LeaseInput{WorkloadInstance: "native-assistant-worker", Limit: 1}).RuntimeItems
+				if len(items) != 1 {
+					t.Fatalf("expected one claim, got %d", len(items))
+				}
+				return items[0]
+			}
+			first := claim("claim-first")
+			if first["nativeSession"] != nil {
+				t.Fatal("new assistant received foreign native state")
+			}
+			checkpoint := nativeCheckpointFixture("ses_Assistant"+scope, 1, strings.Repeat("a", 64), 128)
+			payload := command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"), Success: true, ResultSummary: "Native final", Usage: turnUsageFixture(), NativeSession: checkpoint}
+			invoke(command.CompleteExecution, worker, "complete-first", payload)
+			invoke(command.CompleteExecution, worker, "complete-first", payload)
+			restore := prepareAssistantSessionArchiveRoundTrip(t, ctx, r, service, worker, owner, conversation.Ref, conversation.SessionRef, scope)
+			invoke(command.AddAssistantTurn, owner, "second", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: "Новый бизнес-ход", DeliveryMode: "QUEUE"})
+			restore()
+			second := claim("claim-second")
+			raw, err := json.Marshal(second["nativeSession"])
+			got, decodeErr := runtimecontract.DecodeNativeSessionCheckpoint(raw)
+			if err != nil || decodeErr != nil || got != *checkpoint || len(runtimeRevisionSessionContext(second["sessionContext"])) != 0 {
+				t.Fatal("assistant lost exact native binding or replayed old context", decodeErr)
+			}
+			var priorTask string
+			if pool.QueryRow(ctx, `SELECT safe_snapshot->>'task' FROM control_plane.runtime_revisions WHERE ref=$1`, stringMap(first, "runtimeRevisionRef")).Scan(&priorTask) != nil || priorTask != original {
+				t.Fatal("immutable original task was changed")
+			}
+			run, err := service.GetRun(ctx, owner, stringMap(second, "runRef"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "native-assistant-" + scope + "stop", ExpectedVersion: &run.Version}, Payload: command.RunCommandInput{RunRef: run.Ref}})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }

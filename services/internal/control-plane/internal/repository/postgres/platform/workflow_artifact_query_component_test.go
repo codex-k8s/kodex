@@ -79,7 +79,7 @@ func seedWorkflowArtifactBoundaryCatalog(t *testing.T, ctx context.Context, pool
 			artifacts = append(artifacts, workflowCaptureProgressArtifact(name, []byte("Unrelated native artifact.\n")))
 		}
 		lease := items[0]
-		result := execute(command.CompleteExecution, key+"-complete", nil, command.CompleteExecutionInput{
+		result := execute(command.CompleteExecution, key+"-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"),
 			Success: true, Usage: turnUsageFixture(), ResultSummary: "Unrelated native work completed.", Artifacts: artifacts})
 		if len(result.CreatedRefs) != 10 {
