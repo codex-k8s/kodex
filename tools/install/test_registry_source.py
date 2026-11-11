@@ -113,14 +113,15 @@ class RegistrySource(unittest.TestCase):
             registry.one(bad, 'ConfigMap', 'kodex-buildkit-config')['data']['buildkitd.toml'] += suffix
             with self.assertRaises(ValueError): registry.transform(bad, config, lock)
 
-    def test_runtime_pull_policy_is_opt_in_and_rejects_lock_or_environment_conflict(self):
+    def test_runtime_pull_policy_defaults_to_opencode_and_rejects_conflicts(self):
         config,lock,resources=fixture()
         result=registry.transform(resources,config,lock)
         authorizer=registry.one(result,'Deployment','kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
-        self.assertEqual(authorizer['env'],[])
-        for engine in ('opencode','unknown'):
+        self.assertEqual(authorizer['env'], [{'name': 'REGISTRY_PULL_RUNTIME_ENGINE', 'value': 'opencode'}])
+        self.assertEqual(registry.transform(resources,config,{**lock,'role_base_runtime_engine':'opencode'}), result)
+        for engine in ('codex','unknown'):
             with self.subTest(engine=engine),self.assertRaises(ValueError):registry.transform(resources,config,{**lock,'role_base_runtime_engine':engine})
-        for env in ([{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'opencode'}],
+        for env in ([{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'codex'}],
                     [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'codex'}]*2,
                     [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','valueFrom':{'configMapKeyRef':{'name':'synthetic','key':'engine'}}}]):
             altered=copy.deepcopy(resources)
@@ -129,24 +130,16 @@ class RegistrySource(unittest.TestCase):
 
     def test_opencode_materializer_and_promoted_readback_use_destination_namespace(self):
         config, lock, resources = fixture()
-        data = next((v['data'] for v in resources if v['kind'] == 'ConfigMap' and v['metadata']['name'] == 'kodex-image-admission-policy'))
-        data['trustedRoleBaseRepository'] = data['trustedRoleBaseRepository'].replace('/agent-runner', '/agent-runner-opencode')
-        for resource in resources:
-            if resource['kind'] == 'Deployment' and resource['metadata']['name'] in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
-                resource['spec']['template']['metadata']['annotations']['kodex.dev/trusted-role-base-repository'] = data['trustedRoleBaseRepository']
-        lock['images'][1]['component'] = 'agent-runner-opencode'
-        job = next((v for v in resources if v['kind'] == 'Job'))
-        for item in job['spec']['template']['spec']['containers'][0]['env']:
-            if item['name'] == 'AGENT_RUNNER_SOURCE_REF':
-                item['value'] = item['value'].replace('/agent-runner@', '/agent-runner-opencode@')
-        with self.assertRaises(ValueError):
-            registry.transform(resources, config, lock)
         lock['role_base_runtime_engine'] = 'opencode'
+        legacy = copy.deepcopy(lock)
+        legacy['images'][1]['component'] = 'agent-runner-opencode'
+        with self.assertRaises(ValueError):
+            registry.transform(resources, config, legacy)
         result = registry.transform(resources, config, lock)
         data = registry.one(result, 'ConfigMap', 'kodex-image-admission-policy')['data']
-        self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner-opencode@sha256:' + 'b' * 64)
+        self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner@sha256:' + 'b' * 64)
         env = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']['containers'][0]['env']
-        self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner-opencode'}, env)
+        self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner'}, env)
         authorizer = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
         self.assertEqual(authorizer['env'], [{'name': 'REGISTRY_PULL_RUNTIME_ENGINE', 'value': 'opencode'}])
         guard = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][0]
