@@ -21,7 +21,7 @@ from installation_inventory import Client, decode, inventory, metadata
 ERROR = "Installation apply rejected: target, ownership, precondition or phase readback failed"
 PHASES = {
     "admission": {"mutatingwebhookconfigurations", "validatingwebhookconfigurations", "validatingadmissionpolicybindings"},
-    "producers": {"prometheuses", "alertmanagers", "certificates", "bundles", "cronjobs"},
+    "producers": {"prometheuses", "alertmanagers", "bundles", "cronjobs"},
     "workloads": {"deployments", "daemonsets", "statefulsets", "replicasets", "jobs"},
     "pods": {"pods"},
     "claims": {"persistentvolumeclaims"},
@@ -229,7 +229,7 @@ def wait_absent(client, rows, journal, deadline):
             time.sleep(2)
 
 
-def verify_local_writers(plan, storage_absent=False):
+def verify_local_writers(plan, storage_absent=False, current_claims=None):
     """Подтвердить завершение containers через exact k3d runtime; API absence само по себе не доказывает join."""
     physical = plan.get("physicalStorage")
     if not physical or physical.get("schema") != "kodex.k3d-local-storage/v1":
@@ -264,6 +264,20 @@ def verify_local_writers(plan, storage_absent=False):
             base = ["docker", "exec", volume["containerID"], "test", "!"]
             for predicate in ("-e", "-L"):
                 subprocess.run(base + [predicate, volume["path"]], capture_output=True, timeout=20, check=True)
+    if current_claims is not None:
+        by_claim = {volume["claimUID"]: volume for volume in physical["volumes"]}
+        if set(current_claims) - by_claim.keys():
+            raise ValueError(ERROR)
+        for claim_uid in current_claims:
+            volume = by_claim[claim_uid]
+            base = ["docker", "exec", volume["containerID"]]
+            result = subprocess.run(base + ["readlink", "-f", volume["path"]], capture_output=True, timeout=20, check=True)
+            if result.stdout.decode().strip() != volume["path"]:
+                raise ValueError(ERROR)
+            result = subprocess.run(base + ["stat", "-c", "%d:%i:%f", volume["path"]], capture_output=True, timeout=20, check=True)
+            device, inode, mode = result.stdout.decode().strip().split(":")
+            if device != volume["device"] or inode != volume["inode"] or not stat.S_ISDIR(int(mode, 16)):
+                raise ValueError(ERROR)
 
 
 def main():
@@ -274,6 +288,7 @@ def main():
     for name in ("plan", "inventory", "journal"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--executor-sha")
     args = parser.parse_args()
     plan = read_private(args.plan, args.plan_sha256)
     baseline = read_private(args.inventory, args.inventory_sha256)
@@ -281,8 +296,10 @@ def main():
     if expected != plan or plan["status"] != "OWNERSHIP_CLASSIFIED" or args.context != plan["context"]:
         raise ValueError(ERROR)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    if source != plan["sourceSHA"]:
+    executor = args.executor_sha or plan["sourceSHA"]
+    if not re.fullmatch(r"[a-f0-9]{40}", executor) or source != executor:
         raise ValueError(ERROR)
+    subprocess.run(["git", "merge-base", "--is-ancestor", plan["sourceSHA"], executor], capture_output=True, check=True)
     subprocess.run(["git", "diff", "--exit-code", "HEAD", "--", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py"],
                    capture_output=True, check=True)
     subprocess.run(["git", "ls-files", "--error-unmatch", "tools/dev/installation_apply.py", "tools/dev/installation_cleanup.py", "tools/dev/installation_inventory.py"],
@@ -295,8 +312,17 @@ def main():
             fresh = current_plan(plan, baseline, current, retired_uids(journal))
             rows = select_phase(fresh, current, args.phase)
             if args.phase in {"claims", "objects", "namespaces"}:
-                verify_local_writers(plan, storage_absent=args.phase == "namespaces")
-            journal.append({"event": "PREFLIGHT", "phase": args.phase, "snapshotDigest": digest(current), "count": len(rows)})
+                expected_volumes = {volume["identity"]["uid"]: volume for volume in plan["volumes"]}
+                target_namespaces = {item["name"] for item in plan["namespaces"]}
+                for volume in current["volumes"]:
+                    if volume["claim"].get("namespace") not in target_namespaces:
+                        continue
+                    previous = expected_volumes.get(volume["identity"]["uid"])
+                    if not previous or any(volume[key] != previous[key] for key in ("claim", "localPath", "csiDriver", "nodeAffinity", "reclaimPolicy")):
+                        raise ValueError(ERROR)
+                verify_local_writers(plan, storage_absent=args.phase == "namespaces",
+                                     current_claims={item["uid"] for item in rows} if args.phase == "claims" else None)
+            journal.append({"event": "PREFLIGHT", "phase": args.phase, "snapshotDigest": digest(current), "count": len(rows), "executorSHA": executor})
             if args.execute:
                 deadline = time.monotonic() + 600
                 for item in rows:

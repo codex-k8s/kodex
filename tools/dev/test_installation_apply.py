@@ -63,6 +63,16 @@ class ApplyTests(unittest.TestCase):
         with patch.object(apply.subprocess, "run", return_value=result(json.dumps("b" * 64).encode())):
             with self.assertRaises(ValueError):
                 apply.verify_local_writers(expected)
+        expected["volumes"] = [{"identity": {"uid": "volume"}}]
+        expected["physicalStorage"]["volumes"] = [{"volumeUID": "volume", "claimUID": "claim", "containerID": "a" * 64,
+                                                    "path": "/var/lib/rancher/k3s/storage/fixture", "device": "10", "inode": "20"}]
+        path = result(b"/var/lib/rancher/k3s/storage/fixture")
+        with patch.object(apply.subprocess, "run", side_effect=outputs + [path, result(b"10:20:41c0")]):
+            apply.verify_local_writers(expected, current_claims={"claim"})
+        for actual in (b"10:21:41c0", b"10:20:a1ff"):
+            with patch.object(apply.subprocess, "run", side_effect=outputs + [path, result(actual)]):
+                with self.assertRaises(ValueError):
+                    apply.verify_local_writers(expected, current_claims={"claim"})
 
     def test_delete_records_intent_and_uid_rv_without_reading_secret_response(self):
         row = item("secrets", "fixture", managers=["kodex-install"])
@@ -168,6 +178,20 @@ class ApplyTests(unittest.TestCase):
                                item("persistentvolumeclaims", "data", managers=["kodex-install"])]
         with self.assertRaises(ValueError):
             apply.select_phase(plan(baseline), baseline, "claims")
+
+    def test_unavailable_shared_certificate_webhook_does_not_block_writer_stop(self):
+        baseline = fixture()
+        certificate = item("certificates", "fixture-tls", managers=["kodex-install"])
+        certificate["deleting"] = True
+        workload = item("deployments", "component", managers=["kodex-install"])
+        baseline["objects"] = [certificate, workload]
+        selected = apply.select_phase(plan(baseline), baseline, "workloads")
+        self.assertEqual([row["uid"] for row in selected], [workload["uid"]])
+        baseline["objects"] = [certificate]
+        self.assertEqual(apply.select_phase(plan(baseline), baseline, "claims"), [])
+        self.assertEqual([row["uid"] for row in apply.select_phase(plan(baseline), baseline, "objects")], [certificate["uid"]])
+        with self.assertRaises(ValueError):
+            apply.select_phase(plan(baseline), baseline, "namespaces")
 
     def test_path_cannot_escape_exact_api_object(self):
         row = item("pods", "fixture")

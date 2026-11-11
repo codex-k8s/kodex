@@ -168,6 +168,9 @@ Apply получает те же client/config/context, `--inventory`,
 `--inventory-sha256`, `--plan`, `--plan-sha256`, `--journal` и одну `--phase`.
 Без `--execute` выполняется только preflight. Фазы идут в порядке `admission`,
 `producers`, `workloads`, `pods`, `claims`, `objects`, `namespaces`.
+Сертификаты удаляются в `objects`: недоступный общий webhook не должен блокировать
+независимую остановку workloads и освобождение диска Kodex. Общий webhook при этом
+не отключается, его failure policy и finalizers не изменяются.
 Каждая фаза заново проверяет target и ownership, имеет бюджет600 секунд и
 ожидает авторитетного отсутствия удалённых UID. Все удаления адресные, с UID/RV
 preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delete и
@@ -176,6 +179,12 @@ preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delet
 удаление; replacement UID не удаляется. Снятие ownerReferences допускается только
 для exact parent UID с записанным intent. Остальной ownership drift закрыто
 останавливает применение.
+
+При исправлении исполнителя во время незавершённой очистки исходные plan/inventory
+и журнал сохраняются. После квалификации нового committed descendant явно
+передаётся `--executor-sha`; exact HEAD и отсутствие изменений кода проверяются,
+новый SHA записывается в preflight. Это не меняет digest/область исходного плана
+и не разрешает другие ресурсы. По умолчанию executor SHA равен source SHA плана.
 
 Перед claims проверяется завершение containers через CRI exact k3d nodes.
 Перед namespace дополнительно требуется отсутствие PV и физических каталогов
