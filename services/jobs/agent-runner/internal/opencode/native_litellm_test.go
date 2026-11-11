@@ -134,7 +134,8 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	if os.WriteFile(configPath, []byte(config), 0600) != nil {
 		t.Fatal("write private synthetic proxy config")
 	}
-	docker.start(proxyName, "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
+	// UID/GID владельца сохраняют private mode 0600 без CAP_DAC_OVERRIDE и chmod для остальных пользователей.
+	docker.start(proxyName, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
 		"--env", "LITELLM_LOCAL_MODEL_COST_MAP=True", "--env", "LITELLM_LOG=INFO", "--env", "PYTHONUNBUFFERED=1", "--mount", "type=bind,src="+directory+",dst=/harness", "--mount", "type=bind,src="+configPath+",dst=/config/proxy.yaml,readonly", "--entrypoint", "python", nativeLiteLLMImage, "-c", nativeLiteLLMUnixRelay, "--config", "/config/proxy.yaml", "--host", "127.0.0.1", "--port", "4000", "--num_workers", "1")
 	origin := "http://litellm.example.invalid"
 	transport := &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {

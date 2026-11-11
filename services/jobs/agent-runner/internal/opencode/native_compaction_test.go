@@ -251,7 +251,20 @@ func TestNativeCompactionContinuesManagedToolLoop(t *testing.T) {
 		t.Fatalf("native loop qualification failed: tools=%d summaries=%d compacted=%d violations=%v", fixture.tools, fixture.summaries, result.Compactions, fixture.violations)
 	}
 	if result.Usage.OutputTokens != int64(fixture.modelCalls*24) {
-		t.Fatal("native event drain lost or duplicated measured model steps")
+		messages, readErr := server.client.Messages(t.Context(), session.ID, 100, "")
+		var storedOutput int64
+		for _, message := range messages {
+			for _, raw := range message.Parts {
+				var part struct {
+					Type   string
+					Tokens nativeTokens
+				}
+				if json.Unmarshal(raw, &part) == nil && part.Type == "step-finish" {
+					storedOutput += part.Tokens.Output
+				}
+			}
+		}
+		t.Fatalf("native event drain lost or duplicated measured model steps: observed_output=%d stored_output=%d read_failed=%t expected_output=%d model_calls=%d compactions=%d", result.Usage.OutputTokens, storedOutput, readErr != nil, fixture.modelCalls*24, fixture.modelCalls, result.Compactions)
 	}
 	if result.FinalText != "SYNTHETIC_FINAL_COUNTER_12" || commentaryCount == 0 || result.Usage.InputTokens == 0 {
 		t.Fatal("compaction summary was mistaken for the final response")
