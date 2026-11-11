@@ -95,6 +95,40 @@ plane. Их read/claim/complete paths должны использовать пр
 транзакции, idempotency, OCC, terminal closure и authoritative readback;
 native API не становится новым источником прикладных полномочий.
 
+Для `DELETE_OBJECT` отдельного native archive применяется format3 и прежняя
+owner-граница: session без workspace, exact tenant/session/archive/object
+version, завершённая retention и отсутствие активной задачи того же объекта.
+Инициатор — materializer control-plane; исполнитель — workload `session-archive`
+через специализированные claim/renew/complete/fail RPC. Полномочия следуют из
+проверенного workload и owner lease/fence/generation, а не ключа объекта в payload.
+Префикс `session-archive/v3` согласован у producer, claim, owner-проверки
+удаления проекта, worker удаления и конфигурации backup-controller. Перенос
+SYSTEM-сессии в проект сохраняет immutable ключ `/_system/`; право удалить его
+доказывается актуальным owner lineage в PostgreSQL, а не переписыванием ключа.
+Worker использует отдельное архивное хранилище, проверяет exact version и
+отсутствие этой версии после Delete; одинаковый ключ в хранилище артефактов
+не затрагивается. Старый префикс не допускается как запасной вариант.
+
+| Переход native `DELETE_OBJECT` | Результат владельца / наблюдение |
+| --- | --- |
+| Materialize | `SUPERSEDED` либо `AVAILABLE` закрытой session → новая `READY` task с immutable object/version и input digest; отдельного события нет, авторитетны task и archive |
+| Claim | `READY` → `CLAIMED`, новая attempt/generation/fence и ограниченный lease; отдельного события нет, исполнитель читает exact claim |
+| Renew | Продлевается лишь та же активная claim; stale/foreign отклоняется, нового события нет |
+| Complete | Exact receipt → `SUCCEEDED`, archive `DELETED`, claim закрыта; если это current archive закрытой session, storage `PURGED` и штатный `RUN_CHANGED` для связанных run, иначе отдельного события нет |
+| Fail / expiry | Claim закрывается; bounded backoff → `READY` либо `DEAD_LETTER`; физическое удаление не объявляется выполненным, отдельного события нет, состояние читается владельцем из task/receipt |
+| Project purge | Owner lifecycle отменяет ещё не начатую task; активные работы проверяются перед удалением полного графа, GC не создаёт новые задачи для `PURGE_PENDING` |
+| Replay / неопределённый ответ | Прежняя receipt при текущей authority; нового эффекта или события нет; отсутствие ответа не подтверждает физическое удаление |
+
+Миграция041 включает две новые FK writer в полный purge graph только после
+проверки прежних 111 узлов/306 рёбер без точной новой пары. Итог — 111/308,
+с прежним алгоритмом, owner ACL и `DEFERRABLE INITIALLY IMMEDIATE` для новых
+связей. Неизвестная дополнительная FK закрыто отклоняет cutover. Исторические
+schema proofs не расширяются; текущие проверки явно отделяют полный граф от
+inverse-проекций. Проверены через Context7 документы PostgreSQL18
+[`CREATE TABLE`](https://www.postgresql.org/docs/18/sql-createtable.html),
+[`SET CONSTRAINTS`](https://www.postgresql.org/docs/18/sql-set-constraints.html) и
+[`pg_constraint`](https://www.postgresql.org/docs/18/catalog-pg-constraint.html).
+
 Первый native writer получает `INITIALIZING` intent в той же транзакции,
 что lease и immutable RuntimeRevision. Последующий writer захватывает только
 подтверждённый `LIVE` checkpoint без прежнего незавершённого writer.

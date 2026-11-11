@@ -1549,7 +1549,7 @@ write_local_backup_controller_credentials() {
           endpoint: $endpoint,
           region: $region,
           bucket: "kodex-session-archives",
-          prefix: "session-archive/v1",
+          prefix: "session-archive/v3",
           accessKeyId: $accessKey,
           secretAccessKey: $secretKey,
           usePathStyle: true,

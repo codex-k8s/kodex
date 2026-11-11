@@ -8,11 +8,11 @@ test('native cutover требует пустые session data и точный н
   assert.equal(validOpenCodeNativeMigrationPrecondition(before),true);
   for (const change of [{sessionDataEmpty:false},{activeRuntimeLeases:1},{nativeColumnsAbsent:false},{gooseVersion:20261110000200},{readOnly:'off'},{database:'foreign'}])
     assert.equal(validOpenCodeNativeMigrationPrecondition({...before,...change}),false);
-  const after={profile:'OPENCODE_NATIVE_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,nativeColumnsReady:true,legacyIdentityAbsent:true,nativeShapeReady:true,nativeIdentityGuardReady:true,nativeConstraintsReady:true};
+  const after={profile:'OPENCODE_NATIVE_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,nativeColumnsReady:true,legacyIdentityAbsent:true,nativeShapeReady:true,nativeIdentityGuardReady:true,nativeConstraintsReady:true,nativeWriterForeignKeysReady:true,nativePurgeGraphReady:true,nativePurgeGuardReady:true};
   assert.equal(validOpenCodeNativeMigrationPostcondition(after),true);
   assert.equal(validImmutableMigrationPostcondition('opencode-native-sessions',after),true);
   assert.equal(validImmutableMigrationPostcondition('workflow-workspace',after),false);
-  for (const key of ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady']) {
+  for (const key of ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady','nativeWriterForeignKeysReady','nativePurgeGraphReady','nativePurgeGuardReady']) {
     assert.equal(validOpenCodeNativeMigrationPostcondition({...after,[key]:false}),false);
     const missing={...after};delete missing[key];
     assert.equal(validOpenCodeNativeMigrationPostcondition(missing),false);

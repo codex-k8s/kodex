@@ -94,7 +94,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Полный actual036111/306 закреплён независимо от явно названной inverse010 проекции284.
+	// Полный actual041111/308 закреплён независимо от явно названной inverse010 проекции284.
 	// Полный shape также проверяется shipped current postcondition до запуска component suite.
 	if graphNodes != 111 || graphNodeDigest != "3eb558fae167872ba6bd17bc68f7a303" || graphEdges != 308 ||
 		graphEdgeDigest != "d6aa5b9aa21c5e065c3106f2a6119e0f" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
@@ -105,12 +105,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	configureComponentProviderAndRoleImages(t, repository)
 	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}

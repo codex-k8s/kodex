@@ -145,6 +145,7 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
  FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
  JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
  WHERE c.contype='f' AND c.confrelid IN(SELECT relation_id FROM nodes) AND c.conrelid IN(SELECT relation_id FROM nodes)
+ AND NOT(c.conrelid='control_plane.session_storage'::regclass AND c.conname IN('session_storage_native_writer_lease_ref_fkey','session_storage_native_writer_revision_id_fkey'))
 ), node_proof AS (
  SELECT count(*) AS count,md5(string_agg(n.nspname||'.'||r.relname,E'\n' ORDER BY n.nspname,r.relname)) AS digest
  FROM nodes JOIN pg_class r ON r.oid=nodes.relation_id JOIN pg_namespace n ON n.oid=r.relnamespace
@@ -320,7 +321,8 @@ $body$
     AND position(format('IF v_edges <> 287 OR v_edge_fingerprint <> %L THEN',(SELECT digest FROM edge_proof)) IN definition)>0 FROM purge_guard)
 ,
  'visibilitySource',EXISTS(SELECT 1 FROM legacy_function_rows WHERE oid=to_regprocedure('control_plane.runtime_file_source_visible(uuid,uuid,uuid,uuid,uuid,text,text,uuid)')
- AND md5(prosrc)='be098f192205fa279eb55a502655052b'
+ AND md5(prosrc)=CASE WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)>=20261110000100
+   THEN '9a14fe7cf18830648738eec9b80aa709' ELSE 'be098f192205fa279eb55a502655052b' END
  AND pg_get_userbyid(proowner)='control_plane_owner' AND NOT prosecdef AND provolatile='s'
  AND prolang=(SELECT oid FROM pg_language WHERE lanname='sql') AND prorettype='boolean'::regtype
  AND cardinality(proconfig)=1 AND regexp_replace(proconfig[1],'[[:space:]]','','g')='search_path=pg_catalog,control_plane'
@@ -499,6 +501,7 @@ SELECT (base_proof.proof || jsonb_build_object(
  FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
  JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
  WHERE c.contype='f' AND c.confrelid IN(SELECT relation_id FROM evidence_nodes) AND c.conrelid IN(SELECT relation_id FROM evidence_nodes)
+ AND NOT(c.conrelid='control_plane.session_storage'::regclass AND c.conname IN('session_storage_native_writer_lease_ref_fkey','session_storage_native_writer_revision_id_fkey'))
 ), evidence_edge_proof AS (
  SELECT count(*) AS count,md5(string_agg(pin,E'\n' ORDER BY child_schema,child_name,conname)) AS digest FROM evidence_edges
 ), evidence_node_proof AS (

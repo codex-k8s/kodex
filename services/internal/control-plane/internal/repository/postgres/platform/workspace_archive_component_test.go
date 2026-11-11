@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"errors"
 	"strings"
@@ -14,18 +15,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryWorkspaceArchiveScopeFixture resolves the latest exact run inside the fixture session owner boundary.
+// queryWorkspaceArchiveScopeFixture разрешает последний точный run внутри owner boundary тестовой session.
+//
+//go:embed testdata/sql/workspace_archive_scope_fixture.sql
+var queryWorkspaceArchiveScopeFixture string
+
 // workspaceArchiveArguments resolves exact fixture scope without bypassing production session locks.
 // workspaceArchiveArguments получает точную область fixture, не обходя production session locks.
 func workspaceArchiveArguments(t *testing.T, ctx context.Context, pool *pgxpool.Pool, sessionRef string) pgx.StrictNamedArgs {
 	t.Helper()
-	var organization, project, session, agent string
-	if err := pool.QueryRow(ctx, `SELECT s.organization_id::text,s.project_id::text,s.id::text,a.id::text
-		FROM control_plane.sessions s JOIN control_plane.agents a ON a.ref=s.target_ref
-		AND a.organization_id=s.organization_id AND a.project_id=s.project_id WHERE s.ref=$1`, sessionRef).
-		Scan(&organization, &project, &session, &agent); err != nil {
+	var organization, project, session, agent, run string
+	if err := pool.QueryRow(ctx, queryWorkspaceArchiveScopeFixture, sessionRef).
+		Scan(&organization, &project, &session, &agent, &run); err != nil {
 		t.Fatal("resolve workspace archive fixture", err)
 	}
-	return pgx.StrictNamedArgs{"organization_id": organization, "project_id": project, "session_id": session, "agent_id": agent}
+	return pgx.StrictNamedArgs{"organization_id": organization, "project_id": project, "session_id": session, "agent_id": agent, "run_id": run}
 }
 
 // workspaceArchiveTransaction rolls every fixture mutation back with an independent cleanup context.

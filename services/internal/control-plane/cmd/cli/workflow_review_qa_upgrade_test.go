@@ -100,6 +100,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "opencode-native-sessions":
+		verifier = "validOpenCodeNativeMigration"
 	case "workflow-workspace":
 		verifier = "validWorkflowWorkspaceMigration"
 	case "managed-workspace":

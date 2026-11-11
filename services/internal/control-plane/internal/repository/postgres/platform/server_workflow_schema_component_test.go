@@ -76,7 +76,7 @@ func TestServerWorkflowMigrationProofComponent(t *testing.T) {
 			personalRejection := version >= 20261106000100 &&
 				(fixture.name == "disabled-ssh-snapshot-guard" || fixture.name == "public-ssh-execute" ||
 					fixture.name == "disabled-ssh-admission-guard" || fixture.name == "missing-ssh-admission-check")
-			if version != 20261109000100 && (pdlcRejection || personalRejection) {
+			if version < 20261109000100 && (pdlcRejection || personalRejection) {
 				filename := "workflow-pdlc-migration-postcondition.sql"
 				switch version {
 				case 20261030000100:

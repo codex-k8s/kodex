@@ -7,10 +7,11 @@ SELECT EXISTS (
     JOIN control_plane.projects project ON project.id=archive.project_id AND project.organization_id=archive.organization_id
     WHERE archive.organization_id=@organization_id::uuid AND archive.project_id=@project_id::uuid
       AND session.project_id=@project_id::uuid AND archive.object_key=@object_key
+      AND archive.format_version=3
       AND project.ref=@project_ref AND project.lifecycle='PURGE_PENDING'
       AND (@object_version='' OR archive.object_version=@object_version)
-      AND (starts_with(archive.object_key,'session-archive/v1/' || organization.ref || '/' || @project_ref || '/' || session.ref || '/')
-        OR starts_with(archive.object_key,'session-archive/v1/' || organization.ref || '/_system/' || session.ref || '/'))
+      AND (starts_with(archive.object_key,'session-archive/v3/' || organization.ref || '/' || @project_ref || '/' || session.ref || '/')
+        OR starts_with(archive.object_key,'session-archive/v3/' || organization.ref || '/_system/' || session.ref || '/'))
     UNION ALL
     SELECT 1
     FROM control_plane.session_archive_tasks task
@@ -22,6 +23,6 @@ SELECT EXISTS (
       AND project.ref=@project_ref AND project.lifecycle='PURGE_PENDING'
       AND task.state NOT IN ('READY','CLAIMED')
       AND (@object_version='' OR task.object_version=@object_version)
-      AND (starts_with(task.object_key,'session-archive/v1/' || organization.ref || '/' || @project_ref || '/' || session.ref || '/')
-        OR starts_with(task.object_key,'session-archive/v1/' || organization.ref || '/_system/' || session.ref || '/'))
+      AND (starts_with(task.object_key,'session-archive/v3/' || organization.ref || '/' || @project_ref || '/' || session.ref || '/')
+        OR starts_with(task.object_key,'session-archive/v3/' || organization.ref || '/_system/' || session.ref || '/'))
 );

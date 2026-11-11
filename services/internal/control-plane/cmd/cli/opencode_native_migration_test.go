@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"strings"
@@ -38,9 +39,19 @@ func TestOpenCodeNativeSessionCutover(t *testing.T) {
 	if _, err := observer.Exec(ctx, `DELETE FROM control_plane.sessions WHERE ref='ses_native_cutover'`); err != nil {
 		t.Fatal("remove own empty disposable session", err)
 	}
+	if _, err := observer.Exec(ctx, `ALTER TABLE control_plane.session_storage ADD CONSTRAINT synthetic_unregistered_edge FOREIGN KEY(project_id) REFERENCES control_plane.projects(id) DEFERRABLE`); err != nil {
+		t.Fatal("prepare isolated unknown purge edge", err)
+	}
+	if err := goose.UpToContext(ctx, database, "migrations", 20261111000200); err == nil || !strings.Contains(err.Error(), "purge predecessor edges changed") {
+		t.Fatal("native cutover accepted an unregistered purge edge", err)
+	}
+	if _, err := observer.Exec(ctx, `ALTER TABLE control_plane.session_storage DROP CONSTRAINT synthetic_unregistered_edge`); err != nil {
+		t.Fatal("remove isolated unknown purge edge", err)
+	}
 	if err := goose.UpToContext(ctx, database, "migrations", 20261111000200); err != nil {
 		t.Fatal("apply native session cutover", err)
 	}
+	first := readControlPlaneMigrationProof(t, ctx, observer, "opencode-native-sessions", "postcondition")
 	var preserved bool
 	if err := observer.QueryRow(ctx, `SELECT
  EXISTS(SELECT 1 FROM control_plane.projects WHERE ref='prj_native_cutover')
@@ -69,5 +80,9 @@ func TestOpenCodeNativeSessionCutover(t *testing.T) {
 	}
 	if err := goose.UpToContext(ctx, database, "migrations", 20261111000200); err != nil {
 		t.Fatal("replay native migration", err)
+	}
+	second := readControlPlaneMigrationProof(t, ctx, observer, "opencode-native-sessions", "postcondition")
+	if !bytes.Equal(first, second) {
+		t.Fatal("no-op migration changed native schema proof")
 	}
 }

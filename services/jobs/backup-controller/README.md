@@ -66,7 +66,7 @@ Deployment находится в `deploy/k8s/base/backup-controller`. Экспл
 Локальное доказательство ненулевого архива Session запускается публичным
 entrypoint `scripts/tests/local-session-archive-backup-restore-e2e.sh`. Он
 работает только с явно подтверждённым disposable hot-reload профилем: создаёт
-объект под `session-archive/v1`, выполняет one-shot backup, проверяет exact
+объект под `session-archive/v3`, выполняет one-shot backup, проверяет exact
 manifest и payload, изменяет source fixture, выполняет изолированный restore и
 сравнивает восстановленные bytes с исходными. Все версии fixture и disposable
 restore targets удаляются с readback в рамках сценария.

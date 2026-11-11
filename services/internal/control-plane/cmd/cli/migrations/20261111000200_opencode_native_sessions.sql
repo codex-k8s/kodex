@@ -51,8 +51,8 @@ ALTER TABLE control_plane.session_storage
  DROP CONSTRAINT session_storage_content_generation_check,
  DROP CONSTRAINT session_storage_state_check,
  ADD COLUMN native_checkpoint jsonb,
- ADD COLUMN native_writer_lease_ref text REFERENCES control_plane.runtime_leases(ref) DEFERRABLE INITIALLY DEFERRED,
- ADD COLUMN native_writer_revision_id uuid REFERENCES control_plane.runtime_revisions(id) DEFERRABLE INITIALLY DEFERRED,
+ ADD COLUMN native_writer_lease_ref text REFERENCES control_plane.runtime_leases(ref) DEFERRABLE INITIALLY IMMEDIATE,
+ ADD COLUMN native_writer_revision_id uuid REFERENCES control_plane.runtime_revisions(id) DEFERRABLE INITIALLY IMMEDIATE,
  ADD CONSTRAINT session_storage_content_generation_check CHECK(content_generation>=0),
  ADD CONSTRAINT session_storage_state_check CHECK(state IN('INITIALIZING','LIVE','SNAPSHOT_READY','SNAPSHOTTING',
    'DELETE_PVC_READY','ARCHIVED','RESTORE_READY','RESTORING','ERROR','PURGED')),
@@ -137,6 +137,74 @@ $$;
 
 REVOKE ALL ON FUNCTION control_plane.native_checkpoint_shape(jsonb),control_plane.guard_native_session_identity() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION control_plane.native_checkpoint_shape(jsonb),control_plane.guard_native_session_identity() TO control_plane_runtime;
+
+-- Новые связи writer входят в полный purge-граф. Сначала доказываются прежний
+-- граф без ровно этих двух рёбер, их точная форма и неизменность owner-функции.
+-- Остальные связи не исключаются, grants и алгоритм удаления не меняются.
+-- +goose StatementBegin
+DO $native_purge$
+DECLARE
+ v_function oid:='control_plane.purge_project_database(uuid,uuid,text)'::regprocedure;
+ v_definition text; v_source text; v_nodes oid[]; v_count integer; v_digest text;
+ v_old_nodes text:='IF v_nodes <> 111 OR v_node_fingerprint <> ''3eb558fae167872ba6bd17bc68f7a303'' THEN';
+ v_old_edges text:='IF v_edges <> 306 OR v_edge_fingerprint <> ''19782286a860f9e05cdaad7b6e5f8ef3'' THEN';
+ v_new_edges text; v_delta oid[]; v_links jsonb;
+BEGIN
+ SELECT pg_get_functiondef(p.oid),p.prosrc INTO STRICT v_definition,v_source
+ FROM pg_proc p WHERE p.oid=v_function AND p.proowner='control_plane_owner'::regrole
+  AND p.prosecdef AND p.provolatile='v' AND p.prorettype='integer'::regtype
+  AND NOT p.proretset AND p.proconfig=ARRAY['search_path=pg_catalog']
+  AND has_function_privilege('control_plane_runtime',p.oid,'EXECUTE')
+  AND NOT EXISTS(SELECT 1 FROM aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+   WHERE acl.grantee NOT IN('control_plane_owner'::regrole,'control_plane_runtime'::regrole)
+    OR acl.grantee='control_plane_runtime'::regrole AND (acl.is_grantable OR acl.privilege_type<>'EXECUTE'));
+ IF regexp_count(v_source,'IF v_nodes <>')<>1 OR regexp_count(v_source,'IF v_edges <>')<>1
+  OR md5(replace(replace(v_source,v_old_nodes,
+    'IF v_nodes <> 105 OR v_node_fingerprint <> ''f51a0de25bd942a250997775617eeaee'' THEN'),v_old_edges,
+    'IF v_edges <> 284 OR v_edge_fingerprint <> ''6bf6ad76d8c7ae66e07f75ecf719fdd6'' THEN'))<>'b886c24d4e2f5c4a0ec08123d99462b0' THEN
+  RAISE EXCEPTION 'native session purge predecessor changed';
+ END IF;
+ SELECT array_agg(c.oid),jsonb_agg(jsonb_build_array(c.conname,pg_get_constraintdef(c.oid),
+   c.convalidated,c.conenforced) ORDER BY c.conname) INTO v_delta,v_links
+ FROM pg_constraint c WHERE c.conrelid='control_plane.session_storage'::regclass
+  AND c.conname IN('session_storage_native_writer_lease_ref_fkey','session_storage_native_writer_revision_id_fkey');
+ IF v_links IS DISTINCT FROM '[
+  ["session_storage_native_writer_lease_ref_fkey","FOREIGN KEY (native_writer_lease_ref) REFERENCES control_plane.runtime_leases(ref) DEFERRABLE",true,true],
+  ["session_storage_native_writer_revision_id_fkey","FOREIGN KEY (native_writer_revision_id) REFERENCES control_plane.runtime_revisions(id) DEFERRABLE",true,true]]'::jsonb THEN
+  RAISE EXCEPTION 'native session purge graph delta changed';
+ END IF;
+ WITH RECURSIVE nodes(id) AS (SELECT 'control_plane.projects'::regclass::oid UNION
+  SELECT c.conrelid FROM pg_constraint c JOIN nodes n ON c.confrelid=n.id
+  WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace)
+ SELECT array_agg(id) INTO v_nodes FROM nodes;
+ SELECT count(*),md5(string_agg(n.nspname||'.'||r.relname,E'\n' ORDER BY n.nspname,r.relname))
+ INTO v_count,v_digest FROM pg_class r JOIN pg_namespace n ON n.oid=r.relnamespace WHERE r.oid=ANY(v_nodes);
+ IF v_count<>111 OR v_digest<>'3eb558fae167872ba6bd17bc68f7a303' THEN
+  RAISE EXCEPTION 'native session purge nodes changed';
+ END IF;
+ SELECT count(*),md5(string_agg(cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text,
+  E'\n' ORDER BY cn.nspname,cc.relname,c.conname)) INTO v_count,v_digest
+ FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
+ JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
+ WHERE c.contype='f' AND c.conrelid=ANY(v_nodes) AND c.confrelid=ANY(v_nodes) AND NOT c.oid=ANY(v_delta);
+ IF v_count<>306 OR v_digest<>'19782286a860f9e05cdaad7b6e5f8ef3' THEN
+  RAISE EXCEPTION 'native session purge predecessor edges changed';
+ END IF;
+ SELECT count(*),md5(string_agg(cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text,
+  E'\n' ORDER BY cn.nspname,cc.relname,c.conname)) INTO v_count,v_digest
+ FROM pg_constraint c JOIN pg_class cc ON cc.oid=c.conrelid JOIN pg_namespace cn ON cn.oid=cc.relnamespace
+ JOIN pg_class pc ON pc.oid=c.confrelid JOIN pg_namespace pn ON pn.oid=pc.relnamespace
+ WHERE c.contype='f' AND c.conrelid=ANY(v_nodes) AND c.confrelid=ANY(v_nodes);
+ IF v_count<>308 OR v_digest<>'d6aa5b9aa21c5e065c3106f2a6119e0f' THEN
+  RAISE EXCEPTION 'native session purge successor edges changed';
+ END IF;
+ v_new_edges:=format('IF v_edges <> %s OR v_edge_fingerprint <> %L THEN',v_count,v_digest);
+ EXECUTE replace(v_definition,v_old_edges,v_new_edges);
+ IF NOT EXISTS(SELECT 1 FROM pg_proc p WHERE p.oid=v_function AND p.prosrc=replace(v_source,v_old_edges,v_new_edges)) THEN
+  RAISE EXCEPTION 'native session purge function readback failed';
+ END IF;
+END $native_purge$;
+-- +goose StatementEnd
 
 RESET ROLE;
 
