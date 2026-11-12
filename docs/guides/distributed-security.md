@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.63
+version: 1.7.64
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Профиль мониторинга отдельной установки ограничивает не только target selectors,
+но и operator watch scope, RBAC и sidecar discovery. Пустой namespace selector
+и `searchNamespace: ALL` не допускаются для такого профиля. Dashboard reader
+читает ConfigMaps только выбранных namespace и не получает доступ к Secrets.
+Host collectors и kubelet reconciliation требуют отдельного cluster-wide допуска.
+Общие CRD не перезаписываются установщиком одного продукта; совместимость
+проверяется до apply, а точные UID целевых namespace сверяются повторно.
 
 Завершение model stream не доказывает завершение модельного шага. Native
 `step-finish` допускает дальнейшее исполнение только с квалифицированной

@@ -119,6 +119,8 @@ yq -e '
 
 headlamp_chart=$(download_chart headlamp)
 monitoring_chart=$(download_chart kube-prometheus-stack)
+KODEX_TEST_MONITORING_CHART="$monitoring_chart" timeout 60s python3 -B \
+  "$repository_root/infra/management-surfaces/test_scoped_monitoring.py"
 oauth2_chart=$(download_chart oauth2-proxy)
 headlamp_render="$temporary_directory/headlamp.yaml"
 monitoring_render="$temporary_directory/monitoring.yaml"

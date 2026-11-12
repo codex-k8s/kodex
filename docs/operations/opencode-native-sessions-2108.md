@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.22
+version: 1.4.23
 updated: 2026-11-12
 ---
 
@@ -1189,8 +1189,10 @@ images. Однако строгая проверка нуля startup restarts �
 restart evidence, а не доказательство устранения причины.
 
 Независимые product/security/architecture review и owner gate остаются впереди;
-PR остаётся draft. Недоступные DGX/корпоративные профили, выключенная Grafana и
-многочасовой soak не объявляются проверенными. Цена live-вызовов остаётся UNKNOWN.
+PR остаётся draft. Недоступные DGX/корпоративные профили и многочасовой soak не
+объявляются проверенными. Grafana/Prometheus — обязательная доступная часть
+приёмки, её отсутствие не является исключением внешнего профиля.
+Цена live-вызовов остаётся UNKNOWN.
 
 ## Материализация AST на фактическом native model wire
 
@@ -1222,3 +1224,38 @@ wire16708/16823/16938/17047байт. Равный заново разрешён�
 отдельные owner authorization, Preview API и live cluster business проверки.
 Production binaries этой проверкой не изменены; установленный runner source187ec6b
 сохраняется до изменения его исполняемого кода.
+
+## Ограниченный мониторинг отдельной установки
+
+Канонический `infra/management-surfaces/bootstrap.sh` принимает профиль
+`--monitoring-scope kodex` вместе с `--management-surfaces control-center-grafana`,
+точными `--kubeconfig`, `--context` и ожидаемыми UID `kube-system`, `observability`,
+`kodex-system`. Проверка UID предшествует изменениям. Существующие общие CRD
+только читаются; chart не обновляет их. Preflight может сохранить полный render
+через `--monitoring-render-file` в новый файл0600 внутри принадлежащего оператору
+каталога0700. Readback не применяет namespace manifests.
+
+Путь конфигурации: owner installer flags → закреплённый chart88.5.4 и OCI lock →
+типизированные values → проверенный post-render → Helm release → operator только
+в `observability` → один ServiceMonitor control-plane → Prometheus → Grafana
+через прежний OAuth2 group gate. Chart/render/config hashes и resource inventory
+сохраняются до apply; повторный apply сохраняет тот же профиль. Native runtime,
+модельные credentials и checkpoint lifecycle мониторинг не меняет.
+
+В этом профиле отсутствуют node-exporter, host mounts, kubelet discovery,
+общие cluster rules и сбор чужих workloads. Оператор имеет write authority
+только в собственном `observability`; его единственная общая роль читает
+namespace metadata и запрашиваемый StorageClass. Prometheus читает discovery
+только в двух указанных namespace. Grafana sidecar читает только ConfigMaps
+этих namespace, без Secrets. NetworkPolicy разрешает exact API Service/endpoints,
+DNS и выбранные Pod selectors; широкого internet egress нет. Образы всех
+исполняемых компонентов и config reloader закреплены OCI digests.
+
+`make test-management-surfaces` проверяет настоящий render закреплённого chart,
+RBAC, соответствие сетевого selector Pod labels, отказ при расширении scope,
+mutable image и hostNetwork. Для Helm4 используется штатный `postrenderer/v1`
+subprocess plugin во временном каталоге; host plugin/config не изменяется.
+Проверены Context7 `/helm/helm`, `/prometheus-operator/prometheus-operator`,
+[manifest Helm4.3.0](https://github.com/helm/helm/blob/v4.3.0/pkg/postrenderer/testdata/plugins/postrenderer-v1/plugin.yaml)
+и values/templates точного chart88.5.4. Локальный render не доказывает успешный
+live scrape, readiness или доступность dashboard: они проверяются отдельно.

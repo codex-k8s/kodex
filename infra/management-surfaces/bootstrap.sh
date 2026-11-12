@@ -6,6 +6,9 @@ usage() {
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode preflight|apply-monitoring|apply-surfaces|readback|reconcile" \
     '  [--management-surfaces all|control-center-grafana|control-center]' \
+    '  [--kubeconfig <absolute-path> --monitoring-scope cluster|kodex]' \
+    '  [--expected-cluster-uid <uid> --expected-observability-uid <uid> --expected-system-uid <uid>]' \
+    '  [--monitoring-render-file <new-absolute-private-file> (preflight only)]' \
     '  --oidc-issuer <https-url> --oidc-connect-address <service.namespace.svc.cluster.local:port>' \
     '  --oidc-target-port <port> [--oidc-ca-file <absolute-path>] --control-center-host <dns> --grafana-host <dns>' \
     '  --headlamp-host <dns>' \
@@ -16,6 +19,12 @@ usage() {
 }
 
 context=""
+kubeconfig=""
+monitoring_scope=cluster
+expected_cluster_uid=""
+expected_observability_uid=""
+expected_system_uid=""
+monitoring_render_file=""
 mode=""
 management_surfaces=all
 oidc_issuer=""
@@ -35,6 +44,12 @@ kubernetes_api_endpoint_ports=""
 while (($# > 0)); do
   case "$1" in
     --context) context="${2:-}"; shift 2 ;;
+    --kubeconfig) kubeconfig="${2:-}"; shift 2 ;;
+    --monitoring-scope) monitoring_scope="${2:-}"; shift 2 ;;
+    --expected-cluster-uid) expected_cluster_uid="${2:-}"; shift 2 ;;
+    --expected-observability-uid) expected_observability_uid="${2:-}"; shift 2 ;;
+    --expected-system-uid) expected_system_uid="${2:-}"; shift 2 ;;
+    --monitoring-render-file) monitoring_render_file="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --management-surfaces) management_surfaces="${2:-}"; shift 2 ;;
     --oidc-issuer) oidc_issuer="${2:-}"; shift 2 ;;
@@ -57,7 +72,33 @@ while (($# > 0)); do
 done
 
 [[ -n "$context" ]] || fail 'exact context is required'
+case "$monitoring_scope" in cluster|kodex) ;; *) fail 'monitoring scope is invalid' ;; esac
+if [[ -n "$kubeconfig" ]]; then
+  [[ "$kubeconfig" == /* && -f "$kubeconfig" ]] || fail 'absolute kubeconfig is required'
+  # Каждый вызов адресует выбранный контекст, не изменяя host defaults.
+  kubectl() { command kubectl --kubeconfig "$kubeconfig" --context "$context" "$@"; }
+  helm() { command helm --kubeconfig "$kubeconfig" --kube-context "$context" "$@"; }
+fi
+if [[ "$monitoring_scope" == kodex ]]; then
+  [[ -n "$kubeconfig" && "$management_surfaces" == control-center-grafana ]] ||
+    fail 'Kodex monitoring requires explicit kubeconfig and control-center-grafana surfaces'
+  for uid in "$expected_cluster_uid" "$expected_observability_uid" "$expected_system_uid"; do
+    [[ "$uid" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] ||
+      fail 'expected namespace UID is required for Kodex monitoring'
+  done
+  [[ "$(kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')" == "$expected_cluster_uid" &&
+     "$(kubectl get namespace observability -o jsonpath='{.metadata.uid}')" == "$expected_observability_uid" &&
+     "$(kubectl get namespace kodex-system -o jsonpath='{.metadata.uid}')" == "$expected_system_uid" ]] ||
+    fail 'Kodex monitoring target UID mismatch'
+  # Существующие общие CRD только читаются: chart не устанавливает их повторно.
+  kubectl get crd prometheuses.monitoring.coreos.com alertmanagers.monitoring.coreos.com \
+    servicemonitors.monitoring.coreos.com >/dev/null || fail 'monitoring CRDs must already exist'
+fi
 case "$mode" in preflight|apply-monitoring|apply-surfaces|readback|reconcile) ;; *) fail 'mode is invalid' ;; esac
+if [[ -n "$monitoring_render_file" ]]; then
+  [[ "$mode" == preflight && "$monitoring_scope" == kodex && "$monitoring_render_file" == /* ]] ||
+    fail 'monitoring render output requires scoped preflight and absolute path'
+fi
 case "$management_surfaces" in all|control-center-grafana|control-center) ;; *) fail 'management surfaces are invalid' ;; esac
 include_grafana=false
 include_headlamp=false
@@ -93,7 +134,9 @@ done
 for command_name in go helm jq kubectl openssl sha256sum yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
-[[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
+if [[ -z "$kubeconfig" ]]; then
+  [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
+fi
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
@@ -152,6 +195,8 @@ recover_interrupted_helm_release() {
     fail "Helm release status is unreadable: $release"
   case "$status" in
     pending-upgrade|pending-rollback)
+      [[ "$release" != kodex-monitoring || "$monitoring_scope" != kodex ]] ||
+        fail 'scoped monitoring requires explicit compatible recovery, not Helm history rollback'
       [[ "$release" != oauth2-control-center ]] ||
         fail 'proxy session backend requires explicit compatible recovery, not Helm history rollback'
       rollback_revision=$(helm history "$release" --namespace "$namespace" --max 20 -o json |
@@ -229,6 +274,7 @@ fi
 kubectl apply --dry-run=client --validate=false -f "$routes" >/dev/null
 
 render_monitoring_values="$temporary_directory/monitoring-values.yaml"
+monitoring_render_args=()
 if [[ "$include_grafana" == true ]]; then
   grafana_post_logout_redirect=$(jq -rn --arg url "https://$grafana_host/" '$url | @uri')
   grafana_provider_logout="$oidc_issuer/protocol/openid-connect/logout?id_token_hint={id_token}&post_logout_redirect_uri=$grafana_post_logout_redirect"
@@ -241,6 +287,35 @@ if [[ "$include_grafana" == true ]]; then
       sub("__KODEX_GRAFANA_SIGNOUT_REDIRECT_URL__"; strenv(GRAFANA_SIGNOUT_REDIRECT_URL))
     )
   ' "$script_directory/kube-prometheus-stack-values.yaml" >"$render_monitoring_values"
+  if [[ "$monitoring_scope" == kodex ]]; then
+    python3 "$script_directory/scoped-monitoring.py" values <"$render_monitoring_values" \
+      >"$render_monitoring_values.scoped"
+    mv "$render_monitoring_values.scoped" "$render_monitoring_values"
+    monitoring_renderer="$script_directory/scoped-monitoring.py"
+    case "$(helm version --short)" in
+      v4.*)
+        # Helm 4 использует plugin API; каталог существует только до завершения команды.
+        export HELM_PLUGINS="$temporary_directory/plugins"
+        mkdir -p "$HELM_PLUGINS/kodex-scoped-monitoring"
+        SCOPED_RENDERER="$monitoring_renderer" python3 - <<'PY' >"$HELM_PLUGINS/kodex-scoped-monitoring/plugin.yaml"
+import os
+import yaml
+yaml.safe_dump({'name': 'kodex-scoped-monitoring', 'version': '1.0.0',
+                'type': 'postrenderer/v1', 'apiVersion': 'v1', 'runtime': 'subprocess',
+                'runtimeConfig': {'platformCommand': [{'command': os.environ['SCOPED_RENDERER']}]}},
+               __import__('sys').stdout)
+PY
+        monitoring_renderer=kodex-scoped-monitoring
+        ;;
+      v3.*) ;;
+      *) fail 'unsupported Helm postrenderer version' ;;
+    esac
+    monitoring_render_args=(--skip-crds --post-renderer "$monitoring_renderer"
+      --post-renderer-args postrender
+      --post-renderer-args "--api-service-cidr=$kubernetes_api_service_cidr"
+      --post-renderer-args "--api-endpoint-cidrs=$kubernetes_api_endpoint_cidrs"
+      --post-renderer-args "--api-endpoint-ports=$kubernetes_api_endpoint_ports")
+  fi
 fi
 
 render_oauth_values() {
@@ -339,7 +414,22 @@ fi
 
 if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
   if [[ "$include_grafana" == true ]]; then
-    helm template kodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" >/dev/null
+    helm template kodex-monitoring "$monitoring_chart" --namespace observability --values "$render_monitoring_values" \
+      "${monitoring_render_args[@]}" >"$temporary_directory/monitoring-render.yaml"
+    if [[ -n "$monitoring_render_file" ]]; then
+      python3 - "$temporary_directory/monitoring-render.yaml" "$monitoring_render_file" <<'PY'
+import os
+from pathlib import Path
+import stat
+import sys
+source, target = map(Path, sys.argv[1:])
+parent = target.parent.lstat()
+if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.getuid() or stat.S_IMODE(parent.st_mode) != 0o700:
+    raise SystemExit('Monitoring render output requires owned private directory')
+with os.fdopen(os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as output:
+    output.write(source.read_bytes())
+PY
+    fi
   fi
   for binding in "${oauth_bindings[@]}"; do
     IFS='|' read -r surface namespace host role issuer <<<"$binding"
@@ -356,14 +446,14 @@ if [[ "$mode" == preflight || "$mode" == reconcile ]]; then
   fi
 fi
 
-if [[ "$include_grafana" == true ]]; then
+if [[ "$include_grafana" == true && "$mode" != readback ]]; then
   observability_namespace="$temporary_directory/observability-namespace.yaml"
   yq 'select(.metadata.name == "observability")' "$script_directory/namespaces.yaml" \
     >"$observability_namespace"
   kubectl apply --server-side --field-manager=kodex-management \
     -f "$observability_namespace" >/dev/null
 fi
-if [[ "$include_headlamp" == true ]]; then
+if [[ "$include_headlamp" == true && "$mode" != readback ]]; then
   platform_admin_namespace="$temporary_directory/platform-admin-namespace.yaml"
   yq 'select(.metadata.name == "platform-admin")' "$script_directory/namespaces.yaml" \
     >"$platform_admin_namespace"
@@ -374,7 +464,7 @@ if [[ ( "$mode" == apply-monitoring || "$mode" == reconcile ) && "$include_grafa
   kubectl -n observability get secret grafana-admin >/dev/null 2>&1 || fail 'Grafana admin Secret is absent'
   recover_interrupted_helm_release kodex-monitoring observability
   helm upgrade --install kodex-monitoring "$monitoring_chart" --namespace observability \
-    --values "$render_monitoring_values" --atomic --wait --timeout 20m
+    --values "$render_monitoring_values" "${monitoring_render_args[@]}" --atomic --wait --timeout 20m
 fi
 
 if [[ "$mode" == apply-surfaces || "$mode" == reconcile ]]; then
