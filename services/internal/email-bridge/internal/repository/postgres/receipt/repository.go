@@ -163,10 +163,15 @@ func (r *Repository) Configuration(ctx context.Context, c api.Configuration, dig
 }
 
 // Ready executes the runtime-role/RLS/schema privilege assertion and rejects false, missing or failed results without probing mail providers.
+// Query failures retain a private typed cause; a false assertion remains the canonical unavailable sentinel and is never a transient connectivity signal.
 // Ready выполняет проверку runtime-роли, RLS и привилегий схемы и отвергает ложный, отсутствующий либо отказной результат без проверки почтовых провайдеров.
+// Ошибки запроса сохраняют закрытую типизированную причину; ложная проверка остаётся каноническим unavailable sentinel и не является временным отказом подключения.
 func (r *Repository) Ready(ctx context.Context) error {
 	var ok bool
-	if r.Pool.QueryRow(ctx, readySQL).Scan(&ok) != nil || !ok {
+	if err := r.Pool.QueryRow(ctx, readySQL).Scan(&ok); err != nil {
+		return errs.WrapUnavailable(err)
+	}
+	if !ok {
 		return errs.Unavailable
 	}
 	return nil

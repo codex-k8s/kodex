@@ -4,11 +4,49 @@ title: Email bridge и границы интеграции
 type: operations
 status: approved
 owner: developer
-version: 1.7.0
-updated: 2026-09-09
+version: 1.7.1
+updated: 2026-11-13
 ---
 
 # Сценарии #1037
+
+## Начальный PostgreSQL barrier при повторной установке #2108
+
+`Run` сохраняет исходный бюджет20s и владение pool/cleanup. Общий
+`serviceruntime.WaitStartupProbe` выполняет только initial `pool.Ping`: предел
+каждой проверки10s, отменяемая пауза1s, повтор лишь типизированного
+`connection_refused`. Непустой неизвестный отказ, PostgreSQL/TLS/configuration,
+отмена и timeout закрывают допуск. Без caller deadline повтор запрещён.
+После подключения `receipt.Repository.Ready` ровно один раз проверяет прежние
+runtime-login, forced RLS и schema/ACL; эта проверка не входит в retry loop.
+
+Query/Scan сохраняет закрытую причину через сервисный `WrapUnavailable`:
+`errors.Is(Unavailable)` и безопасный текст остаются прежними, `errors.As`
+доступен только внутренней диагностике. False assertion остаётся отдельным
+`readiness_rejected`. Диагностика не форматирует DSN, SQL, сертификаты и
+драйверные сообщения. Это не изменение authority, миграции или mail protocol.
+
+SQL readiness проверяет SELECT/INSERT/UPDATE отдельными `AND` для receipts и
+owner_receipts. Прежний comma-list проверял любое из прав и не замечал частичный
+отзыв. Regression-тест отзывает каждое из шести обязательных прав по отдельности,
+проверяет отказ и точное восстановление; wrong login и отсутствующая таблица
+проверяются отдельно. Реальные operation grants не расширяются.
+
+| Инициатор / полномочия | Путь / владелец | Исход / переход / consumer |
+| --- | --- | --- |
+| Process startup, существующий runtime DSN | `Run → verifyPostgresStartup → pool.Ping` | Временный TCP refusal повторяется в исходном бюджете; workers/listeners ещё не открыты; событий и business receipts нет |
+| Тот же process после подключения | `Repository.Ready → receipt__ready.sql`, собственная email schema | False, missing schema, SQL/role/TLS отказ немедленно закрывает startup; pool закрывает прежний defer; внешних effects нет |
+| Отмена / истечение deadline | Общая sequential probe/pause и финальная проверка context после Ready | Поздний success не допускается; root budget не продлевается; новый процесс проходит полный barrier заново |
+| Успешный startup | Прежние configuration/authority/worker consumers | Права, grants, idempotency, mail send/reconciliation и cancel/join остаются прежними; повтор mail effects не добавляется |
+| Периодическая readiness | Прежний `Repository.Ready`, без startup loop | Отказ закрывает локальную готовность; безопасная domain error сохраняет typed cause, не становится разрешением повторить SQL mutation |
+
+Context7: `/jackc/pgx/v5.10.0`, `Pool.Ping`, `QueryRow/Scan`, cancellation.
+Ping доказывает connectivity, поэтому не заменяет точную SQL-проверку прав.
+Два наблюдавшихся ранее startup `unavailable` не получают придуманную причину
+задним числом. Локальные тесты используют только disposable PostgreSQL и
+synthetic failures; кластерная приёмка и старые FAIL учитываются отдельно.
+Возврат — совместимый immutable email-bridge image без повторного bootstrap,
+схемных изменений, удаления receipts либо операций над настоящими ящиками.
 
 ## Приём UI-публикации mailbox
 
