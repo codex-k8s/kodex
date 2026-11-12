@@ -4,11 +4,21 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.62
+version: 1.7.63
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Завершение model stream не доказывает завершение модельного шага. Native
+`step-finish` допускает дальнейшее исполнение только с квалифицированной
+причиной: обычный stop, tool calls либо length для штатной compaction.
+Пустая, неизвестная, ошибочная или отфильтрованная причина закрыто останавливает
+consumer при первом событии; общий deadline не заменяет эту границу и не
+оправдывает повторные запросы после оборванного потока. Owner выполняет прежние
+abort/process-group join/checkpoint, а не новый агентный цикл или replay эффектов.
+Нормализованные upstream нулевые counters остаются UNKNOWN, а не доказательством
+полного нулевого расхода. Матрица: [native failures](../operations/opencode-native-sessions-2108.md).
 
 Frozen catalog фиксирует состав и pins, но не сохраняет отозванное право.
 Discovery, в том числе пустые search/manifest, проверяет текущий purpose grant

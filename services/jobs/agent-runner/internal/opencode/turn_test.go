@@ -2,10 +2,34 @@ package opencode
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"testing"
 )
+
+// TestObserverRejectsUnprovenStepFinish stops malformed or unsuccessful native lifecycle
+// events before accounting or completion, while preserving normal tool and compaction steps.
+// TestObserverRejectsUnprovenStepFinish останавливает неверные либо неуспешные native
+// lifecycle events до accounting/completion, сохраняя нормальные tool и compaction steps.
+func TestObserverRejectsUnprovenStepFinish(t *testing.T) {
+	for _, reason := range []string{"", "unknown", "other", "error", "content-filter", "future-finish", "stop", "tool-calls", "length"} {
+		t.Run(reason, func(t *testing.T) {
+			observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{"msg_final": {parts: map[string]bool{}}}}
+			err := observer.consume(nativeObservation("message.part.updated", map[string]any{"part": map[string]any{
+				"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "reason": reason,
+				"tokens": map[string]int{"input": 10, "output": 24},
+			}}))
+			allowed := reason == "stop" || reason == "tool-calls" || reason == "length"
+			if allowed && (err != nil || observer.result.Usage.TotalTokens != 34) {
+				t.Fatal("qualified native finish was rejected")
+			}
+			if !allowed && (!errors.Is(err, ErrProtocol) || observer.result.Usage.TotalTokens != 0 || observer.active["msg_final"].measured) {
+				t.Fatal("unproven native finish advanced the consumer")
+			}
+		})
+	}
+}
 
 // nativeObservation serializes only synthetic native properties for observer contract tests.
 // nativeObservation сериализует только synthetic native properties для observer contract tests.
@@ -26,8 +50,8 @@ func TestObserverSeparatesSummaryAndDisjointUsage(t *testing.T) {
 	for _, event := range []Event{
 		nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_summary", "sessionID": "ses_native", "role": "assistant", "summary": true}}),
 		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_text", "messageID": "msg_summary", "sessionID": "ses_native", "type": "text", "text": "not final", "time": map[string]int{"end": 1}}}),
-		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
-		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
+		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
+		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
 		nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_summary", "sessionID": "ses_native", "role": "assistant", "summary": true, "time": map[string]int{"completed": 1}}}),
 	} {
 		if err := observer.consume(event); err != nil {
@@ -79,7 +103,7 @@ func TestObserverJoinsEarlyCompletionWithUsage(t *testing.T) {
 	completed := 0
 	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(string) bool { return true }, commentary: func(string, string) error { return nil }, completed: func(string) error { completed++; return nil }}
 	message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_final", "sessionID": "ses_native", "role": "assistant", "time": map[string]int{"completed": 1}}})
-	part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]int{"input": 10, "output": 24}}})
+	part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]int{"input": 10, "output": 24}}})
 	for _, event := range []Event{message, message} {
 		if err := observer.consume(event); err != nil {
 			t.Fatal(err)
@@ -105,7 +129,7 @@ func TestObserverBoundsCompletionMemory(t *testing.T) {
 	for i := 0; i < 4097; i++ {
 		id := fmt.Sprintf("msg_%d", i)
 		message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": id, "sessionID": "ses_native", "role": "assistant", "summary": true, "time": map[string]int{"completed": 1}}})
-		part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": fmt.Sprintf("prt_%d", i), "messageID": id, "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]int{"output": 1}}})
+		part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": fmt.Sprintf("prt_%d", i), "messageID": id, "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]int{"output": 1}}})
 		for _, event := range []Event{message, part, message, part} {
 			if err := observer.consume(event); err != nil {
 				t.Fatal(err)

@@ -4,11 +4,17 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.19
+version: 1.4.20
 updated: 2026-11-12
 ---
 
 # OpenCode: нативные сессии и восстановление
+
+Последующий аудит пункта10.1.8 обнаружил пробел в установленном runner:
+неполный provider SSE без finish мог вызывать повторные upstream model steps
+до общего deadline. Детерминированная регрессия реальным OpenCode наблюдала505
+запросов за20с. Исправление ниже требует нового immutable runner и полного
+RoleImage; прежняя установленная квалификация не доказывает его доставку.
 
 Новая чистая установка прошла живую проверку native compaction, продолжения,
 workspace, делегирования и GitHub Human Gate. Повторный адресный apply и
@@ -1091,3 +1097,45 @@ ERROR: продолжение закрыто отклонено, пустой fa
 GitHub CI и независимое review не выводятся из локальных или кластерных
 результатов. PR остаётся draft до завершения обязательной приёмки и ручного
 шлюза владельца.
+
+## Отказ неполного model stream и матрица native recovery
+
+Проверены точные upstream
+[processor.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/session/processor.ts),
+[retry.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/session/retry.ts)
+и compaction.ts. Context7 `/anomalyco/opencode` вернул смешанные V1 config и
+V2 spec; V2 гарантии не перенесены на установленный1.19.5. Источник проверки —
+именно real-binary harness и version-pinned исходники.
+
+`turnObserver` проверяет native `step-finish.reason`: только `stop`, `tool-calls`
+и `length` допускают дальнейшую обработку. Пустое значение, `unknown`, `other`,
+`error`, `content-filter` и неподтверждённое новое значение дают `ErrProtocol`.
+Это не ограничение числа успешных шагов и не новый loop/retry механизм.
+
+| Сценарий | Владелец и переход | Результат / authoritative read |
+| --- | --- | --- |
+| Валидный stop/tool-calls/length | Native loop сохраняет управление tools/compaction, owner lease не меняется | Прежние progress/measurements, бизнес-final по-прежнему требует ordinary stop |
+| Неизвестный/неполный finish | Exact native session observer → Execute error → прежний runtime defer Abort/Stop | Положительный process-group join до official export; failed completion сохраняет только подтверждённый checkpoint, не выдаёт новых grants |
+| Ошибка summary | Native error не становится final или SUCCESS | Предшествующие принятые tool outputs сохраняются в stopped export; owner audit/effect ledger остаются источником effects |
+| Context overflow | Штатный upstream compactor/recovery, без собственного повторного промпта | Закрытый отказ при недоступном сжатии; нет автоматического provider fallback |
+| Однократный429 | Retry принадлежит upstream и прежнему deadline | Успешное продолжение12 tools/3 compactions без повторения ordinal effect |
+| Неверные counters | Отрицательные synthetic counters upstream нормализует в0 | Native measurement остаётся UNKNOWN; успешный текст не означает COMPLETE accounting или нулевой счёт |
+
+`TestNativeFailureRecoveryBounds` запускает пять сценариев настоящим OpenCode:
+ошибку summary, постоянный overflow, однократный rate limit, отрицательные counters
+и обрезанный SSE. При ошибке summary проверяются4 сохранённых tool outputs;
+неполный SSE после исправления остановлен после1–2 запросов, без final и tools.
+Второй запрос может успеть начаться до доставки SSE; отсутствие такого in-flight
+запроса не обещается.
+Проверка consumer отдельно перебирает все допустимые и недопустимые причины.
+Это локальный synthetic результат, пока не установленное исправление.
+
+Матрица включена в штатный `make test-opencode-native` и изолированный кластерный
+runner. Бюджет полного локального native suite увеличен с300 до420с из-за пяти
+новых real-process сценариев; внешний предел480с. Бюджеты бизнес-run не меняются.
+
+Локальная квалификация исправления: целевая race-матрица PASS29.458с, полный
+`make test-opencode-native` PASS274.867с с реальными OpenCode/LiteLLM/Redis и
+synthetic upstream. Полный runner `go test -race ./...`, `go vet ./...`,
+`go build ./...` и4 проверки кластерной оснастки PASS. Это не новый CI и пока
+не доказательство доставки изменённого runner на стенд.

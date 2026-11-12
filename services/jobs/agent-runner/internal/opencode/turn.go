@@ -219,8 +219,8 @@ func (observer *turnObserver) consume(event Event) error {
 	case "message.part.updated":
 		var value struct {
 			Part struct {
-				ID, SessionID, MessageID, Type, Text, Tool string
-				Time                                       struct {
+				ID, SessionID, MessageID, Type, Text, Tool, Reason string
+				Time                                               struct {
 					End int64 `json:"end"`
 				} `json:"time"`
 				Tokens *nativeTokens `json:"tokens"`
@@ -244,6 +244,15 @@ func (observer *turnObserver) consume(event Event) error {
 			return nil
 		}
 		if part.Type == "step-finish" {
+			// A truncated provider stream can become an upstream "unknown" finish and
+			// repeatedly start new model steps. Reject it at the first lifecycle event;
+			// the owner then aborts and joins the native writer before checkpointing.
+			// Обрезанный provider stream может стать upstream finish "unknown" и
+			// повторно запускать model steps. Отклоняем первое lifecycle event;
+			// владелец затем выполняет abort/join native writer перед checkpoint.
+			if part.Reason != "stop" && part.Reason != "tool-calls" && part.Reason != "length" {
+				return ErrProtocol
+			}
 			if part.Tokens == nil {
 				return ErrProtocol
 			}
