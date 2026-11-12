@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.7
+version: 1.4.8
 updated: 2026-11-12
 ---
 
@@ -716,3 +716,42 @@ checkpoint и immutable input. Изменение затрагивает тол�
 Локальный тест порядка кадров сам по себе не доказывает установленный resume,
 сохранность файлов после Stop или отсутствие повторных effects. Эти сценарии
 требуют нового полного runner/RoleImage и отдельной кластерной проверки.
+
+## Конкуренция owner claim после подготовки workspace
+
+Установленная проверка WORKFLOW выявила отказ до первого model request:
+`NOWAIT` на строке `sessions` вернул `55P03`, а adapter преобразовал его в
+`Conflict`. Owner ошибочно завершил весь граф как `RUNTIME_INPUT_INVALID`,
+хотя CREATE/PREPARE тома уже имели положительные квитанции. Тот же путь
+использует обычный AGENT. Readiness до запуска не доказывает отсутствие
+конкуренции при последующем claim.
+
+Источник требования — #2108 и GUIDE-DOC-006. Авторизованный owner запускает
+AGENT либо WORKFLOW через `POST /api/v1/runs`, gateway и `LaunchRun`.
+Runtime-controller вызывает внутренний `ClaimExecution`; control-plane
+разрешает initiator из сохранённого root, проверяет текущие grants и блокирует
+точную session/workspace. Payload не назначает authority. Ошибка PostgreSQL
+теперь возвращает `Unavailable` и откатывает транзакцию claim целиком. Уже
+подтверждённые CREATE/PREPARE из прежних транзакций сохраняются. Следующий
+ограниченный цикл controller снова выполняет все owner-проверки; leases,
+RuntimeRevision и provider writer не появляются до успешного допуска.
+
+| Сценарий / переход | Состояние, ответ и наблюдение |
+|---|---|
+| AGENT: session занята другой транзакцией | Unavailable; run/node/workspace и idempotency receipt не меняются; событий нет; `GET /runs/{ref}` остаётся авторитетным чтением |
+| WORKFLOW: session координатора занята | Unavailable; root и плановые этапы не получают FAILED/CANCELLED; событий нет; `GET /runs/{ref}/graph` сохраняет граф |
+| Следующий claim AGENT после известного rollback | Свежая проверка actor/grants/version; один RuntimeRevision/lease и прежний `TURN_STARTED` только после commit |
+| Следующий claim WORKFLOW после известного rollback | Дополнительно exact опубликованная версия и координатор; один допуск координатора, без запуска плановых этапов от имени host |
+| Отсутствующая owner-строка или доказанный mismatch | Прежний закрытый доменный отказ; инфраструктурная ошибка не выдаётся за отсутствие строки |
+| Renew / complete / cancel / delete / lease expiry | Их owner-предикаты и события не изменены; временный отказ claim не продлевает lease и не оживляет terminal run |
+| Retry / dead-letter / WAITING_OWNER / CHANGES_REQUESTED | Ошибка SQL не создаёт attempt, grant, повтор внешнего effect либо решение gate; действуют существующие специализированные переходы |
+
+Общие аналоги проверены в назначении writer, CREATE/PREPARE тома и подготовке
+restore: ошибка запроса отделена от отсутствия строки и проверки прочитанных
+полей. Native claim уже различал SQL failure и `RowsAffected != 1`.
+Тест использует настоящий PostgreSQL и отдельного держателя блокировки;
+драйверный tracer лишь сообщает о фактическом `55P03`, не подменяя SQL или
+ошибку. Проверяются неизменность графа/authority/receipt и успешный повтор
+того же запроса после известного rollback. Это не заменяет новую установленную
+приёмку WORKFLOW. Через Context7 проверены pgx `QueryRow.Scan`, `ErrNoRows`,
+`errors.Is/As` и `pgconn.PgError`; зависимость остаётся v5.10.0.

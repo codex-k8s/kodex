@@ -87,7 +87,7 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 	if run == nil {
 		t.Fatal("workspace run was not returned")
 	}
-	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", execute)
+	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", run.Ref, execute)
 	if len(claimed.RuntimeItems) != 1 {
 		t.Fatalf("expected one V2 execution claim, got %d", len(claimed.RuntimeItems))
 	}

@@ -64,7 +64,10 @@ func (repository *Repository) prepareSessionWorkspaceTx(ctx context.Context, tx 
 	arguments := pgx.StrictNamedArgs{"organization_id": current.organizationID, "session_id": candidate.sessionID,
 		"project_id": candidate.projectID, "agent_id": candidate.agentID, "run_id": candidate.runID}
 	var sessionID string
-	if err := tx.QueryRow(ctx, queryWorkspaceStorageSession, arguments).Scan(&sessionID); err != nil || sessionID != candidate.sessionID {
+	if err := tx.QueryRow(ctx, queryWorkspaceStorageSession, arguments).Scan(&sessionID); err != nil {
+		return nil, false, workspaceOwnerRowError(err)
+	}
+	if sessionID != candidate.sessionID {
 		return nil, false, errs.ErrConflict
 	}
 	var reference, state string
@@ -138,7 +141,20 @@ func claimSessionWorkspaceTx(ctx context.Context, tx pgx.Tx, current scope, bind
 		"organization_id": current.organizationID, "workspace_ref": binding.WorkspaceRef,
 		"workspace_generation": binding.Generation, "lease_ref": leaseRef,
 	}).Scan(&version); err != nil {
-		return errs.ErrConflict
+		return workspaceOwnerRowError(err)
 	}
 	return nil
+}
+
+// workspaceOwnerRowError preserves a missing owner row as Conflict while treating query,
+// lock, scan and transport failures as Unavailable. A failed read cannot prove lost authority
+// or justify a terminal graph; callers still roll back and reauthorize a later claim.
+// workspaceOwnerRowError сохраняет Conflict для отсутствующей owner-строки, но относит ошибки
+// запроса, блокировки, чтения и транспорта к Unavailable. Неуспешное чтение не доказывает утрату
+// полномочий и не разрешает terminal graph; вызывающий откатывает транзакцию и заново проверяет claim.
+func workspaceOwnerRowError(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return errs.ErrConflict
+	}
+	return errs.ErrUnavailable
 }

@@ -18,7 +18,7 @@ import (
 // claimPreparedWorkspaceComponent проводит owner commands через pending CREATE/PREPARE к
 // model claim. Physical observations — явные fixtures, не доказательство Kubernetes work.
 func claimPreparedWorkspaceComponent(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, worker value.Principal,
-	workload string, execute func(command.Kind, value.Principal, string, any) command.Result) command.Result {
+	workload, runRef string, execute func(command.Kind, value.Principal, string, any) command.Result) command.Result {
 	t.Helper()
 	principal := func(operation string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject",
@@ -81,7 +81,7 @@ func claimPreparedWorkspaceComponent(t *testing.T, ctx context.Context, reposito
 			t.Fatal("completed physical grant was renewed")
 		}
 	}
-	return execute(command.ClaimExecution, worker, "claim", command.LeaseInput{WorkloadInstance: workload, Limit: 1})
+	return testWorkspaceClaimContention(t, ctx, repository, service, worker, workload, runRef)
 }
 
 // workspaceVolumeComponentWork decodes the actual owner response for both fresh and durable

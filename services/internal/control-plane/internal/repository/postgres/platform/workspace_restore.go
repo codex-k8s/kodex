@@ -81,7 +81,10 @@ func (repository *Repository) prepareWorkspaceRestoreTx(ctx context.Context, tx 
 	if err := tx.QueryRow(ctx, queryWorkspaceRestoreAdvance, pgx.StrictNamedArgs{
 		"organization_id": state.organizationID, "workspace_id": state.id, "workspace_version": state.version,
 		"workspace_generation": state.generation, "archive_id": state.sourceArchiveID,
-	}).Scan(&next); err != nil || next != generation+1 {
+	}).Scan(&next); err != nil {
+		return workspaceOwnerRowError(err)
+	}
+	if next != generation+1 {
 		return errs.ErrConflict
 	}
 	state, err = readWorkspaceArchiveState(ctx, tx, current.organizationID, candidate.sessionID)
@@ -117,7 +120,10 @@ func createWorkspaceRestore(ctx context.Context, tx pgx.Tx, state workspaceArchi
 	var preparationRef, readyRaw string
 	if err := tx.QueryRow(ctx, queryWorkspaceRestorePVC, pgx.StrictNamedArgs{
 		"organization_id": state.organizationID, "workspace_id": state.id,
-	}).Scan(&pvcUID, &incarnation, &preparationRef, &readyRaw); err != nil || pvcUID == "" {
+	}).Scan(&pvcUID, &incarnation, &preparationRef, &readyRaw); err != nil {
+		return task, workspaceOwnerRowError(err)
+	}
+	if pvcUID == "" {
 		return task, errs.ErrConflict
 	}
 	ready, err := runtimecontract.DecodeWorkspaceVolumeReady([]byte(readyRaw))
