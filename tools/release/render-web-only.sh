@@ -27,6 +27,7 @@ usage() {
     '  [--authority-registry-configuration <json>]' \
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--disable-observability; exporters only]' \
+    '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
     '  [--clamav-mode enabled|disabled; default enabled]' \
     '  [--artifact-antivirus-mode required|disabled; default required, disabled marks ordinary files NOT_SCANNED]' \
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
@@ -72,6 +73,7 @@ oidc_pod_component=""
 oidc_target_port=""
 disable_observability=false
 clamav_mode=enabled
+clamav_storage_profile=shared-rwx
 artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 disable_monitoring_resources=false
@@ -113,6 +115,7 @@ while (($# > 0)); do
     --oidc-pod-component) oidc_pod_component="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
+    --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --disable-monitoring-resources) disable_monitoring_resources=true; shift ;;
@@ -388,10 +391,11 @@ KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
 ' "$rendered"
 
 python3 "$repository_root/tools/install/kubernetes_api_profile.py" --render "$rendered"
+case "$clamav_storage_profile" in shared-rwx|node-local-rwo) ;; *) fail 'ClamAV storage profile is invalid' ;; esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antivirus mode is invalid' ;; esac
-if [[ "$clamav_mode" == disabled || "$artifact_antivirus_mode" == disabled ]]; then
-  python3 "$repository_root/tools/install/clamav_profile.py" --render "$rendered" --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode"
+if [[ "$clamav_mode" == disabled || "$artifact_antivirus_mode" == disabled || "$clamav_storage_profile" != shared-rwx ]]; then
+  python3 "$repository_root/tools/install/clamav_profile.py" --render "$rendered" --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile"
 fi
 
 if [[ "$disable_observability" == true ]]; then

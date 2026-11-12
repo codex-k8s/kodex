@@ -115,5 +115,42 @@ class ClamAVProfile(unittest.TestCase):
             state.runtime_pods=[{'metadata':{'name':'active-runtime'}}]
             with self.assertRaisesRegex(Rejected,'EMPTY_RUNTIME_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_mode='disabled')
 
+    def test_local_storage_preserves_scanning_and_rejects_unpinned_consumers(self):
+        before=fixture();before[2]['spec']['jobTemplate']['spec']['template']['spec']['volumes']=[{'name':'database','persistentVolumeClaim':{'claimName':'clamav-database'}}]
+        original=copy.deepcopy(before)
+        desired=profile.transform(before,storage_profile='node-local-rwo')
+        self.assertEqual(before,original)
+        self.assertEqual(profile.transform(desired,storage_profile='node-local-rwo'),desired)
+        self.assertEqual(desired[0]['spec']['template']['spec']['containers'],before[0]['spec']['template']['spec']['containers'])
+        self.assertEqual(desired[2]['spec']['schedule'],before[2]['spec']['schedule'])
+        self.assertNotIn('suspend',desired[2]['spec'])
+        self.assertEqual(profile.one(desired,'PersistentVolumeClaim',profile.LOCAL_CLAIM)['spec']['accessModes'],['ReadWriteOnce'])
+        self.assertEqual(desired[-1],before[-1])
+        with self.assertRaises(Rejected):profile.transform(desired)
+        with self.assertRaises(Rejected):profile.transform(before,mode='disabled',storage_profile='node-local-rwo')
+        for mode in ['foreign','collision','readwrite','provenance','access']:
+            value=copy.deepcopy(before)
+            if mode=='foreign':value[1]['spec']['template']['spec']['volumes']=[{'name':'foreign','persistentVolumeClaim':{'claimName':'clamav-database'}}]
+            elif mode=='collision':value.append({'kind':'PersistentVolumeClaim','metadata':{'name':profile.LOCAL_CLAIM},'spec':{}})
+            elif mode=='readwrite':value[0]['spec']['template']['spec']['volumes'][3]['persistentVolumeClaim']['readOnly']=False
+            elif mode=='provenance':value[2]['metadata']['annotations']={profile.STORAGE_ANNOTATION:'node-local-rwo'}
+            else:value[3]['spec']['accessModes']=['ReadOnlyMany']
+            with self.subTest(mode=mode),self.assertRaises(Rejected):profile.transform(value,storage_profile='node-local-rwo')
+
+    def test_local_storage_resume_keeps_authority_and_requires_explicit_profile(self):
+        import authority_registry as registry
+        from test_authority_registry import fixture as authority_fixture,FakeState
+        assets=fixture();assets[2]['spec']['jobTemplate']['spec']['template']['spec']['volumes']=[{'name':'database','persistentVolumeClaim':{'claimName':'clamav-database'}}]
+        before=registry.observability_profile.transform(registry.transform(authority_fixture(),{'schema':'kodex.authority-registry/v1','source_revision':1})+assets,True)
+        desired=profile.transform(before,storage_profile='node-local-rwo');state=FakeState(before)
+        state.current['internal-rpc-authority-publisher']['spec']['replicas']=2
+        state.published_state=dict(rotation_count=1,snapshot_count=1,fence_allows=True,matching_count=1)
+        state.live_deployments=[r for r in before if r['kind']=='Deployment']
+        with patch.object(registry,'verify_schemas'):
+            with self.assertRaisesRegex(Rejected,'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED'):registry.verify_workload_resume(state,desired,before)
+            self.assertEqual(registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')['deployments'],3)
+            state.runtime_pods=[{'metadata':{'name':'active-runtime'}}]
+            with self.assertRaisesRegex(Rejected,'EMPTY_RUNTIME_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')
+
 
 if __name__=='__main__':unittest.main()

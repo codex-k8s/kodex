@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.2
+version: 1.6.3
 updated: 2026-11-12
 ---
 
@@ -1105,6 +1105,25 @@ fencing, preimage и empty runtime по-прежнему обязательны.
 состояние всех consumers. Новый guarded resume требует отдельной сверки частичной
 попытки и свежего backup/preimage. HTTP401 unauthenticated probe подтверждает лишь
 TLS/маршрут; это не проверка application permissions или успешный вход.
+
+### ClamAV на локальном RWO storage
+
+Явный `--clamav-storage-profile node-local-rwo` у renderer, portable delivery и
+`deploy-platform.sh` создаёт отдельный `clamav-database-local` с ReadWriteOnce.
+Scanner и единственный updater используют этот claim; антивирусный verdict,
+обязательная проверка артефактов, TLS/egress и расписание updater сохраняются.
+Все потребители этого тома размещаются на узле, выбранном storage provisioner:
+это локальный тестовый профиль без обещания доступности при потере узла.
+По умолчанию сохраняется `shared-rwx`; смена профиля требует явного параметра.
+
+Профиль не изменяет accessModes существующего PVC и не переносит его данные.
+`resume-workloads` допускает только точное преобразование закреплённого render,
+проверяет опубликованную authority revision, receipt миграций и пустой runtime,
+создаёт новый claim до workloads. Старый pending claim можно удалить отдельно
+только после проверки ownership, отсутствия volumeName/Bound и потребителей;
+для занятого тома требуется отдельное решение о данных. При первой установке
+подписи ClamAV должны быть получены updater до готовности scanner. Факт Ready
+PVC не доказывает успешное сканирование.
 
 ### Опциональный ClamAV
 
