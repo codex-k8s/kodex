@@ -1517,3 +1517,12 @@ test('042 portable CLI сохраняет три replica и прежний diges
  assert.equal(f.read().calls.filter(a=>a.includes('patch')).length,2);
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
 });
+
+test('042 portable повторяет failed check через отдельную попытку без DDL первой попытки', t => {
+ const f=cli(t,'workspace-archive-abi');pass(f,'plan','PLANNED');
+ f.edit(s=>s.mode='check-fail');assert.notEqual(f.run('check').status,0);
+ const previous=f.retry();f.edit(s=>s.mode='');const planned=f.run('plan',previous);assert.equal(planned.status,0,planned.stderr);
+ pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().deployment.spec.replicas,3);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,3);
+});

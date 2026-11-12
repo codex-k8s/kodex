@@ -406,7 +406,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === profile &&
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
-      parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
+      parent.anchor.uid === anchor.metadata.uid && [0,anchorReplicas].includes(anchor.spec.replicas) &&
       parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:anchorReplicas}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
     immutableMigrationImage(parent.source,parent.imageEvidence);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
