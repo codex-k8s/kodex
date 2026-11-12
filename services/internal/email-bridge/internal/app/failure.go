@@ -48,6 +48,9 @@ const (
 	// stageDatabaseOpen identifies pool construction, not a successful database readiness check.
 	// stageDatabaseOpen обозначает создание пула, не успешную проверку готовности БД.
 	stageDatabaseOpen failureStage = "database_open"
+	// stageDatabasePing identifies initial connectivity admission before the non-retried role/schema assertion.
+	// stageDatabasePing обозначает начальный допуск подключения до неповторяемой проверки роли и схемы.
+	stageDatabasePing failureStage = "database_connectivity"
 	// stageDatabaseReady identifies the bounded receipt-repository startup barrier.
 	// stageDatabaseReady обозначает ограниченный startup barrier репозитория квитанций.
 	stageDatabaseReady failureStage = "database_readiness"
@@ -133,11 +136,14 @@ func failureFields(err error) (string, string) {
 	}
 	switch f.stage {
 	case stageEnvironment, stageTLS, stageCertificate, stagePrivateKey, stageKeyPair, stageCA,
-		stageDSN, stageDSNValidation, stageDatabaseOpen, stageDatabaseReady, stageTelemetry,
+		stageDSN, stageDSNValidation, stageDatabaseOpen, stageDatabasePing, stageDatabaseReady, stageTelemetry,
 		stageMetrics, stageAuthority, stageConfiguration, stagePins, stageWatermark,
 		stageService, stageReadback, stageTechnical, stageHTTPS, stageShutdown:
 	default:
 		return "unknown", "unknown"
+	}
+	if f.stage == stageDatabasePing || f.stage == stageDatabaseReady {
+		return string(f.stage), databaseFailureClass(f.cause)
 	}
 	return string(f.stage), failureClass(f.cause)
 }

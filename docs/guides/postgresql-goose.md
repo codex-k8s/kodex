@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.18
-updated: 2026-11-12
+version: 1.2.19
+updated: 2026-11-13
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -44,6 +44,16 @@ fence, состояние графа и authority. Истечение бюдже
 
 Актуальные API библиотек проверяются через Context7 перед реализацией или
 обновлением версий.
+
+Readiness, которой необходимы все права, проверяет каждое отдельно через
+`AND has_table_privilege(...)`. Список прав через запятую внутри одного
+`has_*_privilege` означает наличие хотя бы одного, а не всех. Отрицательное
+условие `NOT has_*_privilege(..., 'A,B')` может намеренно запрещать любое из них;
+механическая замена всех списков недопустима. Component-тест отзывает каждое
+обязательное право по отдельности и подтверждает отказ, затем восстанавливает
+ровно прежний grant и проверяет успешный допуск. Query error и отрицательный
+результат assertion не смешиваются в диагностике и не разрешают retry mutation.
+Семантика подтверждена [официальной документацией PostgreSQL18](https://www.postgresql.org/docs/18/functions-info.html#FUNCTIONS-INFO-ACCESS-TABLE).
 
 ## Структура PostgreSQL adapter
 

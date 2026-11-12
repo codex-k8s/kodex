@@ -4,7 +4,7 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.12
+version: 1.1.13
 updated: 2026-11-13
 ---
 
@@ -416,3 +416,12 @@ input/output. Provider accounting не доказывает физическую
 ошибки до проверки network refusal; joined credential refusal не становится
 разрешением retry. Исторический отказ остаётся в evidence; успешный новый
 rollout не переписывает его в PASS.
+
+Readiness adapter различает ошибку `QueryRow.Scan` и успешно прочитанный
+отрицательный результат роли/схемы. Сервисный safe domain wrapper сохраняет
+прежний sentinel для transport mapping и закрытую причину для `errors.Is/As`;
+его `Error` не форматирует SQL/DSN/provider message. Нельзя уничтожать причину
+простым `Unavailable`, а затем объявлять любой такой отказ transient.
+Начальный connectivity ping и неповторяемая authority/schema assertion имеют
+разные этапы диагностики. Пример полного lifecycle и теста настоящей БД:
+[email-bridge startup](../operations/email-bridge-1037.md#начальный-postgresql-barrier-при-повторной-установке-2108).

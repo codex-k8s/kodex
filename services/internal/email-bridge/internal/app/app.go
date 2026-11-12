@@ -59,7 +59,7 @@ func Run(ctx, background context.Context, version string) (result error) {
 	stage = stageDatabaseReady
 	repository := &receipt.Repository{Pool: pool}
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
-	e = repository.Ready(startup)
+	e = verifyPostgresStartup(startup, pool.Ping, repository.Ready)
 	cancel()
 	if e != nil {
 		return e
