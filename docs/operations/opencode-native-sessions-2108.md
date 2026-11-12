@@ -620,7 +620,9 @@ account/read, rollout-source и token-usage классификаторы, таб
 язык и search_path сохраняются; строки истории, workspace и task не меняются.
 Исторические миграции040/041 и их verifiers не расширяются. Доставка использует
 профиль `workspace-archive-abi` существующего immutable migration tool, drain и
-readback. Обратной goose-миграции нет: возврат требует совместимого forward fix.
+readback. Профиль042 сохраняет канонические три replica portable deployment;
+прежние stable-профили сохраняют свои две. CAS/journal фиксируют точный старый
+image и spec, повторный resume не создаёт новую миграцию. Обратной goose-миграции нет: возврат требует совместимого forward fix.
 
 Сквозной путь: controller с exact workload authority → `ObserveWorkspace` →
 owner lease/RR/fence и positive join → `CHECKPOINT_PENDING`/release →

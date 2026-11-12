@@ -18,6 +18,7 @@ const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
   'workspace-archive-abi': {
+    anchorProfile:'portable',
     version:'20261112000100',file:'20261112000100_workspace_archive_runtime_abi.sql',
     annotation:'kodex.dev/cp-workspace-archive-abi-migration-plan',previousVersion:20261111000200,
     emptyField:'archiveGuardPredecessor',preconditionFile:'workspace-archive-abi-migration-precondition.sql',
@@ -229,6 +230,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const profile = options['--profile'] ?? 'outbox-index';
   const configuration = immutableMigrationProfile(profile);
   const {version:migrationVersion,file:migrationFile,annotation} = configuration;
+  // Канонический portable сохраняет три replica; прежние stable profiles сохраняют две.
+  const anchorReplicas = configuration.anchorProfile === 'portable' ? 3 : 2;
+  const anchorLocalProfile = configuration.anchorProfile === 'portable' ? undefined : 'stable';
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
   ensure(context === 'k3d-kodex', 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -394,7 +398,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
       parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
-      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:anchorReplicas}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
     immutableMigrationImage(parent.source,parent.imageEvidence);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
@@ -438,9 +442,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
     ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
     const previousImage = anchor.spec?.template?.spec?.containers?.find(container => container.name === 'control-plane')?.image;
-    ensure(anchor.spec.replicas === 2 && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === 'stable' &&
+    ensure(anchor.spec.replicas === anchorReplicas && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === anchorLocalProfile &&
       anchor.status?.observedGeneration >= anchor.metadata.generation &&
-      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === 2) &&
+      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === anchorReplicas) &&
       /^registry\.local\.kodex\/kodex\/control-plane@sha256:[a-f0-9]{64}$/.test(previousImage ?? '') &&
       !previousImage.endsWith('0'.repeat(64)) && !anchor.spec.template.spec.volumes?.some(volume => volume.hostPath), 'MIGRATION_CP_IMMUTABLE_HEALTH_REQUIRED');
     ensure(previous || !anchor.metadata.annotations?.[annotation], 'MIGRATION_ANCHOR_ALREADY_RESERVED');
@@ -496,7 +500,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
       const digest = plan.anchor.previousImage.split('@').at(-1);
       const ready = actual.status?.observedGeneration >= actual.metadata.generation &&
-        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => actual.status[key] === 2) && pods.length === 2 &&
+        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => actual.status[key] === anchorReplicas) && pods.length === anchorReplicas &&
         pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
           p.spec.containers?.some(c => c.name === 'control-plane' && c.image === plan.anchor.previousImage) &&
           p.status.containerStatuses?.some(c => c.name === 'control-plane' && c.ready && c.imageID?.endsWith(digest)));
@@ -680,7 +684,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           ensure(validWorkspaceBackupACLReadback(proof),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
           journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:proof.gooseVersion,sqlSHA256:plan.backupACLReadbackSQLSHA256});
         }
-        transition('RESUME',state,2);
+        transition('RESUME',state,anchorReplicas);
       }
       state = await waitMigrationMaintenance(observeCP,s => s.stage === 'RESUMED' && s.ready,'MIGRATION_CP_RESUME_TIMEOUT',io.clock);
       journal.append({type:'RESUME_ACK',resourceVersion:state.actual.metadata.resourceVersion});
