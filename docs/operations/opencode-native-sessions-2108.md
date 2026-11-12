@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.2
+version: 1.4.3
 updated: 2026-11-12
 ---
 
@@ -135,6 +135,22 @@ inverse-проекций. Проверены через Context7 докумен�
 Первый native writer получает `INITIALIZING` intent в той же транзакции,
 что lease и immutable RuntimeRevision. Последующий writer захватывает только
 подтверждённый `LIVE` checkpoint без прежнего незавершённого writer.
+
+Сквозное чтение этого intent: владелец с проверенным BFF/transport context →
+`GET /api/v1/runs/{ref}` → generated `PlatformQueryService.GetRun` → canonical
+assistant-context eligibility и scoped snapshot CP → `RunSessionReadiness` →
+Proto `RUN_SESSION_STORAGE_STATE_INITIALIZING` → HTTP `INITIALIZING` → PWA.
+Locator из URL не назначает actor/project/owner. Чтение не имеет idempotency,
+не меняет version/state и не создаёт события. До первого подтверждённого
+checkpoint причина остаётся `STORAGE_NOT_LIVE`, продолжение закрыто.
+
+| Состояние native session | Проекция и доступный путь |
+| --- | --- |
+| Первый claim, writer ещё не подтвердил checkpoint | `INITIALIZING`, `STORAGE_NOT_LIVE`; обычное защищённое чтение без HTTP500 |
+| Первый процесс завершился ошибкой или Stop без checkpoint | Тот же неподтверждённый intent; terminal run не делает storage готовым |
+| Подтверждённый checkpoint | Прежний owner transition в `LIVE`; eligibility continuation повторно проверяется сервером |
+| Lease expiry, stale complete или retry | Чтение не выдаёт новый grant и не разрешает пустую замену истории; действуют прежние fence/recovery guards |
+
 Потерянный initial create не превращается в разрешение создать другую пустую
 сессию. Completion связывает exact lease/revision, следующее native generation,
 сохранённый native ID и текущую workspace generation. Успешный native outcome

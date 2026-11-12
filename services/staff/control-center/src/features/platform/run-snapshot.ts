@@ -9,6 +9,7 @@ import { assertRunOwner, sameAssistantRunPin } from "@/features/runs/run-owner";
 
 const refPattern = /^[A-Za-z0-9_-]{8,128}$/;
 const storageStates = new Set([
+  "INITIALIZING",
   "UNTRACKED",
   "LIVE",
   "SNAPSHOT_READY",

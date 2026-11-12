@@ -351,6 +351,18 @@ describe("SERVER business retry full snapshot", () => {
 
 describe("полный owner run snapshot", () => {
   beforeEach(() => setActivePinia(createPinia()));
+  it("сохраняет INITIALIZING и запрет продолжения до первого checkpoint", () => {
+    const store = usePlatformStore(),
+      value = fixture();
+    const run = requiredFixture(value.runs[1]);
+    const readiness = requiredFixture(run.sessionReadiness);
+    readiness.storageState = "INITIALIZING";
+    readiness.reason = "STORAGE_NOT_LIVE";
+    run.nextActions = [];
+    store.applyRunReadinessSnapshot(value.graph, value.runs);
+    expect(store.runs[run.ref]?.sessionReadiness).toEqual(readiness);
+    expect(store.runs[run.ref]?.nextActions).toEqual([]);
+  });
   it("обновляет shared child storage при прежних Run.version и graph cursor без HTTP", () => {
     const store = usePlatformStore(),
       value = fixture();

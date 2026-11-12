@@ -2,6 +2,8 @@ package httptransport
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -115,7 +117,7 @@ func TestRunSessionReadinessEnumsPinned(t *testing.T) {
 		count  int
 		actual int
 	}{
-		{11, cp.RunSessionStorageState(0).Descriptor().Values().Len()},
+		{12, cp.RunSessionStorageState(0).Descriptor().Values().Len()},
 		{5, cp.RunSessionReadinessReason(0).Descriptor().Values().Len()},
 		{6, cp.RunSessionArchiveTaskState(0).Descriptor().Values().Len()},
 		{5, cp.SessionArchiveTaskKind(0).Descriptor().Values().Len()},
@@ -158,5 +160,40 @@ func TestRunSessionReadinessLocalizationKeepsClosedWire(t *testing.T) {
 	}
 	if run["safeErrorMessage"] != "Безопасное сообщение об ошибке" {
 		t.Fatal("ordinary Run error localization suppressed")
+	}
+}
+
+// TestInitializingSessionReadbackPreservesBlocker exercises the public HTTP projection before
+// the first checkpoint, including terminal runs, without manufacturing storage readiness.
+// TestInitializingSessionReadbackPreservesBlocker проверяет HTTP-проекцию до первого checkpoint,
+// включая terminal run, без выдуманной готовности хранилища.
+func TestInitializingSessionReadbackPreservesBlocker(t *testing.T) {
+	t.Parallel()
+	for _, state := range []cp.RunState{cp.RunState_RUN_STATE_RUNNING, cp.RunState_RUN_STATE_FAILED, cp.RunState_RUN_STATE_CANCELLED} {
+		run := sessionReadinessWireFixture()
+		run.State = state
+		run.SessionReadiness.StorageState = cp.RunSessionStorageState_RUN_SESSION_STORAGE_STATE_INITIALIZING
+		run.SessionReadiness.LatestArchiveTask = nil
+		writer := httptest.NewRecorder()
+		writeMessage(writer, http.StatusOK, &cp.GetRunResponse{Run: run}, "run", "")
+		if writer.Code != http.StatusOK {
+			t.Fatalf("initializing read failed: %d", writer.Code)
+		}
+		var body struct {
+			SessionReadiness struct {
+				StorageState string
+				Reason       string
+			}
+		}
+		if err := json.Unmarshal(writer.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.SessionReadiness.StorageState != "INITIALIZING" || body.SessionReadiness.Reason != "STORAGE_NOT_LIVE" {
+			t.Fatal("initializing blocker lost")
+		}
+		run.SessionReadiness.Reason = cp.RunSessionReadinessReason_RUN_SESSION_READINESS_REASON_NO_SESSION_BLOCKER
+		if _, err := messageMap(&cp.GetRunResponse{Run: run}); err == nil {
+			t.Fatal("unconfirmed native session accepted as ready")
+		}
 	}
 }

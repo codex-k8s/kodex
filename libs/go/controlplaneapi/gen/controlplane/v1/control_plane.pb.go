@@ -8222,6 +8222,7 @@ const (
 	RunSessionStorageState_RUN_SESSION_STORAGE_STATE_RESTORING        RunSessionStorageState = 8
 	RunSessionStorageState_RUN_SESSION_STORAGE_STATE_ERROR            RunSessionStorageState = 9
 	RunSessionStorageState_RUN_SESSION_STORAGE_STATE_PURGED           RunSessionStorageState = 10
+	RunSessionStorageState_RUN_SESSION_STORAGE_STATE_INITIALIZING     RunSessionStorageState = 11
 )
 
 // Enum value maps for RunSessionStorageState.
@@ -8238,6 +8239,7 @@ var (
 		8:  "RUN_SESSION_STORAGE_STATE_RESTORING",
 		9:  "RUN_SESSION_STORAGE_STATE_ERROR",
 		10: "RUN_SESSION_STORAGE_STATE_PURGED",
+		11: "RUN_SESSION_STORAGE_STATE_INITIALIZING",
 	}
 	RunSessionStorageState_value = map[string]int32{
 		"RUN_SESSION_STORAGE_STATE_UNSPECIFIED":      0,
@@ -8251,6 +8253,7 @@ var (
 		"RUN_SESSION_STORAGE_STATE_RESTORING":        8,
 		"RUN_SESSION_STORAGE_STATE_ERROR":            9,
 		"RUN_SESSION_STORAGE_STATE_PURGED":           10,
+		"RUN_SESSION_STORAGE_STATE_INITIALIZING":     11,
 	}
 )
 
@@ -97579,7 +97582,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"(ManagedConfigurationGitWriteBackWorkMode\x12>\n" +
 	":MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_UNSPECIFIED\x10\x00\x12:\n" +
 	"6MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_EXECUTE\x10\x01\x12D\n" +
-	"@MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_RECOVER_READ_ONLY\x10\x02*\xe3\x03\n" +
+	"@MANAGED_CONFIGURATION_GIT_WRITE_BACK_WORK_MODE_RECOVER_READ_ONLY\x10\x02*\x8f\x04\n" +
 	"\x16RunSessionStorageState\x12)\n" +
 	"%RUN_SESSION_STORAGE_STATE_UNSPECIFIED\x10\x00\x12'\n" +
 	"#RUN_SESSION_STORAGE_STATE_UNTRACKED\x10\x01\x12\"\n" +
@@ -97592,7 +97595,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"#RUN_SESSION_STORAGE_STATE_RESTORING\x10\b\x12#\n" +
 	"\x1fRUN_SESSION_STORAGE_STATE_ERROR\x10\t\x12$\n" +
 	" RUN_SESSION_STORAGE_STATE_PURGED\x10\n" +
-	"*\xa3\x02\n" +
+	"\x12*\n" +
+	"&RUN_SESSION_STORAGE_STATE_INITIALIZING\x10\v*\xa3\x02\n" +
 	"\x19RunSessionReadinessReason\x12,\n" +
 	"(RUN_SESSION_READINESS_REASON_UNSPECIFIED\x10\x00\x121\n" +
 	"-RUN_SESSION_READINESS_REASON_STORAGE_NOT_LIVE\x10\x01\x12<\n" +

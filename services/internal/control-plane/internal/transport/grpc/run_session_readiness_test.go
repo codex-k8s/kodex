@@ -27,3 +27,15 @@ func TestRunSessionReadinessCasterPreservesExactBinding(t *testing.T) {
 		t.Fatal("canonical purged storage state lost")
 	}
 }
+
+// TestInitializingSessionCasterPreservesIntent prevents the first native writer intent from
+// becoming an unspecified enum that public consumers cannot safely render.
+// TestInitializingSessionCasterPreservesIntent не допускает преобразование первого native intent
+// в неопределённый enum, который публичные consumers не могут безопасно показать.
+func TestInitializingSessionCasterPreservesIntent(t *testing.T) {
+	t.Parallel()
+	read := castRunSessionReadiness(&entity.RunSessionReadiness{SessionRef: "ses_fixture01", StorageState: "INITIALIZING", Reason: "STORAGE_NOT_LIVE"})
+	if read.StorageState != cp.RunSessionStorageState_RUN_SESSION_STORAGE_STATE_INITIALIZING || read.Reason != cp.RunSessionReadinessReason_RUN_SESSION_READINESS_REASON_STORAGE_NOT_LIVE || read.LatestArchiveTask != nil {
+		t.Fatal("initial native storage intent lost")
+	}
+}
