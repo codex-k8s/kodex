@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.55
+version: 1.7.56
 updated: 2026-11-12
 ---
 
@@ -2213,6 +2213,11 @@ Regression использует реальный schema-to-CEL adapter закр�
 warnings значим только при свежем `observedGeneration == generation`; ошибка
 компиляции не разрешает возобновить controller. Публичная ограниченная проверка —
 `make test-workspace-policy-contract`, локальный предел процесса 120 секунд.
+
+При смене runtime ABI проверяются одновременно producer Pod, параметры и
+каждое CEL-условие, включая workspace V2. Кандидат проходит полный admission
+контур с текущей ABI; та же форма с предыдущей ABI должна закрыто отклоняться.
+Версия в ConfigMap без совместимого исполняемого условия не подтверждает допуск.
 
 Для policy, объединяющей Role/RoleBinding, динамическая граница ограничена
 полями `rules`/`subjects`/`roleRef` внутри точной ветки `kind` с проверкой наличия.

@@ -84,6 +84,13 @@ func TestManagedWorkspaceActualProducerFullAdmission(t *testing.T) {
 			if len(evaluate(fixture.Pod, fixture.Params, "system:serviceaccount:example:untrusted")) == 0 {
 				t.Fatal("untrusted actor accepted")
 			}
+			if strings.HasSuffix(fixture.Name, "-v2") {
+				previous := runtimeClone(t, fixture.Params)
+				previous["data"].(map[string]any)["roleRuntimeContractRevision"] = "4"
+				if len(evaluate(fixture.Pod, previous, user)) == 0 {
+					t.Fatal("previous workspace runtime ABI accepted")
+				}
+			}
 			mutations := map[string]func(map[string]any){
 				"host PID":   func(p map[string]any) { p["spec"].(map[string]any)["hostPID"] = true },
 				"shared PID": func(p map[string]any) { p["spec"].(map[string]any)["shareProcessNamespace"] = true },
