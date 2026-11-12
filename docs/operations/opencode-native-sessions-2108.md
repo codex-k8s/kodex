@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.5
+version: 1.4.6
 updated: 2026-11-12
 ---
 
@@ -658,3 +658,21 @@ Managed read сохраняет порционный лимит32768 байт н
 файла; исправление аргументов не разрешает повтор неизвестного внешнего эффекта.
 Кластерный сценарий с ошибочным `maximum_bytes=1048576` был отклонён корректно;
 успех записи не считается успехом последующего чтения.
+
+Профиль доставки042 проверяет канонический portable Deployment с тремя replica,
+метками `production/web-only` и отсутствием `local-profile`; локальный stable
+профиль прежних миграций сохраняет две replica. Отключённая наблюдаемость допускает
+только точный `OTEL_SDK_DISABLED=true`, без произвольных дополнительных env.
+Проверочный Job с `imagePullPolicy=Always` обязан подтвердить настоящий node pull
+до остановки control-plane. Импорт image в containerd не заменяет эту проверку.
+
+Для локальной установки alias `registry.local.kodex` явно связывается с текущим
+promoted pull endpoint флагом `--bind-platform-registry` скриптов
+`tools/dev/configure-{k3d,local}-node-registry.sh`. Это меняет только фиксированный
+alias и выбранный endpoint; остальные registry entries сохраняются. Exact TLS,
+mTLS и application credentials берутся из штатного node-pull material, без
+plaintext или skip-verify. Readback проверяет alias отдельно. Проверены через
+Context7 официальные [правила K3s private registry](https://docs.k3s.io/installation/private-registry):
+auth/TLS назначаются hostname endpoint, конфигурация применяется на каждом узле
+с перезапуском K3s. Неуспешный check Job сохраняется как отдельная попытка; новая
+попытка миграции связывается с его terminal receipt.

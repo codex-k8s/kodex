@@ -11,12 +11,14 @@ kodex_node_registry_parse() {
   context=""
   material_directory=""
   promoted_pull_host=""
+  bind_platform_registry=false
   while (($# > 0)); do
     case "$1" in
       --mode) mode=${2:-}; shift 2 ;;
       --context) context=${2:-}; shift 2 ;;
       --material-directory) material_directory=${2:-}; shift 2 ;;
       --promoted-pull-host) promoted_pull_host=${2:-}; shift 2 ;;
+      --bind-platform-registry) bind_platform_registry=true; shift ;;
       --help) usage; exit 0 ;;
       *) usage; fail "unsupported argument: $1" ;;
     esac
@@ -58,11 +60,13 @@ kodex_node_registry_read_material() {
 # Использует прежние выходные пути; к узлам не обращается, секреты не выводит.
 kodex_node_registry_render() {
   jq -cn --slurpfile existing "$existing_json_file" --arg host "$promoted_pull_host" \
+    --argjson bind_platform_registry "$bind_platform_registry" \
     --rawfile username "$temporary_directory/username" --rawfile password "$temporary_directory/password" --arg ca "$system_ca" \
     --arg certificate "$system_certificate" --arg private_key "$system_private_key" '
     (if ($existing | length) == 1 then $existing[0]
      else error("registry configuration must contain one JSON value") end) |
     .mirrors = ((.mirrors // {}) + {($host):{endpoint:[("https://" + $host)]}}) |
+    (if $bind_platform_registry then .mirrors["registry.local.kodex"]={endpoint:[("https://" + $host)]} else . end) |
     .configs = ((.configs // {}) + {($host):{
       auth:{username:$username,password:$password},
       tls:{ca_file:$ca,cert_file:$certificate,key_file:$private_key}
