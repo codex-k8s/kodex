@@ -83,16 +83,20 @@ class ScanMemoryBudgetTest(unittest.TestCase):
         self.assertFalse(self.calls.exists())
 
     def test_component_changes_only_optional_configmap_key(self):
-        # Фактический kustomize build, а не проверка текста компонента.
+        # Настоящий Kustomize проверяет базу и оба полных профиля поставки.
+        for relative in ("base/image-supply-chain", "profiles/web-only", "profiles/web-with-mattermost"):
+            with self.subTest(profile=relative):
+                self.assert_component_delta(ROOT / "deploy/k8s" / relative)
+
+    def assert_component_delta(self, base):
         k = self.root / "kustomization.yaml"
-        base = ROOT / "deploy/k8s/base/image-supply-chain"
         component = ROOT / "deploy/k8s/components/image-admission-memory-budget"
         header = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n"
         k.write_text(header + "resources:\n- " + os.path.relpath(base, self.root) + "\n")
         def render():
             r = subprocess.run(["kubectl", "kustomize", str(self.root), "--load-restrictor=LoadRestrictionsNone"],
                                env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(self.root)},
-                               capture_output=True, text=True, timeout=30, check=True)
+                               capture_output=True, text=True, timeout=45, check=True)
             d = subprocess.run(["yq", "-o=json", "-I=0", ".", "-"], input=r.stdout,
                                capture_output=True, text=True, timeout=10, check=True)
             return [json.loads(line) for line in d.stdout.splitlines() if line.strip()]

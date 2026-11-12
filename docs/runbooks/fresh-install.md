@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.10
+version: 2.4.11
 updated: 2026-11-12
 ---
 
@@ -130,6 +130,25 @@ runner images, полным набором waiting statuses, без запуск
 публикация release artifacts ещё должна обеспечить его первый pull/start.
 Работающий warm Pod, бизнес-история, неизвестный Pod или неполный status
 закрывают initial-resume; это не maintenance/Stop/retry действующей сессии.
+
+### Ограничение Go-памяти проверки образа
+
+Если фактический scan завершился `OOMKilled` при контейнерном лимите 2 GiB,
+canonical renderer принимает `--image-admission-memory-profile bounded-2g`.
+Он включает существующий component `image-admission-memory-budget`: только
+ключ `scan-go-memory-limit-mib=1536` в ConfigMap `kodex-image-admission`.
+Wrapper передаёт `GOMEMLIMIT=1536MiB` Syft/Grype и проверяет конечный cgroup v2
+limit с резервом не меньше25%. Профиль `default` сохраняет прежнее поведение.
+Это мягкий предел Go runtime, а не гарантия отсутствия OOM. Requests/limits,
+сканирование, policy, подписи и правила допуска не ослабляются.
+
+В уже установленном окружении сначала завершить текущие admission attempts,
+сохранить terminal status, получить render и адресный plan для exact ConfigMap,
+проверить UID/resourceVersion, применить и перечитать только этот ресурс.
+Новую попытку создаёт штатная `REQUEST_BUILD`; старый FAILED не переписывается.
+Нужны новые SBOM/vulnerability/signature/receipt и promotion до запуска образа.
+Компонент и правила merge проверены по официальной документации Kustomize
+через Context7; `make test-scan-memory-budget` исполняет wrapper и Kustomize.
 
 ### Подготовка полного runner без изменения кластера
 

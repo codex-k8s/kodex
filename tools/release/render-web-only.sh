@@ -28,6 +28,7 @@ usage() {
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--disable-observability; exporters only]' \
     '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
+    '  [--image-admission-memory-profile default|bounded-2g; default default]' \
     '  [--clamav-mode enabled|disabled; default enabled]' \
     '  [--artifact-antivirus-mode required|disabled; default required, disabled marks ordinary files NOT_SCANNED]' \
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
@@ -74,6 +75,7 @@ oidc_target_port=""
 disable_observability=false
 clamav_mode=enabled
 clamav_storage_profile=shared-rwx
+image_admission_memory_profile=default
 artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 disable_monitoring_resources=false
@@ -116,6 +118,7 @@ while (($# > 0)); do
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
     --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
+    --image-admission-memory-profile) image_admission_memory_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --disable-monitoring-resources) disable_monitoring_resources=true; shift ;;
@@ -126,6 +129,11 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+case "$image_admission_memory_profile" in
+  default|bounded-2g) ;;
+  *) fail 'image admission memory profile is invalid' ;;
+esac
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
@@ -263,7 +271,22 @@ source_sha=$(jq -er '.source_sha' "$lock_file")
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 rendered="$temporary_directory/$profile.yaml"
-kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
+if [[ "$image_admission_memory_profile" == bounded-2g ]]; then
+  # Доверенный component добавляет только Go budget; requests/limits и admission
+  # guards остаются прежними. Пути задаются репозиторием, не входным manifest.
+  python3 - "$temporary_directory" "$repository_root" "$profile" <<'PY'
+import json, os, pathlib, sys
+target, root, profile = map(pathlib.Path, sys.argv[1:])
+(target / 'kustomization.yaml').write_text(json.dumps({
+    'apiVersion': 'kustomize.config.k8s.io/v1beta1', 'kind': 'Kustomization',
+    'resources': [os.path.relpath(root / 'deploy/k8s/profiles' / profile, target)],
+    'components': [os.path.relpath(root / 'deploy/k8s/components/image-admission-memory-budget', target)],
+}))
+PY
+  kubectl kustomize "$temporary_directory" --load-restrictor=LoadRestrictionsNone >"$rendered"
+else
+  kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
+fi
 
 # SSH targets поступают только из явно выбранных public connection snapshots.
 # Каждый документ добавляет exact /32(/128):22; wildcard и тестовый IP отсутствуют.
