@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.29
+version: 1.4.30
 updated: 2026-11-13
 ---
 
@@ -1431,3 +1431,31 @@ publication consumer проверяет исходный archive и точные
 с promotion identity. Это не означает выдачу платформенным сотрудникам
 registry-admin и не меняет policy/signers. Смена sidecar image сохраняет
 UID/seal preconditions и не повторяет исторические bootstrap Jobs.
+
+
+## Ограниченное ожидание initial PostgreSQL connectivity authority
+
+Новый immutable diagnostic candidate действительно наблюдал
+`postgres_step=PING_POOL postgres_cause=connection_refused` при старте issuer;
+после Kubernetes restart Pod стал Ready. Это доказательство нового наблюдения,
+не восстановление отсутствующей причины старых журналов UNKNOWN.
+
+Предикат authority теперь допускает следующий initial ping только для
+типизированного connection refusal. Общий механизм вынесен из прежнего
+control-plane startup в `serviceruntime.WaitStartupProbe`; оба consumer
+используют его, не меняя TLS/LOGIN/capability или SQL. Приоритетные
+PostgreSQL/TLS/parse отказы, DNS/reset/timeout/неизвестный текст терминальны.
+
+| Переход | Результат / эффект / авторитетное чтение |
+| --- | --- |
+| Create pool / initial claim readiness | Exact config и прежний startup context; нет business claim либо нового grant |
+| Refused → success | Тот же pool, ping≤10секунд, пауза1секунда; затем прежний Run запускает workers |
+| Refused → permanent rejection | Pool закрыт, отказ не скрывается прежним transient; workers не стартуют |
+| Cancel/deadline до, внутри или после ping | Успех не принимается после отмены, pool закрыт; первичная причина и budget отдельно |
+| Retry без исходного deadline | Запрещён; следующий ping не запускается |
+| Business terminal/delete/retry/lease/dead-letter | Переходы домена не изменяются: helper применяется только до startup barrier |
+| Restart/readback | Только Kubernetes metadata и закрытый diagnostic; нового domain event нет |
+
+Схема, runtime ABI, session checkpoints и owner approvals не меняются.
+Rollback — прежние immutable images, без goose down и удаления новых данных.
+Проверка нормального нового запуска не является многочасовой гарантией сети.

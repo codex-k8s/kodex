@@ -4,7 +4,7 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.11
+version: 1.1.12
 updated: 2026-11-13
 ---
 
@@ -408,3 +408,11 @@ COMMIT acknowledgement может оставить пропуск. Автори�
 input/output. Provider accounting не доказывает физическую изоляцию кеша.
 Все labels берутся из закрытого словаря; prompt, salt, alias и execution IDs
 в общие metrics не попадают. Пример: #2108.
+
+Для authority после наблюдения `PING_POOL/connection_refused` действует тот же
+узкий профиль initial connectivity, что у control-plane: общий
+`serviceruntime.WaitStartupProbe`, probe≤10секунд, отменяемая пауза1секунда,
+исходный startup deadline. Сервисный предикат отклоняет PostgreSQL/TLS/parse
+ошибки до проверки network refusal; joined credential refusal не становится
+разрешением retry. Исторический отказ остаётся в evidence; успешный новый
+rollout не переписывает его в PASS.

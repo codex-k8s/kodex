@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/postgresdiagnostic"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -97,50 +98,12 @@ func parsePostgresStartupConfig(raw []byte) (*pgxpool.Config, error) {
 // Каждый ping ограничен десятью секундами; отменяемые паузы не разрешают повторы SQL/bootstrap/workers.
 // Постоянный отказ либо отмена закрывает именно этот pool; успешное владение передаётся Run.
 func verifyPostgresStartup(ctx context.Context, pool postgresStartupPool) error {
-	accepted := false
-	defer func() {
-		if !accepted {
-			pool.Close()
-		}
-	}()
-	var lastRefused error
-	for {
-		if err := ctx.Err(); err != nil {
-			if lastRefused == nil {
-				return startupFailure(stageVerifyPostgreSQLConnection, err)
-			}
-			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: lastRefused, budget: err}
-		}
-		probe, cancel := context.WithTimeout(ctx, postgresStartupPingBudget)
-		err := pool.Ping(probe)
-		if err == nil {
-			err = probe.Err()
-		}
-		cancel()
-		if err == nil {
-			err = ctx.Err()
-		}
-		if err == nil {
-			accepted = true
-			return nil
-		}
-		class := postgresdiagnostic.Class(err)
-		if budget := ctx.Err(); budget != nil {
-			if lastRefused != nil && (class == "canceled" || class == "timeout") {
-				err = lastRefused
-			}
-			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: err, budget: budget}
-		}
-		if class != "connection_refused" {
-			return startupFailure(stageVerifyPostgreSQLConnection, err)
-		}
-		lastRefused = err
-		timer := time.NewTimer(postgresStartupRetryDelay)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return &startupError{stage: stageVerifyPostgreSQLConnection, cause: lastRefused, budget: ctx.Err()}
-		case <-timer.C:
-		}
+	failed := serviceruntime.WaitStartupProbe(ctx, pool.Ping, func(err error) bool {
+		return postgresdiagnostic.Class(err) == "connection_refused"
+	}, postgresStartupPingBudget, postgresStartupRetryDelay)
+	if failed == nil {
+		return nil
 	}
+	pool.Close()
+	return &startupError{stage: stageVerifyPostgreSQLConnection, cause: failed.Cause, budget: failed.Budget}
 }

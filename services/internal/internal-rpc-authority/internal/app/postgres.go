@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"strings"
+	"time"
 
 	sessionrepository "github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/repository/postgres/session"
 	"github.com/jackc/pgx/v5"
@@ -21,12 +23,15 @@ type postgresConnectionConfig struct {
 	MaxConnections  int32
 }
 
-// openCapabilityPostgres requires nonempty expected identity/capability and one through sixty-four connections, reads a bounded DSN and rejects fallbacks, a foreign host/user, absent password, missing CA/SNI or insecure TLS. It installs tracing and exact session setup on connect plus identity/capability checking before each acquire, then pings the pool and closes it on ping failure. Rejected configuration is sanitized; the returned pool belongs to the caller, and this function does not explicitly erase the parsed DSN buffer.
-// openCapabilityPostgres требует непустые ожидаемые идентичность и возможность и от одного до шестидесяти четырёх соединений, читает ограниченный DSN и отклоняет запасные подключения, чужие host или user, отсутствие пароля, CA или SNI и небезопасный TLS. Устанавливает tracing, точную настройку сессии при подключении и проверку идентичности и возможности перед каждым acquire, затем проверяет пул ping и закрывает его при ошибке ping. Отказы конфигурации безопасны; возвращённый пул принадлежит вызывающему, явной очистки разобранного буфера DSN нет.
+// openCapabilityPostgres requires nonempty expected identity/capability and one through sixty-four connections, reads a bounded DSN and rejects fallbacks, a foreign host/user, absent password, missing CA/SNI or insecure TLS. It installs tracing and exact session setup on connect plus identity/capability checking before each acquire, then probes with a ten-second cap and one-second waits only for typed connection refusal under the original startup deadline; failure closes the pool. Rejected configuration is sanitized; the returned pool belongs to the caller, and this function does not explicitly erase the parsed DSN buffer.
+// openCapabilityPostgres требует непустые ожидаемые идентичность и возможность и от одного до шестидесяти четырёх соединений, читает ограниченный DSN и отклоняет запасные подключения, чужие host или user, отсутствие пароля, CA или SNI и небезопасный TLS. Устанавливает tracing, точную настройку сессии при подключении и проверку идентичности и возможности перед каждым acquire, затем проверяет pool с пределом десять секунд и паузами одну секунду только для типизированного отказа подключения в исходном startup deadline; отказ закрывает pool. Отказы конфигурации безопасны; возвращённый пул принадлежит вызывающему, явной очистки разобранного буфера DSN нет.
 func openCapabilityPostgres(
 	ctx context.Context,
 	config postgresConnectionConfig,
 ) (*pgxpool.Pool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, &postgresStartupError{step: postgresPingPool, cause: err}
+	}
 	if config.ExpectedUser == "" || config.Capability == "" ||
 		config.MaxConnections < 1 || config.MaxConnections > 64 {
 		return nil, errors.New("PostgreSQL capability configuration is invalid")
@@ -58,13 +63,16 @@ func openCapabilityPostgres(
 	poolConfig.BeforeAcquire = func(ctx context.Context, connection *pgx.Conn) bool {
 		return sessionrepository.Ensure(ctx, connection, config.ExpectedUser, config.Capability) == nil
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, &postgresStartupError{step: postgresOpenPool, cause: err}
+	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, &postgresStartupError{step: postgresOpenPool, cause: err}
 	}
-	if err := pool.Ping(ctx); err != nil {
+	if failed := serviceruntime.WaitStartupProbe(ctx, pool.Ping, retryPostgresStartup, 10*time.Second, time.Second); failed != nil {
 		pool.Close()
-		return nil, &postgresStartupError{step: postgresPingPool, cause: err}
+		return nil, &postgresStartupError{step: postgresPingPool, cause: failed.Cause, budget: failed.Budget}
 	}
 	return pool, nil
 }
