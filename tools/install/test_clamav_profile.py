@@ -113,7 +113,7 @@ class ClamAVProfile(unittest.TestCase):
             with self.assertRaisesRegex(Rejected,'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED'):registry.verify_workload_resume(state,desired,before)
             self.assertEqual(registry.verify_workload_resume(state,desired,before,clamav_mode='disabled')['deployments'],3)
             state.runtime_pods=[{'metadata':{'name':'active-runtime'}}]
-            with self.assertRaisesRegex(Rejected,'EMPTY_RUNTIME_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_mode='disabled')
+            with self.assertRaisesRegex(Rejected,'UNSTARTED_INSTALLATION_WARM_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_mode='disabled')
 
     def test_local_storage_preserves_scanning_and_rejects_unpinned_consumers(self):
         before=fixture();before[2]['spec']['jobTemplate']['spec']['template']['spec']['volumes']=[{'name':'database','persistentVolumeClaim':{'claimName':'clamav-database'}}]
@@ -157,7 +157,7 @@ class ClamAVProfile(unittest.TestCase):
             drift=copy.deepcopy(desired);drift[0]['metadata']['labels']['foreign-observability']='changed'
             with self.assertRaisesRegex(Rejected,'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED'):registry.verify_workload_resume(state,drift,before,clamav_storage_profile='node-local-rwo',preserve_observability_profile=True)
             state.runtime_pods=[{'metadata':{'name':'active-runtime'}}]
-            with self.assertRaisesRegex(Rejected,'EMPTY_RUNTIME_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')
+            with self.assertRaisesRegex(Rejected,'UNSTARTED_INSTALLATION_WARM_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')
 
 
 if __name__=='__main__':unittest.main()
