@@ -1,10 +1,13 @@
 import type { ModelMeasurement } from "./generated/openapi/types.gen";
 
 // Значения приходят из owner event, но неполная/неизвестная проекция не становится измеренным нулём.
-export function validModelMeasurement(value: ModelMeasurement): boolean {
+export function validModelMeasurement(
+  input: unknown,
+): input is ModelMeasurement {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const value = input as ModelMeasurement;
+  const source = (input as Record<string, unknown>).source;
   if (
-    !value ||
-    typeof value !== "object" ||
     Object.keys(value).some(
       (key) =>
         ![
@@ -35,7 +38,7 @@ export function validModelMeasurement(value: ModelMeasurement): boolean {
     (value.durationMs === undefined || value.ttftMs > value.durationMs)
   )
     return false;
-  if (value.source === "HTTP_REQUEST") {
+  if (source === "HTTP_REQUEST") {
     if (!value.ref.startsWith("request_") || value.usage !== undefined)
       return false;
     if (value.completeness === "COMPLETE")
@@ -49,7 +52,7 @@ export function validModelMeasurement(value: ModelMeasurement): boolean {
       : value.durationMs !== undefined;
   }
   if (
-    value.source !== "NATIVE_STEP" ||
+    source !== "NATIVE_STEP" ||
     !value.ref.startsWith("step_") ||
     value.ttftMs !== undefined ||
     value.completeness === "COMPLETE"

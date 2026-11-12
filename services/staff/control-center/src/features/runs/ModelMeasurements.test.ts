@@ -46,11 +46,13 @@ it("показывает отдельное сжатие, UNKNOWN TTFT и не �
       },
     },
   };
+  const measurement = measured.modelMeasurement;
+  if (!measurement) throw new Error("Measurement fixture is missing");
   expect(activeTranscriptItemId([working, measured])).toBe(working.id);
-  expect(validModelMeasurement(measured.modelMeasurement!)).toBe(true);
+  expect(validModelMeasurement(measurement)).toBe(true);
   expect(
     validModelMeasurement({
-      ...measured.modelMeasurement!,
+      ...measurement,
       completeness: "COMPLETE",
     }),
   ).toBe(false);
@@ -77,3 +79,20 @@ it("показывает отдельное сжатие, UNKNOWN TTFT и не �
 });
 
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+
+it("отклоняет неизвестный wire source и неверную внешнюю форму измерения", () => {
+  for (const value of [
+    null,
+    undefined,
+    0,
+    [],
+    {
+      ref: "request_fixture01",
+      source: "UNREGISTERED",
+      phase: "NORMAL",
+      outcome: "FAILED",
+      completeness: "UNKNOWN",
+    },
+  ])
+    expect(validModelMeasurement(value)).toBe(false);
+});

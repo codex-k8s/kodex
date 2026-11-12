@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.3
+version: 1.4.4
 updated: 2026-11-12
 ---
 
@@ -14,6 +14,17 @@ updated: 2026-11-12
 [#1982](https://github.com/codex-k8s/kodex/issues/1982).
 Точка передачи: native adapter квалифицирован локально. Полный переход платформы
 остаётся в работе в #2108; локальные тесты не подтверждают установленный результат.
+
+Измерения проходят полный callback: native/HTTP observer runner →
+`RunnerProgressRequest.model_measurement` → подписанный exact execution context
+`POST /v1/executions/{lease}/progress` → закрытый decoder runtime-controller →
+`ReportExecutionProgress` → owner lease/fence/generation → immutable receipt и
+существующий Run event → HTTP/WebSocket/PWA. Поле измерения не назначает actor,
+project, session или attempt; их разрешает сервер из текущей lease. Повтор
+измерения использует прежнюю квитанцию; terminal/stale/revoked lease отклоняется.
+При отказе decode запрос не доходит до owner и не превращает модельный шаг
+в успешный бизнес-результат. Тест HTTP callback включает фактическую сериализацию
+runner, оба источника измерений, duplicate/unknown/alias/mixed payload и чужую revision.
 
 ## Решение об upstream
 

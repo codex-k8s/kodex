@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 for (const width of [390, 1440, 2900])
-  test(`Измерения модели и текущая фаза ${width}px`, async ({
+  test(`Измерения модели и текущая фаза ${String(width)}px`, async ({
     page,
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
