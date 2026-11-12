@@ -248,12 +248,10 @@ test("локальный OIDC, API и основные экраны доступ
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const projectAssistant = page.getByRole("dialog", { name: "Kodex" });
   await projectAssistant
-    .getByRole("link", { name: "Открыть защищённую форму нового секрета" })
+    .getByRole("button", { name: "Открыть защищённую форму нового секрета" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(
-      `/projects/${encodeURIComponent(projectRef ?? "")}/secrets\\?assistantCreateSecret=1`,
-    ),
+    new RegExp(`/projects/${encodeURIComponent(projectRef ?? "")}$`),
   );
   await expect(
     page.getByRole("dialog", { name: "Новый секрет" }),

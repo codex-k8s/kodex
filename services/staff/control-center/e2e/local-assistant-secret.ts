@@ -37,12 +37,10 @@ test("помощник открывает защищённую форму и п�
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const assistant = page.getByRole("dialog", { name: "Kodex" });
   await assistant
-    .getByRole("link", { name: "Открыть защищённую форму нового секрета" })
+    .getByRole("button", { name: "Открыть защищённую форму нового секрета" })
     .click();
-  await expect(assistant).toBeHidden();
-  await expect(page).toHaveURL(
-    new RegExp(`/projects/${projectRef}/secrets\\?assistantCreateSecret=1$`),
-  );
+  await expect(assistant).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}$`));
   expect(page.url()).not.toContain(value);
 
   const create = page.getByRole("dialog", { name: "Новый секрет" });
@@ -84,9 +82,7 @@ test("помощник открывает защищённую форму и п�
       .locator('button[type="submit"], input[type="submit"]')
       .first()
       .click();
-    await expect(page).toHaveURL(
-      new RegExp(`/projects/${projectRef}/secrets\\?assistantCreateSecret=1$`),
-    );
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectRef}$`));
     await expect(create).toBeVisible();
     saved = await submitDraft();
   }
