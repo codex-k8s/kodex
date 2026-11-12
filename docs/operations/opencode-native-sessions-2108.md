@@ -4,26 +4,30 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.18
+version: 1.4.19
 updated: 2026-11-12
 ---
 
 # OpenCode: нативные сессии и восстановление
 
-Живая проверка опубликованных context/cache preferences выявила отказ
-`RUNTIME_PROFILE_UNSUPPORTED` до первого tool: дополнительный runner preflight
-запрещал любой непустой overlay и reasoning, хотя общий контракт и генератор
-OpenCode уже принимали их. Проверка использует общий `ValidateRuntimePreferences`;
-регрессия охватывает preflight и native config, включая неизвестные поля и
-неподдержанный строгий `NO_STORE`. Исправление требует нового runner, полного
-RoleImage и повторной установленной проверки; один локальный тест не доказывает
-доставку. Предыдущий запуск не достиг точки отзыва права и не подтверждает
-сохранение checkpoint при отказе публикации.
+Новая чистая установка прошла живую проверку native compaction, продолжения,
+workspace, делегирования и GitHub Human Gate. Повторный адресный apply и
+перезапуск основных компонентов подтверждены отдельным readback. Точные
+результаты и ограничения приведены в конце документа; независимое review и
+готовность PR к слиянию этим не подтверждаются.
+
+Обнаруженный при ранней проверке отказ `RUNTIME_PROFILE_UNSUPPORTED` устранён:
+runner preflight использует общий `ValidateRuntimePreferences` вместо запрета
+любого непустого overlay/reasoning. Новые runner и полные RoleImage доставлены;
+опубликованные настройки, живое сжатие и checkpoint после отзыва права проверены.
+Отрицательные проверки неизвестных полей и неподдержанного строгого `NO_STORE`
+сохраняются. Ранний неуспешный запуск остаётся отдельным FAIL в evidence.
 
 Работа: [#2108](https://github.com/codex-k8s/kodex/issues/2108), дочерняя
 [#1982](https://github.com/codex-k8s/kodex/issues/1982).
-Точка передачи: native adapter квалифицирован локально. Полный переход платформы
-остаётся в работе в #2108; локальные тесты не подтверждают установленный результат.
+Исходная точка передачи содержала только локально квалифицированный adapter.
+Последующая установленная квалификация относится к новому разрешённому стенду;
+приёмка Issues остаётся отдельным решением владельца.
 
 При обновлении runner проверяется согласованность image policy с сохранённой
 runtime AppArmor-проекцией. `provider_sandbox_profile.py --reconcile-policy`
@@ -1046,7 +1050,44 @@ Bash-файле, нарушив чтение его оставшейся час�
 `652a0466ea726c5d925e011a6c3c964bd0ff19d7`, schema042 и индивидуальных source SHA
 каждого образа. Полный `portable-release.sh --mode readback` прошёл с исходным
 bootstrap completion receipt, без повторения миграций и bootstrap effects.
-Повторный apply и проверка после перезапуска учитываются отдельно; один readback
-не объявляется их выполнением. GitHub CI и независимое review также не выводятся
-из этих локальных или кластерных результатов. PR остаётся draft до завершения
-обязательной приёмки и ручного шлюза владельца.
+Повторный адресный apply прошёл:414 конфигурационных ресурсов и416 шагов с
+закрытием/открытием API. Неопределённый acknowledgement одной CAS-записи
+сопоставлен с прежними UID/seal и точным desired state без повторения записи.
+Завершённые bootstrap Jobs, credentials, PVC и namespace lifecycle не повторялись.
+
+Затем API, runtime-controller, control-plane и secret-broker остановлены с
+положительным подтверждением и запущены в обратном порядке. Неопределённый
+acknowledgement старта broker разрешён readback, доказавшим неприменение записи;
+следующая attempt использовала свежий CAS. Проверены10 готовых Pod, точные
+container/init imageID и нулевые restart counters. Повторный полный portable
+readback после перезапуска — PASS. Первичная ошибка проверочного selector,
+захватившего завершённый migration Job по общему label, исправлена проверкой
+Deployment UID → ReplicaSet UID → Pod UID; исходный FAIL оснастки сохранён.
+
+Дополнительный изолированный native harness на Kubernetes прошёл8 проверок
+без SKIP:144 tools,36 compactions,256 messages, export804317байт и максимум
+17738байт фактического model HTTP body. LiteLLM выполнил18 запросов с4 compactions
+и12 effects; seeded response-cache read/write bypass подтверждён. Во время
+207.368319с получены57 наблюдений cgroup: peak native710684672байта,
+LiteLLM718848000байт, Redis19587072байта; OOM и restart отсутствуют. Это конечная
+проверка ресурсов, не доказательство отсутствия утечки на многочасовой нагрузке.
+Точный изолированный namespace удалён, отсутствие подтверждено readback.
+
+После перезапуска PROJECT assistant продолжил прежнюю native session из
+format3 S3-архива: SNAPSHOT, DELETE_PVC и RESTORE завершились с первой attempt.
+Прежняя привязка на старую версию default environment сначала закрыто отклонила
+turn; штатная owner-команда привязала актуальную опубликованную версию полного
+RoleImage, после чего turn прошёл. Native generation2 физически сверена с owner
+SHA256. Новая SYSTEM-сессия также ответила успешно и сохранила generation1.
+После штатных15минут простоя SNAPSHOT и DELETE_PVC прошли с первой attempt;
+физическое отсутствие старого PVC подтверждено до нового turn. RESTORE создал
+PVC с другим UID, continuation завершился за37.486605с без tools. После полного
+graceful shutdown физически сверены generation2/export189675байт и owner SHA256;
+native ID не изменился, оба исходных сообщения глубоко равны началу четырёх
+сообщений нового export. Пять фактических container/init imageID совпали с runner.
+Ранняя SYSTEM-сессия этой же новой установки с DEAD_LETTER snapshot остаётся
+ERROR: продолжение закрыто отклонено, пустой fallback и SQL reset не применялись.
+
+GitHub CI и независимое review не выводятся из локальных или кластерных
+результатов. PR остаётся draft до завершения обязательной приёмки и ручного
+шлюза владельца.
