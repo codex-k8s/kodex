@@ -1423,3 +1423,11 @@ disposable PostgreSQL18.3: миграция/bootstrap, concurrency и новый
 запрет issuer LOGIN принять publisher role (`42501`), затем успешный issuer
 SET ROLE/readback. Это подтверждает диагностику и сохранение запрета, но ещё
 не определяет причину прошлых двух live restart и не доказывает её устранение.
+
+Доставка authority использует отдельный существующий recipe из `images.json`
+через `build-stable-local.sh --component internal-rpc-authority`. Закрытый
+publication consumer проверяет исходный archive и точные `65532:65532`/
+`internal-rpc-authority-verifier` из Dockerfile, затем штатные plan/apply/readback
+с promotion identity. Это не означает выдачу платформенным сотрудникам
+registry-admin и не меняет policy/signers. Смена sidecar image сохраняет
+UID/seal preconditions и не повторяет исторические bootstrap Jobs.

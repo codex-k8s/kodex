@@ -89,7 +89,7 @@ if(program==='git'){
 }else process.exit(10);
 `;
 
-async function setup(retainedComponent, builtComponent = "control-plane") {
+async function setup(retainedComponent, builtComponent = "control-plane", configOverride = {}) {
   const directory = await mkdtemp(join(tmpdir(), "kodex-stable-publication-test-"));
   await mkdir(join(directory, "bin")); await mkdir(join(directory, "tools"), { mode: 0o700 });
   for (const name of ["git", "kubectl", "docker"]) await writeFile(join(directory, "bin", name), mock, { mode: 0o700 });
@@ -104,9 +104,9 @@ async function setup(retainedComponent, builtComponent = "control-plane") {
     return { mediaType, digest: "sha256:" + digest, size: Buffer.byteLength(bytes) };
   };
   const component = retainedComponent ?? builtComponent, referenceTag = retainedComponent ? "local-" + "c".repeat(64) : "a".repeat(40);
-  const config = await document({ os: "linux", architecture: "amd64", config: { User: "10001:10001",
+  const config = await document({ os: "linux", architecture: "amd64", config: { User: component === "internal-rpc-authority" ? "65532:65532" : "10001:10001",
     ...(retainedComponent ? { Cmd: ["/bin/sh"], Labels: { "org.opencontainers.image.revision": "a".repeat(40) } } :
-      { Entrypoint: ["/usr/local/bin/" + component] }) } }, "application/vnd.oci.image.config.v1+json");
+      { Entrypoint: ["/usr/local/bin/" + component + (component === "internal-rpc-authority" ? "-verifier" : "")] }), ...configOverride } }, "application/vnd.oci.image.config.v1+json");
   const layer = await document("synthetic layer", "application/vnd.oci.image.layer.v1.tar");
   const manifest = await document({ schemaVersion: 2, config, layers: [layer] }, "application/vnd.oci.image.manifest.v1+json");
   manifest.annotations = { "org.opencontainers.image.ref.name": referenceTag,
@@ -117,7 +117,7 @@ async function setup(retainedComponent, builtComponent = "control-plane") {
   execFileSync("tar", ["-cf", archive, "-C", layout, ...files]); await chmod(archive, 0o600);
   const receipt = { schema: "kodex.stable-local-build/v1", component, sourceSHA: "a".repeat(40),
     contextSHA256: sha("synthetic git archive"), archiveSHA256: sha(await readFile(archive)), imageDigest: manifest.digest,
-    dockerfile: component === "backup-controller" ? "services/jobs/backup-controller/Dockerfile" : "services/internal/control-plane/Dockerfile",
+    dockerfile: component === "backup-controller" ? "services/jobs/backup-controller/Dockerfile" : "services/internal/" + component + "/Dockerfile",
     target: "", admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
   if (!retainedComponent) await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt), { mode: 0o600 });
   else {
@@ -258,4 +258,26 @@ test("lost registry response is resolved through readback and registry drift blo
     const state = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
     assert.equal(state.imports, 1); assert.equal(state.removes, 2);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("authority publication requires its exact nonroot verifier entrypoint and uses fenced readback", async () => {
+  for (const override of [{}, { User: "0:0" }, { User: "10001:10001" }, { Entrypoint: ["/usr/local/bin/internal-rpc-authority-publisher"] }]) {
+    const { directory, run, plan } = await setup(undefined, "internal-rpc-authority", override);
+    try {
+      const planned = plan();
+      if (Object.keys(override).length) {
+        assert.notEqual(planned.status, 0);
+        assert.equal(JSON.parse(await readFile(join(directory, "fixture.json"), "utf8")).creates, 0);
+        continue;
+      }
+      assert.equal(planned.status, 0, planned.output);
+      const path = join(directory, "plan", "plan.json"), value = JSON.parse(await readFile(path, "utf8"));
+      assert.equal(value.image.component, "internal-rpc-authority");
+      const applied = run("apply", "apply.jsonl", ["--plan", path, "--approved-plan-sha", fingerprint(value)]);
+      assert.equal(applied.status, 0, applied.output);
+      const observed = run("readback", "readback.jsonl", ["--plan", path]);
+      assert.equal(observed.status, 0, observed.output);
+      assert.equal(JSON.parse(await readFile(join(directory, "fixture.json"), "utf8")).imports, 1);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
 });

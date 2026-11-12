@@ -15,7 +15,7 @@ const execute = promisify(execFile), root = fileURLToPath(new URL("../../", impo
 const namespace = "kodex-system", secretName = "kodex-image-promotion-writer";
 const registryObjects = [["deployment", "kodex-image-registry-promotion"], ["service", "kodex-image-registry-promotion"],
   ["deployment", "kodex-image-registry-pull"], ["service", "kodex-image-registry-pull"]];
-const components = new Set(["control-plane", "secret-broker", "email-bridge", "runtime-controller", "integration-gateway",
+const components = new Set(["control-plane", "internal-rpc-authority", "secret-broker", "email-bridge", "runtime-controller", "integration-gateway",
   "integration-synthetic", "control-api-gateway", "staff-control-center", "egress-gateway", "automation-scheduler",
   "artifact-retention", "session-archive", "backup-controller", "registry-pull-authorizer", "image-admission-controller"]);
 function requireValue(value, code) { if (!value) throw Error(code); }
