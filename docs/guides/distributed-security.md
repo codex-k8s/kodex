@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.56
+version: 1.7.57
 updated: 2026-11-12
 ---
 
@@ -2217,6 +2217,10 @@ warnings значим только при свежем `observedGeneration == ge
 При смене runtime ABI проверяются одновременно producer Pod, параметры и
 каждое CEL-условие, включая workspace V2. Кандидат проходит полный admission
 контур с текущей ABI; та же форма с предыдущей ABI должна закрыто отклоняться.
+Проверка охватывает также исполняемые SQL guards создания snapshot/restore task.
+Совместимый Pod не доказывает совместимость owner-транзакции после остановки
+writer. Актуальные AGENT и WORKFLOW component-сценарии проходят весь путь до
+checkpoint и следующего restore на текущей схеме, а не только на predecessor.
 Версия в ConfigMap без совместимого исполняемого условия не подтверждает допуск.
 
 Для policy, объединяющей Role/RoleBinding, динамическая граница ограничена
@@ -2344,24 +2348,20 @@ no-mount-crossing, identity rejoin, foreign-owner/type/link и resource guards
 по-прежнему проверяются. Во время исполнения private directory может временно
 закрыть readiness; post-join нормализация не доказывает исправление этой фазы.
 
-Восстановленный native history принадлежит фактическому writer/capture UID,
-а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
-и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт
-файлы с тем же UID, group29000 и mode0640. Отдельный non-root init RESTORE
-с UID10001 заранее создаёт только точный корень `codex-home` с group29000,
-setgid и mode2770: существующие init/provider guards требуют эту directory
-identity. Init читает тот же immutable RESTORE task, не получает credentials
-object storage, RPC tokens, произвольные paths или новую authority.
-Main runner UID10001 не получает
-CAP_CHOWN или право менять чужой rollout. Kernel-регрессия проверяет append
-новых history bytes и их последующий exact digest от UID10002, а чужой UID10001
-остаётся отрицательным случаем. Полная kernel-проверка проходит directory
-preparation → restore → текущий workspace guard → native append/capture;
-чужой владелец, symlink и mismatched task закрыто отклоняются.
-SNAPSHOT/DELETE сохраняют прежние identities,
-claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
-исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
-с проверенным immutable archive receipt, без подмены terminal outcome.
+Официальный native export принадлежит фактическому writer/capture UID,
+а не UID контейнера, передающего запрос. OpenCode и официальный stopped export
+исполняются в `provider-runtime` с UID10002. RESTORE возвращает проверенный
+export с тем же UID, group29000 и mode0640; затем native driver выполняет
+официальный import в новый приватный HOME/XDG. Живая SQLite/WAL не копируется.
+Отдельный non-root init RESTORE с UID10001 заранее создаёт только точный
+корень `.kodex/state/opencode` с group29000, setgid и mode2770 по закрытому task.
+Init не получает credentials object storage, RPC tokens, произвольные paths
+или новую authority. Main runner UID10001 не получает CAP_CHOWN либо право
+переписывать чужой export. Quiescence и положительный join всех writer
+предшествуют публикации checkpoint; digest связывает exact session/generation.
+SNAPSHOT/DELETE сохраняют claim/fence и минимальные capabilities. Wrong-owner
+PVC не исправляется ручным chown: нужен штатный owner-bound RESTORE с
+проверенным immutable archive receipt, без подмены terminal outcome.
 
 Ошибка после native append не означает отсутствия новой истории. Проверенный
 rollout tuple сохраняется и при generic process/activity/credential-refresh

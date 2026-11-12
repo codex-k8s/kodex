@@ -108,6 +108,46 @@ func TestWorkspaceMCPCatalogAndClosedArguments(t *testing.T) {
 	}
 }
 
+// TestWorkspaceReadRangeCanBeCorrected exercises the real MCP boundary after an oversized
+// model request: the bounded diagnostic exposes no file bytes and a corrected read retains
+// fresh owner admission and the complete file hash. Unknown effect errors stay conservative.
+// TestWorkspaceReadRangeCanBeCorrected проверяет MCP после слишком большого запроса модели:
+// ограниченная диагностика не раскрывает файл, исправленное чтение сохраняет свежий owner
+// admission и полный hash. Ошибки с неопределённым эффектом остаются консервативными.
+func TestWorkspaceReadRangeCanBeCorrected(t *testing.T) {
+	handler, _ := handlerFixture(t)
+	hash, err := handler.store.write(context.Background(), "work/proof.txt", "synthetic proof\n", "ABSENT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arguments := range []string{
+		`{"path":"work/proof.txt","maximum_bytes":1048576}`,
+		`{"path":"work/proof.txt","maximum_bytes":3}`,
+		`{"path":"work/proof.txt","maximum_bytes":0}`,
+		`{"path":"work/proof.txt","offset_bytes":-1}`,
+		`{"path":"work/proof.txt","offset_bytes":1048577}`,
+	} {
+		writer := httptest.NewRecorder()
+		request := httptest.NewRequest("POST", "http://workspace/workspace/mcp", strings.NewReader(
+			`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_workspace_file","arguments":`+arguments+`}}`))
+		handler.ServeHTTP(writer, request)
+		body := writer.Body.String()
+		if writer.Code != 200 || !strings.Contains(body, `"isError":true`) ||
+			!strings.Contains(body, "maximum_bytes must be 4..32768") || strings.Contains(body, "synthetic proof") {
+			t.Fatal("invalid range diagnostic", writer.Code, body)
+		}
+	}
+	value, err := handler.call(context.Background(), "corrected-read", runtimecontract.WorkspaceToolRead,
+		json.RawMessage(`{"path":"work/proof.txt","maximum_bytes":32768}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, ok := value.(FileRead)
+	if !ok || read.Text != "synthetic proof\n" || read.SHA256 != hash {
+		t.Fatal("corrected read lost bytes or hash", value)
+	}
+}
+
 // TestUnknownCommandClosesLocalFileAdmission proves a lost/unknown command reply cannot be
 // followed by file access under an unproven writer-stop assumption; there is no automatic retry.
 // TestUnknownCommandClosesLocalFileAdmission доказывает, что lost/unknown command reply закрывает

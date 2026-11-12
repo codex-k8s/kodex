@@ -321,7 +321,7 @@ $body$
     AND position(format('IF v_edges <> 287 OR v_edge_fingerprint <> %L THEN',(SELECT digest FROM edge_proof)) IN definition)>0 FROM purge_guard)
 ,
  'visibilitySource',EXISTS(SELECT 1 FROM legacy_function_rows WHERE oid=to_regprocedure('control_plane.runtime_file_source_visible(uuid,uuid,uuid,uuid,uuid,text,text,uuid)')
- AND md5(prosrc)=CASE WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)=20261111000200
+ AND md5(prosrc)=CASE WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied) IN (20261111000200,20261112000100)
    THEN '6e6494d533d00f1bcd35d65497dff28c' WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)>=20261110000100
    THEN '9a14fe7cf18830648738eec9b80aa709' ELSE 'be098f192205fa279eb55a502655052b' END
  AND pg_get_userbyid(proowner)='control_plane_owner' AND NOT prosecdef AND provolatile='s'

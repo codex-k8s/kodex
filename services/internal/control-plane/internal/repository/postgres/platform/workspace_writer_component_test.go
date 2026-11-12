@@ -209,6 +209,16 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 			t.Fatal("storage-only observation reopened cancelled run", err)
 		}
 	})
+	// A native continuation also needs its stopped-writer export, independently of file custody.
+	// Native continuation требует export остановленного writer независимо от custody файлов.
+	checkpoint := nativeCheckpointForClaimFixture(item)
+	checkpoint.WorkspaceRef, checkpoint.WorkspaceGeneration = binding.WorkspaceRef, binding.Generation
+	fact := execute(command.CompleteExecution, worker, "stopped-native-checkpoint", command.CompleteExecutionInput{
+		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
+		Success: true, ResultSummary: "Synthetic stopped native checkpoint", Usage: turnUsageFixture(), NativeSession: checkpoint})
+	if fact.Run == nil || fact.Run.State != "CANCELLED" || fact.Runtime["nativeCheckpointRecorded"] != true {
+		t.Fatal("native checkpoint revived cancelled run or was not recorded")
+	}
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
 	var restoreProfile bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('control_plane.session_archive_tasks_workspace_restore') IS NOT NULL").Scan(&restoreProfile); err != nil {

@@ -1,7 +1,21 @@
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
+import { validWorkspaceArchiveABIMigrationPrecondition, validWorkspaceArchiveABIMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+
+test('archive ABI5 проверяет точный predecessor, drain и действующий trigger', () => {
+  const before={profile:'WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,archiveGuardPredecessor:true,activeRuntimeLeases:0,activeArchiveTasks:0};
+  assert.equal(validWorkspaceArchiveABIMigrationPrecondition(before),true);
+  for(const change of [{archiveGuardPredecessor:false},{activeRuntimeLeases:1},{activeArchiveTasks:1},{gooseVersion:20261111000100},{readOnly:'off'},{database:'foreign'}])
+    assert.equal(validWorkspaceArchiveABIMigrationPrecondition({...before,...change}),false);
+  const after={profile:'WORKSPACE_ARCHIVE_ABI5_V1',database:'control_plane',readOnly:'on',gooseVersion:20261112000100,archiveGuardReady:true,archiveTriggerReady:true};
+  assert.equal(validWorkspaceArchiveABIMigrationPostcondition(after),true);
+  assert.equal(validImmutableMigrationPostcondition('workspace-archive-abi',after),true);
+  assert.equal(validOpenCodeNativeMigrationPostcondition(after),false);
+  for(const change of [{archiveGuardReady:false},{archiveTriggerReady:false},{gooseVersion:20261111000200},{readOnly:'off'}])
+    assert.equal(validWorkspaceArchiveABIMigrationPostcondition({...after,...change}),false);
+});
 
 test('native cutover требует пустые session data и точный новый schema proof', () => {
   const before={profile:'OPENCODE_NATIVE_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000100,sessionDataEmpty:true,nativeColumnsAbsent:true,activeRuntimeLeases:0};

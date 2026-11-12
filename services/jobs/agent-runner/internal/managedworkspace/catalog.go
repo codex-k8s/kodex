@@ -36,7 +36,7 @@ func Tools(input runtimecontract.RunnerInput) []map[string]any {
 			entry := objectSchema([]string{"path", "kind", "size_bytes"}, map[string]any{"path": textSchema(1280), "kind": map[string]any{"enum": []string{"FILE", "DIRECTORY"}}, "size_bytes": integerSchema(0, 1<<40)})
 			output = objectSchema([]string{"entries", "has_more", "next_after"}, map[string]any{"entries": map[string]any{"type": "array", "maxItems": 200, "items": entry}, "has_more": map[string]any{"type": "boolean"}, "next_after": textSchema(255)})
 		case runtimecontract.WorkspaceToolRead:
-			description = "Read a UTF-8 source chunk, with complete file SHA-256 for compare-and-swap edits. offset_bytes and next_offset_bytes are byte offsets; file ceiling is one MiB."
+			description = "Read a UTF-8 source chunk, with complete file SHA-256 for compare-and-swap edits. maximum_bytes is 4..32768 per call (default 32768), even when the file is larger. offset_bytes and next_offset_bytes are byte offsets; follow next_offset_bytes for further chunks. The complete file ceiling is one MiB."
 			arguments = objectSchema([]string{"path"}, map[string]any{"path": textSchema(1024), "offset_bytes": integerSchema(0, maximumFileBytes), "maximum_bytes": integerSchema(4, 32768)})
 			output = objectSchema([]string{"text", "sha256", "size_bytes", "offset_bytes", "next_offset_bytes"}, map[string]any{"text": textSchema(32768), "sha256": textSchema(64), "size_bytes": integerSchema(0, maximumFileBytes), "offset_bytes": integerSchema(0, maximumFileBytes), "next_offset_bytes": integerSchema(0, maximumFileBytes)})
 		case runtimecontract.WorkspaceToolWrite:

@@ -17,6 +17,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workspace-archive-abi': {
+    version:'20261112000100',file:'20261112000100_workspace_archive_runtime_abi.sql',
+    annotation:'kodex.dev/cp-workspace-archive-abi-migration-plan',previousVersion:20261111000200,
+    emptyField:'archiveGuardPredecessor',preconditionFile:'workspace-archive-abi-migration-precondition.sql',
+    postconditionFile:'workspace-archive-abi-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261112000100_workspace_archive_runtime_abi.sql']),
+  },
   'opencode-native-sessions': {
     version:'20261111000200',file:'20261111000200_opencode_native_sessions.sql',
     annotation:'kodex.dev/cp-opencode-native-migration-plan',previousVersion:20261111000100,
@@ -355,6 +362,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workspace-archive-abi')
+      ensure(validWorkspaceArchiveABIMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-workspace')
       ensure(validWorkflowWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'managed-workspace')
@@ -1008,6 +1017,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workspace-archive-abi': return validWorkspaceArchiveABIMigrationPostcondition(proof);
     case 'opencode-native-sessions': return validOpenCodeNativeMigrationPostcondition(proof);
     case 'workflow-workspace': return validWorkflowWorkspaceMigrationPostcondition(proof);
     case 'managed-workspace': return validManagedWorkspaceMigrationPostcondition(proof);
@@ -1044,6 +1054,20 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
     default: return false;
   }
+}
+
+// Новый профиль проверяет только точный переход guard; исторические schema proofs не расширяются.
+export function validWorkspaceArchiveABIMigrationPrecondition(proof) {
+  return proof?.profile==='WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000200 && proof.archiveGuardPredecessor===true &&
+    proof.activeRuntimeLeases===0 && proof.activeArchiveTasks===0;
+}
+
+// Exact body и действующий trigger подтверждают установленный ABI5 без переноса либо удаления данных.
+export function validWorkspaceArchiveABIMigrationPostcondition(proof) {
+  return proof?.profile==='WORKSPACE_ARCHIVE_ABI5_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261112000100 && proof.archiveGuardReady===true &&
+    proof.archiveTriggerReady===true;
 }
 
 // Exact033 сверяет собственные tables/constraints/ACL/guards и полный неизменный predecessor032.

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.4
+version: 1.4.5
 updated: 2026-11-12
 ---
 
@@ -609,3 +609,50 @@ account/read, rollout-source и token-usage классификаторы, таб
 Сведения native terminal/checkpoint и provenance проходят прежние проверки;
 отказ процесса не становится успешным result. Это не подтверждение кластерной
 приёмки: она записывается отдельно после установки immutable image.
+
+## ABI5 в owner guard архивных задач
+
+Живой сценарий #2108 обнаружил несовместимость producer ABI5 с двумя ABI4
+предикатами `guard_workspace_archive_task`: SNAPSHOT не создавался после
+подтверждённой quiescence/release. Миграция042
+`20261112000100_workspace_archive_runtime_abi.sql` проверяет точный predecessor
+и заменяет лишь эти два предиката. OID, ACL, сигнатура, security mode, volatility,
+язык и search_path сохраняются; строки истории, workspace и task не меняются.
+Исторические миграции040/041 и их verifiers не расширяются. Доставка использует
+профиль `workspace-archive-abi` существующего immutable migration tool, drain и
+readback. Обратной goose-миграции нет: возврат требует совместимого forward fix.
+
+Сквозной путь: controller с exact workload authority → `ObserveWorkspace` →
+owner lease/RR/fence и positive join → `CHECKPOINT_PENDING`/release →
+`ClaimSessionArchiveTasks` архивного worker → owner SNAPSHOT intent и SQL guard →
+immutable worker grant → PVC/S3 snapshot → owner archive receipt → явный новый
+бизнес-ход → RESTORE intent/guard → exact generation restore → свежий writer.
+Версия/idempotency task не заменяет tenant, session, agent/workflow и lineage.
+
+| Переход | Обязательное доказательство и результат | Событие / read path |
+|---|---|---|
+| Create/claim SNAPSHOT | CHECKPOINT_PENDING, positive join, released writer, exact ABI5/RR/source; одна задача поколения | Существующий owner audit и session storage readback |
+| Renew | Exact task/attempt/generation/fence и grant; вход неизменяем | Существующий task receipt/readback |
+| Retry/lease expiry | Новая attempt/grant; reconciliation-only для неопределённого внешнего исхода | Существующий owner task lifecycle |
+| Complete SNAPSHOT | Проверенные object version/digest и tree metadata; CHECKPOINT_READY; PVC не удаляется | Immutable archive receipt и session storage readback |
+| RESTORE claim/complete | Явно разрешённый новый ход, точный source archive, новое поколение; native checkpoint обязателен отдельно | Существующие owner receipts и новое readback состояния |
+| Cancel/terminal | Outcome run не меняется поздним checkpoint; новая работа не возникает автоматически | Существующий terminal event; storage-only completion читает session_storage |
+| Delete/dead-letter | Прежние ownership, retention и ограниченный retry budget; миграция их не меняет | Существующие task/owner read paths |
+| WAITING_OWNER/CHANGES_REQUESTED | Не создают новый writer или archive grant сами по себе | Существующий owner gate/workflow read path |
+| Отказ до Pod/BIND | WRITER_PENDING без ACK пока остаётся отдельным открытым дефектом; отсутствие Pod не подменяет quiescence | Owner workspace readback; восстановление не объявлено успешным |
+
+Актуальный PostgreSQL baseline включает `TestWorkspaceWriterOwnerComponent` и
+`TestWorkflowWorkspaceOwnerComponent`. Их оснастка отдельно передаёт native
+checkpoint через настоящий поздний owner completion после отмены и проверяет
+сохранение CANCELLED. Это synthetic worker metadata, а не доказательство
+физического PVC/S3 или native export. Проверка миграции запускается через
+`scripts/tests/control-plane-postgres-test.sh --workspace-archive-abi-upgrade`: она
+проверяет drift predecessor, точные атрибуты и repeat. Отдельный
+`--workspace-archive-abi-fresh-install` доказывает пустой bootstrap и всю цепочку
+миграций на новой disposable БД.
+
+Managed read сохраняет порционный лимит32768 байт независимо от полного лимита
+файла1MiB. Неправильный диапазон возвращает безопасную диагностику без данных
+файла; исправление аргументов не разрешает повтор неизвестного внешнего эффекта.
+Кластерный сценарий с ошибочным `maximum_bytes=1048576` был отклонён корректно;
+успех записи не считается успехом последующего чтения.
