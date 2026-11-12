@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.57
+version: 1.7.58
 updated: 2026-11-12
 ---
 
@@ -2347,6 +2347,16 @@ no-mount-crossing, identity rejoin, foreign-owner/type/link и resource guards
 рабочего дерева из canary или квоты: новый runnable checkout и scratch
 по-прежнему проверяются. Во время исполнения private directory может временно
 закрыть readiness; post-join нормализация не доказывает исправление этой фазы.
+
+В framed broker подтверждение процесса остаётся первым кадром холодного запуска.
+При восстановлении единственное исключение — предшествующий кадр
+`NATIVE_SESSION_RECOVERING` от точного provider UID для OpenCode с проверенными
+metadata checkpoint в текущем input. Следующий activity обязан содержать exact
+process observation, включая execution binding; промежуточная работа, повтор или
+поздняя фаза восстановления отклоняются до callback. Отказ import/start до
+наблюдения процесса может завершиться только ошибкой. Progress не доказывает
+identity, успешный import, join или право на новый эффект; проверка actual export
+и свежих полномочий остаётся обязательной.
 
 Официальный native export принадлежит фактическому writer/capture UID,
 а не UID контейнера, передающего запрос. OpenCode и официальный stopped export

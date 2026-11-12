@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.6
+version: 1.4.7
 updated: 2026-11-12
 ---
 
@@ -688,3 +688,31 @@ broker path. Безопасная диагностика теперь сохра
 Незавершённый intent следующего native поколения не удаляется ради retry:
 восстановление требует согласованного owner lifecycle и сохранения исходного
 checkpoint, файлов и неопределённого хвоста.
+
+В следующей установленной диагностической сборке подтверждён тот же отказ resume;
+хеш runner внутри RoleImage совпал со сборкой. Регрессионный тест воспроизвёл
+причину: recovery progress занимал sequence1, а reader принимал process observation
+только на sequence1. Исправление допускает ровно один recovery prefix, сохраняя
+exact UID/input/checkpoint/process binding и исходный порядок холодного запуска.
+Источники сценария: #2108, GUIDE-DOC-003 и GUIDE-DOC-006. Инициатором остаётся
+авторизованный session continuation через gateway и owner command; owner выбирает
+checkpoint и immutable input. Изменение затрагивает только внутренний broker
+между provider writer и runner; новых endpoint, grants и domain events нет.
+Проверенный progress попадает в существующий runtime callback и owner read path,
+но не изменяет authoritative session state или idempotency/version.
+
+| Переход broker | Разрешённый результат и граница |
+|---|---|
+| Холодный старт | Exact process observation только sequence1 |
+| Начало восстановления | Один recovery progress sequence1; OpenCode, exact UID, валидные checkpoint metadata |
+| Успешный import/start | Exact process observation sequence2; затем обычные activities |
+| Ошибка import/start | Неуспешный terminal без выдуманного process proof; успешный итог запрещён |
+| Повтор/чужой binding/промежуточная работа | Закрытый отказ до доставки неверного activity |
+| Stop/cancel/timeout | Прежний owner lifecycle и обязательный positive writer join; progress их не заменяет |
+| Retry/lease expiry/dead-letter | Прежние attempts/fences; broker не выдаёт новый grant и не повторяет effect |
+| Complete/delete | Прежний terminal/checkpoint/retention; recovery progress не меняет владельца состояния |
+| WAITING_OWNER/CHANGES_REQUESTED | Прежний gate; observation не разрешает продолжение |
+
+Локальный тест порядка кадров сам по себе не доказывает установленный resume,
+сохранность файлов после Stop или отсутствие повторных effects. Эти сценарии
+требуют нового полного runner/RoleImage и отдельной кластерной проверки.

@@ -20,9 +20,11 @@ import (
 // для восстановления, compaction и обоих источников измерений. Наблюдения сохраняют
 // порядок и неизвестный usage, не превращая terminal failure в успех.
 func TestNativeBrokerDeliversProgressAndMeasurements(t *testing.T) {
-	input := model.Input{Provider: "opencode"}
+	input := nativeHandshakeInput()
+	observation := runtimecontract.BindProviderProcessObservation(input, runtimecontract.OpenCodeVersion)
 	activities := []runtimecontract.RuntimeActivity{
-		{Progress: "NATIVE_SESSION_RECOVERING"},
+		{Progress: nativeSessionRecovering},
+		{ProviderProcess: &observation},
 		{Progress: "MODEL_REQUEST_RUNNING"},
 		{ModelMeasurement: &runtimecontract.ModelMeasurement{Ref: "request_synthetic1", Source: "HTTP_REQUEST", Phase: "NORMAL", Outcome: "FAILED", Completeness: "UNKNOWN"}},
 		{Progress: "MODEL_CONTEXT_COMPACTING"},

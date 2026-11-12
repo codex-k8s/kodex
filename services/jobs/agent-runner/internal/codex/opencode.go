@@ -216,7 +216,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	measurementURL.Path = "/model-measurements"
 	environment = append(environment, "KODEX_MODEL_MEASUREMENT_URL="+measurementURL.String())
 	if input.NativeSession != nil {
-		if activity(runtimecontract.RuntimeActivity{Progress: "NATIVE_SESSION_RECOVERING"}) != nil {
+		if activity(runtimecontract.RuntimeActivity{Progress: nativeSessionRecovering}) != nil {
 			return Result{}, atProviderStage(providerStageContext, errOpenCodeProvider)
 		}
 		source := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(input.NativeSession.RelativePath))

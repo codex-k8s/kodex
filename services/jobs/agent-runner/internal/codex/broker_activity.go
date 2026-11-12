@@ -40,6 +40,11 @@ const (
 	// brokerFrameWriteTimeout bounds each net.Conn write; generic writers must provide their own bounds.
 	// brokerFrameWriteTimeout ограничивает запись в net.Conn; обычный writer обеспечивает свои ограничения.
 	brokerFrameWriteTimeout = 5 * time.Second
+	// nativeSessionRecovering identifies the sole allowed pre-process observation during exact restore.
+	// It reports work in progress and never proves process identity or successful recovery.
+	// nativeSessionRecovering обозначает единственное допустимое наблюдение до процесса при exact restore.
+	// Оно сообщает о работе, но не подтверждает identity процесса или успешное восстановление.
+	nativeSessionRecovering = "NATIVE_SESSION_RECOVERING"
 )
 
 // brokerFrame carries a versioned sequence and exactly one payload as checked by the reader.
@@ -220,6 +225,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 	var financialSequence int64
 	toolStates := make(map[string]runtimecontract.NativeToolCall)
 	providerProcessSeen := false
+	nativeRecoverySeen := false
 	for scanner.Scan() {
 		if terminal != nil {
 			return Result{}, brokerResponseError(brokerResponsePostTerminal, errProviderBrokerResponseInvalid)
@@ -253,8 +259,20 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 			if frame.Activity == nil || frame.Terminal != nil || frame.Activity.Validate() != nil {
 				return Result{}, brokerResponseError(brokerResponseActivitySchema, errProviderBrokerResponseInvalid)
 			}
+			if frame.Activity.Progress == nativeSessionRecovering {
+				if input == nil || input.Provider != "opencode" || writerUID != providerWriterUID || input.NativeSession == nil || input.NativeSession.Validate() != nil || sequence != 1 || nativeRecoverySeen || providerProcessSeen {
+					return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
+				}
+				nativeRecoverySeen = true
+			} else if nativeRecoverySeen && !providerProcessSeen && frame.Activity.ProviderProcess == nil {
+				return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
+			}
 			if observation := frame.Activity.ProviderProcess; observation != nil {
-				if input == nil || writerUID != providerWriterUID || !observation.Matches(*input) || providerProcessSeen || sequence != 1 {
+				expectedSequence := uint64(1)
+				if nativeRecoverySeen {
+					expectedSequence = 2
+				}
+				if input == nil || writerUID != providerWriterUID || !observation.Matches(*input) || providerProcessSeen || sequence != expectedSequence {
 					return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
 				}
 				providerProcessSeen = true
@@ -314,6 +332,9 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
 			terminal = frame.Terminal
+			if nativeRecoverySeen && !providerProcessSeen && terminal.OK && terminal.Result.Outcome != "FAILED" {
+				return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
+			}
 			if raw, present := terminalFields["native_capture"]; present {
 				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "lease_ref", "lease_generation", "organization_ref", "project_ref", "agent_ref", "session_ref", "turn_ref", "attempt", "checkpoint"}
 				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || verifyNativeCapture(*input, terminal.Result, terminal.NativeCapture, writerUID) != nil {
