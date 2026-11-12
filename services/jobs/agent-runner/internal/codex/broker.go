@@ -530,7 +530,9 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	joinError := bridge.server.Shutdown(joinContext)
 	joinCancel()
 	if joinError != nil {
-		err = errProviderBrokerFailed
+		// Preserve the first execution boundary while keeping failed cleanup fatal.
+		// Сохраняем первую границу отказа, при этом неуспешный cleanup остаётся фатальным.
+		err = errors.Join(err, atProviderStage(providerStageMCPBridge, errProviderBrokerFailed))
 	}
 	if err != nil {
 		logProviderSafeFailure(providerStageOf(err), err)

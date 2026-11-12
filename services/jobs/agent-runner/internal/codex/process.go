@@ -65,6 +65,21 @@ const (
 	// providerStageHomePrepare identifies preparation of pinned configuration and the working home/directory.
 	// providerStageHomePrepare обозначает подготовку закреплённой конфигурации и рабочего home или каталога.
 	providerStageHomePrepare providerExecutionStage = "HOME_PREPARE"
+	// providerStageArchiveRestore identifies validation and official import of an owner-selected native checkpoint.
+	// providerStageArchiveRestore обозначает проверку и штатный import выбранного владельцем native checkpoint.
+	providerStageArchiveRestore providerExecutionStage = "ARCHIVE_RESTORE"
+	// providerStageProcessStart identifies native server startup before its exact session is resolved.
+	// providerStageProcessStart обозначает запуск native server до разрешения его точной сессии.
+	providerStageProcessStart providerExecutionStage = "PROCESS_START"
+	// providerStageThreadBind identifies exact native session lookup, without treating its ID as authority.
+	// providerStageThreadBind обозначает чтение exact native session; её ID не является полномочием.
+	providerStageThreadBind providerExecutionStage = "THREAD_BIND"
+	// providerStageProcessStop identifies a failed positive join, which always prevents checkpoint publication.
+	// providerStageProcessStop обозначает неподтверждённый join, всегда запрещающий публикацию checkpoint.
+	providerStageProcessStop providerExecutionStage = "PROCESS_STOP"
+	// providerStageArchiveCapture identifies stopped native export validation and durable publication failures.
+	// providerStageArchiveCapture обозначает отказы проверки stopped native export и его устойчивой публикации.
+	providerStageArchiveCapture providerExecutionStage = "ARCHIVE_CAPTURE"
 	// providerStageAccountPin marks local credential-content pin checks, not provider financial eligibility.
 	// providerStageAccountPin отмечает локальную проверку digest реквизитов, а не финансовый допуск провайдера.
 	providerStageAccountPin providerExecutionStage = "ACCOUNT_PIN"

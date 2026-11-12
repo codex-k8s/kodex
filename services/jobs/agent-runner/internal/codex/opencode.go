@@ -142,7 +142,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	}
 	generation, err := prepareNativeGeneration(input)
 	if err != nil {
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageHomePrepare, err)
 	}
 	// The existing provider-only512Mi tmp volume holds transient DB/config/cache, never the durable archive tree.
 	// Only a stopped official export enters provider-state; temporary credentials/config cannot enter a workspace snapshot.
@@ -217,11 +217,11 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	environment = append(environment, "KODEX_MODEL_MEASUREMENT_URL="+measurementURL.String())
 	if input.NativeSession != nil {
 		if activity(runtimecontract.RuntimeActivity{Progress: "NATIVE_SESSION_RECOVERING"}) != nil {
-			return Result{}, errOpenCodeProvider
+			return Result{}, atProviderStage(providerStageContext, errOpenCodeProvider)
 		}
 		source := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(input.NativeSession.RelativePath))
 		if err := native.Restore(ctx, home, source, input.NativeSession.SessionID, input.NativeSession.SHA256); err != nil {
-			return Result{}, err
+			return Result{}, atProviderStage(providerStageArchiveRestore, err)
 		}
 	}
 	server, err := native.Start(ctx, home, environment)
@@ -231,7 +231,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		if server != nil {
 			_ = server.Stop()
 		}
-		return Result{}, err
+		return Result{}, atProviderStage(providerStageProcessStart, err)
 	}
 	sessionID := ""
 	defer func() {
@@ -243,7 +243,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 			cancelAbort()
 		}
 		if server.Stop() != nil {
-			resultErr = native.ErrWriterActive
+			resultErr = errors.Join(resultErr, atProviderStage(providerStageProcessStop, native.ErrWriterActive))
 			result.workspaceJoin = nil
 			return
 		}
@@ -255,7 +255,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		proof, captureErr := captureNativeCheckpoint(checkpointContext, input, server, sessionID, generation, string(key), mcpToken, namespace)
 		if captureErr != nil {
 			if resultErr == nil {
-				resultErr = captureErr
+				resultErr = atProviderStage(providerStageArchiveCapture, captureErr)
 			}
 			return
 		}
@@ -274,7 +274,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if input.NativeSession != nil {
 		session, err := server.Client.Session(ctx, input.NativeSession.SessionID)
 		if err != nil || session.ID != input.NativeSession.SessionID {
-			return Result{}, runtimecontract.ErrNativeSession
+			return Result{}, atProviderStage(providerStageThreadBind, runtimecontract.ErrNativeSession)
 		}
 		sessionID = session.ID
 	} else {

@@ -23,11 +23,12 @@ func diagnosticInput() model.Input {
 // TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements сериализует и читает bound synthetic failures, требуя safe stage/detail и measured usage, immutable diagnostic accessors, отказ другой attempt и невозможность подделки private state через JSON.
 func TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements(t *testing.T) {
 	input := diagnosticInput()
-	for _, stage := range []providerExecutionStage{providerStageHomePrepare, providerStageTerminalWait, providerStageUnknown} {
+	for _, stage := range []providerExecutionStage{providerStageHomePrepare, providerStageArchiveRestore, providerStageProcessStart,
+		providerStageThreadBind, providerStageProcessStop, providerStageArchiveCapture, providerStageTerminalWait, providerStageUnknown} {
 		var wire bytes.Buffer
 		writer := &brokerFrameWriter{writer: &wire, input: &input}
 		usage := runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}
-		err := atProviderStage(stage, errors.New("PRIVATE_NATIVE_SENTINEL"))
+		err := errors.Join(atProviderStage(stage, errors.New("PRIVATE_NATIVE_SENTINEL")), atProviderStage(providerStageMCPBridge, errProviderBrokerFailed))
 		if writeProviderBrokerResultFailure(writer, Result{Usage: usage}, err) != nil {
 			t.Fatal("write failed")
 		}

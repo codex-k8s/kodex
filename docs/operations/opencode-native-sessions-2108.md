@@ -676,3 +676,15 @@ Context7 официальные [правила K3s private registry](https://do
 auth/TLS назначаются hostname endpoint, конфигурация применяется на каждом узле
 с перезапуском K3s. Неуспешный check Job сохраняется как отдельная попытка; новая
 попытка миграции связывается с его terminal receipt.
+
+Кластерная доставка042 подтвердила schema postcondition и восстановление трёх
+replica control-plane. Штатные workspace SNAPSHOT и RESTORE выполнились с первой
+попытки, но следующий native turn завершился до inference после
+`NATIVE_SESSION_RECOVERING`, без positive provider join. Полный resume остаётся
+FAIL. Исходный export не изменился; отдельный offline import/start/exact session
+read в закреплённом runner image под UID10002 прошёл. Это не доказывает рабочий
+broker path. Безопасная диагностика теперь сохраняет первую границу отказа при
+ошибке завершения MCP bridge и различает native import/start/bind/join/export.
+Незавершённый intent следующего native поколения не удаляется ради retry:
+восстановление требует согласованного owner lifecycle и сохранения исходного
+checkpoint, файлов и неопределённого хвоста.
