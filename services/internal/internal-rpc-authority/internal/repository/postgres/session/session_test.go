@@ -1,6 +1,57 @@
 package session
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+// TestConfigureDeniedCapabilityPreservesSQLState uses a disposable issuer LOGIN to prove a forbidden SET ROLE remains denied and diagnosable.
+// TestConfigureDeniedCapabilityPreservesSQLState использует disposable LOGIN issuer и доказывает сохранение отказа и SQLSTATE запрещённого SET ROLE.
+func TestConfigureDeniedCapabilityPreservesSQLState(t *testing.T) {
+	dsn := os.Getenv("KODEX_AUTHORITY_POSTGRES_TEST_DSN")
+	if dsn == "" {
+		t.Skip("disposable PostgreSQL DSN is not configured")
+	}
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal("parse disposable PostgreSQL configuration")
+	}
+	config.User = "ira_control_api_gateway_issuer_g1"
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	connection, err := pgx.ConnectConfig(ctx, config)
+	if err != nil {
+		t.Fatal("connect disposable issuer LOGIN")
+	}
+	t.Cleanup(func() {
+		closeCtx, closeCancel := context.WithTimeout(context.Background(), time.Second)
+		defer closeCancel()
+		_ = connection.Close(closeCtx)
+	})
+	for _, configure := range []func(context.Context, *pgx.Conn, string, string) error{Configure, Ensure} {
+		err := configure(ctx, connection, config.User, CapabilityPublisher)
+		var postgres *pgconn.PgError
+		if !errors.As(err, &postgres) || postgres.Code != "42501" || !failure.IsKind(err, failure.PersistenceUnavailable) {
+			t.Fatal("forbidden role failure lost SQLSTATE or was accepted")
+		}
+		if err.Error() != "activate PostgreSQL capability role" {
+			t.Fatal("driver message reached the safe error")
+		}
+	}
+	if err := Configure(ctx, connection, config.User, CapabilityIssuer); err != nil {
+		t.Fatal("registered issuer capability failed")
+	}
+	if err := Ensure(ctx, connection, config.User, CapabilityIssuer); err != nil {
+		t.Fatal("exact issuer identity readback failed")
+	}
+}
 
 // TestAssumeQueryUsesOnlyRegisteredStatements checks the five exact capability
 // statements and rejects empty, unknown and SQL-shaped role inputs. It tests

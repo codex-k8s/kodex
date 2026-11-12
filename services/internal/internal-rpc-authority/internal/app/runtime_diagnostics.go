@@ -125,7 +125,11 @@ func SafeRuntimeFailure(mode Mode, err error) string {
 		contextState = diagnosticCanceled
 	}
 	class, sqlstate := runtimeErrorClass(err)
-	return fmt.Sprintf("internal-rpc-authority runtime failed: mode=%s stage=%s domain_kind=%s error_class=%s sqlstate=%s context_state=%s", role, stage, kind, class, sqlstate, contextState)
+	line := fmt.Sprintf("internal-rpc-authority runtime failed: mode=%s stage=%s domain_kind=%s error_class=%s sqlstate=%s context_state=%s", role, stage, kind, class, sqlstate, contextState)
+	if step, cause, present := postgresStartupDiagnostic(err); present {
+		line += fmt.Sprintf(" postgres_step=%s postgres_cause=%s", step, cause)
+	}
+	return line
 }
 
 // runtimeErrorClass classifies in order PostgreSQL with allowlisted SQLSTATE, snapshot rollback, gRPC status, net.OpError, deadline, cancellation and other net.Error, then UNKNOWN. The original class can survive a joined context failure; adapter messages and arbitrary SQLSTATE or gRPC codes are never returned.

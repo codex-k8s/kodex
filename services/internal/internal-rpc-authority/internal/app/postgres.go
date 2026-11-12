@@ -33,11 +33,11 @@ func openCapabilityPostgres(
 	}
 	raw, err := readPrivateFile(config.DSNFile, maxDSNFileBytes)
 	if err != nil {
-		return nil, errors.New("read PostgreSQL DSN file")
+		return nil, &postgresStartupError{step: postgresReadDSN, cause: err}
 	}
 	poolConfig, err := pgxpool.ParseConfig(strings.TrimSpace(string(raw)))
 	if err != nil {
-		return nil, errors.New("parse PostgreSQL DSN")
+		return nil, &postgresStartupError{step: postgresParseDSN, cause: err}
 	}
 	instrumentPGX(poolConfig, config.ApplicationName)
 	if len(poolConfig.ConnConfig.Fallbacks) != 0 ||
@@ -60,11 +60,11 @@ func openCapabilityPostgres(
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		return nil, errors.New("open PostgreSQL pool")
+		return nil, &postgresStartupError{step: postgresOpenPool, cause: err}
 	}
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, errors.New("verify PostgreSQL connectivity")
+		return nil, &postgresStartupError{step: postgresPingPool, cause: err}
 	}
 	return pool, nil
 }

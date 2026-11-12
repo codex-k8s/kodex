@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/codex-k8s/kodex/services/internal/internal-rpc-authority/internal/domain/failure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -43,7 +44,7 @@ func Configure(
 	}
 	sessionUser, currentUser, err := identity(ctx, connection, queries.sessionIdentity)
 	if err != nil {
-		return errors.New("read PostgreSQL session identity")
+		return failure.Wrap(failure.PersistenceUnavailable, "read PostgreSQL session identity", err)
 	}
 	if sessionUser != expectedSessionUser || currentUser != expectedSessionUser {
 		return errors.New("PostgreSQL initial session identity mismatch")
@@ -65,11 +66,11 @@ func Configure(
 // владение соединением и его отклонение остаются у настройки пула.
 func activateCapability(ctx context.Context, connection *pgx.Conn, identityQuery, expectedSessionUser, capability, assume string) error {
 	if _, err := connection.Exec(ctx, assume); err != nil {
-		return errors.New("activate PostgreSQL capability role")
+		return failure.Wrap(failure.PersistenceUnavailable, "activate PostgreSQL capability role", err)
 	}
 	sessionUser, currentUser, err := identity(ctx, connection, identityQuery)
 	if err != nil {
-		return errors.New("read effective PostgreSQL identity")
+		return failure.Wrap(failure.PersistenceUnavailable, "read effective PostgreSQL identity", err)
 	}
 	if sessionUser != expectedSessionUser || currentUser != capability {
 		return errors.New("PostgreSQL effective identity mismatch")
@@ -94,7 +95,7 @@ func Ensure(
 	}
 	sessionUser, currentUser, err := identity(ctx, connection, queries.sessionIdentity)
 	if err != nil {
-		return errors.New("read PostgreSQL session identity")
+		return failure.Wrap(failure.PersistenceUnavailable, "read PostgreSQL session identity", err)
 	}
 	if sessionUser != expectedSessionUser {
 		return errors.New("PostgreSQL session user mismatch")

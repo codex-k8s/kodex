@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.10
-updated: 2026-11-12
+version: 1.1.11
+updated: 2026-11-13
 ---
 
 # Наблюдаемость Go-сервисов
@@ -76,6 +76,14 @@ Service startup также сохраняет typed connection cause прива�
 startup. Проверка не добавляет retry SQL, сетевые разрешения или credentials.
 Typed PostgreSQL/TLS policy принадлежит сервису; CLI и service используют один
 его classifier, а SDK-neutral `Postgres/Network` mappings — общий `errorclass`.
+
+Сохранение причины распространяется и на `AfterConnect`/проверку capability:
+замена ошибки `SET ROLE` либо чтения identity общим `errors.New` уничтожает
+SQLSTATE ещё до внешнего classifier. Repository сохраняет исходную ошибку
+через безопасный domain wrapper; `Error()` возвращает только фиксированный
+текст, `Unwrap()` доступен локальной диагностике. Это не даёт права на retry.
+Отсутствующая типизированная причина остаётся `unknown`; этап чтения private
+файла не оправдывает вывод его пути или обход `securefile`.
 
 Для control-plane [#1862](https://github.com/codex-k8s/kodex/issues/1862) задаёт
 закрытую диагностику, а [#1866](https://github.com/codex-k8s/kodex/issues/1866) —
