@@ -97,4 +97,20 @@ class Tests(unittest.TestCase):
         self.assertEqual(current[0],updated[0]);self.assertEqual(current[3],updated[3])
 
 
+    def test_versioned_source_rebases_projection_and_preserves_historical_policy(self):
+        previous=profile.transform(fixture(), '');updated=copy.deepcopy(previous)
+        new=copy.deepcopy(updated[0]);new['data']['nodeReadbackImage']='images.example.invalid/kodex/runner@sha256:'+'f'*64
+        new['data']['policyRevision']='2';new['data']['policySHA256']=profile.digest({k:v for k,v in new['data'].items()if k not in ('policySHA256','orchestrationRevision')})
+        new['metadata']['name']=profile.SOURCE+'-'+new['data']['policySHA256'][:32]
+        updated.append(new);updated.append(dict(apiVersion='apps/v1',kind='Deployment',metadata=dict(name='image-admission-controller',namespace='kodex-system',labels={'app.kubernetes.io/part-of':'kodex'}),spec=dict(template=dict(spec=dict(containers=[dict(name='image-admission-controller',env=[dict(name='IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP',value=new['metadata']['name'])])])))))
+        current=profile.rebase(updated,previous)
+        self.assertEqual(profile.active(current),'');self.assertEqual(current[0],previous[0])
+        self.assertEqual(current[-1]['data']['nodeReadbackImage'],new['data']['nodeReadbackImage'])
+        self.assertEqual(current[-1]['metadata']['annotations'][profile.SOURCE_DIGEST],new['data']['policySHA256'])
+        stale=copy.deepcopy(current);stale[-1]=copy.deepcopy(previous[-1])
+        with self.assertRaises(Rejected):profile.active(stale)
+        wrong=copy.deepcopy(updated);wrong[-1]['spec']['template']['spec']['containers'][0]['env'][0]['value']=profile.SOURCE+'-'+'0'*32
+        with self.assertRaises(Rejected):profile.source_policy(wrong)
+
+
 if __name__=='__main__':unittest.main()

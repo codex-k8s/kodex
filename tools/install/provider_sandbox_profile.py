@@ -36,12 +36,22 @@ def one(resources, kind, name, namespace='kodex-system'):
 
 
 def source_policy(resources):
-    source = one(resources, 'ConfigMap', SOURCE)
+    controllers = [r for r in resources if r.get('kind') == 'Deployment' and r.get('metadata', {}).get('name') == 'image-admission-controller' and r['metadata'].get('namespace') == 'kodex-system']
+    name = SOURCE
+    if controllers:
+        controller = one(resources, 'Deployment', 'image-admission-controller')
+        apps = [c for c in controller['spec']['template']['spec']['containers'] if c.get('name') == 'image-admission-controller']
+        require(len(apps) == 1, 'EXACT_IMAGE_ADMISSION_CONTROLLER_REQUIRED')
+        entries = [e for e in apps[0].get('env', []) if e.get('name') == 'IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP']
+        require(len(entries) == 1 and set(entries[0]) == {'name', 'value'} and isinstance(entries[0]['value'], str), 'EXACT_ACTIVE_IMAGE_POLICY_REQUIRED')
+        name = entries[0]['value']
+    source = one(resources, 'ConfigMap', name)
     data = source.get('data')
     require(source.get('immutable') is True and isinstance(data, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()), 'IMMUTABLE_IMAGE_POLICY_REQUIRED')
     require(all(k in data for k in (*FIELDS, 'policySHA256')), 'PROVIDER_SANDBOX_SOURCE_FIELDS_REQUIRED')
     require(re.fullmatch('[a-f0-9]{64}', data['policySHA256']) and data['policySHA256'] != '0'*64, 'IMAGE_POLICY_DIGEST_REQUIRED')
     require(digest({k: v for k, v in data.items() if k not in ('policySHA256', 'orchestrationRevision')}) == data['policySHA256'], 'IMAGE_POLICY_DIGEST_MISMATCH')
+    require(name in (SOURCE, SOURCE+'-'+data['policySHA256'][:32]), 'IMAGE_POLICY_NAME_DIGEST_MISMATCH')
     require(re.fullmatch(r'[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}', data['nodeReadbackImage']) and '://' not in data['nodeReadbackImage'] and not data['nodeReadbackImage'].endswith('0'*64), 'PINNED_PROVIDER_IMAGE_REQUIRED')
     require(re.fullmatch('[1-9][0-9]{0,8}', data['roleRuntimeContractRevision']) and data['providerAppArmorProfile'] in ('', PROFILE), 'PROVIDER_SANDBOX_SOURCE_CONTRACT_REJECTED')
     return source
@@ -79,7 +89,7 @@ def active(resources):
     deployment, binding, reference = targets(resources)
     selected = [r for r in resources if r.get('kind') == 'ConfigMap' and (r.get('metadata', {}).get('name', '').startswith(PREFIX) or LABEL in r.get('metadata', {}).get('labels', {}))]
     marker = deployment['spec']['template'].get('metadata', {}).get('annotations', {}).get(DIGEST)
-    if reference['name'] == SOURCE:
+    if reference['name'] == source['metadata']['name']:
         require(not selected and marker is None, 'UNBOUND_PROVIDER_PROFILE_REJECTED')
         return None
     require(len(selected) == 1 and reference['name'] == selected[0]['metadata']['name'], 'EXACT_PROVIDER_PROFILE_PROJECTION_REQUIRED')
@@ -129,8 +139,8 @@ def rebase(resources, previous):
     deployment, binding, reference = targets(result)
     require(reference['name'] == before['metadata']['name'], 'PROVIDER_PROFILE_OVERLAY_BINDING_DRIFT')
     result = [r for r in result if not (r.get('kind') == 'ConfigMap' and r['metadata']['name'] == before['metadata']['name'] and r['metadata'].get('namespace') == 'kodex-system')]
-    reference['name'] = SOURCE
-    binding['spec']['paramRef']['name'] = SOURCE
+    reference['name'] = source_policy(result)['metadata']['name']
+    binding['spec']['paramRef']['name'] = reference['name']
     deployment['spec']['template']['metadata']['annotations'].pop(DIGEST)
     return transform(result, profile)
 

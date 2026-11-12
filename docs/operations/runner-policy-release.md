@@ -70,6 +70,14 @@ Canonical consumers могут читать policy через exact immutable `c
 отдельного runtime binding/default перехода. Optional references, Secret,
 неизвестный ключ, дубликат env и чужая ConfigMap закрыто отклоняются.
 
+Если render содержит отдельную provider sandbox projection, после default
+перехода она перебазируется штатным `provider_sandbox_profile.rebase` на policy,
+выбранную admission-controller. Сохраняется прежнее явное значение AppArmor,
+обновляются exact source digest, node readback image, runtime env/marker и Deny
+binding. Историческая image policy и её Jobs остаются неизменными. Промежуточный
+default readback не заменяет итоговый portable readback всей проекции; старый
+source или расходящиеся env/binding считаются drift.
+
 Закрытая схема `kodex.portable-runner-target/v1` содержит `context`, `clusterUID`,
 `namespaceUID`, `installationUID`, `installationSHA256` и `resources`.
 SHA256 закрепляет canonical JSON `data` существующего ConfigMap
