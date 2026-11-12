@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.25
+version: 1.4.26
 updated: 2026-11-12
 ---
 
@@ -1316,5 +1316,13 @@ sealed export остаётся byte-for-byte прежним, повторный 
 Целевая локальная race-проверка PASS15.217с с настоящим бинарником и0modelrequests.
 Первый прогон FAIL из-за неверного fixture: удалялся последний перевод строки,
 поэтому JSON оставался корректным. Fixture теперь удаляет закрывающий JSON token;
-production decoder не ослаблялся. Полная повторная и кластерная квалификация
-этого дополнительного сценария фиксируется отдельно после исполнения.
+production decoder не ослаблялся.
+
+Полный повторный `make test-opencode-native` на source
+`e10a0f7ebec3bf3a1f6373d794e0e626602fd7a3` завершился PASS311.179с,
+без SKIP, с настоящими OpenCode/LiteLLM/Redis и synthetic upstream.
+Канонический кластерный plan/apply/readback на том же source завершил все11
+native сценариев PASS за291.209с; exact imageID сверены, restart0.
+Новый storage-сценарий занял15.33с в кластере и восстановил исходные message
+values после всех отказов. Это isolated adapter qualification в отдельном
+namespace, не повтор business E2E. Production binary и RoleImage не менялись.
