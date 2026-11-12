@@ -112,7 +112,7 @@ func promptWorkflowStep(version entity.WorkflowVersion, key string) (entity.Work
 			instructions = version.Purpose
 		}
 		return entity.WorkflowStep{Key: key, Name: version.Name, AgentRef: version.CoordinatorAgentRef, Instructions: instructions,
-			ExpectedResult: version.CompletionCriteria, RequiredCapabilityKeys: []string{"platform.run.delegate"}}, true
+			ExpectedResult: version.CompletionCriteria, RequiredCapabilityKeys: []string{"platform.run.delegate", runtimecontract.ArtifactCapability}}, true
 	}
 	return entity.WorkflowStep{}, false
 }

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.9
+version: 1.4.10
 updated: 2026-11-12
 ---
 
@@ -775,3 +775,35 @@ Deployment с сохранением текущих проекций и пров
 Изменение не добавляет endpoint, grant или новое внешнее действие: существующий
 publisher продолжает собственный owner lifecycle. Полный render проверяется
 с несколькими provider definitions; live GitHub tools требуют отдельной приёмки.
+
+## Полномочия собственного workspace координатора
+
+После устранения `55P03` установленный WORKFLOW дошёл до owner claim, но Pod
+не был построен: fixed coordinator allowlist оставлял только
+`platform.run.delegate`, хотя владелец уже выдал этому агенту
+`platform.artifact.manage`, а окружение требовало managed workspace.
+`configureManagedWorkspacePod` правильно закрыл неполный snapshot. Это отдельный
+отказ `RUNTIME_MATERIALIZATION_FAILED` до model request, а не успешный workflow.
+
+Источник — #2108 и workspace координатора по schema040. Owner grant задаётся
+через команду агента; `POST /runs` запускает опубликованный workflow, а
+`ClaimExecution` разрешает его точного координатора и создаёт immutable revision.
+SQL candidate и общий preview/runtime prompt materializer допускают делегирование
+и работу с артефактами, но оба разрешения проходят прежнее пересечение actor,
+agent и gate authority. Полномочия не выводятся из задания либо native summary.
+
+| Переход | Authority, состояние и событие |
+|---|---|
+| Initial / continuation координатора | Выданный artifact grant сохраняется в новом RR; без grant он не появляется; прежний `TURN_STARTED` после owner commit |
+| Claim / renew / workspace BIND | Точные agent/session/workflow version, workspace generation и lease сохраняются; snapshot не заменяет свежий допуск |
+| Delegation / результат / reviewer | Прежние server-owned edges и опубликованные этапы; artifact grant не выдаёт `platform.run.launch` или integration grants |
+| Отзыв artifact grant | Старый RR не разрешает новый tool effect; существующие current-grant проверки закрывают доступ |
+| Complete / cancel / delete / lease expiry | Прежний owner terminal и закрытие claims/grants; positive writer join остаётся обязательным |
+| Retry / dead-letter / WAITING_OWNER / CHANGES_REQUESTED | Только штатный переход и свежая revision; новый allowlist не оживляет terminal run и не подтверждает gate |
+| SERVER_DAG_V1 exception manager | Прежний отдельный read/diagnostic профиль; delegation ему не добавляется |
+
+Локальная проверка owner lifecycle теперь требует сохранения явно выданного
+artifact capability в AGENT и WORKFLOW snapshot. Проверки координатора без
+этого grant по-прежнему требуют только delegation и не допускают чужие файлы.
+Кластерный запуск и последствия отказа до BIND проверяются отдельно; наличие
+локального теста не освобождает неопределённого writer и не доказывает delivery.

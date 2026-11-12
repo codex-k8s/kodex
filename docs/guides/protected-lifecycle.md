@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.72
-updated: 2026-11-11
+version: 1.1.73
+updated: 2026-11-12
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Runtime и preview координатора используют одинаковый закрытый набор допустимых
+capabilities, затем пересекают его с текущими полномочиями инициатора, агента и
+gate. `platform.artifact.manage` для собственного managed workspace не выдаётся
+по роли координатора: он должен быть явно предоставлен агенту владельцем.
+Выданное разрешение не теряется при материализации workflow stage. Интеграции,
+запуск других процессов, чужие workspace и owner decisions этим не разрешаются.
+Матрица: [OpenCode workflow workspace](../operations/opencode-native-sessions-2108.md).
 
 Обычное продолжение после Human Gate не усекает завершённый результат интеграции.
 Большой ответ передаётся через owner manifest и reader непосредственного

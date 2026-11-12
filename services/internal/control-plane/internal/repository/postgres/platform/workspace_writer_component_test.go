@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +78,13 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 		t.Fatal("workspace project was not returned")
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "workspace-owner-agent", "Разработчик")
+	granted, grantErr := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "workspace-owner-artifact", ExpectedVersion: &agent.Version},
+		Payload:  command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}})
+	if grantErr != nil || granted.Agent == nil {
+		t.Fatal("grant explicit workspace authority", grantErr)
+	}
+	agent = *granted.Agent
 	target := entity.RunTarget{Type: "AGENT", Ref: agent.Ref}
 	var workflowVersionRef string
 	if workflowMode {
@@ -92,6 +100,9 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 		t.Fatalf("expected one V2 execution claim, got %d", len(claimed.RuntimeItems))
 	}
 	item := claimed.RuntimeItems[0]
+	if !slices.Contains(runtimeRevisionStringSlice(item["capabilities"]), runtimecontract.ArtifactCapability) {
+		t.Fatal("runtime revision lost the owner's artifact capability for its own workspace")
+	}
 	binding, err := runtimeWorkspaceSnapshotBinding(item)
 	if err != nil || binding == nil {
 		t.Fatal("owner did not assign workspace binding", err)

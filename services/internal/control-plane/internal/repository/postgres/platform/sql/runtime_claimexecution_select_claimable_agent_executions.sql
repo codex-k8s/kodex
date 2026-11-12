@@ -74,7 +74,9 @@ SELECT n.id::text,
                THEN ARRAY['platform.artifact.manage']::text[]
            WHEN workflow_version.id IS NOT NULL
             AND n.workflow_step_key LIKE 'workflow.coordinator.%'
-               THEN ARRAY['platform.run.delegate']::text[]
+               -- Локальные файлы координатора требуют выданного агенту artifact grant;
+               -- этот allowlist ещё пересекается с actor/agent/current gate authority.
+               THEN ARRAY['platform.run.delegate','platform.artifact.manage']::text[]
            ELSE COALESCE((
                SELECT ARRAY(
                    SELECT capability.value
