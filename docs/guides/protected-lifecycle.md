@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.74
+version: 1.1.75
 updated: 2026-11-12
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Проверка опубликованной runtime policy охватывает owner snapshot, runner preflight,
+broker и native config consumer. Дополнительная локальная проверка использует
+общий типизированный validator, а не устаревший запрет всего непустого overlay.
+Регрессионная проверка должна проходить через фактическую admission-границу
+consumer: успешный тест генератора конфигурации отдельно недостаточен.
+Неизвестные поля, неподдержанная строгая cache policy и отсутствие managed workspace
+по-прежнему закрыто отклоняются до запуска provider.
 
 Отзыв права на публикацию итогового artifact не разрешает отбросить подтверждение
 остановленного native writer. Completion сохраняет exact lease/fence/generation,

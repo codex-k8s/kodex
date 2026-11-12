@@ -26,16 +26,16 @@ func ValidateRuntimeProfile(input model.Input) error {
 	return validateRuntimeSelection(input)
 }
 
-// validateRuntimeSelection accepts the pinned openai provider and bounded nonblank model, validates effective reasoning against the overlay and requires each declared tool to resolve to an executable regular file. It does not impose a local model catalog or execute the tools.
-// validateRuntimeSelection принимает pinned openai provider и ограниченную непустую модель, сверяет effective reasoning с overlay и требует разрешения каждого tool в исполняемый обычный файл. Не навязывает локальный model catalog и не запускает tools.
+// validateRuntimeSelection shares the owner contract's typed native preferences and strict cache checks before broker execution; managed workspace authority remains mandatory for declared environment tools. It neither starts tools nor infers remote model capabilities.
+// validateRuntimeSelection использует типизированные native preferences и строгие cache checks контракта владельца до запуска broker; объявленные environment tools по-прежнему требуют managed workspace. Проверка не запускает инструменты и не выводит возможности удалённой модели.
 func validateRuntimeSelection(input model.Input) error {
 	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil || input.Model == "" || len(input.Model) > 128 || strings.TrimSpace(input.Model) != input.Model {
 		return ErrRuntimeProfile
 	}
 	if input.Provider == "opencode" {
-		if input.ModelProvider == nil || input.ModelProvider.Validate() != nil || input.ConfigOverlay != "" ||
-			(len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace) || input.EffectiveReasoningEffort != "" ||
-			input.ReasoningMode != runtimecontract.ReasoningUnsupported {
+		if input.ModelProvider == nil ||
+			input.ModelProvider.ValidateRuntimePreferences(input.Model, input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil ||
+			(len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace) {
 			return ErrRuntimeProfile
 		}
 		if _, found := input.ModelProvider.Model(input.Model); !found {

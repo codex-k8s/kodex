@@ -4,11 +4,21 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.16
+version: 1.4.17
 updated: 2026-11-12
 ---
 
 # OpenCode: нативные сессии и восстановление
+
+Живая проверка опубликованных context/cache preferences выявила отказ
+`RUNTIME_PROFILE_UNSUPPORTED` до первого tool: дополнительный runner preflight
+запрещал любой непустой overlay и reasoning, хотя общий контракт и генератор
+OpenCode уже принимали их. Проверка использует общий `ValidateRuntimePreferences`;
+регрессия охватывает preflight и native config, включая неизвестные поля и
+неподдержанный строгий `NO_STORE`. Исправление требует нового runner, полного
+RoleImage и повторной установленной проверки; один локальный тест не доказывает
+доставку. Предыдущий запуск не достиг точки отзыва права и не подтверждает
+сохранение checkpoint при отказе публикации.
 
 Работа: [#2108](https://github.com/codex-k8s/kodex/issues/2108), дочерняя
 [#1982](https://github.com/codex-k8s/kodex/issues/1982).

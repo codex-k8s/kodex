@@ -62,6 +62,9 @@ func TestOpenCodeConfigurationRejectsCodexStateAndUnknownModels(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			input := openCodeInputFixture()
 			mutate(&input)
+			if validateRuntimeSelection(input) == nil {
+				t.Fatal("incompatible engine input passed runner preflight")
+			}
 			if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
 				t.Fatal("incompatible engine input accepted")
 			}
@@ -177,8 +180,8 @@ func TestOpenCodeCoordinatorKeepsInstalledToolsUnexposed(t *testing.T) {
 	}
 }
 
-// TestOpenCodeReasoningProjection carries owner-validated effort into the model options without arbitrary overlay passthrough.
-// TestOpenCodeReasoningProjection передаёт проверенное владельцем усилие в параметры модели без произвольного переноса overlay.
+// TestOpenCodeReasoningProjection passes owner-validated effort through runner preflight and native model options without arbitrary overlay passthrough.
+// TestOpenCodeReasoningProjection проводит проверенное владельцем усилие через runner preflight и native параметры модели без произвольного переноса overlay.
 func TestOpenCodeReasoningProjection(t *testing.T) {
 	for _, api := range []string{runtimecontract.ModelAPIResponses, runtimecontract.ModelAPIChatCompletions} {
 		input := openCodeInputFixture()
@@ -186,6 +189,10 @@ func TestOpenCodeReasoningProjection(t *testing.T) {
 		input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
 		input.EffectiveReasoningEffort = "high"
 		input.ReasoningMode = runtimecontract.ReasoningSupported
+		if err := validateRuntimeSelection(input); err != nil {
+			t.Fatal("runner preflight rejected valid reasoning", err)
+		}
+
 		raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
 		if err != nil {
 			t.Fatal("valid reasoning profile rejected", err)
@@ -206,6 +213,10 @@ func TestOpenCodeReasoningProjection(t *testing.T) {
 func TestOpenCodeConfigurationConsumesNativePreferences(t *testing.T) {
 	input := openCodeInputFixture()
 	input.ConfigOverlay = "[context]\nauto_compaction = false\nprune = false\n[cache]\noptimization = \"NO_HINTS\""
+	if err := validateRuntimeSelection(input); err != nil {
+		t.Fatal("runner preflight rejected native preferences", err)
+	}
+
 	raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
 	var config map[string]any
 	if err != nil || json.Unmarshal(raw, &config) != nil {
@@ -216,6 +227,9 @@ func TestOpenCodeConfigurationConsumesNativePreferences(t *testing.T) {
 		t.Fatal("native preferences lost")
 	}
 	input.ConfigOverlay = "[cache]\nno_store = true\nrequired = false"
+	if validateRuntimeSelection(input) == nil {
+		t.Fatal("strict unsupported preference passed runner preflight")
+	}
 	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
 		t.Fatal("strict unsupported preference reached native config")
 	}
