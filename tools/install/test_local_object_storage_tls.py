@@ -54,6 +54,21 @@ class LocalStorageTLS(unittest.TestCase):
         self.assertIn("podSelector", peer)
         self.assertEqual(peer["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"], "kodex-runtime")
 
+    def test_archive_dns_is_exact_and_independent_from_controller_labels(self):
+        result = profile.storage(resources(ROOT / "deploy/k8s/base/local-object-storage"), self.ca, "synthetic-local")
+        worker = profile.one(result, "NetworkPolicy", "session-archive-local-object-storage")
+        self.assertEqual(worker["metadata"]["namespace"], "kodex-runtime")
+        self.assertEqual(worker["spec"]["podSelector"], {"matchLabels": {"session-archive.kodex.dev/managed": "true"}})
+        self.assertEqual(worker["spec"]["policyTypes"], ["Egress"])
+        self.assertEqual(worker["spec"]["egress"], [
+            {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+                     "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+             "ports": [{"protocol": "UDP", "port": 53}, {"protocol": "TCP", "port": 53}]},
+            {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kodex-system"}},
+                     "podSelector": {"matchLabels": {"app.kubernetes.io/name": "seaweedfs", "app.kubernetes.io/component": "object-storage"}}}],
+             "ports": [{"protocol": "TCP", "port": 8333}]},
+        ])
+
     def test_all_platform_consumers_and_ephemeral_archive_workers_get_ca(self):
         source = []
         for component in ["control-plane", "artifact-retention", "backup-controller", "session-archive"]:

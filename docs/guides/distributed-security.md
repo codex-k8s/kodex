@@ -291,6 +291,9 @@ fallback при ошибке защищённого транспорта. Сох
 `kube-system/kube-dns` по UDP/TCP53, если его рабочий путь использует имена
 Service. Такое правило не должно зависеть от issuer sidecar label: в
 `trusted-cluster` sidecar отсутствует, но DNS нужен тому же domain consumer.
+То же правило проверяется для одноразового archive worker в `kodex-runtime`: DNS
+его controller в `kodex-system` не разрешает DNS дочернему Pod. Проверяется
+полный render worker selector → kube-dns → exact S3 ingress/egress и TLS CA.
 Readiness фонового controller подтверждает фактический owner RPC, а не только
 доступность Kubernetes API; отказ claim закрывает readiness до успешного цикла.
 

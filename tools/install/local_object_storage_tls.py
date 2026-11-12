@@ -68,19 +68,20 @@ def storage(resources, ca, issuer):
     policy["spec"]["ingress"].append({"from": [{"namespaceSelector": {"matchLabels": {
         "kubernetes.io/metadata.name": "kodex-runtime"}}, "podSelector": {"matchLabels": {
         "session-archive.kodex.dev/managed": "true"}}}], "ports": [{"protocol": "TCP", "port": 8333}]})
+    dns_rule = {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
+        "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
+        "ports": [{"protocol": protocol, "port": 53} for protocol in ["UDP", "TCP"]]}
     result.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": {
         "name": "session-archive-local-object-storage", "namespace": "kodex-runtime"}, "spec": {
         "podSelector": {"matchLabels": {"session-archive.kodex.dev/managed": "true"}}, "policyTypes": ["Egress"],
-        "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kodex-system"}},
+        "egress": [copy.deepcopy(dns_rule), {"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kodex-system"}},
             "podSelector": {"matchLabels": {"app.kubernetes.io/name": "seaweedfs", "app.kubernetes.io/component": "object-storage"}}}],
             "ports": [{"protocol": "TCP", "port": 8333}]}]}})
     result.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": {
         "name": "local-object-storage-dns", "namespace": "kodex-system"}, "spec": {
         "podSelector": {"matchExpressions": [{"key": "app.kubernetes.io/name", "operator": "In",
             "values": ["seaweedfs", "seaweedfs-bucket-bootstrap"]}]}, "policyTypes": ["Egress"],
-        "egress": [{"to": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
-            "podSelector": {"matchLabels": {"k8s-app": "kube-dns"}}}],
-            "ports": [{"protocol": protocol, "port": 53} for protocol in ["UDP", "TCP"]]}]}})
+        "egress": [copy.deepcopy(dns_rule)]}})
     for resource in result:
         resource["metadata"].setdefault("labels", {})["app.kubernetes.io/part-of"] = "kodex"
     return result
