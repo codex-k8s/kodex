@@ -136,10 +136,11 @@ runner images, полным набором waiting statuses, без запуск
 Если фактический scan завершился `OOMKilled` при контейнерном лимите 2 GiB,
 canonical renderer принимает `--image-admission-memory-profile bounded-2g`.
 Он включает существующий component `image-admission-memory-budget`: только
-ключ `scan-go-memory-limit-mib=1536` в ConfigMap `kodex-image-admission`.
-Wrapper передаёт `GOMEMLIMIT=1536MiB` Syft/Grype и проверяет конечный cgroup v2
+ключ `scan-go-memory-limit-mib=768` в ConfigMap `kodex-image-admission`.
+Wrapper передаёт `GOMEMLIMIT=768MiB` Syft/Grype и проверяет конечный cgroup v2
 limit с резервом не меньше25%. Профиль `default` сохраняет прежнее поведение.
-Это мягкий предел Go runtime, а не гарантия отсутствия OOM. Requests/limits,
+Резерв выбран после повторного OOM при1536MiB; более низкий предел ещё требует
+реальной проверки. Это мягкий предел Go runtime, а не гарантия отсутствия OOM. Requests/limits,
 сканирование, policy, подписи и правила допуска не ослабляются.
 
 В уже установленном окружении сначала завершить текущие admission attempts,
@@ -794,3 +795,24 @@ Docker auth в jq через private files/JSON stdin, а не `--arg` со зн
 не появляются в argv. Временные файлы имеют0600 внутри0700. При обновлении
 node registry сохраняется прежнее удаление завершающих LF из credential files.
 Это не меняет auth scopes, CA/TLS policy или существующие secret refs.
+
+
+### Доставка устойчивого workspace
+
+Для полной приёмки файлов canonical renderer получает
+`--session-workspace-profile SESSION_WORKSPACE_V2`. Закрытый transform проверяет
+ABI5 владельца и immutable images, exact envFrom и отсутствие shadow env.
+Он назначает профиль одновременно control-plane/session-archive и согласованный
+`local-path`/`20Gi` runtime-controller/session-archive; маркер Pod template
+обеспечивает rollout после изменения ConfigMap. Default `disabled` не меняет
+render и не служит командой удаления уже существующего V2 состояния.
+
+Перед переходом установленного стенда подтверждаются current schema041,
+совместимые CP/RC/runner/archive images и отсутствие активных runs/archive tasks.
+Применение: ConfigMap consumers, затем archive controller и runtime-controller,
+последним control-plane owner; каждый Deployment проверяется по UID/spec и
+readiness. Только после этого разрешается model claim тестового AGENT/WORKFLOW.
+Manifest не заменяет проверку реального PREPARE_WORKSPACE_VOLUME, owner ACK,
+PVC/S3 checkpoint и restore. Матрица lifecycle сохранена в
+[runtime-workspace-durability-1953](../operations/runtime-workspace-durability-1953.md).
+Отключение флага не разрешает fallback, потерю файлов или удаление bindings.

@@ -28,6 +28,7 @@ usage() {
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--disable-observability; exporters only]' \
     '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
+    '  [--session-workspace-profile disabled|SESSION_WORKSPACE_V2; default disabled]' \
     '  [--image-admission-memory-profile default|bounded-2g; default default]' \
     '  [--clamav-mode enabled|disabled; default enabled]' \
     '  [--artifact-antivirus-mode required|disabled; default required, disabled marks ordinary files NOT_SCANNED]' \
@@ -76,6 +77,7 @@ disable_observability=false
 clamav_mode=enabled
 clamav_storage_profile=shared-rwx
 image_admission_memory_profile=default
+session_workspace_profile=disabled
 artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 disable_monitoring_resources=false
@@ -118,6 +120,7 @@ while (($# > 0)); do
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
     --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
+    --session-workspace-profile) session_workspace_profile="${2:-}"; shift 2 ;;
     --image-admission-memory-profile) image_admission_memory_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
@@ -751,6 +754,9 @@ if [[ -n "$native_integration_configuration$native_integration_configuration_sha
     --configuration "$native_integration_configuration" --configuration-sha256 "$native_integration_configuration_sha256" ||
     fail 'native integration profile render rejected'
 fi
+
+python3 "$repository_root/tools/install/workspace_storage_profile.py" --render "$rendered" \
+  --profile "$session_workspace_profile" || fail 'workspace storage profile render rejected'
 
 # Canonicalize duplicate resources before validation. The web-only aggregate may
 # include a shared ConfigMap through more than one component base, but the bytes

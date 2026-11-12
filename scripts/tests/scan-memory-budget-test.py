@@ -104,7 +104,7 @@ class ScanMemoryBudgetTest(unittest.TestCase):
         k.write_text(k.read_text() + "components:\n- " + os.path.relpath(component, self.root) + "\n")
         after = render()
         cm = next(v for v in after if v["kind"] == "ConfigMap" and v["metadata"]["name"] == "kodex-image-admission")
-        self.assertEqual(cm["data"].pop("scan-go-memory-limit-mib"), "1536")
+        self.assertEqual(cm["data"].pop("scan-go-memory-limit-mib"), "768")
         self.assertEqual(cm["data"]["scan-memory-budget.sh"], SCRIPT.read_text())
         self.assertEqual(before, after)
 
