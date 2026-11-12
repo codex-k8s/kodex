@@ -577,7 +577,14 @@ function cli(t, profile = 'outbox-index', sourceCase = '') {
     labels:{'app.kubernetes.io/name':'control-plane','app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging','kodex.dev/local-profile':'stable'}},
     spec:{replicas:2,template:{spec:{containers:[{name:'control-plane',image:`registry.local.kodex/kodex/control-plane@${digest}`}]}}},
     status:{observedGeneration:1,replicas:2,updatedReplicas:2,readyReplicas:2,availableReplicas:2}};
-  if(profile==='workspace-archive-abi'){delete deployment.metadata.labels['kodex.dev/local-profile'];deployment.spec.replicas=3;for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])deployment.status[key]=3;}
+  if(profile==='workspace-archive-abi'){
+    delete deployment.metadata.labels['kodex.dev/local-profile'];
+    deployment.metadata.labels['kodex.dev/environment']='production';deployment.metadata.labels['kodex.dev/profile']='web-only';
+    const portableBase=base();Object.assign(portableBase.metadata.labels,{'kodex.dev/environment':'production','kodex.dev/profile':'web-only','app.kubernetes.io/part-of':'kodex'});
+    delete portableBase.metadata.labels['kodex.dev/local-profile'];
+    portableBase.spec.template.spec.containers[0].env.push({name:'OTEL_SDK_DISABLED',value:'true'});write(render,portableBase);
+    deployment.spec.replicas=3;for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])deployment.status[key]=3;
+  }
   const state=join(dir,'state.json');write(state,{deployment,calls:[],mode:'',dependencyVersion:'1',namespaceUID:'namespace'});
   const executable=join(dir,'kubectl');
   writeFileSync(executable,`#!/usr/bin/env node
@@ -1496,6 +1503,11 @@ test('040: workspace workflow требует точный version pin и зав�
 // Проверяется реальный CLI plan/check/stop/apply/resume с journal и CAS, а не helper числа replica.
 test('042 portable CLI сохраняет три replica и прежний digest при drain/resume', t => {
  const f=cli(t,'workspace-archive-abi');
+ for(const [key,value] of [['kodex.dev/environment','staging'],['kodex.dev/profile','foreign'],['kodex.dev/local-profile','stable']]){
+  const original=f.read().deployment.metadata.labels[key];f.edit(s=>s.deployment.metadata.labels[key]=value);
+  assert.notEqual(f.run('plan').status,0);
+  f.edit(s=>{if(original===undefined)delete s.deployment.metadata.labels[key];else s.deployment.metadata.labels[key]=original;});
+ }
  f.edit(s=>s.deployment.spec.replicas=2);assert.notEqual(f.run('plan').status,0);
  assert.equal(f.read().calls.filter(a=>a.includes('patch')||a.includes('create')).length,0);
  f.edit(s=>s.deployment.spec.replicas=3);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');

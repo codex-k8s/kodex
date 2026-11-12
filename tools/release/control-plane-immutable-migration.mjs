@@ -134,8 +134,14 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     before.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
     before.metadata.labels?.['app.kubernetes.io/component'] === 'migration' &&
     [undefined,'kodex'].includes(before.metadata.labels?.['app.kubernetes.io/part-of']) &&
-    before.metadata.labels?.['kodex.dev/environment'] === 'staging', 'MIGRATOR_IDENTITY_INVALID');
+    before.metadata.labels?.['kodex.dev/environment'] === (configuration.anchorProfile === 'portable' ? 'production' : 'staging') &&
+    (configuration.anchorProfile !== 'portable' || (before.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+      before.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && !before.metadata.labels?.['kodex.dev/local-profile'])), 'MIGRATOR_IDENTITY_INVALID');
   const pod = before.spec?.template?.spec, container = pod?.containers?.[0];
+  const migrationEnvironment = [{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}];
+  // Отключённый observability profile portable renderer сохраняется без произвольного env passthrough.
+  if (configuration.anchorProfile === 'portable' && container?.env?.some(value => value.name === 'OTEL_SDK_DISABLED'))
+    migrationEnvironment.push({name:'OTEL_SDK_DISABLED',value:'true'});
   // YAML 1.1 Kubernetes и YAML 1.2 yq по-разному переводят 0440 в JSON. Права из render
   // не переносятся: новый Job всегда назначает собственные явные десятичные modes.
   const refsOnly = values => (values ?? []).map(value => {
@@ -148,7 +154,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     pod.restartPolicy === 'Never' && pod.containers.length === 1 && container?.name === 'migrate' &&
     fingerprint(container.command) === fingerprint(['/usr/local/bin/control-plane-cli']) &&
     fingerprint(container.args) === fingerprint(['up']) &&
-    fingerprint(container.env) === fingerprint([{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}]) &&
+    fingerprint(container.env) === fingerprint(migrationEnvironment) &&
     !container.envFrom && fingerprint(container.volumeMounts) === fingerprint(mounts) &&
     fingerprint(refsOnly(pod.volumes)) === fingerprint(refsOnly(volumes)) &&
     !pod.hostNetwork && !pod.hostPID && !pod.hostIPC &&
@@ -169,7 +175,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
       securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,fsGroup:10001,fsGroupChangePolicy:'OnRootMismatch',seccompProfile:{type:'RuntimeDefault'}},
       initContainers:[structuredClone(waitForPostgres)],
       containers:[{name:'migrate',image,imagePullPolicy:'Always',command:['/usr/local/bin/control-plane-cli'],args:[configuration.executionCommand ?? 'up'],
-        env:[{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}],
+        env:migrationEnvironment,
         securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,readOnlyRootFilesystem:true,allowPrivilegeEscalation:false,capabilities:{drop:['ALL']}},
         resources:{requests:{cpu:'25m',memory:'32Mi'},limits:{cpu:'250m',memory:'128Mi'}},volumeMounts:structuredClone(mounts)}],volumes:structuredClone(volumes)}}}};
   const checkJob = structuredClone(job);
@@ -283,7 +289,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const value = get('deployment','control-plane');
     ensure(value.kind === 'Deployment' && value.metadata?.name === 'control-plane' && value.metadata.namespace === namespace &&
       value.metadata.uid && value.metadata.resourceVersion && value.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
-      value.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && value.metadata.labels?.['kodex.dev/environment'] === 'staging',
+      value.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' &&
+      value.metadata.labels?.['kodex.dev/environment'] === (configuration.anchorProfile === 'portable' ? 'production' : 'staging') &&
+      (configuration.anchorProfile !== 'portable' || (value.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+        !value.metadata.labels?.['kodex.dev/local-profile'])),
     'MIGRATION_ANCHOR_IDENTITY_INVALID');
     return value;
   };
