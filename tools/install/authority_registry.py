@@ -122,6 +122,39 @@ def verify_published_resume(state, resources, startup_only=True, completion=None
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
+BOOTSTRAP_BUSINESS_SQL = "SELECT json_build_object('runs',(SELECT count(*) FROM control_plane.runs),'turns',(SELECT count(*) FROM control_plane.session_turns));"
+
+
+def verify_initial_runtime(state, resources):
+    """Допускает пустой runtime либо ещё не исполнявшийся штатный warm Pod первого bootstrap."""
+    pods = json.loads(state.call(['-n', 'kodex-runtime', 'get', 'pods', '-o', 'json']))['items']
+    if not pods:
+        return
+    require(len(pods) == 1, 'EMPTY_RUNTIME_REQUIRED_FOR_INITIAL_RESUME')
+    pod = pods[0];meta = pod.get('metadata', {});spec = pod.get('spec', {});status = pod.get('status', {})
+    labels = meta.get('labels', {})
+    require(meta.get('name') == 'system-assistant-warm' and not meta.get('deletionTimestamp') and
+            labels.get('runtime.kodex.dev/mode') == 'warm' and labels.get('runtime.kodex.dev/managed') == 'true' and
+            labels.get('app.kubernetes.io/name') == 'agent-runner' and spec.get('serviceAccountName') == 'agent-runner' and
+            status.get('phase') == 'Pending', 'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    image = provider_sandbox_profile.source_policy(resources)['data']['nodeReadbackImage']
+    containers = spec.get('containers', []);initializers = spec.get('initContainers', [])
+    require(len(containers) == 3 and {c.get('name') for c in containers} == {'role-runtime', 'provider-runtime', 'provider-credential-relay'} and
+            len(initializers) == 2 and {c.get('name') for c in initializers} == {'workspace-prepare', 'workspace-init'} and
+            all(c.get('image') == image for c in containers + initializers) and not spec.get('ephemeralContainers'),
+            'EXACT_INSTALLATION_WARM_IMAGES_REQUIRED')
+    for field, expected in [('containerStatuses', containers), ('initContainerStatuses', initializers)]:
+        observed = status.get(field, [])
+        require(len(observed) == len(expected) and {c.get('name') for c in observed} == {c['name'] for c in expected} and
+                all(c.get('restartCount') == 0 and not c.get('imageID') and not c.get('lastState') and
+                    not c.get('ready') and not c.get('started') and set(c.get('state', {})) == {'waiting'} for c in observed),
+                'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    require(not status.get('ephemeralContainerStatuses'), 'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    raw = state.call(['-n', 'kodex-system', 'exec', 'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d', 'control_plane',
+                      '-v', 'ON_ERROR_STOP=1', '-c', BOOTSTRAP_BUSINESS_SQL])
+    require(json.loads(raw) == {'runs': 0, 'turns': 0}, 'EMPTY_BOOTSTRAP_BUSINESS_HISTORY_REQUIRED')
+
+
 def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None, artifact_antivirus_mode='required', clamav_storage_profile='shared-rwx', preserve_observability_profile=False):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
     require(type(preserve_observability_profile) is bool, 'EXPLICIT_OBSERVABILITY_PRESERVATION_REQUIRED')
@@ -170,8 +203,7 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
                 except Rejected:
                     pass
             verify_resource(after[identity], deployment)
-    runtime = json.loads(state.call(['-n', 'kodex-runtime', 'get', 'pods', '-o', 'json']))['items']
-    require(not runtime, 'EMPTY_RUNTIME_REQUIRED_FOR_INITIAL_RESUME')
+    verify_initial_runtime(state, resources)
     return dict(status='WORKLOAD_BOOTSTRAP_RESUME_PREFLIGHT_PASSED', deployments=len(live),
                 migrations='VERIFIED_NOT_REPEATED', authorityHistory='PRESERVED_NOT_REPLAYED')
 

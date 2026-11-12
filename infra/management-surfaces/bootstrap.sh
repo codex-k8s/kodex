@@ -530,8 +530,9 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
     ' >/dev/null || fail "surface OAuth2 middleware is absent: $ingress"
   done
   kubectl -n kodex-system get ingress staff-control-center -o json | jq -e '
-    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
-      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"
+    .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] as $chain |
+    (["kodex-system-oauth2-control-center-chain@kubernetescrd",
+      "kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"] | index($chain)) != null
   ' >/dev/null || fail 'Control Center OAuth2 middleware is absent'
   kubectl -n kodex-system get ingress staff-control-center-api -o json | jq -e '
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==

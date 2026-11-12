@@ -282,7 +282,8 @@ if [[ "$arguments" == *' get ingress kodex-headlamp -o json '* ]]; then
   exit 0
 fi
 if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
-  printf '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd"}}}\n'
+  jq -cn --arg chain "${FAKE_CONTROL_CENTER_CHAIN:-kodex-system-oauth2-control-center-chain@kubernetescrd,kodex-system-staff-control-center-retry@kubernetescrd}" \
+    '{metadata:{annotations:{"traefik.ingress.kubernetes.io/router.middlewares":$chain}}}'
   exit 0
 fi
 if [[ "$arguments" == *' get ingress staff-control-center-api -o json '* ]]; then
@@ -344,6 +345,16 @@ if ! run_readback kodex-headlamp-admin cluster-admin StatefulSet \
   cat "$temporary_directory/readback.err" >&2
   fail 'management readback rejected the exact pinned chart resources'
 fi
+# Portable release не добавляет retry hot-reload; обе закрытые цепочки сохраняют OAuth2.
+FAKE_CONTROL_CENTER_CHAIN=kodex-system-oauth2-control-center-chain@kubernetescrd \
+  run_readback kodex-headlamp-admin cluster-admin StatefulSet >/dev/null ||
+  fail 'management readback rejected the portable release OAuth2 chain'
+for invalid_chain in absent kodex-system-staff-control-center-retry@kubernetescrd \
+  kodex-system-oauth2-control-center-chain@kubernetescrd,unknown@kubernetescrd; do
+  FAKE_CONTROL_CENTER_CHAIN="$invalid_chain" expect_readback_rejected \
+    kodex-headlamp-admin cluster-admin StatefulSet \
+    'Control Center OAuth2 middleware is absent' invalid-control-center-chain
+done
 expect_readback_rejected kodex-headlamp cluster-admin StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-name
 expect_readback_rejected kodex-headlamp-admin view StatefulSet \

@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.8
+version: 2.4.9
 updated: 2026-11-12
 ---
 
@@ -105,7 +105,8 @@ authority, но направляет raw TLS tunnel на этот внутрен
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
 
-Перед открытием Control Center установить отдельную dependency
+После полного завершения платформенного bootstrap и перед открытием Control Center
+установить отдельную dependency
 [proxy session store](../operations/proxy-session-store-1383.md), затем выполнить
 `infra/management-surfaces/bootstrap.sh --mode apply-surfaces` с выбранным
 профилем как минимум `control-center`. Одних PWA/API Deployment и Ingress
@@ -114,7 +115,16 @@ namespace пока закрыто отклоняется, чтобы manifests �
 session store; смена environment labels для обхода staging gate запрещена.
 OIDC connect address содержит порт **Service** (у bundled SSO —443),
 `--oidc-target-port` — порт **Pod** (8443). SNI остаётся публичным hostname,
-проверка CA обязательна.
+проверка CA обязательна. Portable release использует OAuth2 chain без
+hot-reload retry; readback допускает только эти две канонические цепочки.
+Initial-resume выполняется до установки management Deployment: его guard
+проверяет точный набор платформенных компонентов. Runtime должен быть пустым;
+допускается только первоначальный `system-assistant-warm` в Pending с exact
+runner images, полным набором waiting statuses, без запусков/restarts контейнеров
+и при нулевых `runs`/`session_turns`. Этот Pod не удаляется и не считается готовым:
+публикация release artifacts ещё должна обеспечить его первый pull/start.
+Работающий warm Pod, бизнес-история, неизвестный Pod или неполный status
+закрывают initial-resume; это не maintenance/Stop/retry действующей сессии.
 
 ### Подготовка полного runner без изменения кластера
 
