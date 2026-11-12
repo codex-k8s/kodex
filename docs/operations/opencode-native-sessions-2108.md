@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.10
+version: 1.4.11
 updated: 2026-11-12
 ---
 
@@ -807,3 +807,39 @@ artifact capability в AGENT и WORKFLOW snapshot. Проверки коорди
 этого grant по-прежнему требуют только delegation и не допускают чужие файлы.
 Кластерный запуск и последствия отказа до BIND проверяются отдельно; наличие
 локального теста не освобождает неопределённого writer и не доказывает delivery.
+
+
+## Подтверждение известной physical attempt при занятом root
+
+Установленный workflow после исправления coordinator capability записал файл и
+создал server-owned delegation. Подготовка дочернего PVC остановилась до helper
+Job: первая attempt осталась без положительного результата, а повторная
+reconciliation закономерно не получила право инициализировать том. Это FAIL
+сквозного workflow, несмотря на успешный coordinator turn.
+
+Отдельная PostgreSQL-проверка воспроизводит общий дефект: `RenewWorkspaceVolumeTask`
+и report использовали `SKIP LOCKED`, предназначенный для очереди claim. Занятый
+root немедленно превращался в `Unavailable`. Известный report теперь после
+проверки durable task/lease/fence блокирует точный root с бюджетом не более двух
+секунд и более ранним caller deadline. Выбор новых tasks сохраняет `SKIP LOCKED`.
+Дальнейший порядок root → session → volume → task, свежая проверка origin и
+неизменные CAS сохраняются. Physical Create/Prepare этим кодом не повторяются.
+
+| Переход | Полномочия, состояние и доставка |
+|---|---|
+| Create / claim | Прежний owner intent, immutable snapshot, attempt/event/grant; занятые кандидаты очереди пропускаются |
+| Renew известной attempt | Точные service method, task/lease/fence/generation до root lock; после ожидания проверяются current attempt, expiry, actor и origin; меняется только expiry, authoritative read — attempt ledger, нового события нет |
+| Complete / поздний physical report | Тот же ограниченный root lock; прежние positive fact, owner receipt, audit/outbox и запрет повторного внешнего действия |
+| Fail / cancel / delete | Существующий owner terminal отзывает grant; ожидание lock не оживляет завершённую задачу и не подтверждает неизвестный результат |
+| Lease expiry / retry / dead-letter | Прежний bounded reconciliation-only retry без write credit; старые attempts и physical uncertainty сохраняются |
+| WAITING_OWNER / CHANGES_REQUESTED | Политика business graph не меняется; report не принимает human decision и не продлевает business deadline |
+| Deadline ожидания | `Unavailable`, rollback и отсутствие physical admission; не `PASS` и не разрешение очистить writer/PVC |
+
+Проверка на настоящем PostgreSQL удерживает root отдельной транзакцией,
+подтверждает ожидание через `pg_blocking_pids`, затем освобождает его и сверяет
+неизменные lease/fence/generation. Отдельный короткий caller deadline проверяет
+закрытый отказ. Сценарий включён для CREATE/PREPARE в AGENT и WORKFLOW lifecycle.
+Через Context7 проверены PostgreSQL18 `SELECT` locking clause, READ COMMITTED и
+`pg_blocking_pids`; в runtime используется тот же закреплённый PostgreSQL18.3.
+Отсутствие исходного helper Job не объявляется исправленным задним числом:
+установленная повторная приёмка требует нового разрешённого запуска.

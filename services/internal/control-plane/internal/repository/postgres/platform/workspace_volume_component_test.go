@@ -62,6 +62,7 @@ func claimPreparedWorkspaceComponent(t *testing.T, ctx context.Context, reposito
 		}
 		proof := command.WorkspaceVolumeTaskInput{TaskRef: work.TaskRef, LeaseRef: stringMap(item, "leaseRef"),
 			Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation")}
+		testWorkspaceVolumeRenewContention(t, ctx, repository, service, renewer, runRef, proof)
 		renewed, err := service.RenewWorkspaceVolumeTask(ctx, renewer, proof)
 		if err != nil || stringMap(renewed, "leaseRef") != proof.LeaseRef || stringMap(renewed, "fence") != proof.Fence ||
 			runtimeRevisionMapInt64(renewed, "generation") != proof.Generation {

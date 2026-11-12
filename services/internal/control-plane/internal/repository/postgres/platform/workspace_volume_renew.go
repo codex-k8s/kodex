@@ -15,6 +15,12 @@ import (
 )
 
 var (
+	// queryWorkspaceVolumeLockReportOrigin waits for the known report's root within a bounded context;
+	// unlike queue selection it must not skip a temporarily busy owner and abandon a live attempt.
+	// queryWorkspaceVolumeLockReportOrigin ожидает известный корень report в ограниченном context;
+	// в отличие от выбора очереди он не пропускает занятого владельца и не теряет живую attempt.
+	//go:embed sql/workspace_volume__lock_report_origin.sql
+	queryWorkspaceVolumeLockReportOrigin string
 	// queryWorkspaceVolumeReportOrigin resolves a trusted root only after an exact durable attempt/fence match.
 	// queryWorkspaceVolumeReportOrigin разрешает trusted root только после exact durable attempt/fence match.
 	//go:embed sql/workspace_volume__report_origin.sql
@@ -24,6 +30,10 @@ var (
 	//go:embed sql/workspace_volume__renew.sql
 	queryWorkspaceVolumeRenew string
 )
+
+// workspaceVolumeReportLockBudget bounds owner serialization independently of a caller deadline.
+// workspaceVolumeReportLockBudget ограничивает сериализацию владельца независимо от caller deadline.
+const workspaceVolumeReportLockBudget = 2 * time.Second
 
 // workspaceVolumeFenceArgs bounds the private proof before a database lookup; a reference alone cannot initiate deadline reconciliation.
 // workspaceVolumeFenceArgs ограничивает private proof до database lookup; одна reference не запускает deadline reconciliation.
@@ -53,8 +63,11 @@ func lockWorkspaceVolumeReportTaskTx(ctx context.Context, tx pgx.Tx, current sco
 		return workspaceVolumeTask{}, errs.ErrUnavailable
 	}
 	var lockedRoot string
-	if err := tx.QueryRow(ctx, queryWorkspaceVolumeLockOrigin, pgx.StrictNamedArgs{
-		"organization_id": current.organizationID, "root_run_id": rootID}).Scan(&lockedRoot); errors.Is(err, pgx.ErrNoRows) {
+	lockContext, stop := context.WithTimeout(ctx, workspaceVolumeReportLockBudget)
+	err = tx.QueryRow(lockContext, queryWorkspaceVolumeLockReportOrigin, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "root_run_id": rootID}).Scan(&lockedRoot)
+	stop()
+	if errors.Is(err, pgx.ErrNoRows) {
 		return workspaceVolumeTask{}, errs.ErrUnavailable
 	} else if err != nil {
 		return workspaceVolumeTask{}, errs.ErrUnavailable
