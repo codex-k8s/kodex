@@ -292,7 +292,7 @@ test-agent-runner:
 test-opencode-native: check-go-toolchain
 	@timeout 30s node --test services/jobs/agent-runner/internal/opencode/model_measurement.test.mjs
 	@test -n "$${KODEX_TEST_OPENCODE_BINARY:-}" || { echo 'KODEX_TEST_OPENCODE_BINARY must select the pinned qualification executable' >&2; exit 1; }
-	@cd services/jobs/agent-runner && env -u GOFLAGS GOENV=off GOWORK=off timeout 480s go test -count=1 -race -timeout=420s -v ./internal/opencode
+	@./scripts/tests/opencode-template-native-test.sh
 
 .PHONY: test-opencode-native-postgres
 test-opencode-native-postgres: check-go-toolchain

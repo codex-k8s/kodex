@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LITELLM = 'docker.io/litellm/litellm@sha256:3d88bd757134a00e8c00237b85a021ab1f6d54abb9c1df750f411dbe7256a500'
 REDIS = 'docker.io/library/redis@sha256:82403a0812a51faf6779f8d0dbe25ea85279ec7d49d24a3c78a65e9d8a87fa5f'
 LABEL = 'qualification.kodex.dev/scope'
-TESTS = '^(TestNativeLongHistoryCheckpointAndFreshContext|TestNativeLiteLLMRedisBypass|TestNativeBundledProtocolAdapters|TestNativeImageHookBindsActualToolCalls|TestNativeCachePolicyControlsEveryRequest|TestNativePruningRetainsOriginalToolOutputs|TestNativeAbortClosesInterruptedToolBeforeExport|TestNativeRejectedKeyHasNoFallback|TestNativeFailureRecoveryBounds)$'
+TESTS = '^(TestNativeLongHistoryCheckpointAndFreshContext|TestNativeLiteLLMRedisBypass|TestNativeBundledProtocolAdapters|TestNativeImageHookBindsActualToolCalls|TestNativeCachePolicyControlsEveryRequest|TestNativePruningRetainsOriginalToolOutputs|TestNativeAbortClosesInterruptedToolBeforeExport|TestNativeRejectedKeyHasNoFallback|TestNativeFailureRecoveryBounds|TestNativeMaterializedTemplatesOnWire)$'
 
 
 def require(condition):
@@ -40,7 +40,7 @@ def regular(path, maximum):
         return stream.read(maximum + 1)
 
 
-def resources(namespace, scope, image, binary_digest):
+def resources(namespace, scope, image, binary_digest, template_fixtures):
     def metadata(name, namespaced=True):
         return {'name': name, **({'namespace': namespace} if namespaced else {}),
                 'labels': {'app.kubernetes.io/part-of': 'kodex', LABEL: scope}}
@@ -64,11 +64,12 @@ process.on('SIGTERM',()=>child.kill('SIGTERM'));child.on('error',()=>process.exi
                     {'name': 'fixture', 'configMap': {'name': 'fixture', 'defaultMode': 292}}],
         'containers': [
             {'name': 'native', 'image': image, 'imagePullPolicy': 'IfNotPresent', 'command': ['node', '-e', launcher],
-             'securityContext': security, 'volumeMounts': mounts, 'workingDir': '/tmp',
+             'securityContext': security, 'volumeMounts': mounts + [{'name': 'fixture', 'mountPath': '/fixture', 'readOnly': True}], 'workingDir': '/tmp',
              'resources': {'requests': {'cpu': '200m', 'memory': '256Mi'}, 'limits': {'cpu': '2', 'memory': '2Gi'}},
              'env': [{'name': 'KODEX_TEST_OPENCODE_BINARY', 'value': '/usr/local/bin/opencode'},
                      {'name': 'KODEX_TEST_LITELLM_REDIS', 'value': '1'},
                      {'name': 'KODEX_TEST_NATIVE_POD', 'value': '1'},
+                     {'name': 'KODEX_TEST_TEMPLATE_WIRE_FIXTURE', 'value': '/fixture/materializations.json'},
                      {'name': 'KODEX_TEST_PATTERN', 'value': TESTS},
                      {'name': 'KODEX_TEST_BINARY_SHA256', 'value': binary_digest}]},
             {'name': 'redis', 'image': REDIS, 'imagePullPolicy': 'IfNotPresent',
@@ -87,7 +88,8 @@ process.on('SIGTERM',()=>child.kill('SIGTERM'));child.on('error',()=>process.exi
         {'apiVersion': 'networking.k8s.io/v1', 'kind': 'NetworkPolicy', 'metadata': metadata('isolation'),
          'spec': {'podSelector': {}, 'policyTypes': ['Ingress', 'Egress'], 'ingress': [], 'egress': []}},
         {'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': metadata('fixture'), 'immutable': True,
-         'data': {'relay.py': (ROOT / 'services/jobs/agent-runner/internal/opencode/testdata/litellm_unix_fixture.py').read_text()}},
+         'data': {'relay.py': (ROOT / 'services/jobs/agent-runner/internal/opencode/testdata/litellm_unix_fixture.py').read_text(),
+                  'materializations.json': template_fixtures.decode()}},
         pod]
 
 
@@ -180,6 +182,14 @@ def main():
         environment = os.environ.copy()
         environment.pop('GOFLAGS', None)
         environment.update(GOENV='off', GOWORK='off', GOTOOLCHAIN='go1.26.10', CGO_ENABLED='0')
+        fixture_path = state / 'materializations.json'
+        environment['KODEX_TEST_TEMPLATE_WIRE_FIXTURE'] = str(fixture_path)
+        produced = subprocess.run(['go', 'test', '-count=1', '-timeout=90s', '-run', '^TestNativeWireMaterializations$', './internal/domain/service/prompt'],
+                                  cwd=ROOT / 'services/internal/control-plane', env=environment, capture_output=True, timeout=120)
+        (state / 'materialization.log').write_bytes(produced.stdout + produced.stderr)
+        require(produced.returncode == 0)
+        template_fixtures = regular(fixture_path, 256 << 10)
+        require(len(json.loads(template_fixtures)) == 4)
         built = subprocess.run(['go', 'test', '-c', '-trimpath', '-buildvcs=true', '-o', str(binary_path), './internal/opencode'],
                                cwd=ROOT / 'services/jobs/agent-runner', env=environment, capture_output=True, timeout=300)
         (state / 'build.log').write_bytes(built.stdout + built.stderr)
@@ -193,7 +203,8 @@ def main():
         plan = {'schema': 'kodex.native-cluster-qualification/v1', 'context': args.context, 'clusterUID': args.cluster_uid,
                 'nodes': {x['metadata']['name']: x['metadata']['uid'] for x in nodes}, 'sourceSHA': source,
                 'scope': scope, 'namespace': namespace, 'binaryPath': str(binary_path), 'binarySHA256': sha(binary),
-                'resources': resources(namespace, scope, args.runner_image, sha(binary))}
+                'templateFixturesSHA256': sha(template_fixtures),
+                'resources': resources(namespace, scope, args.runner_image, sha(binary), template_fixtures)}
         raw = encoded(plan)
         (state / 'plan.json').write_bytes(raw)
         print(json.dumps({'status': 'PLAN_READY', 'sha256': sha(raw), 'namespace': namespace}))

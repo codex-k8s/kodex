@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.21
+version: 1.4.22
 updated: 2026-11-12
 ---
 
@@ -1191,3 +1191,34 @@ restart evidence, а не доказательство устранения пр
 Независимые product/security/architecture review и owner gate остаются впереди;
 PR остаётся draft. Недоступные DGX/корпоративные профили, выключенная Grafana и
 многочасовой soak не объявляются проверенными. Цена live-вызовов остаётся UNKNOWN.
+
+## Материализация AST на фактическом native model wire
+
+`make test-opencode-native` сначала вызывает production `prompt.Materialize`
+в control-plane через `TestNativeWireMaterializations`, затем передаёт созданные
+synthetic fixtures настоящему OpenCode в `TestNativeMaterializedTemplatesOnWire`.
+Собственного renderer в runner или оснастке нет. Скрипт создаёт приватный временный
+каталог, запись fixture требует нового файла; каталог удаляется после проверки.
+Кластерный `opencode-cluster-qualification.py plan` генерирует fixture тем же
+тестом и закрепляет SHA256/байты в immutable ConfigMap плана. Native Pod получает
+только read-only synthetic fixture; новые credentials, network grants и PVC
+не требуются. Отсутствие fixture означает SKIP, который кластерный readback
+не принимает за PASS.
+
+Карта проверки: synthetic текущие зависимости → общий owner renderer →
+неизменяемые `RunnerInput.Instructions`/digest → общий `DecodePromptService` →
+V1 prompt.system → штатный OpenCode SDK → фактический HTTP body synthetic модели.
+Четыре хода проверяют вложенный template, `with`, `printf`, изменённые `if/range`,
+а также заново разрешённые равные значения. Между первым и вторым ходом выполнены
+positive process join, official export/import в новый HOME и exact native resume.
+Каждый HTTP request содержит текущие system bytes ровно один раз; прежние
+отличающиеся инструкции отсутствуют в system, business inputs не дублируются.
+Pinned повтор материализации воспроизводит прежние bytes/digest.
+
+Целевая локальная race-проверка PASS14.713с: четыре фактических model requests,
+wire16708/16823/16938/17047байт. Равный заново разрешённый prompt сохранил digest;
+общий body вырос за счёт штатной истории, поэтому одинаковый полный HTTP body
+не обещается. Проверка подтверждает стык renderer/consumer/SDK и не подменяет
+отдельные owner authorization, Preview API и live cluster business проверки.
+Production binaries этой проверкой не изменены; установленный runner source187ec6b
+сохраняется до изменения его исполняемого кода.
