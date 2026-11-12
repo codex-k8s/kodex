@@ -831,5 +831,9 @@ requests CPU1/memory2Gi, limits CPU4/memory16Gi, tmp32Gi. Прочие фазы 
 
 Сначала завершаются старые attempts и сохраняется их failure evidence, затем
 доставляется immutable admission-controller с новым renderer и совместимая CEL
-policy. Старый renderer после смены CEL закрыто отклоняется. Новый scan создаётся
-owner-командой после readback; live успех должен быть подтверждён отдельно.
+policy. При `observability-profile=disabled` также пересобираются производный
+immutable renderer, его ConfigMap/mount и CEL opt-in штатным
+`observability_profile.admission_profile`: digest исходного renderer должен
+совпасть с новым образом. Один image patch оставит старую закреплённую копию и
+закрыто остановит создание Jobs. Новый scan создаётся owner-командой после
+readback; live успех должен быть подтверждён отдельно.
