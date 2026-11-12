@@ -608,3 +608,7 @@ test-personal-integration-invocation-regression-postgres: check-go-toolchain
 .PHONY: test-personal-integration-assistant-regression-postgres
 test-personal-integration-assistant-regression-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh --personal-credentials-assistant-regression
+
+.PHONY: test-runner-policy-transition
+test-runner-policy-transition:
+	@timeout 300s node --test tools/release/portable-runner-target.test.mjs tools/release/runner-policy-transition.test.mjs tools/release/default-runner-transition.test.mjs

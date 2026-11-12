@@ -4,8 +4,8 @@ title: Ограниченная выкладка runner и admission policy
 type: runbook
 status: approved
 owner: manager
-version: 1.0.1
-updated: 2026-09-13
+version: 1.1.0
+updated: 2026-11-12
 ---
 
 # Ограниченная выкладка runner и admission policy
@@ -55,6 +55,48 @@ credential generation и прежний runtime-controller default по умол
 attempts не перепривязываются автоматически. Default новых проектов можно
 менять отдельной конфигурационной поставкой только после фактической
 публикации нового artifact; данный инструмент default не меняет.
+
+## Явный portable target для разрешённого тестового стенда
+
+Решение владельца #2108 разрешает candidate в указанном локальном Kubernetes.
+Portable renderer сохраняет `environment=production` как часть canonical profile;
+менять эту метку ради staging helper запрещено. Вместо этого оба CLI
+`runner-policy-transition.mjs` и `default-runner-transition.mjs` принимают
+`--portable-target <private-json>` только при таком отдельном разрешении.
+
+Закрытая схема `kodex.portable-runner-target/v1` содержит `context`, `clusterUID`,
+`namespaceUID`, `installationUID`, `installationSHA256` и `resources`.
+SHA256 закрепляет canonical JSON `data` существующего ConfigMap
+`kodex-installation-profile` через `fingerprint`; UID кластера — UID `kube-system`.
+Каждая запись `resources` содержит только `apiVersion`, `kind`, `name`, `uid`.
+Это адресные существующие ConfigMap, Deployment, Role и
+ImageAdmissionPolicyParameters в `kodex-system`, максимум16, без дубликатов.
+Файл regular0600 хранится вне Git. Значения credentials в него не входят.
+
+Перед каждым CLI вызовом читаются реальные cluster/namespace/installation pins.
+Каждый изменяемый namespaced predecessor дополнительно требует совпадения UID,
+owner labels Kodex и canonical `web-only/production`. ResourceVersion и spec
+по-прежнему защищены существующим CAS. Digest profile входит в bundle/plan:
+подмена файла между plan/apply закрыто отклоняется. Ранее созданные versioned
+policy и catalog сохраняются, новая policy увеличивает revision. Метки ресурсов,
+образы sidecar, schema БД, история сессий и bootstrap Jobs не меняются.
+
+| Переход | Дополнительная portable граница | Прежние обязательные guards |
+| --- | --- | --- |
+| prepare / inspect | Свежие UID установки и адресные predecessor | Только чтение, immutable policy/catalog и exact digests |
+| maintenance / reader | Profile digest + UID API/controller | Отсутствие активных owner runs/builds/leases, API=0 и pause новых claim |
+| resources / binding / consumers | Те же predecessor и сохранённый bundle | Terminal Jobs, отсутствие рабочих PVC, closed admission, ordered CP/builder/controller |
+| resume / open | Неизменённые scope и новый policy binding | Все consumers готовы, прежнее число API replicas восстановлено |
+| default runner | Точные CP/runtime-controller UID | Published node readback, закрытый runtime binding, RollingUpdate и stabilization |
+| drift / UNKNOWN | Scope mismatch запрещает mutation | Прежний intent не повторяется; отдельно readback, без автоматического восстановления |
+
+Apply использует строки `APPLY-PORTABLE-RUNNER-POLICY` и
+`APPLY-PORTABLE-DEFAULT-RUNNER`; это CLI precondition, не новое разрешение владельца.
+Старый staging путь сохраняет прежние guards и строки. Portable reader recovery
+этим расширением не вводится: `recovery-plan/recovery-apply` закрыто отклоняются.
+Проверка `make test-runner-policy-transition` исполняет настоящий CLI с bounded
+synthetic Kubernetes fixture, включая весь portable переход и потерянный ACK.
+Она не заменяет installed image/admission/native session acceptance.
 
 ## Подготовка образов и публикация базы
 

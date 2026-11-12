@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { openSync, closeSync, writeSync, fsyncSync, readFileSync, lstatSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { portableRunnerTarget } from "./portable-runner-target.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 import { namespace, applyIssuerAdmissionTransition, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
 
@@ -34,7 +35,7 @@ function content(resource) {
 }
 
 export function samePlan(saved, current) {
-  requireValue(saved.version === 1 && ["context", "clusterUID", "namespaceUID", "bundleSHA256", "phase", "readerImage"]
+  requireValue(saved.version === 1 && ["context", "clusterUID", "namespaceUID", "bundleSHA256", "phase", "readerImage", "portableTargetSHA256"]
     .every((key) => saved[key] === current[key]) && fingerprint(saved.operations) === fingerprint(current.operations) &&
     fingerprint(saved.guards) === fingerprint(current.guards), "PLAN_PRECONDITION_CHANGED");
 }
@@ -82,7 +83,7 @@ function main(args) {
   while (args.length) {
     const key = args.shift();
     if (key === "--k3s-sudo") { requireValue(!options[key], "INVALID_ARGUMENTS"); options[key] = true; continue; }
-    requireValue(["--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm", "--failed-plan", "--failed-evidence", "--incident"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
+    requireValue(["--portable-target", "--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm", "--failed-plan", "--failed-evidence", "--incident"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
   const context = options["--context"];
@@ -94,6 +95,11 @@ function main(args) {
   const namespaceUID = get("namespace", namespace).metadata.uid;
   const controller = get("deployment", "image-admission-controller");
   const readerImage = options["--reader-image"];
+  const portableTarget = options["--portable-target"] ? portableRunnerTarget(privateRead(options["--portable-target"]),
+    { context, clusterUID, namespaceUID, installation: get("configmap", "kodex-installation-profile") }) : undefined;
+  requireValue(!portableTarget || !command.startsWith("recovery-"), "PORTABLE_RECOVERY_NOT_SUPPORTED");
+  const targetPin = portableTarget ? { portableTargetSHA256: portableTarget.digest } : {};
+
   if (command === "recovery-plan") {
     requireValue(options["--output"] && !options["--confirm"], "READ_ONLY_RECOVERY_PLAN_REQUIRED");
     const plan = planReaderRecovery(controller, privateRead(options["--failed-plan"]), privateRows(options["--failed-evidence"]), readerImage, options["--incident"]);
@@ -136,18 +142,18 @@ function main(args) {
     const catalogs = cp.spec.template.spec.volumes.filter((item) => item.name === "role-environments");
     requireValue(catalogs.length === 1, "EXACT_CATALOG_REQUIRED");
     const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name),
-      options["--runner-digest"], options["--authority-issuer-image"], options["--node-readback-image"]);
-    record(options["--output"], { ...bundle, clusterUID, namespaceUID });
+      options["--runner-digest"], options["--authority-issuer-image"], options["--node-readback-image"], portableTarget);
+    record(options["--output"], { ...bundle, clusterUID, namespaceUID, ...targetPin });
     process.stdout.write(`${JSON.stringify({ status: "PREPARED", policy: bundle.resources[0].metadata.name, digest: bundle.resources[0].data.policySHA256 })}\n`);
     return;
   }
   const bundle = privateRead(options["--bundle"]);
-  requireValue(bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID, "CLUSTER_IDENTITY_CHANGED");
+  requireValue(bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID && bundle.portableTargetSHA256 === portableTarget?.digest, "CLUSTER_IDENTITY_CHANGED");
   const recomputed = preparePolicy(get("configmap", bundle.previous.policyName), get("imageadmissionpolicyparameters", bundle.previous.policyName),
     get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest,
     bundle.resources[0].data.authorityIssuerImage !== get("configmap", bundle.previous.policyName).data.authorityIssuerImage ? bundle.resources[0].data.authorityIssuerImage : undefined,
-    bundle.resources[0].data.nodeReadbackImage !== get("configmap", bundle.previous.policyName).data.nodeReadbackImage ? bundle.resources[0].data.nodeReadbackImage : undefined);
-  requireValue(fingerprint({ ...recomputed, clusterUID, namespaceUID }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
+    bundle.resources[0].data.nodeReadbackImage !== get("configmap", bundle.previous.policyName).data.nodeReadbackImage ? bundle.resources[0].data.nodeReadbackImage : undefined, portableTarget);
+  requireValue(fingerprint({ ...recomputed, clusterUID, namespaceUID, ...targetPin }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
   const readDB = () => JSON.parse(kubectl(["exec", "-i", "kodex-postgresql-0", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], readFileSync(new URL("./runner-policy-readback.sql", import.meta.url), "utf8")));
   const database = readDB();
   const phase = command === "apply" ? privateRead(options["--plan"]).phase : options["--phase"];
@@ -195,7 +201,7 @@ function main(args) {
     if (phase === "open") requireValue(env(controller, "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP") === bundle.resources[0].metadata.name &&
       env(controller, "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS") === "false" &&
       [cp, builder, controller].every((item) => item.status?.availableReplicas === item.spec.replicas), "RESUMED_CONSUMERS_REQUIRED");
-    const change = planGatewayMaintenance(gateway, fingerprint(bundle), phase === "open");
+    const change = planGatewayMaintenance(gateway, fingerprint(bundle), phase === "open", portableTarget);
     operations.push({ type: "patch", kind: gateway.kind, name: gateway.metadata.name, uid: gateway.metadata.uid, field: "spec", afterSHA256: fingerprint(change.spec),
       patch: [{ op: "test", path: "/metadata/uid", value: gateway.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: gateway.metadata.resourceVersion },
         { op: "add", path: "/metadata/annotations", value: change.annotations }, { op: "replace", path: "/spec", value: change.spec }] });
@@ -231,7 +237,7 @@ function main(args) {
       requireValue(fingerprint(content(get(resource.kind, resource.metadata.name))) === fingerprint(content(resource)), "PREPARED_RESOURCES_REQUIRED");
     }
     if (phase === "binding") {
-      const change = planBinding(binding, role, bundle);
+      const change = planBinding(binding, role, bundle, portableTarget);
       patch(role, "rules", change.rules); patch(binding, "spec", change.spec);
     } else {
       if (!["reader"].includes(phase)) requireValue(binding.spec.paramRef.name === bundle.resources[0].metadata.name &&
@@ -244,22 +250,22 @@ function main(args) {
       }
       const target = phase === "control-plane" ? cp : phase === "role-image-builder" ? builder : controller;
       if (phase === "resume") {
-        const rules = planBinding(binding, role, bundle).rules;
+        const rules = planBinding(binding, role, bundle, portableTarget).rules;
         for (const rule of rules) if (rule.resources?.some((resource) => ["configmaps", "imageadmissionpolicyparameters"].includes(resource))) {
           rule.resourceNames = [bundle.resources[0].metadata.name];
         }
         patch(role, "rules", rules);
       }
-      patch(target, "spec", planDeployment(target, bundle, phase, readerImage).next);
+      patch(target, "spec", planDeployment(target, bundle, phase, readerImage, portableTarget).next);
     }
   }
-  const current = { version: 1, context, clusterUID, namespaceUID, phase, readerImage, bundleSHA256: fingerprint(bundle), guards, operations };
+  const current = { version: 1, context, clusterUID, namespaceUID, ...targetPin, phase, readerImage, bundleSHA256: fingerprint(bundle), guards, operations };
   if (command === "plan") {
     requireValue(options["--output"] && !options["--confirm"], "READ_ONLY_PLAN_REQUIRED");
     record(options["--output"], { ...current, id: randomUUID(), at: new Date().toISOString() });
     process.stdout.write(`${JSON.stringify({ status: "PLANNED", phase, operations: operations.length })}\n`); return;
   }
-  requireValue(options["--confirm"] === "APPLY-STAGING-RUNNER-POLICY" && options["--evidence"], "EXPLICIT_CONFIRMATION_REQUIRED");
+  requireValue(options["--confirm"] === (portableTarget ? "APPLY-PORTABLE-RUNNER-POLICY" : "APPLY-STAGING-RUNNER-POLICY") && options["--evidence"], "EXPLICIT_CONFIRMATION_REQUIRED");
   const saved = privateRead(options["--plan"]); samePlan(saved, current);
   const fd = openSync(options["--evidence"], "wx", 0o600);
   const journal = (entry) => { writeSync(fd, `${JSON.stringify({ at: new Date().toISOString(), id: saved.id, phase, ...entry })}\n`); fsyncSync(fd); };

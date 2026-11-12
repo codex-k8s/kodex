@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { closeSync, fsyncSync, lstatSync, openSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { portableRunnerTarget } from "./portable-runner-target.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 import { runnerPullReference } from "./runner-policy-model.mjs";
 
@@ -14,13 +15,13 @@ const stabilizedAnnotation = "kodex.dev/default-runner-transition-stabilized";
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const requireValue = (condition, code) => { if (!condition) throw new Error(code); };
 
-function application(deployment) {
+function application(deployment, target) {
   const metadata = deployment?.metadata, spec = deployment?.spec;
   requireValue(deployment?.apiVersion === "apps/v1" && deployment.kind === "Deployment" &&
     ["control-plane", "runtime-controller"].includes(metadata?.name) && metadata.namespace === namespace &&
     uuidPattern.test(metadata.uid ?? "") && typeof metadata.resourceVersion === "string" &&
     metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
-    (metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" || metadata.labels?.["kodex.dev/environment"] === "staging"),
+    (target ? target.allows(deployment) : metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" || metadata.labels?.["kodex.dev/environment"] === "staging"),
   "STAGING_DEPLOYMENT_REQUIRED");
   const trustedHotRecreate = metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" &&
     metadata.labels?.["kodex.dev/environment"] === "staging" &&
@@ -46,7 +47,7 @@ function literal(container, name) {
   return entries[0];
 }
 
-export function planDefaultRunner(deployments, nextReference, operationID = randomUUID(), policy) {
+export function planDefaultRunner(deployments, nextReference, operationID = randomUUID(), policy, target) {
   requirePublishedNodeReadback(policy, nextReference);
   requireValue(uuidPattern.test(operationID) && deployments.length === 2,
     "DEFAULT_RUNNER_INPUT_INVALID");
@@ -55,7 +56,7 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
   const digest = nextReference.slice(nextReference.indexOf("@") + 1);
   const configs = [["runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"], ["control-plane", "CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"]];
   const operations = configs.map(([name, key]) => {
-    const deployment = byName.get(name), container = application(deployment), current = literal(container, key).value;
+    const deployment = byName.get(name), container = application(deployment, target), current = literal(container, key).value;
     const currentDigest = /@(sha256:[a-f0-9]{64})$/.exec(current)?.[1];
     requireValue(currentDigest && current === runnerPullReference(policy.data, currentDigest), "CURRENT_DEFAULT_RUNNER_INVALID");
     if (name === "control-plane") requireValue(literal(container, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST").value === digest, "RUNNER_NOT_TRUSTED_BY_CONTROL_PLANE");
@@ -109,22 +110,28 @@ function main(args) {
   const activePolicy=JSON.parse(kube(["-n",namespace,"get","configmap",policyEntries[0].value,"-o","json"]));
   const runtimeBinding=JSON.parse(kube(["get","validatingadmissionpolicybinding","runtime-role-pod-exact-secret-projection","-o","json"]));
   const clusterUID=JSON.parse(kube(["get","namespace","kube-system","-o","json"])).metadata.uid, deployments=()=>[get("control-plane"),get("runtime-controller")];
+  const portableTarget = options["--portable-target"] ? portableRunnerTarget(privateJSON(options["--portable-target"]), {
+    context, clusterUID,
+    namespaceUID: JSON.parse(kube(["get","namespace",namespace,"-o","json"])).metadata.uid,
+    installation: JSON.parse(kube(["-n",namespace,"get","configmap","kodex-installation-profile","-o","json"])),
+  }) : undefined;
+  const extra = portableTarget ? 1 : 0;
   if(command==="plan"){
-    requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3,"PLAN_ARGUMENTS_INVALID");
+    requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3+extra,"PLAN_ARGUMENTS_INVALID");
     requirePublishedNodeReadback(activePolicy,options["--runner-reference"]);
     requireRuntimeBinding(activePolicy,runtimeBinding,options["--runner-reference"]);
-    const plan={...planDefaultRunner(deployments(),options["--runner-reference"],randomUUID(),activePolicy),context,clusterUID};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
+    const plan={...planDefaultRunner(deployments(),options["--runner-reference"],randomUUID(),activePolicy,portableTarget),context,clusterUID,...(portableTarget?{portableTargetSHA256:portableTarget.digest}:{})};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
   }
-  requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]==="APPLY-STAGING-DEFAULT-RUNNER"),"OPERATION_ARGUMENTS_INVALID");
-  const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID,"PLAN_SCOPE_CHANGED");
+  requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]===(portableTarget?"APPLY-PORTABLE-DEFAULT-RUNNER":"APPLY-STAGING-DEFAULT-RUNNER")),"OPERATION_ARGUMENTS_INVALID");
+  const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID&&saved.portableTargetSHA256===portableTarget?.digest,"PLAN_SCOPE_CHANGED");
   requirePublishedNodeReadback(activePolicy,saved.nextReference);
   requireRuntimeBinding(activePolicy,runtimeBinding,saved.nextReference);
   if(command==="inspect"){
-    requireValue(!options["--confirm"]&&Object.keys(options).length===3,"INSPECT_ARGUMENTS_INVALID");
-    const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
+    requireValue(!options["--confirm"]&&Object.keys(options).length===3+extra,"INSPECT_ARGUMENTS_INVALID");
+    const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment,portableTarget),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
     writeFileSync(options["--evidence"],`${JSON.stringify({at:new Date().toISOString(),status:"INSPECTED",states})}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"INSPECTED",states})}\n`);return;
   }
-  requireValue(Object.keys(options).length===4,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id,activePolicy);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
+  requireValue(Object.keys(options).length===4+extra,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id,activePolicy,portableTarget);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
   const fd=openSync(options["--evidence"],"wx",0o600),journal=(value)=>{writeSync(fd,`${JSON.stringify({at:new Date().toISOString(),id:saved.id,...value})}\n`);fsyncSync(fd);};
   try{for(const operation of saved.operations){journal({status:"INTENT",target:operation.name});kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(operation.patch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);let after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.afterSpecSHA256,"TARGET_READBACK_MISMATCH");journal({status:"APPLIED",target:operation.name});if(operation.name==="control-plane"){journal({status:"STABILIZATION_INTENT",target:operation.name});const stabilizationPatch=[{op:"test",path:"/metadata/uid",value:operation.uid},{op:"test",path:"/metadata/resourceVersion",value:after.metadata.resourceVersion},{op:"replace",path:"/spec",value:operation.stabilizedAfter}];kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(stabilizationPatch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.stabilizedAfterSpecSHA256,"STABILIZATION_READBACK_MISMATCH");journal({status:"STABILIZED",target:operation.name});}}journal({status:"PASS",nextReference:saved.nextReference});process.stdout.write(`${JSON.stringify({status:"PASS",id:saved.id})}\n`);}catch{journal({status:"UNKNOWN",code:"DEFAULT_RUNNER_TRANSITION_FAILED"});throw new Error("DEFAULT_RUNNER_TRANSITION_FAILED");}finally{closeSync(fd);}
 }

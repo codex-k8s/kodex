@@ -74,3 +74,17 @@ test("actual public policy repository связывает old/new defaults; unkno
  assert.throws(()=>planDefaultRunner(values,nextRef,"33333333-3333-4333-8333-333333333333",policy),/NOT_PUBLISHED/);
  assert.throws(()=>createDefaultRunnerPlan(values,policy.data.nodeReadbackImage,"33333333-3333-4333-8333-333333333333"),/NOT_PUBLISHED/);
 });
+
+test('portable default runner сохраняет strategy и требует exact UID обоих consumers',async()=>{
+ const {portableRunnerTarget}=await import('./portable-runner-target.mjs');
+ const {fingerprint}=await import('./scoped-release.mjs');
+ const values=['control-plane','runtime-controller'].map(deployment);
+ for(const value of values){delete value.metadata.labels['kodex.dev/local-profile'];value.metadata.labels['kodex.dev/environment']='production';value.metadata.labels['kodex.dev/profile']='web-only';}
+ const uid='55555555-5555-4555-8555-555555555555';
+ const installation={apiVersion:'v1',kind:'ConfigMap',metadata:{name:'kodex-installation-profile',namespace:'kodex-system',uid,labels:{'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/managed-by':'kodex-install'}},data:{'profile.json':'synthetic'}};
+ const profile={schema:'kodex.portable-runner-target/v1',context:'synthetic',clusterUID:uid,namespaceUID:uid,installationUID:uid,installationSHA256:fingerprint(installation.data),resources:values.map(v=>({apiVersion:v.apiVersion,kind:v.kind,name:v.metadata.name,uid:v.metadata.uid}))};
+ const target=portableRunnerTarget(profile,{context:'synthetic',clusterUID:uid,namespaceUID:uid,installation});
+ const plan=createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',publicPolicy(),target);
+ for(const operation of plan.operations)assert.deepEqual(operation.patch.at(-1).value.strategy,values.find(v=>v.metadata.name===operation.name).spec.strategy);
+ values[1].metadata.uid=uid;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',publicPolicy(),target));
+});
