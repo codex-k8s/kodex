@@ -92,6 +92,13 @@ policy и catalog сохраняются, новая policy увеличивае
 
 Apply использует строки `APPLY-PORTABLE-RUNNER-POLICY` и
 `APPLY-PORTABLE-DEFAULT-RUNNER`; это CLI precondition, не новое разрешение владельца.
+Для публикации самой базы `seed-local-image-supply-chain.sh --component runner`
+принимает тот же `--portable-target`. В profile добавляется UID Deployment
+`kodex-image-registry-promotion`. Отдельный verifier читает cluster/namespace/
+installation и этот ресурс до чтения registry credentials; только runner component
+разрешён в portable режиме. Прежние exact archive/digest, mTLS, credential files,
+отдельная promotion identity и authoritative registry readback сохраняются.
+`--readback-only` позволяет разрешить UNKNOWN без повторной публикации.
 Старый staging путь сохраняет прежние guards и строки. Portable reader recovery
 этим расширением не вводится: `recovery-plan/recovery-apply` закрыто отклоняются.
 Проверка `make test-runner-policy-transition` исполняет настоящий CLI с bounded

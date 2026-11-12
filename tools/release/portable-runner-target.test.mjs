@@ -22,3 +22,14 @@ test('scope закрывает подмену cluster, namespace, установ
     const {profile,live}=fixture();edit(profile);assert.throws(()=>portableRunnerTarget(profile,live));
   }
 });
+
+test('публичный verifier проверяет private files и точный ресурс до публикации',async()=>{
+ const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {spawnSync}=await import('node:child_process');const {fileURLToPath}=await import('node:url');
+ const directory=mkdtempSync(join(tmpdir(),'kodex-portable-target-'));try{
+  const {profile,resource,live}=fixture();
+  for(const [name,value]of Object.entries({'profile.json':profile,'cluster.json':{metadata:{uid:live.clusterUID}},'namespace.json':{metadata:{uid:live.namespaceUID}},'installation.json':live.installation,'resource.json':resource}))writeFileSync(join(directory,name),JSON.stringify(value),{mode:0o600});
+  const run=()=>spawnSync(process.execPath,[fileURLToPath(new URL('./portable-runner-target-cli.mjs',import.meta.url)),join(directory,'profile.json'),directory,'synthetic'],{encoding:'utf8'});
+  assert.equal(run().status,0);
+  resource.metadata.uid='22222222-2222-4222-8222-222222222222';writeFileSync(join(directory,'resource.json'),JSON.stringify(resource));assert.equal(run().status,1);
+ }finally{rmSync(directory,{recursive:true,force:true});}
+});
