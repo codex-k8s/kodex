@@ -4,8 +4,8 @@ title: Устойчивая ротация ключей internal RPC authority
 status: approved
 type: operation-evidence
 owner: developer
-version: 1.3.1
-updated: 2026-09-09
+version: 1.3.2
+updated: 2026-11-13
 ---
 
 # Граница и причина
@@ -221,3 +221,30 @@ node tools/release/authority-legacy-provenance-repair.mjs observe \
 расследование durable intent; инструмент не создаёт новый Job автоматически.
 Первый legacy upgrade требует доказать эту связь до заявления готовности
 ротации. Наличие PostgreSQL migration само по себе её не доказывает.
+
+
+# Полнота прав persistence readiness
+
+Уточнение #2108: `PublisherReady` требует **оба** права `SELECT` и `INSERT`
+на `authority_publisher_delivery_receipts`, проверяя их отдельными условиями.
+Список через запятую означает PostgreSQL ANY и не подтверждает весь набор.
+Проверки `session_user`, capability, активной identity и restore fence остаются
+обязательными; SQL не выдаёт прав и не меняет состояние. `ensureWritable`
+в domain service и publisher graph вызывает тот же owner read до эффектов;
+ошибка либо false закрывают публикацию, без fallback и самостоятельного retry.
+Readiness-запрос не создаёт intent, lease, receipt или событие. Вышестоящая
+`Graph.Ready` сохраняет собственную документированную семантику продвижения
+фазы: исправление не делает её чистым health-запросом.
+
+`GOTOOLCHAIN=go1.26.10 bash scripts/tests/internal-rpc-authority-postgres-test.sh`
+проверяет toolchain **до** создания disposable PostgreSQL. Тест использует
+настоящую мигрированную schema, LOGIN `ira_publisher_g4`, штатный `SET ROLE`
+и `PublisherReady`; отзыв каждого права отдельно обязан закрыть готовность,
+а возврат точного grant — восстановить её. Контур не ротирует ключи, не
+публикует Kubernetes material и не меняет живой target. Отрицательные проверки
+`NOT has_table_privilege(..., 'INSERT,UPDATE,DELETE')` readback attestor сохраняют
+ANY: они правильно запрещают наличие любого перечисленного права.
+
+Миграции и текущие ACL не меняются. Откат бинарника возвращает дефект проверки
+готовности; для восстановления следует вернуть доказанно обязательный grant
+либо поставить исправленный образ, без schema downgrade.

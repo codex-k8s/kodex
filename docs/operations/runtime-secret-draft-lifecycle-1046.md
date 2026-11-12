@@ -4,8 +4,8 @@ title: Контракт жизненного цикла зашифрованно
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
-updated: 2026-09-06
+version: 1.1.1
+updated: 2026-11-13
 ---
 
 # Владение и граница checkpoint
@@ -78,7 +78,35 @@ EMAIL_EFFECT_RECONCILIATION. Public ingress/listener и новый deployable CP
 CP хранит назначенный сервером staging namespace `kodex-secret-drafts` отдельно
 от runtime namespace `kodex-runtime`; encrypted data key — `ciphertext`,
 published data key — `value`. Readiness проверяет таблицы, sequence и уникальный
-индекс активной операции. Policy revision 58 включает отдельный OIDC producer
+индекс активной операции. Каждое право `SELECT`, `INSERT`, `UPDATE` проверяется
+отдельно на четырёх таблицах draft/operation/impact; `USAGE` и `SELECT` sequence
+также обязательны по отдельности. Список прав через запятую в PostgreSQL
+означает наличие хотя бы одного права и не подтверждает этот контракт.
+
+Проверка `CheckRuntimeSecretDraftWork` проходит существующий защищённый путь
+secret-broker → generated client/Proto → CP domain service → repository SQL.
+Её actor — проверенный workload с точным permission
+`platform.runtime-secret-drafts.readiness.check`; поля клиента не назначают
+полномочия. Вызов только читает состояние: version/idempotency, mutation,
+lease/claim/retry/terminal и domain event неприменимы. Отсутствие любого права,
+индекса либо ошибка/отмена SQL возвращают `Unavailable`; неверный principal —
+`Forbidden`. Broker не открывает зависимые recovery workers до успешной пробы;
+чтение не подтверждает доставку ключей или готовность Kubernetes.
+
+Воспроизводимая проверка:
+
+```bash
+GOTOOLCHAIN=go1.26.10 bash scripts/tests/control-plane-postgres-test.sh '^TestRuntimeSecretDraftReadinessComponent$'
+```
+
+Она создаёт отдельную БД из пустого мигрированного шаблона, отзывает по одному
+каждое из 14 прав, требует отказ owner path и восстановления после возврата
+точного grant, проверяет отсутствие индекса, отмену и неверного участника.
+Тот же тест включён в полный PostgreSQL baseline. Production ACL и миграции
+не изменяются; откат бинарника вернёт прежний дефект readiness и не считается
+безопасным способом восстановления. Schema downgrade не требуется.
+
+Policy revision 58 включает отдельный OIDC producer
 для вызовов Secret Broker с точным target workload. Все D6 work tuples связаны
 через `UNARY_PROTO_SHA256`; их resource/version/attempt metadata запрещены.
 
