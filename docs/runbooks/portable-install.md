@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.4
+version: 1.6.5
 updated: 2026-11-12
 ---
 
@@ -519,6 +519,26 @@ ClusterIP ingress Service, сохраняя исходные SNI, HTTP Host и �
 Публичный loopback DNS локального стенда не используется внутри Pod. Конфликтующий
 alias, loopback/link-local/unspecified адрес и неизвестные поля отклоняются.
 Ingress, его маршруты и общесистемный DNS этим преобразованием не изменяются.
+
+Когда публичный promoted pull endpoint обслуживает тот же ingress Service,
+explicit `kodex.registry-source/v3` дополнительно требует `promoted_tls_hostname`.
+Он обязан совпадать с immutable admission policy и exact `HostSNI` passthrough
+маршрутом в `kodex-image-registry-pull:5000`. Профиль добавляет только BuildKit
+hostAlias и его exact namespace/Pod/port egress; mTLS identity, CA, SNI, digest,
+promotion ACL и node pull конфигурация не меняются. Preflight сверяет также live
+маршрут и policy. Это не настройка общесистемного DNS и не доказательство node pull.
+
+| Состояние promoted route | Проверка / действие | Readback / отказ |
+|---|---|---|
+| Plan | Exact source Service UID/IP, source и pull hostname, policy и TCP route | Только render/get; коллизии и wildcard закрыты |
+| Apply | До первой RoleImage build; exact previous/desired delta и fenced inventory | NetworkPolicy, immutable profile, затем BuildKit rollout; чужие workloads не затрагиваются |
+| Restart / потерянный ответ | UID/seal/RV прежнего Deployment и фактический desired template | Rejoin/readback; новая build не запускается повторно |
+| Readiness | Настоящий BuildKit pull/build/push с прежними mTLS identities | Не заменяется успешным DNS lookup или готовым registry Pod |
+| Активная build / changed Service | Требуется отдельное завершение build либо новый approved profile | Initial repair не отменяет task/lease и не меняет authority |
+
+Проверены через Context7 официальные Kubernetes документы
+[HostAliases](https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/)
+и [NetworkPolicy selectors](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
 
 Сквозной путь: операторский lock/profile → immutable ConfigMap и Job →
 Service с точными UID/ClusterIP/selector → ready EndpointSlice и Pod с проверенным

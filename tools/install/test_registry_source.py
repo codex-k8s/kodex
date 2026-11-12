@@ -64,6 +64,36 @@ class RegistrySource(unittest.TestCase):
             with self.subTest(field=field, value=value), self.assertRaises(ValueError):
                 registry.transform(resources, invalid, lock)
 
+    def test_promoted_ingress_requires_exact_sni_and_scoped_buildkit_route(self):
+        config, lock, resources = fixture()
+        config.update(schema='kodex.registry-source/v3', tls_hostname=lock['registry']['push'],
+                      service_ip='192.0.2.20', service_port_name='websecure', promoted_tls_hostname='pull.example.invalid')
+        registry.one(resources,'ConfigMap','kodex-image-admission-policy')['data']['pullRegistryHost']='pull.example.invalid'
+        route=registry.one(resources,'IngressRouteTCP','kodex-image-registry-pull')
+        route.update(apiVersion='traefik.io/v1alpha1',spec={'entryPoints':['websecure'],'routes':[{
+            'match':'HostSNI(`pull.example.invalid`)','services':[{'name':'kodex-image-registry-pull','port':5000}]}],
+            'tls':{'passthrough':True}})
+        resources.append({'apiVersion':'networking.k8s.io/v1','kind':'NetworkPolicy','metadata':{
+            'name':'kodex-buildkit-exact-paths','namespace':'kodex-system'},'spec':{
+            'podSelector':{'matchLabels':{'app.kubernetes.io/name':'kodex-buildkit'}},'egress':[]}})
+        result=registry.transform(resources,config,lock)
+        pod=registry.one(result,'Deployment','kodex-buildkit')['spec']['template']['spec']
+        self.assertEqual(pod['hostAliases'],[{'ip':'192.0.2.20','hostnames':['pull.example.invalid']}])
+        egress=registry.one(result,'NetworkPolicy','kodex-buildkit-exact-paths')['spec']['egress']
+        self.assertEqual(egress,[{'to':[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':config['namespace']}},
+                                       'podSelector':{'matchLabels':config['pod_labels']}}],'ports':[{'protocol':'TCP','port':8443}]}])
+        self.assertEqual(registry.transform(result,config,lock),result)
+        for change in [
+            lambda r:registry.one(r,'IngressRouteTCP','kodex-image-registry-pull')['spec']['routes'][0].update(match='HostSNI(`*`)'),
+            lambda r:registry.one(r,'IngressRouteTCP','kodex-image-registry-pull')['spec'].update(tls={}),
+            lambda r:registry.one(r,'Deployment','kodex-buildkit')['spec']['template']['spec'].update(hostAliases=[{'ip':'192.0.2.99','hostnames':['pull.example.invalid']}]),
+            lambda r:registry.one(r,'NetworkPolicy','kodex-buildkit-exact-paths')['spec'].update(podSelector={}),
+        ]:
+            altered=copy.deepcopy(resources);change(altered)
+            with self.assertRaises(ValueError):registry.transform(altered,config,lock)
+        invalid=dict(config,promoted_tls_hostname='other.example.invalid')
+        with self.assertRaises(ValueError):registry.transform(resources,invalid,lock)
+
     def test_ingress_preflight_pins_service_ip_and_named_target(self):
         config, lock, _ = fixture()
         config.update(schema='kodex.registry-source/v2', tls_hostname=lock['registry']['push'],

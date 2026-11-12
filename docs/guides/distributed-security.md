@@ -4,11 +4,20 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.54
+version: 1.7.55
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Публичный registry hostname должен быть достижим отдельно из node runtime и
+каждого Pod consumer. Host DNS/readback не доказывает маршрут внутри Pod.
+При явном ingress profile Pod-level `hostAliases` связывает точный hostname с
+проверенным Service UID/ClusterIP; TLS сохраняет публичный SNI и доверенную CA,
+NetworkPolicy — exact namespace/Pod/port. Для promoted pull дополнительно
+проверяется закрытый SNI passthrough к pull Service; source registry route не
+подразумевает такой допуск. Рабочий build/pull проверяется теми же identities,
+без global DNS override, wildcard egress или insecure fallback.
 
 Чистая установка материализует namespace и точные параметры admission раньше
 bindings и защищаемых ресурсов. Порядок YAML-документов не заменяет граф зависимостей:
