@@ -707,7 +707,28 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       verifyInputs(state.actual);noActiveMigrations();
       const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true);
       journal.append({type:'OWNER_PREFLIGHT',...proof});
-      ensure(!optionalJob('control-plane-migrate') && !optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
+      const bootstrap = optionalJob('control-plane-migrate');
+      if (bootstrap && configuration.anchorProfile === 'portable') {
+        // Portable сохраняет bootstrap receipt. Наличие старого Job не разрешает
+        // его повтор или удаление; допускается только доказанно завершённый writer.
+        ensure(bootstrap.kind === 'Job' && bootstrap.metadata?.uid && bootstrap.metadata.namespace === namespace &&
+          bootstrap.metadata.name === 'control-plane-migrate' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/component'] === 'migration' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' &&
+          bootstrap.metadata.labels?.['kodex.dev/environment'] === 'production' &&
+          bootstrap.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+          !bootstrap.status?.active && !bootstrap.status?.terminating && bootstrap.status?.succeeded === 1 &&
+          bootstrap.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1 &&
+          bootstrap.status.conditions.some(c => c.type === 'Complete' && c.status === 'True'), 'MIGRATION_BOOTSTRAP_NOT_COMPLETE');
+        const bootstrapPods = JSON.parse(kube(['-n',namespace,'get','pods','-l','batch.kubernetes.io/job-name=control-plane-migrate','-o','json'])).items;
+        ensure(bootstrapPods.every(p => p.metadata?.uid && p.metadata.namespace === namespace &&
+          p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === bootstrap.metadata.uid) &&
+          isProvenStoppedPod(p)), 'MIGRATION_BOOTSTRAP_NOT_JOINED');
+        journal.append({type:'BOOTSTRAP_TERMINAL_READBACK',jobUID:bootstrap.metadata.uid,
+          specSHA256:fingerprint(bootstrap.spec),podUIDs:bootstrapPods.map(p => p.metadata.uid)});
+      } else ensure(!bootstrap, 'MIGRATION_JOB_ALREADY_EXISTS');
+      ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
       const quiesced = observeCP();ensure(quiesced.stage === 'STOPPED' && quiesced.joined, 'MIGRATION_STOP_JOIN_REQUIRED');
       const job = structuredClone(plan.job); job.metadata.annotations = {[annotation]:planSHA256};
       journal.append({type:'CREATE_INTENT',jobName:job.metadata.name});

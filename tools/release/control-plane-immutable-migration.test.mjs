@@ -628,11 +628,11 @@ else if(a.includes('replicasets,pods')){
  out({items});
 }
 else if(a.includes('pods')){const selector=a[a.indexOf('-l')+1],name=selector.split('=')[1];
- const pod=name===s.checkJob?.metadata.name?s.checkPod:name===s.previousCheckJob?.metadata.name?s.previousCheckPod:name===s.previousJob?.metadata.name?s.previousPod:s.pod;out({items:pod?[pod]:[]});}
+ const pod=name==='control-plane-migrate'?s.bootstrapPod:name===s.checkJob?.metadata.name?s.checkPod:name===s.previousCheckJob?.metadata.name?s.previousCheckPod:name===s.previousJob?.metadata.name?s.previousPod:s.pod;out({items:pod?[pod]:[]});}
 else if(a.includes('jobs'))out({items:[s.checkJob,s.previousCheckJob,s.previousJob,s.job,...(s.otherJobs??[])].filter(Boolean)});
 else if(a.includes('logs')){save();const check=a.some(x=>x.startsWith('job/control-plane-migration-check-'));process.stdout.write(check?(s.checkLog??'PostgreSQL connection check completed')+'\\n':'goose: current version: '+(s.logVersion??'${version}')+'\\n');}
 else if(a.includes('job')){const name=a[a.indexOf('job')+1];
- const job=name===s.checkJob?.metadata.name?s.checkJob:name===s.previousCheckJob?.metadata.name?s.previousCheckJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:undefined;
+ const job=name==='control-plane-migrate'?s.bootstrapJob:name===s.checkJob?.metadata.name?s.checkJob:name===s.previousCheckJob?.metadata.name?s.previousCheckJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:undefined;
  if(job)out(job);else{save();if(!a.includes('--ignore-not-found=true'))process.exit(1);}}
 else{save();process.exit(1);}
 `,{mode:0o700});
@@ -1525,4 +1525,16 @@ test('042 portable повторяет failed check через отдельную
  pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'inspect');pass(f,'resume','RESUMED');
  assert.equal(f.read().deployment.spec.replicas,3);
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,3);
+});
+
+// Сохранённый bootstrap не удаляется и не повторяется; активный либо чужой Pod закрывает DDL.
+test('042 portable сохраняет завершённый bootstrap и требует positive join', t => {
+ const f=cli(t,'workspace-archive-abi');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ f.edit(s=>{s.bootstrapJob={kind:'Job',metadata:{name:'control-plane-migrate',namespace:'kodex-system',uid:'bootstrap',labels:{'app.kubernetes.io/name':'control-plane','app.kubernetes.io/component':'migration','app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}},spec:{},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
+ s.bootstrapPod={metadata:{uid:'bootstrap-pod',namespace:'kodex-system',ownerReferences:[{kind:'Job',controller:true,uid:'bootstrap'}]},spec:{containers:[{name:'migrate'}]},status:{phase:'Running',containerStatuses:[{name:'migrate',state:{running:{}}}]}};});
+ assert.notEqual(f.run('apply').status,0);assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>{s.bootstrapPod.status={phase:'Succeeded',containerStatuses:[{name:'migrate',state:{terminated:{exitCode:0}}}]};s.bootstrapPod.metadata.ownerReferences[0].uid='foreign';});
+ assert.notEqual(f.run('apply').status,0);
+ f.edit(s=>s.bootstrapPod.metadata.ownerReferences[0].uid='bootstrap');pass(f,'apply');pass(f,'inspect');pass(f,'resume','RESUMED');
+ assert.equal(f.read().bootstrapJob.metadata.uid,'bootstrap');assert.equal(f.read().calls.some(a=>a.includes('delete')),false);
 });
