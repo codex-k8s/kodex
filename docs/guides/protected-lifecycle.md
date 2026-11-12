@@ -4,11 +4,20 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.73
+version: 1.1.74
 updated: 2026-11-12
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Отзыв права на публикацию итогового artifact не разрешает отбросить подтверждение
+остановленного native writer. Completion сохраняет exact lease/fence/generation,
+checkpoint CAS и исходный idempotency intent; owner фиксирует FAILED без новых
+artifacts либо сохраняет прежний terminal verdict. Проверка текущего права и
+возможная публикация сериализуются с изменением агента. До staging новые objects
+не создаются; после staging точные непринятые версии удаляются только при известном
+исходе commit. Неподтверждённый writer не превращается в пустую сессию.
+Матрица и границы квалификации: [#2108](../operations/opencode-native-sessions-2108.md).
 
 Runtime и preview координатора используют одинаковый закрытый набор допустимых
 capabilities, затем пересекают его с текущими полномочиями инициатора, агента и

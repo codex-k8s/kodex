@@ -2058,7 +2058,17 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	if len(payload.Artifacts) > 0 {
 		if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
-			return commandOutcome{}, err
+			if !errors.Is(err, errs.ErrForbidden) || payload.NativeSession == nil {
+				return commandOutcome{}, err
+			}
+			// Keep the verified stopped checkpoint while refusing every new artifact and success outcome.
+			// The original intent remains bound to its receipt; prepared object versions are cleaned after commit.
+			// Сохраняем проверенный stopped checkpoint, отклоняя все новые artifacts и SUCCESS.
+			// Исходный intent закреплён receipt; подготовленные версии объектов очищаются после commit.
+			payload.Success = false
+			payload.SafeErrorCode = runtimeInputInvalidCode
+			payload.ResultSummary = runtimeClaimEligibilityChanged
+			payload.Artifacts = nil
 		}
 	}
 	nodeState, runState := "SUCCEEDED", "RUNNING"
@@ -2470,7 +2480,7 @@ func runtimeSafeErrorCode(code string) bool {
 		return true
 	}
 	switch code {
-	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
+	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", runtimeInputInvalidCode, "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
 		return true
 	default:
 		return false
@@ -2929,7 +2939,7 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 			}
 		}
 		if err == nil && !evidenceAuthority {
-			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged)
+			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, runtimeInputInvalidCode, runtimeClaimEligibilityChanged)
 		}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.14
+version: 1.4.15
 updated: 2026-11-12
 ---
 
@@ -935,3 +935,39 @@ RUN_RESULT координатора — проверяются вместе. С�
 Через Context7 проверены PostgreSQL18 `Repeatable Read`, `SELECT FOR SHARE`
 и конфликт обновлённой строки: [изоляция](https://www.postgresql.org/docs/18/transaction-iso.html),
 [блокировки](https://www.postgresql.org/docs/18/explicit-locking.html).
+
+## Завершение после отзыва права на итоговый артефакт
+
+Живая проверка #2108 обнаружила второй failure path: текущий file catalog после
+отзыва закрывается, но автоматический `result.md` в завершении отклоняется ещё
+при подготовке S3. Вместе с ним теряется подтверждение остановленного native
+writer. Исправление ниже требует отдельной квалификации; прежний FAIL остаётся
+в evidence. Источник требования — #2108 и GUIDE-DOC-006.
+
+| Переход | Полномочия, состояние и результат |
+| --- | --- |
+| Grant/claim | Владелец явно выдаёт capability. Обычный claim закрепляет lease/fence/generation, RR и single-writer intent; grant не выводится из checkpoint |
+| Revoke до staging | Проверенный runtime-controller передаёт прежний exact completion. Текущее право закрывает новые S3 writes. Наличие native metadata позволяет лишь передать исходный intent основной owner-транзакции |
+| Revoke после staging | Owner-транзакция повторно проверяет текущего агента и actor. Уже подготовленные объекты не публикуются; после известного commit удаляются по точной версии прежним cleanup |
+| Complete при отказе публикации | Exact lease, fence, generation и native checkpoint проверяются полностью. Owner атомарно сохраняет checkpoint/usage, завершает run как FAILED с безопасной причиной и без artifacts, закрывает leases/grants и штатный граф. Отказ не превращается в SUCCESS либо право загрузки |
+| Replay | Прежний idempotency scope/intent digest возвращает тот же FAILED без повторных artifacts/events; изменённый intent отклоняется |
+| Cancel/expiry/terminal | Прежний terminal verdict не меняется. Допустим только существующий exact stopped-writer fact без новых artifacts и без возобновления run |
+| Continuation/retry | Новый owner transition, свежие права и RR; только подтверждённый совместимый checkpoint допускает native resume. Неподтверждённый writer остаётся BLOCKED, SQL reset и пустая сессия не используются |
+| Неверная provenance/неизвестный COMMIT | Полный закрытый отказ; checkpoint не подтверждается по словам модели или состоянию Pod. Неизвестный commit не разрешает уничтожение потенциально принятых S3 versions |
+
+Существующие completion RPC, авторизация workload, audit/idempotency и terminal
+события сохраняют своих владельцев и cardinality. Отказ публикации не создаёт
+`ARTIFACT_AVAILABLE`; сохранённый native checkpoint читается через прежний
+защищённый session-storage path. Отдельный runtime, callback или permission не
+добавляется. Workspace ACK/positive writer join остаются самостоятельными
+обязательными предусловиями; один owner component test их физически не доказывает.
+
+Локальная регрессия на production-коде до исправления: FAIL6.035с для обоих
+моментов отзыва. После исправления целевой PostgreSQL-контур PASS31.889с:
+AGENT до/после staging, позднее завершение после Cancel и WORKFLOW coordinator;
+проверены отсутствие новых artifacts/events, точный replay, cleanup подготовленного
+объекта, сохранённый checkpoint и continuation/RetryRun без возврата capability.
+Также прошли прежние проверки completion receipt и неизвестного COMMIT ACK.
+Это component evidence с synthetic checkpoint metadata, не положительный writer
+join в установленном Pod. Исправление завершения ещё не установлено; полный
+PostgreSQL-прогон нового среза выполняется отдельно.
