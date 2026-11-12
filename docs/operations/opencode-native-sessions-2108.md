@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.24
+version: 1.4.25
 updated: 2026-11-12
 ---
 
@@ -1291,3 +1291,30 @@ Cache-write0 не доказывает NO_STORE. Это тест понижен�
 evidence, а не нулевой счётчик либо установленная причина временной недоступности.
 Прежние ограничения authority-issuer restart, независимого review и внешних
 provider/hardware профилей сохраняются.
+
+## Отказы хранения настоящего native checkpoint
+
+`TestNativeCheckpointStorageFailures` включён в канонический native package и
+кластерный набор. Отдельный дочерний тест запускает закреплённый OpenCode,
+сохраняет synthetic user message через V1 `NoReply` и после positive join
+получает настоящий официальный export около33КБ. Модель не вызывается.
+
+Только этот дочерний процесс временно получает soft `RLIMIT_FSIZE=4096`;
+hard limit и лимиты родителя/хоста не меняются. Официальный export при отказе
+записи не выдаёт checkpoint metadata и не оставляет частичный файл. Исходный
+sealed export остаётся byte-for-byte прежним, повторный export после возврата
+лимита имеет прежний SHA. Отсутствующий parent directory и занятый destination
+также закрыто отклоняются без перезаписи подтверждённых bytes.
+
+Пять invalid restore — отсутствующий файл, обрезанный JSON, чужой nativeID,
+неподдержанная версия и неверный digest — не запускают import и не создают новую
+пустую native БД. Корректный official import после отказов восстанавливает все
+исходные message values; повторный import в уже инициализированный HOME
+отклоняется. Это проверка ошибки ограниченного размера файла и unavailable path,
+а не заполнение shared filesystem до ENOSPC или имитация полного диска кластера.
+
+Целевая локальная race-проверка PASS15.217с с настоящим бинарником и0modelrequests.
+Первый прогон FAIL из-за неверного fixture: удалялся последний перевод строки,
+поэтому JSON оставался корректным. Fixture теперь удаляет закрывающий JSON token;
+production decoder не ослаблялся. Полная повторная и кластерная квалификация
+этого дополнительного сценария фиксируется отдельно после исполнения.
