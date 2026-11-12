@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.28
+version: 1.4.29
 updated: 2026-11-13
 ---
 
@@ -1389,3 +1389,45 @@ runtime режима. Бюджеты, ownership cleanup и private Unix transpor
 Квалификация не доказывает физическую изоляцию KV, облачный billing или NO_STORE
 upstream inference cache. Новые production adapters и второй LLM gateway
 не добавляются.
+
+
+## Диагностика initial PostgreSQL authority при повторной установке
+
+Повторный restart выявил два кратковременных terminal issuer container с
+`stage=POSTGRES error_class=UNKNOWN`. Все приложения затем достигли Ready;
+строгая проверка отсутствия restart осталась FAIL. Старый журнал не содержит
+исходной причины, поэтому сетевой отказ, credential и SQLSTATE по нему не
+восстанавливаются. Это не доказательство дефекта native OpenCode.
+
+Исправление сохраняет typed cause на пути private DSN → pgx parse → pool →
+Ping → `AfterConnect`/точный `SET ROLE` → identity readback. Внешний issuer/
+verifier CLI добавляет только `postgres_step` и `postgres_cause` из закрытых
+множеств; старые publisher callers получают фиксированный безопасный `Error()`.
+Общие классификаторы PostgreSQL/TLS/network берутся из `observability/errorclass`.
+Ошибки `securefile` остаются обезличенными. Нет нового RPC, owner command,
+события, retry loop, миграции или изменения credentials.
+
+| Переход | Полномочия и результат | Read path / consumers |
+| --- | --- | --- |
+| Запуск issuer/verifier | Прежний workload config и exact LOGIN/TLS; startup deadline принадлежит Run | Kubernetes container metadata и закрытый CLI diagnostic |
+| Parse/file rejection | Нет подключения, worker или выдачи proof | READ_DSN/PARSE_DSN; raw DSN и пути не выводятся |
+| Ping/SET ROLE rejection | Pool закрывается; listeners/workers не запускаются, права не расширяются | PING_POOL; исходные SQLSTATE/network/TLS типы доступны локально |
+| Успешный ping | Прежний pool передаётся Run; capability проверяется перед acquire | Прежние readiness/write-path проверки |
+| Cancel/deadline | Прежний bounded context; ошибка не превращается в success/retry | Отдельный context_state и безопасный класс причины |
+| Stop/terminal/restart | Прежние join/close и Kubernetes restart policy | Нового domain event нет; история прежних FAIL сохраняется |
+
+Локально выполнены настоящий pgx Ping на закрытом loopback порту, malformed
+private DSN, sentinel/unprintable cause проверки, весь authority `go test -race`,
+`go vet`, `go build`. `make test-internal-rpc-authority-postgres` прошёл на
+disposable PostgreSQL18.3: миграция/bootstrap, concurrency и новый настоящий
+запрет issuer LOGIN принять publisher role (`42501`), затем успешный issuer
+SET ROLE/readback. Это подтверждает диагностику и сохранение запрета, но ещё
+не определяет причину прошлых двух live restart и не доказывает её устранение.
+
+Доставка authority использует отдельный существующий recipe из `images.json`
+через `build-stable-local.sh --component internal-rpc-authority`. Закрытый
+publication consumer проверяет исходный archive и точные `65532:65532`/
+`internal-rpc-authority-verifier` из Dockerfile, затем штатные plan/apply/readback
+с promotion identity. Это не означает выдачу платформенным сотрудникам
+registry-admin и не меняет policy/signers. Смена sidecar image сохраняет
+UID/seal preconditions и не повторяет исторические bootstrap Jobs.

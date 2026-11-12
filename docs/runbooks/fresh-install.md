@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.12
-updated: 2026-11-12
+version: 2.4.13
+updated: 2026-11-13
 ---
 
 # Чистое развертывание Kodex
@@ -170,6 +170,13 @@ binding и controller через общий `provider_sandbox_profile.py --check
 Переход меняет default двух приложений с UID/resourceVersion guards; admission
 остаётся закрытым до завершения rollout. Успешный readback не обновляет ранее
 опубликованные среды проектов: для них нужны новые RoleImage и явная привязка.
+
+Отдельное исправление authority можно собрать точным source SHA через
+`tools/release/build-stable-local.sh --component internal-rpc-authority
+--source-sha <sha> --output-directory <new-private-directory>`. Штатный
+`stable-image-publication.mjs plan/apply/readback` проверяет OCI, nonroot
+`65532:65532`, verifier entrypoint и exact registry boundary. Это публикация
+образа; rollout существующих workload и readback остаются отдельными шагами.
 
 Вспомогательные authority/admission/builder образы готовятся отдельно через
 `tools/dev/build-local-image-supply-chain.sh --build-only --component all

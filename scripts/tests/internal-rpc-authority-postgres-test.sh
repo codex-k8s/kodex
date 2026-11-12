@@ -230,6 +230,13 @@ fi
 
 # Отдельная disposable DB: concurrency fixture заменяет свою схему и не
 # затрагивает только что проверенные production migrations/receipts.
+(
+  cd -- "$repository_root/services/internal/internal-rpc-authority"
+  KODEX_AUTHORITY_POSTGRES_TEST_DSN="$authority_admin_dsn" \
+    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    go test -count=1 -timeout=30s ./internal/repository/postgres/session \
+      -run '^TestConfigureDeniedCapabilityPreservesSQLState$'
+)
 psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 \
   --command 'CREATE DATABASE authority_concurrency_fixture' >/dev/null
 (

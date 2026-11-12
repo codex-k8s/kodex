@@ -31,7 +31,7 @@ try:
         require(set(receipt) == {'schema', 'component', 'sourceSHA', 'contextSHA256', 'imageDigest',
                 'archiveSHA256', 'dockerfile', 'target', 'admission', 'publication', 'nodePull'})
         component, expected = receipt['component'], receipt['imageDigest']
-        require(component in ('control-plane', 'secret-broker', 'email-bridge', 'runtime-controller',
+        require(component in ('control-plane', 'internal-rpc-authority', 'secret-broker', 'email-bridge', 'runtime-controller',
                 'integration-gateway', 'integration-synthetic', 'control-api-gateway', 'staff-control-center',
                 'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive', 'backup-controller', 'registry-pull-authorizer',
                 'image-admission-controller'))
@@ -163,6 +163,8 @@ try:
         require(manifest.get('schemaVersion') == 2)
         config = document(descriptor(manifest['config'], {'application/vnd.oci.image.config.v1+json'}))
         entrypoint = component + '-entrypoint' if component == 'staff-control-center' else component
+        if component == 'internal-rpc-authority':
+            entrypoint = 'internal-rpc-authority-verifier'
         require(config.get('os') == 'linux' and config.get('architecture') == 'amd64')
         if retained:
             require(config.get('config', {}).get('User') == '10001:10001'
@@ -171,7 +173,8 @@ try:
         else:
             require(config.get('config', {}).get('Entrypoint') == ['/usr/local/bin/' + entrypoint])
         if stable:
-            require(config.get('config', {}).get('User') == ('101:101' if component == 'staff-control-center' else '10001:10001'))
+            expected_user = {'staff-control-center': '101:101', 'internal-rpc-authority': '65532:65532'}.get(component, '10001:10001')
+            require(config.get('config', {}).get('User') == expected_user)
             if component in ('staff-control-center', 'image-admission-controller'):
                 require(config['config'].get('Labels', {}).get('org.opencontainers.image.revision') == receipt['sourceSHA'])
         layers = manifest['layers']
