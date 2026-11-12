@@ -99,6 +99,8 @@ var (
 
 	// queryRuntimeCompleteexecutionSelectAgentCapability embeds capability intersection between current agent and pinned runtime snapshot plus active root-actor resolution on the exact tenant/node/lease; this read does not replace lease freshness validation.
 	// queryRuntimeCompleteexecutionSelectAgentCapability содержит пересечение возможностей текущего сотрудника и закреплённого снимка runtime с разрешением активного автора корня для точных организации, узла и аренды; проверку свежести аренды этим чтением не заменяют.
+	// Shared row locks serialize agent/actor revocation with publication and require a read-write transaction.
+	// Shared-блокировки строк упорядочивают отзыв agent/actor и публикацию; нужна транзакция с правом записи.
 	//go:embed sql/runtime_completeexecution_select_agent_capability.sql
 	queryRuntimeCompleteexecutionSelectAgentCapability string
 	// queryRuntimeCompleteexecutionLockRootRun embeds state lookup and row locking by resolved root-run ID; tenant, graph-root identity and completion eligibility must be established before this ID-only read.

@@ -297,7 +297,9 @@ func workflowExceptionArtifactWriteAuthority(t *testing.T, f *workflowRecoveryRe
 	if err != nil {
 		t.Fatal("resolve artifact authority observer", completionOutcomeClass(err))
 	}
-	tx, err := f.pool.BeginTx(f.ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	// The production authority query locks agent/actor rows against concurrent revocation.
+	// Production-запрос полномочий блокирует строки agent/actor от конкурентного отзыва.
+	tx, err := f.pool.BeginTx(f.ctx, pgx.TxOptions{})
 	if err != nil {
 		t.Fatal("begin artifact authority observer", completionOutcomeClass(err))
 	}
