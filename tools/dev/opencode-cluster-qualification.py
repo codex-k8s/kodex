@@ -121,6 +121,7 @@ def verify_owned(client, plan, record):
 
 def verify_cleanup_inventory(client, plan, journal):
     owned = {x['uid'] for x in journal['objects']}
+    owned_pods = {x['name']: x for x in journal['objects'] if x.get('kind') == 'Pod'}
     kinds = client.call(['api-resources', '--namespaced=true', '--verbs=list', '-o', 'name']).decode().splitlines()
     require(kinds and len(set(kinds)) == len(kinds))
     for kind in kinds:
@@ -131,6 +132,11 @@ def verify_cleanup_inventory(client, plan, journal):
             fields = row.split()
             require(len(fields) == 4)
             identity, name, involved, regarding = fields
+            # Metrics API возвращает виртуальную проекцию Pod без собственного UID.
+            # Подтверждаем текущий исходный Pod; совпадение одного имени недостаточно.
+            if kind == 'pods.metrics.k8s.io' and identity == '<none>' and name in owned_pods:
+                verify_owned(client, plan, owned_pods[name])
+                continue
             automatic = (kind == 'serviceaccounts' and name == 'default' or
                          kind == 'configmaps' and name == 'kube-root-ca.crt' or
                          kind in ('events', 'events.events.k8s.io') and (involved in owned or regarding in owned))

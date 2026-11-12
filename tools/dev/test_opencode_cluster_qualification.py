@@ -50,6 +50,17 @@ class NativeQualificationSafetyTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 native.verify_cleanup_inventory(ClientFixture(objects={**objects, kind: row}), plan, journal)
 
+    def test_metrics_projection_requires_current_owned_pod(self):
+        plan = {'namespace': 'fixture', 'scope': 'fixture'}
+        journal = {'objects': [{'kind': 'Pod', 'name': 'native', 'namespace': 'fixture', 'uid': 'owned'}]}
+        objects = {'pods.metrics.k8s.io': '<none> native <none> <none>'}
+        native.verify_cleanup_inventory(ClientFixture(objects=objects), plan, journal)
+        for client in (ClientFixture(identity='replacement', objects=objects),
+                       ClientFixture(scope='foreign', objects=objects),
+                       ClientFixture(objects={'pods.metrics.k8s.io': '<none> neighbor <none> <none>'})):
+            with self.assertRaises(ValueError):
+                native.verify_cleanup_inventory(client, plan, journal)
+
 
 if __name__ == '__main__':
     unittest.main()
