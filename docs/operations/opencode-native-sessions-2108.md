@@ -4,8 +4,8 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.27
-updated: 2026-11-12
+version: 1.4.28
+updated: 2026-11-13
 ---
 
 # OpenCode: нативные сессии и восстановление
@@ -1354,3 +1354,38 @@ Usage200674input/10898output/115328cached/4416reasoning, PARTIAL; стоимос
 Бюджет smoke540с,30tool calls и350000observed tokens не исчерпан.
 Это проверка делегирования внутри платформы, не независимое review данного PR
 и не owner approve. GitHub test objects и прежний Human Gate не изменялись.
+
+## Настоящий LiteLLM для Responses и Messages
+
+Прежний `TestNativeBundledProtocolAdapters` проверял bundled SDK и transport hook
+через синтетический HTTP endpoint, в том числе для route kind LITELLM. Он не
+доказывал поведение настоящего proxy для Responses/Messages. Прежний реальный
+LiteLLM/Redis сценарий покрывал Chat Completions. Эти области доказательств
+не взаимозаменяемы.
+
+`TestNativeLiteLLMRedisBypass` теперь дополнительно запускает настоящий OpenCode
+с bundled OpenAI/Anthropic SDK через тот же изолированный LiteLLM1.104.2 и Redis.
+Aliases разрешаются в точные синтетические upstream model IDs; Responses и
+Messages сохраняют свой протокол. Для каждого API сначала доказывается работа
+response cache, затем обход уже заполненного кеша и отсутствие записи обходного
+ответа по фактическому счётчику upstream requests. HTTP200 сам по себе недостаточен.
+
+В upstream проверяются `prompt_cache_key` и автоматический `cache_control`;
+proxy-only `cache` и `disable_fallbacks` туда не попадают. Дополнительные probes
+на основе захваченного native request удаляют hints и доказывают отсутствие их
+повторной инъекции proxy. Эти probes не выдаются за отдельный native NO_HINTS
+turn: штатный SDK для этого режима проверяется соседней adapter suite.
+
+Синтетический primary затем возвращает500. Контрольный запрос с разрешённым
+fallback действительно достигает настроенного запасного маршрута. Точные
+controls исходного native request закрыто запрещают такой переход: ответ —
+ошибка, счётчик запасного маршрута не меняется. Все upstream локальны и
+синтетические; real provider credentials, чужой proxy и общий Redis не используются.
+
+Точка входа остаётся `make test-opencode-native` с закреплённым
+`KODEX_TEST_OPENCODE_BINARY` и `KODEX_TEST_LITELLM_REDIS=1`. Кластерная точка
+`tools/dev/opencode-cluster-qualification.py` включает расширение без отдельного
+runtime режима. Бюджеты, ownership cleanup и private Unix transport сохраняются.
+Квалификация не доказывает физическую изоляцию KV, облачный billing или NO_STORE
+upstream inference cache. Новые production adapters и второй LLM gateway
+не добавляются.

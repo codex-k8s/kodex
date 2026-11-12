@@ -119,7 +119,12 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 		})
 	}
 	fixture := &nativeFixture{cacheExpectation: &nativeCacheWireExpectation{mechanism: "VLLM_CACHE_SALT", namespace: strings.Repeat("c", 64)}, identityKey: strings.Repeat("d", 64), identityRevision: strings.Repeat("b", 64), nativeIdentities: map[string]bool{}}
-	model := httptest.NewUnstartedServer(http.HandlerFunc(fixture.model))
+	protocols := &nativeProxyProtocols{t: t}
+	model := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !protocols.serve(w, r) {
+			fixture.model(w, r)
+		}
+	}))
 	directory := t.TempDir()
 	redisHost := "redis"
 	if podMode {
@@ -148,6 +153,7 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	docker.sensitive = []string{credential}
 	configPath := filepath.Join(directory, "proxy.yaml")
 	config := fmt.Sprintf("model_list:\n  - model_name: tiny\n    litellm_params:\n      model: hosted_vllm/tiny\n      api_base: %s/v1\n      api_key: synthetic-not-a-credential\nrouter_settings:\n  num_retries: 0\n  timeout: 15\nlitellm_settings:\n  telemetry: false\n  cache: true\n  cache_params:\n    type: redis\n    host: %s\n    port: 6379\n    ttl: 300\n", "http://127.0.0.1:4001", redisHost)
+	config = strings.Replace(config, "router_settings:\n", nativeProtocolProxyModels+"router_settings:\n  fallbacks: [{responses-alias: [responses-fallback]}, {messages-alias: [messages-fallback]}]\n", 1)
 	config += "general_settings:\n  master_key: " + credential + "\n"
 	if os.WriteFile(configPath+".next", []byte(config), 0600) != nil || os.Rename(configPath+".next", configPath) != nil {
 		t.Fatal("write private synthetic proxy config")
@@ -214,7 +220,9 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 			compactions++
 		}
 		wireMu.Unlock()
-		once.Do(func() { qualifyLiteLLMCacheReadWrite(t, client, origin, body, fixture) })
+		once.Do(func() {
+			qualifyLiteLLMCacheReadWrite(t, client, origin, "/v1/chat/completions", body, func() int { fixture.mu.Lock(); defer fixture.mu.Unlock(); return fixture.modelCalls })
+		})
 		response, err := nativeProxyRequest(client, origin, raw)
 		if err != nil {
 			w.WriteHeader(502)
@@ -254,17 +262,25 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	tools, violations := fixture.tools, len(fixture.violations)
 	fixture.mu.Unlock()
 	wireMu.Lock()
-	defer wireMu.Unlock()
-	if tools != 12 || violations != 0 || compactions < 1 {
+	finalRequests, finalCompactions := requests, compactions
+	wireMu.Unlock()
+	if tools != 12 || violations != 0 || finalCompactions < 1 {
 		t.Fatal("real proxy path lost tools, compaction or route controls")
 	}
-	t.Logf("OpenCode1.19.5 -> LiteLLM1.104.2 -> synthetic model: modelRequests=%d compactionRequests=%d managedEffects=%d; seeded Redis read/write bypass and upstream salt forwarding qualified", requests, compactions, tools)
+	t.Logf("OpenCode1.19.5 -> LiteLLM1.104.2 -> synthetic model: modelRequests=%d compactionRequests=%d managedEffects=%d; seeded Redis read/write bypass and upstream salt forwarding qualified", finalRequests, finalCompactions, tools)
+	qualifyNativeProxyProtocols(t, binary, client, origin, protocols)
 }
 
 // nativeProxyRequest makes one local synthetic model request without retries, redirects, host proxy inheritance or real credentials.
 // nativeProxyRequest выполняет один local synthetic model request без retry, redirect, host proxy inheritance и real credentials.
 func nativeProxyRequest(client *http.Client, origin string, raw []byte) (*http.Response, error) {
-	request, err := http.NewRequest(http.MethodPost, origin+"/v1/chat/completions", bytes.NewReader(raw))
+	return nativeProxyAPIRequest(client, origin, "/v1/chat/completions", raw)
+}
+
+// nativeProxyAPIRequest confines a protocol probe to the owned synthetic proxy.
+// nativeProxyAPIRequest ограничивает проверку протокола собственным синтетическим proxy.
+func nativeProxyAPIRequest(client *http.Client, origin, path string, raw []byte) (*http.Response, error) {
+	request, err := http.NewRequest(http.MethodPost, origin+path, bytes.NewReader(raw))
 	if err != nil {
 		return nil, err
 	}
@@ -274,12 +290,11 @@ func nativeProxyRequest(client *http.Client, origin string, raw []byte) (*http.R
 
 // qualifyLiteLLMCacheReadWrite proves cache effectiveness first, then checks seeded-read bypass and absence of a stored bypass result by upstream counters.
 // qualifyLiteLLMCacheReadWrite сначала доказывает работу кеша, затем проверяет seeded-read bypass и отсутствие stored bypass result по upstream counters.
-func qualifyLiteLLMCacheReadWrite(t *testing.T, client *http.Client, origin string, body map[string]any, fixture *nativeFixture) {
+func qualifyLiteLLMCacheReadWrite(t *testing.T, client *http.Client, origin, path string, body map[string]any, count func() int) {
 	t.Helper()
-	count := func() int { fixture.mu.Lock(); defer fixture.mu.Unlock(); return fixture.modelCalls }
 	send := func(value map[string]any) {
 		raw, _ := json.Marshal(value)
-		response, err := nativeProxyRequest(client, origin, raw)
+		response, err := nativeProxyAPIRequest(client, origin, path, raw)
 		if err != nil {
 			t.Error("synthetic cache probe transport failed")
 			return
