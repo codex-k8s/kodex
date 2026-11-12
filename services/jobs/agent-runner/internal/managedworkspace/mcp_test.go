@@ -148,6 +148,34 @@ func TestWorkspaceReadRangeCanBeCorrected(t *testing.T) {
 	}
 }
 
+// TestWorkspaceReadNeverAdoptsAnotherSessionPath keeps equal relative names isolated and
+// rejects absolute model paths, including the current root, without silently rewriting them.
+// TestWorkspaceReadNeverAdoptsAnotherSessionPath сохраняет изоляцию одинаковых относительных
+// имён и отклоняет абсолютные пути модели, включая текущий root, без скрытого преобразования.
+func TestWorkspaceReadNeverAdoptsAnotherSessionPath(t *testing.T) {
+	current, _ := handlerFixture(t)
+	other, _ := handlerFixture(t)
+	ctx := context.Background()
+	for handler, content := range map[*Handler]string{current: "current session", other: "other session"} {
+		if _, err := handler.store.write(ctx, "work/result.txt", content, "ABSENT"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{"/workspace/work/result.txt", filepath.Join(current.store.root, "work/result.txt"), filepath.Join(other.store.root, "work/result.txt")} {
+		args, _ := json.Marshal(map[string]string{"path": path})
+		if value, err := current.call(ctx, "rejected-absolute-read", runtimecontract.WorkspaceToolRead, args); err == nil || value != nil {
+			t.Fatal("absolute path accepted or released file bytes")
+		}
+	}
+	value, err := current.call(ctx, "own-relative-read", runtimecontract.WorkspaceToolRead, json.RawMessage(`{"path":"work/result.txt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read, ok := value.(FileRead); !ok || read.Text != "current session" {
+		t.Fatal("relative path did not resolve only within the current session")
+	}
+}
+
 // TestUnknownCommandClosesLocalFileAdmission proves a lost/unknown command reply cannot be
 // followed by file access under an unproven writer-stop assumption; there is no automatic retry.
 // TestUnknownCommandClosesLocalFileAdmission доказывает, что lost/unknown command reply закрывает
