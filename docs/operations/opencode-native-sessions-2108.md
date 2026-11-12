@@ -4,17 +4,19 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.20
+version: 1.4.21
 updated: 2026-11-12
 ---
 
 # OpenCode: нативные сессии и восстановление
 
-Последующий аудит пункта10.1.8 обнаружил пробел в установленном runner:
+Последующий аудит пункта10.1.8 обнаружил и устранил пробел в runner:
 неполный provider SSE без finish мог вызывать повторные upstream model steps
 до общего deadline. Детерминированная регрессия реальным OpenCode наблюдала505
-запросов за20с. Исправление ниже требует нового immutable runner и полного
-RoleImage; прежняя установленная квалификация не доказывает его доставку.
+запросов за20с. Исправление187ec6b доставлено новым immutable runner и двумя
+полными RoleImage. Последний раздел содержит отдельные результаты доставки,
+native recovery и ограничения повторного restart; прежние результаты не
+подменяют квалификацию исправления.
 
 Новая чистая установка прошла живую проверку native compaction, продолжения,
 workspace, делегирования и GitHub Human Gate. Повторный адресный apply и
@@ -1128,7 +1130,7 @@ V2 spec; V2 гарантии не перенесены на установлен
 Второй запрос может успеть начаться до доставки SSE; отсутствие такого in-flight
 запроса не обещается.
 Проверка consumer отдельно перебирает все допустимые и недопустимые причины.
-Это локальный synthetic результат, пока не установленное исправление.
+Первичный результат получен локально; установленная квалификация приведена ниже.
 
 Матрица включена в штатный `make test-opencode-native` и изолированный кластерный
 runner. Бюджет полного локального native suite увеличен с300 до420с из-за пяти
@@ -1137,5 +1139,55 @@ runner. Бюджет полного локального native suite увели
 Локальная квалификация исправления: целевая race-матрица PASS29.458с, полный
 `make test-opencode-native` PASS274.867с с реальными OpenCode/LiteLLM/Redis и
 synthetic upstream. Полный runner `go test -race ./...`, `go vet ./...`,
-`go build ./...` и4 проверки кластерной оснастки PASS. Это не новый CI и пока
-не доказательство доставки изменённого runner на стенд.
+`go build ./...` и4 проверки кластерной оснастки PASS. Это локальные проверки,
+отдельные от CI и установленной квалификации.
+
+## Доставка исправления неполного SSE и повторное восстановление
+
+Исполняемый source `187ec6b21803ae4d06ac1a268139c3d58bb9e88b` установлен
+в разрешённом тестовом контуре. Default runner:
+`sha256:5c22bc8d5ed1e798dd438faa9eb23c075fc67546d8fb8f6348b9e28d100a44e6`.
+Оба полных RoleImage прошли build, provenance/SBOM, admission, promotion и
+штатные owner bindings: `sha256:0a42aa496892c508d6b1612d50238e7c1d26a696dfb3835d70a53d538d04e862`
+и `sha256:89a8931838908ab6f0e6a59bce4426d009e3ceb06b8020f0aba420897c222dac`.
+Schema042/input10/ABI5 не менялись. Release lock содержит индивидуальный source
+каждого компонента; это не заявление о пересборке остальных сервисов на187ec6b.
+
+Полный readback нового lock и повторный адресный apply прошли:417 ресурсов,
+419 шагов, исходный bootstrap receipt без повторного bootstrap. Изолированный
+кластерный suite на новом runner прошёл9 тестов за250с без restart: настоящий
+OpenCode и LiteLLM/Redis, synthetic upstream. Неполный SSE остановлен после
+двух фактических запросов без tools/final. Долгий сценарий:144 tools,
+36 compactions,256 messages,804133 export bytes и17736 maximum wire bytes.
+Pruning:150 messages,78 markers,681395 export bytes. Все пять failure/recovery
+сценариев выполнены; точный временный namespace удалён и отсутствие проверено.
+
+После graceful restart платформы три business continuation завершились
+`SUCCEEDED`. У AGENT два чтения файлов сохранили прежние SHA256 и не создали
+записей; SYSTEM не вызывал tools. PROJECT выполнил одно разрешённое чтение
+`get_configuration_catalog`: поставляемый core prompt v54 требует его в начале
+новой задачи. Исходный smoke с требованием нуля tools остаётся `FAIL`; отдельная
+проверка подтверждает сохранность истории и отсутствие записей/внешних effects.
+Это не ослабление production validation и не повтор платного запуска ради PASS.
+
+После положительного writer join физические checkpoints совпали с owner SHA:
+AGENT generation8 сохранил все24 прежних messages среди28; SYSTEM generation3 —
+все4 среди6; PROJECT generation3 — все5 среди8. Во всех случаях native ID
+не изменился, исходные message values сравнивались полностью. Все15 фактических
+container/init imageID трёх execution Pods соответствовали новым runner/RoleImage,
+restarts отсутствовали. WORKFLOW, GitHub Human Gate и forced-threshold business
+compaction относятся к ранее указанным source pins и целиком на187ec6b не
+повторялись; новые proofs квалифицируют доставку и продолжение сессий.
+
+Сам graceful restart завершился и10 платформенных Pods стали готовы с exact
+images. Однако строгая проверка нуля startup restarts дала `FAIL`: два
+`internal-rpc-authority-issuer` по одному разу завершились на этапе `POSTGRES`
+до активации authority и затем восстановились. Безопасная диагностика не
+содержит SQLSTATE или точной причины (`UNKNOWN`); причинность не установлена.
+За последующие207с новых restart не наблюдалось. Исходные failure receipts
+сохранены; Pod не заменялись ради нулевого счётчика. Это ограничение текущего
+restart evidence, а не доказательство устранения причины.
+
+Независимые product/security/architecture review и owner gate остаются впереди;
+PR остаётся draft. Недоступные DGX/корпоративные профили, выключенная Grafana и
+многочасовой soak не объявляются проверенными. Цена live-вызовов остаётся UNKNOWN.
