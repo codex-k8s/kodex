@@ -106,7 +106,7 @@ func TestNativeBrokerHandshakeBoundaries(t *testing.T) {
 				accepted, acceptedFrames = true, 1
 			case "restore-false-success":
 				activities = []runtimecontract.RuntimeActivity{recovery}
-				outcome, acceptedFrames = "COMPLETED", 1
+				outcome, acceptedFrames = "SUCCEEDED", 1
 			}
 			var wire bytes.Buffer
 			encoder := json.NewEncoder(&wire)
