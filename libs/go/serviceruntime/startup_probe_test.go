@@ -117,3 +117,23 @@ func TestStartupProbeRequiresBoundedRetry(t *testing.T) {
 		t.Fatal("unbounded retry admitted")
 	}
 }
+
+// TestStartupProbeDoesNotHidePermanentErrorJoinedWithCancellation retains the new failure separately from the previous retry for service-owned classification.
+// TestStartupProbeDoesNotHidePermanentErrorJoinedWithCancellation сохраняет новый отказ отдельно от прежнего retry для сервисной классификации.
+func TestStartupProbeDoesNotHidePermanentErrorJoinedWithCancellation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	calls := 0
+	terminal := errors.Join(syscall.EACCES, context.Canceled)
+	result := WaitStartupProbe(ctx, func(context.Context) error {
+		calls++
+		if calls == 1 {
+			return syscall.ECONNREFUSED
+		}
+		cancel()
+		return terminal
+	}, func(err error) bool { return errors.Is(err, syscall.ECONNREFUSED) }, time.Second, time.Millisecond)
+	if result == nil || result.Cause != terminal || !errors.Is(result.PreviousRetry, syscall.ECONNREFUSED) || !errors.Is(result.Budget, context.Canceled) || calls != 2 {
+		t.Fatal("current failure concealed by previous retry")
+	}
+}

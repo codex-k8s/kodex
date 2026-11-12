@@ -105,5 +105,10 @@ func verifyPostgresStartup(ctx context.Context, pool postgresStartupPool) error 
 		return nil
 	}
 	pool.Close()
-	return &startupError{stage: stageVerifyPostgreSQLConnection, cause: failed.Cause, budget: failed.Budget}
+	cause := failed.Cause
+	class := postgresdiagnostic.Class(cause)
+	if failed.PreviousRetry != nil && (class == "canceled" || class == "timeout") {
+		cause = failed.PreviousRetry
+	}
+	return &startupError{stage: stageVerifyPostgreSQLConnection, cause: cause, budget: failed.Budget}
 }

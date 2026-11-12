@@ -72,7 +72,12 @@ func openCapabilityPostgres(
 	}
 	if failed := serviceruntime.WaitStartupProbe(ctx, pool.Ping, retryPostgresStartup, 10*time.Second, time.Second); failed != nil {
 		pool.Close()
-		return nil, &postgresStartupError{step: postgresPingPool, cause: failed.Cause, budget: failed.Budget}
+		cause := failed.Cause
+		_, class, _ := postgresStartupDiagnostic(&postgresStartupError{step: postgresPingPool, cause: cause})
+		if failed.PreviousRetry != nil && (class == "canceled" || class == "deadline") {
+			cause = failed.PreviousRetry
+		}
+		return nil, &postgresStartupError{step: postgresPingPool, cause: cause, budget: failed.Budget}
 	}
 	return pool, nil
 }

@@ -15,6 +15,9 @@ type StartupProbeFailure struct {
 	// Budget is set only when the original caller context has ended; it never extends that context.
 	// Budget задаётся только при завершении исходного context вызывающего и никогда его не продлевает.
 	Budget error
+	// PreviousRetry preserves a prior retryable probe when cancellation overlaps a new error; service policy chooses diagnostic precedence.
+	// PreviousRetry сохраняет прежний временный отказ при совпадении отмены с новой ошибкой; приоритет диагностики выбирает сервис.
+	PreviousRetry error
 }
 
 // WaitStartupProbe runs sequential bounded readiness probes under an existing context and service-owned retry predicate.
@@ -48,10 +51,7 @@ func WaitStartupProbe(ctx context.Context, probe func(context.Context) error, re
 			return nil
 		}
 		if budget := ctx.Err(); budget != nil {
-			if last != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
-				err = last
-			}
-			return &StartupProbeFailure{Cause: err, Budget: budget}
+			return &StartupProbeFailure{Cause: err, Budget: budget, PreviousRetry: last}
 		}
 		_, hasDeadline := ctx.Deadline()
 		if !hasDeadline || !retryable(err) {
