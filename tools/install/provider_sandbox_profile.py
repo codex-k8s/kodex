@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 
 import yaml
 from deployment_profile import require, Rejected
@@ -113,6 +114,19 @@ def validate_render(resources):
     return None
 
 
+def validate_live(resources):
+    """Проверяет API readback тем же контрактом, удаляя только серверную metadata проекции."""
+    result = copy.deepcopy(resources)
+    for item in result:
+        if item.get('kind') != 'ConfigMap' or not item.get('metadata', {}).get('name', '').startswith(PREFIX):
+            continue
+        metadata = item['metadata']
+        for field in ('uid', 'resourceVersion', 'generation', 'creationTimestamp', 'managedFields'):
+            metadata.pop(field, None)
+        metadata.get('annotations', {}).pop('kubectl.kubernetes.io/last-applied-configuration', None)
+    return active(result)
+
+
 def transform(resources, profile=None):
     result = copy.deepcopy(resources)
     if profile is None:
@@ -203,11 +217,21 @@ def transition(previous, desired):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--render', type=Path, required=True)
+    parser.add_argument('--render', type=Path)
+    parser.add_argument('--check-live', action='store_true')
     parser.add_argument('--profile', choices=('', PROFILE))
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--reconcile-policy', action='store_true')
     args = parser.parse_args()
+    if args.check_live:
+        require(args.render is None and args.profile is None and not args.check and not args.reconcile_policy, 'PROVIDER_PROFILE_ARGUMENTS_REJECTED')
+        raw = sys.stdin.buffer.read((2 << 20) + 1)
+        require(len(raw) <= 2 << 20, 'RENDER_SIZE_REJECTED')
+        resources = json.loads(raw)
+        require(isinstance(resources, list) and 3 <= len(resources) <= 5, 'RESOURCE_COUNT_REJECTED')
+        validate_live(resources)
+        return
+    require(args.render is not None, 'REGULAR_RENDER_REQUIRED')
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes(); require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)))

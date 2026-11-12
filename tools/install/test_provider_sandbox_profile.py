@@ -19,6 +19,25 @@ def fixture():
 
 
 class Tests(unittest.TestCase):
+    def test_live_readback_uses_exact_projection_and_controller_contract(self):
+        for configured_profile in ('', profile.PROFILE):
+            values = profile.transform(fixture(), configured_profile)
+            current = values[-1]
+            current['metadata'].update(uid='synthetic', resourceVersion='12', creationTimestamp='synthetic', managedFields=[])
+            current['metadata']['annotations']['kubectl.kubernetes.io/last-applied-configuration'] = 'synthetic'
+            self.assertEqual(profile.validate_live(values), configured_profile)
+            for change in ('data', 'binary', 'owner', 'binding', 'marker', 'env', 'source'):
+                bad = copy.deepcopy(values)
+                if change == 'data': bad[-1]['data']['extra'] = 'rejected'
+                elif change == 'binary': bad[-1]['binaryData'] = {'extra': 'rejected'}
+                elif change == 'owner': bad[-1]['metadata']['ownerReferences'] = [{'uid': 'foreign'}]
+                elif change == 'binding': bad[2]['spec']['validationActions'] = ['Warn']
+                elif change == 'marker': bad[1]['spec']['template']['metadata']['annotations'][profile.DIGEST] = 'f' * 64
+                elif change == 'env': bad[1]['spec']['template']['spec']['containers'][0]['env'][0]['valueFrom']['configMapKeyRef']['name'] = 'foreign'
+                else: bad[0]['data']['requiredTools'] = 'changed'
+                with self.subTest(change=change), self.assertRaises(Rejected):
+                    profile.validate_live(bad)
+
     def changed_policy(self, configured_profile):
         values = profile.transform(fixture(), configured_profile)
         new = copy.deepcopy(values[0])

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { planDefaultRunner as createDefaultRunnerPlan, requirePublishedNodeReadback, requireRuntimeBinding } from "./default-runner-transition.mjs";
 function publicPolicy(host="pull.kodex.works",digest=`sha256:${"b".repeat(64)}`){return{apiVersion:"v1",kind:"ConfigMap",metadata:{name:"policy-next",namespace:"kodex-system",labels:{"app.kubernetes.io/part-of":"kodex","kodex.dev/owner-intent":"true"}},immutable:true,data:{pullRegistryHost:host,promotedPullRepository:`${host}/kodex/roles`,pullCredentialGeneration:"1",trustedRoleBaseDigest:digest,nodeReadbackImage:`${host}/kodex/agent-runner@${digest}`}};}
 const planDefaultRunner=(values,reference,id,policy=publicPolicy())=>createDefaultRunnerPlan(values,reference,id,policy);
@@ -14,6 +16,26 @@ test("план закрыто отклоняет чужой профиль, ра
 test("переход требует опубликованный exact node readback runner",()=>{const policy=publicPolicy();assert.doesNotThrow(()=>requirePublishedNodeReadback(policy,nextRef));policy.data.nodeReadbackImage=oldRef;assert.throws(()=>requirePublishedNodeReadback(policy,nextRef),/NOT_PUBLISHED/);});
 
 test("переход требует заранее переключённый закрытый runtime binding",()=>{const policy=publicPolicy(),binding={apiVersion:"admissionregistration.k8s.io/v1",kind:"ValidatingAdmissionPolicyBinding",metadata:{name:"runtime-role-pod-exact-secret-projection"},spec:{policyName:"runtime-role-pod-exact-secret-projection",validationActions:["Deny"],paramRef:{name:"policy-next",namespace:"kodex-system",parameterNotFoundAction:"Deny"}}};assert.doesNotThrow(()=>requireRuntimeBinding(policy,binding,nextRef));binding.spec.paramRef.name="policy-old";assert.throws(()=>requireRuntimeBinding(policy,binding,nextRef),/NOT_TRANSITIONED/);});
+
+test("default runner проверяет фактическую sandbox-проекцию общим renderer", () => {
+ const source = `import json
+from test_provider_sandbox_profile import fixture
+import provider_sandbox_profile as p
+v=fixture()[:3]
+d=v[0]['data']
+d.update(pullRegistryHost='images.example.invalid',promotedPullRepository='images.example.invalid/kodex/roles',pullCredentialGeneration='1',trustedRoleBaseDigest='sha256:'+'a'*64,nodeReadbackImage='images.example.invalid/kodex/agent-runner@sha256:'+'a'*64)
+d['policySHA256']=p.digest({k:x for k,x in d.items() if k not in ('policySHA256','orchestrationRevision')})
+print(json.dumps([p.transform(v, ''),p.transform(v,p.PROFILE)]))`;
+ const fixtures = JSON.parse(execFileSync('python3', ['-c', source], {cwd:fileURLToPath(new URL('../install',import.meta.url)),encoding:'utf8'}));
+ for (const values of fixtures) {
+  const check = v => requireRuntimeBinding(v[0], v[2], v[0].data.nodeReadbackImage, v);
+  assert.doesNotThrow(() => check(values));
+  for (const mutate of [v=>v[3].data.roleRuntimeContractRevision='99',v=>v[3].data.extra='rejected',v=>v[2].spec.validationActions=['Warn'],v=>v[1].spec.template.metadata.annotations['kodex.dev/provider-sandbox-profile-sha256']='f'.repeat(64),v=>v[0].data.requiredTools='tampered',v=>v[1].spec.template.spec.containers[0].env[0].valueFrom.configMapKeyRef.name='foreign']) {
+   const bad=structuredClone(values);mutate(bad);assert.throws(()=>check(bad),/NOT_TRANSITIONED/);
+  }
+  const missing=values.slice(0,3);assert.throws(()=>check(missing),/NOT_TRANSITIONED/);
+ }
+});
 
 function trustedHotDeployment(name){
  const value=deployment(name);value.metadata.labels["kodex.dev/environment"]="staging";

@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.11
+version: 2.4.12
 updated: 2026-11-12
 ---
 
@@ -163,6 +163,13 @@ limit с резервом не меньше25%. Профиль `default` сох�
 private cache; последующий import использует прежние exact-manifest guards.
 Полный runner ещё не является допущенным RoleImage: supply-chain admission,
 материализация среды, pod readback и реальный workspace path проверяются отдельно.
+Если runtime использует provider sandbox projection, сначала согласовать её
+с новой image policy при остановленных новых исполнениях. Затем
+`tools/release/default-runner-transition.mjs` проверяет live source/projection,
+binding и controller через общий `provider_sandbox_profile.py --check-live`.
+Переход меняет default двух приложений с UID/resourceVersion guards; admission
+остаётся закрытым до завершения rollout. Успешный readback не обновляет ранее
+опубликованные среды проектов: для них нужны новые RoleImage и явная привязка.
 
 Вспомогательные authority/admission/builder образы готовятся отдельно через
 `tools/dev/build-local-image-supply-chain.sh --build-only --component all

@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.61
+version: 1.7.62
 updated: 2026-11-12
 ---
 
@@ -27,6 +27,10 @@ Discovery, в том числе пустые search/manifest, проверяет
 новая проекция, затем связываются admission и controller; до завершения rollout
 новые исполнения остановлены. Профиль AppArmor при этом не меняется, прошлые
 bootstrap effects не повторяются, итоговый render проходит общий preflight.
+Последующее переключение default runner проверяет тот же контракт renderer
+по фактическим source, projection, binding и controller из Kubernetes API.
+Совпадение только имени binding или runner digest недостаточно; stale marker,
+другая ABI, дополнительные поля проекции и неподтверждённый source закрыты.
 
 Свежий профиль с несколькими репликами signed worker использует grant v2 с
 `metadata.uid` из Downward API. Общий v1 revision watermark не разделяет
