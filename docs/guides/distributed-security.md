@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.58
+version: 1.7.59
 updated: 2026-11-12
 ---
 
@@ -209,6 +209,15 @@ Human Gate для merge/deploy. Неподдержанная exact версия 
 и не выдаёт executable fallback.
 
 ## Ожидаемые политики из полного desired render
+
+После изменения базовой egress policy renderer связывает один проверенный digest
+с gateway и всеми publisher consumers владельца состояния. В частности,
+`CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST` управляет публикацией и почтовых,
+и интеграционных проекций; он обязан совпадать с
+`EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST` после добавления model-provider routes.
+Проверка полного render охватывает оба consumer, а live readback — фактически
+обслуживаемые Deployment и immutable policy. Исправление ожидаемого digest
+не переписывает текущие поколения проекций и не отключает проверку источника.
 
 При сверке NetworkPolicy ожидаемое состояние строится из полного repo-owned
 kustomization deployable, включая components и patches. Чтение только сырых

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.8
+version: 1.4.9
 updated: 2026-11-12
 ---
 
@@ -755,3 +755,23 @@ restore: ошибка запроса отделена от отсутствия 
 того же запроса после известного rollback. Это не заменяет новую установленную
 приёмку WORKFLOW. Через Context7 проверены pgx `QueryRow.Scan`, `ErrNoRows`,
 `errors.Is/As` и `pgconn.PgError`; зависимость остаётся v5.10.0.
+
+## Базовая egress policy и publisher интеграций
+
+Приёмка #2108 выявила второй независимый отказ перед GitHub tools:
+model-provider render изменил базовую policy gateway, но сохранил прежний
+`CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST`. Publisher интеграций правильно
+отклонил Deployment с несовпадающим digest на этапе
+`kubernetes_deployment_source`. Наличие готового inference route не доказывает
+готовность integration route.
+
+Оба renderer, release и local, вызывают общий bootstrap consumer. После
+квалифицированного Go producer он назначает control-plane тот же точный digest,
+который получает gateway. Отсутствующие, повторные, косвенные и некорректные поля
+закрыто отклоняются. Отдельное связывание owner consumer не меняет поколения
+mail/integration projections; непустая проекция по-прежнему запрещает повторный
+bootstrap. Для действующей установки применяется адресный fenced rollout
+Deployment с сохранением текущих проекций и проверкой фактического readback.
+Изменение не добавляет endpoint, grant или новое внешнее действие: существующий
+publisher продолжает собственный owner lifecycle. Полный render проверяется
+с несколькими provider definitions; live GitHub tools требуют отдельной приёмки.

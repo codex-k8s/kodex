@@ -217,6 +217,10 @@ class ModelProviderTests(unittest.TestCase):
             gateway = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'egress-gateway')
             container = next(item for item in gateway['spec']['template']['spec']['containers'] if item['name'] == 'egress-gateway')
             environment = {item['name']: item.get('value') for item in container['env']}
+            owner = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane')
+            owner_container = next(item for item in owner['spec']['template']['spec']['containers'] if item['name'] == 'control-plane')
+            owner_env = {item['name']: item.get('value') for item in owner_container['env']}
+            self.assertEqual(owner_env['CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST'], environment['EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'])
             for kind in ('mail', 'integration'):
                 projection = next(item for item in resources if item['kind'] == 'ConfigMap' and kind + '-policy.json' in item.get('data', {}))
                 raw = projection['data'][kind + '-policy.json']
@@ -225,6 +229,28 @@ class ModelProviderTests(unittest.TestCase):
                 volume = next(item for item in gateway['spec']['template']['spec']['volumes'] if item['name'] == kind + '-policy')
                 self.assertEqual(volume['configMap']['name'], projection['metadata']['name'])
             import copy, egress_bootstrap_projection
+            self.assertEqual(egress_bootstrap_projection.bind_owner_policy(resources), resources)
+            for workload, field_name in (
+                ('control-plane', 'CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST'),
+                ('egress-gateway', 'EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'),
+            ):
+                for variant in ('duplicate', 'missing', 'valueFrom', 'malformed', 'namespace'):
+                    invalid = copy.deepcopy(resources)
+                    deployment = next(r for r in invalid if r['kind'] == 'Deployment' and r['metadata']['name'] == workload)
+                    env = next(c for c in deployment['spec']['template']['spec']['containers'] if c['name'] == workload)['env']
+                    entry = next(e for e in env if e['name'] == field_name)
+                    if variant == 'duplicate':
+                        env.append(copy.deepcopy(entry))
+                    elif variant == 'missing':
+                        env.remove(entry)
+                    elif variant == 'valueFrom':
+                        entry['valueFrom'] = {'fieldRef': {'fieldPath': 'metadata.name'}}
+                    elif variant == 'malformed':
+                        entry['value'] = 'invalid'
+                    else:
+                        deployment['metadata']['namespace'] = 'foreign'
+                    with self.subTest(workload=workload, variant=variant), self.assertRaises(ValueError):
+                        egress_bootstrap_projection.bind_owner_policy(invalid)
             nonempty = copy.deepcopy(resources)
             projection = next(item for item in nonempty if item['kind'] == 'ConfigMap' and 'integration-policy.json' in item.get('data', {}))
             policy_document = json.loads(projection['data']['integration-policy.json'])

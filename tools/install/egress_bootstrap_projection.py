@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -16,6 +17,32 @@ def one(items):
     if len(items) != 1:
         raise ValueError("exact bootstrap consumer required")
     return items[0]
+
+
+def bind_owner_policy(resources):
+    """Связывает publisher владельца с закреплённой базовой policy gateway.
+
+    Проекции текущего поколения не меняются; вызывающий проверяет base policy
+    штатным producer и применяет результат через обычный fenced rollout.
+    """
+    result = copy.deepcopy(resources)
+    def field(workload, name):
+        deployment = one([r for r in result if r['kind'] == 'Deployment'
+                          and r['metadata']['name'] == workload])
+        if deployment['metadata'].get('namespace') != 'kodex-system':
+            raise ValueError('exact policy consumer namespace required')
+        container = one([c for c in deployment['spec']['template']['spec']['containers']
+                         if c['name'] == workload])
+        entry = one([e for e in container['env'] if e['name'] == name])
+        if set(entry) != {'name', 'value'}:
+            raise ValueError('literal policy digest required')
+        if not isinstance(entry['value'], str) or not re.fullmatch('[a-f0-9]{64}', entry['value']):
+            raise ValueError('exact policy digest required')
+        return entry
+    source = field('egress-gateway', 'EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST')
+    target = field('control-plane', 'CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST')
+    target['value'] = source['value']
+    return result
 
 
 def bind(resources):
@@ -73,7 +100,7 @@ def bind(resources):
                         annotations = workload['spec']['template']['metadata'].setdefault('annotations', {})
                         annotations.update(patch['metadata']['annotations'])
                         annotations['kodex.dev/mail-policy-digest'] = env['value']
-    return result
+    return bind_owner_policy(result)
 
 
 def main():
