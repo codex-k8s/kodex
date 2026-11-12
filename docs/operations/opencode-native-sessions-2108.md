@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.26
+version: 1.4.27
 updated: 2026-11-12
 ---
 
@@ -1326,3 +1326,31 @@ native сценариев PASS за291.209с; exact imageID сверены, rest
 Новый storage-сценарий занял15.33с в кластере и восстановил исходные message
 values после всех отказов. Это isolated adapter qualification в отдельном
 namespace, не повтор business E2E. Production binary и RoleImage не менялись.
+
+## WORKFLOW на установленном runner187ec6b
+
+Один дополнительный ограниченный smoke прежнего опубликованного процесса
+завершился SUCCEEDED за365.827с: координатор, исполнитель, рецензент, две
+делегации и десять CLEAN artifacts с проверенными digest. Рецензент прочитал
+два артефакта исполнителя через managed tools. Выполнены ровно две записи —
+по одной координатором и исполнителем; внешних effects нет. Пять execution Pods
+подтвердили25 container/init imageID текущих runner/полного RoleImage,
+restart0; три сессии используют разные PVC и native ID.
+
+Строгая проверка «все tools SUCCEEDED» дала **FAIL**: рецензент после чтения
+артефактов дополнительно вызвал `read_workspace_file` с абсолютным путём
+`/workspace/work/workflow-2108.txt` и получил закрытый generic отказ. Один отказ
+сохранён и в native export; точная более узкая причина не установлена.
+Повторного вызова или записи рецензентом не было. Успешный terminal business
+status не превращает этот FAIL в PASS; отдельные проверки графа, артефактов,
+образов контейнеров и сохранности состояния прошли. Вся дополнительная
+проверка отмечена PARTIAL, платного повтора ради чистого результата не было.
+
+После positive writer join физически прочитаны все три официальных checkpoint:
+generation3/1/1,226774/44887/120608байт, SHA совпали с owner metadata.
+Файлы координатора32байта и исполнителя29байт имеют ожидаемые hashes; исходное
+наблюдение до освобождения writer закрыто отказало и сохранено отдельно.
+Usage200674input/10898output/115328cached/4416reasoning, PARTIAL; стоимостьUNKNOWN.
+Бюджет smoke540с,30tool calls и350000observed tokens не исчерпан.
+Это проверка делегирования внутри платформы, не независимое review данного PR
+и не owner approve. GitHub test objects и прежний Human Gate не изменялись.
