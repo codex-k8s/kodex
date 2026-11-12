@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.7
+version: 2.4.8
 updated: 2026-11-12
 ---
 
@@ -104,6 +104,17 @@ authority, но направляет raw TLS tunnel на этот внутрен
 Текущий релиз изолируется в namespace `kodex-system`. Произвольное имя
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
+
+Перед открытием Control Center установить отдельную dependency
+[proxy session store](../operations/proxy-session-store-1383.md), затем выполнить
+`infra/management-surfaces/bootstrap.sh --mode apply-surfaces` с выбранным
+профилем как минимум `control-center`. Одних PWA/API Deployment и Ingress
+недостаточно: маршруты ссылаются на управляемые OAuth2 Proxy middleware.
+Для локальной чистой установки используется explicit UID-bound fresh profile
+session store; смена environment labels для обхода staging gate запрещена.
+OIDC connect address содержит порт **Service** (у bundled SSO —443),
+`--oidc-target-port` — порт **Pod** (8443). SNI остаётся публичным hostname,
+проверка CA обязательна.
 
 ### Подготовка полного runner без изменения кластера
 

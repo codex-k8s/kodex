@@ -257,7 +257,7 @@ function main(argv) {
   while (argv.length) {
     const key = argv.shift();
     assert(
-      ["--context", "--output", "--plan", "--evidence", "--confirm"].includes(
+      ["--context", "--output", "--plan", "--evidence", "--confirm", "--local-fresh-cluster-uid", "--local-fresh-namespace-uid"].includes(
         key,
       ) &&
         !Object.hasOwn(options, key) &&
@@ -293,14 +293,22 @@ function main(argv) {
   };
   const ns = get("namespace", storeNamespace),
     cluster = get("namespace", "kube-system");
-  assert(
-    ns.metadata.labels?.["kodex.dev/environment"] === "staging",
-    "STAGING_NAMESPACE_REQUIRED",
-  );
+  const localFresh = options["--local-fresh-cluster-uid"] !== undefined || options["--local-fresh-namespace-uid"] !== undefined;
+  if (localFresh) {
+    // Отдельный fresh scope не изменяет метки окружения и не допускает cutover/backup.
+    assert(["plan-install", "install"].includes(command) && /^k3d-[a-z0-9-]+$/.test(context), "LOCAL_FRESH_INSTALL_ONLY");
+    const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+    assert(uuid.test(options["--local-fresh-cluster-uid"] ?? "") && uuid.test(options["--local-fresh-namespace-uid"] ?? "") &&
+      cluster.metadata.uid === options["--local-fresh-cluster-uid"] && ns.metadata.uid === options["--local-fresh-namespace-uid"] &&
+      ns.metadata.labels?.["app.kubernetes.io/part-of"] === "kodex", "LOCAL_FRESH_IDENTITY_REQUIRED");
+  } else {
+    assert(ns.metadata.labels?.["kodex.dev/environment"] === "staging", "STAGING_NAMESPACE_REQUIRED");
+  }
   const identity = {
     context,
     namespaceUID: ns.metadata.uid,
     clusterUID: cluster.metadata.uid,
+    ...(localFresh ? {installationProfile: "LOCAL_FRESH"} : {}),
   };
   if (command === "backup") {
     assert(
@@ -480,7 +488,7 @@ function main(argv) {
       !options["--output"] &&
       options["--confirm"] ===
         (install
-          ? "INSTALL-STAGING-PROXY-SESSION-STORE"
+          ? (localFresh ? "INSTALL-LOCAL-FRESH-PROXY-SESSION-STORE" : "INSTALL-STAGING-PROXY-SESSION-STORE")
           : "CUTOVER-STAGING-PROXY-SESSIONS-REAUTH") &&
       fingerprint(privateRead(options["--plan"])) === fingerprint(plan),
     "EXACT_PLAN_CONFIRMATION_REQUIRED",

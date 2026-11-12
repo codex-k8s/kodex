@@ -24,7 +24,7 @@ if(state.failName===(input.metadata?.name||name)){save();process.exit(1)}
 if(verb==='create'){const key=input.kind.toLowerCase()+':'+input.metadata.name;if(state.objects[key])process.exit(1);input.metadata.uid='00000000-0000-4000-8000-'+String(state.calls.length+20).padStart(12,'0');input.metadata.resourceVersion='1';state.objects[key]=input;save();process.exit(0)}
 if(verb==='patch'){const obj=state.objects[kind+':'+name];for(const p of input){const parts=p.path.split('/').slice(1);let target=obj;for(const part of parts.slice(0,-1))target=target[part];const key=parts.at(-1);if(p.op==='test'&&JSON.stringify(target[key])!==JSON.stringify(p.value))process.exit(1);if(p.op==='replace')target[key]=p.value}const c=obj.spec.template.spec.containers[0];for(const probe of [c.readinessProbe,c.livenessProbe]){probe.httpGet.scheme??='HTTP';probe.successThreshold??=1;}obj.metadata.resourceVersion=String(Number(obj.metadata.resourceVersion)+1);save();process.exit(0)}process.exit(1);
 `;
-function fixture(ready = false) {
+function fixture(ready = false, context = "fixture-staging") {
   const directory = mkdtempSync(join(tmpdir(), "kodex-proxy-cli-"));
   const stateFile = join(directory, "state.json");
   const objects = {
@@ -110,7 +110,7 @@ function fixture(ready = false) {
         new URL("./proxy-session-store.mjs", import.meta.url).pathname,
         ...args,
         "--context",
-        "fixture-staging",
+        context,
       ],
       {
         env: {
@@ -286,5 +286,30 @@ test("namespace без staging label не получает даже install plan
     assert.equal(f.load().calls.length, 0);
   } finally {
     f.dispose();
+  }
+});
+
+test("чистый local install закрепляет обе UID и не разрешает соседний scope или cutover", () => {
+  const args=["--local-fresh-cluster-uid",uid(1),"--local-fresh-namespace-uid",uid(2)];
+  for (const mode of ["valid","cluster","namespace","owner","context","cutover"]) {
+    const f=fixture(false,mode==="context"?"fixture-staging":"k3d-fixture");
+    try {
+      f.change(s=>{s.objects["namespace:kodex-system"].metadata.labels={"kodex.dev/environment":"production","app.kubernetes.io/part-of":mode==="owner"?"foreign":"kodex"};
+        if(mode==="cluster")s.objects["namespace:kube-system"].metadata.uid=uid(9);
+        if(mode==="namespace")s.objects["namespace:kodex-system"].metadata.uid=uid(9);});
+      const plan=join(f.directory,"plan.json");
+      if(mode!=="valid") {
+        assert.throws(()=>f.run(mode==="cutover"?"plan-cutover":"plan-install","--output",plan,...args));
+        assert.equal(f.load().calls.length,0);continue;
+      }
+      assert.throws(()=>f.run("plan-install","--output",plan));
+      f.run("plan-install","--output",plan,...args);
+      assert.equal(JSON.parse(readFileSync(plan)).installationProfile,"LOCAL_FRESH");
+      f.run("install","--plan",plan,"--evidence",join(f.directory,"evidence.jsonl"),"--confirm","INSTALL-LOCAL-FRESH-PROXY-SESSION-STORE",...args);
+      assert.equal(f.load().calls.length,resources().length+1);
+      assert.throws(()=>f.run("plan-install","--output",join(f.directory,"second.json"),...args));
+      assert.equal(f.load().calls.length,resources().length+1);
+      assert.equal(f.load().objects["namespace:kodex-system"].metadata.labels["kodex.dev/environment"],"production");
+    } finally {f.dispose();}
   }
 });

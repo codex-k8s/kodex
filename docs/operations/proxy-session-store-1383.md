@@ -4,8 +4,8 @@ title: Защищённое хранилище proxy-сессий Control Center
 status: approved
 type: operations
 owner: sre
-version: 1.0.0
-updated: 2026-09-09
+version: 1.0.1
+updated: 2026-11-12
 ---
 
 # Защищённое хранилище proxy-сессий Control Center
@@ -16,6 +16,25 @@ updated: 2026-09-09
 компоненту. Это отдельная зависимость обычной установки и dev-профиля:
 приложения по-прежнему могут доставляться source rollout, а образ Valkey
 закреплён digest. Хранилище не использует БД Kodex или данные других сервисов.
+
+## Первая установка в отдельном локальном кластере
+
+`plan-install` и `install` дополнительно принимают
+`--local-fresh-cluster-uid <kube-system-uid>` и
+`--local-fresh-namespace-uid <kodex-system-uid>` вместе. Этот явный профиль
+допускает только context `k3d-*`, exact UID обеих namespace и владельца
+`app.kubernetes.io/part-of=kodex`. Метки окружения не меняются. Наличие любого
+целевого объекта закрыто отклоняется до генерации credentials и первой записи.
+Plan включает `installationProfile=LOCAL_FRESH`, исходный набор ресурсов и его
+digest; apply требует тот же plan и
+`--confirm INSTALL-LOCAL-FRESH-PROXY-SESSION-STORE`.
+
+Профиль предназначен только для новой пустой зависимости: он не расширяет
+staging-only cutover/backup, не импортирует sessions и не разрешает перезапись
+Secret/PVC. UNKNOWN после create требует readback и сохраняет journal;
+повторный install не генерирует новый пароль поверх частичной установки.
+После создания обязательны Ready сертификатов, StatefulSet и точный readback
+через `validateStoreDependencies`, затем штатный management-surfaces bootstrap.
 
 ## Причина и границы
 
