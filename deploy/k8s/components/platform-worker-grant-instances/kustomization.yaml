@@ -1,10 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
-# Opt-in только после обновления всех control-plane consumers по #1220.
+# Fresh profiles используют CP с поддержкой v2; upgrade сначала обновляет всех consumers.
 patches:
   - target:
       kind: Deployment
-      name: (secret-broker|email-bridge|runtime-controller|integration-gateway|interaction-gateway|automation-scheduler|session-archive|role-image-builder)
+      name: (secret-broker|email-bridge|integration-gateway|interaction-gateway|automation-scheduler|session-archive|role-image-builder)
     patch: |-
       apiVersion: apps/v1
       kind: Deployment
@@ -44,3 +44,27 @@ patches:
                     valueFrom:
                       fieldRef:
                         fieldPath: metadata.uid
+  - target:
+      kind: Deployment
+      name: runtime-controller
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: runtime-controller
+      spec:
+        template:
+          metadata:
+            annotations:
+              kodex.dev/worker-grant-format: "2"
+          spec:
+            initContainers:
+              - name: internal-rpc-authority-socket-init
+              - name: internal-rpc-authority-issuer
+              - name: platform-worker-grant-agent
+                env:
+                  - name: PLATFORM_WORKER_GRANT_INSTANCE_ID
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: metadata.uid
+              - name: artifact-spool-init

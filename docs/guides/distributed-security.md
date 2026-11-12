@@ -10,6 +10,14 @@ updated: 2026-11-12
 
 # Безопасность распределенных сервисов и служебного состояния
 
+Свежий профиль с несколькими репликами signed worker использует grant v2 с
+`metadata.uid` из Downward API. Общий v1 revision watermark не разделяет
+экземпляры: ротация одной реплики может отклонять действующий credential другой.
+Сначала обновляются все readers/schema, затем issuance; instance не заменяет
+подпись, общий credential-generation floor, срок и per-instance replay guard.
+Native init sidecar сохраняет своё место и порядок завершения. Матрица:
+[гранты экземпляров](../operations/worker-grant-instances-2108.md).
+
 Публичный registry hostname должен быть достижим отдельно из node runtime и
 каждого Pod consumer. Host DNS/readback не доказывает маршрут внутри Pod.
 При явном ingress profile Pod-level `hostAliases` связывает точный hostname с
