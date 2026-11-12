@@ -538,11 +538,10 @@ if [[ "$mode" == readback || "$mode" == reconcile ]]; then
     .metadata.annotations["traefik.ingress.kubernetes.io/router.middlewares"] ==
       "kodex-system-oauth2-control-center-auth@kubernetescrd" and
     .metadata.annotations["traefik.ingress.kubernetes.io/router.priority"] == "200" and
-    .spec.rules[0].http.paths == [{
-      path:"/api/v1",
-      pathType:"Prefix",
-      backend:{service:{name:"control-api-gateway",port:{name:"https"}}}
-    }]
+    (.spec.rules[0].http.paths as $paths |
+      any(["staff-control-center", "control-api-gateway"][]; . as $service |
+        $paths == [{path:"/api/v1", pathType:"Prefix",
+          backend:{service:{name:$service,port:{name:"https"}}}}]))
   ' >/dev/null || fail 'Control Center API must preserve application authorization responses'
 fi
 

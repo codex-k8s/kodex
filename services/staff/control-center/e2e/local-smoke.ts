@@ -152,7 +152,7 @@ test("локальный OIDC, API и основные экраны доступ
     };
   });
   expect(assistantReadback.corePromptRevision).toBe(
-    "system-assistant-core-v21",
+    "system-assistant-core-v54",
   );
   const providerAccountRequired =
     !assistantReadback.warmSessionRef &&
@@ -306,7 +306,11 @@ paths:
     .getByRole("button", { name: "Проверить контракт" })
     .click();
   expect((await inspected).status()).toBe(200);
-  await expect(importDialog.getByText("Проверить соединение")).toBeVisible();
+  await expect(
+    importDialog.getByText("GET /health — Проверить соединение", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await importDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(importDialog).toHaveCount(0);
 });

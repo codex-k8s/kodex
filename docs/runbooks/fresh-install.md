@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.9
+version: 2.4.10
 updated: 2026-11-12
 ---
 
@@ -117,6 +117,11 @@ OIDC connect address содержит порт **Service** (у bundled SSO —44
 `--oidc-target-port` — порт **Pod** (8443). SNI остаётся публичным hostname,
 проверка CA обязательна. Portable release использует OAuth2 chain без
 hot-reload retry; readback допускает только эти две канонические цепочки.
+API portable release идёт через TLS Service `staff-control-center` и его
+проверяемый nginx upstream к gateway; hot-reload использует непосредственно TLS
+Service `control-api-gateway`. В обоих случаях `/api/v1` сохраняет точный auth
+middleware без browser error redirect, priority200 и порт `https`. Произвольный
+backend либо plaintext не допускаются.
 Initial-resume выполняется до установки management Deployment: его guard
 проверяет точный набор платформенных компонентов. Runtime должен быть пустым;
 допускается только первоначальный `system-assistant-warm` в Pending с exact

@@ -287,7 +287,8 @@ if [[ "$arguments" == *' get ingress staff-control-center -o json '* ]]; then
   exit 0
 fi
 if [[ "$arguments" == *' get ingress staff-control-center-api -o json '* ]]; then
-  printf '%s\n' '{"metadata":{"annotations":{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-auth@kubernetescrd","traefik.ingress.kubernetes.io/router.priority":"200"}},"spec":{"rules":[{"http":{"paths":[{"path":"/api/v1","pathType":"Prefix","backend":{"service":{"name":"control-api-gateway","port":{"name":"https"}}}}]}}]}}'
+  jq -cn --arg service "${FAKE_API_SERVICE:-control-api-gateway}" --arg port "${FAKE_API_PORT:-https}" \
+    '{metadata:{annotations:{"traefik.ingress.kubernetes.io/router.middlewares":"kodex-system-oauth2-control-center-auth@kubernetescrd","traefik.ingress.kubernetes.io/router.priority":"200"}},spec:{rules:[{http:{paths:[{path:"/api/v1",pathType:"Prefix",backend:{service:{name:$service,port:{name:$port}}}}]}}]}}'
   exit 0
 fi
 if [[ "$arguments" == *' get service staff-control-center -o json '* ]]; then
@@ -355,6 +356,12 @@ for invalid_chain in absent kodex-system-staff-control-center-retry@kubernetescr
     kodex-headlamp-admin cluster-admin StatefulSet \
     'Control Center OAuth2 middleware is absent' invalid-control-center-chain
 done
+FAKE_API_SERVICE=staff-control-center run_readback kodex-headlamp-admin cluster-admin StatefulSet >/dev/null ||
+  fail 'management readback rejected the portable API TLS route'
+FAKE_API_SERVICE=unknown expect_readback_rejected kodex-headlamp-admin cluster-admin StatefulSet \
+  'Control Center API must preserve application authorization responses' unknown-api-service
+FAKE_API_PORT=http expect_readback_rejected kodex-headlamp-admin cluster-admin StatefulSet \
+  'Control Center API must preserve application authorization responses' insecure-api-port
 expect_readback_rejected kodex-headlamp cluster-admin StatefulSet \
   'Headlamp cluster-admin binding mismatch' wrong-binding-name
 expect_readback_rejected kodex-headlamp-admin view StatefulSet \
