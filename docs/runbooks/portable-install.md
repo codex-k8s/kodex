@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.5
+version: 1.6.6
 updated: 2026-11-12
 ---
 
@@ -584,17 +584,17 @@ target. Git fixtures синтетические, внешнего registry и cr
 
 ## Общий runtime profile и promoted namespace
 
-`--role-base-runtime-engine opencode` при full release build выбирает
-`agent-runner-opencode` также для documents base. По умолчанию остаётся `codex`;
-оба runner образа сохраняются в inventory. Явный OpenCode profile фиксируется в
-lock как `role_base_runtime_engine: opencode`. Render с Git-managed OpenCode
-отклоняет lock без соответствующего profile до materialization/apply. Один
-успешно собранный optional runner не подтверждает совместимость documents base.
+Full release build допускает только `--role-base-runtime-engine opencode`
+и использует его по умолчанию. Единственный `agent-runner` служит также documents
+base; отдельного Codex либо optional OpenCode runner в inventory нет.
+Lock фиксирует `role_base_runtime_engine: opencode`; другой runtime закрыто
+отклоняется до materialization/apply. Full RoleImage дополнительно проходит
+совместимость ABI, admission и проверку фактического digest.
 
 `promoted_registry.py` согласует producer и consumers по итоговому lock:
 source prefix принадлежит только публикации source artifacts, внутренние
 promotion repositories сохраняют канонический `kodex/`. Materializer выбирает
-строго `kodex/agent-runner` либо `kodex/agent-runner-opencode`; прочие targets
+строго `kodex/agent-runner`; прочие targets
 отклоняются. `promotedPullRepository`, node readback, certificate-guard readback
 и `ImageAdmissionPolicyParameters` указывают на действительно материализованные
 repositories с exact digest. Policy hash пересчитывается вместе с projection.

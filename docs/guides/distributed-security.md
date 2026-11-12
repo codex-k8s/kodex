@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.64
+version: 1.7.65
 updated: 2026-11-12
 ---
 
@@ -141,9 +141,10 @@ Provenance фиксируется в Pod template annotations. Без явног
 child profile сохраняет собственный canonical JSON SHA и прежнюю provenance при
 добавлении второй цели. У authorizer меняется только его image и явно проверенный
 runtime env; registry/guard containers, credentials и transport остаются прежними.
-Runtime совпадает с base lock: OpenCode добавляет один известный repository только
-BuildKit base и installer/node readers. Остальные identities не расширяются,
-default Codex сохраняется. Неизвестный runtime, конфликт env/valueFrom, повтор
+Runtime совпадает с base lock: единственный OpenCode поставляется в каноническом
+`kodex/agent-runner`; отдельный optional engine repository не допускается.
+BuildKit base и installer/node readers используют exact promoted digest;
+остальные identities не расширяются. Неизвестный runtime, конфликт env/valueFrom, повтор
 компонента, другой registry и дополнительные resource/security deltas закрыты.
 У control-plane и secret-broker дополнительно обязательны неизменные schema heads исходного lock;
 меняется только основной container image/provenance, без migrations и sidecars.

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.23
+version: 1.4.24
 updated: 2026-11-12
 ---
 
@@ -1259,3 +1259,35 @@ subprocess plugin во временном каталоге; host plugin/config �
 [manifest Helm4.3.0](https://github.com/helm/helm/blob/v4.3.0/pkg/postrenderer/testdata/plugins/postrenderer-v1/plugin.yaml)
 и values/templates точного chart88.5.4. Локальный render не доказывает успешный
 live scrape, readiness или доступность dashboard: они проверяются отдельно.
+
+Установленная проверка профиля на source `d48b78386b51ac25324e4eefec31aa1c42b4d15b`:
+`make test-management-surfaces` PASS, включая шесть проверок scoped render;
+серверная dry-run41ресурса PASS, конфликтующих объектов нет. Первоначальный
+apply, повторный apply и канонический readback PASS. Три control-plane endpoints
+имеют `up=1`, других scrape targets нет. Восемь положительных/отрицательных
+проверок RBAC PASS; десять фактических container/init imageID соответствуют
+закреплённым manifest digests, включая Linux amd64 child manifests.
+Общие десять CRD сохранили UID/spec, Control Center proxy сохранил UID/spec/generation.
+
+После адресной graceful замены Grafana/Prometheus Pods новые UID готовы с прежними
+PVC UID; исторический TSDB query возвращает прежние значения. Chrome прошёл
+существующий SSO gate, Grafana13.2.0 открыла штатный dashboard control-plane,
+datasource proxy действительно прочитал Prometheus. Неавторизованный запрос
+получил302. Это не тест запрета каждой возможной непривилегированной группы.
+
+Дополнительный ограниченный business turn на установленном runner187ec6b
+завершился SUCCEEDED за143.103814с: manifest и четыре чтения, ноль записей/внешних
+effects, две настоящие native compactions. Шесть NORMAL и два COMPACTION HTTP
+измерения совпали с приростом counters; обе фазы показаны в Grafana для tokens,
+TTFT и duration. Все36 прежних message values сохранились среди49; native ID
+прежний, checkpoint generation3 подтверждён physical/owner hash после writer join.
+Usage136263input/9349output/58112cached/5056reasoning, PARTIAL; стоимость UNKNOWN.
+Cache-write0 не доказывает NO_STORE. Это тест пониженного порога24576,
+не многочасовая нагрузка и не новый claim о hard context cap.
+
+У обоих OAuth2 Grafana Pods при первом старте произошло по два restart:
+`connection refused` во время OIDC discovery. Они восстановились; последующее
+наблюдение не обнаружило новых restart. Это сохранённое ограничение startup
+evidence, а не нулевой счётчик либо установленная причина временной недоступности.
+Прежние ограничения authority-issuer restart, независимого review и внешних
+provider/hardware профилей сохраняются.
