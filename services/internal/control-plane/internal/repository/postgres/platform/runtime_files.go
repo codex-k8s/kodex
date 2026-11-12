@@ -23,10 +23,12 @@ import (
 var (
 	// queryRuntimeFilesReadCatalog locks the exact live claimed lease with fence/generation and frozen
 	// catalog pins, checks run/root/actor/resource eligibility and returns the authoritative catalog
-	// actor/project.
+	// actor/project. The current agent row is locked too, so a committed capability revoke
+	// cannot become an empty successful catalog read.
 	// queryRuntimeFilesReadCatalog блокирует точный живой claimed lease с fence/generation и pins
 	// замороженного каталога, проверяет допустимость run/root/actor/resources и возвращает
-	// авторитетные actor/project каталога.
+	// авторитетные actor/project каталога. Текущий агент тоже блокируется: committed отзыв
+	// capability не превращается в успешное чтение пустого каталога.
 	//go:embed sql/runtime_files_read_catalog.sql
 	queryRuntimeFilesReadCatalog string
 	// queryRuntimeFilesSearch reads ordered eligible file descriptors for the exact catalog/purpose

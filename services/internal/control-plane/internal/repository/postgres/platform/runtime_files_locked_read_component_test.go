@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -18,6 +18,22 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// queryRuntimeFilesLockFixtureAgent locks the exact disposable lease agent before a synthetic
+// capability update; it cannot select an unrelated agent or modify production state.
+// queryRuntimeFilesLockFixtureAgent блокирует агента точной disposable lease перед synthetic
+// обновлением capability; чужой агент и production state не выбираются.
+//
+//go:embed testdata/sql/runtime_files_lock_fixture_agent.sql
+var queryRuntimeFilesLockFixtureAgent string
+
+// queryRuntimeFilesSetFixtureCapabilities updates only the locked disposable agent capability
+// array so the real read transaction can observe a committed revoke and serialization conflict.
+// queryRuntimeFilesSetFixtureCapabilities меняет массив capability заблокированного disposable
+// агента для проверки committed revoke и конфликта сериализации настоящего чтения.
+//
+//go:embed testdata/sql/runtime_files_set_fixture_capabilities.sql
+var queryRuntimeFilesSetFixtureCapabilities string
 
 // TestRuntimeFilesLockedReadComponent creates isolated PostgreSQL plus an in-memory store and
 // synthetic scanner/credential/image configuration, bootstraps warm owner metadata and delegates
@@ -35,17 +51,8 @@ func TestRuntimeFilesLockedReadComponent(t *testing.T) {
 		t.Fatal("create isolated file fixture")
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
-	if err != nil {
-		t.Fatal("construct isolated file repository")
-	}
+	repository := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
-		t.Fatal("configure synthetic credential identity")
-	}
-	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
-		t.Fatal("configure synthetic image identity")
-	}
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatal("bootstrap isolated file fixture")
 	}
@@ -103,24 +110,24 @@ func (trace *runtimeFilesReadTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Co
 	recordReadSerializationConflict(&trace.mu, &trace.conflicts, data.Err)
 }
 
-// testRuntimeFilesConcurrentLeaseRenew for search/manifest/metadata/preview/expiry coordinates a
+// testRuntimeFilesConcurrentLeaseRenew for search/manifest/metadata/preview/expiry/revoke coordinates a
 // locked renewal and exact backend waiter within5s, requiring one40001 and a whole second read. It
 // preserves cursor/content pins, rejects expiry with no partial page and checks expected effect
 // counters. A separate uncanceled one-second cleanup restores expiry; it needs real disposable
 // PostgreSQL and synthetic file fixtures, not a running tool or provider.
-// testRuntimeFilesConcurrentLeaseRenew для search/manifest/metadata/preview/expiry согласует
+// testRuntimeFilesConcurrentLeaseRenew для search/manifest/metadata/preview/expiry/revoke согласует
 // locked renewal и exact backend waiter за5s, требуя один40001 и полный second read. Сохраняет
 // cursor/content pins, отклоняет expiry без partial page и проверяет ожидаемые effect counters.
 // Отдельный uncanceled one-second cleanup восстанавливает expiry; нужны real disposable PostgreSQL
 // и synthetic file fixtures, а не running tool и provider.
 func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, repository *Repository, lease map[string]any, first entity.ExecutionFilePage) {
-	for _, operation := range []string{"search", "manifest", "metadata", "preview", "expiry"} {
+	for _, operation := range []string{"search", "manifest", "metadata", "preview", "expiry", "capability"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 			defer cancel()
 			purpose := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeWorkspaceInput)
 			permission := operation
-			if permission == "expiry" {
+			if permission == "expiry" || permission == "capability" {
 				permission = "search"
 			}
 			reader := runtimeFilesTestPrincipal(t, ctx, repository, permission)
@@ -155,7 +162,8 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 				t.Fatal("begin disposable lease renew")
 			}
 			defer renew.Rollback(ctx)
-			var leaseID string
+			var leaseID, agentID string
+			var originalCapabilities []string
 			if err := renew.QueryRow(ctx, queryAssistantLockedReadLeaseID, stringMap(lease, "leaseRef")).Scan(&leaseID); err != nil {
 				t.Fatal("resolve disposable lease")
 			}
@@ -163,12 +171,35 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 			if operation == "expiry" {
 				expires = time.Now().UTC().Add(-time.Second)
 			}
-			if _, err := renew.Exec(ctx, queryRuntimeRenewexecutionUpdateRuntimeLeasesExpiresAtUpdatedAt, leaseID, expires); err != nil {
+			if operation == "capability" {
+				if err := renew.QueryRow(ctx, queryRuntimeFilesLockFixtureAgent, stringMap(lease, "leaseRef")).Scan(&agentID, &originalCapabilities); err != nil {
+					t.Fatal("lock fixture file agent", err)
+				}
+				revoked := make([]string, 0, len(originalCapabilities))
+				for _, capability := range originalCapabilities {
+					if capability != runtimecontract.ArtifactCapability {
+						revoked = append(revoked, capability)
+					}
+				}
+				if len(revoked) == len(originalCapabilities) {
+					t.Fatal("fixture artifact grant missing")
+				}
+				if _, err := renew.Exec(ctx, queryRuntimeFilesSetFixtureCapabilities, agentID, revoked); err != nil {
+					t.Fatal("hold exact capability revoke", err)
+				}
+			} else if _, err := renew.Exec(ctx, queryRuntimeRenewexecutionUpdateRuntimeLeasesExpiresAtUpdatedAt, leaseID, expires); err != nil {
 				t.Fatal("hold exact renew update")
 			}
 			defer func() {
 				cleanup, stop := context.WithTimeout(context.WithoutCancel(parent), time.Second)
 				defer stop()
+				_ = renew.Rollback(cleanup)
+				if operation == "capability" {
+					if _, err := repository.pool.Exec(cleanup, queryRuntimeFilesSetFixtureCapabilities, agentID, originalCapabilities); err != nil {
+						t.Error("restore fixture capability", err)
+					}
+					return
+				}
 				if _, err := repository.pool.Exec(cleanup, queryAssistantCurrentConfigurationRestoreExpiry, stringMap(lease, "leaseRef"), time.Now().UTC().Add(30*time.Second)); err != nil {
 					t.Error("restore disposable lease expiry")
 				}
@@ -191,7 +222,7 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 			go func() {
 				var result outcome
 				switch operation {
-				case "search", "expiry":
+				case "search", "expiry", "capability":
 					result.page, result.err = service.SearchExecutionFiles(ctx, reader, purpose, "", query.Page{Size: 1, Token: first.Next})
 				case "manifest":
 					result.page, result.err = service.GetExecutionFileManifest(ctx, reader, purpose, query.Page{Size: 1})
@@ -239,7 +270,7 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 			if attempts != 2 || conflicts != 1 {
 				t.Fatalf("whole file read retry: attempts=%d conflicts=%d", attempts, conflicts)
 			}
-			if operation == "expiry" {
+			if operation == "expiry" || operation == "capability" {
 				if !errors.Is(result.err, errs.ErrNotFound) || len(result.page.Items) != 0 || result.page.Next != "" {
 					t.Fatal("expired lease returned partial page or was not rechecked")
 				}
@@ -273,7 +304,7 @@ func testRuntimeFilesConcurrentLeaseRenew(t *testing.T, parent context.Context, 
 			}
 			for i := range before {
 				want := before[i]
-				if i == 0 && operation != "expiry" {
+				if i == 0 && operation != "expiry" && operation != "capability" {
 					want++
 				}
 				if after[i] != want {

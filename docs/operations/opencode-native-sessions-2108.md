@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.13
+version: 1.4.14
 updated: 2026-11-12
 ---
 
@@ -898,3 +898,40 @@ imageID. Незавершённый Pod означает `RUNNING`, заверш
 прерывание и реальные protocol adapters. Он не является доказательством
 сквозного Kodex Session/RuntimeRevision/PVC/S3, workflow либо GitHub effects:
 эти сценарии проходят отдельную установленную приёмку.
+
+
+## Текущий допуск файлового каталога после отзыва capability
+
+Установленная приёмка #2108 обнаружила различие между discovery и выдачей
+содержимого: после отзыва `platform.artifact.manage` прежний frozen catalog
+продолжал возвращать успешный пустой manifest. Проверка отдельных sources уже
+исключала файлы; это не доказательство выдачи чужого содержимого. Однако пустой
+успешный ответ скрывал отзыв и позволял модели продолжать уже запрещённый цикл.
+
+Карта: команда владельца `REVOKE_CAPABILITY` через API агента изменяет текущую
+capability с `If-Match` и idempotency receipt; следующий managed file tool
+передаёт проверенный execution context в owner RPC. Общий owner read разрешает
+lease/fence/generation, frozen catalog/purpose, root actor и текущего агента
+до поиска или чтения. Для PROJECT/WORKSPACE_INPUT нужен текущий artifact grant;
+для RUN_RESULT сохраняются отдельные серверные права координатора и exact
+exception-manager node. Ни одно из них не открывает PROJECT. SKILL
+по-прежнему использует текущую привязку skill и видимость её revision.
+Идентификатор каталога и прошлый snapshot не назначают authority.
+
+| Переход или путь | Проверяемая граница и результат |
+| --- | --- |
+| Create / claim | Новый immutable каталог фиксирует разрешённые purposes; текущий grant проверяется снова при чтении |
+| Search / manifest, включая пустой результат | Отзыв даёт закрытый `NotFound` до выдачи страницы и успешного audit чтения |
+| Metadata / preview / body | Общий допуск и прежний source eligibility проверяют exact pins; отсутствие содержимого не считается успешным чтением |
+| Concurrent grant update | Shared lock текущего агента удерживается до завершения owner read; изменённая строка в Repeatable Read требует полного bounded retry после rollback |
+| Renew / continuation / retry | Renew не продлевает grant; continuation/retry получает свежую revision, не переиспользует прежние полномочия |
+| Complete / cancel / delete / lease expiry / dead-letter | Прежние terminal predicates и fence остаются обязательными; новый допуск не возобновляет execution и не создаёт effect |
+| WAITING_OWNER / WAITING_HUMAN / CHANGES_REQUESTED | Решение gate не подменяется; отсутствие живого claimed lease закрывает чтение |
+| Отказ чтения | Доменных событий изменения состояния нет; авторитетные пути — текущий agent grant, состояние run/lease и журнал инструментального вызова |
+
+Запись неуспешного tool outcome остаётся учётом попытки, а не повторной выдачей
+права на содержимое. Общие аналоги — пять file tools, отдельный body RPC и
+RUN_RESULT координатора — проверяются вместе. Схема БД и внешний API не меняются.
+Через Context7 проверены PostgreSQL18 `Repeatable Read`, `SELECT FOR SHARE`
+и конфликт обновлённой строки: [изоляция](https://www.postgresql.org/docs/18/transaction-iso.html),
+[блокировки](https://www.postgresql.org/docs/18/explicit-locking.html).

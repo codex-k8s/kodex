@@ -18,6 +18,14 @@ WHERE lease.organization_id=@organization_id::uuid AND catalog.organization_id=l
   AND lease.ref=@lease_ref AND lease.fence_digest=@fence_digest AND lease.generation=@generation
   AND lease.generation=catalog.generation AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND catalog.ref=@catalog_ref AND catalog.digest=@catalog_digest AND @purpose=ANY(catalog.purposes)
+  -- Frozen purposes не сохраняют отозванный grant, даже для пустой страницы.
+  -- RUN_RESULT координатора имеет отдельный server-owned источник полномочий.
+  AND (@purpose NOT IN ('PROJECT','WORKSPACE_INPUT','RUN_RESULT')
+    OR 'platform.artifact.manage'=ANY(current_agent.capabilities)
+    OR (@purpose='RUN_RESULT' AND (
+      EXISTS (SELECT 1 FROM control_plane.workflow_exception_context_node(catalog.organization_id,catalog.node_id))
+      OR control_plane.runtime_file_coordinator(
+        catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id))))
   AND (@authority_project='' OR catalog.project_id=NULLIF(@authority_project,'')::uuid)
   AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND root.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
@@ -30,4 +38,4 @@ WHERE lease.organization_id=@organization_id::uuid AND catalog.organization_id=l
   AND (control_plane.catalog_resource_visible(catalog.organization_id,catalog.actor_id,'agent.view','AGENT',
       agent.id,agent.project_id,agent.owner_id,agent.related_ids,statement_timestamp(),false)
       OR (current_agent.system_key='system-assistant' AND current_agent.project_id IS NULL AND current_agent.state<>'ARCHIVED'))
-FOR SHARE OF lease;
+FOR SHARE OF lease,current_agent;

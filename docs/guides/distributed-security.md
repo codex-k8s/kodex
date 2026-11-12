@@ -4,11 +4,19 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.60
+version: 1.7.61
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Frozen catalog фиксирует состав и pins, но не сохраняет отозванное право.
+Discovery, в том числе пустые search/manifest, проверяет текущий purpose grant
+до выдачи успешной страницы. Фильтрация отдельных записей не заменяет этот
+допуск: иначе запрет превращается в ложный успешный пустой результат.
+Проверка текущей строки grant согласуется с конкурентным изменением; terminal
+журнал отказавшей попытки не является разрешением на чтение.
+Матрица: [OpenCode file catalog](../operations/opencode-native-sessions-2108.md).
 
 При смене image policy runtime AppArmor-проекция и admission binding обновляются
 вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker
