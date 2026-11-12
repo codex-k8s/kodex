@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.12
+version: 1.4.13
 updated: 2026-11-12
 ---
 
@@ -14,6 +14,23 @@ updated: 2026-11-12
 [#1982](https://github.com/codex-k8s/kodex/issues/1982).
 Точка передачи: native adapter квалифицирован локально. Полный переход платформы
 остаётся в работе в #2108; локальные тесты не подтверждают установленный результат.
+
+При обновлении runner проверяется согласованность image policy с сохранённой
+runtime AppArmor-проекцией. `provider_sandbox_profile.py --reconcile-policy`
+меняет только render: требует точный прежний immutable source, полную проекцию,
+marker controller и закрытый binding; переносит тот же профиль на текущий source.
+Неизвестные ссылки и неподтверждённое содержимое закрыто отклоняются.
+`runtime-role-policy-binding.mjs` отказывается отдельно переводить binding,
+если тот ссылается на runtime-проекцию. Порядок применения:
+
+| Переход | Предусловие | Результат и проверка |
+| --- | --- | --- |
+| План | Точные cluster/namespace UID, исходные resource seals и обе policy | Только проверенный render, без изменения кластера |
+| Остановка producer | Нет активных execution leases и volume grants | Runtime-controller остановлен; Human Gate и checkpoints сохранены |
+| Новая проекция | Immutable source и прежний профиль подтверждены | Создан content-addressed ConfigMap; никакого расширения разрешений |
+| Admission и controller | Producer остановлен, UID/seal прежнего binding неизменны | Оба используют одну новую проекцию; `Deny` и ABI сохраняются |
+| Возобновление | Exact readback проекции, binding и шаблона controller | Исходное число реплик, успешный rollout и общий portable preflight |
+| Прерывание | Durable журнал применённых шагов | Readback фактического состояния; неизвестный исход не повторяется вслепую |
 
 Измерения проходят полный callback: native/HTTP observer runner →
 `RunnerProgressRequest.model_measurement` → подписанный exact execution context

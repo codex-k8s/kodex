@@ -14,6 +14,12 @@ function values() {
   };
 }
 
+test("отдельный binding не отрывает admission от runtime AppArmor-проекции", () => {
+  const v = values();
+  v.binding.spec.paramRef.name = "kodex-provider-sandbox-" + "a".repeat(32);
+  assert.throws(() => planRuntimeRoleBindingForRunner(v.controller, runner, v.policy, v.binding), /PROVIDER_SANDBOX_POLICY_REBASE_REQUIRED/);
+});
+
 test("план меняет только exact runtime binding и сохраняет Deny", () => { const v = values(), plan = planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding, "22222222-2222-4222-8222-222222222222"); assert.equal(plan.changed, true); assert.equal(plan.patch.at(-1).value.paramRef.name, active); assert.deepEqual(plan.patch.at(-1).value.validationActions, ["Deny"]); assert.equal(v.binding.spec.paramRef.name, old); });
 test("несовпадающий runner и открытый binding отклоняются", () => { const v = values(); v.policy.data.nodeReadbackImage = runner.replace("a", "b"); assert.throws(() => planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding)); const x = values(); x.binding.spec.validationActions = ["Warn"]; assert.throws(() => planRuntimeRoleBinding(x.controller, x.runtime, x.policy, x.binding)); });
 test("apply принимает неизменный plan с context и отвергает CAS drift", () => { const v = values(), current = planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding), saved = { ...current, context: "default" }; assert.doesNotThrow(() => sameRuntimeRoleBindingPlan(saved, current, "default")); current.resourceVersion = "8"; assert.throws(() => sameRuntimeRoleBindingPlan(saved, current, "default"), /PRECONDITION/); });

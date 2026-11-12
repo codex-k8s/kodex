@@ -4,11 +4,21 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.59
+version: 1.7.60
 updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+При смене image policy runtime AppArmor-проекция и admission binding обновляются
+вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker
+должны совпадать у producer и admission. Отдельный перенос binding на image policy
+при сохранённой runtime-проекции запрещён. Восстановление согласованности требует
+проверки прежнего immutable source и полной проекции; неизвестный binding,
+изменённый marker или ослабленный `Deny` закрыто отклоняются. Сначала создаётся
+новая проекция, затем связываются admission и controller; до завершения rollout
+новые исполнения остановлены. Профиль AppArmor при этом не меняется, прошлые
+bootstrap effects не повторяются, итоговый render проходит общий preflight.
 
 Свежий профиль с несколькими репликами signed worker использует grant v2 с
 `metadata.uid` из Downward API. Общий v1 revision watermark не разделяет

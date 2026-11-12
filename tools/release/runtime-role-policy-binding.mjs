@@ -25,6 +25,8 @@ export function planRuntimeRoleBinding(controller, runtimeController, policy, bi
 }
 
 export function planRuntimeRoleBindingForRunner(controller, runner, policy, binding, operationID = randomUUID()) {
+  requireValue(!binding?.spec?.paramRef?.name?.startsWith("kodex-provider-sandbox-"),
+    "PROVIDER_SANDBOX_POLICY_REBASE_REQUIRED");
   const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
   requireValue(runner === runnerPullReference(policy?.data, policy?.data?.trustedRoleBaseDigest), "EXACT_RUNNER_REFERENCE_REQUIRED");
   requireValue(policy?.apiVersion === "v1" && policy.kind === "ConfigMap" && policy.metadata?.name === policyName &&

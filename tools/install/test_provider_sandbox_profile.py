@@ -19,6 +19,50 @@ def fixture():
 
 
 class Tests(unittest.TestCase):
+    def changed_policy(self, configured_profile):
+        values = profile.transform(fixture(), configured_profile)
+        new = copy.deepcopy(values[0])
+        new['data']['nodeReadbackImage'] = 'images.example.invalid/kodex/runner@sha256:' + 'f' * 64
+        new['data']['policyRevision'] = '2'
+        new['data']['policySHA256'] = profile.digest({k: v for k, v in new['data'].items() if k not in ('policySHA256', 'orchestrationRevision')})
+        new['metadata']['name'] = profile.SOURCE + '-' + new['data']['policySHA256'][:32]
+        values.extend([new, dict(apiVersion='apps/v1', kind='Deployment', metadata=dict(name='image-admission-controller', namespace='kodex-system', labels={'app.kubernetes.io/part-of': 'kodex'}), spec=dict(template=dict(spec=dict(containers=[dict(name='image-admission-controller', env=[dict(name='IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP', value=new['metadata']['name'])])]))))])
+        return values, new
+
+    def test_policy_reconciliation_preserves_profile_and_all_unrelated_resources(self):
+        for configured_profile in ('', profile.PROFILE):
+            for binding_moved in (False, True):
+                values, new = self.changed_policy(configured_profile)
+                if binding_moved:
+                    values[2]['spec']['paramRef']['name'] = new['metadata']['name']
+                before = copy.deepcopy(values)
+                with self.assertRaises(Rejected):
+                    profile.validate_render(values)
+                actual = profile.reconcile_policy(values)
+                self.assertEqual(values, before)
+                self.assertEqual(profile.active(actual), configured_profile)
+                self.assertEqual(profile.reconcile_policy(actual), actual)
+                changed = {(r['kind'], r['metadata']['name']) for r in actual if r not in before}
+                self.assertEqual(changed, {('ConfigMap', actual[-1]['metadata']['name']), ('Deployment', profile.DEPLOYMENT), ('ValidatingAdmissionPolicyBinding', profile.BINDING)})
+                self.assertEqual(actual[-1], profile.projection(new, configured_profile))
+                self.assertIn(before[0], actual)
+                self.assertIn(before[3], actual)
+
+    def test_policy_reconciliation_rejects_unproven_previous_state(self):
+        for change in ('unknown-binding', 'warn', 'namespace', 'old-policy', 'projection', 'marker', 'source-missing', 'duplicate'):
+            values, new = self.changed_policy('')
+            current = next(r for r in values if r['metadata']['name'].startswith(profile.PREFIX))
+            if change == 'unknown-binding': values[2]['spec']['paramRef']['name'] = 'foreign'
+            elif change == 'warn': values[2]['spec']['validationActions'] = ['Warn']
+            elif change == 'namespace': values[2]['spec']['paramRef']['namespace'] = 'foreign'
+            elif change == 'old-policy': values[0]['data']['requiredTools'] = 'tampered'
+            elif change == 'projection': current['data']['providerAppArmorProfile'] = profile.PROFILE
+            elif change == 'marker': values[1]['spec']['template']['metadata']['annotations'][profile.DIGEST] = 'f' * 64
+            elif change == 'source-missing': values.remove(values[0])
+            else: values.append(copy.deepcopy(current))
+            with self.subTest(change=change), self.assertRaises(Rejected):
+                profile.reconcile_policy(values)
+
     def test_default_is_unchanged_for_either_engine(self):
         for engine in ('codex','opencode'):
             values=fixture();values[0]['data']['nodeReadbackImage']=values[0]['data']['nodeReadbackImage'].replace('/runner@','/'+engine+'@')
