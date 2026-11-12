@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.6
+version: 2.4.7
 updated: 2026-11-12
 ---
 
@@ -63,6 +63,19 @@ registry и workloads Kodex принадлежат `kodex-system`. Смешив�
 или возвращать исторические release namespaces запрещено.
 
 ### Готовый Kubernetes
+
+Для новой пустой БД authority renderer получает явный
+`--authority-registry-configuration <json>` с содержимым
+`{"schema":"kodex.authority-registry/v1","source_revision":1}`.
+Историческая ревизия каталога в исходниках не является первой ревизией новой
+установки: publisher закрыто отклоняет её до публикации. Этот input сохраняется
+вместе с release lock и применяется при каждом воспроизведении render; после
+первой публикации ревизия меняется только штатным протоколом ротации.
+Если bootstrap Jobs уже завершились, а publisher отказал до первого durable
+effect, используется проверяемое
+[продолжение initial authority bootstrap](portable-install.md#registry-authority-при-первой-установке-и-после-частичного-bootstrap).
+Повторный запуск миграций или удаление нового состояния для такого исправления
+не требуется.
 
 `KODEX_INSTALL_MODE=existing-kubernetes` не обновляет ОС и не устанавливает
 k3s. Оператор передаёт exact kubeconfig/context и выбирает компоненты. Для
