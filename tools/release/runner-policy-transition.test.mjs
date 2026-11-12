@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fingerprint } from "./scoped-release.mjs";
-import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
+import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance, policyEnvironmentValue } from "./runner-policy-model.mjs";
 import { planToolsMetadata } from "./policy-tools-metadata.mjs";
 import { planReaderRecovery, requireCompatibleReaderBeforeMaintenance, requireDrainedInventory, samePlan } from "./runner-policy-transition.mjs";
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
@@ -276,6 +276,10 @@ for (const [issuerOnly, portable] of [[false,false],[true,false],[false,true]]) 
     ];
     const portableArgs = [], confirmation = portable ? "APPLY-PORTABLE-RUNNER-POLICY" : "APPLY-STAGING-RUNNER-POLICY";
     if (portable) {
+      const app = objects.find(value=>value.kind==="Deployment"&&value.metadata.name==="control-plane").spec.template.spec.containers[0];
+      for(const [name,key] of [["CONTROL_PLANE_IMAGE_POLICY_REVISION","policyRevision"],["CONTROL_PLANE_IMAGE_POLICY_SHA256","policySHA256"],["CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST","trustedRoleBaseDigest"]]) {
+        const entry=app.env.find(item=>item.name===name);delete entry.value;entry.valueFrom={configMapKeyRef:{name:policyBase,key}};
+      }
       for (const value of objects) {
         delete value.metadata.labels["kodex.dev/local-profile"];
         value.metadata.labels["kodex.dev/environment"] = "production";

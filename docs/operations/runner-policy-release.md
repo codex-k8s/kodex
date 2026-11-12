@@ -64,6 +64,12 @@ Portable renderer сохраняет `environment=production` как часть 
 `runner-policy-transition.mjs` и `default-runner-transition.mjs` принимают
 `--portable-target <private-json>` только при таком отдельном разрешении.
 
+Canonical consumers могут читать policy через exact immutable `configMapKeyRef`.
+Переход сохраняет такую форму и переключает только зарегистрированные ключи на
+новую policy. Старый default runner остаётся закреплён прежней ConfigMap до
+отдельного runtime binding/default перехода. Optional references, Secret,
+неизвестный ключ, дубликат env и чужая ConfigMap закрыто отклоняются.
+
 Закрытая схема `kodex.portable-runner-target/v1` содержит `context`, `clusterUID`,
 `namespaceUID`, `installationUID`, `installationSHA256` и `resources`.
 SHA256 закрепляет canonical JSON `data` существующего ConfigMap

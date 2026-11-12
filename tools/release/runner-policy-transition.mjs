@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { portableRunnerTarget } from "./portable-runner-target.mjs";
 import { fingerprint } from "./scoped-release.mjs";
-import { namespace, applyIssuerAdmissionTransition, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
+import { namespace, applyIssuerAdmissionTransition, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance, policyEnvironmentValue } from "./runner-policy-model.mjs";
 
 const requireValue = (value, code) => { if (!value) throw new Error(code); };
 const phases = ["maintenance", "reader", "schema", "admission", "resources", "binding", "control-plane", "role-image-builder", "controller", "resume", "open"];
@@ -243,7 +243,7 @@ function main(args) {
       if (!["reader"].includes(phase)) requireValue(binding.spec.paramRef.name === bundle.resources[0].metadata.name &&
         binding.spec.paramRef.parameterNotFoundAction === "Deny", "NEW_CLOSED_BINDING_REQUIRED");
       if (["controller", "resume"].includes(phase)) {
-        requireValue(env(cp, "CONTROL_PLANE_IMAGE_POLICY_SHA256") === bundle.resources[0].data.policySHA256 &&
+        requireValue(policyEnvironmentValue(cp.spec.template.spec.containers.find(item => item.name === "control-plane"), "CONTROL_PLANE_IMAGE_POLICY_SHA256", bundle.resources[0]) === bundle.resources[0].data.policySHA256 &&
           cp.spec.template.spec.volumes.find((item) => item.name === "role-environments")?.configMap?.name === bundle.resources[2].metadata.name &&
           builder.spec.template.spec.volumes.find((item) => item.name === "role-environments")?.configMap?.name === bundle.resources[2].metadata.name &&
           builder.spec.template.metadata.annotations?.["kodex.dev/trusted-role-base-digest"] === bundle.resources[0].data.trustedRoleBaseDigest, "ALL_CONSUMERS_MUST_SWITCH_FIRST");
@@ -298,5 +298,9 @@ function main(args) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(process.argv.slice(2)); } catch { process.stderr.write("Runner policy transition failed; inspect authoritative state before another operation\n"); process.exitCode = 1; }
+  try { main(process.argv.slice(2)); } catch (error) {
+    // Только закрытый диагностический код; вывод дочернего kubectl может содержать приватные данные.
+    const code = /^[A-Z][A-Z_]{1,100}$/.test(error?.message ?? "") ? error.message : "RUNNER_POLICY_TRANSITION_FAILED";
+    process.stderr.write(`${code}: inspect authoritative state before another operation\n`); process.exitCode = 1;
+  }
 }

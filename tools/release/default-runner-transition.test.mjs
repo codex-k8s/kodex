@@ -88,3 +88,25 @@ test('portable default runner сохраняет strategy и требует exac
  for(const operation of plan.operations)assert.deepEqual(operation.patch.at(-1).value.strategy,values.find(v=>v.metadata.name===operation.name).spec.strategy);
  values[1].metadata.uid=uid;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',publicPolicy(),target));
 });
+
+test('canonical ConfigMap defaults сохраняют ссылочную конфигурацию и закрыто проверяют источник',()=>{
+ const policy=publicPolicy(),old=publicPolicy('pull.kodex.works',`sha256:${'a'.repeat(64)}`);old.metadata.name='policy-old';
+ const values=['control-plane','runtime-controller'].map(deployment);
+ for(const value of values){
+  const app=value.spec.template.spec.containers[0];
+  for(const entry of app.env){
+   const field=entry.name.endsWith('DEFAULT_ROLE_IMAGE_REFERENCE')?'nodeReadbackImage':entry.name==='CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST'?'trustedRoleBaseDigest':null;
+   if(field){delete entry.value;entry.valueFrom={configMapKeyRef:{name:field==='nodeReadbackImage'?old.metadata.name:policy.metadata.name,key:field}};}
+  }
+ }
+ const plan=createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[old]);
+ for(const op of plan.operations){const entry=op.patch.at(-1).value.template.spec.containers[0].env.find(e=>e.name===op.key);assert.equal(entry.value,undefined);assert.deepEqual(entry.valueFrom,{configMapKeyRef:{name:policy.metadata.name,key:'nodeReadbackImage'}});assert.equal(op.beforeReference,oldRef);}
+ for(const mutate of [
+  app=>app.env[0].valueFrom.configMapKeyRef.optional=true,
+  app=>app.env[0].valueFrom.configMapKeyRef.key='foreign',
+  app=>app.env[0].valueFrom.configMapKeyRef.name='foreign',
+  app=>app.env[0].value='injected',
+  app=>app.env.push(structuredClone(app.env[0])),
+ ]){const changed=structuredClone(values);mutate(changed[0].spec.template.spec.containers[0]);assert.throws(()=>createDefaultRunnerPlan(changed,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[old]),/EXACT_POLICY_CONFIG_REQUIRED/);}
+ const mutable=structuredClone(old);mutable.immutable=false;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[mutable]),/EXACT_POLICY_CONFIG_REQUIRED/);
+});

@@ -7,7 +7,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { portableRunnerTarget } from "./portable-runner-target.mjs";
 import { fingerprint } from "./scoped-release.mjs";
-import { runnerPullReference } from "./runner-policy-model.mjs";
+import { runnerPullReference, policyEnvironmentValue } from "./runner-policy-model.mjs";
 
 const namespace = "kodex-system";
 const annotation = "kodex.dev/default-runner-transition";
@@ -47,7 +47,7 @@ function literal(container, name) {
   return entries[0];
 }
 
-export function planDefaultRunner(deployments, nextReference, operationID = randomUUID(), policy, target) {
+export function planDefaultRunner(deployments, nextReference, operationID = randomUUID(), policy, target, sourcePolicies = []) {
   requirePublishedNodeReadback(policy, nextReference);
   requireValue(uuidPattern.test(operationID) && deployments.length === 2,
     "DEFAULT_RUNNER_INPUT_INVALID");
@@ -56,12 +56,13 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
   const digest = nextReference.slice(nextReference.indexOf("@") + 1);
   const configs = [["runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"], ["control-plane", "CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"]];
   const operations = configs.map(([name, key]) => {
-    const deployment = byName.get(name), container = application(deployment, target), current = literal(container, key).value;
+    const deployment = byName.get(name), container = application(deployment, target), sourcePolicy = sourcePolicies.find(item => item.metadata.name === container.env?.find(entry => entry.name === key)?.valueFrom?.configMapKeyRef?.name), current = policyEnvironmentValue(container, key, sourcePolicy);
     const currentDigest = /@(sha256:[a-f0-9]{64})$/.exec(current)?.[1];
     requireValue(currentDigest && current === runnerPullReference(policy.data, currentDigest), "CURRENT_DEFAULT_RUNNER_INVALID");
-    if (name === "control-plane") requireValue(literal(container, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST").value === digest, "RUNNER_NOT_TRUSTED_BY_CONTROL_PLANE");
+    if (name === "control-plane") requireValue(policyEnvironmentValue(container, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST", policy) === digest, "RUNNER_NOT_TRUSTED_BY_CONTROL_PLANE");
     const after = structuredClone(deployment.spec), nextContainer = after.template.spec.containers.find((item) => item.name === name);
-    literal(nextContainer, key).value = nextReference;
+    const entry = nextContainer.env.find(item => item.name === key);
+    if (entry.valueFrom) entry.valueFrom.configMapKeyRef.name = policy.metadata.name; else entry.value = nextReference;
     after.template.metadata.annotations = { ...(after.template.metadata.annotations ?? {}), [annotation]: operationID };
     let stabilizedAfter, stabilizedAfterSpecSHA256;
     if (name === "control-plane") {
@@ -70,7 +71,7 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
       stabilizedAfterSpecSHA256 = fingerprint(stabilizedAfter);
     }
     return { name, key, uid: deployment.metadata.uid, resourceVersion: deployment.metadata.resourceVersion,
-      beforeReference: current, afterReference: nextReference, beforeSpecSHA256: fingerprint(deployment.spec), afterSpecSHA256: fingerprint(after), changed: current !== nextReference,
+      beforeReference: current, afterReference: nextReference, ...(sourcePolicy ? {sourcePolicySHA256:fingerprint(sourcePolicy.data)} : {}), beforeSpecSHA256: fingerprint(deployment.spec), afterSpecSHA256: fingerprint(after), changed: current !== nextReference,
       patch: [{op:"test",path:"/metadata/uid",value:deployment.metadata.uid},{op:"test",path:"/metadata/resourceVersion",value:deployment.metadata.resourceVersion},{op:"replace",path:"/spec",value:after}],
       ...(stabilizedAfter ? { stabilizedAfter, stabilizedAfterSpecSHA256 } : {}) };
   });
@@ -115,12 +116,19 @@ function main(args) {
     namespaceUID: JSON.parse(kube(["get","namespace",namespace,"-o","json"])).metadata.uid,
     installation: JSON.parse(kube(["-n",namespace,"get","configmap","kodex-installation-profile","-o","json"])),
   }) : undefined;
+  const sourcePolicies = () => {
+    const names = new Set(deployments().flatMap(deployment => {
+      const key = deployment.metadata.name === "control-plane" ? "CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE" : "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE";
+      return deployment.spec.template.spec.containers.filter(item=>item.name===deployment.metadata.name).flatMap(item=>(item.env??[]).filter(entry=>entry.name===key&&entry.valueFrom?.configMapKeyRef).map(entry=>entry.valueFrom.configMapKeyRef.name));
+    }));
+    return [...names].map(name=>JSON.parse(kube(["-n",namespace,"get","configmap",name,"-o","json"])));
+  };
   const extra = portableTarget ? 1 : 0;
   if(command==="plan"){
     requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3+extra,"PLAN_ARGUMENTS_INVALID");
     requirePublishedNodeReadback(activePolicy,options["--runner-reference"]);
     requireRuntimeBinding(activePolicy,runtimeBinding,options["--runner-reference"]);
-    const plan={...planDefaultRunner(deployments(),options["--runner-reference"],randomUUID(),activePolicy,portableTarget),context,clusterUID,...(portableTarget?{portableTargetSHA256:portableTarget.digest}:{})};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
+    const plan={...planDefaultRunner(deployments(),options["--runner-reference"],randomUUID(),activePolicy,portableTarget,sourcePolicies()),context,clusterUID,...(portableTarget?{portableTargetSHA256:portableTarget.digest}:{})};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
   }
   requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]===(portableTarget?"APPLY-PORTABLE-DEFAULT-RUNNER":"APPLY-STAGING-DEFAULT-RUNNER")),"OPERATION_ARGUMENTS_INVALID");
   const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID&&saved.portableTargetSHA256===portableTarget?.digest,"PLAN_SCOPE_CHANGED");
@@ -128,10 +136,10 @@ function main(args) {
   requireRuntimeBinding(activePolicy,runtimeBinding,saved.nextReference);
   if(command==="inspect"){
     requireValue(!options["--confirm"]&&Object.keys(options).length===3+extra,"INSPECT_ARGUMENTS_INVALID");
-    const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment,portableTarget),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
+    const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),app=application(deployment,portableTarget), source=sourcePolicies().find(item=>item.metadata.name===app.env?.find(entry=>entry.name===expected.key)?.valueFrom?.configMapKeyRef?.name),current=policyEnvironmentValue(app,expected.key,source);return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
     writeFileSync(options["--evidence"],`${JSON.stringify({at:new Date().toISOString(),status:"INSPECTED",states})}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"INSPECTED",states})}\n`);return;
   }
-  requireValue(Object.keys(options).length===4+extra,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id,activePolicy,portableTarget);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
+  requireValue(Object.keys(options).length===4+extra,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id,activePolicy,portableTarget,sourcePolicies());requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
   const fd=openSync(options["--evidence"],"wx",0o600),journal=(value)=>{writeSync(fd,`${JSON.stringify({at:new Date().toISOString(),id:saved.id,...value})}\n`);fsyncSync(fd);};
   try{for(const operation of saved.operations){journal({status:"INTENT",target:operation.name});kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(operation.patch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);let after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.afterSpecSHA256,"TARGET_READBACK_MISMATCH");journal({status:"APPLIED",target:operation.name});if(operation.name==="control-plane"){journal({status:"STABILIZATION_INTENT",target:operation.name});const stabilizationPatch=[{op:"test",path:"/metadata/uid",value:operation.uid},{op:"test",path:"/metadata/resourceVersion",value:after.metadata.resourceVersion},{op:"replace",path:"/spec",value:operation.stabilizedAfter}];kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(stabilizationPatch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.stabilizedAfterSpecSHA256,"STABILIZATION_READBACK_MISMATCH");journal({status:"STABILIZED",target:operation.name});}}journal({status:"PASS",nextReference:saved.nextReference});process.stdout.write(`${JSON.stringify({status:"PASS",id:saved.id})}\n`);}catch{journal({status:"UNKNOWN",code:"DEFAULT_RUNNER_TRANSITION_FAILED"});throw new Error("DEFAULT_RUNNER_TRANSITION_FAILED");}finally{closeSync(fd);}
 }
