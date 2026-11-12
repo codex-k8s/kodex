@@ -8,6 +8,7 @@ fail() {
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 container_name="kodex-internal-rpc-authority-postgres-${BASHPID}"
+"$repository_root/scripts/check-go-toolchain.sh"
 
 cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
@@ -44,7 +45,7 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 --file \
 (
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   KODEX_AUTHORITY_MIGRATION_TEST_PORT="$port" \
-    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    env -u GOFLAGS GOENV=off GOWORK=off \
     go test -count=1 -timeout=120s ./cmd/cli -run '^TestAuthorityBaselineGooseComponent$'
 )
 
@@ -228,12 +229,21 @@ SQL
   fail 'removed PostgreSQL credential lifecycle function remains callable'
 fi
 
+# Проверка настоящей readiness с поочерёдным отзывом прав в этой disposable БД.
+(
+  cd -- "$repository_root/services/internal/internal-rpc-authority"
+  KODEX_AUTHORITY_POSTGRES_TEST_DSN="$authority_admin_dsn" \
+    env -u GOFLAGS GOENV=off GOWORK=off \
+    go test -count=1 -timeout=30s ./internal/repository/postgres/publisher \
+      -run '^TestPublisherReadinessPrivilegesComponent$'
+)
+
 # Отдельная disposable DB: concurrency fixture заменяет свою схему и не
 # затрагивает только что проверенные production migrations/receipts.
 (
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   KODEX_AUTHORITY_POSTGRES_TEST_DSN="$authority_admin_dsn" \
-    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    env -u GOFLAGS GOENV=off GOWORK=off \
     go test -count=1 -timeout=30s ./internal/repository/postgres/session \
       -run '^TestConfigureDeniedCapabilityPreservesSQLState$'
 )
@@ -242,7 +252,7 @@ psql "$admin_dsn" --no-password --set ON_ERROR_STOP=1 \
 (
   cd -- "$repository_root/services/internal/internal-rpc-authority"
   KODEX_AUTHORITY_POSTGRES_TEST_DSN="postgresql://postgres@127.0.0.1:${port}/authority_concurrency_fixture?sslmode=disable" \
-    env -u GOFLAGS GOENV=off GOWORK=off GOTOOLCHAIN=local \
+    env -u GOFLAGS GOENV=off GOWORK=off \
     go test -count=1 -timeout=30s ./internal/repository/postgres/authority \
       -run '^TestAcceptVerificationExactSnapshotDoesNotWaitForWatermarkRowLock$'
 )

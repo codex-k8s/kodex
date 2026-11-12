@@ -6,7 +6,12 @@ SELECT
     AND pg_catalog.has_table_privilege(
         current_user,
         'internal_rpc_authority.authority_publisher_delivery_receipts',
-        'SELECT,INSERT'
+        'SELECT'
+    )
+    AND pg_catalog.has_table_privilege(
+        current_user,
+        'internal_rpc_authority.authority_publisher_delivery_receipts',
+        'INSERT'
     )
     AND EXISTS (
         SELECT 1
