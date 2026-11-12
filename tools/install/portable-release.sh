@@ -19,6 +19,7 @@ artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 provider_profile_arguments=()
 previous_arguments=()
+preserve_observability_profile=false
 arguments=()
 repair_egress_secret_access=false
 component_image_profile=""
@@ -44,6 +45,7 @@ while (($#)); do
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
     --image-policy-inputs-mode) image_policy_inputs_mode="${2:-}"; shift 2 ;;
+    --preserve-observability-profile) preserve_observability_profile=true; shift ;;
     --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
@@ -67,7 +69,8 @@ while (($#)); do
         '  [--preimage-directory <new-private-directory>; required for apply/upgrade]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       printf '%s\n' '  [--image-policy-inputs-mode direct|versioned; default direct; materialized in pinned render]'
-      printf '%s\n' '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]'
+      printf '%s\n' '  [--preserve-observability-profile; workload resume only]'
+  printf '%s\n' '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--artifact-antivirus-mode required|disabled; default required]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
@@ -105,9 +108,11 @@ if [[ "$mode" == resume-workloads ]]; then
   [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
   case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
   previous_arguments=("${provider_profile_arguments[@]}" --previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
+  [[ "$preserve_observability_profile" != true ]] || previous_arguments+=(--preserve-observability-profile)
   [[ "$repair_api_endpoints" != true ]] || previous_arguments+=(--repair-kubernetes-api-endpoints)
   [[ "$repair_egress_secret_access" != true ]] || previous_arguments+=(--repair-egress-secret-access)
 else
+  [[ "$preserve_observability_profile" == false ]] || fail 'observability preservation requires workload resume'
   [[ "$repair_egress_secret_access" == false ]] || fail 'egress secret repair only applies to workload resume'
   [[ "$repair_api_endpoints" == false ]] || fail 'API endpoint repair only applies to workload resume'
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'

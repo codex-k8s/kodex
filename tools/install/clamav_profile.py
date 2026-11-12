@@ -1,6 +1,8 @@
 """Явный optional ClamAV profile: scanner отсутствует, scan-required операции закрыты."""
 import argparse
 import copy
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -10,6 +12,7 @@ from deployment_profile import require, Rejected
 ANNOTATION = 'kodex.dev/clamav-mode'
 STORAGE_ANNOTATION = 'kodex.dev/clamav-storage-profile'
 LOCAL_CLAIM = 'clamav-database-local'
+BOOTSTRAP_ANNOTATION = 'kodex.dev/clamav-bootstrap-sha256'
 VOLUMES = {'skill-scanner-config', 'skill-scanner-socket', 'skill-scanner-tmp', 'skill-scanner-database'}
 
 
@@ -48,7 +51,9 @@ def local_storage(resources):
             for item in value.values():collect(item)
         elif isinstance(value, list):
             for item in value:collect(item)
-    collect(resources)
+    bootstrap_jobs = [r for r in resources if r.get('kind') == 'Job' and (r['metadata']['name'].startswith('clamav-db-bootstrap-') or BOOTSTRAP_ANNOTATION in r['metadata'].get('annotations', {}))]
+    require(len(bootstrap_jobs) <= 1, 'UNIQUE_CLAMAV_BOOTSTRAP_REQUIRED')
+    collect([r for r in resources if r not in bootstrap_jobs])
     require(references == [old_name, old_name], 'EXACT_CLAMAV_STORAGE_CONSUMERS_REQUIRED')
     claim = one(resources, 'PersistentVolumeClaim', old_name)
     require(claim['spec'].get('accessModes') == (['ReadWriteOnce'] if marked else ['ReadWriteMany']), 'CLAMAV_STORAGE_MODE_DRIFT')
@@ -66,6 +71,15 @@ def local_storage(resources):
     update_volumes[0]['persistentVolumeClaim']['claimName'] = LOCAL_CLAIM
     claim['metadata']['name'] = LOCAL_CLAIM
     claim['spec']['accessModes'] = ['ReadWriteOnce']
+    template = updater['spec']['jobTemplate']
+    fingerprint = hashlib.sha256(json.dumps(template,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    metadata = copy.deepcopy(template.get('metadata', {}))
+    metadata.update(name='clamav-db-bootstrap-'+fingerprint[:16],namespace='kodex-system')
+    metadata.setdefault('labels', {}).update({'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/name':'clamav-db-updater'})
+    metadata.setdefault('annotations', {})[BOOTSTRAP_ANNOTATION] = fingerprint
+    job = dict(apiVersion='batch/v1',kind='Job',metadata=metadata,spec=copy.deepcopy(template['spec']))
+    require(not bootstrap_jobs or bootstrap_jobs == [job], 'EXACT_CLAMAV_BOOTSTRAP_REQUIRED')
+    if not bootstrap_jobs:resources.append(job)
     return resources
 
 

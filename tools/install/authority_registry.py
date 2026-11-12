@@ -122,9 +122,11 @@ def verify_published_resume(state, resources, startup_only=True, completion=None
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None, artifact_antivirus_mode='required', clamav_storage_profile='shared-rwx'):
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None, artifact_antivirus_mode='required', clamav_storage_profile='shared-rwx', preserve_observability_profile=False):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
-    expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
+    require(type(preserve_observability_profile) is bool, 'EXPLICIT_OBSERVABILITY_PRESERVATION_REQUIRED')
+    baseline = copy.deepcopy(previous) if preserve_observability_profile else observability_profile.transform(previous, disabled=True)
+    expected = buildkit_runtime_profile.transform(baseline, buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
     if repair_api_endpoints:expected = kubernetes_api_profile.transform(expected)
     if clamav_mode != 'enabled' or artifact_antivirus_mode != 'required' or clamav_storage_profile != 'shared-rwx':expected = clamav_profile.transform(expected, clamav_mode, artifact_antivirus_mode, clamav_storage_profile)
@@ -221,6 +223,7 @@ def main():
     parser.add_argument('--job-name')
     parser.add_argument('--repair-kubernetes-api-endpoints', action='store_true')
     parser.add_argument('--repair-egress-secret-access', action='store_true')
+    parser.add_argument('--preserve-observability-profile', action='store_true')
     parser.add_argument('--clamav-storage-profile', choices=['shared-rwx','node-local-rwo'], default='shared-rwx')
     parser.add_argument('--clamav-mode', choices=['enabled','disabled'], default='enabled')
     parser.add_argument('--artifact-antivirus-mode', choices=['required','disabled'], default='required')
@@ -235,6 +238,7 @@ def main():
     args = parser.parse_args()
     completion = bootstrap_completion.from_arguments(args)
     require(completion is None or args.mode in ('preflight-resume', 'preflight-published', 'preflight-workloads', 'verify-bootstrap'), 'BOOTSTRAP_COMPLETION_MODE_REJECTED')
+    require(not args.preserve_observability_profile or args.mode == 'preflight-workloads', 'OBSERVABILITY_PRESERVATION_MODE_REJECTED')
     component_image = None
     if any((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)):
         require(args.mode == 'preflight-workloads' and all((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)), 'EXPLICIT_COMPONENT_WORKLOAD_PROFILE_REQUIRED')
@@ -267,7 +271,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode, args.clamav_storage_profile)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode, args.clamav_storage_profile, args.preserve_observability_profile)))
         elif args.mode == 'verify-bootstrap':
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))

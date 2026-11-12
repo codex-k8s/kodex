@@ -17,6 +17,7 @@ usage() {
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
   printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
   printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]' >&2
+  printf '%s\n' '  [--preserve-observability-profile; workload resume only]'
   printf '%s\n' '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' >&2
   printf '%s\n' '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; explicit runtime-only projection]' >&2
 }
@@ -29,6 +30,7 @@ portable_arguments=()
 portable_inventory=""
 provider_profile_arguments=()
 previous_arguments=()
+preserve_observability_profile=false
 repair_api_endpoints=false
 clamav_mode=enabled
 clamav_storage_profile=shared-rwx
@@ -56,6 +58,7 @@ while (($# > 0)); do
     --render) render_file="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
+    --preserve-observability-profile) preserve_observability_profile=true; shift ;;
     --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
@@ -94,6 +97,10 @@ if [[ "$repair_egress_secret_access" == true ]]; then
 fi
 if [[ "$repair_api_endpoints" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'API endpoint repair requires workload resume' ;; esac
+fi
+if [[ "$preserve_observability_profile" == true ]]; then
+  case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'observability preservation requires workload resume' ;; esac
+  previous_arguments+=(--preserve-observability-profile)
 fi
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
@@ -849,6 +856,14 @@ apply_workloads_after_authority() {
     select(.kind == "Deployment" or
       .kind == "DaemonSet" or .kind == "CronJob")
   '
+  if [[ "$clamav_storage_profile" == node-local-rwo ]]; then
+    kubectl --context "$context" -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+      fail 'ClamAV egress gateway is unavailable before database bootstrap'
+    local clamav_bootstrap_job
+    clamav_bootstrap_job=$(yq -r 'select(.kind == "Job" and .metadata.annotations."kodex.dev/clamav-bootstrap-sha256" != null) | .metadata.name' "$render_file")
+    [[ "$clamav_bootstrap_job" =~ ^clamav-db-bootstrap-[a-f0-9]{16}$ ]] || fail 'exact ClamAV bootstrap Job is required'
+    apply_job "$clamav_bootstrap_job"
+  fi
   kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
     fail 'control plane is unavailable before provider bootstrap'
   python3 "$repository_root/tools/install/provider-bootstrap.py" recover --context "$context"

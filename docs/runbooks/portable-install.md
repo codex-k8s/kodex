@@ -1121,8 +1121,19 @@ Scanner и единственный updater используют этот claim;
 проверяет опубликованную authority revision, receipt миграций и пустой runtime,
 создаёт новый claim до workloads. Старый pending claim можно удалить отдельно
 только после проверки ownership, отсутствия volumeName/Bound и потребителей;
-для занятого тома требуется отдельное решение о данных. При первой установке
-подписи ClamAV должны быть получены updater до готовности scanner. Факт Ready
+для занятого тома требуется отдельное решение о данных.
+`--preserve-observability-profile` у `resume-workloads` сохраняет уже
+закреплённый профиль наблюдаемости побайтно на уровне структуры render вместо
+повторного применения disabled overlay; любые дополнительные изменения этой
+области по-прежнему отклоняются сравнением полного ожидаемого render.
+Семантика проверена через Context7 по документации
+[Kubernetes PersistentVolume access modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes)
+и [WaitForFirstConsumer](https://kubernetes.io/docs/concepts/storage/storage-classes/#volume-binding-mode).
+Для первой установки профиль также материализует отдельный Job из точного
+CronJob template с именем по digest. Delivery проверяет готовность egress gateway
+и завершение этого Job до ожидания control-plane: пустой новый том получает
+подписи без ожидания очередного шестичасового расписания. Повтор проверяет
+существующий Job и его результат, не подменяет образ или verdict. Факт Ready
 PVC не доказывает успешное сканирование.
 
 ### Опциональный ClamAV

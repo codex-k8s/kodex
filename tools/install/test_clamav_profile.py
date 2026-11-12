@@ -123,9 +123,13 @@ class ClamAVProfile(unittest.TestCase):
         self.assertEqual(profile.transform(desired,storage_profile='node-local-rwo'),desired)
         self.assertEqual(desired[0]['spec']['template']['spec']['containers'],before[0]['spec']['template']['spec']['containers'])
         self.assertEqual(desired[2]['spec']['schedule'],before[2]['spec']['schedule'])
+        jobs=[r for r in desired if r['kind']=='Job'];self.assertEqual(len(jobs),1)
+        self.assertEqual(jobs[0]['spec'],desired[2]['spec']['jobTemplate']['spec'])
+        corrupt=copy.deepcopy(desired);corrupt[-1]['spec']['template']['spec']['containers'][0]['image']='foreign.invalid:latest'
+        with self.assertRaisesRegex(Rejected,'EXACT_CLAMAV_BOOTSTRAP'):profile.transform(corrupt,storage_profile='node-local-rwo')
         self.assertNotIn('suspend',desired[2]['spec'])
         self.assertEqual(profile.one(desired,'PersistentVolumeClaim',profile.LOCAL_CLAIM)['spec']['accessModes'],['ReadWriteOnce'])
-        self.assertEqual(desired[-1],before[-1])
+        self.assertIn(before[-1],desired)
         with self.assertRaises(Rejected):profile.transform(desired)
         with self.assertRaises(Rejected):profile.transform(before,mode='disabled',storage_profile='node-local-rwo')
         for mode in ['foreign','collision','readwrite','provenance','access']:
@@ -149,6 +153,9 @@ class ClamAVProfile(unittest.TestCase):
         with patch.object(registry,'verify_schemas'):
             with self.assertRaisesRegex(Rejected,'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED'):registry.verify_workload_resume(state,desired,before)
             self.assertEqual(registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')['deployments'],3)
+            self.assertEqual(registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo',preserve_observability_profile=True)['deployments'],3)
+            drift=copy.deepcopy(desired);drift[0]['metadata']['labels']['foreign-observability']='changed'
+            with self.assertRaisesRegex(Rejected,'EXACT_BOOTSTRAP_PROFILE_DELTA_REQUIRED'):registry.verify_workload_resume(state,drift,before,clamav_storage_profile='node-local-rwo',preserve_observability_profile=True)
             state.runtime_pods=[{'metadata':{'name':'active-runtime'}}]
             with self.assertRaisesRegex(Rejected,'EMPTY_RUNTIME_REQUIRED'):registry.verify_workload_resume(state,desired,before,clamav_storage_profile='node-local-rwo')
 
