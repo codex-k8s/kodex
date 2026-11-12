@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.3
+version: 1.6.4
 updated: 2026-11-12
 ---
 
@@ -1013,7 +1013,14 @@ preimage. Разрешённое отличие candidate — результат
 `--buildkit-runtime-profile nested-userns`, соответствующий BuildKit transform: прежние images,
 schema, registry и прочие настройки неизменны. Readonly preflight проверяет
 начальную signed publication, registry revision1/digest, OPEN fence, все пять
-завершённых bootstrap Jobs/schema heads и пустой runtime. Каждый существующий
+завершённых bootstrap Jobs/schema heads и начальную границу runtime. Допускается
+пустой namespace либо единственный `system-assistant-warm`, который ещё не
+исполнил ни одного контейнера: Pending, exact runner image из immutable policy,
+штатные три контейнера и два initializer, waiting statuses без imageID, restart,
+lastState и ephemeral containers, правильные managed/warm labels и ServiceAccount.
+Дополнительно authoritative PostgreSQL read требует нулевые `runs` и
+`session_turns`. Это состояние возникает до публикации первого runner в pull
+registry; guard не удаляет Pod и не объявляет его готовым. Каждый существующий
 Deployment обязан точно соответствовать predecessor либо successor; неизвестный
 workload или executable drift закрывает продолжение. Для policy update применяются
 UID/resourceVersion CAS и полный readback, без force или ослабления CEL.
@@ -1034,6 +1041,10 @@ API. Непустой аргумент, другой medium/fieldPath/version, �
 | Этап / actor | Авторитетное состояние и допуск | Эффект и потерянный ответ |
 |---|---|---|
 | Operator: plan/preflight | Exact render SHA/context, initial signed history, schema/jobs, before/after executable | Только SELECT/get/server dry-run; отказ не разрешает apply |
+| Runtime пуст | Начальная signed history и остальные preconditions | Продолжение без создания бизнес-хода |
+| Initial warm Pending | Exact image/spec identity, все контейнеры никогда не стартовали, runs/turns пусты | Pod сохранён; первый pull/start выполняет штатный controller после публикации |
+| Warm работал, есть бизнес-история или неизвестный Pod | Initial-resume недопустим; неполный status также закрыт | Нет удаления, cancel, retry или нового grant; требуется отдельный lifecycle действующего исполнения |
+| Проверка недоступна либо потерян ответ apply | Отсутствие доказательства не является пустым runtime | Остановка и readback; эффекты не повторяются вслепую |
 | Installer: bootstrap seed | Named CP-owned mutable Secret, канонический пустой payload только при отсутствии | Create-only; после ошибки readback; существующее поколение не обновляется |
 | Installer: profile assets/workloads | Git-owned exact render, fenced inventory UID/seal/RV, parameter-owned opt-in | Exact CAS/create, readback; неизвестный исход требует reconciliation |
 | Issuer/publisher: activation | Настоящие consumer attestations, signed snapshot и OPEN fence | Штатный durable authority protocol; установщик не подделывает readback/activation |
