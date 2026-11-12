@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.11
+version: 1.4.12
 updated: 2026-11-12
 ---
 
@@ -843,3 +843,41 @@ root немедленно превращался в `Unavailable`. Извест�
 `pg_blocking_pids`; в runtime используется тот же закреплённый PostgreSQL18.3.
 Отсутствие исходного helper Job не объявляется исправленным задним числом:
 установленная повторная приёмка требует нового разрешённого запуска.
+
+
+## Изолированный native adapter на локальном Kubernetes
+
+`tools/dev/opencode-cluster-qualification.py` переносит существующую native
+оснастку в отдельный новый namespace, не подменяя OpenCode, LiteLLM или Redis.
+Она принимает exact `--kubectl`, `--kubeconfig`, `--context k3d-kodex`,
+`--cluster-uid` и новый приватный `--state`. Режим `plan` требует чистый commit,
+собирает тестовый executable из этого SHA и закрепляет его digest вместе с
+`--runner-image registry.local.kodex/kodex/agent-runner@sha256:...`. Режимы
+`apply`, `readback`, `cleanup` требуют тот же `--plan-sha256`. Они не читают
+проектный dotenv, платформенные Secrets или пользовательский workspace.
+
+План содержит только новый Namespace, запрет ingress/egress, immutable ConfigMap
+с синтетическим relay и один Pod с тремя закреплёнными образами. Нет Service,
+PVC, hostPath, host network, RBAC либо service-account token. Redis и proxy
+слушают loopback; upstream связан Unix-сокетом. Новый случайный proxy key
+создаётся внутри Pod, атомарно публикуется в private file и не входит в argv,
+план или evidence. Запросы модели и инструменты синтетические; платных вызовов
+этот профиль не делает. NetworkPolicy не объявляется физической изоляцией
+памяти и требует работающего enforcement выбранного CNI.
+
+Source/cluster/node/Pod UID и фактические imageID сохраняются в приватном
+readback. Бюджет тестов480 секунд, Pod720 секунд, объёмы emptyDir и ресурсы
+контейнеров ограничены. `PASS` требует exit0, завершение тестов без SKIP и точные
+imageID. Незавершённый Pod означает `RUNNING`, завершённый отказ — `FAIL`.
+Очистка сначала сверяет созданные UID и полный namespaced inventory; соседний
+объект, неизвестный CRD либо Secret блокирует удаление namespace. Сама команда
+удаления имеет UID/resourceVersion preconditions и требует последующего readback
+отсутствия namespace. Общее удаление workloads, образов или Redis не выполняется.
+
+Публичная локальная проверка безопасности оснастки:
+`make test-opencode-cluster-qualification`. Настоящий Docker-контур LiteLLM
+остаётся в `make test-opencode-native`. Кластерный профиль проверяет длинную
+историю, native compaction/export/import, managed tool identity, cache hints,
+прерывание и реальные protocol adapters. Он не является доказательством
+сквозного Kodex Session/RuntimeRevision/PVC/S3, workflow либо GitHub effects:
+эти сценарии проходят отдельную установленную приёмку.

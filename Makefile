@@ -298,6 +298,10 @@ test-opencode-native: check-go-toolchain
 test-opencode-native-postgres: check-go-toolchain
 	@./scripts/tests/control-plane-postgres-test.sh --opencode-native-upgrade
 
+.PHONY: test-opencode-cluster-qualification
+test-opencode-cluster-qualification:
+	@timeout 30s python3 tools/dev/test_opencode_cluster_qualification.py
+
 .PHONY: test-runtime-controller-artifact-transfer
 test-runtime-controller-artifact-transfer:
 	@bash ./scripts/tests/runtime-controller-artifact-transfer-test.sh

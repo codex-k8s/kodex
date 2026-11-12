@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -83,35 +84,50 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 		t.Skip("set KODEX_TEST_LITELLM_REDIS=1 for isolated Docker qualification")
 	}
 	binary := qualifiedNativeBinary(t)
-	endpoint := os.Getenv("DOCKER_HOST")
-	if endpoint == "" {
-		raw, err := exec.Command("docker", "context", "inspect", "--format", `{{.Endpoints.docker.Host}}`).Output()
-		if err != nil {
-			t.Fatal("local Docker context unavailable")
+	podMode := os.Getenv("KODEX_TEST_NATIVE_POD") == "1"
+	if value := os.Getenv("KODEX_TEST_NATIVE_POD"); value != "" && value != "1" {
+		t.Fatal("native pod qualification mode is invalid")
+	}
+	var docker nativeDocker
+	var scope string
+	if !podMode {
+		endpoint := os.Getenv("DOCKER_HOST")
+		if endpoint == "" {
+			raw, err := exec.Command("docker", "context", "inspect", "--format", `{{.Endpoints.docker.Host}}`).Output()
+			if err != nil {
+				t.Fatal("local Docker context unavailable")
+			}
+			endpoint = strings.TrimSpace(string(raw))
 		}
-		endpoint = strings.TrimSpace(string(raw))
-	}
-	if !strings.HasPrefix(endpoint, "unix:///") || strings.ContainsAny(endpoint, "\r\n") {
-		t.Fatal("cache qualification requires a local Unix Docker endpoint")
-	}
-	var random [8]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		t.Fatal(err)
-	}
-	scope := "kodex-native-2108-" + hex.EncodeToString(random[:])
-	docker := nativeDocker{t: t, endpoint: endpoint, scope: scope}
-	if _, err := docker.command("network", "create", "--internal", "--label", "kodex.native-test="+scope, scope); err != nil {
-		t.Fatal("create isolated cache qualification network")
-	}
-	t.Cleanup(func() {
-		raw, err := docker.command("network", "inspect", "--format", `{{index .Labels "kodex.native-test"}}`, scope)
-		if err == nil && raw == scope {
-			_, _ = docker.command("network", "rm", scope)
+		if !strings.HasPrefix(endpoint, "unix:///") || strings.ContainsAny(endpoint, "\r\n") {
+			t.Fatal("cache qualification requires a local Unix Docker endpoint")
 		}
-	})
+		var random [8]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			t.Fatal(err)
+		}
+		scope = "kodex-native-2108-" + hex.EncodeToString(random[:])
+		docker = nativeDocker{t: t, endpoint: endpoint, scope: scope}
+		if _, err := docker.command("network", "create", "--internal", "--label", "kodex.native-test="+scope, scope); err != nil {
+			t.Fatal("create isolated cache qualification network")
+		}
+		t.Cleanup(func() {
+			raw, err := docker.command("network", "inspect", "--format", `{{index .Labels "kodex.native-test"}}`, scope)
+			if err == nil && raw == scope {
+				_, _ = docker.command("network", "rm", scope)
+			}
+		})
+	}
 	fixture := &nativeFixture{cacheExpectation: &nativeCacheWireExpectation{mechanism: "VLLM_CACHE_SALT", namespace: strings.Repeat("c", 64)}, identityKey: strings.Repeat("d", 64), identityRevision: strings.Repeat("b", 64), nativeIdentities: map[string]bool{}}
 	model := httptest.NewUnstartedServer(http.HandlerFunc(fixture.model))
 	directory := t.TempDir()
+	redisHost := "redis"
+	if podMode {
+		directory, redisHost = "/harness/private", "127.0.0.1"
+		if os.Getuid() != 10001 || os.Mkdir(directory, 0700) != nil {
+			t.Fatal("fresh private pod fixture directory is required")
+		}
+	}
 	listener, err := net.Listen("unix", filepath.Join(directory, "upstream.sock"))
 	model.Listener = listener
 	if err != nil {
@@ -121,7 +137,9 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	t.Cleanup(model.Close)
 	redisName := scope + "-redis"
 	proxyName := scope + "-proxy"
-	docker.start(redisName, "--network", scope, "--network-alias", "redis", "--memory", "128m", "--cpus", "0.5", "--user", "999:999", nativeRedisImage, "redis-server", "--save", "", "--appendonly", "no")
+	if !podMode {
+		docker.start(redisName, "--network", scope, "--network-alias", "redis", "--memory", "128m", "--cpus", "0.5", "--user", "999:999", nativeRedisImage, "redis-server", "--save", "", "--appendonly", "no")
+	}
 	var proxyKey [32]byte
 	if _, err := rand.Read(proxyKey[:]); err != nil {
 		t.Fatal(err)
@@ -129,14 +147,16 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	credential := "sk-" + hex.EncodeToString(proxyKey[:])
 	docker.sensitive = []string{credential}
 	configPath := filepath.Join(directory, "proxy.yaml")
-	config := fmt.Sprintf("model_list:\n  - model_name: tiny\n    litellm_params:\n      model: hosted_vllm/tiny\n      api_base: %s/v1\n      api_key: synthetic-not-a-credential\nrouter_settings:\n  num_retries: 0\n  timeout: 15\nlitellm_settings:\n  telemetry: false\n  cache: true\n  cache_params:\n    type: redis\n    host: redis\n    port: 6379\n    ttl: 300\n", "http://127.0.0.1:4001")
+	config := fmt.Sprintf("model_list:\n  - model_name: tiny\n    litellm_params:\n      model: hosted_vllm/tiny\n      api_base: %s/v1\n      api_key: synthetic-not-a-credential\nrouter_settings:\n  num_retries: 0\n  timeout: 15\nlitellm_settings:\n  telemetry: false\n  cache: true\n  cache_params:\n    type: redis\n    host: %s\n    port: 6379\n    ttl: 300\n", "http://127.0.0.1:4001", redisHost)
 	config += "general_settings:\n  master_key: " + credential + "\n"
-	if os.WriteFile(configPath, []byte(config), 0600) != nil {
+	if os.WriteFile(configPath+".next", []byte(config), 0600) != nil || os.Rename(configPath+".next", configPath) != nil {
 		t.Fatal("write private synthetic proxy config")
 	}
 	// UID/GID владельца сохраняют private mode 0600 без CAP_DAC_OVERRIDE и chmod для остальных пользователей.
-	docker.start(proxyName, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
-		"--env", "LITELLM_LOCAL_MODEL_COST_MAP=True", "--env", "LITELLM_LOG=INFO", "--env", "PYTHONUNBUFFERED=1", "--mount", "type=bind,src="+directory+",dst=/harness", "--mount", "type=bind,src="+configPath+",dst=/config/proxy.yaml,readonly", "--entrypoint", "python", nativeLiteLLMImage, "-c", nativeLiteLLMUnixRelay, "--config", "/config/proxy.yaml", "--host", "127.0.0.1", "--port", "4000", "--num_workers", "1")
+	if !podMode {
+		docker.start(proxyName, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
+			"--env", "LITELLM_LOCAL_MODEL_COST_MAP=True", "--env", "LITELLM_LOG=INFO", "--env", "PYTHONUNBUFFERED=1", "--mount", "type=bind,src="+directory+",dst=/harness", "--mount", "type=bind,src="+configPath+",dst=/config/proxy.yaml,readonly", "--entrypoint", "python", nativeLiteLLMImage, "-c", nativeLiteLLMUnixRelay, "--config", "/config/proxy.yaml", "--host", "127.0.0.1", "--port", "4000", "--num_workers", "1")
+	}
 	origin := "http://litellm.example.invalid"
 	transport := &http.Transport{Proxy: nil, DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", filepath.Join(directory, "proxy.sock"))
@@ -156,13 +176,18 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 				break
 			}
 		}
-		state, _ := docker.command("inspect", "--format", `{{.State.Status}}`, proxyName)
-		if state == "exited" {
-			break
+		if !podMode {
+			state, _ := docker.command("inspect", "--format", `{{.State.Status}}`, proxyName)
+			if state == "exited" {
+				break
+			}
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	if !ready {
+		if podMode {
+			t.Fatal("isolated pod LiteLLM is not ready")
+		}
 		state, _ := docker.command("inspect", "--format", `{{.State.Status}}/{{.State.ExitCode}}/{{.State.OOMKilled}}`, proxyName)
 		logs, _ := docker.command("logs", "--tail", "200", proxyName)
 		t.Fatalf("synthetic LiteLLM is not ready: %s / %s", state, logs)
@@ -326,38 +351,9 @@ func qualifyLiteLLMCacheReadWrite(t *testing.T, client *http.Client, origin stri
 
 // nativeLiteLLMUnixRelay bridges only the private synthetic socket and starts the real proxy; it supports rootless Docker without exposing a host listener.
 // nativeLiteLLMUnixRelay связывает только private synthetic socket и запускает настоящий proxy, поддерживая rootless Docker без host listener.
-const nativeLiteLLMUnixRelay = `import os, select, socket, socketserver, sys
-class Relay(socketserver.BaseRequestHandler):
-    def handle(self):
-        is_model = self.server.address_family == socket.AF_INET
-        family = socket.AF_UNIX if is_model else socket.AF_INET
-        target_address = "/harness/upstream.sock" if is_model else ("127.0.0.1", 4000)
-        with socket.socket(family, socket.SOCK_STREAM) as upstream:
-            try:
-                upstream.connect(target_address)
-            except OSError:
-                return
-            peers = [self.request, upstream]
-            while peers:
-                readable, _, _ = select.select(peers, [], [], 30)
-                if not readable:
-                    return
-                for source in readable:
-                    target = upstream if source is self.request else self.request
-                    data = source.recv(65536)
-                    if not data:
-                        return
-                    target.sendall(data)
-if os.fork() == 0:
-    socketserver.ThreadingTCPServer.allow_reuse_address = True
-    with socketserver.ThreadingTCPServer(("127.0.0.1", 4001), Relay) as server:
-        server.serve_forever()
-if os.fork() == 0:
-    os.umask(0o077)
-    with socketserver.ThreadingUnixStreamServer("/harness/proxy.sock", Relay) as server:
-        server.serve_forever()
-os.execvp("litellm", ["litellm"] + sys.argv[1:])
-`
+//
+//go:embed testdata/litellm_unix_fixture.py
+var nativeLiteLLMUnixRelay string
 
 // nativeCacheAuthTransport supplies an in-memory test-only credential solely to the owned Unix-socket proxy, never argv or a remote host.
 // nativeCacheAuthTransport передаёт in-memory test credential лишь owned Unix-socket proxy, никогда argv или remote host.
