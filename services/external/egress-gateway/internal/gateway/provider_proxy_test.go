@@ -5,11 +5,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"fmt"
+	"encoding/json"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/runtimepolicy"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,8 +26,39 @@ import (
 // providerProxyFixture создаёт аутентифицированный CONNECT-туннель с тестовым TLS-доверием клиента и upstream.
 func providerProxyFixture(t *testing.T, host string, access runtimecontract.RuntimeWebAccess, upstreamRoots *x509.CertPool) (*Server, securedReader, *fakeResolver, *fakeDialer, <-chan struct{}) {
 	t.Helper()
-	active, key := authenticatedRuntimePolicyFixture(t)
-	grant, err := runtimecontract.SignRuntimeWebAccessGrant(key, "synthetic-execution", strings.Repeat("a", 64), access)
+	path := filepath.Join("..", "..", "..", "..", "..", "deploy/k8s/base/egress-gateway/policy.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc policy.Document
+	if json.Unmarshal(raw, &doc) != nil {
+		t.Fatal("read synthetic policy")
+	}
+	config := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "synthetic", API: runtimecontract.ModelAPIResponses, BaseURL: "https://" + host + "/v1", AddressCIDRs: []string{"93.184.216.34/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "synthetic", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	doc.Spec.ModelProviderCatalog = &runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: config.SourceRevision, DefaultProvider: config.DefinitionKey(), DefaultModel: config.Models[0].ID, Providers: []runtimecontract.ModelProviderConfiguration{config}}
+	raw, err = json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path = filepath.Join(t.TempDir(), "policy.json")
+	if os.WriteFile(path, raw, 0600) != nil {
+		t.Fatal("write synthetic policy")
+	}
+	digest, err := policy.DigestFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := policy.LoadFile(path, doc.Metadata.Revision, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := []byte(strings.Repeat("synthetic", 8))
+	active, err := runtimepolicy.New(base, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := runtimecontract.SignRuntimeProxyAccessGrant(key, "synthetic-execution", strings.Repeat("a", 64), access, &config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,19 +89,6 @@ func providerProxyFixture(t *testing.T, host string, access runtimecontract.Runt
 		t.Fatal(err)
 	}
 	return server, securedReader{conn: secured, reader: bufio.NewReader(secured)}, resolver, dialer, done
-}
-
-// providerWebSocketEndpoint prepares the exact provider host, TLS roots, and authenticated client tunnel.
-// providerWebSocketEndpoint готовит точный хост провайдера, TLS-доверие и аутентифицированный клиентский туннель.
-func providerWebSocketEndpoint(t *testing.T, host string) (tls.Certificate, securedReader, *fakeDialer, <-chan struct{}, string) {
-	t.Helper()
-	certificate, roots := serverCertificateFixture(t, host)
-	_, client, _, dialer, done := providerProxyFixture(t, host, runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
-	path := "/v1/responses"
-	if host == "chatgpt.com" {
-		path = "/backend-api/codex/responses"
-	}
-	return certificate, client, dialer, done, path
 }
 
 // TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE keeps provider POST available and SSE unbuffered.
@@ -137,303 +159,4 @@ func TestProviderPOSTIsIndependentOfUserReadOnlyAndPreservesSSE(t *testing.T) {
 		t.Fatal("provider proxy did not join")
 	}
 	assertProviderResponsesEvents(t, logs.String(), "HTTP", "event=POLICY outcome=ALLOWED", "event=UPSTREAM outcome=RESPONSE status_class=2XX http_status=200", "event=UPSTREAM_BODY outcome=COMPLETED status_class=2XX http_status=200")
-}
-
-// TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade rejects untrusted TLS and malformed WebSocket upgrades.
-// TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade отклоняет недоверенный TLS и неверный WebSocket upgrade.
-func TestProviderProxyRejectsForeignTrustAndInvalidUpstreamUpgrade(t *testing.T) {
-	for _, boundary := range []string{"foreignCA", "foreignAccept", "extensionBinding"} {
-		t.Run(boundary, func(t *testing.T) {
-			logs := captureProviderResponsesLogs(t)
-			certificate, roots := serverCertificateFixture(t, "api.openai.com")
-			if boundary == "foreignCA" {
-				_, roots = serverCertificateFixture(t, "other.example")
-			}
-			_, client, _, dialer, done := providerProxyFixture(t, "api.openai.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
-			upstreamDone := make(chan struct{})
-			go func() {
-				defer close(upstreamDone)
-				peer := <-dialer.peers
-				defer peer.Close()
-				upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}, NextProtos: []string{"h2", "http/1.1"}})
-				if _, err := http.ReadRequest(bufio.NewReader(upstream)); err != nil {
-					return
-				}
-				accept, extensions := "foreign", ""
-				if boundary == "extensionBinding" {
-					accept = "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-					extensions = "Sec-WebSocket-Extensions: permessage-deflate; client_max_window_bits=8\r\n"
-				}
-				_, _ = io.WriteString(upstream, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: "+accept+"\r\n"+extensions+"\r\n")
-			}()
-			request := syntheticUpgradeRequest(t, "api.openai.com")
-			if boundary == "extensionBinding" {
-				request.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate; client_max_window_bits")
-			}
-			if err := request.Write(client.conn); err != nil {
-				t.Fatal(err)
-			}
-			response, err := http.ReadResponse(client.reader, request)
-			if err != nil || response.StatusCode != 502 {
-				t.Fatal("invalid provider trust or upgrade was accepted")
-			}
-			_, _ = io.ReadAll(response.Body)
-			_ = response.Body.Close()
-			for _, completed := range []<-chan struct{}{done, upstreamDone} {
-				select {
-				case <-completed:
-				case <-time.After(time.Second):
-					t.Fatal("rejected upstream did not join")
-				}
-			}
-			if boundary == "foreignCA" {
-				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPSTREAM outcome=FAILED status_class=NONE http_status=NONE failure=TLS")
-			} else {
-				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPGRADE outcome=REJECTED status_class=1XX http_status=101")
-			}
-		})
-	}
-}
-
-// TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames checks upgrade bytes and opaque traffic both ways.
-// TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames проверяет байты upgrade и двусторонний трафик.
-func TestProviderWebSocketPreservesExactHandshakeAndBidirectionalFrames(t *testing.T) {
-	for _, host := range []string{"api.openai.com", "chatgpt.com"} {
-		t.Run(host, func(t *testing.T) {
-			logs := captureProviderResponsesLogs(t)
-			certificate, client, dialer, done, path := providerWebSocketEndpoint(t, host)
-			upstreamResult := make(chan error, 1)
-			go func() {
-				peer := <-dialer.peers
-				defer peer.Close()
-				upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
-				reader := bufio.NewReader(upstream)
-				request, err := http.ReadRequest(reader)
-				// HTTP/1.1 допустим и без ALPN. Предложенный сервером h2 не
-				// должен выбираться для RFC6455 Upgrade.
-				if err != nil || upstream.ConnectionState().NegotiatedProtocol == "h2" || request.Proto != "HTTP/1.1" || request.Method != "GET" || request.URL.Path != path || request.Header.Get("Upgrade") != "websocket" || request.Header.Get("Connection") != "Upgrade" || request.Header.Get("Authorization") != "Bearer synthetic" || request.Header.Get("Proxy-Authorization") != "" {
-					upstreamResult <- fmt.Errorf("synthetic upstream request failed: protocol=%s error=%v", upstream.ConnectionState().NegotiatedProtocol, err)
-					return
-				}
-				_, err = io.WriteString(upstream, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")
-				if err != nil {
-					upstreamResult <- err
-					return
-				}
-				frame := make([]byte, 8)
-				_, err = io.ReadFull(reader, frame)
-				if err != nil || string(frame) != string([]byte{0x81, 0x82, 1, 2, 3, 4, 'o' ^ 1, 'k' ^ 2}) {
-					upstreamResult <- io.ErrUnexpectedEOF
-					return
-				}
-				_, err = upstream.Write([]byte{0x81, 2, 'o', 'k'})
-				upstreamResult <- err
-			}()
-			request, _ := http.NewRequest("GET", "https://"+host+path, nil)
-			request.Header.Set("Authorization", "Bearer synthetic")
-			request.Header.Set("Connection", "Upgrade")
-			request.Header.Set("Upgrade", "websocket")
-			request.Header.Set("Sec-WebSocket-Version", "13")
-			request.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
-			if err := request.Write(client.conn); err != nil {
-				t.Fatal(err)
-			}
-			response, err := http.ReadResponse(client.reader, request)
-			if err != nil || response.StatusCode != 101 {
-				select {
-				case upstreamErr := <-upstreamResult:
-					t.Fatalf("provider upgrade was not preserved: %v", upstreamErr)
-				default:
-					t.Fatal("provider upgrade was not preserved")
-				}
-			}
-			if _, err := client.conn.Write([]byte{0x81, 0x82, 1, 2, 3, 4, 'o' ^ 1, 'k' ^ 2}); err != nil {
-				t.Fatal(err)
-			}
-			frame := make([]byte, 4)
-			if _, err := io.ReadFull(client.reader, frame); err != nil || string(frame) != string([]byte{0x81, 2, 'o', 'k'}) {
-				t.Fatal("provider frames changed")
-			}
-			if err := <-upstreamResult; err != nil {
-				t.Fatal(err)
-			}
-			_ = client.conn.Close()
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-				t.Fatal("websocket pump did not join")
-			}
-			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=POLICY outcome=ALLOWED", "event=UPSTREAM outcome=RESPONSE status_class=1XX http_status=101", "event=UPGRADE outcome=ACCEPTED status_class=1XX http_status=101", "event=PUMP outcome=CLOSED")
-		})
-	}
-}
-
-// TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial denies unauthorized paths before upstream access.
-// TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial отклоняет чужие пути до обращения к upstream.
-func TestProviderProxyRejectsForeignPathsAndMalformedUpgradesBeforeDial(t *testing.T) {
-	for _, mutation := range []string{"foreignpath", "wrongmethod", "protocol", "extensions", "badkey", "foreignupgrade"} {
-		t.Run(mutation, func(t *testing.T) {
-			logs := captureProviderResponsesLogs(t)
-			_, client, resolver, dialer, done := providerProxyFixture(t, "api.openai.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, nil)
-			request, _ := http.NewRequest("GET", "https://api.openai.com/v1/responses", nil)
-			request.Header.Set("Connection", "Upgrade")
-			request.Header.Set("Upgrade", "websocket")
-			request.Header.Set("Sec-WebSocket-Version", "13")
-			request.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
-			switch mutation {
-			case "foreignpath":
-				request.URL.Path = "/v1/other"
-			case "wrongmethod":
-				request.Method = "DELETE"
-			case "protocol":
-				request.Header.Set("Sec-WebSocket-Protocol", "foreign")
-			case "extensions":
-				request.Header.Set("Sec-WebSocket-Extensions", "foreign-extension")
-			case "badkey":
-				request.Header.Set("Sec-WebSocket-Key", "invalid")
-			case "foreignupgrade":
-				request.Header.Set("Upgrade", "h2c")
-			}
-			if err := request.Write(client.conn); err != nil {
-				t.Fatal(err)
-			}
-			response, err := http.ReadResponse(client.reader, request)
-			if err != nil {
-				t.Fatal(err)
-			}
-			_, _ = io.ReadAll(response.Body)
-			_ = response.Body.Close()
-			if response.StatusCode != 403 || resolver.calls != 0 || len(dialer.targets) != 0 {
-				t.Fatal("invalid provider route crossed the DNS boundary")
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-				t.Fatal("rejected provider proxy did not join")
-			}
-			if mutation == "foreignpath" {
-				if logs.Len() != 0 {
-					t.Fatal("unknown model route acquired diagnostics")
-				}
-			} else {
-				reason := map[string]string{"wrongmethod": "METHOD_PATH", "protocol": "WS_SUBPROTOCOL", "extensions": "WS_EXTENSIONS", "badkey": "WS_HANDSHAKE", "foreignupgrade": "WS_HANDSHAKE"}[mutation]
-				assertProviderResponsesEvents(t, logs.String(), "WSS", "event=POLICY outcome=DENIED status_class=NONE http_status=NONE failure="+reason)
-			}
-		})
-	}
-}
-
-// TestProviderResponsesRejectedUpgradePreservesHTTPResponse keeps a rejected upgrade as an ordinary HTTP response.
-// TestProviderResponsesRejectedUpgradePreservesHTTPResponse сохраняет отклонённый upgrade обычным HTTP-ответом.
-func TestProviderResponsesRejectedUpgradePreservesHTTPResponse(t *testing.T) {
-	logs := captureProviderResponsesLogs(t)
-	certificate, roots := serverCertificateFixture(t, "api.openai.com")
-	_, client, _, dialer, done := providerProxyFixture(t, "api.openai.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone, Rules: []runtimecontract.RuntimeWebAccessRule{}}, roots)
-	upstreamDone := make(chan struct{})
-	go func() {
-		defer close(upstreamDone)
-		peer := <-dialer.peers
-		defer peer.Close()
-		upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
-		if _, err := http.ReadRequest(bufio.NewReader(upstream)); err != nil {
-			return
-		}
-		_, _ = io.WriteString(upstream, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 9\r\nX-Private-Fixture: synthetic\r\n\r\nsynthetic")
-	}()
-	request := syntheticUpgradeRequest(t, "api.openai.com")
-	if err := request.Write(client.conn); err != nil {
-		t.Fatal(err)
-	}
-	response, err := http.ReadResponse(client.reader, request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := io.ReadAll(response.Body)
-	_ = response.Body.Close()
-	if err != nil || response.StatusCode != 401 || string(body) != "synthetic" || response.Header.Get("X-Private-Fixture") != "synthetic" {
-		t.Fatal("rejected Upgrade changed upstream HTTP response")
-	}
-	for _, completed := range []<-chan struct{}{done, upstreamDone} {
-		select {
-		case <-completed:
-		case <-time.After(time.Second):
-			t.Fatal("rejected Upgrade did not join")
-		}
-	}
-	assertProviderResponsesEvents(t, logs.String(), "WSS", "event=UPSTREAM outcome=RESPONSE status_class=4XX http_status=401", "event=UPGRADE outcome=REJECTED status_class=4XX http_status=401", "event=UPSTREAM_BODY outcome=COMPLETED status_class=4XX http_status=401")
-}
-
-// TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames keeps permitted compression frames opaque.
-// TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames передаёт разрешённые сжатые кадры без разбора.
-func TestProviderWebSocketPinnedDeflateNegotiationPreservesOpaqueFrames(t *testing.T) {
-	// Exact default offer Codex rust-v0.160.0 / tungstenite fork 4fffad30.
-	const offer = "permessage-deflate; client_max_window_bits"
-	const answer = "permessage-deflate; client_max_window_bits=15; server_no_context_takeover"
-	// RFC 7692 §7.2.3.1: compressed Hello; RSV1 остаётся end-to-end.
-	payload := []byte{0xf2, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00}
-	clientFrame := append([]byte{0xc1, 0x87, 1, 2, 3, 4}, payload...)
-	for index := range payload {
-		clientFrame[index+6] ^= byte(index%4 + 1)
-	}
-	upstreamFrame := append([]byte{0xc1, 7}, payload...)
-	for _, host := range []string{"api.openai.com", "chatgpt.com"} {
-		t.Run(host, func(t *testing.T) {
-			logs := captureProviderResponsesLogs(t)
-			certificate, client, dialer, done, path := providerWebSocketEndpoint(t, host)
-			upstreamResult := make(chan error, 1)
-			go func() {
-				peer := <-dialer.peers
-				defer peer.Close()
-				upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
-				reader := bufio.NewReader(upstream)
-				request, err := http.ReadRequest(reader)
-				if err != nil || request.URL.Path != path || len(request.Header.Values("Sec-WebSocket-Extensions")) != 1 || request.Header.Get("Sec-WebSocket-Extensions") != offer {
-					upstreamResult <- io.ErrUnexpectedEOF
-					return
-				}
-				_, err = io.WriteString(upstream, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\nSec-WebSocket-Extensions: "+answer+"\r\n\r\n")
-				if err != nil {
-					upstreamResult <- err
-					return
-				}
-				frame := make([]byte, len(clientFrame))
-				if _, err = io.ReadFull(reader, frame); err != nil || string(frame) != string(clientFrame) {
-					upstreamResult <- io.ErrUnexpectedEOF
-					return
-				}
-				_, err = upstream.Write(upstreamFrame)
-				upstreamResult <- err
-			}()
-			request := syntheticUpgradeRequest(t, host)
-			request.URL.Path, request.RequestURI = path, path
-			request.Header.Set("Sec-WebSocket-Extensions", offer)
-			if err := request.Write(client.conn); err != nil {
-				t.Fatal(err)
-			}
-			response, err := http.ReadResponse(client.reader, request)
-			if err != nil || response.StatusCode != 101 || response.Header.Get("Sec-WebSocket-Extensions") != answer {
-				t.Fatal("pinned extension negotiation was not preserved")
-			}
-			if _, err := client.conn.Write(clientFrame); err != nil {
-				t.Fatal(err)
-			}
-			frame := make([]byte, len(upstreamFrame))
-			if _, err := io.ReadFull(client.reader, frame); err != nil || string(frame) != string(upstreamFrame) {
-				t.Fatal("opaque compressed frame changed")
-			}
-			if err := <-upstreamResult; err != nil {
-				t.Fatal(err)
-			}
-			_ = client.conn.Close()
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-				t.Fatal("compressed websocket pumps were not joined")
-			}
-			assertProviderResponsesEvents(t, logs.String(), "WSS", "event=POLICY outcome=ALLOWED", "event=UPGRADE outcome=ACCEPTED", "event=PUMP outcome=CLOSED")
-			if strings.Contains(logs.String(), "deflate") || strings.Contains(logs.String(), "window_bits") || strings.Contains(logs.String(), "Hello") {
-				t.Fatal("negotiation or payload escaped closed diagnostics")
-			}
-		})
-	}
 }

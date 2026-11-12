@@ -6,7 +6,6 @@ package runtimepolicy
 
 import (
 	"errors"
-	"slices"
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -47,8 +46,7 @@ func (active *Active) AuthorizeAuthenticated(hostname string, port int, credenti
 		ProviderAccess: runtimecontract.RuntimeProviderAllowsHost(hostname) && active.base.Allows(hostname, port)}
 	if claims.ModelProvider != nil {
 		access.ModelProvider = claims.ModelProvider
-		approved := active.base.ModelProviderRoute(hostname)
-		access.ProviderAccess = approved != nil && approved.ConfigurationSHA256 == claims.ModelProvider.ConfigurationSHA256 && approved.BaseURL == claims.ModelProvider.BaseURL && slices.Equal(approved.AddressCIDRs, claims.ModelProvider.AddressCIDRs) && claims.ModelProvider.AllowsHost(hostname) && active.base.Allows(hostname, port)
+		access.ProviderAccess = active.base.MatchesModelProviderRoute(hostname, claims.ModelProvider)
 		if !access.ProviderAccess {
 			return runtimecontract.RuntimeProxyAccess{}, false
 		}

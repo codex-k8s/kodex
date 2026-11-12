@@ -103,7 +103,7 @@ func runWorkflowGateIsolationScenario(t *testing.T, f *workflowRecoveryRegressio
 			t.Fatal("model reclaim resolved or changed an owner gate")
 		}
 	}
-	f.execute(command.CompleteExecution, "isolation-independent-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(freshIndependent, "leaseRef"), Fence: stringMap(freshIndependent, "fence"), Generation: runtimeRevisionMapInt64(freshIndependent, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("independent.md", []byte("Независимый результат при двух OPEN Gates.\n"))}})
+	f.execute(command.CompleteExecution, "isolation-independent-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(freshIndependent), LeaseRef: stringMap(freshIndependent, "leaseRef"), Fence: stringMap(freshIndependent, "fence"), Generation: runtimeRevisionMapInt64(freshIndependent, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("independent.md", []byte("Независимый результат при двух OPEN Gates.\n"))}})
 	f.execute(command.ResolveOwnerGate, "isolation-approve-one", &ownerGate.Version, command.GateResolutionInput{GateRef: ownerGate.Ref, Decision: "APPROVE"})
 	if claims := f.claims("isolation-one-own-gate-left"); len(claims) != 0 {
 		t.Fatal("one remaining own OPEN gate admitted a fresh model")

@@ -44,6 +44,88 @@ def fixture():
 
 class RegistrySource(unittest.TestCase):
 
+    def test_ingress_source_preserves_tls_identity_and_rejects_alias_collision(self):
+        config, lock, resources = fixture()
+        host = lock['registry']['push']
+        config.update(schema='kodex.registry-source/v2', tls_hostname=host,
+                      service_ip='192.0.2.20', service_port_name='websecure')
+        lock['registry']['node_pull'] = 'node-cache.example.invalid'
+        result = registry.transform(resources, config, lock)
+        pod = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']
+        self.assertEqual(pod['hostAliases'], [{'ip': '192.0.2.20', 'hostnames': [host]}])
+        self.assertEqual(registry.transform(result, config, lock), result)
+        pod['hostAliases'][0]['ip'] = '192.0.2.21'
+        with self.assertRaises(ValueError):
+            registry.transform(result, config, lock)
+        for field, value in [('service_ip', '127.0.0.1'), ('service_ip', '169.254.169.254'),
+                             ('service_ip', '0.0.0.0'), ('tls_hostname', 'foreign.example.invalid'),
+                             ('tls_hostname', 'bad..example.invalid'), ('service_port_name', '443')]:
+            invalid = dict(config, **{field: value})
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                registry.transform(resources, invalid, lock)
+
+    def test_promoted_ingress_requires_exact_sni_and_scoped_buildkit_route(self):
+        config, lock, resources = fixture()
+        config.update(schema='kodex.registry-source/v3', tls_hostname=lock['registry']['push'],
+                      service_ip='192.0.2.20', service_port_name='websecure', promoted_tls_hostname='pull.example.invalid')
+        registry.one(resources,'ConfigMap','kodex-image-admission-policy')['data']['pullRegistryHost']='pull.example.invalid'
+        route=registry.one(resources,'IngressRouteTCP','kodex-image-registry-pull')
+        route.update(apiVersion='traefik.io/v1alpha1',spec={'entryPoints':['websecure'],'routes':[{
+            'match':'HostSNI(`pull.example.invalid`)','services':[{'name':'kodex-image-registry-pull','port':5000}]}],
+            'tls':{'passthrough':True}})
+        resources.append({'apiVersion':'networking.k8s.io/v1','kind':'NetworkPolicy','metadata':{
+            'name':'kodex-buildkit-exact-paths','namespace':'kodex-system'},'spec':{
+            'podSelector':{'matchLabels':{'app.kubernetes.io/name':'kodex-buildkit'}},'egress':[]}})
+        result=registry.transform(resources,config,lock)
+        pod=registry.one(result,'Deployment','kodex-buildkit')['spec']['template']['spec']
+        self.assertEqual(pod['hostAliases'],[{'ip':'192.0.2.20','hostnames':['pull.example.invalid']}])
+        egress=registry.one(result,'NetworkPolicy','kodex-buildkit-exact-paths')['spec']['egress']
+        self.assertEqual(egress,[{'to':[{'namespaceSelector':{'matchLabels':{'kubernetes.io/metadata.name':config['namespace']}},
+                                       'podSelector':{'matchLabels':config['pod_labels']}}],'ports':[{'protocol':'TCP','port':8443}]}])
+        self.assertEqual(registry.transform(result,config,lock),result)
+        for change in [
+            lambda r:registry.one(r,'IngressRouteTCP','kodex-image-registry-pull')['spec']['routes'][0].update(match='HostSNI(`*`)'),
+            lambda r:registry.one(r,'IngressRouteTCP','kodex-image-registry-pull')['spec'].update(tls={}),
+            lambda r:registry.one(r,'Deployment','kodex-buildkit')['spec']['template']['spec'].update(hostAliases=[{'ip':'192.0.2.99','hostnames':['pull.example.invalid']}]),
+            lambda r:registry.one(r,'NetworkPolicy','kodex-buildkit-exact-paths')['spec'].update(podSelector={}),
+        ]:
+            altered=copy.deepcopy(resources);change(altered)
+            with self.assertRaises(ValueError):registry.transform(altered,config,lock)
+        invalid=dict(config,promoted_tls_hostname='other.example.invalid')
+        with self.assertRaises(ValueError):registry.transform(resources,invalid,lock)
+
+    def test_ingress_preflight_pins_service_ip_and_named_target(self):
+        config, lock, _ = fixture()
+        config.update(schema='kodex.registry-source/v2', tls_hostname=lock['registry']['push'],
+                      service_ip='192.0.2.20', service_port_name='websecure')
+        service = {'metadata': {'uid': config['service_uid']}, 'spec': {'type': 'LoadBalancer',
+            'clusterIP': config['service_ip'], 'selector': config['pod_labels'],
+            'ports': [{'port': 443, 'targetPort': 'websecure', 'protocol': 'TCP'}]}}
+        slices = {'items': [{'metadata': {'ownerReferences': [{'kind': 'Service', 'uid': config['service_uid'], 'controller': True}]},
+            'ports': [{'port': 8443, 'protocol': 'TCP'}], 'endpoints': [{'conditions': {'ready': True},
+            'addresses': ['192.0.2.9'], 'targetRef': {'kind': 'Pod', 'namespace': config['namespace'], 'name': 'synthetic', 'uid': 'pod-uid'}}]}]}
+        pod = {'metadata': {'uid': 'pod-uid', 'labels': config['pod_labels']},
+            'spec': {'containers': [{'ports': [{'name': 'websecure', 'containerPort': 8443}]}]},
+            'status': {'podIPs': [{'ip': '192.0.2.9'}]}}
+        def run_case(service_value, pod_value, accepted):
+            def get(command, **kwargs):
+                kind = command[command.index('get') + 1]
+                value = {'service': service_value, 'configmap': {'data': {'ca.crt': '-----BEGIN CERTIFICATE-----synthetic'}},
+                         'endpointslices': slices, 'pod': pod_value}[kind]
+                return subprocess.CompletedProcess(command, 0, json.dumps(value).encode())
+            with patch.object(registry.subprocess, 'run', side_effect=get), patch('ssl.create_default_context'):
+                if accepted:
+                    self.assertEqual(registry.preflight(config, lock, 'synthetic-context')['workload_tls_and_auth'], 'NOT_RUN')
+                else:
+                    with self.assertRaises(ValueError):registry.preflight(config, lock, 'synthetic-context')
+        run_case(service, pod, True)
+        bad = copy.deepcopy(service);bad['spec']['clusterIP'] = '192.0.2.21'
+        run_case(bad, pod, False)
+        bad = copy.deepcopy(service);bad['spec']['ports'][0]['targetPort'] = 'web'
+        run_case(bad, pod, False)
+        bad = copy.deepcopy(pod);bad['spec']['containers'][0]['ports'][0]['containerPort'] = 8080
+        run_case(service, bad, False)
+
     def test_promoted_buildkit_tls_is_exact_and_config_digest_rolls_only_daemon(self):
         config, lock, resources = fixture()
         result = registry.transform(resources, config, lock)
@@ -61,14 +143,15 @@ class RegistrySource(unittest.TestCase):
             registry.one(bad, 'ConfigMap', 'kodex-buildkit-config')['data']['buildkitd.toml'] += suffix
             with self.assertRaises(ValueError): registry.transform(bad, config, lock)
 
-    def test_runtime_pull_policy_is_opt_in_and_rejects_lock_or_environment_conflict(self):
+    def test_runtime_pull_policy_defaults_to_opencode_and_rejects_conflicts(self):
         config,lock,resources=fixture()
         result=registry.transform(resources,config,lock)
         authorizer=registry.one(result,'Deployment','kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
-        self.assertEqual(authorizer['env'],[])
-        for engine in ('opencode','unknown'):
+        self.assertEqual(authorizer['env'], [{'name': 'REGISTRY_PULL_RUNTIME_ENGINE', 'value': 'opencode'}])
+        self.assertEqual(registry.transform(resources,config,{**lock,'role_base_runtime_engine':'opencode'}), result)
+        for engine in ('codex','unknown'):
             with self.subTest(engine=engine),self.assertRaises(ValueError):registry.transform(resources,config,{**lock,'role_base_runtime_engine':engine})
-        for env in ([{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'opencode'}],
+        for env in ([{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'codex'}],
                     [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','value':'codex'}]*2,
                     [{'name':'REGISTRY_PULL_RUNTIME_ENGINE','valueFrom':{'configMapKeyRef':{'name':'synthetic','key':'engine'}}}]):
             altered=copy.deepcopy(resources)
@@ -77,24 +160,16 @@ class RegistrySource(unittest.TestCase):
 
     def test_opencode_materializer_and_promoted_readback_use_destination_namespace(self):
         config, lock, resources = fixture()
-        data = next((v['data'] for v in resources if v['kind'] == 'ConfigMap' and v['metadata']['name'] == 'kodex-image-admission-policy'))
-        data['trustedRoleBaseRepository'] = data['trustedRoleBaseRepository'].replace('/agent-runner', '/agent-runner-opencode')
-        for resource in resources:
-            if resource['kind'] == 'Deployment' and resource['metadata']['name'] in ('control-plane', 'role-image-builder', 'kodex-buildkit'):
-                resource['spec']['template']['metadata']['annotations']['kodex.dev/trusted-role-base-repository'] = data['trustedRoleBaseRepository']
-        lock['images'][1]['component'] = 'agent-runner-opencode'
-        job = next((v for v in resources if v['kind'] == 'Job'))
-        for item in job['spec']['template']['spec']['containers'][0]['env']:
-            if item['name'] == 'AGENT_RUNNER_SOURCE_REF':
-                item['value'] = item['value'].replace('/agent-runner@', '/agent-runner-opencode@')
-        with self.assertRaises(ValueError):
-            registry.transform(resources, config, lock)
         lock['role_base_runtime_engine'] = 'opencode'
+        legacy = copy.deepcopy(lock)
+        legacy['images'][1]['component'] = 'agent-runner-opencode'
+        with self.assertRaises(ValueError):
+            registry.transform(resources, config, legacy)
         result = registry.transform(resources, config, lock)
         data = registry.one(result, 'ConfigMap', 'kodex-image-admission-policy')['data']
-        self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner-opencode@sha256:' + 'b' * 64)
+        self.assertEqual(data['nodeReadbackImage'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/agent-runner@sha256:' + 'b' * 64)
         env = registry.one(result, 'Job', 'release-artifact-materializer')['spec']['template']['spec']['containers'][0]['env']
-        self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner-opencode'}, env)
+        self.assertIn({'name': 'AGENT_RUNNER_DESTINATION_REPOSITORY', 'value': 'kodex/agent-runner'}, env)
         authorizer = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][1]
         self.assertEqual(authorizer['env'], [{'name': 'REGISTRY_PULL_RUNTIME_ENGINE', 'value': 'opencode'}])
         guard = registry.one(result, 'Deployment', 'kodex-image-registry-pull')['spec']['template']['spec']['containers'][0]

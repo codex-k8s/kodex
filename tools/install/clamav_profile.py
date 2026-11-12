@@ -1,6 +1,8 @@
 """Явный optional ClamAV profile: scanner отсутствует, scan-required операции закрыты."""
 import argparse
 import copy
+import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -8,6 +10,9 @@ import yaml
 from deployment_profile import require, Rejected
 
 ANNOTATION = 'kodex.dev/clamav-mode'
+STORAGE_ANNOTATION = 'kodex.dev/clamav-storage-profile'
+LOCAL_CLAIM = 'clamav-database-local'
+BOOTSTRAP_ANNOTATION = 'kodex.dev/clamav-bootstrap-sha256'
 VOLUMES = {'skill-scanner-config', 'skill-scanner-socket', 'skill-scanner-tmp', 'skill-scanner-database'}
 
 
@@ -17,12 +22,12 @@ def one(resources, kind, name):
     return selected[0]
 
 
-def validate_scanner(pod):
+def validate_scanner(pod, claim='clamav-database'):
     scanners = [c for c in pod['containers'] if c['name'] == 'skill-scanner']
     require(len(scanners) == 1 and re.fullmatch(r'docker.io/clamav/clamav@sha256:[a-f0-9]{64}', scanners[0]['image']) and
             scanners[0].get('command') == ['/usr/sbin/clamd'], 'CANONICAL_PINNED_CLAMAV_REQUIRED')
     volumes = {v['name']:v for v in pod.get('volumes', []) if v['name'] in VOLUMES}
-    require(set(volumes) == VOLUMES and volumes['skill-scanner-database'].get('persistentVolumeClaim') == {'claimName':'clamav-database','readOnly':True},
+    require(set(volumes) == VOLUMES and volumes['skill-scanner-database'].get('persistentVolumeClaim') == {'claimName':claim,'readOnly':True},
             'CANONICAL_CLAMAV_DATABASE_MOUNT_REQUIRED')
     for c in pod['containers']:
         mounts = [m for m in c.get('volumeMounts', []) if m['name'] in VOLUMES]
@@ -32,10 +37,60 @@ def validate_scanner(pod):
                     'CANONICAL_SCANNER_CLIENT_MOUNT_REQUIRED')
 
 
-def transform(resources, mode='enabled', artifact_mode='required'):
+def local_storage(resources):
+    """Новый RWO claim сохраняет scanner/updater и не изменяет существующий RWX том."""
+    control = one(resources, 'Deployment', 'control-plane')
+    updater = one(resources, 'CronJob', 'clamav-db-updater')
+    marked = control['metadata'].get('annotations', {}).get(STORAGE_ANNOTATION) == 'node-local-rwo'
+    old_name = LOCAL_CLAIM if marked else 'clamav-database'
+    require(marked or not any(r.get('kind') == 'PersistentVolumeClaim' and r['metadata']['name'] == LOCAL_CLAIM for r in resources), 'CLAMAV_LOCAL_CLAIM_COLLISION')
+    references = []
+    def collect(value):
+        if isinstance(value, dict):
+            if value.get('persistentVolumeClaim', {}).get('claimName') in ('clamav-database', LOCAL_CLAIM):references.append(value['persistentVolumeClaim']['claimName'])
+            for item in value.values():collect(item)
+        elif isinstance(value, list):
+            for item in value:collect(item)
+    bootstrap_jobs = [r for r in resources if r.get('kind') == 'Job' and (r['metadata']['name'].startswith('clamav-db-bootstrap-') or BOOTSTRAP_ANNOTATION in r['metadata'].get('annotations', {}))]
+    require(len(bootstrap_jobs) <= 1, 'UNIQUE_CLAMAV_BOOTSTRAP_REQUIRED')
+    collect([r for r in resources if r not in bootstrap_jobs])
+    require(references == [old_name, old_name], 'EXACT_CLAMAV_STORAGE_CONSUMERS_REQUIRED')
+    claim = one(resources, 'PersistentVolumeClaim', old_name)
+    require(claim['spec'].get('accessModes') == (['ReadWriteOnce'] if marked else ['ReadWriteMany']), 'CLAMAV_STORAGE_MODE_DRIFT')
+    pod = control['spec']['template']['spec']
+    validate_scanner(pod, old_name)
+    update_pod = updater['spec']['jobTemplate']['spec']['template']['spec']
+    update_volumes = [v for v in update_pod.get('volumes', []) if 'persistentVolumeClaim' in v]
+    require(len(update_volumes) == 1 and update_volumes[0]['persistentVolumeClaim'] == {'claimName':old_name}, 'CANONICAL_CLAMAV_UPDATER_CLAIM_REQUIRED')
+    for resource in (control, updater, claim):
+        value = resource['metadata'].get('annotations', {}).get(STORAGE_ANNOTATION)
+        require(value == ('node-local-rwo' if marked else None), 'CLAMAV_STORAGE_PROVENANCE_DRIFT')
+        resource['metadata'].setdefault('annotations', {})[STORAGE_ANNOTATION] = 'node-local-rwo'
+    for volume in pod['volumes']:
+        if volume['name'] == 'skill-scanner-database':volume['persistentVolumeClaim']['claimName'] = LOCAL_CLAIM
+    update_volumes[0]['persistentVolumeClaim']['claimName'] = LOCAL_CLAIM
+    claim['metadata']['name'] = LOCAL_CLAIM
+    claim['spec']['accessModes'] = ['ReadWriteOnce']
+    template = updater['spec']['jobTemplate']
+    fingerprint = hashlib.sha256(json.dumps(template,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    metadata = copy.deepcopy(template.get('metadata', {}))
+    metadata.update(name='clamav-db-bootstrap-'+fingerprint[:16],namespace='kodex-system')
+    metadata.setdefault('labels', {}).update({'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/name':'clamav-db-updater'})
+    metadata.setdefault('annotations', {})[BOOTSTRAP_ANNOTATION] = fingerprint
+    job = dict(apiVersion='batch/v1',kind='Job',metadata=metadata,spec=copy.deepcopy(template['spec']))
+    require(not bootstrap_jobs or bootstrap_jobs == [job], 'EXACT_CLAMAV_BOOTSTRAP_REQUIRED')
+    if not bootstrap_jobs:resources.append(job)
+    return resources
+
+
+def transform(resources, mode='enabled', artifact_mode='required', storage_profile='shared-rwx'):
     require(mode in ['enabled', 'disabled'], 'CLAMAV_MODE_REJECTED')
     require(artifact_mode in ['required', 'disabled'], 'ARTIFACT_ANTIVIRUS_MODE_REJECTED')
+    require(storage_profile in ['shared-rwx', 'node-local-rwo'], 'CLAMAV_STORAGE_PROFILE_REJECTED')
+    require(storage_profile == 'shared-rwx' or mode == 'enabled', 'CLAMAV_LOCAL_STORAGE_REQUIRES_SCANNER')
     result = copy.deepcopy(resources)
+    if storage_profile == 'node-local-rwo':result = local_storage(result)
+    else:require(not any(r.get('metadata', {}).get('annotations', {}).get(STORAGE_ANNOTATION) for r in result), 'CLAMAV_STORAGE_PROFILE_REQUIRED')
     control = one(result, 'Deployment', 'control-plane')
     updater = one(result, 'CronJob', 'clamav-db-updater')
     gateway = one(result, 'Deployment', 'clamav-egress-gateway')
@@ -52,7 +107,8 @@ def transform(resources, mode='enabled', artifact_mode='required'):
     if mode == 'enabled':
         require(not any(r.get('metadata', {}).get('annotations', {}).get(ANNOTATION) == 'disabled' for r in result),
                 'CLAMAV_ENABLE_REQUIRES_CANONICAL_RENDER')
-        validate_scanner(pod);one(result,'PersistentVolumeClaim','clamav-database')
+        claim = LOCAL_CLAIM if storage_profile == 'node-local-rwo' else 'clamav-database'
+        validate_scanner(pod, claim);one(result,'PersistentVolumeClaim',claim)
         return result
     if marked:
         require(not scanners and not any(v['name'] in VOLUMES for v in pod.get('volumes', [])) and
@@ -82,12 +138,13 @@ def main():
     parser.add_argument('--render', type=Path, required=True)
     parser.add_argument('--mode', choices=['enabled','disabled'], default='enabled')
     parser.add_argument('--artifact-antivirus-mode', choices=['required','disabled'], default='required')
+    parser.add_argument('--storage-profile', choices=['shared-rwx','node-local-rwo'], default='shared-rwx')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)));require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
-    desired = transform(resources, args.mode, args.artifact_antivirus_mode)
+    desired = transform(resources, args.mode, args.artifact_antivirus_mode, args.storage_profile)
     if args.check:
         require(desired == resources, 'CLAMAV_PROFILE_NOT_MATERIALIZED')
         return

@@ -152,7 +152,7 @@ test("локальный OIDC, API и основные экраны доступ
     };
   });
   expect(assistantReadback.corePromptRevision).toBe(
-    "system-assistant-core-v21",
+    "system-assistant-core-v54",
   );
   const providerAccountRequired =
     !assistantReadback.warmSessionRef &&
@@ -248,12 +248,10 @@ test("локальный OIDC, API и основные экраны доступ
   await page.getByRole("button", { name: "Открыть Kodex" }).click();
   const projectAssistant = page.getByRole("dialog", { name: "Kodex" });
   await projectAssistant
-    .getByRole("link", { name: "Открыть защищённую форму нового секрета" })
+    .getByRole("button", { name: "Открыть защищённую форму нового секрета" })
     .click();
   await expect(page).toHaveURL(
-    new RegExp(
-      `/projects/${encodeURIComponent(projectRef ?? "")}/secrets\\?assistantCreateSecret=1`,
-    ),
+    new RegExp(`/projects/${encodeURIComponent(projectRef ?? "")}$`),
   );
   await expect(
     page.getByRole("dialog", { name: "Новый секрет" }),
@@ -306,7 +304,11 @@ paths:
     .getByRole("button", { name: "Проверить контракт" })
     .click();
   expect((await inspected).status()).toBe(200);
-  await expect(importDialog.getByText("Проверить соединение")).toBeVisible();
+  await expect(
+    importDialog.getByText("GET /health — Проверить соединение", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await importDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(importDialog).toHaveCount(0);
 });

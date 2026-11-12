@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -26,7 +27,7 @@ func TestConstraintRevisionContinuationAndRejoin(t *testing.T) {
 				for _, cold := range []bool{false, true} {
 					candidate := input
 					if cold {
-						candidate.CodexSessionID = ""
+						candidate.NativeSession = nil
 					}
 					// История хранит прежнюю версию без переписывания; только последний
 					// owner notice относится к текущей runtime revision.
@@ -95,7 +96,9 @@ func constraintContinuationFixture(t *testing.T, revision, kind string) (runtime
 		t.Fatalf("notice producer failed: %v", err)
 	}
 	input := constraintConsumerInput(base, kind)
-	input.CodexSessionID, input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "previous-provider-thread", diff.CurrentRevisionRef, diff.SessionRef, diff.TurnRef, diff.Attempt
+	input.Mode = runtimecontract.RunnerModeTurn
+	input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = diff.CurrentRevisionRef, diff.SessionRef, diff.TurnRef, diff.Attempt
+	input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_synthetic", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_synthetic.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 	input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: notice.Prompt}}
 	return input, notice
 }

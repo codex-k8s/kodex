@@ -139,7 +139,7 @@ func completeBundleChildContinuation(t *testing.T, f *repositoryBundleFixture, l
 		digest := sha256.Sum256(raw)
 		artifacts = append(artifacts, command.CompletedArtifact{FileName: "publication-receipt.txt", MediaType: "text/plain", SizeBytes: int64(len(raw)), SHA256: hex.EncodeToString(digest[:]), Content: raw})
 	}
-	_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "published successfully", Artifacts: artifacts, Usage: turnUsageFixture()}})
+	_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: key}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "published successfully", Artifacts: artifacts, Usage: turnUsageFixture()}})
 	if err != nil {
 		t.Fatal("final child completion", err)
 	}

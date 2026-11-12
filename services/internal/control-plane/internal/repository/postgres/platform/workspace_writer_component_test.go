@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +78,13 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 		t.Fatal("workspace project was not returned")
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "workspace-owner-agent", "Разработчик")
+	granted, grantErr := service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "workspace-owner-artifact", ExpectedVersion: &agent.Version},
+		Payload:  command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}})
+	if grantErr != nil || granted.Agent == nil {
+		t.Fatal("grant explicit workspace authority", grantErr)
+	}
+	agent = *granted.Agent
 	target := entity.RunTarget{Type: "AGENT", Ref: agent.Ref}
 	var workflowVersionRef string
 	if workflowMode {
@@ -87,11 +95,14 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 	if run == nil {
 		t.Fatal("workspace run was not returned")
 	}
-	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", execute)
+	claimed := claimPreparedWorkspaceComponent(t, ctx, repository, service, worker, "workspace-owner-controller", run.Ref, execute)
 	if len(claimed.RuntimeItems) != 1 {
 		t.Fatalf("expected one V2 execution claim, got %d", len(claimed.RuntimeItems))
 	}
 	item := claimed.RuntimeItems[0]
+	if !slices.Contains(runtimeRevisionStringSlice(item["capabilities"]), runtimecontract.ArtifactCapability) {
+		t.Fatal("runtime revision lost the owner's artifact capability for its own workspace")
+	}
 	binding, err := runtimeWorkspaceSnapshotBinding(item)
 	if err != nil || binding == nil {
 		t.Fatal("owner did not assign workspace binding", err)
@@ -209,6 +220,16 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 			t.Fatal("storage-only observation reopened cancelled run", err)
 		}
 	})
+	// A native continuation also needs its stopped-writer export, independently of file custody.
+	// Native continuation требует export остановленного writer независимо от custody файлов.
+	checkpoint := nativeCheckpointForClaimFixture(item)
+	checkpoint.WorkspaceRef, checkpoint.WorkspaceGeneration = binding.WorkspaceRef, binding.Generation
+	fact := execute(command.CompleteExecution, worker, "stopped-native-checkpoint", command.CompleteExecutionInput{
+		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
+		Success: true, ResultSummary: "Synthetic stopped native checkpoint", Usage: turnUsageFixture(), NativeSession: checkpoint})
+	if fact.Run == nil || fact.Run.State != "CANCELLED" || fact.Runtime["nativeCheckpointRecorded"] != true {
+		t.Fatal("native checkpoint revived cancelled run or was not recorded")
+	}
 	testWorkspaceCheckpointOwner(t, ctx, repository, service, pool, owner, claimPrincipal, binding, run.Ref)
 	var restoreProfile bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass('control_plane.session_archive_tasks_workspace_restore') IS NOT NULL").Scan(&restoreProfile); err != nil {

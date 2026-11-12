@@ -219,7 +219,7 @@ func testWorkflowDispatchArtifactFanout(t *testing.T) {
 		t.Helper()
 		body := []byte("Проверенный native материал: " + file + "\n")
 		digest := sha256.Sum256(body)
-		return execute(command.CompleteExecution, key, nil, command.CompleteExecutionInput{
+		return execute(command.CompleteExecution, key, nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease),
 			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"),
 			Success: true, Usage: turnUsageFixture(),
 			ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`,

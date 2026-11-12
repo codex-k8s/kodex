@@ -688,6 +688,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.provider-accounts.authorization.verify",
+      "source_binding_sha256": "7d99b795ccc39a3fd21f41f7cf25227adc70e4068b79529f74d7a1ff4379f5bb",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.provider-accounts.concurrency.set",
       "source_binding_sha256": "4d10025df2bb19d2e09dd295f21f8bdfa403fcdc4014ecf5f3ddccfcbbeba26f",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -710,11 +715,6 @@
     {
       "operation_id": "platform.command.provider-accounts.device-reauthorize",
       "source_binding_sha256": "cbf06cee0ceca5d322d7075d2d7e987e77558beff26e3d05949bce8fc76ab09e",
-      "actor_mode": "USER_CREDENTIAL_REQUIRED"
-    },
-    {
-      "operation_id": "platform.command.provider-accounts.device-verify",
-      "source_binding_sha256": "a96016c6e263143fe4219202160d0b21b7779099f0009418a3e8c9c6b3a82b6c",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

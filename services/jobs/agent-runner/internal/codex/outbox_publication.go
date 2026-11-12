@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -142,4 +143,18 @@ func publishOutboxFile(directory int, name string, providerUID, group uint32) er
 		return providerFilesystemDenied(errProviderOutboxPublication, filesystemMetadataChanged)
 	}
 	return nil
+}
+
+// publishCompletedProviderOutbox publishes only an eligible, joined successful turn and preserves measured usage on denial.
+// publishCompletedProviderOutbox публикует лишь допустимый завершённый ход и сохраняет измеренный usage при отказе.
+func publishCompletedProviderOutbox(ctx context.Context, input model.Input, result Result) Result {
+	if result.Outcome != "SUCCEEDED" || input.IsAssistant() || !slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
+		return result
+	}
+	if err := publishProviderOutbox(ctx, input); err != nil {
+		logProviderFilesystemDenial(providerOutboxStage, err)
+		result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+		result = result.WithWorkspaceDiagnostic(input, providerOutboxStage, filesystemDenialReason(providerOutboxStage, err).String())
+	}
+	return result
 }

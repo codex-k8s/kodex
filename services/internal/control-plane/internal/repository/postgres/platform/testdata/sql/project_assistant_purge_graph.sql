@@ -1,4 +1,4 @@
--- Полный actual036 граф и отдельно inverse010; никакая actual FK не скрывается.
+-- Полный actual041 граф и отдельно inverse010; новые native FK исключены только из inverse010.
 WITH RECURSIVE nodes(relation_id) AS (
     SELECT 'control_plane.projects'::regclass::oid
     UNION
@@ -31,7 +31,8 @@ WITH RECURSIVE nodes(relation_id) AS (
 )
 SELECT node_digest.count,node_digest.digest,edge_digest.count,edge_digest.digest,
     (SELECT count(*) FROM pg_constraint fk WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM server_nodes)
-        AND fk.conrelid IN(SELECT relation_id FROM server_nodes) AND NOT(fk.conrelid='control_plane.run_nodes'::regclass
+        AND fk.conrelid IN(SELECT relation_id FROM server_nodes) AND NOT(fk.conrelid='control_plane.session_storage'::regclass AND fk.conname IN('session_storage_native_writer_lease_ref_fkey','session_storage_native_writer_revision_id_fkey'))
+        AND NOT(fk.conrelid='control_plane.run_nodes'::regclass
             AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk','workflow_rework_gate_fk'))),
     (SELECT md5(string_agg(child_namespace.nspname||'.'||child_class.relname||'|'||fk.conname||'|'
         ||parent_namespace.nspname||'.'||parent_class.relname||'|'||fk.confdeltype::text,E'\n'
@@ -40,5 +41,6 @@ SELECT node_digest.count,node_digest.digest,edge_digest.count,edge_digest.digest
      JOIN pg_namespace child_namespace ON child_namespace.oid=child_class.relnamespace
      JOIN pg_class parent_class ON parent_class.oid=fk.confrelid JOIN pg_namespace parent_namespace ON parent_namespace.oid=parent_class.relnamespace
      WHERE fk.contype='f' AND fk.confrelid IN(SELECT relation_id FROM server_nodes) AND fk.conrelid IN(SELECT relation_id FROM server_nodes)
+        AND NOT(fk.conrelid='control_plane.session_storage'::regclass AND fk.conname IN('session_storage_native_writer_lease_ref_fkey','session_storage_native_writer_revision_id_fkey'))
         AND NOT(fk.conrelid='control_plane.run_nodes'::regclass AND fk.conname IN('legacy_rework_gate_fk','legacy_rework_origin_fk','workflow_rework_gate_fk')))
 FROM node_digest,edge_digest;

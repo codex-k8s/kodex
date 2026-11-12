@@ -9,50 +9,24 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-// TestAssistantReasoningOverlayPreservesSettings checks reasoning changes retain supported
-// personality/history fields and reject unknown preexisting TOML settings without silently
-// dropping them.
-// TestAssistantReasoningOverlayPreservesSettings проверяет, что изменение reasoning сохраняет
-// поддерживаемые personality/history fields и отклоняет неизвестные исходные TOML settings без
-// молчаливого удаления.
+// TestAssistantReasoningOverlayPreservesSettings proves reasoning edits preserve native preferences and reject retired engine settings.
+// TestAssistantReasoningOverlayPreservesSettings проверяет сохранение native preferences и отказ удалённым настройкам движка.
 func TestAssistantReasoningOverlayPreservesSettings(t *testing.T) {
-	before := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\n[history]\npersistence = \"save-all\"\n"
-	content, err := assistantRuntimeOverlay(before, "medium", "")
-	if err != nil {
-		t.Fatal(err)
+	before := `model_reasoning_effort = "high"
+[context]
+prune = false
+[cache]
+optimization = "NO_HINTS"
+`
+	content, err := assistantRuntimeOverlay(before, "medium")
+	parsed, parseErr := runtimecontract.ParseConfigOverlay(content)
+	if err != nil || parseErr != nil || parsed.ModelReasoningEffort != "medium" || parsed.Context == nil || parsed.Context.Prune == nil || *parsed.Context.Prune || parsed.Cache == nil || parsed.Cache.Optimization != "NO_HINTS" {
+		t.Fatal("native preferences lost")
 	}
-	parsed, err := runtimecontract.ParseConfigOverlay(content)
-	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.Personality != "pragmatic" || parsed.History.Persistence != "save-all" {
-		t.Fatalf("unrelated settings lost: %+v %v", parsed, err)
-	}
-	if _, err := assistantRuntimeOverlay("unknown_setting = true\n", "low", ""); err == nil {
-		t.Fatal("unknown manual configuration silently discarded")
-	}
-}
-
-// TestAssistantRuntimeOverlayClosedSearchModes checks omitted search mode preserves its value,
-// every supported mode updates it and unknown/case-altered modes fail while reasoning/personality
-// stay consistent.
-// TestAssistantRuntimeOverlayClosedSearchModes проверяет сохранение значения при пропуске search
-// mode, обновление каждым поддерживаемым mode и отказ неизвестных/изменённых по регистру modes при
-// согласованных reasoning/personality.
-func TestAssistantRuntimeOverlayClosedSearchModes(t *testing.T) {
-	before := "web_search = \"indexed\"\npersonality = \"pragmatic\"\n"
-	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "future", "LIVE"} {
-		content, err := assistantRuntimeOverlay(before, "medium", mode)
-		if mode == "future" || mode == "LIVE" {
-			if !errors.Is(err, errs.ErrInvalid) {
-				t.Fatal("unknown search mode was accepted")
-			}
-			continue
-		}
-		parsed, parseErr := runtimecontract.ParseConfigOverlay(content)
-		want := mode
-		if want == "" {
-			want = "indexed"
-		}
-		if err != nil || parseErr != nil || parsed.WebSearchMode != want || parsed.Personality != "pragmatic" || parsed.ModelReasoningEffort != "medium" {
-			t.Fatal("search update changed unrelated fields or omitted mode was reset")
+	for _, raw := range []string{`unknown_setting = true`, `web_search = "live"`, `personality = "pragmatic"`, `[history]
+persistence = "save-all"`} {
+		if _, err := assistantRuntimeOverlay(raw, "low"); !errors.Is(err, errs.ErrConflict) {
+			t.Fatal("retired or unknown setting accepted")
 		}
 	}
 }
@@ -71,11 +45,6 @@ func TestAssistantRuntimeConfigurationNoChangeExactPins(t *testing.T) {
 	before := map[string]any{"runtimeProfileRef": pin.Ref, "model": "model-synthetic", "reasoningEffort": "medium", "providerPolicyMode": "PRIMARY", "runtimeProfilePin": pin, "providerAccounts": minimalAssistantRuntimeAccounts(persisted)}
 	after := cloneAssistantFields(before)
 	after["providerCatalogPins"] = persisted
-	searchChange := cloneAssistantFields(after)
-	searchChange["webSearchMode"] = "live"
-	if assistantRuntimeConfigurationUnchanged(before, searchChange, persisted) {
-		t.Fatal("search-only owner configuration was discarded as unchanged")
-	}
 	if !assistantRuntimeConfigurationUnchanged(before, after, persisted) {
 		t.Fatal("same authoritative settings and persisted catalog pins were not recognized")
 	}

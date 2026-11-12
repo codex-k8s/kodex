@@ -16,11 +16,18 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-def fixture():
+def provider_fixture():
     return dict(schema='kodex.model-provider/v1', managed_by='git', source_revision='a' * 40, engine='opencode',
                 engine_version='1.19.5', tool_mode='managed_mcp', provider_id='test-gateway',
                 base_url='https://gateway.example.invalid/v1', address_cidrs=['192.0.2.4/32'],
                 models=[dict(id='vendor/model-v1', context_window_tokens=32768, maximum_output_tokens=1024)])
+
+
+def fixture():
+    first = provider_fixture()
+    second = {**provider_fixture(), 'provider_id': 'second-gateway', 'base_url': 'https://second.example.invalid/v1', 'address_cidrs': ['192.0.2.5/32']}
+    return dict(schema='kodex.model-provider-catalog/v1', managed_by='git', source_revision=first['source_revision'],
+                default_provider='opencode-test-gateway', default_model=first['models'][0]['id'], providers=[first, second])
 
 
 class ModelProviderTests(unittest.TestCase):
@@ -78,20 +85,70 @@ class ModelProviderTests(unittest.TestCase):
             self.assertEqual(secret['auth_mode'], 'gateway-api-key')
             self.assertEqual(secret['provider_definition_key'], 'opencode-test-gateway')
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-            with self.assertRaises(FileExistsError):
+            first = output.read_bytes()
+            MODULE.prepare_auth(value, key, output)
+            self.assertEqual(first, output.read_bytes())
+            self.assertRegex(secret['cache_namespace_key'], r'^[a-f0-9]{64}$')
+            key.write_text('synthetic-other-key')
+            with self.assertRaises(ValueError):
                 MODULE.prepare_auth(value, key, output)
+            self.assertEqual(first, output.read_bytes())
             invalid = fixture()
             invalid['API_KEY'] = 'synthetic-gateway-key'
             config.write_text(json.dumps(invalid))
             with self.assertRaises(Exception):
                 MODULE.configuration(config)
 
-    def test_missing_opencode_role_base_profile_is_rejected_before_render(self):
+    def test_catalog_rejects_ambiguous_defaults_sources_and_shared_host_pins(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'catalog.json'
+            invalid = [provider_fixture()]
+            for mutate in (
+                lambda c: c.update(default_provider='opencode-missing'),
+                lambda c: c.update(default_model='missing-model'),
+                lambda c: c['providers'][1].update(provider_id=c['providers'][0]['provider_id']),
+                lambda c: c['providers'][1].update(source_revision='b' * 40),
+                lambda c: c['providers'][1].update(base_url=c['providers'][0]['base_url']),
+                lambda c: c.update(unregistered=True),
+            ):
+                candidate = copy.deepcopy(fixture())
+                mutate(candidate)
+                invalid.append(candidate)
+            for candidate in invalid:
+                path.write_text(json.dumps(candidate))
+                with self.assertRaises(Exception):
+                    MODULE.configuration(path)
+            candidate = fixture()
+            candidate['providers'][1]['base_url'] = candidate['providers'][0]['base_url'] + '/second'
+            candidate['providers'][1]['address_cidrs'] = candidate['providers'][0]['address_cidrs'][:]
+            path.write_text(json.dumps(candidate))
+            self.assertEqual(MODULE.configuration(path), candidate)
+            path.write_text(json.dumps(candidate).replace('"managed_by": "git"', '"managed_by": "git", "managed_by": "git"', 1))
+            with self.assertRaises(ValueError):
+                MODULE.configuration(path)
+
+    def test_auth_reapply_rejects_missing_namespace_without_rewriting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            key, output = directory / 'key', directory / 'auth.json'
+            key.write_text('synthetic-gateway-key')
+            key.chmod(0o600)
+            MODULE.prepare_auth(fixture(), key, output)
+            value = json.loads(output.read_text())
+            value.pop('cache_namespace_key')
+            output.write_text(json.dumps(value))
+            before = output.read_bytes()
+            with self.assertRaises(ValueError):
+                MODULE.prepare_auth(fixture(), key, output)
+            self.assertEqual(before, output.read_bytes())
+
+    def test_unsupported_role_base_engine_is_rejected_before_render(self):
         with tempfile.TemporaryDirectory()as temporary:
-            directory=Path(temporary);lock=directory/'lock.json';lock.write_text('{}')
+            directory=Path(temporary);lock=directory/'lock.json';lock.write_text('{"role_base_runtime_engine":"codex"}')
             config=directory/'provider.json';config.write_text(json.dumps(fixture()))
             value=subprocess.run([str(ROOT/'tools/release/render-web-only.sh'),'--lock',str(lock),'--lock-sha256',hashlib.sha256(lock.read_bytes()).hexdigest(),
-                '--output',str(directory/'render.yaml'),'--model-provider-configuration',str(config),'--model-provider-default-model','vendor/model-v1'],capture_output=True,timeout=15)
+                '--output',str(directory/'render.yaml'),'--public-host','console.example.invalid','--public-origin','https://console.example.invalid','--model-provider-configuration',str(config),'--model-provider-default-model','vendor/model-v1'],capture_output=True,timeout=15)
             self.assertNotEqual(value.returncode,0)
             self.assertIn(b'OpenCode requires a matching role-base runtime profile',value.stderr)
 
@@ -146,11 +203,68 @@ class ModelProviderTests(unittest.TestCase):
                 self.assertIn(identity.upper().replace('-', '_') + '_MODEL_PROVIDER_CONFIGURATION_FILE', env)
                 self.assertTrue(any(item.get('configMap', {}).get('name') == projections[0]['metadata']['name'] for item in pod['volumes']))
             policy = next(json.loads(item['data']['policy.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('egress-gateway-policy-'))
-            self.assertEqual(policy['spec']['modelProvider'], fixture())
+            self.assertEqual(policy['spec']['modelProviderCatalog'], fixture())
+            from referencing import Registry, Resource
+            import jsonschema
+            schemas = [json.loads((ROOT / path).read_text()) for path in (
+                'contracts/runtime-controller/v10/agent-runner-input.schema.json',
+                'contracts/model-provider/v1/catalog.schema.json',
+            )]
+            registry = Registry().with_resources((item['$id'], Resource.from_contents(item)) for item in schemas)
+            policy_schema = json.loads((ROOT / 'contracts/egress/v1/egress-gateway-policy.schema.json').read_text())
+            jsonschema.Draft202012Validator(policy_schema, registry=registry).validate(policy)
+
+            gateway = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'egress-gateway')
+            container = next(item for item in gateway['spec']['template']['spec']['containers'] if item['name'] == 'egress-gateway')
+            environment = {item['name']: item.get('value') for item in container['env']}
+            owner = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane')
+            owner_container = next(item for item in owner['spec']['template']['spec']['containers'] if item['name'] == 'control-plane')
+            owner_env = {item['name']: item.get('value') for item in owner_container['env']}
+            self.assertEqual(owner_env['CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST'], environment['EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'])
+            for kind in ('mail', 'integration'):
+                projection = next(item for item in resources if item['kind'] == 'ConfigMap' and kind + '-policy.json' in item.get('data', {}))
+                raw = projection['data'][kind + '-policy.json']
+                self.assertEqual(json.loads(raw)['gatewayPolicyDigest'], environment['EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'])
+                self.assertEqual(hashlib.sha256(raw.encode()).hexdigest(), environment['EGRESS_GATEWAY_' + kind.upper() + '_POLICY_DIGEST'])
+                volume = next(item for item in gateway['spec']['template']['spec']['volumes'] if item['name'] == kind + '-policy')
+                self.assertEqual(volume['configMap']['name'], projection['metadata']['name'])
+            import copy, egress_bootstrap_projection
+            self.assertEqual(egress_bootstrap_projection.bind_owner_policy(resources), resources)
+            for workload, field_name in (
+                ('control-plane', 'CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST'),
+                ('egress-gateway', 'EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST'),
+            ):
+                for variant in ('duplicate', 'missing', 'valueFrom', 'malformed', 'namespace'):
+                    invalid = copy.deepcopy(resources)
+                    deployment = next(r for r in invalid if r['kind'] == 'Deployment' and r['metadata']['name'] == workload)
+                    env = next(c for c in deployment['spec']['template']['spec']['containers'] if c['name'] == workload)['env']
+                    entry = next(e for e in env if e['name'] == field_name)
+                    if variant == 'duplicate':
+                        env.append(copy.deepcopy(entry))
+                    elif variant == 'missing':
+                        env.remove(entry)
+                    elif variant == 'valueFrom':
+                        entry['valueFrom'] = {'fieldRef': {'fieldPath': 'metadata.name'}}
+                    elif variant == 'malformed':
+                        entry['value'] = 'invalid'
+                    else:
+                        deployment['metadata']['namespace'] = 'foreign'
+                    with self.subTest(workload=workload, variant=variant), self.assertRaises(ValueError):
+                        egress_bootstrap_projection.bind_owner_policy(invalid)
+            nonempty = copy.deepcopy(resources)
+            projection = next(item for item in nonempty if item['kind'] == 'ConfigMap' and 'integration-policy.json' in item.get('data', {}))
+            policy_document = json.loads(projection['data']['integration-policy.json'])
+            policy_document['generation'] = 2
+            projection['data']['integration-policy.json'] = json.dumps(policy_document)
+            with self.assertRaisesRegex(ValueError, 'empty bootstrap'):
+                egress_bootstrap_projection.bind(nonempty)
+            first_render = output.read_bytes()
+            MODULE.render(fixture(), output, 'vendor/model-v1')
+            self.assertEqual(first_render, output.read_bytes())
             catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
             standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
-            self.assertTrue(standard['baseImageReference'].endswith('/agent-runner-opencode'))
-            self.assert_role_catalog_authority(resources, 'agent-runner-opencode')
+            self.assertTrue(standard['baseImageReference'].endswith('/agent-runner'))
+            self.assert_role_catalog_authority(resources, 'agent-runner')
             import provider_sandbox_profile
             for selected in (provider_sandbox_profile.PROFILE, ''):
                 policy_arguments = ['--image-policy-inputs-mode', 'versioned'] if selected == provider_sandbox_profile.PROFILE else []
@@ -166,7 +280,7 @@ class ModelProviderTests(unittest.TestCase):
                     self.assertEqual(promoted_registry.bind(copy.deepcopy(actual), lock), actual)
                 self.assertEqual(actual, expected)
                 self.assertEqual(provider_sandbox_profile.active(actual), selected)
-            # Без optional provider остаются штатные Codex defaults с тем же authority.
+            # Без каталога inference остаётся недоступен; образ исполнения остаётся OpenCode.
             baseline_args = list(args)
             for option in ('--model-provider-configuration', '--model-provider-default-model'):
                 index = baseline_args.index(option)

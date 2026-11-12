@@ -4,11 +4,111 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.47
-updated: 2026-11-08
+version: 1.7.65
+updated: 2026-11-12
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Профиль мониторинга отдельной установки ограничивает не только target selectors,
+но и operator watch scope, RBAC и sidecar discovery. Пустой namespace selector
+и `searchNamespace: ALL` не допускаются для такого профиля. Dashboard reader
+читает ConfigMaps только выбранных namespace и не получает доступ к Secrets.
+Host collectors и kubelet reconciliation требуют отдельного cluster-wide допуска.
+Общие CRD не перезаписываются установщиком одного продукта; совместимость
+проверяется до apply, а точные UID целевых namespace сверяются повторно.
+
+Завершение model stream не доказывает завершение модельного шага. Native
+`step-finish` допускает дальнейшее исполнение только с квалифицированной
+причиной: обычный stop, tool calls либо length для штатной compaction.
+Пустая, неизвестная, ошибочная или отфильтрованная причина закрыто останавливает
+consumer при первом событии; общий deadline не заменяет эту границу и не
+оправдывает повторные запросы после оборванного потока. Owner выполняет прежние
+abort/process-group join/checkpoint, а не новый агентный цикл или replay эффектов.
+Нормализованные upstream нулевые counters остаются UNKNOWN, а не доказательством
+полного нулевого расхода. Матрица: [native failures](../operations/opencode-native-sessions-2108.md).
+
+Frozen catalog фиксирует состав и pins, но не сохраняет отозванное право.
+Discovery, в том числе пустые search/manifest, проверяет текущий purpose grant
+до выдачи успешной страницы. Фильтрация отдельных записей не заменяет этот
+допуск: иначе запрет превращается в ложный успешный пустой результат.
+Проверка текущей строки grant согласуется с конкурентным изменением; terminal
+журнал отказавшей попытки не является разрешением на чтение.
+Матрица: [OpenCode file catalog](../operations/opencode-native-sessions-2108.md).
+
+При смене image policy runtime AppArmor-проекция и admission binding обновляются
+вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker
+должны совпадать у producer и admission. Отдельный перенос binding на image policy
+при сохранённой runtime-проекции запрещён. Восстановление согласованности требует
+проверки прежнего immutable source и полной проекции; неизвестный binding,
+изменённый marker или ослабленный `Deny` закрыто отклоняются. Сначала создаётся
+новая проекция, затем связываются admission и controller; до завершения rollout
+новые исполнения остановлены. Профиль AppArmor при этом не меняется, прошлые
+bootstrap effects не повторяются, итоговый render проходит общий preflight.
+Последующее переключение default runner проверяет тот же контракт renderer
+по фактическим source, projection, binding и controller из Kubernetes API.
+Совпадение только имени binding или runner digest недостаточно; stale marker,
+другая ABI, дополнительные поля проекции и неподтверждённый source закрыты.
+
+Свежий профиль с несколькими репликами signed worker использует grant v2 с
+`metadata.uid` из Downward API. Общий v1 revision watermark не разделяет
+экземпляры: ротация одной реплики может отклонять действующий credential другой.
+Сначала обновляются все readers/schema, затем issuance; instance не заменяет
+подпись, общий credential-generation floor, срок и per-instance replay guard.
+Native init sidecar сохраняет своё место и порядок завершения. Матрица:
+[гранты экземпляров](../operations/worker-grant-instances-2108.md).
+
+Публичный registry hostname должен быть достижим отдельно из node runtime и
+каждого Pod consumer. Host DNS/readback не доказывает маршрут внутри Pod.
+При явном ingress profile Pod-level `hostAliases` связывает точный hostname с
+проверенным Service UID/ClusterIP; TLS сохраняет публичный SNI и доверенную CA,
+NetworkPolicy — exact namespace/Pod/port. Для promoted pull дополнительно
+проверяется закрытый SNI passthrough к pull Service; source registry route не
+подразумевает такой допуск. Рабочий build/pull проверяется теми же identities,
+без global DNS override, wildcard egress или insecure fallback.
+
+Чистая установка материализует namespace и точные параметры admission раньше
+bindings и защищаемых ресурсов. Порядок YAML-документов не заменяет граф зависимостей:
+`parameterNotFoundAction=Deny` сохраняется, отсутствие параметров не обходится
+отключением policy. После частичного apply сначала восстанавливается недостающий
+параметр из закреплённого render с проверкой ownership/preimage, затем продолжается
+обычный защищённый путь. До этого workloads и их producers не запускаются.
+
+При локальном разрешении TLS hostname через `hostAliases` адрес закрепляется
+за проверенным Service UID/ClusterIP и ready EndpointSlice/Pod. Именованный
+target port проверяется до числового container port; один DNS alias не доказывает
+назначение. SNI/HTTP Host/проверка CA сохраняются, NetworkPolicy ограничивается
+точными namespace/Pod selectors/port. Замена Service не наследует прежний допуск.
+
+Установщики не передают credentials в argv ни локальных процессов, ни команд
+внутри Pod. Для Keycloak 26.7.1 используются stdin и штатные
+`KC_CLI_CLIENT_SECRET` / `KC_CLI_PASSWORD`; секретные поля клиентской конфигурации
+поступают через JSON-файл с правами 0600 в отдельном каталоге 0700. Каждый вызов
+удаляет собственные JSON и auth cache после завершения, включая ошибку команды;
+фиксированный общий файл в `/tmp` и `exec`, обходящий cleanup trap, запрещены.
+Секреты не передаются через `jq --arg` и не попадают в Kubernetes exec arguments.
+
+Полная очистка установки ограничивается exact cluster/node/namespace UID и
+доказанным графом принадлежности ресурсов. Namespace label или использование
+Secret/PVC самим приложением не доказывает исключительное владение. Перед
+удалением проверяются чужие consumers, дочерние UID, shared capabilities и
+физические пути. Адресный DELETE несёт UID/resourceVersion preconditions;
+потерянный ответ разрешается readback, replacement не наследует прежний допуск.
+Отсутствие Pod в API не доказывает остановку writer: перед уничтожением тома
+нужен положительный runtime join на точном узле. Недоступность узла не разрешает
+force-delete или global prune. Исполняемый локальный путь и ограничения:
+[чистая установка](../runbooks/fresh-install.md).
+При согласованном уничтожении local-path данных недостаточно строкового префикса:
+проверяются claim UID, canonical path, device/inode, exact node/container и
+отсутствие вложенных mount points. Rejoin после частичного удаления сохраняет
+тот же объект; новый inode не наследует разрешение. Общий недоступный webhook
+не отключается ради cleanup: независимое завершение writers и освобождение
+принадлежащего установке диска выполняются отдельно от зависимых API deletions.
+Порядок очистки следует графу producers: Service предшествует Endpoint/EndpointSlice,
+Ingress предшествует Certificate и Secret. Восстановленный контроллером объект с
+новым UID требует свежего доказательства ownership; прежний DELETE intent не
+разрешает удалить replacement. Namespace bootstrap сохраняется до удаления самого
+namespace, чтобы не создавать бесконечную регенерацию default SA и root CA.
 
 Authority proof revision принадлежит устойчивому server-owned allocator и не
 конкурирует за одну строку с platform event sequence. Разделение storage не
@@ -41,9 +141,10 @@ Provenance фиксируется в Pod template annotations. Без явног
 child profile сохраняет собственный canonical JSON SHA и прежнюю provenance при
 добавлении второй цели. У authorizer меняется только его image и явно проверенный
 runtime env; registry/guard containers, credentials и transport остаются прежними.
-Runtime совпадает с base lock: OpenCode добавляет один известный repository только
-BuildKit base и installer/node readers. Остальные identities не расширяются,
-default Codex сохраняется. Неизвестный runtime, конфликт env/valueFrom, повтор
+Runtime совпадает с base lock: единственный OpenCode поставляется в каноническом
+`kodex/agent-runner`; отдельный optional engine repository не допускается.
+BuildKit base и installer/node readers используют exact promoted digest;
+остальные identities не расширяются. Неизвестный runtime, конфликт env/valueFrom, повтор
 компонента, другой registry и дополнительные resource/security deltas закрыты.
 У control-plane и secret-broker дополнительно обязательны неизменные schema heads исходного lock;
 меняется только основной container image/provenance, без migrations и sidecars.
@@ -51,6 +152,11 @@ default Codex сохраняется. Неизвестный runtime, конфл
 API-контрактов, runtime, credentials, ServiceAccount либо других ресурсов. Отсутствие
 optional cursor в HTTP-странице означает конец списка; отсутствие обязательного
 items остаётся ошибкой формы, null/нестроковый либо слишком длинный cursor отклоняется.
+
+Проверка настроенного provider definition и поддержанного способа авторизации
+предшествует чтению credential из secret backend. Валидный task digest и точный
+Secret descriptor не разрешают чтение для чужого либо снятого runtime route.
+Отсутствующий definition не получает неявного default или fallback каталога.
 
 Gateway model catalog сначала пересекает typed remote IDs с exact deployment
 allowlist. Невыбранные aliases не возвращаются, не используются как endpoint/model
@@ -86,6 +192,14 @@ same-schema contract: он сохраняет все пять прежних boo
 проверяет original cluster/namespace, fingerprints и native catalog, но не
 создаёт новую миграцию. Новый origin не заменяет forward receipt; закрытые
 режимы и порядок описаны в [#2067](../operations/image-only-upgrade-2067.md).
+
+Полная замена SQL eligibility-функции при развитии policy обязана сохранять
+все действующие owner, immutable revision и workflow frontier ограничения.
+Проверяется фактическая цепочка миграций, включая SYSTEM/PROJECT и
+SERVER_DAG consumers; успех отдельной миграции либо ослабление только scan state
+этого не доказывает. Metadata verifier должен отвергать прежнее тело функции
+после смены обязательной boundary. Ordinary file admission не расширяет допуск
+skills, executable bundles и структурированных workflow evidence.
 
 ## Bootstrap consumers и опциональная observability
 
@@ -136,6 +250,15 @@ Human Gate для merge/deploy. Неподдержанная exact версия 
 и не выдаёт executable fallback.
 
 ## Ожидаемые политики из полного desired render
+
+После изменения базовой egress policy renderer связывает один проверенный digest
+с gateway и всеми publisher consumers владельца состояния. В частности,
+`CONTROL_PLANE_EMAIL_GATEWAY_POLICY_DIGEST` управляет публикацией и почтовых,
+и интеграционных проекций; он обязан совпадать с
+`EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST` после добавления model-provider routes.
+Проверка полного render охватывает оба consumer, а live readback — фактически
+обслуживаемые Deployment и immutable policy. Исправление ожидаемого digest
+не переписывает текущие поколения проекций и не отключает проверку источника.
 
 При сверке NetworkPolicy ожидаемое состояние строится из полного repo-owned
 kustomization deployable, включая components и patches. Чтение только сырых
@@ -218,6 +341,9 @@ fallback при ошибке защищённого транспорта. Сох
 `kube-system/kube-dns` по UDP/TCP53, если его рабочий путь использует имена
 Service. Такое правило не должно зависеть от issuer sidecar label: в
 `trusted-cluster` sidecar отсутствует, но DNS нужен тому же domain consumer.
+То же правило проверяется для одноразового archive worker в `kodex-runtime`: DNS
+его controller в `kodex-system` не разрешает DNS дочернему Pod. Проверяется
+полный render worker selector → kube-dns → exact S3 ingress/egress и TLS CA.
 Readiness фонового controller подтверждает фактический owner RPC, а не только
 доступность Kubernetes API; отказ claim закрывает readiness до успешного цикла.
 
@@ -887,29 +1013,34 @@ token, а запрос нового токена закрыто отклоняе
 env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
 временного credential state; inherited proxy bypass и прямой fallback запрещены.
 
-Настройка hosted native search материализуется только из опубликованного
-version/digest-pinned ConfigOverlay. Для Codex 0.160.0 закрытые режимы
-`disabled|cached|indexed|live` входят в существующий reviewed
-`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`; отсутствие параметра сохраняет
-текущую настройку. Это не sandbox WebAccess: domain allowlist shell egress
-не ограничивает hosted search, и настройка search не выдаёт shell/network
-authority. Readback различает свежую owner-конфигурацию и immutable snapshot
-хода; запрошенный режим либо SDK default не доказывает effective поведение
-provider или успешный native call. Неизвестные режимы и вложенный arbitrary
-TOML закрыто отклоняются, без legacy feature flags.
+OpenCode получает только опубликованные version/digest-pinned preferences из
+ConfigOverlay. Закрытые context/compaction/cache поля не меняют endpoint,
+credentials, qualification или model limits. Git-конфигурация маршрута задаёт
+обязательные ограничения, а UI overlay — допустимые предпочтения. Обязательную
+область reuse нельзя расширить и обязательный запрет нельзя снять через overlay.
+`NO_REUSE=true` и `NO_STORE=true` требуют исполнения независимо от дополнительного
+флага `required`: unsupported/unknown отклоняются до публикации и model request.
+Отсутствие hints не доказывает отсутствие кеша провайдера; физическая изоляция
+не выводится из namespace или usage. Fresh owner readback отделён от immutable
+snapshot хода; retry использует прежний снимок, continuation — свежую ревизию.
 
-Маршрутизация native tools не является источником полномочий. Для закреплённого
-Codex0.160.0 provider-owned `model.tool_mode` может иметь приоритет над
-отключением code mode: `CodeModeOnly` не получает обычный Direct fallback.
-При выключенном code-mode host платформа явно материализует DirectModelOnly
-только для закрытых namespace `functions`, `web`, `mcp__kodex`; feature
-flags host/only/enabled остаются false. Это изменение способа вызова, не
-выдача sandbox, shell egress, MCP grants или credential access. Проверка
-tool policy и прежние deny paths сохраняются; произвольный namespace и
-arbitrary TOML от клиента не принимаются. При обновлении SDK требуется
-проверить точные namespace и parser/spec_plan закреплённой версии, затем
-реальные shell/web/MCP ходы с новым admitted image и immutable runtime pins.
-Наличие executable в inventory или успешный Go test этого не заменяет.
+Каталог нескольких model providers имеет единственного Git-владельца, immutable
+source revision и явный default. Account, credential и разрешённый маршрут
+выбираются по точному definition, а не по имени модели или порядку каталога.
+Совпадение TLS hostname не объединяет authority: подписанный runtime route
+сверяется по digest, API, base path и address pins. Статический broker CONNECT
+может объединять лишь одинаковые transport pins одного host. Удалённое
+definition закрывает новые admissions и catalog proofs; старые consumers
+останавливаются в рамках drain перед изменением installation snapshot.
+
+Native tools не являются источником полномочий. OpenCode shell/file/network и
+самостоятельная делегация закрыты; доступные инструменты назначаются exact
+managed MCP grants и проверяются при каждом эффекте. Удалённые Codex
+search/personality/history/shell параметры не рекламируются и не декодируются.
+Неполные старые read projections не достраивают owner pins. При обновлении
+upstream повторно проверяются штатные adapters, реальные tools/compaction,
+positive writer join и admitted image с immutable runtime pins. Наличие
+executable в inventory или успешный Go test этого не заменяет.
 
 Authenticated runtime CONNECT поддерживает стандартную proxy authentication
 negotiation Git/libcurl: полный корректный bodyless CONNECT без
@@ -2133,6 +2264,15 @@ warnings значим только при свежем `observedGeneration == ge
 компиляции не разрешает возобновить controller. Публичная ограниченная проверка —
 `make test-workspace-policy-contract`, локальный предел процесса 120 секунд.
 
+При смене runtime ABI проверяются одновременно producer Pod, параметры и
+каждое CEL-условие, включая workspace V2. Кандидат проходит полный admission
+контур с текущей ABI; та же форма с предыдущей ABI должна закрыто отклоняться.
+Проверка охватывает также исполняемые SQL guards создания snapshot/restore task.
+Совместимый Pod не доказывает совместимость owner-транзакции после остановки
+writer. Актуальные AGENT и WORKFLOW component-сценарии проходят весь путь до
+checkpoint и следующего restore на текущей схеме, а не только на predecessor.
+Версия в ConfigMap без совместимого исполняемого условия не подтверждает допуск.
+
 Для policy, объединяющей Role/RoleBinding, динамическая граница ограничена
 полями `rules`/`subjects`/`roleRef` внутри точной ветки `kind` с проверкой наличия.
 Для списка обычных/init контейнеров `dyn` ограничен единственным элементом
@@ -2258,24 +2398,30 @@ no-mount-crossing, identity rejoin, foreign-owner/type/link и resource guards
 по-прежнему проверяются. Во время исполнения private directory может временно
 закрыть readiness; post-join нормализация не доказывает исправление этой фазы.
 
-Восстановленный native history принадлежит фактическому writer/capture UID,
-а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
-и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт
-файлы с тем же UID, group29000 и mode0640. Отдельный non-root init RESTORE
-с UID10001 заранее создаёт только точный корень `codex-home` с group29000,
-setgid и mode2770: существующие init/provider guards требуют эту directory
-identity. Init читает тот же immutable RESTORE task, не получает credentials
-object storage, RPC tokens, произвольные paths или новую authority.
-Main runner UID10001 не получает
-CAP_CHOWN или право менять чужой rollout. Kernel-регрессия проверяет append
-новых history bytes и их последующий exact digest от UID10002, а чужой UID10001
-остаётся отрицательным случаем. Полная kernel-проверка проходит directory
-preparation → restore → текущий workspace guard → native append/capture;
-чужой владелец, symlink и mismatched task закрыто отклоняются.
-SNAPSHOT/DELETE сохраняют прежние identities,
-claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
-исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
-с проверенным immutable archive receipt, без подмены terminal outcome.
+В framed broker подтверждение процесса остаётся первым кадром холодного запуска.
+При восстановлении единственное исключение — предшествующий кадр
+`NATIVE_SESSION_RECOVERING` от точного provider UID для OpenCode с проверенными
+metadata checkpoint в текущем input. Следующий activity обязан содержать exact
+process observation, включая execution binding; промежуточная работа, повтор или
+поздняя фаза восстановления отклоняются до callback. Отказ import/start до
+наблюдения процесса может завершиться только ошибкой. Progress не доказывает
+identity, успешный import, join или право на новый эффект; проверка actual export
+и свежих полномочий остаётся обязательной.
+
+Официальный native export принадлежит фактическому writer/capture UID,
+а не UID контейнера, передающего запрос. OpenCode и официальный stopped export
+исполняются в `provider-runtime` с UID10002. RESTORE возвращает проверенный
+export с тем же UID, group29000 и mode0640; затем native driver выполняет
+официальный import в новый приватный HOME/XDG. Живая SQLite/WAL не копируется.
+Отдельный non-root init RESTORE с UID10001 заранее создаёт только точный
+корень `.kodex/state/opencode` с group29000, setgid и mode2770 по закрытому task.
+Init не получает credentials object storage, RPC tokens, произвольные paths
+или новую authority. Main runner UID10001 не получает CAP_CHOWN либо право
+переписывать чужой export. Quiescence и положительный join всех writer
+предшествуют публикации checkpoint; digest связывает exact session/generation.
+SNAPSHOT/DELETE сохраняют claim/fence и минимальные capabilities. Wrong-owner
+PVC не исправляется ручным chown: нужен штатный owner-bound RESTORE с
+проверенным immutable archive receipt, без подмены terminal outcome.
 
 Ошибка после native append не означает отсутствия новой истории. Проверенный
 rollout tuple сохраняется и при generic process/activity/credential-refresh

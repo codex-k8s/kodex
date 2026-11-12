@@ -1,3 +1,4 @@
+import { modelMeasurementMessages } from "@/features/runs/model-measurement-messages";
 import { approvalConsentMessages } from "@/features/integrations/approval-consent-messages";
 import { createI18n } from "vue-i18n";
 import { promptContextMessages } from "@/features/agents/detail/prompt-context-messages";
@@ -19,6 +20,7 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  modelMeasurements: modelMeasurementMessages.ru,
   integrationConsents: approvalConsentMessages.ru,
   credentialPolicy: {
     title: "Чей ключ использовать",
@@ -157,6 +159,21 @@ const ru = {
     },
   },
   runtimeOverlay: {
+    executionPreferences: "Контекст и кеш",
+    inheritRoute: "Из настройки маршрута",
+    preferencesHelp:
+      "Изменения входят в текущий черновик. Сохраните, проверьте и опубликуйте его. Обязательные ограничения маршрута проверяет сервер.",
+    repairPreferences: "Сначала исправьте недопустимые поля TOML ниже.",
+    preferenceValues: {
+      true: "Да",
+      false: "Нет",
+      PROVIDER_DEFAULT: "Настройки провайдера",
+      NO_HINTS: "Без подсказок Kodex",
+      OPTIMIZE: "Оптимизировать",
+      PROJECT: "Проект",
+      INITIATOR: "Инициатор",
+      SESSION: "Сессия",
+    },
     environmentShortBase: "База",
     environmentShortSavedAt: "Сохранено",
     environmentValidationDigest: "Дайджест проверки",
@@ -2504,6 +2521,9 @@ const ru = {
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
       modelRequestRunning: "Подготовка и выполнение запроса к модели",
+      modelContextCompacting: "Сжатие контекста; выполнение продолжится",
+      nativeSessionRecovering:
+        "Восстановление подтверждённого контекста сессии",
       providerUnavailable:
         "Провайдер модели временно недоступен. Ход завершён с ошибкой.",
     },
@@ -3745,6 +3765,29 @@ const ru = {
     },
   },
   providers: {
+    runtimePolicy: {
+      title: "Контекст и кеш маршрута",
+      enabled: "Включено",
+      disabled: "Выключено",
+      runtime: "Исполнитель",
+      context: "Контекст / максимум ответа, токены",
+      compaction: "Автоматическое сжатие",
+      pruning: "Сокращение старых результатов инструментов",
+      requested: "Запрошено",
+      effective: "Применяется",
+      strict: "Строгие гарантии",
+      response: "Кеш готовых ответов proxy",
+      unknown:
+        "Политика модели пока недоступна; гарантии кеширования не подтверждены.",
+      ownership:
+        "Здесь показана базовая политика маршрута из Git. Допустимые предпочтения задаются в настройках агента и публикуются вместе с overlay; обязательные ограничения маршрута сохраняются.",
+      guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
+      blocked: "Запуск с этой обязательной политикой заблокирован",
+      noHints:
+        "Kodex не добавляет cache hints. Это не означает отключение внутреннего кеша провайдера.",
+      physical:
+        "Разделение физической памяти и отсутствие хранения у провайдера здесь не подтверждаются.",
+    },
     finance: {
       label: "Лимиты аккаунтов Codex",
       unavailable: "Лимиты и кредиты недоступны",
@@ -3785,7 +3828,6 @@ const ru = {
     catalogFailed: "Не удалось проверить каталог",
     catalogExpired: "Срок проверки каталога истёк",
     catalogRemoteApi: "Каталог API провайдера",
-    catalogRemoteCodex: "Каталог Codex провайдера",
     catalogUnavailable: "Проверка провайдера временно недоступна",
     catalogUnverified: "Источник каталога не подтверждён",
     catalogAuthorizationRejected: "Провайдер отклонил авторизацию",
@@ -4865,6 +4907,7 @@ const ru = {
 
 const en = {
   ...ru,
+  modelMeasurements: modelMeasurementMessages.en,
   integrationConsents: approvalConsentMessages.en,
   credentialPolicy: {
     title: "Whose key to use",
@@ -5007,6 +5050,21 @@ const en = {
     },
   },
   runtimeOverlay: {
+    executionPreferences: "Context and cache",
+    inheritRoute: "Inherit route setting",
+    preferencesHelp:
+      "Changes belong to the current draft. Save, validate and publish it. The server enforces mandatory route constraints.",
+    repairPreferences: "Correct invalid TOML fields below first.",
+    preferenceValues: {
+      true: "Yes",
+      false: "No",
+      PROVIDER_DEFAULT: "Provider default",
+      NO_HINTS: "No Kodex hints",
+      OPTIMIZE: "Optimize",
+      PROJECT: "Project",
+      INITIATOR: "Initiator",
+      SESSION: "Session",
+    },
     environmentShortBase: "Base",
     environmentShortSavedAt: "Saved",
     environmentValidationDigest: "Validation digest",
@@ -7355,6 +7413,8 @@ const en = {
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
       modelRequestRunning: "Preparing and executing the model request",
+      modelContextCompacting: "Compacting context; execution will continue",
+      nativeSessionRecovering: "Restoring the confirmed session context",
       providerUnavailable:
         "The model provider is temporarily unavailable. The turn failed.",
     },
@@ -8585,8 +8645,31 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    runtimePolicy: {
+      title: "Model context and cache",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      runtime: "Runtime",
+      context: "Context / maximum output tokens",
+      compaction: "Automatic compaction",
+      pruning: "Prune old tool results",
+      requested: "Requested",
+      effective: "Effective",
+      strict: "Strict guarantees",
+      response: "Proxy response cache",
+      unknown:
+        "Model policy is unavailable; caching guarantees are unconfirmed.",
+      ownership:
+        "This is the Git-owned route baseline. Agent preferences are published through its overlay; mandatory route constraints remain enforced.",
+      guarantees: "NO_REUSE: {reuse}; NO_STORE: {store}",
+      blocked: "Launch is blocked by this required policy",
+      noHints:
+        "Kodex adds no cache hints. This does not disable the provider's internal cache.",
+      physical:
+        "Physical memory isolation and provider no-retention are not proven here.",
+    },
     finance: {
-      label: "Codex account limits",
+      label: "Model account limits",
       unavailable: "Limits and credits unavailable",
       stale: "Data is stale",
       limitUnknown: "Limit unavailable",
@@ -8627,7 +8710,6 @@ const en = {
     catalogFailed: "Catalog check failed",
     catalogExpired: "Catalog check expired",
     catalogRemoteApi: "Provider API catalog",
-    catalogRemoteCodex: "Provider Codex catalog",
     catalogUnavailable: "Provider check is temporarily unavailable",
     catalogUnverified: "Catalog source is unverified",
     catalogAuthorizationRejected: "Provider rejected authorization",

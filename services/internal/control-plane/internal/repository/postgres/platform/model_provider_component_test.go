@@ -45,6 +45,20 @@ func TestModelProviderBootstrapComponent(t *testing.T) {
 		t.Fatalf("bootstrap gateway catalog did not select API_KEY: tasks=%+v err=%v", tasks, err)
 	}
 	task := tasks[0]
+	savedProvider := repository.modelProviderCatalog
+	repository.modelProviderCatalog = nil
+	if _, err := repository.ResolveProviderModelCatalogProof(ctx, platformrepo.ProofPrincipalInput{CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: task.RequestDigest}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("unconfigured provider retained catalog authority", err)
+	}
+	if claims, err := repository.ClaimProviderModelCatalogTasks(ctx, "unconfigured-fixture", 16, &providercredentialclient.Client{}); err != nil || len(claims) != 0 {
+		t.Fatal("unconfigured provider created catalog work", err)
+	}
+	repository.modelProviderCatalog = savedProvider
+	tasks, err = repository.ClaimProviderModelCatalogTasks(ctx, "restored-provider-fixture", 16, &providercredentialclient.Client{})
+	if err != nil || len(tasks) != 1 || tasks[0].Ref == task.Ref {
+		t.Fatal("retired catalog task was reused", err)
+	}
+	task = tasks[0]
 	principal := platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: task.RequestDigest}
 	if _, err := repository.ResolveProviderModelCatalogProof(ctx, principal); err != nil {
 		t.Fatal("bootstrap catalog proof rejected", err)
@@ -97,20 +111,20 @@ func TestModelProviderBootstrapComponent(t *testing.T) {
 	}
 }
 
-// TestModelCatalogBootstrapMethodComponent checks gateway inference, legacy defaults and explicit-method precedence in separate migrated databases. No provider is contacted and no authorization attempt is synthesized by production code.
-// TestModelCatalogBootstrapMethodComponent проверяет gateway inference, legacy defaults и приоритет явного метода в отдельных мигрированных БД. Обращения к provider отсутствуют; production code не создаёт фиктивной authorization attempt.
+// TestModelCatalogBootstrapMethodComponent checks configured API-key catalog work and rejects retired or missing routes in separate migrated databases. No provider is contacted and no authorization attempt is synthesized by production code.
+// TestModelCatalogBootstrapMethodComponent проверяет каталог настроенного API-key маршрута и отказ для удалённых или отсутствующих маршрутов в отдельных мигрированных БД. Обращения к provider отсутствуют; production code не создаёт фиктивной authorization attempt.
 func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 	for _, scenario := range []struct {
 		name, explicit, configured, want string
 		gateway, disabled                bool
 	}{
-		{name: "legacy-device-default", want: "DEVICE_CODE"},
-		{name: "legacy-explicit-api-key", explicit: "API_KEY", want: "API_KEY"},
+		{name: "configured-bootstrap", want: "API_KEY"},
+		{name: "configured-explicit-api-key", explicit: "API_KEY", want: "API_KEY"},
 		{name: "gateway-bootstrap", gateway: true, configured: "active", want: "API_KEY"},
-		{name: "gateway-explicit-device-preserved", gateway: true, configured: "active", explicit: "DEVICE_CODE", want: "DEVICE_CODE"},
+		{name: "retired-device-method-rejected", gateway: true, configured: "active", explicit: "DEVICE_CODE"},
 		{name: "gateway-explicit-api-key", gateway: true, configured: "active", explicit: "API_KEY", want: "API_KEY"},
-		{name: "gateway-not-configured", gateway: true, want: "DEVICE_CODE"},
-		{name: "gateway-different-definition", gateway: true, configured: "different", want: "DEVICE_CODE"},
+		{name: "gateway-not-configured", gateway: true},
+		{name: "gateway-different-definition", gateway: true, configured: "different"},
 		{name: "disabled-gateway", gateway: true, configured: "active", disabled: true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
@@ -134,7 +148,7 @@ func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 				t.Fatal("bootstrap method fixture", err)
 			}
 			if scenario.gateway && scenario.configured == "" {
-				repository.modelProvider = nil
+				repository.modelProviderCatalog = nil
 			} else if scenario.configured == "different" {
 				config.ProviderID = "different-gateway"
 				if err := repository.ConfigureModelProvider(config, "vendor/model-v1"); err != nil {
@@ -157,9 +171,9 @@ func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 			if err != nil {
 				t.Fatal("claim method fixture", err)
 			}
-			if scenario.disabled {
+			if scenario.want == "" {
 				if len(tasks) != 0 {
-					t.Fatal("disabled definition produced a catalog task")
+					t.Fatal("ineligible definition or authorization method produced a catalog task")
 				}
 			} else if len(tasks) != 1 || tasks[0].AuthorizationMethod != scenario.want {
 				t.Fatalf("wrong catalog method: tasks=%+v want=%s", tasks, scenario.want)
@@ -176,5 +190,108 @@ func TestModelCatalogBootstrapMethodComponent(t *testing.T) {
 				t.Fatal("catalog claim created a fictitious authorization attempt")
 			}
 		})
+	}
+}
+
+// TestModelProviderCatalogComponent proves independent registration, exact native selection and catalog grants for two accounts sharing a model alias; removing one route revokes only its pending work.
+// TestModelProviderCatalogComponent проверяет независимую регистрацию, точный native selection и catalog grants двух accounts с общим alias; удаление маршрута отзывает только его pending work.
+func TestModelProviderCatalogComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	pool := newIsolatedAssistantComponentPool(t, ctx)
+	defer pool.Close()
+	repository, err := New(pool, "opencode-test-gateway", "vendor/model-v1", objectstoragetest.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	configureComponentArtifactScanner(t, repository)
+	configureComponentProviderAndRoleImages(t, repository)
+	first := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "test-gateway", BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.4/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "vendor/model-v1", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	second, err := first.Clone()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second.ProviderID = "second-gateway"
+	second.BaseURL = "https://second.example.invalid/v1"
+	second.AddressCIDRs = []string{"192.0.2.5/32"}
+	catalog := runtimecontract.ModelProviderCatalog{Schema: runtimecontract.ModelProviderCatalogSchema, ManagedBy: "git", SourceRevision: first.SourceRevision, DefaultProvider: first.DefinitionKey(), DefaultModel: first.Models[0].ID, Providers: []runtimecontract.ModelProviderConfiguration{first, second}}
+	if err := repository.ConfigureModelProviderCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, provider := range catalog.Providers {
+		engine, selected, err := repository.runtimeProviderSelection(provider.DefinitionKey(), "vendor/model-v1")
+		if err != nil || engine != "opencode" || selected.BaseURL != provider.BaseURL {
+			t.Fatal("exact route selection failed", err)
+		}
+		var registered int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.runtime_profiles WHERE provider=$1 AND model=$2 AND stable_key=$3`, provider.DefinitionKey(), "vendor/model-v1", modelProviderProfileKey(provider, "vendor/model-v1")).Scan(&registered); err != nil || registered != 1 {
+			t.Fatal("independent profile registration failed", err)
+		}
+	}
+	if _, _, err := repository.runtimeProviderSelection("vendor/model-v1", "vendor/model-v1"); !errors.Is(err, errs.ErrConflict) {
+		t.Fatal("model alias selected a route")
+	}
+	// Only fixture setup inserts synthetic credential metadata; no secret value or remote reachability is claimed.
+	// Только fixture setup вставляет synthetic credential metadata; secret value или remote reachability не предполагаются.
+	if _, err := pool.Exec(ctx, `INSERT INTO control_plane.provider_accounts(ref,organization_id,definition_key,stable_key,name,state,created_by)
+ SELECT 'pacc_secondcatalog',organization_id,$1,'second-catalog','Second catalog','AUTHORIZED',created_by FROM control_plane.provider_accounts WHERE stable_key=$2`, second.DefinitionKey(), "default-"+first.DefinitionKey()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO control_plane.provider_credential_revisions(ref,organization_id,provider_account_id,revision_number,secret_name,secret_uid,secret_resource_version,content_sha256,observed_at)
+ SELECT 'pcred_secondcatalog',organization_id,id,1,'synthetic-second-catalog',gen_random_uuid(),'1',repeat('b',64),clock_timestamp() FROM control_plane.provider_accounts WHERE ref='pacc_secondcatalog'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE control_plane.provider_accounts SET current_credential_revision_id=(SELECT id FROM control_plane.provider_credential_revisions WHERE ref='pcred_secondcatalog') WHERE ref='pacc_secondcatalog'`); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := repository.ClaimProviderModelCatalogTasks(ctx, "catalog-two-routes", 16, &providercredentialclient.Client{})
+	if err != nil || len(tasks) != 2 {
+		t.Fatal("two accounts did not receive independent catalog tasks", len(tasks), err)
+	}
+	principals := map[string]platformrepo.ProofPrincipalInput{}
+	for _, task := range tasks {
+		principal := platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "control-plane", Operation: platformrepo.ProviderModelCatalogOperation, RequestDigestSHA256: task.RequestDigest}
+		if _, err := repository.ResolveProviderModelCatalogProof(ctx, principal); err != nil {
+			t.Fatal("active route proof rejected", err)
+		}
+		principals[task.ProviderDefinitionKey] = principal
+	}
+	if len(principals) != 2 {
+		t.Fatal("catalog identities collapsed")
+	}
+	catalog.Providers = catalog.Providers[:1]
+	if err := repository.ConfigureModelProviderCatalog(catalog); err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.ResolveProviderModelCatalogProof(ctx, principals[second.DefinitionKey()]); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("removed route retained authority", err)
+	}
+	if _, err := repository.ResolveProviderModelCatalogProof(ctx, principals[first.DefinitionKey()]); err != nil {
+		t.Fatal("remaining route lost authority", err)
+	}
+	if claimed, err := repository.ClaimProviderModelCatalogTasks(ctx, "catalog-after-removal", 16, &providercredentialclient.Client{}); err != nil || len(claimed) != 0 {
+		t.Fatal("removed route reissued work", err)
+	}
+	for _, task := range tasks {
+		var state, fence, digest string
+		if err := pool.QueryRow(ctx, `SELECT state,fence,request_digest FROM control_plane.provider_model_catalog_tasks WHERE ref=$1`, task.Ref).Scan(&state, &fence, &digest); err != nil {
+			t.Fatal(err)
+		}
+		if task.ProviderDefinitionKey == second.DefinitionKey() {
+			if state != "CANCELLED" || fence != "" || digest != "" {
+				t.Fatal("removed route task did not close atomically")
+			}
+		} else if state != "CLAIMED" || fence == "" || digest != task.RequestDigest {
+			t.Fatal("remaining route task changed")
+		}
+	}
+	if _, _, err := repository.runtimeProviderSelection(second.DefinitionKey(), "vendor/model-v1"); !errors.Is(err, errs.ErrConflict) {
+		t.Fatal("removed route runtime selection survived")
 	}
 }

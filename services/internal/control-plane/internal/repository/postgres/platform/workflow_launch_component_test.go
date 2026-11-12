@@ -996,7 +996,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 			time.Sleep(time.Until(initial.DeadlineAt) + 100*time.Millisecond)
 			var payload any = command.LeaseInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation")}
 			if operation == command.CompleteExecution {
-				payload = command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Late success must not win", Usage: turnUsageFixture(), CodexSessionID: "00000000-0000-4000-8000-000000000001", ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/08/rollout-2026-10-08T00-00-00-00000000-0000-4000-8000-000000000001.jsonl", ArchiveSHA256: strings.Repeat("d", 64), ArchiveSizeBytes: 26276}
+				payload = command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Late success must not win", Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture("00000000-0000-4000-8000-000000000001", 1, strings.Repeat("d", 64), 26276)}
 			}
 			if operation == command.DelegateExecution {
 				payload = command.DelegateInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Must not create child"}
@@ -1209,7 +1209,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		firstLease := claim("two-first-claim", first.Ref)
 		body := []byte("Verified architecture result")
 		digest := sha256.Sum256(body)
-		firstInput := command.CompleteExecutionInput{LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: runtimeRevisionMapInt64(firstLease, "generation"), Success: true, ResultSummary: "Authoritative architecture completed", Usage: turnUsageFixture(), Artifacts: []command.CompletedArtifact{{FileName: "architecture.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(body)), Content: body}}}
+		firstInput := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(firstLease), LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: runtimeRevisionMapInt64(firstLease, "generation"), Success: true, ResultSummary: "Authoritative architecture completed", Usage: turnUsageFixture(), Artifacts: []command.CompletedArtifact{{FileName: "architecture.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(body)), Content: body}}}
 		firstResult := execute(command.CompleteExecution, worker, "two-first-complete", firstInput, nil)
 		callback := claim("two-first-callback", child.Run.Ref)
 		task := stringMap(callback, "task")

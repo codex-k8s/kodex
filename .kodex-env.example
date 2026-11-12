@@ -75,9 +75,11 @@ KODEX_GITHUB_OWNER_PAT=github_pat_replace_me
 KODEX_RELEASE_REGISTRY_USERNAME=
 KODEX_RELEASE_REGISTRY_PASSWORD=
 
-# Codex auth.json в base64 без переносов либо путь к локальному файлу.
-KODEX_OPENAI_AUTH_JSON_B64=eyJyZXBsYWNlIjoibWUifQ==
-# KODEX_OPENAI_AUTH_JSON_FILE=/absolute/path/to/auth.json
+# Несекретный route descriptor и необязательный bootstrap API key из защищённого файла.
+# Без bootstrap ключ добавляется владельцем через подключения после установки.
+KODEX_MODEL_PROVIDER_CONFIGURATION_FILE=
+KODEX_MODEL_PROVIDER_API_KEY_FILE=
+KODEX_MODEL_PROVIDER_DEFAULT_MODEL=
 
 # В bundled MVP Prometheus-метрики остаются включены, а внешние tracing/Sentry
 # exporters отключены до установки совместимых OTel Collector и Sentry Relay.

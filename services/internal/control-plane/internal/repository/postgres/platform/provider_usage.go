@@ -103,6 +103,7 @@ type providerUsageAgent struct {
 // профилем, отдельно вычисленной пригодностью субъекта и хешем субъекта с привязками. ActorAllowed
 // является внутренней проекцией и не принимается как полномочие из данных клиента.
 type providerUsageContext struct {
+	ModelProvider   *runtimecontract.ModelProviderConfiguration
 	Input           *entity.ProviderAccountUsageContext
 	Agent           providerUsageAgent
 	ActorAllowed    bool
@@ -248,6 +249,10 @@ func (repository *Repository) resolveProviderUsageContext(ctx context.Context, t
 	if !ok {
 		return result, errs.ErrNotFound
 	}
+	result.ModelProvider = repository.configuredModelProvider(result.Agent.Provider)
+	if input.Purpose == "CONFIGURE" {
+		result.ModelProvider = repository.configuredModelProvider(input.ProviderDefinitionKey)
+	}
 	if input.Purpose == "CONFIGURE" {
 		err = tx.QueryRow(ctx, queryProviderUsageProfile, pgx.StrictNamedArgs{"profile_ref": input.RuntimeProfileRef}).Scan(&result.Profile.Ref, &result.Profile.Provider, &result.Profile.Model, &result.Profile.RuntimeRevision, &result.Profile.Enabled)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -288,7 +293,7 @@ func providerAccountUsage(item providerUsageAccount, context providerUsageContex
 	u.ProviderHealthScope = "CREDENTIALED_CATALOG_REACHABILITY"
 	// READY относится только к подтверждённому пути текущей credential, не к SLA провайдера.
 	if item.CredentialID != "" && item.Catalog.State == "READY" && item.Catalog.Failure == "NONE" &&
-		(item.Catalog.Source == "REMOTE_API" || item.Catalog.Source == "REMOTE_CODEX") &&
+		item.Catalog.Source == "REMOTE_API" &&
 		item.Catalog.ObservedAt != nil && !item.Catalog.ObservedAt.After(item.ObservedAt) && item.Catalog.ExpiresAt != nil && item.Catalog.ExpiresAt.After(item.ObservedAt) {
 		u.ProviderHealth = providerDimension("READY", "CREDENTIALED_CATALOG_REACHABLE", "NONE")
 		u.ProviderHealthObservedAt, u.ProviderHealthExpiresAt = item.Catalog.ObservedAt, item.Catalog.ExpiresAt
@@ -358,6 +363,17 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 	if context.Input.Purpose == "CONFIGURE" && (!context.Profile.Enabled || context.Profile.Ref != context.Input.RuntimeProfileRef || context.Profile.Provider != provider || context.Profile.Model == "" || context.Profile.RuntimeRevision == "") {
 		return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
 	}
+	if profile := context.ModelProvider; profile != nil {
+		selectedProvider, selectedModel := provider, model
+		if context.Input.Purpose == "LAUNCH" {
+			selectedProvider, selectedModel = context.Agent.Provider, context.Agent.Model
+		}
+		if profile.DefinitionKey() == selectedProvider && selectedModel != "" {
+			if _, err := profile.ResolveModelCache(selectedModel); err != nil {
+				return blocked("INFERENCE_CACHE_POLICY_UNSUPPORTED", "REPUBLISH_CONFIGURATION")
+			}
+		}
+	}
 	var selected *entity.ProviderAccountCandidate
 	if context.Input.Purpose == "LAUNCH" {
 		if !context.Agent.Enabled || context.Agent.State != "READY" {
@@ -367,7 +383,7 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 			return blocked("RUNTIME_CONFIGURATION_MISSING", "REPUBLISH_CONFIGURATION")
 		}
 		provider, model = context.Agent.Provider, context.Agent.Model
-		if strings.HasPrefix(provider, "opencode-") && (context.Agent.Overlay != "" || context.Agent.NativeToolCount < 0 || context.Agent.NativeToolCount > 0 && !context.Agent.ManagedWorkspaceTools) {
+		if strings.HasPrefix(provider, "opencode-") && (runtimecontract.ValidateOpenCodeOverlay(context.Agent.Overlay) != nil || context.Agent.NativeToolCount < 0 || context.Agent.NativeToolCount > 0 && !context.Agent.ManagedWorkspaceTools) {
 			return blocked("RUNTIME_PROFILE_UNAVAILABLE", "REPUBLISH_CONFIGURATION")
 		}
 		for _, candidate := range context.Agent.Candidates {
@@ -427,6 +443,19 @@ func providerModelCompatibility(item providerUsageAccount, context providerUsage
 		if len(runtimecontract.DiagnoseConfigOverlay(context.Agent.Overlay, capability.ReasoningEfforts)) != 0 {
 			return blocked("EFFORT_UNSUPPORTED", "CHANGE_EFFORT")
 		}
+		if profile := context.ModelProvider; profile != nil && profile.DefinitionKey() == provider {
+			effective := effort
+			if effective == "" {
+				effective = capability.DefaultReasoningEffort
+			}
+			mode := runtimecontract.ReasoningSupported
+			if effective == "" {
+				mode = runtimecontract.ReasoningUnsupported
+			}
+			if profile.ValidateRuntimePreferences(model, context.Agent.Overlay, effective, mode) != nil {
+				return blocked("EFFORT_UNSUPPORTED", "CHANGE_EFFORT")
+			}
+		}
 		return providerDimension("READY", "AVAILABLE", "NONE")
 	}
 	return blocked("MODEL_UNSUPPORTED", "SELECT_MODEL")
@@ -456,7 +485,7 @@ func validProviderUsageCatalog(item providerUsageAccount) bool {
 	if !slices.Contains([]string{"READY", "PENDING", "FAILED", "EXPIRED"}, item.Catalog.State) || len(item.Models) > 128 {
 		return false
 	}
-	if !slices.Contains([]string{"", "NONE", "UNAVAILABLE", "UNVERIFIED_SOURCE", "AUTHORIZATION_REJECTED"}, item.Catalog.Failure) || !slices.Contains([]string{"", "REMOTE_API", "REMOTE_CODEX"}, item.Catalog.Source) {
+	if !slices.Contains([]string{"", "NONE", "UNAVAILABLE", "UNVERIFIED_SOURCE", "AUTHORIZATION_REJECTED"}, item.Catalog.Failure) || !slices.Contains([]string{"", "REMOTE_API"}, item.Catalog.Source) {
 		return false
 	}
 	if item.Catalog.State == "READY" && (item.Catalog.Failure != "NONE" || item.Catalog.Source == "" || item.Catalog.ObservedAt == nil || item.Catalog.ExpiresAt == nil || !item.Catalog.ExpiresAt.After(item.ObservedAt)) {
@@ -553,7 +582,7 @@ func (repository *Repository) providerAdmissionForAgents(ctx context.Context, tx
 			continue
 		}
 		// Actor admission выполняет общий Workflow/Agent caller; это внутренний dependency snapshot.
-		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true})
+		usage, err := providerAccountUsage(account, providerUsageContext{Input: &entity.ProviderAccountUsageContext{Purpose: "LAUNCH", AgentRef: ref}, Agent: agent, ActorAllowed: true, ModelProvider: repository.configuredModelProvider(agent.Provider)})
 		if err != nil {
 			return nil, err
 		}

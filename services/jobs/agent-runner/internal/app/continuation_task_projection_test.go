@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -22,20 +21,16 @@ func TestContinuationTaskProjectionProducerRunnerOracle(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		input := fixture
 		if resumed {
-			input.CodexSessionID = "exact-previous-provider-thread"
+			input.NativeSession = &runtimecontract.NativeSessionCheckpoint{SessionID: "ses_previous", Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: ".kodex/state/opencode/checkpoints/g1/ses_previous.json", SHA256: strings.Repeat("a", 64), SizeBytes: 800}
 		}
 		prompt, err := buildPrompt(input)
 		if err != nil {
 			t.Fatal(err)
 		}
 		messages := promptSessionMessages(t, prompt)
-		want := fixture.SessionContext
-		if resumed {
-			want = want[len(want)-1:]
-		}
-		if !reflect.DeepEqual(messages, want) || !strings.HasSuffix(string(prompt), fixture.Task) || strings.Count(string(prompt), fixture.Task) != 1 ||
-			strings.Contains(string(prompt), "<runtime-revision-delta>") {
-			t.Fatal("cold/resume dropped or duplicated full task/history/notice")
+		want := fixture.SessionContext[len(fixture.SessionContext)-1].Content
+		if len(messages) != 1 || messages[0].Content != want || string(prompt) != want+"\n"+fixture.Task || strings.Count(string(prompt), fixture.Task) != 1 {
+			t.Fatal("native input dropped current task/notice or replayed prior history")
 		}
 		var envelope runtimecontract.PromptServiceEnvelope
 		if json.Unmarshal([]byte(messages[len(messages)-1].Content), &envelope) != nil {

@@ -17,3 +17,4 @@ JOIN control_plane.subjects actor ON actor.id=root_run.initiated_by
  AND actor.organization_id=node.organization_id AND actor.active
 WHERE node.organization_id=$1::uuid
   AND node.id=$3::uuid
+FOR SHARE OF agent, actor

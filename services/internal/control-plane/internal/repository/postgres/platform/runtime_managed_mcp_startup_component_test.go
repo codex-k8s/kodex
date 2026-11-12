@@ -237,7 +237,7 @@ func TestManagedMCPStartupRecoveryComponent(t *testing.T) {
 	if stringMap(result.RuntimeItems[0], "runtimeRevisionRef") == "" {
 		t.Fatal("fresh claim lost immutable RuntimeRevision")
 	}
-	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: controller, Mutation: value.Mutation{IdempotencyKey: "startup-complete"}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(result.RuntimeItems[0], "leaseRef"), Fence: stringMap(result.RuntimeItems[0], "fence"), Generation: runtimeRevisionMapInt64(result.RuntimeItems[0], "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()}})
+	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: controller, Mutation: value.Mutation{IdempotencyKey: "startup-complete"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(result.RuntimeItems[0]), LeaseRef: stringMap(result.RuntimeItems[0], "leaseRef"), Fence: stringMap(result.RuntimeItems[0], "fence"), Generation: runtimeRevisionMapInt64(result.RuntimeItems[0], "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()}})
 	if err != nil {
 		t.Fatal("finish recovered native attempt", err)
 	}

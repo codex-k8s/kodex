@@ -44,6 +44,9 @@ type ModelProviderConfiguration struct {
 	ToolMode       string               `json:"tool_mode"`
 	ProviderID     string               `json:"provider_id"`
 	BaseURL        string               `json:"base_url"`
+	API            string               `json:"api,omitempty"`
+	RouteKind      string               `json:"route_kind,omitempty"`
+	RouteVersion   string               `json:"route_version,omitempty"`
 	AddressCIDRs   []string             `json:"address_cidrs"`
 	Models         []ModelProviderModel `json:"models"`
 }
@@ -53,9 +56,11 @@ type ModelProviderConfiguration struct {
 // ModelProviderModel задаёт разрешённый alias и консервативные пределы запросов владельца установки.
 // Эти пределы не доказывают возможности upstream, квоту или размер контекста модели.
 type ModelProviderModel struct {
-	ID                  string `json:"id"`
-	ContextWindowTokens int    `json:"context_window_tokens"`
-	MaximumOutputTokens int    `json:"maximum_output_tokens"`
+	ID                  string              `json:"id"`
+	ContextWindowTokens int                 `json:"context_window_tokens"`
+	MaximumOutputTokens int                 `json:"maximum_output_tokens"`
+	CachePolicy         *ModelCachePolicy   `json:"cache_policy,omitempty"`
+	ContextPolicy       *ModelContextPolicy `json:"context_policy,omitempty"`
 }
 
 // ModelProviderRoute is the small nonsecret transport projection carried in a signed proxy grant.
@@ -66,6 +71,7 @@ type ModelProviderRoute struct {
 	BaseURL             string   `json:"base_url"`
 	AddressCIDRs        []string `json:"address_cidrs"`
 	ConfigurationSHA256 string   `json:"configuration_sha256"`
+	API                 string   `json:"api,omitempty"`
 }
 
 // DecodeModelProviderConfiguration accepts one bounded object, rejecting duplicate/unknown keys.
@@ -92,6 +98,9 @@ func DecodeModelProviderConfiguration(raw []byte) (ModelProviderConfiguration, e
 // Validate проверяет закреплённый engine, exact HTTPS authority, адресные pins и bounded aliases.
 // DNS lookup не выполняется; wildcard destination, secret и заголовки вызывающего не принимаются.
 func (config ModelProviderConfiguration) Validate() error {
+	if !validModelProviderAPI(config.API) || !validModelRouteKind(config.RouteKind, config.RouteVersion) {
+		return ErrModelProviderConfiguration
+	}
 	if config.Schema != ModelProviderConfigurationSchema || config.ManagedBy != "git" ||
 		len(config.SourceRevision) != 40 || !lowerHex(config.SourceRevision) ||
 		config.Engine != "opencode" || config.EngineVersion != OpenCodeVersion || config.ToolMode != "managed_mcp" ||
@@ -111,6 +120,12 @@ func (config ModelProviderConfiguration) Validate() error {
 		if !ValidModelProviderModelID(model.ID) || models[model.ID] ||
 			model.ContextWindowTokens < 1 || model.ContextWindowTokens > 2_000_000 ||
 			model.MaximumOutputTokens < 1 || model.MaximumOutputTokens > model.ContextWindowTokens {
+			return ErrModelProviderConfiguration
+		}
+		if model.ContextPolicy != nil && model.ContextPolicy.Revision != 1 {
+			return ErrModelProviderConfiguration
+		}
+		if model.CachePolicy != nil && model.CachePolicy.validate() != nil {
 			return ErrModelProviderConfiguration
 		}
 		models[model.ID] = true
@@ -143,26 +158,25 @@ func (config ModelProviderConfiguration) Model(id string) (ModelProviderModel, b
 	return ModelProviderModel{}, false
 }
 
-// validateModelProvider closes alternate-engine inputs unless their exact descriptor and model match.
-// An absent descriptor preserves the legacy validation path; it never enables OpenCode implicitly.
-// validateModelProvider отклоняет alternate engine без exact descriptor и model.
-// Отсутствующий descriptor сохраняет legacy проверку и не включает OpenCode неявно.
+// validateModelProvider requires the sole native engine, exact route/model and qualified preferences before execution.
+// validateModelProvider требует единственный native engine, точный route/model и проверенные настройки до исполнения.
 func (input RunnerInput) validateModelProvider() error {
-	if input.EnvironmentPolicy.ManagedWorkspace && !RuntimeWorkspaceToolsAvailable(input) {
+	if input.NativeSession != nil && (input.Provider != "opencode" || input.NativeSession.ValidateWorkspace(input.WorkspaceStorage) != nil) {
 		return ErrModelProviderConfiguration
 	}
 	if input.ModelProvider == nil {
-		if input.Provider == "opencode" {
-			return ErrModelProviderConfiguration
-		}
-		return nil
+		return ErrModelProviderConfiguration
 	}
+
 	if input.Provider != "opencode" || input.ModelProvider.Validate() != nil {
 		return ErrModelProviderConfiguration
 	}
-	if input.CodexSessionID != "" || len(input.EnvironmentTools) != 0 && !RuntimeWorkspaceToolsAvailable(input) || input.ConfigOverlay != "" ||
-		input.EffectiveReasoningEffort != "" || input.ReasoningMode != ReasoningUnsupported {
+	if len(input.EnvironmentTools) != 0 && !input.EnvironmentPolicy.ManagedWorkspace ||
+		input.ModelProvider.ValidateRuntimePreferences(input.Model, input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
 		return ErrModelProviderConfiguration
+	}
+	if _, err := input.ModelProvider.ResolveRuntimeModelCache(input.Model, input.ConfigOverlay); err != nil {
+		return err
 	}
 	if _, found := input.ModelProvider.Model(input.Model); !found {
 		return ErrModelProviderConfiguration
@@ -182,7 +196,7 @@ func (config ModelProviderConfiguration) AllowsRequest(host, path, method string
 	if err != nil || host != endpoint.Hostname() {
 		return false
 	}
-	return method == "POST" && path == endpoint.Path+"/chat/completions" ||
+	return method == "POST" && path == endpoint.Path+modelProviderAPIPath(config.API) ||
 		method == "GET" && path == endpoint.Path+"/models"
 }
 
@@ -193,14 +207,14 @@ func (config ModelProviderConfiguration) Route() (ModelProviderRoute, error) {
 	if err != nil {
 		return ModelProviderRoute{}, err
 	}
-	return ModelProviderRoute{BaseURL: config.BaseURL, AddressCIDRs: append([]string(nil), config.AddressCIDRs...),
+	return ModelProviderRoute{BaseURL: config.BaseURL, AddressCIDRs: append([]string(nil), config.AddressCIDRs...), API: config.API,
 		ConfigurationSHA256: digest}, nil
 }
 
 // Validate checks route metadata; a valid route alone is not evidence of a verified proxy grant.
 // Validate проверяет route metadata; корректный route сам по себе не доказывает verified proxy grant.
 func (route ModelProviderRoute) Validate() error {
-	if !sha256Pattern.MatchString(route.ConfigurationSHA256) || !ValidOperatorAddressPins(route.AddressCIDRs) {
+	if !validModelProviderAPI(route.API) || !sha256Pattern.MatchString(route.ConfigurationSHA256) || !ValidOperatorAddressPins(route.AddressCIDRs) {
 		return ErrModelProviderConfiguration
 	}
 	_, err := modelProviderEndpoint(route.BaseURL)
@@ -224,7 +238,7 @@ func (route ModelProviderRoute) AllowsRequest(host, path, method string) bool {
 		return false
 	}
 	endpoint, _ := modelProviderEndpoint(route.BaseURL)
-	return method == "POST" && path == endpoint.Path+"/chat/completions" ||
+	return method == "POST" && path == endpoint.Path+modelProviderAPIPath(route.API) ||
 		method == "GET" && path == endpoint.Path+"/models"
 }
 
@@ -283,4 +297,69 @@ var modelProviderModelIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/
 // ValidModelProviderModelID проверяет один opaque namespaced alias без утверждения о remote model availability.
 func ValidModelProviderModelID(value string) bool {
 	return modelProviderModelIDPattern.MatchString(value)
+}
+
+// ModelContextPolicy configures only qualified native compaction switches; token ceilings remain separate operator-owned model limits.
+// ModelContextPolicy настраивает лишь qualified native compaction switches; token ceilings остаются отдельными model limits владельца.
+type ModelContextPolicy struct {
+	Revision       int  `json:"revision"`
+	AutoCompaction bool `json:"auto_compaction"`
+	Prune          bool `json:"prune"`
+}
+
+// EffectiveContextPolicy returns the explicit native settings or the supported automatic/pruning default without changing stored configuration.
+// EffectiveContextPolicy возвращает explicit native settings или supported automatic/pruning default без изменения stored configuration.
+func (model ModelProviderModel) EffectiveContextPolicy() ModelContextPolicy {
+	if model.ContextPolicy != nil {
+		return *model.ContextPolicy
+	}
+	return ModelContextPolicy{Revision: 1, AutoCompaction: true, Prune: true}
+}
+
+// Clone preserves nil/explicit policies while separating all mutable nested configuration from the caller's memory.
+// Clone сохраняет nil/explicit policies, отделяя всю mutable nested configuration от памяти caller.
+func (config ModelProviderConfiguration) Clone() (ModelProviderConfiguration, error) {
+	if config.Validate() != nil {
+		return ModelProviderConfiguration{}, ErrModelProviderConfiguration
+	}
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return ModelProviderConfiguration{}, ErrModelProviderConfiguration
+	}
+	return DecodeModelProviderConfiguration(raw)
+}
+
+// ValidateOpenCodeOverlay accepts only preferences consumed by the qualified native adapter, rejecting retired shell, search, personality and history switches.
+// ValidateOpenCodeOverlay принимает только настройки проверенного native adapter, отклоняя удалённые переключатели shell, поиска, стиля и истории.
+func ValidateOpenCodeOverlay(raw string) error {
+	_, err := ParseConfigOverlay(raw)
+	if err != nil {
+		return ErrModelProviderConfiguration
+	}
+	return nil
+}
+
+// ValidateRuntimePreferences binds an owner-selected effort to an exact model and qualified API. Catalog eligibility and fresh authorization remain separate owner checks; this method never infers remote model capabilities.
+// ValidateRuntimePreferences связывает выбранную владельцем степень рассуждений с точной моделью и проверенным API. Каталог и свежие полномочия проверяет владелец отдельно; возможности удалённой модели не выводятся из этого метода.
+func (config ModelProviderConfiguration) ValidateRuntimePreferences(model, overlay, effort, mode string) error {
+	if config.Validate() != nil || ValidateOpenCodeOverlay(overlay) != nil || ValidateEffectiveReasoningEffort(overlay, effort, mode) != nil {
+		return ErrModelProviderConfiguration
+	}
+	if _, found := config.Model(model); !found {
+		return ErrModelProviderConfiguration
+	}
+	if _, err := config.ResolveRuntimeModelCache(model, overlay); err != nil {
+		return err
+	}
+	if effort == "" {
+		return nil
+	}
+	if config.API == ModelAPIMessages {
+		return ErrModelProviderConfiguration
+	}
+	switch effort {
+	case "low", "medium", "high":
+		return nil
+	}
+	return ErrModelProviderConfiguration
 }

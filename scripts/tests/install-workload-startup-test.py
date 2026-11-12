@@ -16,6 +16,9 @@ set -euo pipefail
 repository_root=$FIXTURE_REPOSITORY
 context=synthetic-context
 namespace=kodex-system
+clamav_storage_profile=$FIXTURE_CLAMAV_STORAGE
+render_file=$FIXTURE_MANIFEST
+yq() { "$FIXTURE_YQ" "$@"; }
 stage() {
   printf '%s\n' "$1" >>"$FIXTURE_TRACE"
   [[ "$FIXTURE_SCENARIO" != "fail-$1" ]]
@@ -33,10 +36,10 @@ apply_render() {
 }
 kubectl() {
   [[ $# == 8 && $1 == --context && $2 == "$context" && $3 == -n && $4 == "$namespace" &&
-     $5 == rollout && $6 == status && $8 == --timeout=15m ]] || fail 'unexpected Kubernetes command'
+     $5 == rollout && $6 == status && ( $8 == --timeout=15m || ( $7 == deployment/clamav-egress-gateway && $8 == --timeout=5m ) ) ]] || fail 'unexpected Kubernetes command'
   local deployment=${7#deployment/}
   case "$7" in
-    deployment/control-plane|deployment/egress-gateway|deployment/kodex-image-registry-promotion|deployment/kodex-image-registry-pull|deployment/kodex-buildkit) ;;
+    deployment/clamav-egress-gateway|deployment/control-plane|deployment/egress-gateway|deployment/kodex-image-registry-promotion|deployment/kodex-image-registry-pull|deployment/kodex-buildkit) ;;
     *) fail 'unexpected readiness target' ;;
   esac
   stage "ready:$deployment"
@@ -47,8 +50,12 @@ python3() {
   stage provider-bootstrap
 }
 apply_job() {
-  [[ $# == 1 && $1 == release-artifact-materializer ]] || fail 'unexpected Job'
-  stage materializer-terminal
+  [[ $# == 1 ]] || fail 'unexpected Job arguments'
+  case "$1" in
+    release-artifact-materializer) stage materializer-terminal ;;
+    clamav-db-bootstrap-aaaaaaaaaaaaaaaa) stage clamav-bootstrap-terminal ;;
+    *) fail 'unexpected Job' ;;
+  esac
 }
 wait_workloads() { stage all-workloads-ready; }
 prune_role_environment_configmaps() { stage prune-owned-role-catalog; }
@@ -95,12 +102,16 @@ class InstallWorkloadStartupTest(unittest.TestCase):
             for script in (helper, harness):
                 syntax = subprocess.run([bash, '-n', str(script)], capture_output=True, timeout=5)
                 self.assertEqual(syntax.returncode, 0, 'generated Bash fixture syntax differs')
-            scenarios = [('success', STAGES)] + [('fail-'+stage, STAGES[:index+1]) for index, stage in enumerate(STAGES)]
-            for index, (scenario, expected) in enumerate(scenarios):
+            with fixture.open('a') as stream:stream.write('---\napiVersion: batch/v1\nkind: Job\nmetadata:\n  name: clamav-db-bootstrap-aaaaaaaaaaaaaaaa\n  annotations:\n    kodex.dev/clamav-bootstrap-sha256: '+ 'a'*64+'\n')
+            scenarios=[]
+            for profile in ['shared-rwx','node-local-rwo']:
+                stages=STAGES if profile=='shared-rwx' else STAGES[:2]+['ready:clamav-egress-gateway','clamav-bootstrap-terminal']+STAGES[2:]
+                scenarios += [(profile,'success',stages)]+[(profile,'fail-'+stage,stages[:index+1]) for index,stage in enumerate(stages)]
+            for index, (profile, scenario, expected) in enumerate(scenarios):
                 with self.subTest(scenario=scenario):
                     trace = temporary / ('trace-'+str(index)); selected = temporary / ('selected-'+str(index))
                     environment = {'PATH': str(temporary/'empty-path'), 'HOME': directory,
-                                   'FIXTURE_REPOSITORY': str(ROOT), 'FIXTURE_YQ': yq,
+                                   'FIXTURE_REPOSITORY': str(ROOT), 'FIXTURE_YQ': yq, 'FIXTURE_CLAMAV_STORAGE': profile,
                                    'FIXTURE_FUNCTION': str(helper), 'FIXTURE_MANIFEST': str(fixture),
                                    'FIXTURE_TRACE': str(trace), 'FIXTURE_SELECTED': str(selected), 'FIXTURE_SCENARIO': scenario}
                     result = subprocess.run([bash, '--noprofile', '--norc', str(harness)], env=environment,

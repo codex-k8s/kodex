@@ -254,3 +254,21 @@ describe("PromptContextDetails", () => {
     expect(state.isPlaceholder("Текст [WORKFLOW]")).toBe(false);
   });
 });
+
+it("показывает зависимости без обещания кеша и без значений", async () => {
+  const value = preview();
+  value.dependencies = [
+    {
+      templateDigest: "a".repeat(64),
+      path: "task",
+      stability: "TURN_LIVE",
+      sensitivity: "PRIVATE",
+      trustScope: "DATA_ONLY",
+    },
+  ];
+  const html = await render(value);
+  expect(html).toContain("Зависимости шаблонов");
+  expect(html).toContain("заново разрешается для хода");
+  expect(html).toContain("данные без полномочий");
+  expect(html).toContain("не гарантирует повторное использование кеша");
+});

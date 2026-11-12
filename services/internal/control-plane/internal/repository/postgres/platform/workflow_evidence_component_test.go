@@ -76,7 +76,7 @@ func (fixture *workflowEvidenceNativeFixture) claim(agent string) map[string]any
 func (fixture *workflowEvidenceNativeFixture) complete(lease map[string]any, summary string, artifacts ...command.CompletedArtifact) command.Result {
 	f := fixture.f
 	f.t.Helper()
-	payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary, Artifacts: artifacts}
+	payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary, Artifacts: artifacts}
 	intent, err := json.Marshal(payload)
 	if err != nil {
 		f.t.Fatal("encode immutable evidence completion")

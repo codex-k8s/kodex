@@ -532,7 +532,7 @@ spec:
              !('runtime.kodex.dev/workspace-storage-generation' in object.metadata.annotations))
           : variables.workspaceStorageV2 &&
             object.metadata.labels['runtime.kodex.dev/mode'] == 'turn' &&
-            params.data['roleRuntimeContractRevision'] == '4' &&
+            params.data['roleRuntimeContractRevision'] == '5' &&
             object.metadata.annotations['runtime.kodex.dev/workspace-storage-ref'].matches('^wks_[A-Za-z0-9_-]{8,89}$') &&
             object.metadata.annotations['runtime.kodex.dev/workspace-storage-generation'].matches('^[1-9][0-9]{0,18}$') &&
             has(object.metadata.finalizers) &&
@@ -997,7 +997,7 @@ spec:
           item.name == 'HOME' && item.value == '/tmp' && !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'CODEX_HOME' &&
-          item.value == '/workspace/.kodex/state/codex-home' &&
+          item.value == '/workspace/.kodex/state/opencode' &&
           !has(item.valueFrom))) == 1 &&
         size(variables.providerContainers[0].env.filter(item,
           item.name == 'HTTPS_PROXY' &&

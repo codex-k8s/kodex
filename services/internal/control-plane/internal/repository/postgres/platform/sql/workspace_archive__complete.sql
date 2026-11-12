@@ -1,7 +1,7 @@
 -- name: workspace_archive__complete :one
 WITH receipt AS (
  INSERT INTO control_plane.session_archives(ref,organization_id,project_id,session_id,provider_account_id,runtime_revision_id,
-   codex_session_id,content_generation,format_version,source_relative_path,source_sha256,source_size_bytes,
+   native_session_id,content_generation,format_version,source_relative_path,source_sha256,source_size_bytes,
    object_key,object_version,object_etag,object_digest,object_size_bytes,retention_until,
    workspace_id,workspace_generation,workspace_checkpoint_ref,workspace_entries,workspace_quiescence)
  SELECT @archive_ref,w.organization_id,w.project_id,w.session_id,r.provider_account_id,r.id,

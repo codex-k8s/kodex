@@ -14,10 +14,12 @@ previous_sha=""
 buildkit_profile=standard
 repair_api_endpoints=false
 clamav_mode=enabled
+clamav_storage_profile=shared-rwx
 artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 provider_profile_arguments=()
 previous_arguments=()
+preserve_observability_profile=false
 arguments=()
 repair_egress_secret_access=false
 component_image_profile=""
@@ -43,6 +45,8 @@ while (($#)); do
     --previous-render) previous_render="${2:-}"; shift 2 ;;
     --previous-render-sha256) previous_sha="${2:-}"; shift 2 ;;
     --image-policy-inputs-mode) image_policy_inputs_mode="${2:-}"; shift 2 ;;
+    --preserve-observability-profile) preserve_observability_profile=true; shift ;;
+    --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; shift ;;
@@ -65,6 +69,8 @@ while (($#)); do
         '  [--preimage-directory <new-private-directory>; required for apply/upgrade]'
       printf '%s\n' '  [--previous-render <yaml> --previous-render-sha256 <64-hex> --buildkit-runtime-profile standard|nested-userns; resume-workloads only]'
       printf '%s\n' '  [--image-policy-inputs-mode direct|versioned; default direct; materialized in pinned render]'
+      printf '%s\n' '  [--preserve-observability-profile; workload resume only]'
+  printf '%s\n' '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]'
       printf '%s\n' '  [--clamav-mode enabled|disabled; default enabled]'
       printf '%s\n' '  [--artifact-antivirus-mode required|disabled; default required]'
       printf '%s\n' '  [--repair-kubernetes-api-endpoints; explicit workload resume repair from pinned endpoint anchors]'
@@ -84,6 +90,7 @@ if [[ "$mode" == upgrade ]]; then
   [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ && "$allow_reconciled_completion" == true ]] || fail 'upgrade requires an explicit forward migration completion receipt'
 fi
 case "$image_policy_inputs_mode" in direct|versioned) ;; *) fail 'image policy inputs mode is invalid' ;; esac
+case "$clamav_storage_profile" in shared-rwx|node-local-rwo) ;; *) fail 'ClamAV storage profile is invalid' ;; esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antivirus mode is invalid' ;; esac
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
@@ -101,9 +108,11 @@ if [[ "$mode" == resume-workloads ]]; then
   [[ "$(sha256sum "$temporary/previous.yaml" | awk '{print $1}')" == "$previous_sha" ]] || fail 'previous render digest mismatch'
   case "$buildkit_profile" in standard|nested-userns) ;; *) fail 'BuildKit runtime profile is invalid' ;; esac
   previous_arguments=("${provider_profile_arguments[@]}" --previous-render "$temporary/previous.yaml" --previous-render-sha256 "$previous_sha" --buildkit-runtime-profile "$buildkit_profile")
+  [[ "$preserve_observability_profile" != true ]] || previous_arguments+=(--preserve-observability-profile)
   [[ "$repair_api_endpoints" != true ]] || previous_arguments+=(--repair-kubernetes-api-endpoints)
   [[ "$repair_egress_secret_access" != true ]] || previous_arguments+=(--repair-egress-secret-access)
 else
+  [[ "$preserve_observability_profile" == false ]] || fail 'observability preservation requires workload resume'
   [[ "$repair_egress_secret_access" == false ]] || fail 'egress secret repair only applies to workload resume'
   [[ "$repair_api_endpoints" == false ]] || fail 'API endpoint repair only applies to workload resume'
   [[ -z "$previous_render" && -z "$previous_sha" ]] || fail 'previous render only applies to workload resume'
@@ -149,7 +158,7 @@ fi
 python3 "$root/tools/install/image_policy_inputs.py" --check --mode "$image_policy_inputs_mode" --render "$temporary/render.yaml"
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
-python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --render "$temporary/render.yaml"
+python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile" --render "$temporary/render.yaml"
 python3 "$root/tools/install/native_integration_egress.py" --check --render "$temporary/render.yaml"
 [[ "$mode" != plan ]] || exit 0
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
@@ -166,7 +175,7 @@ if [[ "$mode" == resume-authority-published ]]; then
 fi
 if [[ "$mode" == resume-workloads ]]; then
   timeout 180s python3 "$root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" "${completion_arguments[@]}"
+    --render "$temporary/render.yaml" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${completion_arguments[@]}"
 fi
 if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-bootstrap || "$mode" == resume-authority-published || "$mode" == resume-workloads ]]; then
   [[ -n "$preimage" && "$preimage" == /* && ! -e "$preimage" ]] || fail 'new absolute preimage directory is required'
@@ -207,7 +216,7 @@ if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-boot
     if [[ "$phase" == apply ]]; then phase_arguments=(--bootstrap-completion-output "$preimage/bootstrap-completion.json"); fi
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}" "${assistant_readback_arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}" "${assistant_readback_arguments[@]}"
   done
 fi
 if [[ "$mode" == apply && -f "$preimage/bootstrap-completion.json" ]]; then
@@ -217,4 +226,4 @@ fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \
   --context "$context" --render "$temporary/render.yaml" "${completion_arguments[@]}"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
-  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" "${arguments[@]}" "${completion_arguments[@]}" "${assistant_readback_arguments[@]}"
+  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${completion_arguments[@]}" "${assistant_readback_arguments[@]}"

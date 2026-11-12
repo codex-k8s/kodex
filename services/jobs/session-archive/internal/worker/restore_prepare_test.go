@@ -18,14 +18,14 @@ func restorePreparationTask(t *testing.T) model.Task {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000001.jsonl"
+	path := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture1.json"
 	digest := strings.Repeat("a", 64)
 	return model.Task{TaskRef: "sat_fixture01", Kind: "RESTORE", OrganizationRef: "org_fixture01",
 		SessionRef: "ses_fixture01", ProviderAccountRef: "pacc_fixture01", RuntimeRevisionRef: "rrev_fixture01",
 		RuntimeRevisionVersion: 1, RuntimeRevisionDigest: digest, ContentGeneration: 1, InputDigest: digest,
-		CodexSessionID: "00000000-0000-4000-8000-000000000001", PVCName: pvc, Attempt: 1,
+		NativeSessionID: "ses_NativeFixture1", PVCName: pvc, Attempt: 1,
 		SourceRelativePath: path, SourceSHA256: digest, SourceSizeBytes: 1,
-		Archive: &model.ArchiveBinding{ArchiveRef: "sar_fixture01", FormatVersion: 1, ObjectKey: "archive-fixture",
+		Archive: &model.ArchiveBinding{ArchiveRef: "sar_fixture01", FormatVersion: 3, ObjectKey: "archive-fixture",
 			ObjectVersion: "fixture-v1", ObjectETag: "fixture-etag", ObjectDigest: "sha256:" + digest,
 			ObjectSizeBytes: 1, SourceRelativePath: path, SourceSHA256: digest, SourceSizeBytes: 1}}
 }

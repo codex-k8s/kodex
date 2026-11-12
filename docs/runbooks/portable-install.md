@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.0
-updated: 2026-11-10
+version: 1.6.6
+updated: 2026-11-12
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -510,6 +510,49 @@ Kubelet/containerd находятся вне Pod DNS: оператор адре�
 Документация K3s private registry через Context7 проверена; конкретная настройка
 узлов зависит от закреплённой версии дистрибутива и не выполняется этим overlay.
 
+Для registry за существующим HTTPS ingress предусмотрен
+`kodex.registry-source/v2`: к тем же полям добавляются `tls_hostname`,
+`service_ip` и `service_port_name`. `registry.push` точно равен TLS hostname;
+`registry.node_pull` остаётся отдельным immutable адресом прикладных образов.
+Materializer получает единственный `hostAliases` для этого hostname на закреплённый
+ClusterIP ingress Service, сохраняя исходные SNI, HTTP Host и проверку сертификата.
+Публичный loopback DNS локального стенда не используется внутри Pod. Конфликтующий
+alias, loopback/link-local/unspecified адрес и неизвестные поля отклоняются.
+Ingress, его маршруты и общесистемный DNS этим преобразованием не изменяются.
+
+Когда публичный promoted pull endpoint обслуживает тот же ingress Service,
+explicit `kodex.registry-source/v3` дополнительно требует `promoted_tls_hostname`.
+Он обязан совпадать с immutable admission policy и exact `HostSNI` passthrough
+маршрутом в `kodex-image-registry-pull:5000`. Профиль добавляет только BuildKit
+hostAlias и его exact namespace/Pod/port egress; mTLS identity, CA, SNI, digest,
+promotion ACL и node pull конфигурация не меняются. Preflight сверяет также live
+маршрут и policy. Это не настройка общесистемного DNS и не доказательство node pull.
+
+| Состояние promoted route | Проверка / действие | Readback / отказ |
+|---|---|---|
+| Plan | Exact source Service UID/IP, source и pull hostname, policy и TCP route | Только render/get; коллизии и wildcard закрыты |
+| Apply | До первой RoleImage build; exact previous/desired delta и fenced inventory | NetworkPolicy, immutable profile, затем BuildKit rollout; чужие workloads не затрагиваются |
+| Restart / потерянный ответ | UID/seal/RV прежнего Deployment и фактический desired template | Rejoin/readback; новая build не запускается повторно |
+| Readiness | Настоящий BuildKit pull/build/push с прежними mTLS identities | Не заменяется успешным DNS lookup или готовым registry Pod |
+| Активная build / changed Service | Требуется отдельное завершение build либо новый approved profile | Initial repair не отменяет task/lease и не меняет authority |
+
+Проверены через Context7 официальные Kubernetes документы
+[HostAliases](https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/)
+и [NetworkPolicy selectors](https://kubernetes.io/docs/concepts/services-networking/network-policies/).
+
+Сквозной путь: операторский lock/profile → immutable ConfigMap и Job →
+Service с точными UID/ClusterIP/selector → ready EndpointSlice и Pod с проверенным
+именованным портом → HTTPS ingress → source registry. Проверка перед apply
+сверяет все эти Kubernetes-связи; NetworkPolicy разрешает только выбранные
+namespace/Pod labels/port. Ошибка останавливает материализацию до запуска;
+событие домена не создаётся, авторитетный read path — Kubernetes и exact digest
+registry. Привилегии задаёт операторский профиль, содержимое OCI их не расширяет.
+Повторное применение идемпотентно; replacement Service требует нового профиля.
+Готовность TLS/auth и копирование каждого digest подтверждаются отдельно живым Job.
+Проверены Context7 `/websites/kubernetes_io`, официальные
+[HostAliases](https://kubernetes.io/docs/tasks/network/customize-hosts-file-for-pods/)
+и [именованные порты Service](https://kubernetes.io/docs/concepts/services-networking/service/).
+
 ## Закреплённый OpenCode build-рецепт без смены приложения
 
 В #1977 возможна отдельная packaging-коррекция OpenCode download stage при
@@ -541,17 +584,17 @@ target. Git fixtures синтетические, внешнего registry и cr
 
 ## Общий runtime profile и promoted namespace
 
-`--role-base-runtime-engine opencode` при full release build выбирает
-`agent-runner-opencode` также для documents base. По умолчанию остаётся `codex`;
-оба runner образа сохраняются в inventory. Явный OpenCode profile фиксируется в
-lock как `role_base_runtime_engine: opencode`. Render с Git-managed OpenCode
-отклоняет lock без соответствующего profile до materialization/apply. Один
-успешно собранный optional runner не подтверждает совместимость documents base.
+Full release build допускает только `--role-base-runtime-engine opencode`
+и использует его по умолчанию. Единственный `agent-runner` служит также documents
+base; отдельного Codex либо optional OpenCode runner в inventory нет.
+Lock фиксирует `role_base_runtime_engine: opencode`; другой runtime закрыто
+отклоняется до materialization/apply. Full RoleImage дополнительно проходит
+совместимость ABI, admission и проверку фактического digest.
 
 `promoted_registry.py` согласует producer и consumers по итоговому lock:
 source prefix принадлежит только публикации source artifacts, внутренние
 promotion repositories сохраняют канонический `kodex/`. Materializer выбирает
-строго `kodex/agent-runner` либо `kodex/agent-runner-opencode`; прочие targets
+строго `kodex/agent-runner`; прочие targets
 отклоняются. `promotedPullRepository`, node readback, certificate-guard readback
 и `ImageAdmissionPolicyParameters` указывают на действительно материализованные
 repositories с exact digest. Policy hash пересчитывается вместе с projection.
@@ -990,7 +1033,14 @@ preimage. Разрешённое отличие candidate — результат
 `--buildkit-runtime-profile nested-userns`, соответствующий BuildKit transform: прежние images,
 schema, registry и прочие настройки неизменны. Readonly preflight проверяет
 начальную signed publication, registry revision1/digest, OPEN fence, все пять
-завершённых bootstrap Jobs/schema heads и пустой runtime. Каждый существующий
+завершённых bootstrap Jobs/schema heads и начальную границу runtime. Допускается
+пустой namespace либо единственный `system-assistant-warm`, который ещё не
+исполнил ни одного контейнера: Pending, exact runner image из immutable policy,
+штатные три контейнера и два initializer, waiting statuses без imageID, restart,
+lastState и ephemeral containers, правильные managed/warm labels и ServiceAccount.
+Дополнительно authoritative PostgreSQL read требует нулевые `runs` и
+`session_turns`. Это состояние возникает до публикации первого runner в pull
+registry; guard не удаляет Pod и не объявляет его готовым. Каждый существующий
 Deployment обязан точно соответствовать predecessor либо successor; неизвестный
 workload или executable drift закрывает продолжение. Для policy update применяются
 UID/resourceVersion CAS и полный readback, без force или ослабления CEL.
@@ -1011,6 +1061,10 @@ API. Непустой аргумент, другой medium/fieldPath/version, �
 | Этап / actor | Авторитетное состояние и допуск | Эффект и потерянный ответ |
 |---|---|---|
 | Operator: plan/preflight | Exact render SHA/context, initial signed history, schema/jobs, before/after executable | Только SELECT/get/server dry-run; отказ не разрешает apply |
+| Runtime пуст | Начальная signed history и остальные preconditions | Продолжение без создания бизнес-хода |
+| Initial warm Pending | Exact image/spec identity, все контейнеры никогда не стартовали, runs/turns пусты | Pod сохранён; первый pull/start выполняет штатный controller после публикации |
+| Warm работал, есть бизнес-история или неизвестный Pod | Initial-resume недопустим; неполный status также закрыт | Нет удаления, cancel, retry или нового grant; требуется отдельный lifecycle действующего исполнения |
+| Проверка недоступна либо потерян ответ apply | Отсутствие доказательства не является пустым runtime | Остановка и readback; эффекты не повторяются вслепую |
 | Installer: bootstrap seed | Named CP-owned mutable Secret, канонический пустой payload только при отсутствии | Create-only; после ошибки readback; существующее поколение не обновляется |
 | Installer: profile assets/workloads | Git-owned exact render, fenced inventory UID/seal/RV, parameter-owned opt-in | Exact CAS/create, readback; неизвестный исход требует reconciliation |
 | Issuer/publisher: activation | Настоящие consumer attestations, signed snapshot и OPEN fence | Штатный durable authority protocol; установщик не подделывает readback/activation |
@@ -1082,6 +1136,36 @@ fencing, preimage и empty runtime по-прежнему обязательны.
 состояние всех consumers. Новый guarded resume требует отдельной сверки частичной
 попытки и свежего backup/preimage. HTTP401 unauthenticated probe подтверждает лишь
 TLS/маршрут; это не проверка application permissions или успешный вход.
+
+### ClamAV на локальном RWO storage
+
+Явный `--clamav-storage-profile node-local-rwo` у renderer, portable delivery и
+`deploy-platform.sh` создаёт отдельный `clamav-database-local` с ReadWriteOnce.
+Scanner и единственный updater используют этот claim; антивирусный verdict,
+обязательная проверка артефактов, TLS/egress и расписание updater сохраняются.
+Все потребители этого тома размещаются на узле, выбранном storage provisioner:
+это локальный тестовый профиль без обещания доступности при потере узла.
+По умолчанию сохраняется `shared-rwx`; смена профиля требует явного параметра.
+
+Профиль не изменяет accessModes существующего PVC и не переносит его данные.
+`resume-workloads` допускает только точное преобразование закреплённого render,
+проверяет опубликованную authority revision, receipt миграций и пустой runtime,
+создаёт новый claim до workloads. Старый pending claim можно удалить отдельно
+только после проверки ownership, отсутствия volumeName/Bound и потребителей;
+для занятого тома требуется отдельное решение о данных.
+`--preserve-observability-profile` у `resume-workloads` сохраняет уже
+закреплённый профиль наблюдаемости побайтно на уровне структуры render вместо
+повторного применения disabled overlay; любые дополнительные изменения этой
+области по-прежнему отклоняются сравнением полного ожидаемого render.
+Семантика проверена через Context7 по документации
+[Kubernetes PersistentVolume access modes](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes)
+и [WaitForFirstConsumer](https://kubernetes.io/docs/concepts/storage/storage-classes/#volume-binding-mode).
+Для первой установки профиль также материализует отдельный Job из точного
+CronJob template с именем по digest. Delivery проверяет готовность egress gateway
+и завершение этого Job до ожидания control-plane: пустой новый том получает
+подписи без ожидания очередного шестичасового расписания. Повтор проверяет
+существующий Job и его результат, не подменяет образ или verdict. Факт Ready
+PVC не доказывает успешное сканирование.
 
 ### Опциональный ClamAV
 
@@ -1311,3 +1395,15 @@ Skills, avatars, executable bundles и структурированный workfl
 вернуть conflict, а не переаттестовать или повторно записать объект. Migration profile
 `artifact-optional-antivirus` проверяет exact037 и отсутствие активных effects, применяет только
 forward038 и читает его postcondition. Специальный backup ACL/profile для этой миграции не нужен.
+
+
+## Git в образе integration-gateway
+
+Для Alpine3.23 закреплён `git=2.52.1-r0`: прежний2.52.0-r0 больше не
+доступен в текущем APKINDEX и останавливает fresh build. Версия проверяется
+также runtime-тестом. Digest базового Alpine сохраняется, неподписанные
+пакеты, edge repository и плавающий диапазон версий не добавляются. Проверены
+через Context7 правила [apk pinning](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
+и официальный APKINDEX веткиv3.23/main/x86_64, source commit пакета
+`2f20de3527863b1b84f620fefe687921498e7240`. Фактическая OCI-сборка и runtime
+readback остаются отдельными обязательными проверками candidate.

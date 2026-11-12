@@ -8,12 +8,22 @@ import (
 // TestConfigOverlayStrictAllowlist requires canonical TOML output for allowed preferences and rejects credential, provider, sandbox, MCP and invalid-value overrides.
 // TestConfigOverlayStrictAllowlist требует канонический TOML для разрешённых настроек и отклоняет подмену реквизитов, провайдера, sandbox, MCP и некорректные значения.
 func TestConfigOverlayStrictAllowlist(t *testing.T) {
-	valid := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\nallow_login_shell = false\n\n[history]\npersistence = \"none\"\n"
+	valid := `model_reasoning_effort = "high"
+
+[context]
+auto_compaction = true
+prune = false
+`
 	canonical, digest, err := CanonicalConfigOverlay(valid)
 	if err != nil || canonical == "" || len(digest) != 64 {
 		t.Fatalf("CanonicalConfigOverlay() = %q, %q, %v", canonical, digest, err)
 	}
-	expectedCanonical := "model_reasoning_effort = \"high\"\npersonality = \"pragmatic\"\nallow_login_shell = false\n\n[history]\n  persistence = \"none\"\n"
+	expectedCanonical := `model_reasoning_effort = "high"
+
+[context]
+  auto_compaction = true
+  prune = false
+`
 	if canonical != expectedCanonical {
 		t.Fatalf("CanonicalConfigOverlay() content = %q, want %q", canonical, expectedCanonical)
 	}

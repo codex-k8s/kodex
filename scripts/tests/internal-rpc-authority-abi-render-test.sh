@@ -76,6 +76,31 @@ for mutation in \
   fi
 done
 
+# Несколько реплик не должны соревноваться за общий v1 watermark.
+validate_worker_instances() {
+  yq -o=json -I=0 '.' "$1" | jq -s -e '
+    [.[] | select(.kind == "Deployment") |
+      . as $d | (.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
+      select(.name | endswith("platform-worker-grant-agent")) |
+      {deployment:$d, agent:.}] as $workers |
+    ($workers | length) >= 8 and
+    all($workers[];
+      .deployment.spec.template.metadata.annotations."kodex.dev/worker-grant-format" == "2" and
+      ([.agent.env[]? | select(.name == "PLATFORM_WORKER_GRANT_INSTANCE_ID")] ==
+        [{name:"PLATFORM_WORKER_GRANT_INSTANCE_ID",valueFrom:{fieldRef:{fieldPath:"metadata.uid"}}}]))
+  ' >/dev/null
+}
+validate_worker_instances "$render" || fail 'worker grants lack exact Pod instance identity'
+for mutation in \
+  'del(.valueFrom) | .value = "caller-selected"' \
+  '.valueFrom.fieldRef.fieldPath = "metadata.name"'; do
+  yq -o=json -I=0 '.' "$render" | jq -s \
+    'map(if .kind == "Deployment" then
+      (.spec.template.spec.containers[]?.env[]? | select(.name == "PLATFORM_WORKER_GRANT_INSTANCE_ID")) |= ('"$mutation"')
+     else . end)' | yq -P '.[] | split_doc' >"$mutated"
+  if validate_worker_instances "$mutated"; then fail 'invalid worker instance identity was accepted'; fi
+done
+
 validate_controller_sidecars() {
   yq -o=json -I=0 '.' "$1" | jq -s -e '
   any(.[];

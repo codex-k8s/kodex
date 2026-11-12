@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -17,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -308,7 +306,7 @@ func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, ".kodex/outbox"); err != nil {
 		return preparedTurn{}, "RUNTIME_WORKSPACE_INVALID", err
 	}
-	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token(), codex.RequiredMCPToolNames(input))
+	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token(), runtimecontract.RuntimeMCPToolNames(input))
 	if err != nil {
 		return preparedTurn{}, "RUNTIME_MCP_UNAVAILABLE", err
 	}
@@ -349,8 +347,12 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 			return errors.New("runtime activity is invalid")
 		}
 		var err error
-		if activity.ProviderProcess != nil {
+		if activity.Progress != "" {
+			err = client.Progress(ctx, input, activity.Progress)
+		} else if activity.ProviderProcess != nil {
 			err = client.ProviderProcess(ctx, input, *activity.ProviderProcess)
+		} else if activity.ModelMeasurement != nil {
+			err = client.ModelMeasurement(ctx, input, *activity.ModelMeasurement)
 		} else if activity.Financial != nil {
 			err = client.FinancialObservation(ctx, input, *activity.Financial)
 		} else if activity.Message != nil {
@@ -411,8 +413,9 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: completionUsage(result)}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
-	if result.HasVerifiedRollout(input) {
-		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
+
+	if bindNativeCompletion(input, result, &payload) != nil {
+		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", completionUsage(result))
 	}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
@@ -437,7 +440,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 64<<10 || !utf8.ValidString(result.FinalMessage) {
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
-	if input.CodexSandbox == "workspace-write" && hasCapability(input, runtimecontract.ArtifactCapability) {
+	if input.WorkspaceAccess == "workspace-write" && hasCapability(input, runtimecontract.ArtifactCapability) {
 		if err := workspacepolicy.PublishResult(ctx, input.WorkspaceRoot, input.WorkspacePolicy, workspacepolicy.ResultProvenance{
 			Schema: "kodex.workspace-write-result.v1", RuntimeRevisionRef: input.RuntimeRevisionRef,
 			RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
@@ -454,7 +457,10 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		result = result.WithWorkspaceDiagnostic(input, workspaceCompletionPublish, workspaceCompletionDenialReason(err))
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
-	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: completionUsage(result), Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: completionUsage(result), Artifacts: artifacts}
+	if bindNativeCompletion(input, result, &payload) != nil {
+		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
+	}
 	if payload.Validate() != nil {
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
@@ -470,10 +476,11 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 		code, summary = "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
-		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: completionUsage(result),
-		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
-		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: completionUsage(result)}
 	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
+	if bindNativeCompletion(input, result, &payload) != nil {
+		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", completionUsage(result))
+	}
 	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
 		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, completionUsage(result))
 	}
@@ -489,9 +496,11 @@ func completeResultFailure(ctx context.Context, input model.Input, client *callb
 		summary = "i18n:" + runtimecontract.ProviderOverloadedFailureCode
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
-		SafeErrorCode: code, Usage: completionUsage(result), CodexSessionID: result.SessionID,
-		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+		SafeErrorCode: code, Usage: completionUsage(result)}
 	payload.ProviderDiagnostic = diagnostic
+	if bindNativeCompletion(input, result, &payload) != nil {
+		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", completionUsage(result))
+	}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
@@ -638,7 +647,7 @@ func materializeWorkspace(ctx context.Context, input model.Input) error {
 // materializeWorkspaceDirectories creates the fixed shared runtime directory list through the security helper, stopping on the first error and never accepting arbitrary directory names.
 // materializeWorkspaceDirectories создаёт фиксированный список общих runtime-каталогов через security helper, останавливаясь при первой ошибке и не принимая произвольных имён.
 func materializeWorkspaceDirectories() error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge", "work"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/opencode", ".kodex/state/opencode", "input", "session", "knowledge", "work"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
@@ -658,91 +667,17 @@ func buildPrompt(input model.Input) ([]byte, error) {
 		}
 	}
 	var builder strings.Builder
-	continuationNotice, err := appendSessionContext(&builder, input)
+	_, err := appendSessionContext(&builder, input)
 	if err != nil {
 		return nil, err
 	}
 	builder.WriteString(input.Task)
-	if !continuationNotice && (input.CodexSessionID != "" || input.PromptTargetKind == "SESSION_CONTINUATION" ||
-		(input.PromptServiceTemplateRevision == "" && strings.Contains(input.Instructions, `<session-continuation used="true">`))) {
-		if err := appendContinuationRevision(&builder, input); err != nil {
-			return nil, err
-		}
-	}
+
 	result := []byte(builder.String())
 	if len(result) == 0 || len(result) > 1<<20 || !utf8.Valid(result) {
 		return nil, errors.New("turn prompt is invalid")
 	}
 	return result, nil
-}
-
-// appendContinuationRevision validates reasoning configuration and appends exact revision/config/environment pins with sorted tool/grant/file descriptions. Versioned prompts include only PLATFORM sections; the existing unversioned path extracts its fixed service blocks. Textual context describes approved state, not newly granted capabilities.
-// appendContinuationRevision проверяет reasoning configuration и добавляет точные revision/config/environment pins с сортированными tool/grant/file descriptions. Versioned prompts включают лишь PLATFORM sections; прежний unversioned path извлекает фиксированные service blocks. Текст описывает одобренное состояние, а не выдаёт capabilities.
-func appendContinuationRevision(builder *strings.Builder, input model.Input) error {
-	if runtimecontract.ValidateEffectiveReasoningEffort(input.ConfigOverlay, input.EffectiveReasoningEffort, input.ReasoningMode) != nil {
-		return errors.New("continuation configuration is invalid")
-	}
-	toolNames := make([]string, 0, len(input.EnvironmentTools))
-	for _, tool := range input.EnvironmentTools {
-		toolNames = append(toolNames, tool.Name+":"+tool.Command)
-	}
-	sort.Strings(toolNames)
-	mcpTools := codex.RequiredMCPToolNames(input)
-	grants := make([]string, 0, len(input.IntegrationGrants))
-	for _, grant := range input.IntegrationGrants {
-		grants = append(grants, grant.Ref+":"+grant.ConnectionRef+":"+grant.CapabilityKey)
-	}
-	sort.Strings(grants)
-	files := make([]string, 0, len(input.InputArtifacts))
-	for _, artifact := range input.InputArtifacts {
-		files = append(files, artifact.Ref+":"+artifact.Digest)
-	}
-	sort.Strings(files)
-	builder.WriteString("\n<runtime-revision-delta>\n")
-	builder.WriteString("revision=" + input.RuntimeRevisionRef + ":" + strconv.FormatInt(input.RuntimeRevisionVersion, 10) + ":" + input.RuntimeRevisionDigest + "\n")
-	builder.WriteString("attempt=" + strconv.FormatInt(int64(input.Attempt), 10) + "\n")
-	builder.WriteString("model=" + input.Model + "\nreasoning=" + input.EffectiveReasoningEffort + "\n")
-	builder.WriteString("reasoning-mode=" + input.ReasoningMode + "\n")
-	builder.WriteString("image=" + input.ImageReference + ":" + input.ImageManifestDigest + "\n")
-	builder.WriteString("tools=" + strings.Join(toolNames, ",") + "\n")
-	builder.WriteString("mcp=" + input.MCPBindingDigest + ":" + strings.Join(mcpTools, ",") + ":" + strings.Join(grants, ",") + "\n")
-	builder.WriteString("files=" + input.AttachmentSetRef + ":" + input.AttachmentSetManifestDigest + ":" + strings.Join(files, ",") + "\n")
-	builder.WriteString("config=" + input.RuntimeConfigRef + ":" + strconv.FormatInt(input.RuntimeConfigVersion, 10) + ":" + input.RuntimeConfigDigest +
-		":" + input.ProviderPolicyRef + ":" + strconv.FormatInt(input.ProviderPolicyVersion, 10) + ":" + input.ProviderPolicyDigest +
-		":" + input.ConfigOverlayRef + ":" + strconv.FormatInt(input.ConfigOverlayVersion, 10) + ":" + input.ConfigOverlayDigest + "\n")
-	builder.WriteString("environment=" + input.RuntimeEnvironmentRef + ":" + strconv.FormatInt(input.RuntimeEnvironmentVersion, 10) + ":" +
-		input.RuntimeEnvironmentDigest + ":" + input.EnvironmentBindingRef + ":" + strconv.FormatInt(input.EnvironmentBindingVersion, 10) +
-		":" + input.EnvironmentBindingDigest + "\n")
-	builder.WriteString("</runtime-revision-delta>\n")
-	if input.PromptServiceTemplateRevision != "" {
-		envelope, err := runtimecontract.DecodePromptService(input)
-		if err != nil {
-			return err
-		}
-		sections := envelope.Sections[:0]
-		for _, section := range envelope.Sections {
-			if section.Source == "PLATFORM" {
-				sections = append(sections, section)
-			}
-		}
-		envelope.Sections = sections
-		raw, err := json.Marshal(envelope)
-		if err != nil {
-			return err
-		}
-		builder.Write(raw)
-		builder.WriteByte('\n')
-		return nil
-	}
-	for _, name := range []string{"workflow-stage", "automation", "session-continuation", "effective-capabilities"} {
-		block, blockErr := materializedServiceBlock(input.Instructions, name)
-		if blockErr != nil {
-			return blockErr
-		}
-		builder.WriteString(block)
-		builder.WriteByte('\n')
-	}
-	return nil
 }
 
 // validateMaterializedInstructions delegates versioned envelopes to the strict contract decoder; otherwise it requires bounded UTF-8 resolved text, exactly one of each fixed block, at most one used launch kind and an exact capability block. Resumed sessions require the existing continuation block; these shape checks do not manufacture trusted provenance.
@@ -783,7 +718,7 @@ func validateMaterializedInstructions(input model.Input) error {
 	if capabilities != want {
 		return errors.New("server-materialized capability block is invalid")
 	}
-	if input.CodexSessionID != "" {
+	if input.PromptTargetKind == "SESSION_CONTINUATION" {
 		continuation, _ := materializedServiceBlock(value, "session-continuation")
 		if !strings.Contains(continuation, `used="true"`) {
 			return errors.New("server-materialized continuation block is missing")

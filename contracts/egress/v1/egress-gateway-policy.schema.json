@@ -22,6 +22,7 @@
       "additionalProperties": false,
       "required": ["dns", "limits", "destinations"],
       "properties": {
+        "modelProviderCatalog": {"$ref": "urn:kodex:contract:model-provider-catalog:v1"},
         "dns": {
           "type": "object",
           "additionalProperties": false,

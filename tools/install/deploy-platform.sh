@@ -17,6 +17,8 @@ usage() {
   printf '%s\n' '  [--repair-egress-secret-access; explicit workload resume repair]' >&2
   printf '%s\n' '  [--component-image-profile <json> --component-image-profile-sha256 <64-hex> --base-release-lock <json>; workload resume only]' >&2
   printf '%s\n' '  [--previous-component-image-profile <json> --previous-component-image-profile-sha256 <64-hex>; exact component predecessor]' >&2
+  printf '%s\n' '  [--preserve-observability-profile; workload resume only]'
+  printf '%s\n' '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' >&2
   printf '%s\n' '  [--provider-apparmor-profile <empty|kodex-provider-runtime>; explicit runtime-only projection]' >&2
 }
 
@@ -28,8 +30,10 @@ portable_arguments=()
 portable_inventory=""
 provider_profile_arguments=()
 previous_arguments=()
+preserve_observability_profile=false
 repair_api_endpoints=false
 clamav_mode=enabled
+clamav_storage_profile=shared-rwx
 artifact_antivirus_mode=required
 repair_egress_secret_access=false
 component_image_requested=false
@@ -54,6 +58,8 @@ while (($# > 0)); do
     --render) render_file="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) portable_arguments+=("$1" "${2:-}"); shift 2 ;;
     --public-tls-mode) public_tls_mode="${2:-}"; shift 2 ;;
+    --preserve-observability-profile) preserve_observability_profile=true; shift ;;
+    --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --repair-kubernetes-api-endpoints) repair_api_endpoints=true; previous_arguments+=("$1"); shift ;;
@@ -78,6 +84,7 @@ case "$mode" in
   defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;;
   *) fail 'mode is invalid' ;;
 esac
+case "$clamav_storage_profile" in shared-rwx|node-local-rwo) ;; *) fail 'ClamAV storage profile is invalid' ;; esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antivirus mode is invalid' ;; esac
 case "$public_tls_mode" in deferred|enabled|external) ;; *) fail 'public TLS mode is invalid' ;; esac
@@ -90,6 +97,10 @@ if [[ "$repair_egress_secret_access" == true ]]; then
 fi
 if [[ "$repair_api_endpoints" == true ]]; then
   case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'API endpoint repair requires workload resume' ;; esac
+fi
+if [[ "$preserve_observability_profile" == true ]]; then
+  case "$mode" in prepare-preflight|preflight|resume-workloads) ;; *) fail 'observability preservation requires workload resume' ;; esac
+  previous_arguments+=(--preserve-observability-profile)
 fi
 [[ -f "$render_file" && -s "$render_file" && ! -L "$render_file" ]] ||
   fail 'release render is invalid'
@@ -115,7 +126,7 @@ if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
 fi
 python3 "$repository_root/tools/install/provider_sandbox_profile.py" --check --render "$render_file" "${provider_profile_arguments[@]}"
-python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --render "$render_file"
+python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile" --render "$render_file"
 python3 "$repository_root/tools/install/native_integration_egress.py" --check --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
@@ -845,6 +856,14 @@ apply_workloads_after_authority() {
     select(.kind == "Deployment" or
       .kind == "DaemonSet" or .kind == "CronJob")
   '
+  if [[ "$clamav_storage_profile" == node-local-rwo ]]; then
+    kubectl --context "$context" -n "$namespace" rollout status deployment/clamav-egress-gateway --timeout=5m >/dev/null ||
+      fail 'ClamAV egress gateway is unavailable before database bootstrap'
+    local clamav_bootstrap_job
+    clamav_bootstrap_job=$(yq -r 'select(.kind == "Job" and .metadata.annotations."kodex.dev/clamav-bootstrap-sha256" != null) | .metadata.name' "$render_file")
+    [[ "$clamav_bootstrap_job" =~ ^clamav-db-bootstrap-[a-f0-9]{16}$ ]] || fail 'exact ClamAV bootstrap Job is required'
+    apply_job "$clamav_bootstrap_job"
+  fi
   kubectl --context "$context" -n "$namespace" rollout status deployment/control-plane --timeout=15m >/dev/null ||
     fail 'control plane is unavailable before provider bootstrap'
   python3 "$repository_root/tools/install/provider-bootstrap.py" recover --context "$context"
@@ -928,10 +947,17 @@ if [[ "$mode" == apply || "$mode" == upgrade ]]; then
   ensure_seed_secret internal-rpc-authority-restore-evidence
   ensure_seed_secret internal-rpc-authority-snapshot
   reconcile_immutable_configmaps
+  # Параметры должны существовать до включения bindings с parameterNotFoundAction=Deny.
+  # Порядок документов Kustomize не является порядком зависимостей Kubernetes API.
+  apply_render foundation-namespaces 'select(.kind == "Namespace")'
+  apply_render foundation-parameters '
+    select(.kind == "ConfigMap" or .kind == "ImageAdmissionPolicyParameters")
+  '
   apply_render foundation '
     select(.kind != "CustomResourceDefinition" and .kind != "Deployment" and
       .kind != "StatefulSet" and .kind != "DaemonSet" and .kind != "Job" and
-      .kind != "CronJob" and .kind != "Secret" and
+      .kind != "CronJob" and .kind != "Secret" and .kind != "Namespace" and
+      .kind != "ConfigMap" and .kind != "ImageAdmissionPolicyParameters" and
       (strenv(KODEX_DEPLOY_PUBLIC_TLS_MODE) == "enabled" or
        .kind != "Certificate" or
        .metadata.name != strenv(KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME)))
@@ -984,7 +1010,7 @@ fi
 if [[ "$mode" == resume-workloads ]]; then
   [[ -n "$profile_mode" ]] || fail 'workload resume requires a portable profile'
   python3 "$repository_root/tools/install/authority_registry.py" preflight-workloads \
-    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" "${completion_arguments[@]}"
+    --render "$render_file" --context "$context" "${previous_arguments[@]}" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${completion_arguments[@]}"
   # Только profile assets/parameters/policy; authority registry и publisher history прежние.
   apply_render bootstrap-observability '
     select(.metadata.labels."kodex.dev/observability-profile" == "disabled" and
@@ -1004,6 +1030,9 @@ if [[ "$mode" == resume-workloads ]]; then
       select((.kind == "ConfigMap" and .metadata.labels."kodex.dev/provider-sandbox-profile" == "v1") or
         (.kind == "ValidatingAdmissionPolicyBinding" and .metadata.name == "runtime-role-pod-exact-secret-projection"))
     '
+  fi
+  if [[ "$clamav_storage_profile" == node-local-rwo ]]; then
+    apply_render bootstrap-clamav-local-storage 'select(.kind == "PersistentVolumeClaim" and .metadata.name == "clamav-database-local")'
   fi
   wait_authority_projections bootstrap
   apply_workloads_after_authority

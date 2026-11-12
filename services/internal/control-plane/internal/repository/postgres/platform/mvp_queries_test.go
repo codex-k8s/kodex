@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"os"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	domainerrs "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -38,7 +40,7 @@ func TestProviderAccountActionsUseCanonicalNextActions(t *testing.T) {
 			State:         "PENDING_AUTHORIZATION",
 			Authorization: &entity.ProviderAuthorization{State: "PENDING"},
 		}, want: []string{"OPEN", "EDIT", "DELETE", "REFRESH_AUTHORIZATION", "REVOKE"}},
-		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}},
+		{name: "active", item: entity.ProviderAccount{State: "AUTHORIZED", Enabled: true}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REFRESH_AUTHORIZATION", "TEST", "REVOKE", "DISABLE"}},
 		{name: "disabled", item: entity.ProviderAccount{State: "DISABLED"}, want: []string{"OPEN", "EDIT", "DELETE", "REVOKE", "ENABLE"}},
 		{name: "configure", item: entity.ProviderAccount{State: "REAUTHORIZATION_REQUIRED"}, want: []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REVOKE"}},
 		{name: "revoked", item: entity.ProviderAccount{State: "REVOKED"}, want: []string{"OPEN", "EDIT", "DELETE"}},
@@ -283,6 +285,14 @@ func TestProviderCompensationQueryWaitsForOwnerTransactionAndMatchesExactDescrip
 	}
 }
 
+// queryConfiguredBootstrapProviderAccount selects the exact configured bootstrap account in disposable fixtures.
+// It reads only a locator and supplies no credential or account authority.
+// queryConfiguredBootstrapProviderAccount выбирает точный настроенный bootstrap account в disposable fixtures.
+// Запрос читает лишь locator и не выдаёт credential или полномочия аккаунта.
+//
+//go:embed testdata/sql/configured_bootstrap_provider_account.sql
+var queryConfiguredBootstrapProviderAccount string
+
 // TestBootstrapComponentProviderAccountLifecycle runs only with the configured component DSN,
 // initializes synthetic provider/image metadata, bootstraps and resolves the exact default account
 // before materialization-reference and disable/enable/revoke assertions. Descriptor mismatch must
@@ -328,7 +338,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	// Выбираем точный bootstrap-аккаунт, а не первый элемент общего каталога.
 	var bootstrapAccountRef string
-	if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&bootstrapAccountRef); err != nil {
+	if err := pool.QueryRow(ctx, queryConfiguredBootstrapProviderAccount, "default-"+repository.defaultModelProvider().DefinitionKey()).Scan(&bootstrapAccountRef); err != nil {
 		t.Fatalf("resolve bootstrap provider account: %v", err)
 	}
 	account, err := service.GetProviderAccountWithUsage(ctx, owner, bootstrapAccountRef, nil)
@@ -366,7 +376,7 @@ func TestBootstrapComponentProviderAccountLifecycle(t *testing.T) {
 	}
 	account = executeProviderEnabledTransition(t, ctx, service, owner, account, true, "provider-enable-component")
 	if account.State != "AUTHORIZED" || !account.Enabled || !account.Ready ||
-		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "TEST", "REVOKE", "DISABLE"}) {
+		!reflect.DeepEqual(account.NextActions, []string{"OPEN", "EDIT", "DELETE", "CONFIGURE_CREDENTIAL", "REFRESH_AUTHORIZATION", "TEST", "REVOKE", "DISABLE"}) {
 		t.Fatalf("re-enabled provider account = %#v", account)
 	}
 	version := account.Version
@@ -581,6 +591,7 @@ func TestIssue1019RemediationQueriesKeepExactAuthorityAndProvenance(t *testing.T
 // иными значениями остаются отдельными.
 func configureComponentProviderAndRoleImages(t *testing.T, repository *Repository) ProviderCredentialConfig {
 	t.Helper()
+	configureComponentModelProvider(t, repository)
 	credentialConfig := ProviderCredentialConfig{
 		SecretName:            "runtime-provider-openai-default-r1",
 		SecretUID:             "10000000-0000-4000-8000-000000000001",
@@ -594,4 +605,15 @@ func configureComponentProviderAndRoleImages(t *testing.T, repository *Repositor
 		t.Fatalf("configure role images: %v", err)
 	}
 	return credentialConfig
+}
+
+// configureComponentModelProvider installs the exact synthetic OpenCode route before bootstrap without reading environment or credentials.
+// configureComponentModelProvider задаёт точный синтетический маршрут OpenCode до bootstrap, не читая окружение или credentials.
+func configureComponentModelProvider(t *testing.T, repository *Repository) {
+	t.Helper()
+	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion,
+		ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: "gpt-5", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
+	if repository.ConfigureModelProvider(profile, "gpt-5") != nil {
+		t.Fatal("configure synthetic native provider")
+	}
 }

@@ -20,7 +20,7 @@ func testProviderBootstrapHistory(t *testing.T, ctx context.Context, repository 
 	var oldest ProviderCredentialConfig
 	if err := pool.QueryRow(ctx, `SELECT c.secret_name, c.secret_uid::text, c.secret_resource_version, c.content_sha256
 FROM control_plane.provider_credential_revisions c JOIN control_plane.provider_accounts a ON a.id = c.provider_account_id
-WHERE a.stable_key = 'default-openai-codex' AND c.revision_number = 1`).Scan(&oldest.SecretName, &oldest.SecretUID, &oldest.SecretResourceVersion, &oldest.ContentSHA256); err != nil {
+WHERE a.stable_key = 'default-opencode-synthetic' AND c.revision_number = 1`).Scan(&oldest.SecretName, &oldest.SecretUID, &oldest.SecretResourceVersion, &oldest.ContentSHA256); err != nil {
 		t.Fatal("read original bootstrap pin")
 	}
 	initialState := func() string {
@@ -29,7 +29,7 @@ WHERE a.stable_key = 'default-openai-codex' AND c.revision_number = 1`).Scan(&ol
 		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array(a.current_credential_revision_id, a.version,
  (SELECT count(*) FROM control_plane.provider_credential_revisions),
  (SELECT count(*) FROM control_plane.provider_credential_cleanup_tasks))::text
-FROM control_plane.provider_accounts a WHERE a.stable_key = 'default-openai-codex'`).Scan(&snapshot); err != nil {
+FROM control_plane.provider_accounts a WHERE a.stable_key = 'default-opencode-synthetic'`).Scan(&snapshot); err != nil {
 			t.Fatal("read same-name state")
 		}
 		return snapshot
@@ -51,7 +51,7 @@ FROM control_plane.provider_accounts a WHERE a.stable_key = 'default-openai-code
 	}
 	current := ProviderCredentialConfig{SecretName: "runtime-provider-forward-history", SecretUID: "10000000-0000-4000-8000-000000001151", SecretResourceVersion: "1151", ContentSHA256: strings.Repeat("a", 64)}
 	var accountID, organizationID string
-	if err := pool.QueryRow(ctx, `SELECT id::text, organization_id::text FROM control_plane.provider_accounts WHERE stable_key = 'default-openai-codex'`).Scan(&accountID, &organizationID); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT id::text, organization_id::text FROM control_plane.provider_accounts WHERE stable_key = 'default-opencode-synthetic'`).Scan(&accountID, &organizationID); err != nil {
 		t.Fatal("read bootstrap account")
 	}
 	// Fixture публикует отдельную immutable revision, как уже разрешённая owner rotation.

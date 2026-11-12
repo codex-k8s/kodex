@@ -279,6 +279,11 @@ func promptPreviewView(v *cp.PreviewPromptTemplateResponse, full bool) (map[stri
 		}
 	}
 	result := map[string]any{"safePreview": v.SafePreview, "complete": v.Complete, "diagnostics": diagnostics, "templateRef": v.TemplateRef, "templateDigest": v.TemplateDigest, "materializationDigest": v.MaterializationDigest, "effectiveCapabilities": capabilities, "serviceTemplateRevision": v.ServiceTemplateRevision, "serviceTemplateDigest": v.ServiceTemplateDigest, "variableSnapshotDigest": v.VariableSnapshotDigest, "locale": v.Locale, "slots": slots, "sections": sections}
+	dependencies, ok := promptDependencyViews(v.Dependencies)
+	if !ok {
+		return nil, false
+	}
+	result["dependencies"] = dependencies
 	if full {
 		result["fullMaterializedPrompt"] = v.FullMaterializedPrompt
 	}
@@ -294,6 +299,48 @@ func promptPreviewView(v *cp.PreviewPromptTemplateResponse, full bool) (map[stri
 			return nil, false
 		}
 		result["runtimeDiff"] = diff
+	}
+	return result, true
+}
+
+// promptDependencyViews validates closed classifications without accepting values or caller cache guarantees.
+// promptDependencyViews проверяет закрытые классификации без значений и назначаемых клиентом гарантий кеша.
+func promptDependencyViews(values []*cp.PromptTemplateDependency) ([]any, bool) {
+	if len(values) > 512 {
+		return nil, false
+	}
+	result := make([]any, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		if value == nil || !validManagedDigest(value.TemplateDigest) || !promptText(value.Path, 128) || value.Path == "" || value.Sensitivity != "PRIVATE" {
+			return nil, false
+		}
+		key := value.TemplateDigest + ":" + value.Path
+		if seen[key] {
+			return nil, false
+		}
+		seen[key] = true
+		switch value.Stability {
+		case "STATIC_LITERAL":
+			if value.Path != "$literal" || value.SourceDigest != value.TemplateDigest || value.TrustScope != "OWNER_TEMPLATE" {
+				return nil, false
+			}
+		case "VERSION_PINNED":
+			if !validManagedDigest(value.SourceDigest) || value.Path == "$literal" || value.TrustScope != "DATA_ONLY" {
+				return nil, false
+			}
+		case "TURN_LIVE", "UNKNOWN":
+			if value.SourceDigest != "" || value.Path == "$literal" || value.TrustScope != "DATA_ONLY" {
+				return nil, false
+			}
+		default:
+			return nil, false
+		}
+		item := map[string]any{"templateDigest": value.TemplateDigest, "path": value.Path, "stability": value.Stability, "sensitivity": value.Sensitivity, "trustScope": value.TrustScope}
+		if value.SourceDigest != "" {
+			item["sourceDigest"] = value.SourceDigest
+		}
+		result = append(result, item)
 	}
 	return result, true
 }

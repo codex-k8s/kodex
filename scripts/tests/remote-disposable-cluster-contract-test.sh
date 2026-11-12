@@ -143,17 +143,16 @@ cp "$repository_root/dev.sh" "$source_fixture/dev.sh"
 cp "$repository_root/tools/dev/lib/cluster-identity.sh" "$source_fixture/tools/dev/lib/cluster-identity.sh"
 cp "$repository_root/tools/dev/resolve-local-profile.sh" "$source_fixture/tools/dev/resolve-local-profile.sh"
 for helper in configure-local-api-endpoint.sh bootstrap-cluster.sh deploy-local.sh \
-  install-user-render-tools.sh install-user-material-tools.sh install-user-nss-tools.sh \
-  prepare-local-credentials.sh; do
+  install-user-render-tools.sh install-user-material-tools.sh install-user-nss-tools.sh; do
   cat >"$source_fixture/tools/dev/$helper" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ "${BASH_SOURCE[0]##*/}" == prepare-local-credentials.sh ]]; then
-  : >"${1:?}"
-fi
 exit 0
 EOF
 done
+cp "$repository_root/tools/dev/prepare-local-credentials.sh" "$source_fixture/tools/dev/"
+cp "$repository_root/tools/dev/local_credentials.py" "$source_fixture/tools/dev/"
+cp "$repository_root/tools/dev/lib/local-credentials.sh" "$source_fixture/tools/dev/lib/"
 chmod +x "$source_fixture/dev.sh" "$source_fixture/tools/dev"/*.sh
 git -C "$source_fixture" init -q
 git -C "$source_fixture" config user.name 'Kodex contract'

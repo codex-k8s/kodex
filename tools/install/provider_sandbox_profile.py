@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 
 import yaml
 from deployment_profile import require, Rejected
@@ -36,12 +37,28 @@ def one(resources, kind, name, namespace='kodex-system'):
 
 
 def source_policy(resources):
-    source = one(resources, 'ConfigMap', SOURCE)
+    controllers = [r for r in resources if r.get('kind') == 'Deployment' and r.get('metadata', {}).get('name') == 'image-admission-controller' and r['metadata'].get('namespace') == 'kodex-system']
+    name = SOURCE
+    if controllers:
+        controller = one(resources, 'Deployment', 'image-admission-controller')
+        apps = [c for c in controller['spec']['template']['spec']['containers'] if c.get('name') == 'image-admission-controller']
+        require(len(apps) == 1, 'EXACT_IMAGE_ADMISSION_CONTROLLER_REQUIRED')
+        entries = [e for e in apps[0].get('env', []) if e.get('name') == 'IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP']
+        require(len(entries) == 1 and set(entries[0]) == {'name', 'value'} and isinstance(entries[0]['value'], str), 'EXACT_ACTIVE_IMAGE_POLICY_REQUIRED')
+        name = entries[0]['value']
+    source = one(resources, 'ConfigMap', name)
+    return validate_source(source)
+
+
+def validate_source(source):
+    """Проверяет содержимое immutable policy отдельно от выбора действующего controller."""
+    name = source['metadata']['name']
     data = source.get('data')
     require(source.get('immutable') is True and isinstance(data, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()), 'IMMUTABLE_IMAGE_POLICY_REQUIRED')
     require(all(k in data for k in (*FIELDS, 'policySHA256')), 'PROVIDER_SANDBOX_SOURCE_FIELDS_REQUIRED')
     require(re.fullmatch('[a-f0-9]{64}', data['policySHA256']) and data['policySHA256'] != '0'*64, 'IMAGE_POLICY_DIGEST_REQUIRED')
     require(digest({k: v for k, v in data.items() if k not in ('policySHA256', 'orchestrationRevision')}) == data['policySHA256'], 'IMAGE_POLICY_DIGEST_MISMATCH')
+    require(name in (SOURCE, SOURCE+'-'+data['policySHA256'][:32]), 'IMAGE_POLICY_NAME_DIGEST_MISMATCH')
     require(re.fullmatch(r'[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}', data['nodeReadbackImage']) and '://' not in data['nodeReadbackImage'] and not data['nodeReadbackImage'].endswith('0'*64), 'PINNED_PROVIDER_IMAGE_REQUIRED')
     require(re.fullmatch('[1-9][0-9]{0,8}', data['roleRuntimeContractRevision']) and data['providerAppArmorProfile'] in ('', PROFILE), 'PROVIDER_SANDBOX_SOURCE_CONTRACT_REJECTED')
     return source
@@ -79,7 +96,7 @@ def active(resources):
     deployment, binding, reference = targets(resources)
     selected = [r for r in resources if r.get('kind') == 'ConfigMap' and (r.get('metadata', {}).get('name', '').startswith(PREFIX) or LABEL in r.get('metadata', {}).get('labels', {}))]
     marker = deployment['spec']['template'].get('metadata', {}).get('annotations', {}).get(DIGEST)
-    if reference['name'] == SOURCE:
+    if reference['name'] == source['metadata']['name']:
         require(not selected and marker is None, 'UNBOUND_PROVIDER_PROFILE_REJECTED')
         return None
     require(len(selected) == 1 and reference['name'] == selected[0]['metadata']['name'], 'EXACT_PROVIDER_PROFILE_PROJECTION_REQUIRED')
@@ -95,6 +112,19 @@ def validate_render(resources):
     marked = any(r.get('kind') == 'Deployment' and DIGEST in r.get('spec', {}).get('template', {}).get('metadata', {}).get('annotations', {}) for r in resources)
     if selected or marked:return active(resources)
     return None
+
+
+def validate_live(resources):
+    """Проверяет API readback тем же контрактом, удаляя только серверную metadata проекции."""
+    result = copy.deepcopy(resources)
+    for item in result:
+        if item.get('kind') != 'ConfigMap' or not item.get('metadata', {}).get('name', '').startswith(PREFIX):
+            continue
+        metadata = item['metadata']
+        for field in ('uid', 'resourceVersion', 'generation', 'creationTimestamp', 'managedFields'):
+            metadata.pop(field, None)
+        metadata.get('annotations', {}).pop('kubectl.kubernetes.io/last-applied-configuration', None)
+    return active(result)
 
 
 def transform(resources, profile=None):
@@ -129,10 +159,50 @@ def rebase(resources, previous):
     deployment, binding, reference = targets(result)
     require(reference['name'] == before['metadata']['name'], 'PROVIDER_PROFILE_OVERLAY_BINDING_DRIFT')
     result = [r for r in result if not (r.get('kind') == 'ConfigMap' and r['metadata']['name'] == before['metadata']['name'] and r['metadata'].get('namespace') == 'kodex-system')]
-    reference['name'] = SOURCE
-    binding['spec']['paramRef']['name'] = SOURCE
+    reference['name'] = source_policy(result)['metadata']['name']
+    binding['spec']['paramRef']['name'] = reference['name']
     deployment['spec']['template']['metadata']['annotations'].pop(DIGEST)
     return transform(result, profile)
+
+
+def reconcile_policy(resources):
+    """Переносит доказанную прежнюю runtime-проекцию на текущую policy без смены AppArmor.
+
+    Допускаются лишь два binding: исходная проекция либо текущая image policy.
+    Старый immutable source, точная проекция и marker обязательны; неизвестное
+    состояние нельзя превратить в согласованное ослаблением проверки.
+    """
+    result = copy.deepcopy(resources)
+    source = source_policy(result)
+    selected = [r for r in result if r.get('kind') == 'ConfigMap' and
+                (r.get('metadata', {}).get('name', '').startswith(PREFIX) or
+                 LABEL in r.get('metadata', {}).get('labels', {}))]
+    require(len(selected) == 1, 'EXACT_PROVIDER_PROFILE_PROJECTION_REQUIRED')
+    current = selected[0]
+    old_digest = current.get('metadata', {}).get('annotations', {}).get(SOURCE_DIGEST, '')
+    require(re.fullmatch('[a-f0-9]{64}', old_digest), 'PROVIDER_PROFILE_SOURCE_REQUIRED')
+    candidates = [r for r in result if r.get('kind') == 'ConfigMap' and
+                  r.get('data', {}).get('policySHA256') == old_digest]
+    require(len(candidates) == 1, 'EXACT_PROVIDER_PROFILE_SOURCE_REQUIRED')
+    old = validate_source(one(result, 'ConfigMap', candidates[0]['metadata']['name']))
+    profile = current.get('data', {}).get('providerAppArmorProfile')
+    require(current == projection(old, profile), 'PROVIDER_PROFILE_PROJECTION_DRIFT')
+    binding = one(result, 'ValidatingAdmissionPolicyBinding', BINDING, '')
+    require(binding.get('spec', {}).get('paramRef', {}).get('name') in
+            (current['metadata']['name'], source['metadata']['name']), 'PROVIDER_PROFILE_UNKNOWN_BINDING')
+    binding['spec']['paramRef']['name'] = current['metadata']['name']
+    deployment, binding, reference = targets(result)
+    require(reference['name'] == current['metadata']['name'] and
+            deployment['spec']['template'].get('metadata', {}).get('annotations', {}).get(DIGEST) ==
+            current['metadata']['annotations'][DIGEST], 'PROVIDER_PROFILE_DEPLOYMENT_DIGEST_DRIFT')
+    desired = projection(source, profile)
+    reference['name'] = desired['metadata']['name']
+    binding['spec']['paramRef']['name'] = desired['metadata']['name']
+    deployment['spec']['template']['metadata']['annotations'][DIGEST] = desired['metadata']['annotations'][DIGEST]
+    result = [r for r in result if r is not current]
+    result.append(desired)
+    require(active(result) == profile, 'PROVIDER_PROFILE_MATERIALIZATION_FAILED')
+    return result
 
 
 def transition(previous, desired):
@@ -147,20 +217,32 @@ def transition(previous, desired):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--render', type=Path, required=True)
+    parser.add_argument('--render', type=Path)
+    parser.add_argument('--check-live', action='store_true')
     parser.add_argument('--profile', choices=('', PROFILE))
     parser.add_argument('--check', action='store_true')
+    parser.add_argument('--reconcile-policy', action='store_true')
     args = parser.parse_args()
+    if args.check_live:
+        require(args.render is None and args.profile is None and not args.check and not args.reconcile_policy, 'PROVIDER_PROFILE_ARGUMENTS_REJECTED')
+        raw = sys.stdin.buffer.read((2 << 20) + 1)
+        require(len(raw) <= 2 << 20, 'RENDER_SIZE_REJECTED')
+        resources = json.loads(raw)
+        require(isinstance(resources, list) and 3 <= len(resources) <= 5, 'RESOURCE_COUNT_REJECTED')
+        validate_live(resources)
+        return
+    require(args.render is not None, 'REGULAR_RENDER_REQUIRED')
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes(); require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)))
     require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
+    require(not args.reconcile_policy or not args.check and args.profile is None, 'PROVIDER_PROFILE_ARGUMENTS_REJECTED')
     if args.check:
         current = validate_render(resources)
         require(args.profile is None or current == args.profile, 'PROVIDER_PROFILE_INPUT_MISMATCH')
         return
-    require(args.profile is not None, 'EXPLICIT_PROVIDER_PROFILE_REQUIRED')
-    desired = transform(resources, args.profile)
+    require(args.reconcile_policy or args.profile is not None, 'EXPLICIT_PROVIDER_PROFILE_REQUIRED')
+    desired = reconcile_policy(resources) if args.reconcile_policy else transform(resources, args.profile)
     fd = os.open(args.render, os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW)
     with os.fdopen(fd, 'w') as stream: yaml.safe_dump_all(desired, stream, sort_keys=False)
 

@@ -91,7 +91,7 @@ func renderAssistantCore(snapshot Snapshot, data map[string]any) (string, error)
 	if err != nil {
 		return "", ErrInvalid
 	}
-	if slots, valid := templateSlots(parsed.Tree.Root); !valid || len(slots) != 0 {
+	if slots, valid := templateSlots(parsed); !valid || len(slots) != 0 {
 		return "", ErrInvalid
 	}
 	rendered, err := executeTemplate(parsed, data)

@@ -14,14 +14,21 @@ done
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 # Producer проверяет typed source и строит CNI pins вместе с immutable policy.
-revision=$(jq -er '.metadata.revision' "$root/deploy/k8s/base/egress-gateway/policy.json")
-digest=$(yq -r '.spec.template.spec.containers[0].env[] |
-  select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST") | .value' \
-  "$root/deploy/k8s/base/egress-gateway/deployment.yaml")
+yq -o=json -I=0 '.' "$input" | jq -sj '
+  [.[] | select(.kind == "ConfigMap" and (.metadata.name | startswith("egress-gateway-policy-")))] |
+  if length == 1 then .[0].data["policy.json"] else error("exact base policy required") end
+' >"$temporary/policy.json"
+revision=$(jq -er '.metadata.revision' "$temporary/policy.json")
+digest=$(yq -o=json -I=0 '.' "$input" | jq -ser '
+  [.[] | select(.kind == "Deployment" and .metadata.name == "egress-gateway") |
+    .spec.template.spec.containers[] | select(.name == "egress-gateway") |
+    .env[] | select(.name == "EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST").value] |
+  if length == 1 then .[0] else error("exact base policy digest required") end
+')
 (
   cd -- "$root/services/external/egress-gateway"
   go run ./cmd/mail-projection -configuration "$configuration" \
-    -policy "$root/deploy/k8s/base/egress-gateway/policy.json" \
+    -policy "$temporary/policy.json" \
     -revision "$revision" -digest "$digest" -resolv-conf "$resolver" -output "$temporary/mail"
 )
 source_hash=$(yq -o=json -I=0 '.' "$configuration" | jq -cS '.' | sha256sum | awk '{print $1}')

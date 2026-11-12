@@ -1,5 +1,5 @@
 -- name: runtime_catalog__read_configuration :one
-SELECT config.provider, config.model, policy.account_candidates, overlay.content
+SELECT config.provider, config.model, config.runtime_profile_key, policy.account_candidates, overlay.content
 FROM control_plane.agents agent
 JOIN control_plane.agent_runtime_config_versions config
   ON config.agent_id = agent.id

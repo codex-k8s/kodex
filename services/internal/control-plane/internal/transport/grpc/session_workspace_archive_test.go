@@ -79,7 +79,7 @@ func TestWorkspaceArchiveOwnerWire(t *testing.T) {
 			t.Fatal("owner fixture invalid", kind, err)
 		}
 		result := castSessionArchiveTask(map[string]any{"workspaceWork": work})
-		if result == nil || result.Workspace == nil || result.CodexSessionId != "" || result.SourceRelativePath != "" ||
+		if result == nil || result.Workspace == nil || result.NativeSessionId != "" || result.SourceRelativePath != "" ||
 			result.Workspace.Target.Scope.AgentRef != work.Workspace.Target.Scope.AgentRef ||
 			result.Workspace.Policy.Digest != work.Workspace.Policy.Digest {
 			t.Fatal("owner lost or downgraded workspace task", kind)
@@ -135,8 +135,8 @@ func TestWorkspaceArchiveOwnerWire(t *testing.T) {
 			t.Fatal("restore without exact object or prepared target admitted")
 		}
 	}
-	legacy := castSessionArchiveTask(map[string]any{"taskRef": "sat_legacy000", "kind": "SNAPSHOT", "codexSessionID": "legacy-codex"})
-	if legacy == nil || legacy.Workspace != nil || legacy.CodexSessionId != "legacy-codex" {
+	legacy := castSessionArchiveTask(map[string]any{"taskRef": "sat_legacy000", "kind": "SNAPSHOT", "nativeSessionID": "legacy-codex"})
+	if legacy == nil || legacy.Workspace != nil || legacy.NativeSessionId != "legacy-codex" {
 		t.Fatal("legacy projection changed")
 	}
 	path := os.Getenv("KODEX_WORKSPACE_OWNER_PROTO_FIXTURE")

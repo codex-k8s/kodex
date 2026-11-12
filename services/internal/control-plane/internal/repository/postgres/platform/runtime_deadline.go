@@ -176,6 +176,9 @@ func (repository *Repository) executionDeadlineCommand(ctx context.Context, tx p
 	case command.LeaseInput:
 		pin = payload
 	case command.CompleteExecutionInput:
+		if outcome, handled, err := repository.recordClosedNativeCompletion(ctx, tx, current, payload); handled || err != nil {
+			return outcome, handled, err
+		}
 		pin = command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}
 	case command.DelegateInput:
 		pin = command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}
@@ -318,10 +321,10 @@ func validateRuntimeCompletion(payload command.CompleteExecutionInput) error {
 	if !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
 		return errs.ErrInvalid
 	}
-	hasArchive := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
-	if hasArchive && (runtimecontract.ValidateCodexArchiveIdentity(payload.CodexSessionID, payload.ArchiveRelativePath) != nil || len(payload.ArchiveSHA256) != 64 || payload.ArchiveSizeBytes < 1 || payload.ArchiveSizeBytes > runtimecontract.MaximumSessionSourceBytes) {
+	if payload.NativeSession != nil && payload.NativeSession.Validate() != nil {
 		return errs.ErrInvalid
 	}
+
 	return nil
 }
 
@@ -352,21 +355,10 @@ func recordExpiredRuntimeCompletion(ctx context.Context, tx pgx.Tx, current scop
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRootUsage, lease["rootRunID"]); err != nil {
 		return errs.ErrUnavailable
 	}
-	if payload.CodexSessionID != "" {
-		var sessionID, targetType string
-		if tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType) != nil {
-			return errs.ErrUnavailable
-		}
-		if err := lockSessionContentGeneration(ctx, tx, current.organizationID, sessionID); err != nil {
+
+	if payload.NativeSession != nil {
+		if err := completeNativeSessionCheckpoint(ctx, tx, current, lease, payload.LeaseRef, *payload.NativeSession); err != nil {
 			return err
-		}
-		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
-			"organization_id": current.organizationID, "session_id": sessionID, "runtime_revision_id": lease["runtimeRevisionID"],
-			"codex_session_id": payload.CodexSessionID, "source_relative_path": payload.ArchiveRelativePath, "source_sha256": payload.ArchiveSHA256,
-			"source_size_bytes": payload.ArchiveSizeBytes, "retention_seconds": int64(30 * 24 * 60 * 60),
-		})
-		if err != nil || stored.RowsAffected() != 1 {
-			return errs.ErrUnavailable
 		}
 	}
 	return nil

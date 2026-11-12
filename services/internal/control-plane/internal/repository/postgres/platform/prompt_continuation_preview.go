@@ -126,6 +126,10 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	if effort == "" {
 		mode = runtimecontract.ReasoningUnsupported
 	}
+	_, modelProvider, err := repository.runtimeProviderSelection(view.Configuration.Provider, view.Configuration.Model)
+	if err != nil || modelProvider.ValidateRuntimePreferences(view.Configuration.Model, view.PublishedOverlay.Content, effort, mode) != nil {
+		return entity.PromptMaterializationSnapshot{}, errs.ErrConflict
+	}
 	if input.AttachmentSetRef != "" {
 		snapshot.TargetKind = promptservice.TargetSessionContinuation
 		if err := repository.promptPreviewAttachmentsTx(ctx, tx, current, projectID, &snapshot, input.AttachmentSetRef); err != nil {

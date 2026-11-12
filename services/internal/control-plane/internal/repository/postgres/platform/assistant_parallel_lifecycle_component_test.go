@@ -110,6 +110,37 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 			t.Fatalf("closed lease accepted completion: %v", err)
 		}
 	}
+	// recordStoppedWriter seals only the exact stopped native writer, preserving the already chosen run outcome.
+	// recordStoppedWriter запечатывает только точный остановленный native writer, сохраняя ранее выбранный исход run.
+	recordStoppedWriter := func(lease map[string]any, key string) {
+		t.Helper()
+		before, err := service.GetRun(ctx, owner, stringMap(lease, "runRef"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		payload := command.CompleteExecutionInput{
+			NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"),
+			Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Success: true,
+			ResultSummary: "Stopped native writer checkpoint", Usage: turnUsageFixture(),
+		}
+		forged := payload
+		forged.Fence = "synthetic-invalid-fence"
+		if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: "parallel-lifecycle-forged-" + key}, Payload: forged}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("closed native writer accepted a different fence", err)
+		}
+		result := execute(command.CompleteExecution, worker, "checkpoint-"+key, nil, payload)
+		after, err := service.GetRun(ctx, owner, before.Ref)
+		if err != nil || result.Runtime["nativeCheckpointRecorded"] != true || after.State != before.State ||
+			after.Version != before.Version || after.EventSequence != before.EventSequence || after.Usage.TotalTokens != turnUsageFixture().TotalTokens {
+			t.Fatalf("stopped writer checkpoint mismatch: error=%v recorded=%v state=%s/%s version=%d/%d sequence=%d/%d tokens=%d", err, result.Runtime["nativeCheckpointRecorded"], before.State, after.State, before.Version, after.Version, before.EventSequence, after.EventSequence, after.Usage.TotalTokens)
+		}
+		execute(command.CompleteExecution, worker, "checkpoint-"+key, nil, payload)
+		replayed, err := service.GetRun(ctx, owner, before.Ref)
+		if err != nil || replayed.Usage != after.Usage || replayed.Version != after.Version || replayed.EventSequence != after.EventSequence {
+			t.Fatal("stopped native writer receipt replay changed usage or outcome")
+		}
+	}
 	a, b := add(create("a"), "a-first", "QUEUE"), add(create("b"), "b-first", "QUEUE")
 	leases := claim("initial", 2)
 	if len(leases) != 2 || a.SessionRef == b.SessionRef {
@@ -132,6 +163,7 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	assertRun(stringMap(aFirst, "runRef"), "CANCELLED")
 	assertClosedGraph(stringMap(aFirst, "runRef"))
 	assertLateRejected(aFirst, "interrupt")
+	recordStoppedWriter(aFirst, "interrupt")
 	assertRun(stringMap(bFirst, "runRef"), "RUNNING")
 	immediateClaims := claim("immediate-priority", 10)
 	if len(immediateClaims) != 1 || stringMap(immediateClaims[0], "runRef") != aImmediate.Turns[0].RunRef {
@@ -222,6 +254,11 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	}
 	reclaimed := claim("expire-b", 10)
 	assertLateRejected(bFirst, "expiry")
+	if len(reclaimed) != 0 {
+		t.Fatal("expired native writer was replaced before its stop proof")
+	}
+	recordStoppedWriter(bFirst, "expiry")
+	reclaimed = claim("after-expired-writer-stopped", 10)
 	if len(reclaimed) != 1 || stringMap(reclaimed[0], "sessionRef") != b.SessionRef ||
 		stringMap(reclaimed[0], "leaseRef") == stringMap(bFirst, "leaseRef") ||
 		stringMap(reclaimed[0], "runtimeRevisionRef") == stringMap(bFirst, "runtimeRevisionRef") {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -37,12 +38,6 @@ const (
 // overlayEffortPattern bounds the structural shape of effort identifiers without deciding model compatibility.
 // overlayEffortPattern ограничивает структурную форму идентификаторов рассуждений без решения о совместимости модели.
 var overlayEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
-
-// ValidWebSearchMode checks the closed hosted-search mode set; selecting a mode neither grants shell egress nor applies sandbox domain rules to hosted search.
-// ValidWebSearchMode проверяет закрытый набор режимов серверного поиска; выбор режима не даёт shell-доступа в сеть и не применяет доменные правила sandbox к серверному поиску.
-func ValidWebSearchMode(mode string) bool {
-	return slices.Contains([]string{"disabled", "cached", "indexed", "live"}, mode)
-}
 
 // ValidateEffectiveReasoningEffort validates the overlay and requires a structurally valid owner effort matching any explicit override, or no effort for an unsupported model.
 // ValidateEffectiveReasoningEffort проверяет настройки и требует структурно допустимую степень владельца, совпадающую с явным переопределением, либо отсутствие степени у неподдерживаемой модели.
@@ -107,16 +102,22 @@ func OverlaySchema(efforts []string, defaultEffort string) ConfigOverlaySchema {
 // overlayFields возвращает закрытый список редактируемых настроек и копирует степени модели, чтобы метаданные редактора не разделяли список вызывающего.
 func overlayFields(efforts []string, defaultEffort string) []ConfigOverlayField {
 	return []ConfigOverlayField{
-		{Key: "model_reasoning_effort", ValueType: "string", AllowedValues: slices.Clone(efforts), DefaultValue: defaultEffort,
+		{Key: "model_reasoning_effort", ValueType: "string", AllowedValues: append([]string{}, efforts...), DefaultValue: defaultEffort,
 			Description: "Степень рассуждения выбранной модели", Completion: "model_reasoning_effort = ", Hover: "Допустимые значения определяются exact каталогами выбранных provider accounts."},
-		{Key: "web_search", ValueType: "string", AllowedValues: []string{"disabled", "cached", "indexed", "live"}, DefaultValue: "cached",
-			Description: "Режим hosted native web search", Completion: "web_search = ", Hover: "Настройка Codex 0.160.0, не доказательство успешного вызова. Sandbox domain allowlist не применяется к hosted search; shell egress не меняется."},
-		{Key: "personality", ValueType: "string", AllowedValues: []string{"none", "friendly", "pragmatic"},
-			Description: "Стиль ответов", Completion: "personality = ", Hover: "Не изменяет полномочия или ограничения runtime."},
-		{Key: "allow_login_shell", ValueType: "boolean", AllowedValues: []string{"false"}, DefaultValue: "false",
-			Description: "Запрет login shell", Completion: "allow_login_shell = false", Hover: "Разрешено только false."},
-		{Key: "history.persistence", ValueType: "string", AllowedValues: []string{"save-all", "none"}, DefaultValue: "save-all",
-			Description: "Сохранение истории", Completion: "history.persistence = ", Hover: "save-all сохраняет историю; none отключает её сохранение."},
+		{Key: "context.auto_compaction", ValueType: "boolean", AllowedValues: []string{"true", "false"},
+			Description: "Штатное автоматическое сжатие OpenCode", Completion: "context.auto_compaction = true", Hover: "Если поле отсутствует, используется настройка маршрута; по умолчанию включено."},
+		{Key: "context.prune", ValueType: "boolean", AllowedValues: []string{"true", "false"},
+			Description: "Штатное сокращение результатов инструментов в контексте", Completion: "context.prune = true", Hover: "Не удаляет исходный audit и не меняет retention сессии Kodex."},
+		{Key: "cache.optimization", ValueType: "string", AllowedValues: []string{"PROVIDER_DEFAULT", "NO_HINTS", "OPTIMIZE"},
+			Description: "Намерение оптимизации inference cache", Completion: "cache.optimization = ", Hover: "NO_HINTS убирает подсказки Kodex, но не доказывает отключение кеша провайдера."},
+		{Key: "cache.reuse_scope", ValueType: "string", AllowedValues: []string{"PROJECT", "INITIATOR", "SESSION"},
+			Description: "Область допустимого повторного использования", Completion: "cache.reuse_scope = ", Hover: "Фактическая гарантия зависит от квалифицированного маршрута. Обязательную область маршрута нельзя расширять."},
+		{Key: "cache.no_reuse", ValueType: "boolean", AllowedValues: []string{"true", "false"},
+			Description: "Обязательный запрет межзапросного reuse", Completion: "cache.no_reuse = true", Hover: "При true неподдержанный маршрут отклоняется до запроса. Это не гарантия NO_STORE."},
+		{Key: "cache.no_store", ValueType: "boolean", AllowedValues: []string{"true", "false"},
+			Description: "Обязательный запрет сохранения переиспользуемого inference cache", Completion: "cache.no_store = true", Hover: "Неподтверждённая гарантия закрыто отклоняется; не означает отсутствие рабочих KV текущего запроса."},
+		{Key: "cache.required", ValueType: "boolean", AllowedValues: []string{"true", "false"},
+			Description: "Обязательность выбранной оптимизации", Completion: "cache.required = true", Hover: "NO_REUSE и NO_STORE всегда обязательны. Ограничения маршрута нельзя ослабить."},
 	}
 }
 
@@ -161,10 +162,10 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 			}
 			primitive := values[key]
 			path := prefix + key
-			if path == "history" {
+			if slices.Contains([]string{"context", "cache"}, path) {
 				var nested map[string]toml.Primitive
 				if metadata.PrimitiveDecode(primitive, &nested) == nil {
-					visit(nested, "history.")
+					visit(nested, path+".")
 					continue
 				}
 			}
@@ -181,7 +182,7 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 					break
 				}
 				if field.ValueType == "boolean" {
-					if boolean, ok := value.(bool); ok && !boolean {
+					if boolean, ok := value.(bool); ok && slices.Contains(field.AllowedValues, strconv.FormatBool(boolean)) {
 						code = ""
 					}
 				} else if text, ok := value.(string); ok {
@@ -192,7 +193,7 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 								code, message = OverlayEffortUnsupported, "Reasoning effort is not supported by the selected model"
 							}
 						}
-					} else if (text == "" && path != "web_search") || slices.Contains(field.AllowedValues, text) {
+					} else if slices.Contains(field.AllowedValues, text) {
 						code = ""
 					}
 				}

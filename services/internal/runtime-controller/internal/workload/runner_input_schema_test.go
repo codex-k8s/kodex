@@ -20,13 +20,13 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-// TestRunnerInputSchemaV9MatchesRuntimePayload compares the schema shape with
+// TestRunnerInputSchemaV10MatchesRuntimePayload compares the schema shape with
 // RunnerInput tags, validates generated turn/warm payloads and distinguishes
 // bootstrap profile keys from opaque aggregate references without widening either.
-// TestRunnerInputSchemaV9MatchesRuntimePayload сверяет схему с тегами RunnerInput,
+// TestRunnerInputSchemaV10MatchesRuntimePayload сверяет схему с тегами RunnerInput,
 // проверяет turn/warm payload и отличает bootstrap profile keys от opaque-ссылок
 // агрегатов без расширения допустимых значений обоих видов.
-func TestRunnerInputSchemaV9MatchesRuntimePayload(t *testing.T) {
+func TestRunnerInputSchemaV10MatchesRuntimePayload(t *testing.T) {
 	compiled, properties, required := loadRunnerInputSchema(t)
 	assertRunnerInputShape(t, properties, required)
 
@@ -70,13 +70,13 @@ func TestRunnerInputSchemaV9MatchesRuntimePayload(t *testing.T) {
 	}
 }
 
-// TestRunnerInputSchemaV9CarriesOnlySecretDescriptors validates synthetic env
+// TestRunnerInputSchemaV10CarriesOnlySecretDescriptors validates synthetic env
 // descriptors without copying Secret bytes, then rejects injected secret values
 // and unknown fields; fixture hashes do not prove a real Secret read or scan.
-// TestRunnerInputSchemaV9CarriesOnlySecretDescriptors проверяет синтетические env
+// TestRunnerInputSchemaV10CarriesOnlySecretDescriptors проверяет синтетические env
 // descriptors без копирования Secret bytes, затем отвергает внедрённое значение
 // секрета и неизвестные поля; fixture hashes не доказывают чтение Secret или scan.
-func TestRunnerInputSchemaV9CarriesOnlySecretDescriptors(t *testing.T) {
+func TestRunnerInputSchemaV10CarriesOnlySecretDescriptors(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	secretValue := []byte("runner-schema-secret-fixture")
 	digest := sha256.Sum256(secretValue)
@@ -130,13 +130,13 @@ func TestRunnerInputSchemaV9CarriesOnlySecretDescriptors(t *testing.T) {
 	}
 }
 
-// TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage mutates a valid JSON
+// TestRunnerInputSchemaV10RejectsDetachedAttachmentLineage mutates a valid JSON
 // instance to remove turn/set links or mismatch provenance, requiring schema
 // rejection; it does not substitute for owner-side attachment eligibility.
-// TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage убирает связи turn/set
+// TestRunnerInputSchemaV10RejectsDetachedAttachmentLineage убирает связи turn/set
 // или меняет provenance корректного JSON и требует отказа схемы;
 // это не замена проверки допустимости вложения у владельца.
-func TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage(t *testing.T) {
+func TestRunnerInputSchemaV10RejectsDetachedAttachmentLineage(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(testExecution(false))
@@ -179,7 +179,7 @@ func TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage(t *testing.T) {
 func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.RawMessage, []string) {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")
-	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v9", "agent-runner-input.schema.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v10", "agent-runner-input.schema.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

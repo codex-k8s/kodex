@@ -25,7 +25,7 @@ func TestWorkspaceNestedMountContainer(t *testing.T) {
 			t.Fatal("invalid workspace path accepted")
 		}
 	}
-	for _, path := range []string{"/workspace/.kodex/inbox/proof", "/workspace/.kodex/state/codex-home/proof", "/workspace/input/proof", "/workspace/knowledge/proof"} {
+	for _, path := range []string{"/workspace/.kodex/inbox/proof", "/workspace/.kodex/state/opencode/proof", "/workspace/input/proof", "/workspace/knowledge/proof"} {
 		if err := os.WriteFile(path, []byte("synthetic"), 0600); err != nil {
 			t.Fatal(err)
 		}

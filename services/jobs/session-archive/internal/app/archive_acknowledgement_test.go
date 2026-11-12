@@ -34,7 +34,7 @@ type archiveAckFixture struct {
 // ExecuteRetained моделирует одно завершённое физическое действие без owner RPC либо retry.
 func (fixture *archiveAckFixture) ExecuteRetained(context.Context, model.Task, func(context.Context) error) (model.Result, *controller.RetainedAttempt, error) {
 	fixture.physical++
-	return model.Result{Success: true, FormatVersion: 1, ObjectKey: "fixture-object", ObjectVersion: "fixture-version",
+	return model.Result{Success: true, FormatVersion: 3, ObjectKey: "fixture-object", ObjectVersion: "fixture-version",
 		ObjectETag: "fixture-etag", ObjectDigest: "sha256:" + strings.Repeat("d", 64), ObjectSizeBytes: 1024, SourceSizeBytes: 128}, nil, nil
 }
 
@@ -75,8 +75,8 @@ func TestArchiveAcknowledgementNeverRepeatsPhysicalExecution(t *testing.T) {
 			claim := &cp.SessionArchiveTask{TaskRef: "sat_public_fixture", SessionRef: "ses_public_fixture", OrganizationRef: "org_public_fixture",
 				Kind: cp.SessionArchiveTaskKind_SESSION_ARCHIVE_TASK_KIND_SNAPSHOT, ProviderAccountRef: "pacc_fixture",
 				RuntimeRevisionRef: "rrev_fixture", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: strings.Repeat("a", 64),
-				CodexSessionId: "00000000-0000-4000-8000-000000000003", ContentGeneration: 3, PvcName: pvc, InputDigest: strings.Repeat("b", 64),
-				SourceRelativePath: ".kodex/state/codex-home/sessions/2026/10/04/rollout-2026-10-04T00-00-00-00000000-0000-4000-8000-000000000003.jsonl",
+				NativeSessionId: "ses_NativeFixture3", ContentGeneration: 3, PvcName: pvc, InputDigest: strings.Repeat("b", 64),
+				SourceRelativePath: ".kodex/state/opencode/checkpoints/g3/ses_NativeFixture3.json",
 				SourceSha256:       strings.Repeat("c", 64), SourceSizeBytes: 128, TargetObjectKey: "fixture-object", Attempt: 1,
 				Lease: &cp.WorkLease{Ref: "lea_fixture", Fence: "fnc_fixture", Generation: 1}}
 			fixture := &archiveAckFixture{failure: test.code, alwaysFail: test.always}

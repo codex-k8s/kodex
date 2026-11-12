@@ -2,21 +2,18 @@ package callback
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-// TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault checks both scopes separate immutable execution workspace policy from fresh configuration and report SDK cached-search defaults as unverified metadata.
+// TestAssistantCurrentExecutionDiscoverySeparatesWorkspaceAndNativePreferences checks both scopes separate immutable execution workspace policy from fresh configuration and report requested preferences without invented enforcement.
 // Private workspace/auth paths and execution secrets must not enter the projected JSON.
-// TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault проверяет в обеих областях отделение неизменяемой политики рабочей области выполнения от свежей конфигурации и выдачу кешированного поиска SDK как непроверенных метаданных по умолчанию.
+// TestAssistantCurrentExecutionDiscoverySeparatesWorkspaceAndNativePreferences проверяет в обеих областях отделение неизменяемой политики рабочей области выполнения от свежей конфигурации и выдачу намерений настроек без выдуманной гарантии исполнения.
 // Частные пути рабочей области и авторизации, секреты выполнения не должны попадать в проецируемый JSON.
-func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testing.T) {
+func TestAssistantCurrentExecutionDiscoverySeparatesWorkspaceAndNativePreferences(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		t.Run(string(scope), func(t *testing.T) {
 			input, arguments, response := assistantOwnCurrentFixture(scope)
@@ -32,13 +29,12 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 			workspace := map[string]any{"revision": input.WorkspacePolicy.Revision, "root": "/workspace",
 				"maximum_writable_bytes": input.WorkspacePolicy.MaximumWritableBytes, "maximum_file_count": input.WorkspacePolicy.MaximumFileCount,
 				"readonly_logical_roots": []string{"input", "knowledge", "context"}}
-			search := map[string]any{"configuration_source": "SDK_DEFAULT_CACHED", "requested_mode": "cached", "owner_editable": true,
-				"sandbox_domain_allowlist_applies": false, "actual_call_verified": false}
-			if !reflect.DeepEqual(execution["workspace_policy"], workspace) || !reflect.DeepEqual(execution["hosted_native_search"], search) {
+			search := map[string]any{"requested_context": (*runtimecontract.OverlayContext)(nil), "requested_cache": (*runtimecontract.OverlayCache)(nil), "effective_status": "UNKNOWN"}
+			if !reflect.DeepEqual(execution["workspace_policy"], workspace) || !reflect.DeepEqual(execution["native_preferences"], search) {
 				t.Fatal("safe workspace policy or bounded SDK default metadata is missing")
 			}
 			current := result["current_configuration"].(map[string]any)
-			if current["workspace_policy"] != nil || !reflect.DeepEqual(current["hosted_native_search"], search) {
+			if current["workspace_policy"] != nil || !reflect.DeepEqual(current["native_preferences"], search) {
 				t.Fatal("immutable execution/default metadata was substituted into fresh owner configuration")
 			}
 			raw, err := json.Marshal(result)
@@ -54,12 +50,12 @@ func TestAssistantCurrentExecutionDiscoverySeparatesPolicyAndSDKDefault(t *testi
 	}
 }
 
-// TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn checks fresh published live-search settings remain distinct from the turn's cached overlay and invalid settings never fall back silently.
-// TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn проверяет отделение свежих опубликованных настроек живого поиска от кешированного поиска настроек хода и запрет молчаливой замены некорректных настроек значением по умолчанию.
-func TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn(t *testing.T) {
+// TestAssistantNativePreferencesSeparateFreshOwnerFromTurn preserves immutable turn intent when current published preferences change.
+// TestAssistantNativePreferencesSeparateFreshOwnerFromTurn сохраняет намерение immutable turn при изменении опубликованных настроек.
+func TestAssistantNativePreferencesSeparateFreshOwnerFromTurn(t *testing.T) {
 	input, arguments, response := assistantOwnCurrentFixture(runtimecontract.AssistantScopeSystem)
-	input.ConfigOverlay = "web_search = \"cached\"\n"
-	response.AssistantConfigurationCatalog.CurrentConfiguration.PublishedOverlay.Content = "web_search = \"live\"\n"
+	input.ConfigOverlay = "[context]\nprune = false\n"
+	response.AssistantConfigurationCatalog.CurrentConfiguration.PublishedOverlay.Content = "[context]\nprune = true\n"
 	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
 	if err != nil {
 		t.Fatal(err)
@@ -68,15 +64,19 @@ func TestAssistantCurrentSearchSeparatesFreshOwnerFromTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, test := range []struct{ field, mode string }{{"current_configuration", "live"}, {"execution_snapshot", "cached"}} {
-		search := result[test.field].(map[string]any)["hosted_native_search"].(map[string]any)
-		if search["requested_mode"] != test.mode || search["configuration_source"] != "PUBLISHED_CONFIG_OVERLAY" || search["actual_call_verified"] != false || search["sandbox_domain_allowlist_applies"] != false {
-			t.Fatal("fresh current/default/actual effect was confused with the immutable turn")
+	for _, test := range []struct {
+		field string
+		prune bool
+	}{{"current_configuration", true}, {"execution_snapshot", false}} {
+		prefs := result[test.field].(map[string]any)["native_preferences"].(map[string]any)
+		context := prefs["requested_context"].(*runtimecontract.OverlayContext)
+		if context == nil || context.Prune == nil || *context.Prune != test.prune || prefs["effective_status"] != "UNKNOWN" {
+			t.Fatal("fresh preference replaced immutable turn or invented enforcement")
 		}
 	}
-	for _, raw := range []string{`web_search = "unknown"`, `web_search = true`, `web_search = ""`} {
-		if _, err := assistantHostedSearchDiscovery(raw); err == nil {
-			t.Fatal("invalid search configuration was replaced by a default")
+	for _, raw := range []string{`web_search = "live"`, `context.prune = "false"`, `cache.qualification = "SUPPORTED"`} {
+		if _, err := assistantNativePreferencesDiscovery(raw); err == nil {
+			t.Fatal("invalid preferences accepted")
 		}
 	}
 }
@@ -113,48 +113,5 @@ func TestAssistantCurrentExecutionDiscoveryRejectsMissingOrInvalidPolicy(t *test
 				t.Fatal("invalid policy was projected, defaulted or disclosed")
 			}
 		})
-	}
-}
-
-// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter checks local Docker/npm/lock pins and writer-source markers supporting SDK-default discovery metadata.
-// This source guard does not execute Codex, prove an actual hosted-search call or revalidate an upstream SDK implementation.
-// TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter проверяет локальные привязки Docker, npm и lockfile, маркеры исходника записи настроек, на которых основаны метаданные умолчания SDK.
-// Проверка исходников не запускает Codex, не доказывает реальный серверный поисковый вызов и не перепроверяет реализацию внешнего SDK.
-func TestAssistantCurrentExecutionDiscoveryPinsSDKDefaultWriter(t *testing.T) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("test source path is unavailable")
-	}
-	job := filepath.Join(filepath.Dir(source), "..", "..", "..", "..", "jobs", "agent-runner")
-	dockerfile, err := os.ReadFile(filepath.Join(job, "Dockerfile"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Count(string(dockerfile), "ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0\n") != 1 {
-		t.Fatal("SDK default metadata requires revalidation for changed local pin")
-	}
-	var manifest struct {
-		Dependencies map[string]string `json:"dependencies"`
-	}
-	manifestJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package.json"))
-	if err != nil || json.Unmarshal(manifestJSON, &manifest) != nil || manifest.Dependencies["@openai/codex"] != "0.160.0" {
-		t.Fatal("SDK default metadata requires revalidation for changed production pin")
-	}
-	var lock struct {
-		Packages map[string]struct {
-			Dependencies map[string]string `json:"dependencies"`
-			Version      string            `json:"version"`
-		} `json:"packages"`
-	}
-	lockJSON, err := os.ReadFile(filepath.Join(job, "npm-toolchain", "package-lock.json"))
-	if err != nil || json.Unmarshal(lockJSON, &lock) != nil || lock.Packages[""].Dependencies["@openai/codex"] != "0.160.0" || lock.Packages["node_modules/@openai/codex"].Version != "0.160.0" {
-		t.Fatal("SDK default metadata requires revalidation for changed production lock pin")
-	}
-	writer, err := os.ReadFile(filepath.Join(job, "internal", "codex", "config.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(writer), `toml:"web_search,omitempty"`) || !strings.Contains(string(writer), "WebSearchMode: overlay.WebSearchMode") {
-		t.Fatal("hosted search metadata requires the published-overlay writer")
 	}
 }

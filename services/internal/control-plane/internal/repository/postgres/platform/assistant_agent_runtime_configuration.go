@@ -124,8 +124,8 @@ func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.Agen
 		"model_configuration": map[string]any{"ref": view.Configuration.Ref, "version": view.Configuration.Version,
 			"digest": view.Configuration.Digest, "provider": view.Configuration.Provider, "model": view.Configuration.Model,
 			"runtime_profile_ref": view.Configuration.RuntimeProfileRef, "provider_policy_mode": view.Configuration.ProviderPolicy.Mode,
-			"provider_accounts": minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates),
-			"reasoning_effort":  overlay.ModelReasoningEffort, "web_search_mode": overlay.WebSearchMode,
+			"provider_accounts":     minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates),
+			"reasoning_effort":      overlay.ModelReasoningEffort,
 			"published_overlay_ref": view.PublishedOverlay.Ref, "published_overlay_version": view.PublishedOverlay.Version,
 			"published_overlay_digest": view.PublishedOverlay.Digest, "has_draft_overlay": view.DraftOverlay != nil},
 		"resources": runtimecontract.RuntimeResourcePolicy{

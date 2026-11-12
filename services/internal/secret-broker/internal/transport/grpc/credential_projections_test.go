@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -11,26 +12,26 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument accepts synthetic API mode and rejects OAuth mode,
-// extra fields, a second JSON value and edge-whitespace keys; it does not cover duplicate-key rejection.
-// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument принимает synthetic API mode и отклоняет OAuth mode,
-// extra fields, второй JSON value и keys с edge whitespace; duplicate-key rejection не проверяет.
+// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument rejects legacy, foreign, duplicate and malformed secret envelopes before projection.
+// TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument отклоняет старые, чужие, дублированные и повреждённые документы до выдачи ключа.
 func TestProjectedAPIKeyAcceptsOnlyExactAPIKeyDocument(t *testing.T) {
 	t.Parallel()
-	key, err := projectedAPIKey([]byte(`{"OPENAI_API_KEY":"synthetic-key","auth_mode":"apikey"}`))
+	valid := `{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-openai","API_KEY":"synthetic-key"}`
+	key, err := projectedAPIKey([]byte(valid))
 	if err != nil || string(key) != "synthetic-key" {
-		t.Fatalf("valid API key projection failed: key=%q err=%v", key, err)
+		t.Fatal("valid API key projection failed", err)
 	}
 	clear(key)
-	for _, raw := range [][]byte{
-		[]byte(`{"OPENAI_API_KEY":"synthetic-key","auth_mode":"oauth"}`),
-		[]byte(`{"OPENAI_API_KEY":"synthetic-key","auth_mode":"apikey","extra":"value"}`),
-		[]byte("{\"OPENAI_API_KEY\":\"synthetic-key\",\"auth_mode\":\"apikey\"}\n{}"),
-		[]byte(`{"OPENAI_API_KEY":" short ","auth_mode":"apikey"}`),
+	for _, raw := range []string{
+		`{"OPENAI_API_KEY":"synthetic-key","auth_mode":"apikey"}`,
+		`{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-foreign","API_KEY":"synthetic-key"}`,
+		`{"auth_mode":"gateway-api-key","provider_definition_key":"opencode-openai","API_KEY":"synthetic-key","API_KEY":"other-key"}`,
+		valid + `{}`, strings.Replace(valid, "synthetic-key", " short ", 1),
+		strings.Replace(valid, `"API_KEY":`, `"unknown":true,"API_KEY":`, 1),
 	} {
-		if value, err := projectedAPIKey(raw); err == nil {
+		if value, err := projectedAPIKey([]byte(raw)); err == nil {
 			clear(value)
-			t.Fatalf("invalid provider credential was projected: %s", raw)
+			t.Fatal("invalid provider credential was projected")
 		}
 	}
 }

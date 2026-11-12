@@ -116,7 +116,7 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 			{Path: RuntimeWorkspaceRoot + "/input", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot + "/knowledge", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeContextRoot, Access: RuntimeWorkspaceReadOnly},
-			{Path: RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json", Access: RuntimeWorkspaceReadOnly},
+			{Path: RuntimeWorkspaceRoot + "/.kodex/state/opencode/auth.json", Access: RuntimeWorkspaceReadOnly},
 			{Path: RuntimeWorkspaceRoot, Access: RuntimeWorkspaceWritable},
 		},
 		MaximumWritableBytes: RuntimeWorkspaceWritableBytes, MaximumFileCount: RuntimeWorkspaceDefaultFiles,
@@ -138,7 +138,7 @@ func (policy RuntimeWorkspacePolicy) Validate() error {
 		RuntimeWorkspaceRoot + "/input":                             RuntimeWorkspaceReadOnly,
 		RuntimeWorkspaceRoot + "/knowledge":                         RuntimeWorkspaceReadOnly,
 		RuntimeContextRoot:                                          RuntimeWorkspaceReadOnly,
-		RuntimeWorkspaceRoot + "/.kodex/state/codex-home/auth.json": RuntimeWorkspaceReadOnly,
+		RuntimeWorkspaceRoot + "/.kodex/state/opencode/auth.json": RuntimeWorkspaceReadOnly,
 		RuntimeWorkspaceRoot:                                        RuntimeWorkspaceWritable,
 	}
 	seen := make(map[string]struct{}, len(policy.Rules))

@@ -18,7 +18,7 @@ const api = vi.hoisted(() => ({
     vi.fn<
       (account: ProviderAccount, key?: string) => Promise<ProviderAccount>
     >(),
-  verifyDeviceAuthorization:
+  verifyAccountAuthorization:
     vi.fn<
       (account: ProviderAccount, key?: string) => Promise<ProviderAccount>
     >(),
@@ -254,7 +254,7 @@ describe("provider lifecycle recovery", () => {
   });
   it.each([
     ["DELETE", api.deleteProviderAccountRecord],
-    ["VERIFY", api.verifyDeviceAuthorization],
+    ["VERIFY", api.verifyAccountAuthorization],
     ["REAUTHORIZE", api.reauthorizeProviderDevice],
   ] as const)(
     "первый известный %s 412 разрешает новый intent со свежим OCC",

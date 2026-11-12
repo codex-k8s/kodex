@@ -304,7 +304,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.command.provider-accounts.device-authorize":               controlplanev1.PlatformCommandService_StartProviderAccountDeviceAuthorization_FullMethodName,
 		"platform.command.provider-accounts.api-key-authorize":              controlplanev1.PlatformCommandService_AuthorizeProviderAccountAPIKey_FullMethodName,
 		"platform.command.provider-accounts.authorization.refresh":          controlplanev1.PlatformCommandService_RefreshProviderAccountAuthorization_FullMethodName,
-		"platform.command.provider-accounts.device-verify":                  controlplanev1.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName,
+		"platform.command.provider-accounts.authorization.verify":           controlplanev1.PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName,
 		"platform.command.provider-accounts.device-reauthorize":             controlplanev1.PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName,
 		"platform.command.provider-accounts.revoke":                         controlplanev1.PlatformCommandService_RevokeProviderAccount_FullMethodName,
 		"platform.command.provider-accounts.delete":                         controlplanev1.PlatformCommandService_DeleteProviderAccount_FullMethodName,

@@ -32,8 +32,7 @@ func RuntimeRevisionDigest(input RunnerInput, source RuntimeRevisionCredentialSo
 	material.RuntimeRevisionDigest = ""
 	material.ExecutionBindingDigest = ""
 	material.MCPBindingDigest = ""
-	material.CodexSandbox = ""
-	material.CodexApprovalPolicy = ""
+	material.WorkspaceAccess = ""
 	material.CallbackURL = ""
 	material.CallbackTLS = RuntimeTLSBinding{}
 	material.ExecutionTicketFile = ""
@@ -41,7 +40,7 @@ func RuntimeRevisionDigest(input RunnerInput, source RuntimeRevisionCredentialSo
 	material.ProviderAuthSHA256File = ""
 	material.WorkspaceRoot = ""
 	material.OutboxRoot = ""
-	material.CodexHome = ""
+	material.NativeStateRoot = ""
 	raw, err := json.Marshal(struct {
 		Revision   RunnerInput                     `json:"revision"`
 		Credential RuntimeRevisionCredentialSource `json:"credential_source"`

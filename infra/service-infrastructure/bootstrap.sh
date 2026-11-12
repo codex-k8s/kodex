@@ -105,7 +105,7 @@ require_ready_deployment_by_selector() {
 }
 
 if [[ "$mode" == apply-controllers ]]; then
-  kubectl create namespace kodex-trust --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  python3 "$script_directory/../../tools/install/ensure_namespace.py" --context "$expected_context" --namespace kodex-trust
 
   trust_chart=$(download_chart trust-manager)
   helm upgrade --install kodex-trust-manager "$trust_chart" \

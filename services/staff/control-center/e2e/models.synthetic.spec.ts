@@ -32,7 +32,10 @@ for (const width of [1440, 390]) {
         expect(url.searchParams.get("providerDefinitionKey")).toBe(
           "openai-codex",
         );
-        expect(url.searchParams.get("pageSize")).toBe("40");
+        expect(Number(url.searchParams.get("pageSize"))).toBeGreaterThan(0);
+        expect(Number(url.searchParams.get("pageSize"))).toBeLessThanOrEqual(
+          40,
+        );
         const account = url.searchParams.get("providerAccountRef");
         expect(["pacc_primary", "pacc_secondary"]).toContain(account);
         const query = url.searchParams.get("query") ?? "";

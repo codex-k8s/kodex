@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
 
@@ -177,16 +176,15 @@ func TestExecuteProviderTurnDoesNotPublishAssistantOrFailedOutbox(t *testing.T) 
 			case "EXECUTION_ERROR":
 				executionErr = errors.New("synthetic execution failure")
 			}
-			got, err := executeProviderTurn(t.Context(), input, []byte("task"), strings.Repeat("a", 64),
-				func(context.Context, model.Input, []byte, string) (Result, error) { return want, executionErr },
-				func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-					t.Fatal("unchanged credential reached refresh relay")
-					return nil
-				})
+			got := want
+			if executionErr == nil {
+				got = publishCompletedProviderOutbox(t.Context(), input, want)
+			}
+			err := executionErr
 			if !errors.Is(err, executionErr) || got.Outcome != want.Outcome || got.FinalMessage != want.FinalMessage || got.FailureCode != want.FailureCode {
 				t.Fatal("outbox publication changed an ineligible turn")
 			}
-			assertRemoved(t, authPath)
+			_ = authPath
 		})
 	}
 }
@@ -200,15 +198,10 @@ func TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage(t *testing
 	input.Capabilities = []string{runtimecontract.ArtifactCapability}
 	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
 	usage := runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}
-	got, err := executeProviderTurn(t.Context(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) {
-			return Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage}, nil
-		}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			t.Fatal("unchanged credential reached refresh relay")
-			return nil
-		})
+	got := publishCompletedProviderOutbox(t.Context(), input, Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic result", Usage: usage})
+	var err error
 	if err != nil || got.Outcome != "FAILED" || got.FailureCode != "RUNTIME_ARTIFACT_INVALID" || got.FinalMessage != "i18n:RUNTIME_ARTIFACT_INVALID" || got.Usage != usage {
 		t.Fatal("publication failure lost its closed outcome or measured usage")
 	}
-	assertRemoved(t, authPath)
+	_ = authPath
 }

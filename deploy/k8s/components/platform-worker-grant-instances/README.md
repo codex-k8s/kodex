@@ -1,10 +1,13 @@
 # Instance-scoped worker grants
 
-Компонент включается оператором только после additive migration и обновления
-всех control-plane consumers до поддержки grant v2 (#1220). По умолчанию
-он не включён ни в один installation profile: старый CP строго отвергает v2.
+Компонент включён в свежие `web-only` и `web-with-mattermost` профили.
+Они используют schema и immutable control-plane с поддержкой grant v2 (#1220).
+При обновлении существующей установки оператор сначала доставляет additive
+migration и обновляет всех control-plane consumers: старый CP строго отвергает v2.
 
-Компонент применяется после штатных issuer components девяти worker Deployment.
+Компонент применяется после штатных issuer components worker Deployment.
+У runtime-controller grant-agent остаётся native init sidecar; второй обычный
+контейнер не создаётся.
 Он добавляет исключительно Pod UID через Downward API и явный format marker.
 Значения UID не задаются release payload или пользователем приложения.
 Для одноразовых admission Jobs остаётся прежний v1 lifecycle.

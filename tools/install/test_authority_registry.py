@@ -109,6 +109,46 @@ class AuthorityRegistry(unittest.TestCase):
             with self.subTest(change=change), patch.object(registry, 'verify_schemas'), self.assertRaises(Rejected):
                 registry.verify_workload_resume(state, target, previous)
 
+    def test_initial_resume_preserves_only_unstarted_installation_warm(self):
+        image = 'pull.example.invalid/runner@sha256:' + 'a' * 64
+        names = ['role-runtime', 'provider-runtime', 'provider-credential-relay']
+        init = ['workspace-prepare', 'workspace-init']
+        pod = dict(metadata=dict(name='system-assistant-warm', labels={
+            'runtime.kodex.dev/mode':'warm', 'runtime.kodex.dev/managed':'true', 'app.kubernetes.io/name':'agent-runner'}),
+            spec=dict(serviceAccountName='agent-runner', containers=[dict(name=n,image=image) for n in names],
+                      initContainers=[dict(name=n,image=image) for n in init]),
+            status=dict(phase='Pending', containerStatuses=[dict(name=n,restartCount=0,state=dict(waiting={})) for n in names],
+                        initContainerStatuses=[dict(name=n,restartCount=0,state=dict(waiting={})) for n in init]))
+        class State:
+            def __init__(self): self.pods=[copy.deepcopy(pod)];self.history=dict(runs=0,turns=0);self.calls=[]
+            def call(self,args):
+                self.calls.append(args)
+                if 'get' in args:return json.dumps(dict(items=self.pods))
+                assert args[-1] == registry.BOOTSTRAP_BUSINESS_SQL
+                return json.dumps(self.history)
+        with patch.object(registry.provider_sandbox_profile, 'source_policy', return_value=dict(data=dict(nodeReadbackImage=image))):
+            state=State();registry.verify_initial_runtime(state, [])
+            self.assertEqual(len(state.calls), 2)
+            changes = [
+                lambda s:s.pods.append(copy.deepcopy(pod)),
+                lambda s:s.pods[0]['metadata'].update(name='business'),
+                lambda s:s.pods[0]['metadata']['labels'].update({'runtime.kodex.dev/mode':'run'}),
+                lambda s:s.pods[0]['spec']['containers'][0].update(image=image+'0'),
+                lambda s:s.pods[0]['spec'].update(serviceAccountName='other'),
+                lambda s:s.pods[0]['spec'].update(ephemeralContainers=[dict(name='debug')]),
+                lambda s:s.pods[0]['status'].update(phase='Running'),
+                lambda s:s.pods[0]['status']['containerStatuses'][0].update(restartCount=1),
+                lambda s:s.pods[0]['status']['containerStatuses'][0].update(state=dict(running={})),
+                lambda s:s.pods[0]['status']['initContainerStatuses'][0].update(imageID=image),
+                lambda s:s.pods[0]['status']['initContainerStatuses'][0].update(lastState=dict(terminated={})),
+                lambda s:s.pods[0]['status'].update(initContainerStatuses=[]),
+                lambda s:s.history.update(runs=1), lambda s:s.history.update(turns=1),
+            ]
+            for change in changes:
+                state=State();change(state)
+                with self.subTest(change=changes.index(change)), self.assertRaises(Rejected):
+                    registry.verify_initial_runtime(state, [])
+
     def test_existing_job_preserves_active_completed_and_unknown_effects(self):
         resources = fixture();state = FakeState(resources);name = registry.MIGRATION_JOBS[0]
         self.assertTrue(registry.existing_job(state, resources, name))

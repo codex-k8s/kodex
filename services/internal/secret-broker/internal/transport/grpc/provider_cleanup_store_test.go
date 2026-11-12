@@ -23,7 +23,9 @@ import (
 // login or provider-model operations.
 // unusedCleanupAppServer содержит ненастроенный AppServer, чтобы cleanup tests не могли незаметно
 // запустить device login и provider-model operations.
-type unusedCleanupAppServer struct{ providercredential.AppServer }
+type unusedCleanupAppServer struct {
+	providercredential.CredentialClient
+}
 
 // TestProviderCleanupStoreServiceTransportDistinguishesLostWriteACK runs real store/service/transport over
 // a fake tracker, separating pre-write CAS refusal from a committed update with lost ACK and checking

@@ -34,7 +34,7 @@ func TestWorkspaceArchiveOwnerWireConsumer(t *testing.T) {
 			t.Fatal("decode actual owner protobuf", key)
 		}
 		task, err := FromProto(&input)
-		if err != nil || task.Workspace == nil || task.Validate() != nil || task.CodexSessionID != "" || task.Archive != nil {
+		if err != nil || task.Workspace == nil || task.Validate() != nil || task.NativeSessionID != "" || task.Archive != nil {
 			t.Fatal("actual owner output rejected or downgraded", key, err)
 		}
 		raw, err := json.Marshal(task)

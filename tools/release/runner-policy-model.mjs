@@ -43,7 +43,8 @@ export function runnerPullReference(data, digest) {
   return `${host}/kodex/agent-runner@${digest}`;
 }
 
-export function requireStaging(resource) {
+export function requireStaging(resource, target) {
+  if (target) { requireValue(target.allows(resource), "PORTABLE_RUNNER_RESOURCE_REJECTED"); return; }
   const m = resource?.metadata;
   const stableDeployment = resource?.kind === "Deployment" && m?.labels?.["kodex.dev/local-profile"] === "stable" &&
     m.labels["kodex.dev/environment"] === "staging";
@@ -59,8 +60,8 @@ export function requireIdle(state, now = Date.now()) {
 }
 
 // Отдельная configuration-фаза сохраняет старые policy, helper image и published pins.
-export function preparePolicy(policy, parameters, catalog, runnerDigest, authorityIssuerImage, nodeReadbackImage) {
-  [policy, parameters, catalog].forEach(requireStaging);
+export function preparePolicy(policy, parameters, catalog, runnerDigest, authorityIssuerImage, nodeReadbackImage, target) {
+  [policy, parameters, catalog].forEach(resource => requireStaging(resource, target));
   requireValue(policy.kind === "ConfigMap" && policy.immutable === true && policy.metadata.labels["kodex.dev/owner-intent"] === "true" &&
     parameters.kind === "ImageAdmissionPolicyParameters" && parameters.metadata.name === policy.metadata.name &&
     fingerprint(parameters.spec) === fingerprint(policy.data) && policyDigest(policy.data) === policy.data.policySHA256 &&
@@ -102,8 +103,8 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest, authori
   ] };
 }
 
-function application(deployment) {
-  requireStaging(deployment);
+function application(deployment, target) {
+  requireStaging(deployment, target);
   const name = deployment.metadata.name;
   requireValue(deployment.kind === "Deployment" && ["control-plane", "role-image-builder", "image-admission-controller"].includes(name) &&
     !deployment.spec.paused && deployment.spec.replicas > 0, "EXACT_DEPLOYMENT_REQUIRED");
@@ -122,8 +123,33 @@ function setLiteral(app, key, value, expected) {
   entries[0].value = value;
 }
 
-export function planDeployment(deployment, bundle, phase, readerImage) {
-  const { next, app } = application(deployment);
+// Canonical render хранит policy inputs через exact immutable ConfigMap, local profile — литералами.
+// Разрешаются только зарегистрированные ключи; optional, Secret и произвольный valueFrom отклоняются.
+export function policyEnvironmentValue(app, key, policy) {
+  const fields = { CONTROL_PLANE_IMAGE_POLICY_REVISION: "policyRevision", CONTROL_PLANE_IMAGE_POLICY_SHA256: "policySHA256",
+    CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST: "trustedRoleBaseDigest", CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE: "nodeReadbackImage",
+    RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE: "nodeReadbackImage" };
+  const field = fields[key], entries = app.env?.filter(item => item.name === key) ?? [];
+  requireValue(field && entries.length === 1, "EXACT_POLICY_CONFIG_REQUIRED");
+  const entry = entries[0];
+  if (typeof entry.value === "string" && entry.valueFrom === undefined) return entry.value;
+  requireValue(entry.value === undefined && policy?.immutable === true && policy.kind === "ConfigMap" &&
+    policy.metadata?.namespace === namespace && typeof policy.data?.[field] === "string" &&
+    fingerprint(entry.valueFrom) === fingerprint({configMapKeyRef:{name:policy.metadata.name,key:field}}), "EXACT_POLICY_CONFIG_REQUIRED");
+  return policy.data[field];
+}
+
+function switchPolicyEnvironment(app, key, field, bundle, expected) {
+  const entries = app.env?.filter(item => item.name === key) ?? [];
+  requireValue(entries.length === 1, "EXACT_POLICY_CONFIG_REQUIRED");
+  if (entries[0].valueFrom === undefined) { setLiteral(app,key,bundle.resources[0].data[field],expected); return; }
+  requireValue(entries[0].value === undefined && fingerprint(entries[0].valueFrom) ===
+    fingerprint({configMapKeyRef:{name:bundle.previous.policyName,key:field}}), "EXACT_POLICY_CONFIG_REQUIRED");
+  entries[0].valueFrom.configMapKeyRef.name = bundle.resources[0].metadata.name;
+}
+
+export function planDeployment(deployment, bundle, phase, readerImage, target) {
+  const { next, app } = application(deployment, target);
   const name = deployment.metadata.name;
   const policy = bundle.resources[0], catalog = bundle.resources[2];
   if (phase === "reader") {
@@ -147,9 +173,9 @@ export function planDeployment(deployment, bundle, phase, readerImage) {
     next.template.metadata.annotations ??= {};
     next.template.metadata.annotations["kodex.dev/runtime-admission-policy-sha256"] = policy.data.policySHA256;
     if (phase === "control-plane") {
-      setLiteral(app, "CONTROL_PLANE_IMAGE_POLICY_REVISION", policy.data.policyRevision, String(Number(policy.data.policyRevision) - 1));
-      setLiteral(app, "CONTROL_PLANE_IMAGE_POLICY_SHA256", policy.data.policySHA256, bundle.previous.policySHA256);
-      setLiteral(app, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST", policy.data.trustedRoleBaseDigest);
+      switchPolicyEnvironment(app, "CONTROL_PLANE_IMAGE_POLICY_REVISION", "policyRevision", bundle, String(Number(policy.data.policyRevision) - 1));
+      switchPolicyEnvironment(app, "CONTROL_PLANE_IMAGE_POLICY_SHA256", "policySHA256", bundle, bundle.previous.policySHA256);
+      switchPolicyEnvironment(app, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST", "trustedRoleBaseDigest", bundle);
     } else {
       requireValue(next.template.metadata.annotations["kodex.dev/trusted-role-base-repository"] === policy.data.trustedRoleBaseRepository, "BUILDER_BASE_REPOSITORY_MISMATCH");
       for (const suffix of ["REPOSITORY", "DIGEST"]) {
@@ -167,8 +193,8 @@ export function planDeployment(deployment, bundle, phase, readerImage) {
   ], afterSHA256: fingerprint(next) };
 }
 
-export function planBinding(binding, role, bundle) {
-  requireStaging(role);
+export function planBinding(binding, role, bundle, target) {
+  requireStaging(role, target);
   requireValue(binding.kind === "ValidatingAdmissionPolicyBinding" && binding.metadata.name === "kodex-image-admission-controller-jobs" &&
     /^[a-f0-9-]{36}$/.test(binding.metadata.uid ?? "") && /^\d+$/.test(binding.metadata.resourceVersion ?? "") &&
     binding.spec.policyName === binding.metadata.name && [bundle.previous.policyName, bundle.resources[0].metadata.name].includes(binding.spec.paramRef?.name) &&
@@ -186,8 +212,8 @@ export function planBinding(binding, role, bundle) {
   return { spec, rules };
 }
 
-export function planGatewayMaintenance(deployment, bundleSHA256, restore = false) {
-  requireStaging(deployment);
+export function planGatewayMaintenance(deployment, bundleSHA256, restore = false, target) {
+  requireStaging(deployment, target);
   requireValue(deployment.kind === "Deployment" && deployment.metadata.name === "control-api-gateway" &&
     /^[a-f0-9]{64}$/.test(bundleSHA256), "EXACT_GATEWAY_REQUIRED");
   const annotations = { ...deployment.metadata.annotations };

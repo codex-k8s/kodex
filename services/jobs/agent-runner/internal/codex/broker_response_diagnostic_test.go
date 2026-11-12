@@ -90,7 +90,7 @@ func TestBrokerResponseReadFailureCategories(t *testing.T) {
 		{"tool lifecycle", frame(1, brokerFrameActivity, tool, nil) + frame(2, brokerFrameActivity, tool, nil), "TOOL_LIFECYCLE", errProviderBrokerResponseInvalid},
 		{"terminal schema", frame(1, brokerFrameTerminal, nil, nil), "TERMINAL_SCHEMA", errProviderBrokerResponseInvalid},
 		{"diagnostic tuple", frame(1, brokerFrameTerminal, nil, &brokerResponse{Failure: providerBrokerFailureProvider, Diagnostic: bound}), "DIAGNOSTIC_TUPLE", errProviderBrokerResponseInvalid},
-		{"archive", frame(1, brokerFrameTerminal, nil, &brokerResponse{Result: Result{SessionID: "PRIVATE_SENTINEL"}}), "ARCHIVE_PROOF", errProviderBrokerResponseInvalid},
+		{"archive", frame(1, brokerFrameTerminal, nil, &brokerResponse{Result: Result{NativeSession: &runtimecontract.NativeSessionCheckpoint{SessionID: "PRIVATE_SENTINEL"}}}), "ARCHIVE_PROOF", errProviderBrokerResponseInvalid},
 		{"post terminal", end + end, "POST_TERMINAL", errProviderBrokerResponseInvalid},
 		{"absent terminal", activity, "TERMINAL_ABSENT", errProviderBrokerFailed},
 		{"terminal result", end, "TERMINAL_RESULT", errProviderBrokerFailed},

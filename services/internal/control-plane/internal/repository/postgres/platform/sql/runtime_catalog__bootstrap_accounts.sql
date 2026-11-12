@@ -1,7 +1,7 @@
 -- name: runtime_catalog__bootstrap_accounts :many
 WITH eligible AS (
     SELECT account.ref,
-           COALESCE(auth_attempt.method, '') AS authorization_method
+           COALESCE(auth_attempt.method, 'API_KEY') AS authorization_method
     FROM control_plane.provider_accounts account
     LEFT JOIN LATERAL (
         SELECT attempt.method
@@ -19,10 +19,6 @@ WITH eligible AS (
 )
 SELECT candidate.ref
 FROM eligible candidate
-WHERE candidate.authorization_method = 'DEVICE_CODE'
-   OR NOT EXISTS (
-       SELECT 1 FROM eligible preferred
-       WHERE preferred.authorization_method = 'DEVICE_CODE'
-   )
+WHERE candidate.authorization_method = 'API_KEY'
 ORDER BY candidate.ref
 LIMIT 32;

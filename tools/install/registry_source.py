@@ -3,6 +3,7 @@
 import argparse
 import copy
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -19,8 +20,11 @@ def require(value):
         raise Rejected('Registry source contract rejected')
 
 def validate(config, lock):
-    require(set(config) == {'schema', 'namespace', 'service', 'service_uid', 'pod_labels', 'target_port', 'ca_configmap'})
-    require(config['schema'] == 'kodex.registry-source/v1')
+    fields = {'schema', 'namespace', 'service', 'service_uid', 'pod_labels', 'target_port', 'ca_configmap'}
+    ingress = config.get('schema') in ('kodex.registry-source/v2', 'kodex.registry-source/v3')
+    promoted = config.get('schema') == 'kodex.registry-source/v3'
+    require(set(config) == fields | ({'tls_hostname', 'service_ip', 'service_port_name'} if ingress else set()) | ({'promoted_tls_hostname'} if promoted else set()))
+    require(config['schema'] in ('kodex.registry-source/v1', 'kodex.registry-source/v2', 'kodex.registry-source/v3'))
     for field in ['namespace', 'service', 'ca_configmap']:
         require(isinstance(config[field], str) and re.fullmatch('[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', config[field]))
     require(isinstance(config['service_uid'], str) and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', config['service_uid']))
@@ -30,7 +34,20 @@ def validate(config, lock):
         require(re.fullmatch('(?:[a-z0-9][a-z0-9.-]*/)?[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?', key) and isinstance(value, str) and re.fullmatch('[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?', value))
     require(type(config['target_port']) is int and 1 <= config['target_port'] <= 65535)
     host = config['service'] + '.' + config['namespace'] + '.svc.cluster.local'
-    require(lock['registry']['push'] == host and lock['registry']['node_pull'] == host)
+    if ingress:
+        host = config['tls_hostname']
+        require(isinstance(host, str) and len(host) <= 253 and '.' in host and
+                all(re.fullmatch('[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label) for label in host.split('.')))
+        address = ipaddress.ip_address(config['service_ip'])
+        require(address.is_private and not (address.is_loopback or address.is_unspecified or address.is_multicast or address.is_link_local))
+        require(isinstance(config['service_port_name'], str) and re.fullmatch('[a-z][a-z0-9-]{0,14}', config['service_port_name']))
+        require(lock['registry']['push'] == host)
+    else:
+        require(lock['registry']['push'] == host and lock['registry']['node_pull'] == host)
+    if promoted:
+        pull = config['promoted_tls_hostname']
+        require(isinstance(pull, str) and len(pull) <= 253 and '.' in pull and pull != host and
+                not pull.endswith('.svc.cluster.local') and all(re.fullmatch('[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label) for label in pull.split('.')))
     prefix = lock['registry']['repository_prefix']
     require(isinstance(prefix, str) and re.fullmatch('[a-z0-9][a-z0-9._/-]*', prefix) and all((p not in ('', '.', '..') for p in prefix.split('/'))))
     return host
@@ -46,11 +63,44 @@ def put_named(items, value):
     if not found:
         items.append(value)
 
+def promoted_route(config, route):
+    """Только закрытый SNI passthrough в канонический pull Service, без альтернативного backend."""
+    require(route.get('apiVersion') == 'traefik.io/v1alpha1' and route.get('kind') == 'IngressRouteTCP' and
+            route.get('metadata', {}).get('namespace') == 'kodex-system' and
+            route['metadata'].get('name') == 'kodex-image-registry-pull')
+    require(route.get('spec') == {'entryPoints':['websecure'], 'routes':[{
+        'match':'HostSNI(`' + config['promoted_tls_hostname'] + '`)',
+        'services':[{'name':'kodex-image-registry-pull','port':5000}]}], 'tls':{'passthrough':True}})
+
+
+def bind_promoted_ingress(resources, config, edge):
+    """BuildKit сохраняет TLS identity и получает только exact ingress destination для public pull."""
+    host = config['promoted_tls_hostname']
+    require(one(resources, 'ConfigMap', 'kodex-image-admission-policy')['data']['pullRegistryHost'] == host)
+    promoted_route(config, one(resources, 'IngressRouteTCP', 'kodex-image-registry-pull'))
+    pod = one(resources, 'Deployment', 'kodex-buildkit')['spec']['template']['spec']
+    alias = {'ip':config['service_ip'], 'hostnames':[host]}
+    aliases = pod.setdefault('hostAliases', [])
+    matches = [value for value in aliases if host in value.get('hostnames', [])]
+    require(not matches or matches == [alias])
+    if not matches: aliases.append(alias)
+    policy = one(resources, 'NetworkPolicy', 'kodex-buildkit-exact-paths')
+    require(policy['spec']['podSelector'] == {'matchLabels':{'app.kubernetes.io/name':'kodex-buildkit'}})
+    if edge not in policy['spec']['egress']: policy['spec']['egress'].append(copy.deepcopy(edge))
+
+
 def transform(resources, config, lock):
     host = validate(config, lock)
     result = copy.deepcopy(resources)
     job = one(result, 'Job', 'release-artifact-materializer')
     pod = job['spec']['template']['spec']
+    if config['schema'] in ('kodex.registry-source/v2', 'kodex.registry-source/v3'):
+        alias = {'ip': config['service_ip'], 'hostnames': [host]}
+        aliases = pod.setdefault('hostAliases', [])
+        matches = [item for item in aliases if host in item.get('hostnames', [])]
+        require(not matches or matches == [alias])
+        if not matches:
+            aliases.append(alias)
     containers = [c for c in pod['containers'] if c['name'] == 'materializer']
     require(len(containers) == 1)
     container = containers[0]
@@ -73,6 +123,8 @@ def transform(resources, config, lock):
     promoted_registry.bind(result, lock)
     admission = one(result, 'ConfigMap', 'kodex-image-admission-policy')
     pull_host = admission['data']['pullRegistryHost']
+    if config['schema'] == 'kodex.registry-source/v3':
+        bind_promoted_ingress(result, config, edge)
     internal = 'kodex-image-registry-pull.kodex-system.svc.cluster.local'
     if pull_host.endswith('.svc.cluster.local'):
         require(pull_host == internal)
@@ -104,9 +156,14 @@ def preflight(config, lock, context):
         require(value.returncode == 0 and len(value.stdout) <= 2 << 20)
         return json.loads(value.stdout)
     service = get('get', 'service', config['service'], '-n', config['namespace'])
-    require(service['metadata']['uid'] == config['service_uid'] and service['spec']['type'] == 'ClusterIP' and (service['spec']['selector'] == config['pod_labels']))
+    ingress = config['schema'] in ('kodex.registry-source/v2', 'kodex.registry-source/v3')
+    require(service['metadata']['uid'] == config['service_uid'] and
+            service['spec']['type'] in (('ClusterIP', 'LoadBalancer') if ingress else ('ClusterIP',)) and
+            service['spec']['selector'] == config['pod_labels'])
+    if ingress:
+        require(service['spec']['clusterIP'] == config['service_ip'])
     ports = [p for p in service['spec']['ports'] if p['port'] == 443]
-    require(len(ports) == 1 and ports[0]['targetPort'] == config['target_port'] and (ports[0]['protocol'] == 'TCP'))
+    require(len(ports) == 1 and ports[0]['targetPort'] == (config['service_port_name'] if ingress else config['target_port']) and ports[0]['protocol'] == 'TCP')
     ca = get('get', 'configmap', config['ca_configmap'], '-n', 'kodex-system')['data']['ca.crt']
     require(isinstance(ca, str) and len(ca) <= 65536 and ('PRIVATE KEY' not in ca) and ('BEGIN CERTIFICATE' in ca))
     import ssl
@@ -125,8 +182,15 @@ def preflight(config, lock, context):
         workload = get('get', 'pod', reference['name'], '-n', config['namespace'])
         require(workload['metadata']['uid'] == reference['uid'] and (not workload['metadata'].get('deletionTimestamp')))
         require(all((workload['metadata'].get('labels', {}).get(key) == value for key, value in config['pod_labels'].items())))
+        if ingress:
+            named = [port for container in workload['spec']['containers'] for port in container.get('ports', [])
+                     if port.get('name') == config['service_port_name']]
+            require(len(named) == 1 and named[0]['containerPort'] == config['target_port'] and named[0].get('protocol', 'TCP') == 'TCP')
         addresses = {item['ip'] for item in workload['status'].get('podIPs', [])}
         require(endpoint.get('addresses') and set(endpoint['addresses']) <= addresses)
+    if config['schema'] == 'kodex.registry-source/v3':
+        promoted_route(config, get('get', 'ingressroutetcp', 'kodex-image-registry-pull', '-n', 'kodex-system'))
+        require(get('get', 'configmap', 'kodex-image-admission-policy', '-n', 'kodex-system')['data']['pullRegistryHost'] == config['promoted_tls_hostname'])
     return {'phase': 'KUBERNETES_SOURCE_METADATA_VERIFIED', 'registry': host, 'ca_sha256': hashlib.sha256(ca.encode()).hexdigest(), 'workload_tls_and_auth': 'NOT_RUN'}
 
 def main():

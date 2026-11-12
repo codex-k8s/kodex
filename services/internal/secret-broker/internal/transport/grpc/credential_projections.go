@@ -1,11 +1,8 @@
 package grpc
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"time"
 
@@ -14,6 +11,7 @@ import (
 	internalrpcauthorityv1 "github.com/codex-k8s/kodex/libs/go/internalrpcauth/gen/internalrpcauthority/v1"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/serviceidentity"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	secretbrokerv1 "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
@@ -89,16 +87,6 @@ const (
 	// maximumAuthorityRevision ограничивает положительные source/provenance/credential revisions до 2^53-1 для
 	// точного целочисленного представления между transport consumers.
 	maximumAuthorityRevision = uint64(1<<53 - 1)
-	// maximumProjectedAPIKeyBytes limits the extracted API-key byte length to 16 KiB; it is not a bound on raw
-	// JSON document allocation.
-	// maximumProjectedAPIKeyBytes ограничивает длину извлечённого API key до 16 КиБ; это не ограничение
-	// выделения памяти под raw JSON document.
-	maximumProjectedAPIKeyBytes = 16 << 10
-	// minimumProjectedAPIKeyBytes rejects extracted keys shorter than eight bytes without claiming
-	// provider-side key validity.
-	// minimumProjectedAPIKeyBytes отклоняет извлечённые keys короче восьми байтов без гарантии provider-side
-	// key validity.
-	minimumProjectedAPIKeyBytes = 8
 )
 
 // MaterializeRuntimeCredentials derives authority for the fixed runtime method/operation, logs authority
@@ -455,32 +443,10 @@ func runtimeProjectionAuthority(ctx context.Context, method, operation string) (
 	return authority, err
 }
 
-// projectedAPIKey decodes one apikey-mode JSON object with unknown fields/trailing data rejected and
-// validates extracted byte bounds/edge whitespace/no CR-LF-NUL. It does not reject duplicate keys or
-// verify provider credentials; clearing returned bytes does not erase decoded immutable strings.
-// projectedAPIKey декодирует один apikey-mode JSON object, отклоняя unknown fields/trailing data, и
-// проверяет extracted byte bounds/edge whitespace/отсутствие CR-LF-NUL. Duplicate keys и provider
-// credentials не проверяет; очистка возвращённых bytes не стирает decoded immutable strings.
+// projectedAPIKey requires a new-format credential bound to the owner-approved direct OpenAI definition; legacy and foreign routes fail closed.
+// projectedAPIKey требует новый формат ключа прямого OpenAI, допущенного владельцем; старый формат и чужие маршруты закрыто отклоняются.
 func projectedAPIKey(raw []byte) ([]byte, error) {
-	var credential struct {
-		APIKey   string `json:"OPENAI_API_KEY"`
-		AuthMode string `json:"auth_mode"`
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&credential); err != nil {
-		return nil, err
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, errors.New("provider credential JSON contains trailing data")
-	}
-	key := []byte(credential.APIKey)
-	if credential.AuthMode != "apikey" || len(key) < minimumProjectedAPIKeyBytes || len(key) > maximumProjectedAPIKeyBytes ||
-		strings.TrimSpace(credential.APIKey) != credential.APIKey || strings.ContainsAny(credential.APIKey, "\r\n\x00") {
-		clear(key)
-		return nil, errors.New("provider API key is invalid")
-	}
-	return key, nil
+	return runtimecontract.DecodeGatewayProviderAuthentication(raw, runtimecontract.OpenAITranscriptionDefinitionKey)
 }
 
 // projectionStorageError maps input/conflict/stale-source failures to fixed gRPC errors and every other

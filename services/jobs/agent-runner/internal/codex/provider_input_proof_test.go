@@ -2,9 +2,6 @@ package codex
 
 import (
 	"bytes"
-	"encoding/json"
-	"errors"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,102 +76,6 @@ func proofFixture(t *testing.T) (model.Input, []byte) {
 	return input, prompt
 }
 
-// TestProviderInputProofActualAcknowledgedPayloadAndPrivacy injects an in-progress ACK and compares
-// the captured request with privileged hashes/bindings, byte-equal files and omission of private sentinels.
-// TestProviderInputProofActualAcknowledgedPayloadAndPrivacy подставляет in-progress ACK и сопоставляет
-// сохранённый request с приватными hashes/bindings, точными байтами файлов и отсутствием private sentinels.
-func TestProviderInputProofActualAcknowledgedPayloadAndPrivacy(t *testing.T) {
-	input, prompt := proofFixture(t)
-	var logs bytes.Buffer
-	writer := &proofRequestWriter{beforeWrite: func() {
-		if logs.Len() != 0 {
-			t.Fatal("proof emitted before provider ACK")
-		}
-	}}
-	messages := make(chan streamEvent, 1)
-	messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"turn":{"id":"` + testTurnID + `","items":[],"status":"inProgress"}}`)}}
-	server := &appServer{stdin: writer, messages: messages}
-	state := newProtocolState("")
-	state.threadID = testThreadID
-	observer := providerInputProofLogger(slog.New(slog.NewJSONHandler(&logs, nil)))
-	if err := server.startTurnWithInputProof(t.Context(), state, input, prompt, observer); err != nil {
-		t.Fatal(err)
-	}
-	var request struct {
-		Method string `json:"method"`
-		Params struct {
-			Model  string `json:"model"`
-			Effort string `json:"effort"`
-			Input  []struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"input"`
-		} `json:"params"`
-	}
-	var record struct {
-		Event string             `json:"event"`
-		Proof providerInputProof `json:"proof"`
-	}
-	if json.Unmarshal(writer.Bytes(), &request) != nil || json.Unmarshal(logs.Bytes(), &record) != nil {
-		t.Fatal("invalid fixture wire/proof")
-	}
-	proof := record.Proof
-	if request.Method != "turn/start" || len(request.Params.Input) < 1 || record.Event != providerInputProofEvent ||
-		proof.ProviderPromptSHA256 != providerProofSHA([]byte(request.Params.Input[0].Text)) || proof.ProviderPromptBytes != len(prompt) ||
-		proof.Model != request.Params.Model || proof.ReasoningEffort != request.Params.Effort || !proof.TaskInPrompt ||
-		proof.TaskSHA256 != providerProofSHA([]byte(input.Task)) || proof.InstructionsSHA256 != providerProofSHA([]byte(input.Instructions)) ||
-		proof.InstructionsFileComparison != proofEqual || proof.InboxPromptComparison != proofEqual ||
-		proof.InstructionsFileSHA256 != proof.InstructionsSHA256 || proof.InboxPromptSHA256 != proof.ProviderPromptSHA256 ||
-		proof.RunRef != input.RunRef || proof.TurnRef != input.TurnRef || proof.Attempt != 7 || proof.RuntimeRevisionVersion != 9 || proof.EnvironmentVersion != 11 ||
-		len(proof.Tools) != 1 || proof.Tools[0].Command != "git" || len(proof.Grants) != 1 || proof.Grants[0].Version != 3 {
-		t.Fatal("proof does not match actual acknowledged TURN or byte-equal files")
-	}
-	for _, private := range []string{"private-", "run_stale_warm", "QA_INPUT_MARKER", "PRIVATE_VARIABLE", "Материализованный", "Русские instructions"} {
-		if bytes.Contains(logs.Bytes(), []byte(private)) {
-			t.Fatal("private input reached proof log")
-		}
-	}
-	var fields map[string]json.RawMessage
-	if json.Unmarshal(logs.Bytes(), &fields) != nil || len(fields) != 5 || fields[providerInputProofKey] == nil {
-		t.Fatal("unexpected log envelope")
-	}
-}
-
-// TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck injects write, RPC, invalid-status and
-// missing-ACK failures, requiring no projection log on any path; a real provider is not started.
-// TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck подставляет write, RPC, invalid-status и
-// missing-ACK failures, требуя отсутствия projection log; реальный provider не запускается.
-func TestProviderInputProofNoReceiptBeforeSuccessfulProviderAck(t *testing.T) {
-	for _, failure := range []string{"write", "rejected", "invalid ACK", "missing ACK"} {
-		t.Run(failure, func(t *testing.T) {
-			input, prompt := proofFixture(t)
-			var logs bytes.Buffer
-			writer := &proofRequestWriter{beforeWrite: func() {
-				if logs.Len() != 0 {
-					t.Fatal("early proof")
-				}
-			}}
-			messages := make(chan streamEvent, 1)
-			switch failure {
-			case "write":
-				writer.failure = errors.New("private-write-error")
-			case "rejected":
-				messages <- streamEvent{message: wireMessage{kind: messageError, id: json.RawMessage(`1`), payload: json.RawMessage(`{"code":-32000,"message":"private-provider-error"}`)}}
-			case "invalid ACK":
-				messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"turn":{"id":"` + testTurnID + `","items":[],"status":"completed"}}`)}}
-			case "missing ACK":
-				close(messages)
-			}
-			state := newProtocolState("")
-			state.threadID = testThreadID
-			server := &appServer{stdin: writer, messages: messages}
-			if server.startTurnWithInputProof(t.Context(), state, input, prompt, providerInputProofLogger(slog.New(slog.NewJSONHandler(&logs, nil)))) == nil || logs.Len() != 0 {
-				t.Fatal("failed/unacknowledged provider input produced a receipt")
-			}
-		})
-	}
-}
-
 // TestProviderInputProofClosedComparisonsAndPayloadShape distinguishes changed/unavailable files,
 // rejects a leaf alias, arbitrary credential path and representative invalid first-item/model/effort shapes.
 // TestProviderInputProofClosedComparisonsAndPayloadShape отличает changed/unavailable files,
@@ -206,7 +107,7 @@ func TestProviderInputProofClosedComparisonsAndPayloadShape(t *testing.T) {
 			t.Fatal("invalid provider payload accepted")
 		}
 	}
-	if _, err := readProviderProofFile(input.WorkspaceRoot, ".kodex/state/codex-home/auth.json"); err == nil {
+	if _, err := readProviderProofFile(input.WorkspaceRoot, ".kodex/state/opencode/auth.json"); err == nil {
 		t.Fatal("arbitrary credential path accepted")
 	}
 }

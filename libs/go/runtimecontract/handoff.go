@@ -184,31 +184,28 @@ func (output OutputV2) validate() error {
 // HandoffV2 связывает результаты и происхождение архива с точной попыткой исполнения,
 // версиями runtime и входа, сессией и провайдером, включая необязательный исход расписания.
 type HandoffV2 struct {
-	Schema                 string     `json:"schema"`
-	ExecutionID            string     `json:"execution_id"`
-	ExecutionVersion       uint64     `json:"execution_version"`
-	Fence                  uint64     `json:"fence"`
-	GrantGeneration        uint64     `json:"grant_generation"`
-	RuntimeRevisionSHA256  string     `json:"runtime_revision_sha256"`
-	EffectiveRuntimeSHA256 string     `json:"effective_runtime_sha256"`
-	ImmutableInputSHA256   string     `json:"immutable_input_sha256"`
-	SessionID              string     `json:"session_id"`
-	TurnID                 string     `json:"turn_id"`
-	ScheduleOccurrenceID   string     `json:"schedule_occurrence_id,omitempty"`
-	Attempt                uint32     `json:"attempt"`
-	ProviderBindingID      string     `json:"provider_binding_id"`
-	ProviderBindingVersion uint64     `json:"provider_binding_version"`
-	ProviderBindingSHA256  string     `json:"provider_binding_sha256"`
-	Outcome                string     `json:"outcome"`
-	ScheduledOutcome       string     `json:"scheduled_outcome,omitempty"`
-	TerminalReference      string     `json:"terminal_reference"`
-	TerminalSHA256         string     `json:"terminal_sha256"`
-	Outputs                []OutputV2 `json:"outputs"`
-	CodexSessionID         string     `json:"codex_session_id"`
-	ArchiveRelativePath    string     `json:"archive_relative_path"`
-	ArchiveSHA256          string     `json:"archive_sha256"`
-	ArchiveProvenance      string     `json:"archive_provenance"`
-	ObservedAt             time.Time  `json:"observed_at"`
+	Schema                 string                   `json:"schema"`
+	ExecutionID            string                   `json:"execution_id"`
+	ExecutionVersion       uint64                   `json:"execution_version"`
+	Fence                  uint64                   `json:"fence"`
+	GrantGeneration        uint64                   `json:"grant_generation"`
+	RuntimeRevisionSHA256  string                   `json:"runtime_revision_sha256"`
+	EffectiveRuntimeSHA256 string                   `json:"effective_runtime_sha256"`
+	ImmutableInputSHA256   string                   `json:"immutable_input_sha256"`
+	SessionID              string                   `json:"session_id"`
+	TurnID                 string                   `json:"turn_id"`
+	ScheduleOccurrenceID   string                   `json:"schedule_occurrence_id,omitempty"`
+	Attempt                uint32                   `json:"attempt"`
+	ProviderBindingID      string                   `json:"provider_binding_id"`
+	ProviderBindingVersion uint64                   `json:"provider_binding_version"`
+	ProviderBindingSHA256  string                   `json:"provider_binding_sha256"`
+	Outcome                string                   `json:"outcome"`
+	ScheduledOutcome       string                   `json:"scheduled_outcome,omitempty"`
+	TerminalReference      string                   `json:"terminal_reference"`
+	TerminalSHA256         string                   `json:"terminal_sha256"`
+	Outputs                []OutputV2               `json:"outputs"`
+	NativeSession          *NativeSessionCheckpoint `json:"native_session,omitempty"`
+	ObservedAt             time.Time                `json:"observed_at"`
 }
 
 // Validate checks execution/archive pins, compatible scheduled outcomes, unique complete
@@ -227,8 +224,8 @@ func (handoff HandoffV2) Validate() error {
 		(handoff.Outcome != "SUCCEEDED" && handoff.Outcome != "FAILED" && handoff.Outcome != "BLOCKED") ||
 		handoff.TerminalReference == "" || len(handoff.TerminalReference) > 1024 ||
 		!sha256Pattern.MatchString(handoff.TerminalSHA256) || len(handoff.Outputs) == 0 ||
-		len(handoff.Outputs) > MaximumOutputs || !validCodexTerminalBinding(handoff) ||
-		len(handoff.ArchiveProvenance) > 1024 || handoff.ObservedAt.IsZero() {
+		len(handoff.Outputs) > MaximumOutputs || !validNativeTerminalBinding(handoff) ||
+		handoff.ObservedAt.IsZero() {
 		return errors.New("runtime handoff is invalid")
 	}
 	if (handoff.ScheduleOccurrenceID == "") != (handoff.ScheduledOutcome == "") ||
@@ -286,53 +283,6 @@ func scheduledOutcomeMatchesRuntime(scheduled, runtime string) bool {
 		return runtime == "FAILED" || runtime == "BLOCKED"
 	}
 	return runtime == "SUCCEEDED"
-}
-
-// validCodexTerminalBinding requires exact session/archive provenance except for a blocked preflight
-// that has no provider archive at all.
-// validCodexTerminalBinding требует точное происхождение сессии и архива, кроме блокировки preflight,
-// при которой архив провайдера полностью отсутствует.
-func validCodexTerminalBinding(handoff HandoffV2) bool {
-	if handoff.CodexSessionID == "" && handoff.ArchiveRelativePath == "" && handoff.ArchiveSHA256 == "" && handoff.ArchiveProvenance == "" {
-		return handoff.Outcome == "BLOCKED" && strings.HasPrefix(handoff.TerminalReference, "preflight://")
-	}
-	return ValidateCodexArchiveIdentity(handoff.CodexSessionID, handoff.ArchiveRelativePath) == nil &&
-		sha256Pattern.MatchString(handoff.ArchiveSHA256) && handoff.ArchiveProvenance != "" &&
-		validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256)
-}
-
-// validCodexArchiveProvenance binds the canonical rollout marker to source execution UUID, path, and digest.
-// validCodexArchiveProvenance связывает канонический признак rollout с UUID исходного исполнения, путём и дайджестом.
-func validCodexArchiveProvenance(value, path, digest string) bool {
-	// prefix identifies the supported archive provenance serialization.
-	// prefix обозначает поддерживаемую сериализацию происхождения архива.
-	const prefix = "codex-app-server-rollout-v1:"
-	suffix := ":" + path + ":" + digest
-	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
-		return false
-	}
-	sourceExecutionID := strings.TrimSuffix(strings.TrimPrefix(value, prefix), suffix)
-	return uuidPattern.MatchString(sourceExecutionID)
-}
-
-// validArchiveRelativePath accepts only the bounded dated rollout path without backslashes or traversal.
-// validArchiveRelativePath допускает лишь ограниченный датированный путь rollout без обратных слешей и traversal.
-func validArchiveRelativePath(value string) bool {
-	return regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
-		len(value) <= 255 &&
-		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
-}
-
-// ValidateCodexArchiveIdentity requires a canonical Codex rollout path ending in the exact session UUID;
-// the preceding filename portion may include the provider's timestamp.
-// ValidateCodexArchiveIdentity требует канонический путь Codex rollout, заканчивающийся точным UUID сессии;
-// предшествующая часть имени может включать временную метку провайдера.
-func ValidateCodexArchiveIdentity(sessionID, relativePath string) error {
-	if !uuidPattern.MatchString(sessionID) || !validArchiveRelativePath(relativePath) ||
-		!strings.HasSuffix(relativePath, "-"+sessionID+".jsonl") {
-		return errors.New("Codex archive identity is invalid")
-	}
-	return nil
 }
 
 // SignedHandoffV1 carries a detached payload signature; the controller resolves KeyID only
@@ -401,4 +351,13 @@ func DecodeSignedHandoffV2(raw []byte, trustedKeys map[string]ed25519.PublicKey)
 	}
 	handoff.Outputs = slices.Clone(handoff.Outputs)
 	return handoff, nil
+}
+
+// validNativeTerminalBinding validates only the current native checkpoint or an explicitly archive-free preflight failure.
+// validNativeTerminalBinding проверяет лишь текущий native checkpoint или явный preflight failure без архива.
+func validNativeTerminalBinding(handoff HandoffV2) bool {
+	if handoff.NativeSession == nil {
+		return handoff.Outcome == "BLOCKED" && strings.HasPrefix(handoff.TerminalReference, "preflight://")
+	}
+	return handoff.NativeSession.Validate() == nil
 }

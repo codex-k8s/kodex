@@ -97,14 +97,10 @@ func TestRuntimeEnvelopeReasonMatchesActualValidator(t *testing.T) {
 		"ENVELOPE_CONFIG_OVERLAY":         func(input *runtimecontract.RunnerInput) { input.ConfigOverlayVersion = 0 },
 		"ENVELOPE_RUNTIME_ENVIRONMENT":    func(input *runtimecontract.RunnerInput) { input.RuntimeEnvironmentVersion = 0 },
 		"ENVELOPE_ENVIRONMENT_BINDING":    func(input *runtimecontract.RunnerInput) { input.EnvironmentBindingVersion = 0 },
-		"ENVELOPE_CODEX_SANDBOX":          func(input *runtimecontract.RunnerInput) { input.CodexSandbox = "" },
-		"ENVELOPE_CODEX_APPROVAL_POLICY":  func(input *runtimecontract.RunnerInput) { input.CodexApprovalPolicy = "" },
-		"ENVELOPE_CODEX_SESSION": func(input *runtimecontract.RunnerInput) {
-			input.CodexSessionID = "00000000-0000-0000-0000-000000000000"
-		},
-		"ENVELOPE_CALLBACK_TRANSPORT": func(input *runtimecontract.RunnerInput) { input.CallbackURL = "" },
-		"ENVELOPE_SECRET_PATHS":       func(input *runtimecontract.RunnerInput) { input.ProviderAuthFile = "/synthetic-private" },
-		"ENVELOPE_WORKSPACE_PATHS":    func(input *runtimecontract.RunnerInput) { input.WorkspaceRoot = "/synthetic-private" },
+		"ENVELOPE_WORKSPACE_ACCESS":       func(input *runtimecontract.RunnerInput) { input.WorkspaceAccess = "" },
+		"ENVELOPE_CALLBACK_TRANSPORT":     func(input *runtimecontract.RunnerInput) { input.CallbackURL = "" },
+		"ENVELOPE_SECRET_PATHS":           func(input *runtimecontract.RunnerInput) { input.ProviderAuthFile = "/synthetic-private" },
+		"ENVELOPE_WORKSPACE_PATHS":        func(input *runtimecontract.RunnerInput) { input.WorkspaceRoot = "/synthetic-private" },
 		"ENVELOPE_COLLECTION_LIMITS": func(input *runtimecontract.RunnerInput) {
 			input.SessionContext = make([]runtimecontract.RunnerSessionMessage, 129)
 		},

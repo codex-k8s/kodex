@@ -10,6 +10,9 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        modelMeasurements: fileURLToPath(
+          new URL("./e2e/fixtures/model-measurements.html", import.meta.url),
+        ),
         runGraph: fileURLToPath(
           new URL("./e2e/fixtures/run-graph.html", import.meta.url),
         ),

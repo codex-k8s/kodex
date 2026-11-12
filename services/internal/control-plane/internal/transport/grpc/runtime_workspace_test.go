@@ -118,7 +118,7 @@ func TestRuntimeWorkspaceRevisionAdmission(t *testing.T) {
 	}{
 		{"old_contract", "roleRuntimeContractRevision", uint64(3)},
 		{"absent_contract", "roleRuntimeContractRevision", nil},
-		{"unknown_contract", "roleRuntimeContractRevision", uint64(5)},
+		{"unknown_contract", "roleRuntimeContractRevision", runtimecontract.WorkspaceStorageRuntimeContractRevision + 1},
 		{"foreign_project", "projectRef", "prj_foreign000"},
 		{"foreign_session", "sessionRef", "ses_foreign000"},
 		{"foreign_agent", "agentRef", "agt_foreign000"},

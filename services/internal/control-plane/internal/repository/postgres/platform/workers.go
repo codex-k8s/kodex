@@ -176,6 +176,10 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if effectiveEffort == "" {
 		reasoningMode = runtimecontract.ReasoningUnsupported
 	}
+	nativeProvider, modelProvider, err := repository.runtimeProviderSelection(provider, model)
+	if err != nil || modelProvider.ValidateRuntimePreferences(model, configOverlay, effectiveEffort, reasoningMode) != nil {
+		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
+	}
 	stage = errs.WarmReconcileEnvironment
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
@@ -245,7 +249,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"systemSessionRef": systemSessionRef, "runtimeRevisionRef": assistant.DesiredRuntimeRevision,
 		"runtimeRevisionVersion": assistant.Version, "runtimeRevision": profileRevision,
 		"runtimeKey": runtimeKey, "profileRevision": profileRevision,
-		"runtimeProvider": provider, "runtimeModel": model, "corePromptRef": promptRef,
+		"runtimeProvider": nativeProvider, "modelProvider": modelProvider, "runtimeModel": model, "corePromptRef": promptRef,
 		"effectiveReasoningEffort": effectiveEffort, "reasoningMode": reasoningMode,
 		"providerAccountRef":               providerAccountRef,
 		"providerCredentialRevisionRef":    providerCredentialRef,

@@ -39,32 +39,36 @@ def gateway_definition(value):
 
 def bootstrap_key(raw):
     value = json.loads(auth_valid(raw))
-    return "default-" + gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "default-openai-codex"
+    return "default-" + gateway_definition(value)
 
 
 def require_definition(raw, definition):
     # Тип credential проверяется до любого create/CAS; имя account не выбирает provider.
     value = json.loads(auth_valid(raw))
-    selected = gateway_definition(value) if value.get("auth_mode") == "gateway-api-key" else "openai-codex"
+    selected = gateway_definition(value)
     require(selected == definition)
 
 
 def auth_valid(raw):
     require(0 < len(raw) <= 1048576)
-    value = json.loads(raw)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            require(key not in value)
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
     require(isinstance(value, dict))
     mode = value.get("auth_mode")
     if mode == "gateway-api-key":
         gateway_definition(value)
         key = value.get("API_KEY")
-        require(set(value) == {"auth_mode", "provider_definition_key", "API_KEY"} and isinstance(key, str)
+        namespace = value.get("cache_namespace_key", "")
+        require(isinstance(namespace, str) and (not namespace or re.fullmatch(r"[a-f0-9]{64}", namespace)))
+        require(set(value) - {"cache_namespace_key"} == {"auth_mode", "provider_definition_key", "API_KEY"} and isinstance(key, str)
                 and 8 <= len(key.encode()) <= 16384 and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in key))
         return raw
-    require((mode in ("apikey", "api-key") and isinstance(value.get("OPENAI_API_KEY"), str)
-             and bool(value["OPENAI_API_KEY"])) or
-            (mode in ("chatgpt", "chatgptAuthTokens") and isinstance(value.get("tokens"), dict)
-             and bool(value["tokens"])))
-    return raw
+    raise Rejected("unsupported credential mode")
 
 
 def read_private_auth(path):
@@ -73,7 +77,7 @@ def read_private_auth(path):
     try:
         mode = os.fstat(fd)
         require(file.is_absolute() and stat.S_ISREG(mode.st_mode) and mode.st_uid == os.getuid()
-                and mode.st_mode & 0o077 == 0 and mode.st_size <= 1048576)
+                and mode.st_mode & 0o077 == 0 and mode.st_nlink == 1 and mode.st_size <= 1048576)
         with os.fdopen(fd, "rb", closefd=False) as source:
             return auth_valid(source.read(1048577))
     finally:
@@ -87,7 +91,7 @@ def descriptor(secret):
                 secretResourceVersion=meta["resourceVersion"], contentSHA256=digest(raw))
 
 
-def validate(secret, pins, account, key, legacy=False):
+def validate(secret, pins, account, key, seed_epoch=""):
     meta = secret["metadata"]
     labels, annotations = meta.get("labels", {}), meta.get("annotations", {})
     require(meta.get("namespace") == "kodex-runtime" and not meta.get("deletionTimestamp"))
@@ -113,10 +117,12 @@ def validate(secret, pins, account, key, legacy=False):
     if canonical:
         require(stored == sha.encode())
         return raw, True
-    # Только вход миграции, не runtime reader и не подтверждение canonical readiness.
-    require(legacy and owner in ("kodex-local-dev", "kodex-install") and
-            annotations.get("kodex.dev/provider-account-key") == key and
-            not meta.get("ownerReferences") and stored in (sha.encode(), (sha + "\n").encode()))
+    # Единственное промежуточное состояние новой установки: exact seed текущего
+    # namespace. Старые неразмеченные snapshots не являются входом восстановления.
+    require(seed_epoch and key == bootstrap_key(raw))
+    expected = seed_manifest(seed_epoch, raw)["metadata"]
+    require(meta["name"] == expected["name"] and labels == expected["labels"] and
+            annotations == expected["annotations"] and not meta.get("ownerReferences") and stored == sha.encode())
     return raw, False
 
 
@@ -151,7 +157,7 @@ def seed_manifest(epoch, raw):
 
 
 class Operator:
-    def __init__(self, context, bootstrap_account_key="default-openai-codex"):
+    def __init__(self, context, bootstrap_account_key=""):
         self.context = context
         self.bootstrap_account_key = bootstrap_account_key
 
@@ -185,8 +191,7 @@ class Operator:
                 row["state"] in ("AUTHORIZED", "REAUTHORIZATION_REQUIRED", "PENDING_AUTHORIZATION") and
                 row["enabled"] is True and row["version"] >= 1)
         definition = row["definitionKey"]
-        require(definition == "openai-codex" or
-                re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
+        require(re.fullmatch(r"opencode-[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", definition))
         return row
 
     def owner_state(self):
@@ -230,7 +235,7 @@ class Operator:
             self.call(["create", "--field-manager=kodex-install", "-f", "-"], json.dumps(wanted).encode())
             created = self.get("secret", wanted["metadata"]["name"])
         pins = descriptor(created)
-        validate(created, pins, "", self.bootstrap_account_key, legacy=True)
+        validate(created, pins, "", self.bootstrap_account_key, seed_epoch=epoch)
         require(created["metadata"].get("annotations", {}).get(SEED_EPOCH) == epoch and
                 created["metadata"]["annotations"].get(PREFIX + "seed") == "v1" and
                 pins["contentSHA256"] == digest(raw) and
@@ -269,12 +274,12 @@ class Operator:
         selected = self.get("secret", pins["secretName"]) if pins else None
         if auth_file is None:
             require(selected is not None)
-            raw, canonical = validate(selected, pins, before["accountRef"], key, legacy=True)
+            raw, canonical = validate(selected, pins, before["accountRef"], key, seed_epoch=self.namespace_epoch())
         else:
             raw = read_private_auth(auth_file)
             canonical = False
             if selected and pins["contentSHA256"] == digest(raw):
-                _, canonical = validate(selected, pins, before["accountRef"], key, legacy=True)
+                _, canonical = validate(selected, pins, before["accountRef"], key, seed_epoch=self.namespace_epoch())
         require_definition(raw, before["definitionKey"])
         if canonical:
             after = self.snapshot(key)
@@ -317,7 +322,7 @@ class Operator:
         secret = self.get("secret", pins["secretName"])
         annotations = secret["metadata"].get("annotations", {})
         account = annotations.get(PREFIX + "account-ref", annotations.get("runtime.kodex.dev/provider-account-ref", ""))
-        validate(secret, pins, account, self.bootstrap_account_key, legacy=True)
+        validate(secret, pins, account, self.bootstrap_account_key, seed_epoch=self.namespace_epoch())
         return True
 
 
@@ -335,7 +340,7 @@ def main():
         if args.mode == "seed" and probe.owner_state() == "FRESH":
             args.account_key = bootstrap_key(read_private_auth(args.auth_file))
         else:
-            args.account_key = (metadata or {}).get("metadata", {}).get("annotations", {}).get("kodex.dev/provider-account-key", "default-openai-codex")
+            args.account_key = (metadata or {}).get("metadata", {}).get("annotations", {}).get("kodex.dev/provider-account-key", "")
     require(args.context and re.fullmatch(r"[a-z][a-z0-9_-]{1,95}", args.account_key))
     require((args.mode in ("seed", "import")) == bool(args.auth_file))
     operator = Operator(args.context, args.account_key)

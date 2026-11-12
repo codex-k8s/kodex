@@ -31,10 +31,7 @@ var (
 	// queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision создаёт профиль исполнения с закреплёнными провайдером, моделью, ресурсами и ревизией runtime-v1; это конфигурация, не запущенный исполнитель.
 	//go:embed sql/repository_bootstrap_insert_runtime_profiles_stable_key_provider_runtime_revision.sql
 	queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision string
-	// queryRepositoryBootstrapInsertProviderDefinition inserts the fixed OpenAI Codex provider definition and capability flags during bootstrap; it does not authenticate an account.
-	// queryRepositoryBootstrapInsertProviderDefinition создаёт фиксированное определение провайдера OpenAI Codex и признаки возможностей при bootstrap; аккаунт не авторизует.
-	//go:embed sql/repository_bootstrap_insert_provider_definition.sql
-	queryRepositoryBootstrapInsertProviderDefinition string
+
 	// queryRepositoryBootstrapInsertProviderAccount inserts the default OpenAI Codex provider account as AUTHORIZED/enabled with supplied creator; credential material is not stored in this row.
 	// queryRepositoryBootstrapInsertProviderAccount создаёт исходный включённый аккаунт OpenAI Codex в состоянии AUTHORIZED с заданным создателем; сами реквизиты в строке не хранятся.
 	//go:embed sql/repository_bootstrap_insert_provider_account.sql

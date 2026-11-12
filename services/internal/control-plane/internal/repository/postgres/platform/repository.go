@@ -50,13 +50,13 @@ const (
 // Repository реализует хранение владельца через переданные pool и object store с настроенными
 // scanners, каталогами и credential descriptors; закрытие pool ему не принадлежит.
 type Repository struct {
+	modelMeasurementObserver        func(runtimecontract.ModelMeasurement)
 	sshComposeSigningKey            []byte
 	pool                            *pgxpool.Pool
 	trustedCluster                  bool
 	defaultRuntimeProvider          string
 	defaultRuntimeModel             string
-	modelProvider                   *runtimecontract.ModelProviderConfiguration
-	modelProviderDefaultModel       string
+	modelProviderCatalog            *runtimecontract.ModelProviderCatalog
 	providerCredential              ProviderCredentialConfig
 	roleImages                      RoleImageConfig
 	objects                         objectstorage.Store
@@ -103,7 +103,7 @@ type RoleImageConfig struct {
 // New требует pool, object store, поддерживаемого провайдера и модель, загружает shipped
 // definitions и назначает default namespaces без подключения, bootstrap либо запуска workers.
 func New(pool *pgxpool.Pool, defaultRuntimeProvider, defaultRuntimeModel string, objects objectstorage.Store) (*Repository, error) {
-	if pool == nil || defaultRuntimeProvider != "openai-codex" || defaultRuntimeModel == "" || objects == nil {
+	if pool == nil || !runtimecontract.ValidDNSLabel(defaultRuntimeProvider) || defaultRuntimeModel == "" || objects == nil {
 		return nil, errors.New("control-plane repository dependencies are required")
 	}
 	definitions, err := integrationpackage.LoadShipped()
@@ -249,6 +249,9 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 	}
 	if bootstrappedAt != nil {
 		if repository.providerCredential.SecretName != "" {
+			if repository.modelProviderCatalog == nil {
+				return runtimecontract.ErrModelProviderConfiguration
+			}
 			if err := repository.reconcileProviderCredential(ctx, tx); err != nil {
 				return err
 			}
@@ -312,11 +315,8 @@ func (repository *Repository) bootstrapOnce(ctx context.Context) (failure error)
 		}
 	}
 	limits, _ := json.Marshal(map[string]any{"cpu": "1000m", "memory": "2Gi", "maxConcurrentTurns": 1})
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultRuntimeProvider, repository.defaultRuntimeModel, limits); err != nil {
+	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertRuntimeProfilesStableKeyProviderRuntimeRevision, defaultRuntimeKey, repository.defaultProviderDefinitionKey(), repository.defaultRuntimeModel, limits); err != nil {
 		return bootstrapFailure("seed runtime profile", err)
-	}
-	if _, err := tx.Exec(ctx, queryRepositoryBootstrapInsertProviderDefinition); err != nil {
-		return bootstrapFailure("seed provider definition", err)
 	}
 	var providerAccountID string
 	if repository.providerCredential.SecretName != "" {

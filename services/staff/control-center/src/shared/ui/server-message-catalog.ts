@@ -698,6 +698,10 @@ export const serverTokenTranslations = {
     "Задача передана дочернему запуску",
     "Task delegated to a child run",
   ],
+  INFERENCE_CACHE_POLICY_UNSUPPORTED: [
+    "Маршрут не подтверждает запрошенную гарантию кеша либо настройка ослабляет его обязательные ограничения. Выберите совместимую политику или другой маршрут.",
+    "The route cannot enforce the requested cache guarantee, or the preference weakens mandatory route constraints. Select a compatible policy or another route.",
+  ],
   CONFIG_OVERLAY_INVALID_OR_PROTECTED: [
     "Конфигурация содержит ошибку или защищённое поле",
     "Configuration contains an invalid or protected field",
@@ -1101,6 +1105,10 @@ export const serverTokenTranslations = {
     "Runtime execution completed",
   ],
   RUNTIME_LEASE_RENEWED: ["Срок исполнения продлён", "Runtime lease renewed"],
+  MODEL_MEASUREMENT_RECORDED: [
+    "Измерение модели сохранено",
+    "Model measurement recorded",
+  ],
   RUNTIME_PROGRESS_RECORDED: [
     "Ход выполнения сохранён",
     "Runtime progress recorded",

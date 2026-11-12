@@ -34,7 +34,7 @@ temporary_directory=$(mktemp -d "$state_directory/e2e/session-archive-backup.XXX
 chmod 0700 "$temporary_directory"
 suffix=$(date -u +%Y%m%d%H%M%S)-$$
 fixture_id=${suffix//-/}
-object_key="session-archive/v1/org_e2e00001/prj_e2e00001/ses_e2e00001/g1/sat_e2e${fixture_id}-a1.tar"
+object_key="session-archive/v3/org_e2e00001/prj_e2e00001/ses_e2e00001/g1/sat_e2e${fixture_id}-a1.tar"
 job_name="backup-session-e2e-${fixture_id: -20}"
 stale_job_selector='app.kubernetes.io/name=backup-controller,app.kubernetes.io/component=backup-e2e,app.kubernetes.io/managed-by=kodex-local-e2e,kodex.dev/local-profile=hot-reload'
 expected_file="$temporary_directory/session-archive.tar"

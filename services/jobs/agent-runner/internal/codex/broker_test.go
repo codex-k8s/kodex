@@ -2,7 +2,6 @@ package codex
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,171 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
-
-// TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey verifies unchanged synthetic API-key auth
-// requires no relay commit, preserves the result and removes the temporary auth snapshot.
-// TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey проверяет отсутствие relay commit для неизменного
-// синтетического API key, сохранение результата и удаление временного auth.
-func TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey(t *testing.T) {
-	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
-	called := false
-	want := Result{Outcome: "SUCCEEDED"}
-	got, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) { return want, nil },
-		func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			called = true
-			return nil
-		})
-	if err != nil {
-		t.Fatalf("executeProviderTurn() error = %v", err)
-	}
-	if got.Outcome != want.Outcome || called {
-		t.Fatalf("executeProviderTurn() = %#v, callback called = %v", got, called)
-	}
-	assertRemoved(t, authPath)
-}
-
-// TestProviderIndependentlyEnforcesPinnedWorkflowDeadline requires the provider executor to observe
-// the exact immutable workflow deadline and return DeadlineExceeded without a separate controller stop.
-// TestProviderIndependentlyEnforcesPinnedWorkflowDeadline требует передачи исполнителю точного неизменяемого
-// срока workflow и возврата DeadlineExceeded без отдельной остановки контроллером.
-func TestProviderIndependentlyEnforcesPinnedWorkflowDeadline(t *testing.T) {
-	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
-	started := time.Now().UTC().Add(-900 * time.Millisecond)
-	clock := runtimecontract.RuntimeExecutionClock{RunRef: "run_deadline01", WorkflowVersionRef: "wfv_deadline01", WorkflowVersionDigest: strings.Repeat("a", 64), TimeoutSeconds: 1, StartedAt: started, DeadlineAt: started.Add(time.Second)}
-	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{Policy: runtimecontract.WorkflowExecutionDeadlinePolicy, EffectiveDeadlineAt: clock.DeadlineAt, Clocks: []runtimecontract.RuntimeExecutionClock{clock}}
-	joined := false
-	_, err := executeProviderTurn(t.Context(), input, []byte("synthetic task"), strings.Repeat("a", 64), func(ctx context.Context, _ model.Input, _ []byte, _ string) (Result, error) {
-		actual, ok := ctx.Deadline()
-		if !ok || !actual.Equal(clock.DeadlineAt) {
-			t.Fatal("provider did not receive absolute immutable clock")
-		}
-		<-ctx.Done()
-		joined = true
-		return Result{}, ctx.Err()
-	}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-		t.Fatal("unchanged credential triggered refresh")
-		return nil
-	})
-	if !joined || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("provider survived absolute deadline without controller or runner cancellation")
-	}
-	assertRemoved(t, authPath)
-}
-
-// TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay replaces auth during the synthetic execution
-// and requires the fixed denial before any OAuth credential relay callback can run.
-// TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay подменяет auth в синтетическом исполнении
-// и требует фиксированного отказа до возможности вызвать OAuth credential relay.
-func TestExecuteProviderTurnRejectsChangedAPIKeyWithoutRelay(t *testing.T) {
-	original := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"old-key"}`)
-	changed := []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"new-key"}`)
-	input, authPath := providerTurnFixture(t, original)
-	called := false
-	_, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) {
-			if err := os.WriteFile(authPath, changed, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			return Result{Outcome: "SUCCEEDED"}, nil
-		}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			called = true
-			return nil
-		})
-	if err == nil || err.Error() != "provider API-key authentication changed unexpectedly" {
-		t.Fatalf("executeProviderTurn() error = %v", err)
-	}
-	if called {
-		t.Fatal("changed API-key authentication reached OAuth credential relay")
-	}
-	assertRemoved(t, authPath)
-}
-
-// TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure requires rotated OAuth auth
-// and exact previous revision/digest pins to reach the committer even when the turn outcome is FAILED.
-// TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure требует передачи обновлённого OAuth auth
-// с точными прежними revision/digest в committer даже при Outcome FAILED.
-func TestExecuteProviderTurnCommitsChangedAuthenticationAfterSafeFailure(t *testing.T) {
-	original := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"old","refresh_token":"old"}}`)
-	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"access_token":"new","refresh_token":"new"}}`)
-	input, authPath := providerTurnFixture(t, original)
-	var captured runtimecontract.RunnerProviderCredentialRefreshRequest
-	got, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) {
-			if err := os.WriteFile(authPath, rotated, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			return Result{Outcome: "FAILED", FailureCode: "PROVIDER_REQUEST_REJECTED"}, nil
-		}, func(_ context.Context, _ model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			captured = payload
-			captured.Authentication = append([]byte(nil), payload.Authentication...)
-			return nil
-		})
-	if err != nil || got.Outcome != "FAILED" || got.FailureCode != "PROVIDER_REQUEST_REJECTED" {
-		t.Fatalf("executeProviderTurn() = %#v, %v", got, err)
-	}
-	if captured.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
-		captured.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
-		captured.PreviousContentSHA256 != input.ProviderCredentialSHA256 ||
-		string(captured.Authentication) != string(rotated) {
-		t.Fatal("captured refresh metadata does not match the rotated snapshot")
-	}
-	assertRemoved(t, authPath)
-}
-
-// TestExecuteProviderTurnCommitsRefreshAfterExecutionError requires a changed credential to be committed
-// while the original executor error remains discoverable and the temporary auth file is removed.
-// TestExecuteProviderTurnCommitsRefreshAfterExecutionError требует сохранения обновлённых реквизитов,
-// доступности исходной ошибки исполнителя и удаления временного auth файла.
-func TestExecuteProviderTurnCommitsRefreshAfterExecutionError(t *testing.T) {
-	original := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"old"}}`)
-	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"new"}}`)
-	input, authPath := providerTurnFixture(t, original)
-	executionErr := errors.New("ordinary execution failure")
-	callbackCalled := false
-	_, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) {
-			if err := os.WriteFile(authPath, rotated, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			return Result{}, executionErr
-		}, func(_ context.Context, _ model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			callbackCalled = len(payload.Authentication) > 0
-			return nil
-		})
-	if !errors.Is(err, executionErr) || !callbackCalled {
-		t.Fatalf("executeProviderTurn() error = %v, callback called = %v", err, callbackCalled)
-	}
-	assertRemoved(t, authPath)
-}
-
-// TestExecuteProviderTurnFailsClosedWhenRelayFails injects commit denial after a successful synthetic
-// turn and requires the safe commit error rather than reporting transport success.
-// TestExecuteProviderTurnFailsClosedWhenRelayFails подставляет отказ commit после успешного синтетического
-// хода и требует безопасную ошибку сохранения вместо сообщения об успешном транспорте.
-func TestExecuteProviderTurnFailsClosedWhenRelayFails(t *testing.T) {
-	original := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"old"}}`)
-	rotated := []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"new"}}`)
-	input, authPath := providerTurnFixture(t, original)
-	_, err := executeProviderTurn(context.Background(), input, []byte("task"), strings.Repeat("a", 64),
-		func(context.Context, model.Input, []byte, string) (Result, error) {
-			if err := os.WriteFile(authPath, rotated, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			return Result{Outcome: "SUCCEEDED"}, nil
-		}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-			return errors.New("relay failure")
-		})
-	if err == nil || err.Error() != "commit refreshed provider authentication" {
-		t.Fatalf("executeProviderTurn() error = %v", err)
-	}
-	assertRemoved(t, authPath)
-}
 
 // TestProviderBrokerFailurePreservesSafeClass verifies each supported error class round-trips to
 // its stable sentinel; an arbitrary transport error remains a nonnil generic provider failure.
@@ -222,8 +59,7 @@ func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
 		err  error
 		want string
 	}{
-		{name: "account schema", err: atProviderStage(providerStageAccountRead, errAccountReadResponseInvalid), want: "ACCOUNT_RESPONSE_SCHEMA"},
-		{name: "authentication", err: atProviderStage(providerStageAccountRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
+		{name: "authentication", err: atProviderStage(providerStageAuthRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
 		{name: "external diagnostic", err: errors.New("fixture secret and account details must stay private"), want: "PROVIDER"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -289,71 +125,6 @@ func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	}
 }
 
-// TestProviderSafeFailureDetailsRemainClosed exercises correlated RPC codes and notification/account
-// classifiers, requiring unknown or injected details to collapse to safe categories without disclosure.
-// TestProviderSafeFailureDetailsRemainClosed проверяет коды связанного RPC и notification/account
-// классификаторы, требуя безопасные категории без утечки для неизвестных или подставленных деталей.
-func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
-	diagnostic := captureProviderDiagnostic(t)
-	for _, test := range []struct {
-		name string
-		err  error
-		want string
-	}{
-		{name: "RPC code", err: protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"private-upstream-detail"}`)), want: "detail: RPC_ERROR; rpc_code: -32603"},
-		{name: "notification", err: callFailure("NOTIFICATION_INVALID", errors.New("private-upstream-detail")), want: "detail: NOTIFICATION_INVALID; rpc_code: 0"},
-		{name: "unknown detail", err: &appServerCallFailure{detail: "private-upstream-detail", code: 42, err: errors.New("private-upstream-detail")}, want: "detail: NONE; rpc_code: 0"},
-		{name: "registered notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "account/updated", err: errors.New("private-upstream-detail")}, want: "notification: account/updated"},
-		{name: "unknown notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification: UNKNOWN"},
-		{name: "SDK diagnostic only method", err: notificationFailure("thread/attachment/updated", errors.New("Codex app-server notification method is not allowed")), want: "notification: thread/attachment/updated; account_read: NONE; notification_error: METHOD"},
-		{name: "known parser category", err: notificationFailure("item/started", errors.New("Codex app-server tagged thread item is invalid")), want: "notification_error: ITEM"},
-		{name: "unknown parser category", err: notificationFailure("item/started", errors.New("private-upstream-detail")), want: "notification_error: UNKNOWN"},
-		{name: "injected category", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "item/started", notificationError: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification_error: UNKNOWN"},
-		{name: "known account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: DISCOVERY_FAILED"},
-		{name: "unknown account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "account_read: UNKNOWN"},
-		{name: "different RPC code", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32602, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: NONE"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			diagnostic.Reset()
-			logProviderSafeFailure(providerStageAccountRead, atProviderStage(providerStageAccountRead, test.err))
-			if strings.Contains(diagnostic.String(), "private-upstream-detail") || !strings.Contains(diagnostic.String(), test.want) {
-				t.Fatalf("unsafe or incomplete provider diagnostic: %q", diagnostic.String())
-			}
-		})
-	}
-}
-
-// TestTokenUsageFailureLogsRemainClosed preserves registered usage reasons only for their matching
-// notification, rejecting arbitrary reason text and a known reason attached to the wrong method.
-// TestTokenUsageFailureLogsRemainClosed сохраняет зарегистрированные причины usage лишь для своего
-// уведомления, отвергая произвольный текст и известную причину у неподходящего метода.
-func TestTokenUsageFailureLogsRemainClosed(t *testing.T) {
-	diagnostic := captureProviderDiagnostic(t)
-	for _, reason := range []tokenUsageFailureReason{
-		tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
-		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
-		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal,
-	} {
-		diagnostic.Reset()
-		logProviderSafeFailure(providerStageTerminalWait, notificationFailure("thread/tokenUsage/updated", &tokenUsageFailure{reason}))
-		if !strings.Contains(diagnostic.String(), "notification_error: "+string(reason)) {
-			t.Fatal("closed reason lost")
-		}
-	}
-	for _, test := range []struct{ method, reason, want string }{
-		{"thread/tokenUsage/updated", "PRIVATE_SECRET_BODY_SENTINEL", "UNKNOWN"},
-		{"item/started", string(tokenUsageLastExceedsTotal), "UNKNOWN"},
-		{"thread/tokenUsage/updated", "TOKEN_USAGE", "TOKEN_USAGE"},
-	} {
-		diagnostic.Reset()
-		err := &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: test.method, notificationError: test.reason, err: errors.New("PRIVATE_SECRET_BODY_SENTINEL")}
-		logProviderSafeFailure(providerStageTerminalWait, err)
-		if strings.Contains(diagnostic.String(), "PRIVATE_SECRET_BODY_SENTINEL") || !strings.Contains(diagnostic.String(), "notification_error: "+test.want) {
-			t.Fatal("unsafe or unbound usage diagnostic")
-		}
-	}
-}
-
 // providerTurnFixture writes synthetic auth beneath a private temporary home and returns its content
 // pin with minimal execution metadata; it is not a fully admitted runtime input or a live account.
 // providerTurnFixture записывает синтетический auth во временный приватный home и возвращает digest
@@ -361,7 +132,7 @@ func TestTokenUsageFailureLogsRemainClosed(t *testing.T) {
 func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, string) {
 	t.Helper()
 	root := t.TempDir()
-	home := filepath.Join(root, ".kodex", "state", "codex-home")
+	home := filepath.Join(root, ".kodex", "state", "opencode")
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +147,7 @@ func providerTurnFixture(t *testing.T, authentication []byte) (model.Input, stri
 		ProviderCredentialRef:    "pcr_abcdefgh",
 		ProviderCredentialSHA256: hex.EncodeToString(digest[:]),
 		WorkspaceRoot:            root,
-		CodexHome:                home,
+		NativeStateRoot:          home,
 	}, authPath
 }
 

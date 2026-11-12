@@ -5,109 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
-	"os"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
-
-// TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport injects synthetic credential,
-// execution and refresh-commit failures, including cancellation, then uses the real broker codec to
-// retain only measured usage. It checks single execution/commit counts and removal of temporary auth.
-// TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport создаёт синтетические отказы
-// учётных данных, исполнения и сохранения обновления, включая отмену, затем проверяет настоящий кодек
-// broker: остаются лишь измерения, вызовы не повторяются, временный auth удаляется.
-func TestProviderRefreshFailurePreservesMeasurementsAcrossBrokerTransport(t *testing.T) {
-	for _, mode := range []string{"missing auth", "invalid auth", "changed API key", "commit", "cancelled commit", "execution", "before effect"} {
-		t.Run(mode, func(t *testing.T) {
-			input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"synthetic-old"}}`))
-			usage := runtimecontract.TokenUsage{TotalTokens: 30, InputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
-			want := Result{Usage: usage, FinalMessage: "unconfirmed final", Outcome: "SUCCEEDED", SessionID: "unconfirmed-session",
-				ArchivePath: "unconfirmed-archive", ToolCalls: []runtimecontract.NativeToolCall{{CallID: "call-one", Revision: 2, Kind: runtimecontract.NativeToolKindSleep,
-					State: runtimecontract.NativeToolStateSucceeded, SafeResult: runtimecontract.NativeToolResultCompleted,
-					SafeParameters: map[string]any{"requested_duration_ms": int64(25)}, DurationMS: 25}}}
-			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
-			executions, commits := 0, 0
-			result, executionErr := executeProviderTurn(ctx, input, []byte("synthetic task"), strings.Repeat("a", 64),
-				func(context.Context, model.Input, []byte, string) (Result, error) {
-					executions++
-					switch mode {
-					case "missing auth":
-						if err := os.Remove(authPath); err != nil {
-							t.Fatal(err)
-						}
-					case "invalid auth":
-						if err := os.WriteFile(authPath, []byte("invalid"), 0o600); err != nil {
-							t.Fatal(err)
-						}
-					case "changed API key":
-						if err := os.WriteFile(authPath, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"synthetic-changed"}`), 0o600); err != nil {
-							t.Fatal(err)
-						}
-					case "commit", "cancelled commit":
-						if err := os.WriteFile(authPath, []byte(`{"auth_mode":"chatgpt","tokens":{"refresh_token":"synthetic-new"}}`), 0o600); err != nil {
-							t.Fatal(err)
-						}
-						if mode == "cancelled commit" {
-							cancel()
-						}
-					case "execution":
-						return want, errors.New("synthetic execution failure")
-					case "before effect":
-						return Result{}, errors.New("synthetic pre-effect failure")
-					}
-					return want, nil
-				}, func(ctx context.Context, got model.Input, payload runtimecontract.RunnerProviderCredentialRefreshRequest) error {
-					commits++
-					deadline, bounded := ctx.Deadline()
-					if ctx.Err() != nil || !bounded || time.Until(deadline) > providerRefreshCommitTimeout ||
-						got.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.PreviousCredentialRevisionRef != input.ProviderCredentialRef ||
-						payload.PreviousContentSHA256 != input.ProviderCredentialSHA256 || payload.Validate() != nil {
-						t.Error("credential commit lost independent budget or exact binding")
-					}
-					return errors.New("synthetic commit denial")
-				})
-			if executionErr == nil {
-				t.Fatal("provider failure became success")
-			}
-			reader, writer := io.Pipe()
-			written := make(chan error, 1)
-			go func() {
-				err := writeProviderBrokerResultFailure(writer, result, executionErr)
-				_ = writer.CloseWithError(err)
-				written <- err
-			}()
-			got, err := readProviderBrokerResponse(reader)
-			_ = reader.Close()
-			if writeErr := <-written; writeErr != nil || err == nil {
-				t.Fatal("broker failed to carry a typed failure")
-			}
-			if mode == "before effect" {
-				want = Result{}
-			}
-			if got.Usage != want.Usage || len(got.ToolCalls) != 0 || got.Outcome != "" || got.FinalMessage != "" ||
-				got.SessionID != "" || got.ArchivePath != "" || got.ArchiveRelativePath != "" || got.ArchiveSHA256 != "" || got.ArchiveSizeBytes != 0 {
-				t.Fatal("broker lost measurements or published an unconfirmed result")
-			}
-			wantCommits := 0
-			if mode == "commit" || mode == "cancelled commit" {
-				wantCommits = 1
-			}
-			if executions != 1 || commits != wantCommits {
-				t.Fatal("provider effect was retried or credential authority was bypassed")
-			}
-			assertRemoved(t, authPath)
-		})
-	}
-}
 
 // TestBrokerRejectsMalformedPartialMeasurements requires invalid failure kinds, usage, tool batches
 // and trailing JSON to return no partial result, rather than laundering measurements through a bad envelope.
@@ -136,41 +41,6 @@ func TestBrokerRejectsMalformedPartialMeasurements(t *testing.T) {
 				t.Fatal("invalid broker envelope produced partial measurements")
 			}
 		})
-	}
-}
-
-// TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations separates resumed-thread baseline from
-// current-turn deltas and preserves the last accepted measurement when a later observation is malformed.
-// TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations отделяет базовый расход прежнего потока
-// от дельты текущего хода и сохраняет последнее проверенное измерение при повреждённом следующем событии.
-func TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations(t *testing.T) {
-	state := newProtocolState(testThreadID)
-	state.threadID = testThreadID
-	if err := state.notification("thread/tokenUsage/updated", tokenUsageNotification("01980000-0000-7000-8000-000000000099", 100, 80, 20, 10, 20, 5)); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(state.measuredResult(), Result{}) {
-		t.Fatal("resumed thread baseline was charged to a new turn")
-	}
-	if err := state.captureUsageBaseline(); err != nil {
-		t.Fatal(err)
-	}
-	state.turnID = testTurnID
-	if err := state.notification("rawResponse/completed", responseUsageNotification("response-current", `{"totalTokens":70,"inputTokens":60,"cachedInputTokens":40,"cacheWriteInputTokens":10,"outputTokens":10,"reasoningOutputTokens":3}`)); err != nil {
-		t.Fatal(err)
-	}
-	if err := state.notification("thread/tokenUsage/updated", tokenUsageNotification(testTurnID, 170, 140, 60, 20, 30, 8)); err != nil {
-		t.Fatal(err)
-	}
-	before := state.measuredResult()
-	if before.Usage.TotalTokens != 70 || before.Usage.InputTokens != 60 || before.Usage.OutputTokens != 10 || before.Outcome != "" || before.SessionID != "" {
-		t.Fatal("partial turn lost measured delta or invented a terminal")
-	}
-	if err := state.notification("rawResponse/completed", responseUsageNotification("response-invalid", `{"totalTokens":1,"inputTokens":140,"cachedInputTokens":60,"cacheWriteInputTokens":20,"outputTokens":30,"reasoningOutputTokens":8}`)); err == nil {
-		t.Fatal("malformed later observation was accepted")
-	}
-	if !reflect.DeepEqual(state.measuredResult(), before) {
-		t.Fatal("failed parsing changed the last validated measurements")
 	}
 }
 

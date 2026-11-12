@@ -1,3 +1,4 @@
+import { validModelMeasurement } from "@/shared/api/model-measurement";
 import type {
   Artifact,
   OwnerGate,
@@ -122,6 +123,15 @@ export function reduceRunEvent(
   const currentSequence = graph?.sequence ?? 0;
   if (event.sequence <= currentSequence) return "duplicate";
   if (!graph || event.sequence !== currentSequence + 1) return "gap";
+  if (
+    event.modelMeasurement &&
+    (!event.execution ||
+      event.type !== "TURN_PROGRESS" ||
+      event.message ||
+      event.toolCall ||
+      !validModelMeasurement(event.modelMeasurement))
+  )
+    return "invalid";
   if (!isConsistent(event) || event.graphRevision <= graph.revision)
     return "invalid";
 

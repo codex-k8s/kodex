@@ -10,4 +10,4 @@ SELECT credential.revision_number,
 FROM control_plane.provider_accounts account
 JOIN control_plane.provider_credential_revisions credential
   ON credential.id = account.current_credential_revision_id
-WHERE account.stable_key = 'default-openai-codex';
+WHERE account.stable_key = 'default-opencode-synthetic';

@@ -34,7 +34,7 @@ func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	}
 
 	workspace := t.TempDir()
-	relative := ".kodex/state/codex-home/sessions/2026/08/28/rollout-00000000-0000-4000-8000-000000000002.jsonl"
+	relative := ".kodex/state/opencode/checkpoints/g1/ses_NativeFixture2.json"
 	body := []byte("{\"type\":\"session_meta\",\"id\":\"00000000-0000-4000-8000-000000000002\"}\n")
 	path := filepath.Join(workspace, filepath.FromSlash(relative))
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -48,7 +48,7 @@ func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	task := model.Task{TaskRef: "sat_seaweedfs_e2e", Kind: "SNAPSHOT", OrganizationRef: "org_e2e00001",
 		ProjectRef: "prj_e2e00001", SessionRef: "ses_e2e00001", ProviderAccountRef: "pacc_e2e0001",
 		RuntimeRevisionRef: "rrev_e2e0001", RuntimeRevisionVersion: 1, RuntimeRevisionDigest: stringDigest('c'),
-		CodexSessionID: "00000000-0000-4000-8000-000000000002", ContentGeneration: 1,
+		NativeSessionID: "ses_NativeFixture2", ContentGeneration: 1,
 		PVCName: "runtime-session-e2e0000000000000", InputDigest: stringDigest('d'), SourceRelativePath: relative,
 		SourceSHA256: hex.EncodeToString(sourceDigest[:]), SourceSizeBytes: int64(len(body)), Attempt: 1,
 		TargetObjectKey: "session-archive/e2e/" + hex.EncodeToString(objectSuffix[:]) + ".tar"}

@@ -80,7 +80,7 @@ func validateRunSessionReadinessShape(value map[string]any, descriptor protorefl
 		}
 		storage := value["storageState"]
 		switch storage {
-		case "UNTRACKED", "LIVE", "SNAPSHOT_READY", "SNAPSHOTTING", "DELETE_PVC_READY", "ARCHIVED", "RESTORE_READY", "RESTORING", "ERROR", "PURGED":
+		case "INITIALIZING", "UNTRACKED", "LIVE", "SNAPSHOT_READY", "SNAPSHOTTING", "DELETE_PVC_READY", "ARCHIVED", "RESTORE_READY", "RESTORING", "ERROR", "PURGED":
 		default:
 			return errRunSessionReadinessShape
 		}

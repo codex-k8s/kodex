@@ -50,22 +50,13 @@ def test():
     assert json.loads(run(empty_cli, data=owner_probe).stdout) == {"unknown": True}
     run(cli, data=(ROOT / "scripts/tests/provider-bootstrap-fixture.sql").read_bytes())
     assert json.loads(run(cli, data=owner_probe).stdout) == {"owners": 1, "organizations": 2, "accounts": 3}
-    ensure = cli + ["-v", "account_ref=pacc_reserved_fixture", "-v", "stable_key=reserved-fixture",
-                    "-v", "account_name=Synthetic reserved", "-v", "max_concurrent_executions=1"]
-    for _ in range(2):
-        run(ensure, data=(ROOT / "tools/dev/provider-account-ensure.sql").read_bytes())
-    reserved = json.loads(run(cli + ["-v", "stable_key=reserved-fixture"],
-                              data=(ROOT / "tools/dev/provider-account-snapshot.sql").read_bytes()).stdout)[0]
-    assert reserved["version"] == 1 and reserved["state"] == "PENDING_AUTHORIZATION"
-    assert reserved["credential"] is None
-
     def snapshot():
-        return json.loads(run(cli + ["-v", "stable_key=default-openai-codex"],
+        return json.loads(run(cli + ["-v", "stable_key=default-opencode-fixture"],
                               data=(ROOT / "tools/dev/provider-account-snapshot.sql").read_bytes()).stdout)[0]
 
     def values(letter, version, prior):
         number = "abcd".index(letter) + 1
-        return dict(account_ref="pacc_bootstrap_fixture", stable_key="default-openai-codex",
+        return dict(account_ref="pacc_bootstrap_fixture", stable_key="default-opencode-fixture", definition_key="opencode-fixture",
                     expected_version=str(version), expected_credential_ref=prior,
                     credential_ref="pcr_bootstrap_fixture_" + letter, secret_name="provider-bootstrap-" + letter,
                     secret_uid=f"10000000-0000-4000-8000-00000000000{number}",
@@ -82,6 +73,10 @@ def test():
 
     a = values("a", 1, "")
     assert snapshot()["credential"] is None
+    missing_definition = dict(a)
+    del missing_definition['definition_key']
+    assert not apply(missing_definition, False)
+    assert not apply({**a, 'definition_key': 'openai-codex'}, False)
     apply(a)
     first = snapshot()
     assert first["version"] == 2

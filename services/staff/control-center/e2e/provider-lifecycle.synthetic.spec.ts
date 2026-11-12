@@ -7,12 +7,17 @@ import type {
   ProviderAccountQueuedWorkCancellation,
 } from "../src/shared/api/generated/openapi/types.gen";
 
+test.afterEach(async ({ page }) => {
+  // Только synthetic fixture: исключение страницы не скрывается ожиданием UI.
+  expect((await page.pageErrors()).map((error) => error.message)).toEqual([]);
+});
+
 async function install(page: Page, failedDeletion = false) {
   let account: ProviderAccount = {
     ref: "pacc_lifecycle",
     version: 7,
     maximumConcurrentExecutions: 10,
-    definitionKey: "openai-codex",
+    definitionKey: "opencode-synthetic",
     name: "Учётная запись проверки",
     externalAccountMasked: "fixture",
     state: "AUTHORIZED",
@@ -22,7 +27,7 @@ async function install(page: Page, failedDeletion = false) {
     updatedAt: "2026-09-06T00:00:00Z",
     authorization: {
       ref: "authorization_current",
-      method: "DEVICE_CODE",
+      method: "API_KEY",
       state: "AUTHORIZED",
     },
     nextActions: ["REFRESH_AUTHORIZATION", "CONFIGURE_CREDENTIAL", "DELETE"],
@@ -112,10 +117,10 @@ async function install(page: Page, failedDeletion = false) {
   let sessionRequestRef = "";
   let platformCursor = 0;
   const providerDefinition = {
-    key: "openai-codex",
+    key: "opencode-synthetic",
     name: "OpenAI",
     description: "Fixture",
-    authorizationMethods: ["DEVICE_CODE"],
+    authorizationMethods: ["API_KEY"],
     modelIds: [],
     defaultModelId: "",
     available: true,
@@ -220,10 +225,10 @@ async function install(page: Page, failedDeletion = false) {
         json: {
           items: [
             {
-              key: "openai-codex",
+              key: "opencode-synthetic",
               name: "OpenAI",
               description: "Fixture",
-              authorizationMethods: ["DEVICE_CODE"],
+              authorizationMethods: ["API_KEY"],
               modelIds: [],
               defaultModelId: "",
               available: true,
@@ -359,7 +364,7 @@ async function install(page: Page, failedDeletion = false) {
         await route.fulfill({ json: receipt });
         return;
       }
-      if (url.pathname === `${prefix}/device-authorization/verification`) {
+      if (url.pathname === `${prefix}/verification`) {
         account = {
           ...account,
           version: account.version + 1,
@@ -376,20 +381,17 @@ async function install(page: Page, failedDeletion = false) {
         await route.fulfill({ json: account });
         return;
       }
-      if (url.pathname === `${prefix}/device-reauthorizations`) {
+      if (url.pathname === `${prefix}/api-key-authorization`) {
         account = {
           ...account,
           version: account.version + 1,
-          state: "PENDING_AUTHORIZATION",
-          ready: false,
+          state: "AUTHORIZED",
+          ready: true,
           verification: undefined,
           authorization: {
             ref: "authorization_replacement",
-            method: "DEVICE_CODE",
-            state: "PENDING",
-            userCode: "FIXTURE-CODE",
-            verificationUri: "https://kodex.test/verification",
-            expiresAt: new Date(Date.now() + 120000).toISOString(),
+            method: "API_KEY",
+            state: "AUTHORIZED",
           },
           nextActions: ["REFRESH_AUTHORIZATION", "DELETE"],
         };
@@ -573,10 +575,15 @@ for (const width of [390, 2900]) {
     await dialog
       .getByRole("button", { name: "Переавторизовать", exact: true })
       .click();
-    await expect(
-      dialog.getByText("FIXTURE-CODE", { exact: true }),
-    ).toBeVisible();
-    expect(fixture.writes[1]?.path).toMatch(/device-reauthorizations$/);
+    const credential = dialog.locator('input[name="provider-account-api-key"]');
+    await expect(credential).toBeVisible();
+    await credential.fill("synthetic-provider-replacement-key");
+    await dialog.locator('button[type="submit"]').click();
+    await expect(credential).toHaveCount(0);
+    expect(fixture.writes[1]?.path).toMatch(/api-key-authorization$/);
+    expect(fixture.writes[1]?.body).toEqual({
+      apiKey: "synthetic-provider-replacement-key",
+    });
     expect(fixture.failures).toEqual([]);
   });
 }

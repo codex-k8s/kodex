@@ -7,12 +7,13 @@ fail() {
 }
 
 usage() {
-  printf 'Usage: %s --source-root <path> --state-directory <path> --context <context> [--image-profile local|full] [--cache-directory <private-path> --expected-manifest sha256:<digest>]\n' "$0" >&2
+  printf 'Usage: %s --source-root <path> --state-directory <path> --context <context> [--build-only] [--image-profile local|full] [--cache-directory <private-path> --expected-manifest sha256:<digest>]\n' "$0" >&2
 }
 
 source_root=""
 state_directory=""
 context=""
+build_only=false
 image_profile=local
 image_profile_supplied=false
 cache_directory=""
@@ -21,6 +22,7 @@ cache_directory_supplied=false
 expected_manifest_supplied=false
 while (($# > 0)); do
   case "$1" in
+    --build-only) [[ "$build_only" == false ]] || fail 'build-only argument is duplicated'; build_only=true; shift ;;
     --source-root) source_root=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --context) context=${2:-}; shift 2 ;;
@@ -52,7 +54,7 @@ esac
 [[ "$source_root" == /* && -f "$source_root/services/jobs/agent-runner/Dockerfile" ]] ||
   fail 'source root is invalid'
 [[ "$state_directory" == /* && "$state_directory" != / ]] || fail 'state directory is invalid'
-[[ -n "$context" ]] || fail 'exact context is required'
+[[ "$build_only" == true || -n "$context" ]] || fail 'exact context is required'
 for command_name in docker jq sha256sum tar python3 git; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
@@ -105,7 +107,11 @@ if [[ "$cache_directory_supplied" == true ]]; then
   archive_fingerprint=$(reuse_fingerprint)
 fi
 if [[ ! -s "$archive" ]]; then
-  "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
+  if [[ "$build_only" == true ]]; then
+    docker buildx inspect "$builder" >/dev/null 2>&1 || fail 'existing local builder is required'
+  else
+    "$source_root/tools/dev/ensure-local-buildx-builder.sh" "$builder"
+  fi
   next_archive="$archive.next"
   rm -f "$next_archive"
   # BuildKit получает только tracked inputs чистого worktree. Сохраняем mode,
@@ -168,6 +174,13 @@ python3 -B "$verifier" "$provenance_phase" --source-root "$source_root" \
 if [[ "$cache_directory_supplied" == true ]]; then
   reuse_archive_guard
   [[ "$(reuse_fingerprint)" == "$archive_fingerprint" ]] || fail 'cache reuse archive changed during verification'
+fi
+
+# Подготовка immutable OCI проходит те же provenance guards, но не меняет кластер
+# и не публикует installed pin. Доставка остаётся отдельным проверяемым действием.
+if [[ "$build_only" == true ]]; then
+  printf '{"status":"PASS","phase":"LOCAL_OCI_BUILD_ONLY","sourceSHA":"%s","imageDigest":"%s","imageProfile":"%s"}\n' "$revision" "$manifest_digest" "$image_profile"
+  exit 0
 fi
 
 "$source_root/tools/dev/import-local-image.sh" --context "$context" --archive "$archive" \

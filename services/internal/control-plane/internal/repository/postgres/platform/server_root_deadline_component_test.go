@@ -172,7 +172,7 @@ func testServerWorkflowRootDeadline(t *testing.T, scenario string) {
 	}
 	complete := func(key string, lease map[string]any, summary string, artifact bool) {
 		t.Helper()
-		payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary}
+		payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: summary}
 		if artifact {
 			body := []byte("Проверенный материал до deadline.\n")
 			digest := sha256.Sum256(body)

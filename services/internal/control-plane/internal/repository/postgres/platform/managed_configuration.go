@@ -1209,7 +1209,7 @@ func (repository *Repository) getSystemSTTConfigurationTx(ctx context.Context, t
 	if json.Unmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
 		return entity.SystemSTTConfiguration{}, errs.ErrUnavailable
 	}
-	if !providerEnabled {
+	if !providerEnabled || !openAITranscriptionCapabilities(rawProviderCapabilities) {
 		result.ReadinessBlockers = append(result.ReadinessBlockers, "STT_PROVIDER_DISABLED")
 	}
 	specification, specificationErr := revisionservice.ParseSystemSTT(content)

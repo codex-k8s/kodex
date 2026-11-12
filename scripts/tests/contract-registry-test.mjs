@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const registry = JSON.parse(execFileSync('yq', ['-o=json', '.', `${root}contracts/registry.yaml`], { timeout: 10000 }));
-const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, timeout: 10000 }).toString().split('\0').filter(Boolean);
+const registry = JSON.parse(execFileSync('yq', ['-o=json', '.', `${root}contracts/registry.yaml`], { timeout: 10000, maxBuffer: 8 * 1024 * 1024 }));
+const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, timeout: 10000, maxBuffer: 8 * 1024 * 1024 }).toString().split('\0').filter(Boolean);
 
 function checkPaths(packages, files) {
   const ids = new Set();
@@ -47,8 +47,8 @@ test('integration worker consumes existing CP, package and email contracts', () 
   assert.equal(registry.packages.some(entry => entry.format === 'proto' && entry.owner === 'integration-gateway'), false);
 });
 
-const riskPolicy = JSON.parse(execFileSync('node', ['-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))', `${root}deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`], { timeout: 10000 }));
-const riskAPI = JSON.parse(execFileSync('yq', ['-o=json', '.', `${root}contracts/openapi/control-api-gateway/v1/openapi.yaml`], { timeout: 10000 }));
+const riskPolicy = JSON.parse(execFileSync('node', ['-e', 'process.stdout.write(require("node:fs").readFileSync(process.argv[1],"utf8"))', `${root}deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`], { timeout: 10000, maxBuffer: 8 * 1024 * 1024 }));
+const riskAPI = JSON.parse(execFileSync('yq', ['-o=json', '.', `${root}contracts/openapi/control-api-gateway/v1/openapi.yaml`], { timeout: 10000, maxBuffer: 8 * 1024 * 1024 }));
 const riskOperations = [
   ['platform.query.organization.role-images.vulnerability-report.get', 'getOrganizationImageVulnerabilityReport', 'get'],
   ['platform.query.role-images.vulnerability-report.get', 'getImageVulnerabilityReport', 'get'],
@@ -59,7 +59,7 @@ const riskOperations = [
 function checkRiskContract(api, policy) {
   // Ревизия104 добавляет личный каталог согласований и их отзыв поверх103;
   // четыре risk bindings остаются прежними.
-  assert.equal(policy.policy_revision, 104, 'RISK_POLICY_REVISION');
+  assert.equal(policy.policy_revision, 105, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');

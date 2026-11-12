@@ -59,7 +59,7 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		filename, profile, catalogField = "personal-credentials-backup-migration-postcondition.sql", "PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_V1", "githubPRCatalog"
 	case 20261107000100:
 		filename, profile, catalogField = "jira-create-fields-backup-migration-postcondition.sql", "JIRA_CREATE_FIELDS_BACKUP_V1", "githubPRCatalog"
-	case 20261109000100:
+	case 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200, 20261112000100:
 		filename, profile, catalogField = "integration-resource-policies-backup-migration-postcondition.sql", "INTEGRATION_RESOURCE_POLICIES_BACKUP_V2", "integrationPolicyFunctions"
 	case 20261108000100:
 		filename, profile, catalogField = "authority-proof-counter-backup-migration-postcondition.sql", "AUTHORITY_PROOF_COUNTER_BACKUP_V1", "githubPRCatalog"
@@ -88,13 +88,20 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		return proof, nil
 	}
 	backupField := "backupReaderCatalog"
-	currentResourcePolicies := version == 20261109000100
+	currentResourcePolicies := version >= 20261109000100
 	if currentResourcePolicies {
 		backupField = "backupReaderReady"
 	}
 	proof, err := read(source)
 	if err != nil || proof["profile"] != profile || proof["gooseVersion"] != float64(version) || proof[catalogField] != true || proof[backupField] != true {
 		t.Fatal("native GitHub successor did not preserve the full backup schema", err)
+	}
+	if currentResourcePolicies {
+		for _, field := range []string{"migrationTablesReady", "integrationPolicyColumns", "integrationPolicyConstraints", "integrationPolicyFunctions", "integrationPolicyGuards", "integrationPolicyPrivileges", "workspaceGuards", "backupReaderConfigured", "backupReaderSafe"} {
+			if proof[field] != true {
+				t.Fatalf("current backup schema predicate rejected: %s", field)
+			}
+		}
 	}
 	if !currentResourcePolicies && version >= 20261029000200 && proof["githubAutonomousWrites"] != true {
 		t.Fatal("native GitHub write guards are unconfirmed")

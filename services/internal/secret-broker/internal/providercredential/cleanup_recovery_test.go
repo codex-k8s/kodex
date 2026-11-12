@@ -37,7 +37,7 @@ func recoveryServiceFixture(t *testing.T) (*Service, *kubernetesstore.Store, *fa
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	service, err := New(t.Context(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestCleanupRecoveryKeepsProducedAcrossSuccessorsAndRestart(t *testing.T) {
 			if _, err := service.CleanupProviderCredential(t.Context(), "pcct_produced1234", target.AccountRef, 1, produced); err != nil {
 				t.Fatal(err)
 			}
-			restarted, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+			restarted, err := New(t.Context(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -185,7 +185,7 @@ func TestCleanupRecoveryPersistsOriginBeforeLostAcknowledgement(t *testing.T) {
 	if _, err := service.CleanupProviderCredential(t.Context(), "pcct_produced1234", target.AccountRef, 1, produced); err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := New(t.Context(), store, &providerAppServerStub{}, DefaultDeviceAuthorizationTTL())
+	restarted, err := New(t.Context(), store, &providerCredentialBackendStub{}, DefaultDeviceAuthorizationTTL())
 	if err != nil {
 		t.Fatal(err)
 	}

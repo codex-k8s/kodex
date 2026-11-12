@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 fail() {
   printf 'Keycloak bootstrap failed: %s\n' "$*" >&2
@@ -82,9 +83,6 @@ temporary_directory=$(mktemp -d)
 chmod 0700 "$temporary_directory"
 cleanup() {
   rm -rf -- "$temporary_directory"
-  kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec \
-    'rm -f /tmp/kodex-kcadm.config /tmp/kodex-kcadm-bootstrap.config /tmp/kodex-smtp-realm.json' \
-    >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
@@ -158,39 +156,34 @@ read_initial_password() {
   printf '%s' "$value"
 }
 
+# stdin принадлежит приватному протоколу: две строки credentials, затем тело.
+# Секреты не передаются ни kubectl, ни kcadm через argv.
+keycloak_private_request() {
+  local auth_kind=$1 input_kind=$2 input_file=$3
+  shift 3
+  {
+    if [[ "$auth_kind" == client ]]; then
+      printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret"
+    else
+      printf '%s\n%s\n' "$bootstrap_admin_username" "$bootstrap_admin_password"
+    fi
+    if [[ "$input_kind" != none ]]; then
+      [[ -f "$input_file" && -s "$input_file" && ! -L "$input_file" ]] ||
+        fail 'Keycloak private input is invalid'
+      cat -- "$input_file"
+      printf '\n'
+    fi
+  } | kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec \
+    "$(cat "$repository_root/tools/deploy/keycloak-private-request.sh")" sh \
+    "$auth_kind" "$input_kind" "$@"
+}
+
 keycloak_request() {
-  printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret" |
-    kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
-      IFS= read -r client_id
-      IFS= read -r client_secret
-      config=/tmp/kodex-kcadm.config
-      command=/opt/keycloak/bin/kcadm.sh
-      "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
-        --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
-      exec "$command" "$@" --config "$config"
-    ' sh "$@"
+  keycloak_private_request client none '' "$@"
 }
 
 keycloak_update_realm_file() {
-  local resource=$1 input_file=$2
-  [[ -f "$input_file" && -s "$input_file" && ! -L "$input_file" ]] ||
-    fail 'Keycloak realm update file is invalid'
-  {
-    printf '%s\n%s\n' "$admin_client_id" "$admin_client_secret"
-    cat -- "$input_file"
-  } | kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
-    IFS= read -r client_id
-    IFS= read -r client_secret
-    config=/tmp/kodex-kcadm.config
-    input=/tmp/kodex-smtp-realm.json
-    command=/opt/keycloak/bin/kcadm.sh
-    trap '\''rm -f "$input"'\'' EXIT
-    cat >"$input"
-    chmod 600 "$input"
-    "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
-      --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
-    exec "$command" update "$1" --config "$config" -f "$input"
-  ' sh "$resource"
+  keycloak_private_request client json "$2" update "$1"
 }
 
 smtp_realm_file=""
@@ -203,20 +196,7 @@ if [[ -n "$smtp_config_file" ]]; then
 fi
 
 keycloak_bootstrap_request() {
-  local bootstrap_username bootstrap_password
-  bootstrap_username=$(kubectl -n "$namespace" get secret "$bootstrap_secret" -o jsonpath='{.data.admin-username}' | base64 -d)
-  bootstrap_password=$(kubectl -n "$namespace" get secret "$bootstrap_secret" -o jsonpath='{.data.admin-password}' | base64 -d)
-  printf '%s\n%s\n' "$bootstrap_username" "$bootstrap_password" |
-    kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
-      IFS= read -r username
-      IFS= read -r password
-      config=/tmp/kodex-kcadm-bootstrap.config
-      command=/opt/keycloak/bin/kcadm.sh
-      "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
-        --realm master --user "$username" --password "$password" >/dev/null 2>&1
-      exec "$command" "$@" --config "$config"
-    ' sh "$@"
-  unset bootstrap_password
+  keycloak_private_request user none '' "$@"
 }
 
 ensure_admin_client() {
@@ -232,21 +212,22 @@ ensure_admin_client() {
       keycloak_bootstrap_request create clients -r master \
         -s "clientId=$admin_client_id" -s enabled=true -s publicClient=false \
         -s bearerOnly=false -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
-        -s serviceAccountsEnabled=true -s "secret=$admin_client_secret" >/dev/null
+        -s serviceAccountsEnabled=true >/dev/null
       ;;
     1) ;;
     *) fail 'Keycloak admin service client is duplicated' ;;
   esac
   client_uuid=$(keycloak_bootstrap_request get clients -r master -q "clientId=$admin_client_id" |
     jq -er --arg client_id "$admin_client_id" '[.[] | select(.clientId == $client_id)] | if length == 1 then .[0].id else error("admin client mismatch") end')
-  keycloak_bootstrap_request update "clients/$client_uuid" -r master \
+  jq -n --rawfile secret "$temporary_directory/admin-client-secret" \
+    '{secret:$secret}' >"$temporary_directory/admin-client.json"
+  chmod 0600 "$temporary_directory/admin-client.json"
+  keycloak_private_request user json "$temporary_directory/admin-client.json" \
+    update "clients/$client_uuid" -r master \
     -s enabled=true -s publicClient=false -s bearerOnly=false -s standardFlowEnabled=false \
-    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=true -s "secret=$admin_client_secret" >/dev/null
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=true >/dev/null
   service_account_id=$(keycloak_bootstrap_request get "clients/$client_uuid/service-account-user" -r master | jq -er '.id')
-  kubectl -n "$namespace" exec "deployment/$deployment" -- sh -ec '
-    exec /opt/keycloak/bin/kcadm.sh add-roles --config /tmp/kodex-kcadm-bootstrap.config \
-      -r master --uid "$1" --rolename admin
-  ' sh "$service_account_id" >/dev/null
+  keycloak_bootstrap_request add-roles -r master --uid "$service_account_id" --rolename admin >/dev/null
   keycloak_request get realms >/dev/null 2>&1 || fail 'Keycloak admin service client activation failed'
 }
 
@@ -392,12 +373,15 @@ reconcile_confidential_client() {
     "pkce.code.challenge.method":"S256",
     "post.logout.redirect.uris":$logout
   }')
-  keycloak_request update "clients/$client_uuid" -r "$client_realm" \
+  printf '%s' "$client_secret" | jq -Rs '{secret:.}' >"$temporary_directory/client.json"
+  chmod 0600 "$temporary_directory/client.json"
+  keycloak_private_request client json "$temporary_directory/client.json" \
+    update "clients/$client_uuid" -r "$client_realm" \
     -s enabled=true -s publicClient=false -s bearerOnly=false -s protocol=openid-connect \
     -s standardFlowEnabled=true -s implicitFlowEnabled=false \
     -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
     -s "redirectUris=[\"$origin/oauth2/callback\"]" \
-    -s "webOrigins=[\"$origin\"]" -s "attributes=$attributes" -s "secret=$client_secret" >/dev/null
+    -s "webOrigins=[\"$origin\"]" -s "attributes=$attributes" >/dev/null
   unset client_secret
   reconcile_mapper "$client_uuid" kodex-client-audience oidc-audience-mapper \
     "$(jq -cn --arg audience "$client_id" '{
@@ -450,18 +434,8 @@ if [[ "$mode" == apply ]]; then
     admin_initial_password=$(read_initial_password admin-initial-password 'permanent administrator initial password')
     keycloak_request create users -r master -s "username=$admin_username" -s enabled=true \
       -s "firstName=$admin_username" -s lastName=Administrator -s 'requiredActions=[]' >/dev/null
-    printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$admin_initial_password" |
-      kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
-        IFS= read -r client_id
-        IFS= read -r client_secret
-        IFS= read -r administrator_password
-        config=/tmp/kodex-kcadm.config
-        command=/opt/keycloak/bin/kcadm.sh
-        "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
-          --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
-        "$command" set-password --config "$config" -r master --username "$1" \
-          --new-password "$administrator_password" >/dev/null
-      ' sh "$admin_username"
+    keycloak_private_request client password "$temporary_directory/admin-initial-password" \
+      set-password -r master --username "$admin_username" >/dev/null
     unset admin_initial_password
   elif [[ "$admin_count" != 1 ]]; then
     fail 'Keycloak administrator identity is ambiguous'
@@ -581,18 +555,8 @@ if [[ "$mode" == apply ]]; then
     keycloak_request create users -r "$realm" -s "username=$owner_username" -s enabled=true \
       -s "email=$owner_email" -s emailVerified=true -s "firstName=$owner_username" \
       -s lastName=Owner -s 'requiredActions=[]' >/dev/null
-    printf '%s\n%s\n%s\n' "$admin_client_id" "$admin_client_secret" "$owner_password" |
-      kubectl -n "$namespace" exec -i "deployment/$deployment" -- sh -ec '
-        IFS= read -r client_id
-        IFS= read -r client_secret
-        IFS= read -r owner_password
-        config=/tmp/kodex-kcadm.config
-        command=/opt/keycloak/bin/kcadm.sh
-        "$command" config credentials --config "$config" --server http://127.0.0.1:8080 \
-          --realm master --client "$client_id" --secret "$client_secret" >/dev/null 2>&1
-        "$command" set-password --config "$config" -r "$1" --username "$2" \
-          --new-password "$owner_password" >/dev/null
-      ' sh "$realm" "$owner_username"
+    keycloak_private_request client password "$temporary_directory/owner-initial-password" \
+      set-password -r "$realm" --username "$owner_username" >/dev/null
     unset owner_password
   elif [[ "$owner_count" != 1 ]]; then
     fail 'owner identity is ambiguous'

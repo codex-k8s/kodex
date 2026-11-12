@@ -224,7 +224,7 @@ func providerCredentialRefreshRouteFixture(t *testing.T, configure ...func(*runt
 		ProviderHTTPSProxy: "http://egress-gateway.kodex-system.svc:8084", RuntimeEgressSigningKey: []byte("0123456789abcdef0123456789abcdef"), RuntimeEgressCASecret: "runtime-egress-proxy-ca",
 		SessionPVCSize: "20Gi", RunnerServiceAccount: "agent-runner", PromotedRoleImageRepository: "registry.example/runner",
 		DefaultRoleImageReference:   "registry.example/default@" + imageDigest,
-		RoleRuntimeContractRevision: 1, RoleRuntimeContractSHA256: contractDigest,
+		RoleRuntimeContractRevision: runtimecontract.WorkspaceStorageRuntimeContractRevision, RoleRuntimeContractSHA256: contractDigest,
 	})
 	if err != nil {
 		t.Fatalf("workload.New() error = %v", err)

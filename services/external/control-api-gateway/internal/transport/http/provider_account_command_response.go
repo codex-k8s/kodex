@@ -14,7 +14,7 @@ import (
 // авторизации и удаления, уже имеющих одинаковую проверку точного аккаунта. Не допускает другие
 // команды провайдера и не задаёт их жизненный цикл, полномочия или профиль ошибок RPC.
 type providerAccountCommandResponse interface {
-	*cp.VerifyProviderAccountDeviceAuthorizationResponse | *cp.ReauthorizeProviderAccountDeviceCodeResponse | *cp.DeleteProviderAccountResponse
+	*cp.VerifyProviderAccountAuthorizationResponse | *cp.ReauthorizeProviderAccountDeviceCodeResponse | *cp.DeleteProviderAccountResponse
 	proto.Message
 
 	// GetAccount reads the returned account; each admitted generated pointer type safely returns

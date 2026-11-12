@@ -1187,6 +1187,7 @@ components:
           minLength: 8
           maxLength: 96
           pattern: "^inv_[A-Za-z0-9_-]+$"
+        modelMeasurement: { $ref: "#/components/schemas/ModelMeasurement" }
         execution: { $ref: "#/components/schemas/RunEventExecution" }
         message: { $ref: "#/components/schemas/RunMessage" }
     RunEventServiceCode:
@@ -1199,6 +1200,31 @@ components:
           ASSISTANT_TURN_CANCELLED,
           ROOT_PROCESS_COMPLETED,
         ]
+    ModelMeasurement:
+      type: object
+      additionalProperties: false
+      required: [ref, source, phase, outcome, completeness]
+      properties:
+        ref: { type: string, pattern: "^(request|step)_[A-Za-z0-9_-]{8,80}$", maxLength: 88 }
+        source: { $ref: "#/components/schemas/ModelMeasurementSource" }
+        phase: { $ref: "#/components/schemas/ModelMeasurementPhase" }
+        outcome: { $ref: "#/components/schemas/ModelMeasurementOutcome" }
+        completeness: { $ref: "#/components/schemas/ModelMeasurementCompleteness" }
+        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        ttftMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        usage: { $ref: "#/components/schemas/TokenUsage" }
+    ModelMeasurementSource:
+      type: string
+      enum: [HTTP_REQUEST, NATIVE_STEP]
+    ModelMeasurementPhase:
+      type: string
+      enum: [NORMAL, COMPACTION, AUXILIARY]
+    ModelMeasurementOutcome:
+      type: string
+      enum: [COMPLETED, FAILED, CANCELLED]
+    ModelMeasurementCompleteness:
+      type: string
+      enum: [COMPLETE, PARTIAL, UNKNOWN]
     RunEventExecution:
       type: object
       additionalProperties: false

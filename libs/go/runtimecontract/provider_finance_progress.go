@@ -16,7 +16,7 @@ func (value *RunnerProgressRequest) UnmarshalJSON(raw []byte) error {
 	}
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(raw, &fields) != nil || fields == nil ||
-		!financialKnownFields(fields, "financial", "runtime_revision_digest", "progress", "message", "provider_process") {
+		!financialKnownFields(fields, "financial", "runtime_revision_digest", "progress", "message", "provider_process", "model_measurement") {
 		return invalid
 	}
 	// plainProgress retains the request layout without recursively calling this envelope decoder.

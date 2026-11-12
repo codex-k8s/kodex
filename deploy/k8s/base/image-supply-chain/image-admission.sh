@@ -1124,13 +1124,17 @@ case "${1:-}" in
     load_owner_claim
     login_registry "$staging_host" /identity/username /identity/password
     [ "$(regctl image digest "$source_ref")" = "$image_digest" ] || fail "staging digest mismatch"
+    printf '%s\n' 'Image admission verification started' >&2
     verify_image_and_provenance
+    printf '%s\n' 'Image admission verification completed' >&2
     if [ "$risk_acceptance_sha256" = "" ]; then
     write_syft_registry_config "$staging_host" /identity/username /identity/password
+    printf '%s\n' 'Image admission SBOM scan started' >&2
     /bin/sh /opt/kodex/scan-memory-budget.sh /opt/kodex/scan-go-memory-limit-mib \
       /sys/fs/cgroup/memory.max syft --config /tmp/syft.json --from registry "$source_ref" \
       -o spdx-json=/work/sbom.json || fail "SBOM generation failed"
     compact_evidence_json /work/sbom.json
+    printf '%s\n' 'Image admission vulnerability scan started' >&2
     GRYPE_CHECK_FOR_APP_UPDATE=false \
       /bin/sh /opt/kodex/scan-memory-budget.sh /opt/kodex/scan-go-memory-limit-mib \
       /sys/fs/cgroup/memory.max grype sbom:/work/sbom.json -o json >/work/vulnerability.raw.json ||

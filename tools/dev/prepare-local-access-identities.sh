@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set +x
 set -euo pipefail
 
 fail() {
@@ -88,25 +89,11 @@ keycloak_request() {
     ' sh "$@"
 }
 
-if [[ -e "$credentials_file" ]]; then
-  [[ -f "$credentials_file" && ! -L "$credentials_file" &&
-    $((8#$(stat -c '%a' "$credentials_file") & 8#077)) == 0 ]] ||
-    fail 'access identity credentials file is unsafe'
-  # shellcheck disable=SC1090
-  source "$credentials_file"
-else
-  umask 077
-  access_password=$(openssl rand -base64 36 | tr -d '\n')
-  {
-    printf 'KODEX_ACCESS_ADMIN_USERNAME=%q\n' kodex-debug-admin
-    printf 'KODEX_ACCESS_OPERATOR_USERNAME=%q\n' kodex-debug-operator
-    printf 'KODEX_ACCESS_AUDITOR_USERNAME=%q\n' kodex-debug-auditor
-    printf 'KODEX_ACCESS_TEST_PASSWORD=%q\n' "$access_password"
-  } >"$credentials_file"
-  unset access_password
-  # shellcheck disable=SC1090
-  source "$credentials_file"
-fi
+# Только код loader подключается в shell; credential-файл остаётся данными.
+# shellcheck source=lib/local-credentials.sh
+source "${BASH_SOURCE[0]%/*}/lib/local-credentials.sh"
+python3 "${BASH_SOURCE[0]%/*}/local_credentials.py" prepare access "$credentials_file"
+kodex_load_local_credentials "$credentials_file" access
 
 for variable_name in KODEX_ACCESS_ADMIN_USERNAME KODEX_ACCESS_OPERATOR_USERNAME \
   KODEX_ACCESS_AUDITOR_USERNAME KODEX_ACCESS_TEST_PASSWORD; do

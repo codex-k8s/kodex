@@ -118,6 +118,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 				payload.ProviderDiagnostic = nil
 			case "success":
 				payload.Success, payload.SafeErrorCode, payload.ProviderDiagnostic = true, "", nil
+				wantStatus, commits = http.StatusBadRequest, 0
 			case "unauthorized":
 				ticket = strings.Repeat("0", 64)
 				wantStatus, commits = http.StatusNotFound, 0
@@ -187,7 +188,7 @@ func TestProviderCompletionDiagnosticOwnerCommitBeforeCleanup(t *testing.T) {
 				if got.GetMutation().GetIdempotencyKey() != stableKey(input.LeaseRef, "complete") || got.GetLeaseRef() != input.LeaseRef || got.GetFence() != input.LeaseFence || got.GetGeneration() != input.LeaseGeneration {
 					t.Fatal("completion changed the existing owner intent scope")
 				}
-				if got.GetSafeErrorCode() != payload.SafeErrorCode || got.GetResultSummary() != payload.ResultSummary || got.GetUsage().GetTotalTokens() != 3 || got.GetUsage().GetCompleteness() != cp.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL || got.GetCodexArchiveSha256() != "" {
+				if got.GetSafeErrorCode() != payload.SafeErrorCode || got.GetResultSummary() != payload.ResultSummary || got.GetUsage().GetTotalTokens() != 3 || got.GetUsage().GetCompleteness() != cp.UsageCompleteness_USAGE_COMPLETENESS_PARTIAL || got.GetNativeSession() != nil {
 					t.Fatal("diagnostic changed CP state payload")
 				}
 			}

@@ -1,9 +1,7 @@
 package codex
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
@@ -20,29 +18,6 @@ func openCodeInputFixture() model.Input {
 		BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.40/32"},
 		Models: []runtimecontract.ModelProviderModel{{ID: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}},
 	}}
-}
-
-// openCodeWireFixture encodes a bounded synthetic CLI transcript with no provider or environment data.
-// openCodeWireFixture кодирует bounded synthetic CLI transcript без provider/environment data.
-func openCodeWireFixture(t *testing.T, events ...map[string]any) *bytes.Reader {
-	t.Helper()
-	var buffer bytes.Buffer
-	for _, event := range events {
-		if event["sessionID"] == nil {
-			event["sessionID"] = "ses_syntheticfixture0001"
-		}
-		if err := json.NewEncoder(&buffer).Encode(event); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return bytes.NewReader(buffer.Bytes())
-}
-
-// openCodeFinishFixture returns explicit normalized counters whose provenance remains partial.
-// openCodeFinishFixture возвращает explicit normalized counters с частичной полнотой provenance.
-func openCodeFinishFixture(id, reason string) map[string]any {
-	return map[string]any{"type": "step_finish", "part": map[string]any{"id": id, "type": "step-finish", "reason": reason,
-		"tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]any{"read": 3, "write": 1}}}}
 }
 
 // TestOpenCodeConfigurationKeepsCredentialsOutOfConfigAndDeniesNativeTools verifies the managed-only projection.
@@ -81,104 +56,19 @@ func TestOpenCodeConfigurationKeepsCredentialsOutOfConfigAndDeniesNativeTools(t 
 func TestOpenCodeConfigurationRejectsCodexStateAndUnknownModels(t *testing.T) {
 	for name, mutate := range map[string]func(*model.Input){
 		"old engine":  func(i *model.Input) { i.Provider = "openai" },
-		"old session": func(i *model.Input) { i.CodexSessionID = "00000000-0000-4000-8000-000000000001" },
 		"model typo":  func(i *model.Input) { i.Model = "unconfigured-model" },
 		"old overlay": func(i *model.Input) { i.ConfigOverlay = "personality = \"friendly\"\n" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			input := openCodeInputFixture()
 			mutate(&input)
+			if validateRuntimeSelection(input) == nil {
+				t.Fatal("incompatible engine input passed runner preflight")
+			}
 			if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
 				t.Fatal("incompatible engine input accepted")
 			}
 		})
-	}
-}
-
-// TestOpenCodeStreamPublishesFinalAndPreservesPartialUsage binds published output without fake Codex archives.
-// TestOpenCodeStreamPublishesFinalAndPreservesPartialUsage связывает output без поддельных Codex archives.
-func TestOpenCodeStreamPublishesFinalAndPreservesPartialUsage(t *testing.T) {
-	reader := openCodeWireFixture(t,
-		map[string]any{"type": "step_start", "part": map[string]any{"id": "start-1", "type": "step-start"}},
-		map[string]any{"type": "text", "part": map[string]any{"id": "text-1", "type": "text", "text": "Result synthetic-secret"}},
-		openCodeFinishFixture("finish-1", "stop"))
-	var messages []runtimecontract.RuntimeAgentMessage
-	result, err := readOpenCodeTurn(reader, openCodeInputFixture(), func(activity runtimecontract.RuntimeActivity) error {
-		if activity.Message != nil {
-			messages = append(messages, *activity.Message)
-		}
-		return nil
-	}, []string{"synthetic-secret"})
-	if err != nil || result.Outcome != "SUCCEEDED" || result.FinalMessage != "Result [REDACTED]" {
-		t.Fatal("valid terminal turn rejected", err)
-	}
-	if len(messages) != 1 || messages[0].Phase != runtimecontract.RuntimeMessageFinal || messages[0].Text != result.FinalMessage {
-		t.Fatal("published final message differs from completion")
-	}
-	if result.Usage.InputTokens != 14 || result.Usage.OutputTokens != 7 || result.Usage.TotalTokens != 21 || result.UsageCompleteness != runtimecontract.UsagePartial {
-		t.Fatal("normalized usage was lost or declared complete")
-	}
-	if result.SessionID != "" || result.ArchiveRelativePath != "" {
-		t.Fatal("adapter fabricated Codex provider state")
-	}
-}
-
-// TestOpenCodeStreamRejectsNativeTools prevents a provider-native tool event from succeeding silently.
-// TestOpenCodeStreamRejectsNativeTools запрещает неявный успех provider-native tool event.
-func TestOpenCodeStreamRejectsNativeTools(t *testing.T) {
-	reader := openCodeWireFixture(t,
-		map[string]any{"type": "step_start", "part": map[string]any{"id": "start-1", "type": "step-start"}},
-		map[string]any{"type": "tool_use", "part": map[string]any{"id": "tool-1", "type": "tool", "tool": "bash", "state": map[string]any{"status": "completed"}}},
-		openCodeFinishFixture("finish-1", "stop"))
-	result, err := readOpenCodeTurn(reader, openCodeInputFixture(), func(runtimecontract.RuntimeActivity) error { return nil }, nil)
-	if err == nil || result.Outcome == "SUCCEEDED" {
-		t.Fatal("native tool escaped the managed profile")
-	}
-}
-
-// TestOpenCodeStreamRequiresTerminalCompletion rejects truncation, provider errors and session mixing.
-// TestOpenCodeStreamRequiresTerminalCompletion отклоняет обрыв, provider errors и смешение сессий.
-func TestOpenCodeStreamRequiresTerminalCompletion(t *testing.T) {
-	for name, events := range map[string][]map[string]any{
-		"truncated": {{"type": "step_start", "part": map[string]any{"id": "start-1", "type": "step-start"}}},
-		"error":     {{"type": "error", "error": map[string]any{"message": "synthetic"}}},
-		"mixed sessions": {
-			{"type": "step_start", "part": map[string]any{"id": "start-1", "type": "step-start"}},
-			{"type": "text", "sessionID": "ses_otherfixture0001", "part": map[string]any{"id": "text-1", "type": "text", "text": "unexpected"}},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result, err := readOpenCodeTurn(openCodeWireFixture(t, events...), openCodeInputFixture(), func(runtimecontract.RuntimeActivity) error { return nil }, nil)
-			if err == nil || result.Outcome == "SUCCEEDED" {
-				t.Fatal("incomplete or mixed provider stream accepted")
-			}
-		})
-	}
-}
-
-// TestOpenCodeManagedToolTurnContinuesToFinal accepts completed gateway tools followed by a final assistant step.
-// TestOpenCodeManagedToolTurnContinuesToFinal принимает completed gateway tools и последующий final assistant step.
-func TestOpenCodeManagedToolTurnContinuesToFinal(t *testing.T) {
-	reader := openCodeWireFixture(t,
-		map[string]any{"type": "step_start", "part": map[string]any{"id": "start-1", "type": "step-start"}},
-		map[string]any{"type": "tool_use", "part": map[string]any{"id": "tool-1", "type": "tool", "tool": "kodex_echo", "state": map[string]any{"status": "completed", "input": map[string]string{"value": "SYNTHETIC_OK"}, "output": "SYNTHETIC_OK"}}},
-		openCodeFinishFixture("finish-1", "tool-calls"),
-		map[string]any{"type": "step_start", "part": map[string]any{"id": "start-2", "type": "step-start"}},
-		map[string]any{"type": "text", "part": map[string]any{"id": "text-2", "type": "text", "text": "SYNTHETIC_OK"}},
-		openCodeFinishFixture("finish-2", "stop"))
-	result, err := readOpenCodeTurn(reader, openCodeInputFixture(), func(runtimecontract.RuntimeActivity) error { return nil }, nil)
-	if err != nil || result.Outcome != "SUCCEEDED" || result.SessionID != "" {
-		t.Fatal("managed tool continuation failed")
-	}
-}
-
-// TestOpenCodeAuthenticationFailureNeedsNoNativeSession classifies early key rejection without creating resume state.
-// TestOpenCodeAuthenticationFailureNeedsNoNativeSession классифицирует ранний отказ ключа без создания resume state.
-func TestOpenCodeAuthenticationFailureNeedsNoNativeSession(t *testing.T) {
-	reader := strings.NewReader(`{"type":"error","error":{"data":{"statusCode":401}}}` + "\n")
-	_, err := readOpenCodeTurn(reader, openCodeInputFixture(), func(runtimecontract.RuntimeActivity) error { return nil }, nil)
-	if !errors.Is(err, ErrProviderAuthentication) {
-		t.Fatal("early rejected key lost authentication classification")
 	}
 }
 
@@ -228,7 +118,7 @@ func TestOpenCodeWorkspaceIsExplicitAndKeepsNativeToolsDenied(t *testing.T) {
 	input.LeaseGeneration = 1
 	input.InputDigest = strings.Repeat("a", 64)
 	input.RuntimeRevisionDigest = strings.Repeat("b", 64)
-	input.CodexSandbox = "workspace-write"
+	input.WorkspaceAccess = "workspace-write"
 	input.Capabilities = []string{runtimecontract.ArtifactCapability}
 	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
 	input.EnvironmentPolicy = runtimecontract.DefaultRuntimeEnvironmentPolicy()
@@ -261,5 +151,86 @@ func TestOpenCodeWorkspaceIsExplicitAndKeepsNativeToolsDenied(t *testing.T) {
 	input.EnvironmentPolicy.ManagedWorkspace = false
 	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
 		t.Fatal("unqualified command profile accepted")
+	}
+}
+
+// TestOpenCodeCoordinatorKeepsInstalledToolsUnexposed preserves environment metadata while omitting
+// the workspace MCP and every native shell/file permission from a delegate-only coordinator profile.
+// TestOpenCodeCoordinatorKeepsInstalledToolsUnexposed сохраняет environment metadata без
+// workspace MCP и любых native shell/file permissions в профиле delegate-only coordinator.
+func TestOpenCodeCoordinatorKeepsInstalledToolsUnexposed(t *testing.T) {
+	input := openCodeInputFixture()
+	input.EnvironmentPolicy.ManagedWorkspace = true
+	input.EnvironmentTools = []runtimecontract.RuntimeEnvironmentTool{{Name: "Go", Command: "go"}}
+	input.Capabilities = []string{"platform.run.delegate"}
+	raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if json.Unmarshal(raw, &config) != nil {
+		t.Fatal("invalid coordinator configuration")
+	}
+	if config["mcp"].(map[string]any)["workspace"] != nil || runtimecontract.RuntimeWorkspaceCommandAllowed(input, "go") {
+		t.Fatal("coordinator received a file/command catalog")
+	}
+	permission := config["permission"].(map[string]any)
+	if permission["*"] != "deny" || permission["bash"] != nil || permission["workspace_*"] != nil {
+		t.Fatal("native authority expanded")
+	}
+}
+
+// TestOpenCodeReasoningProjection passes owner-validated effort through runner preflight and native model options without arbitrary overlay passthrough.
+// TestOpenCodeReasoningProjection проводит проверенное владельцем усилие через runner preflight и native параметры модели без произвольного переноса overlay.
+func TestOpenCodeReasoningProjection(t *testing.T) {
+	for _, api := range []string{runtimecontract.ModelAPIResponses, runtimecontract.ModelAPIChatCompletions} {
+		input := openCodeInputFixture()
+		input.ModelProvider.API = api
+		input.ConfigOverlay = "model_reasoning_effort = \"high\"\n"
+		input.EffectiveReasoningEffort = "high"
+		input.ReasoningMode = runtimecontract.ReasoningSupported
+		if err := validateRuntimeSelection(input); err != nil {
+			t.Fatal("runner preflight rejected valid reasoning", err)
+		}
+
+		raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+		if err != nil {
+			t.Fatal("valid reasoning profile rejected", err)
+		}
+		var config map[string]any
+		if json.Unmarshal(raw, &config) != nil {
+			t.Fatal("invalid configuration")
+		}
+		options := config["provider"].(map[string]any)[input.ModelProvider.ProviderID].(map[string]any)["models"].(map[string]any)[input.Model].(map[string]any)["options"].(map[string]any)
+		if len(options) != 1 || options["reasoningEffort"] != "high" {
+			t.Fatal("model reasoning projection changed")
+		}
+	}
+}
+
+// TestOpenCodeConfigurationConsumesNativePreferences binds an owner overlay to actual native config and refuses unsupported strict policy before a process starts.
+// TestOpenCodeConfigurationConsumesNativePreferences связывает owner overlay с native config и отклоняет неподдержанную строгую policy до запуска процесса.
+func TestOpenCodeConfigurationConsumesNativePreferences(t *testing.T) {
+	input := openCodeInputFixture()
+	input.ConfigOverlay = "[context]\nauto_compaction = false\nprune = false\n[cache]\noptimization = \"NO_HINTS\""
+	if err := validateRuntimeSelection(input); err != nil {
+		t.Fatal("runner preflight rejected native preferences", err)
+	}
+
+	raw, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	var config map[string]any
+	if err != nil || json.Unmarshal(raw, &config) != nil {
+		t.Fatal("native preferences rejected")
+	}
+	compaction := config["compaction"].(map[string]any)
+	if compaction["auto"] != false || compaction["prune"] != false {
+		t.Fatal("native preferences lost")
+	}
+	input.ConfigOverlay = "[cache]\nno_store = true\nrequired = false"
+	if validateRuntimeSelection(input) == nil {
+		t.Fatal("strict unsupported preference passed runner preflight")
+	}
+	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
+		t.Fatal("strict unsupported preference reached native config")
 	}
 }

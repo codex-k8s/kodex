@@ -21,7 +21,7 @@ import (
 // настраиваемый синтетический ответ аккаунта.
 type providerCommandStub struct {
 	controlplanev1.PlatformCommandServiceClient
-	verify      *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest
+	verify      *controlplanev1.VerifyProviderAccountAuthorizationRequest
 	reauthorize *controlplanev1.ReauthorizeProviderAccountDeviceCodeRequest
 	delete      *controlplanev1.DeleteProviderAccountRequest
 	concurrency *controlplanev1.SetProviderAccountConcurrencyRequest
@@ -86,13 +86,13 @@ func TestProviderConcurrencyMappingRequiresExactVersionAndBounds(t *testing.T) {
 	}
 }
 
-// VerifyProviderAccountDeviceAuthorization captures the verify-device command and returns the
+// VerifyProviderAccountAuthorization captures the verify-device command and returns the
 // configured account without contacting a device authorization provider.
-// VerifyProviderAccountDeviceAuthorization сохраняет команду проверки device authorization и
+// VerifyProviderAccountAuthorization сохраняет команду проверки device authorization и
 // возвращает заданный аккаунт без обращения к провайдеру авторизации устройства.
-func (stub *providerCommandStub) VerifyProviderAccountDeviceAuthorization(_ context.Context, request *controlplanev1.VerifyProviderAccountDeviceAuthorizationRequest, _ ...grpc.CallOption) (*controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse, error) {
+func (stub *providerCommandStub) VerifyProviderAccountAuthorization(_ context.Context, request *controlplanev1.VerifyProviderAccountAuthorizationRequest, _ ...grpc.CallOption) (*controlplanev1.VerifyProviderAccountAuthorizationResponse, error) {
 	stub.verify = request
-	return &controlplanev1.VerifyProviderAccountDeviceAuthorizationResponse{Account: stub.replyAccount()}, nil
+	return &controlplanev1.VerifyProviderAccountAuthorizationResponse{Account: stub.replyAccount()}, nil
 }
 
 // ReauthorizeProviderAccountDeviceCode captures the device reauthorization command and returns a
@@ -128,9 +128,9 @@ func providerTestAccount() *controlplanev1.ProviderAccount {
 func TestProviderDeviceAndDeleteMappingsUseExactRPCs(t *testing.T) {
 	command := &providerCommandStub{}
 	server := &Server{control: &controlplaneclient.Client{Command: command}}
-	parameters := generated.VerifyProviderAccountDeviceAuthorizationParams{IfMatch: `"4"`, IdempotencyKey: "provider-request-01"}
+	parameters := generated.VerifyProviderAccountAuthorizationParams{IfMatch: `"4"`, IdempotencyKey: "provider-request-01"}
 	response := httptest.NewRecorder()
-	server.VerifyProviderAccountDeviceAuthorization(response, httptest.NewRequest(http.MethodPost, "/", nil), "pacc_primary01", parameters)
+	server.VerifyProviderAccountAuthorization(response, httptest.NewRequest(http.MethodPost, "/", nil), "pacc_primary01", parameters)
 	if response.Code != http.StatusOK || command.verify.GetAccountRef() != "pacc_primary01" || command.verify.GetMutation().GetExpectedVersion() != 4 {
 		t.Fatalf("verify mapping failed: status=%d request=%v", response.Code, command.verify)
 	}
@@ -217,7 +217,7 @@ func TestProviderCommandsRejectUnboundAccountReadback(t *testing.T) {
 		server := &Server{control: &controlplaneclient.Client{Command: stub}}
 		for name, invoke := range map[string]func(*httptest.ResponseRecorder){
 			"verify": func(w *httptest.ResponseRecorder) {
-				server.VerifyProviderAccountDeviceAuthorization(w, httptest.NewRequest("POST", "/", nil), "pacc_primary01", generated.VerifyProviderAccountDeviceAuthorizationParams{IfMatch: `"4"`, IdempotencyKey: "verify-binding"})
+				server.VerifyProviderAccountAuthorization(w, httptest.NewRequest("POST", "/", nil), "pacc_primary01", generated.VerifyProviderAccountAuthorizationParams{IfMatch: `"4"`, IdempotencyKey: "verify-binding"})
 			},
 			"reauthorize": func(w *httptest.ResponseRecorder) {
 				server.ReauthorizeProviderAccountDeviceCode(w, httptest.NewRequest("POST", "/", nil), "pacc_primary01", generated.ReauthorizeProviderAccountDeviceCodeParams{IfMatch: `"4"`, IdempotencyKey: "reauthorize-binding"})

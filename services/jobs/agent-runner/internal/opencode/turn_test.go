@@ -2,8 +2,34 @@ package opencode
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"testing"
 )
+
+// TestObserverRejectsUnprovenStepFinish stops malformed or unsuccessful native lifecycle
+// events before accounting or completion, while preserving normal tool and compaction steps.
+// TestObserverRejectsUnprovenStepFinish останавливает неверные либо неуспешные native
+// lifecycle events до accounting/completion, сохраняя нормальные tool и compaction steps.
+func TestObserverRejectsUnprovenStepFinish(t *testing.T) {
+	for _, reason := range []string{"", "unknown", "other", "error", "content-filter", "future-finish", "stop", "tool-calls", "length"} {
+		t.Run(reason, func(t *testing.T) {
+			observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{"msg_final": {parts: map[string]bool{}}}}
+			err := observer.consume(nativeObservation("message.part.updated", map[string]any{"part": map[string]any{
+				"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "reason": reason,
+				"tokens": map[string]int{"input": 10, "output": 24},
+			}}))
+			allowed := reason == "stop" || reason == "tool-calls" || reason == "length"
+			if allowed && (err != nil || observer.result.Usage.TotalTokens != 34) {
+				t.Fatal("qualified native finish was rejected")
+			}
+			if !allowed && (!errors.Is(err, ErrProtocol) || observer.result.Usage.TotalTokens != 0 || observer.active["msg_final"].measured) {
+				t.Fatal("unproven native finish advanced the consumer")
+			}
+		})
+	}
+}
 
 // nativeObservation serializes only synthetic native properties for observer contract tests.
 // nativeObservation сериализует только synthetic native properties для observer contract tests.
@@ -16,12 +42,16 @@ func nativeObservation(kind string, properties any) Event {
 // TestObserverSeparatesSummaryAndDisjointUsage проверяет event consumer, не заменяя native qualification.
 func TestObserverSeparatesSummaryAndDisjointUsage(t *testing.T) {
 	comments := 0
-	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(name string) bool { return name == "kodex_counter" }, commentary: func(_, text string) error { comments++; return nil }}
+	var measurements []runtimecontract.ModelMeasurement
+	observer := turnObserver{measurement: func(value runtimecontract.ModelMeasurement) error {
+		measurements = append(measurements, value)
+		return nil
+	}, sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(name string) bool { return name == "kodex_counter" }, commentary: func(_, text string) error { comments++; return nil }}
 	for _, event := range []Event{
 		nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_summary", "sessionID": "ses_native", "role": "assistant", "summary": true}}),
 		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_text", "messageID": "msg_summary", "sessionID": "ses_native", "type": "text", "text": "not final", "time": map[string]int{"end": 1}}}),
-		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
-		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
+		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
+		nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_usage", "messageID": "msg_summary", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]any{"input": 10, "output": 5, "reasoning": 2, "cache": map[string]int{"read": 20, "write": 3}}}}),
 		nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_summary", "sessionID": "ses_native", "role": "assistant", "summary": true, "time": map[string]int{"completed": 1}}}),
 	} {
 		if err := observer.consume(event); err != nil {
@@ -30,6 +60,9 @@ func TestObserverSeparatesSummaryAndDisjointUsage(t *testing.T) {
 	}
 	if comments != 0 || len(observer.active) != 0 || observer.result.Usage.InputTokens != 33 || observer.result.Usage.OutputTokens != 7 || observer.result.Usage.TotalTokens != 40 {
 		t.Fatal("summary publication, event retention or native accounting is invalid")
+	}
+	if len(measurements) != 1 || measurements[0].Validate() != nil || measurements[0].Phase != "COMPACTION" || measurements[0].Usage.CacheWriteInputTokens != 3 || measurements[0].TTFTMS != nil {
+		t.Fatal("native observation duplicated or invented transport timing")
 	}
 	observer.active["msg_tool"] = &observedMessage{parts: map[string]bool{}}
 	if err := observer.consume(nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_shell", "messageID": "msg_tool", "sessionID": "ses_native", "type": "tool", "tool": "bash"}})); err == nil {
@@ -59,5 +92,54 @@ func TestFinalTextRejectsSummaryErrorsAndIncompleteOutput(t *testing.T) {
 				t.Fatal("false native success accepted")
 			}
 		})
+	}
+}
+
+// TestObserverJoinsEarlyCompletionWithUsage reproduces the pinned server's mutable event snapshot.
+// It requires each final signal to follow usage, while duplicate events cannot count a second step.
+// TestObserverJoinsEarlyCompletionWithUsage воспроизводит изменяемый снимок события закреплённого сервера.
+// Итоговый сигнал следует после usage; повторные события не учитывают шаг повторно.
+func TestObserverJoinsEarlyCompletionWithUsage(t *testing.T) {
+	completed := 0
+	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(string) bool { return true }, commentary: func(string, string) error { return nil }, completed: func(string) error { completed++; return nil }}
+	message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": "msg_final", "sessionID": "ses_native", "role": "assistant", "time": map[string]int{"completed": 1}}})
+	part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": "prt_finish", "messageID": "msg_final", "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]int{"input": 10, "output": 24}}})
+	for _, event := range []Event{message, message} {
+		if err := observer.consume(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if completed != 0 {
+		t.Fatal("completion preceded measured step")
+	}
+	for _, event := range []Event{part, message, part, message} {
+		if err := observer.consume(event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if completed != 1 || observer.result.Usage.OutputTokens != 24 || len(observer.active) != 0 {
+		t.Fatal("completion and usage were not joined exactly once")
+	}
+}
+
+// TestObserverBoundsCompletionMemory crosses the old event lifetime limit with constant retained state.
+// TestObserverBoundsCompletionMemory проходит прежний предел событий с постоянным объёмом состояния.
+func TestObserverBoundsCompletionMemory(t *testing.T) {
+	observer := turnObserver{sessionID: "ses_native", active: map[string]*observedMessage{}, allowTool: func(string) bool { return true }, commentary: func(string, string) error { return nil }}
+	for i := 0; i < 4097; i++ {
+		id := fmt.Sprintf("msg_%d", i)
+		message := nativeObservation("message.updated", map[string]any{"info": map[string]any{"id": id, "sessionID": "ses_native", "role": "assistant", "summary": true, "time": map[string]int{"completed": 1}}})
+		part := nativeObservation("message.part.updated", map[string]any{"part": map[string]any{"id": fmt.Sprintf("prt_%d", i), "messageID": id, "sessionID": "ses_native", "type": "step-finish", "reason": "stop", "tokens": map[string]int{"output": 1}}})
+		for _, event := range []Event{message, part, message, part} {
+			if err := observer.consume(event); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if len(observer.active) != 0 || len(observer.retired) > 64 {
+			t.Fatal("completed message state grew beyond its bound")
+		}
+	}
+	if observer.result.Usage.OutputTokens != 4097 {
+		t.Fatal("long event stream lost measured steps")
 	}
 }

@@ -23,12 +23,13 @@ role = get('Role', 'control-plane-email-projection-writer')
 assert role['rules'] == [
     dict(apiGroups=[''], resources=['secrets'], resourceNames=['email-bridge-mailbox-projection'], verbs=['get','update']),
     dict(apiGroups=['apps'], resources=['deployments'], resourceNames=['email-bridge','egress-gateway'], verbs=['get','update']),
-    dict(apiGroups=['networking.k8s.io'], resources=['networkpolicies'], resourceNames=['egress-gateway-mail-destinations'], verbs=['get','update']),
+    dict(apiGroups=[''], resources=['services'], resourceNames=['egress-gateway-openapi'], verbs=['get','update']),
+    dict(apiGroups=['networking.k8s.io'], resources=['networkpolicies'], resourceNames=['egress-gateway-mail-destinations','egress-gateway-integration-destinations'], verbs=['get','update']),
     dict(apiGroups=[''], resources=['configmaps'], verbs=['get','create']),
 ]
 admission_role = get('ClusterRole', 'control-plane-mail-publication-admission-reader')
 assert not admission_role['metadata'].get('namespace')
-assert admission_role['rules'] == [dict(apiGroups=['admissionregistration.k8s.io'], resources=['validatingadmissionpolicies','validatingadmissionpolicybindings'], resourceNames=['egress-mail-configmap-publication'], verbs=['get'])]
+assert admission_role['rules'] == [dict(apiGroups=['admissionregistration.k8s.io'], resources=['validatingadmissionpolicies','validatingadmissionpolicybindings'], resourceNames=['egress-mail-configmap-publication','egress-integration-configmap-publication','control-plane-egress-configmap-boundary'], verbs=['get'])]
 admission_binding = get('ClusterRoleBinding', admission_role['metadata']['name'])
 assert not admission_binding['metadata'].get('namespace')
 assert admission_binding['roleRef'] == dict(apiGroup='rbac.authorization.k8s.io', kind='ClusterRole', name=admission_role['metadata']['name'])

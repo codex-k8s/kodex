@@ -196,7 +196,7 @@ func TestArchiveCleanupUsesExactArchiveStoreAndServerLineage(t *testing.T) {
 	candidate := platform.ProjectPurgeCandidate{OrganizationRef: "org_fixture", ProjectRef: "prj_fixture"}
 	for _, prefix := range []string{"prj_fixture", "_system"} {
 		t.Run(prefix, func(t *testing.T) {
-			key := "session-archive/v1/org_fixture/" + prefix + "/ses_fixture/g1/sat_fixture-a1.tar"
+			key := "session-archive/v3/org_fixture/" + prefix + "/ses_fixture/g1/sat_fixture-a1.tar"
 			artifacts, archives := objectstoragetest.New(), objectstoragetest.New()
 			put := func(store objectstorage.Store) objectstorage.Receipt {
 				t.Helper()
@@ -217,6 +217,11 @@ func TestArchiveCleanupUsesExactArchiveStoreAndServerLineage(t *testing.T) {
 				}
 			}
 			processor := New(source, artifacts, archives, fake.NewSimpleClientset(), "kodex-runtime")
+			old := source.items[0]
+			old.Target = strings.Replace(old.Target, "session-archive/v3/", "session-archive/v1/", 1)
+			if processor.deleteObject(ctx, candidate, old) == nil {
+				t.Fatal("retired archive prefix was accepted")
+			}
 			for range 2 {
 				if err := processor.process(ctx, candidate); err != nil || !source.finalized {
 					t.Fatalf("archive cleanup/replay: %v", err)

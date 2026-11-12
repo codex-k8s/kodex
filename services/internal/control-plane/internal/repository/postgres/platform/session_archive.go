@@ -56,7 +56,7 @@ const (
 type sessionArchiveCandidate struct {
 	taskID, taskRef, kind, inputDigest, objectKey, objectVersion string
 	organizationRef, projectRef, sessionRef, providerAccountRef  string
-	runtimeRevisionRef, runtimeRevisionDigest, codexSessionID    string
+	runtimeRevisionRef, runtimeRevisionDigest, nativeSessionID   string
 	sourceRelativePath, sourceSHA256                             string
 	archiveRef, archiveObjectKey, archiveObjectVersion           string
 	archiveObjectETag, archiveObjectDigest                       string
@@ -132,7 +132,7 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 			&candidate.inputDigest, &candidate.objectKey, &candidate.objectVersion, &candidate.attempt,
 			&candidate.organizationRef, &candidate.projectRef, &candidate.sessionRef, &candidate.providerAccountRef,
 			&candidate.runtimeRevisionRef, &candidate.runtimeRevisionVersion, &candidate.runtimeRevisionDigest,
-			&candidate.codexSessionID, &candidate.sourceRelativePath, &candidate.sourceSHA256, &candidate.sourceSizeBytes,
+			&candidate.nativeSessionID, &candidate.sourceRelativePath, &candidate.sourceSHA256, &candidate.sourceSizeBytes,
 			&candidate.archiveRef, &candidate.archiveFormatVersion, &candidate.archiveObjectKey,
 			&candidate.archiveObjectVersion, &candidate.archiveObjectETag, &candidate.archiveObjectDigest,
 			&candidate.archiveObjectSizeBytes, &candidate.archiveSourceRelativePath,
@@ -165,7 +165,7 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 			if project == "" {
 				project = "_system"
 			}
-			objectKey = fmt.Sprintf("session-archive/v1/%s/%s/%s/g%d/%s-a%d.tar", candidate.organizationRef,
+			objectKey = fmt.Sprintf("session-archive/v3/%s/%s/%s/g%d/%s-a%d.tar", candidate.organizationRef,
 				project, candidate.sessionRef, candidate.contentGeneration, candidate.taskRef, candidate.attempt+1)
 		}
 		inputDigest, err := digestSessionArchiveInput(candidate, objectKey)
@@ -205,7 +205,7 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 			"projectRef": candidate.projectRef, "sessionRef": candidate.sessionRef,
 			"providerAccountRef": candidate.providerAccountRef, "runtimeRevisionRef": candidate.runtimeRevisionRef,
 			"runtimeRevisionVersion": candidate.runtimeRevisionVersion, "runtimeRevisionDigest": candidate.runtimeRevisionDigest,
-			"codexSessionID": candidate.codexSessionID, "contentGeneration": candidate.contentGeneration,
+			"nativeSessionID": candidate.nativeSessionID, "contentGeneration": candidate.contentGeneration,
 			"sourceRelativePath": candidate.sourceRelativePath, "sourceSHA256": candidate.sourceSHA256,
 			"sourceSizeBytes": candidate.sourceSizeBytes, "objectKey": objectKey, "objectVersion": candidate.objectVersion,
 			"pvcName": pvcName, "archive": archive, "inputDigest": inputDigest, "attempt": attempt,
@@ -232,7 +232,7 @@ func digestSessionArchiveInput(candidate sessionArchiveCandidate, objectKey stri
 	raw, err := json.Marshal([]any{candidate.taskRef, candidate.kind, candidate.organizationRef,
 		candidate.projectRef, candidate.sessionRef, candidate.providerAccountRef,
 		candidate.runtimeRevisionRef, candidate.runtimeRevisionVersion, candidate.runtimeRevisionDigest,
-		candidate.codexSessionID, candidate.contentGeneration, candidate.sourceRelativePath,
+		candidate.nativeSessionID, candidate.contentGeneration, candidate.sourceRelativePath,
 		candidate.sourceSHA256, candidate.sourceSizeBytes, objectKey, candidate.objectVersion,
 		candidate.archiveRef, candidate.archiveObjectDigest, candidate.archiveObjectSizeBytes})
 	if err != nil {

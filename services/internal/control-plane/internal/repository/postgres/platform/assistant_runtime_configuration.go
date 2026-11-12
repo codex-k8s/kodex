@@ -19,10 +19,10 @@ import (
 )
 
 // assistantRuntimeEditable defines the closed user-editable runtime proposal fields, including
-// model/profile/account choices and optional web-search mode; owner pins are supplied separately.
+// model/profile/account choices; owner pins are supplied separately.
 // assistantRuntimeEditable задаёт закрытые редактируемые поля runtime proposal, включая
-// model/profile/account choices и необязательный web-search mode; owner pins назначаются отдельно.
-var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts"}
+// model/profile/account choices; owner pins назначаются отдельно.
+var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}
 
 // assistantRuntimeOwnerFields defines assistant identity/scope/organization/project/profile pins
 // that edits must preserve and hydration resolves from authoritative state.
@@ -38,18 +38,15 @@ var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeK
 // трактовать как этот маркер.
 var errAssistantRuntimeConfigurationNoChange = errors.Join(errs.ErrConflict, errors.New("assistant runtime configuration is unchanged"))
 
-// assistantRuntimeConfigurationUnchanged compares exact runtime/search/profile/account settings
+// assistantRuntimeConfigurationUnchanged compares exact runtime/profile/account settings
 // and nonempty persisted catalog pins. Copies are sorted by account after clearing only the two
 // fields publication does not persist; provider identity, catalog revision/digest and caller
 // slices remain intact.
-// assistantRuntimeConfigurationUnchanged сравнивает точные runtime/search/profile/account settings
+// assistantRuntimeConfigurationUnchanged сравнивает точные runtime/profile/account settings
 // и непустые сохранённые catalog pins. Копии сортируются по account после очистки лишь двух полей,
 // которые publication не сохраняет; provider identity, catalog revision/digest и slices caller
 // сохраняются.
 func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persisted []entity.ProviderAccountCandidate) bool {
-	if assistantString(before, "webSearchMode") != assistantString(after, "webSearchMode") {
-		return false
-	}
 	for _, field := range []string{"runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode"} {
 		previous, previousOK := before[field].(string)
 		prepared, preparedOK := after[field].(string)
@@ -79,26 +76,14 @@ func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persis
 	return assistantJSONEqual(canonical(persisted), canonical(prepared))
 }
 
-// assistantRuntimeOverlay parses the existing restricted TOML overlay, replaces reasoning effort
-// and changes search mode only when supplied, then encodes/canonicalizes it. Existing parse
-// failure is Conflict; unsupported mode or encoding/canonicalization failure is Invalid,
-// preserving unrelated supported settings.
-// assistantRuntimeOverlay разбирает существующий ограниченный TOML overlay, заменяет reasoning
-// effort и меняет search mode лишь при передаче, затем кодирует/канонизирует. Ошибка разбора
-// исходника даёт Conflict; неподдерживаемый mode либо encoding/canonicalization failure даёт
-// Invalid, сохраняя остальные поддерживаемые настройки.
-func assistantRuntimeOverlay(current, effort, mode string) (string, error) {
+// assistantRuntimeOverlay changes reasoning effort while preserving supported native preferences; invalid input is never silently normalized.
+// assistantRuntimeOverlay меняет effort, сохраняя native preferences; недопустимый ввод не нормализуется молча.
+func assistantRuntimeOverlay(current, effort string) (string, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(current)
 	if err != nil {
 		return "", errs.ErrConflict
 	}
 	overlay.ModelReasoningEffort = effort
-	if mode != "" {
-		if !runtimecontract.ValidWebSearchMode(mode) {
-			return "", errs.ErrInvalid
-		}
-		overlay.WebSearchMode = mode
-	}
 	var encoded bytes.Buffer
 	if err := toml.NewEncoder(&encoded).Encode(overlay); err != nil {
 		return "", errs.ErrInvalid
@@ -221,9 +206,6 @@ func assistantRuntimeBefore(target assistantConfigurationTarget, current scope, 
 	}
 	if parsed, err := runtimecontract.ParseConfigOverlay(view.PublishedOverlay.Content); err == nil {
 		before["reasoningEffort"] = parsed.ModelReasoningEffort
-		if parsed.WebSearchMode != "" {
-			before["webSearchMode"] = parsed.WebSearchMode
-		}
 	}
 	return before
 }
@@ -291,17 +273,7 @@ func (repository *Repository) hydratePreparedRuntimeConfiguration(ctx context.Co
 	if !ok {
 		return operation, errs.ErrInvalid
 	}
-	mode := ""
-	if raw, present := operation.Parameters["webSearchMode"]; present {
-		var valid bool
-		mode, valid = raw.(string)
-		if !valid || !runtimecontract.ValidWebSearchMode(mode) {
-			return operation, errs.ErrInvalid
-		}
-	} else if parsed, parseErr := runtimecontract.ParseConfigOverlay(view.PublishedOverlay.Content); parseErr == nil {
-		mode = parsed.WebSearchMode
-	}
-	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, effort, mode)
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, effort)
 	if err != nil {
 		return operation, err
 	}
@@ -310,9 +282,6 @@ func (repository *Repository) hydratePreparedRuntimeConfiguration(ctx context.Co
 		return operation, err
 	}
 	after := assistantRuntimeOwner(target, current, agentRef)
-	if mode != "" {
-		after["webSearchMode"] = mode
-	}
 	for _, field := range []string{"runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode"} {
 		after[field] = operation.Parameters[field]
 	}
@@ -341,7 +310,7 @@ func (repository *Repository) hydratePreparedRuntimeConfiguration(ctx context.Co
 // assistantRuntimeConfigurationCommand accepts only hydrated owner pins and routes each closed operation to its distinct internal command; payload locators grant no authority.
 // assistantRuntimeConfigurationCommand принимает лишь подготовленные сервером owner pins и направляет каждую закрытую операцию в отдельную внутреннюю команду; ссылки payload не дают полномочий.
 func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
-	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "targetKind", "expectedVersion") {
+	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "targetKind", "expectedVersion") {
 		return command.Command{}, errs.ErrInvalid
 	}
 	minimal, err := assistantRuntimeAccounts(operation.Input)
@@ -369,18 +338,9 @@ func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperatio
 	if !ok {
 		return command.Command{}, errs.ErrInvalid
 	}
-	mode := ""
-	if raw, present := operation.Input["webSearchMode"]; present {
-		var valid bool
-		mode, valid = raw.(string)
-		if !valid || !runtimecontract.ValidWebSearchMode(mode) {
-			return command.Command{}, errs.ErrInvalid
-		}
-	}
 	payload := command.AssistantRuntimeConfigurationInput{Configuration: command.AgentRuntimeConfigurationInput{AgentRef: assistantString(operation.Input, "agentRef"), RuntimeProfileRef: assistantString(operation.Input, "runtimeProfileRef"), Model: assistantString(operation.Input, "model"), ProviderPolicyMode: assistantString(operation.Input, "providerPolicyMode"), ProviderAccounts: pins}, ReasoningEffort: effort,
-		WebSearchMode: mode,
-		TargetKind:    assistantString(operation.Input, "targetKind"),
-		ScopeKind:     assistantString(operation.Input, "scopeKind"), OrganizationRef: assistantString(operation.Input, "organizationRef"), ProjectRef: assistantString(operation.Input, "projectRef"), AssistantProfileRef: assistantString(operation.Input, "assistantProfileRef")}
+		TargetKind: assistantString(operation.Input, "targetKind"),
+		ScopeKind:  assistantString(operation.Input, "scopeKind"), OrganizationRef: assistantString(operation.Input, "organizationRef"), ProjectRef: assistantString(operation.Input, "projectRef"), AssistantProfileRef: assistantString(operation.Input, "assistantProfileRef")}
 	profileRaw, err := json.Marshal(operation.Input["runtimeProfilePin"])
 	if err != nil || decodeStrict(profileRaw, &payload.RuntimeProfilePin) != nil || payload.RuntimeProfilePin.Ref != payload.Configuration.RuntimeProfileRef || payload.RuntimeProfilePin.Version < 1 || payload.RuntimeProfilePin.RuntimeRevision == "" {
 		return command.Command{}, errs.ErrInvalid
@@ -449,7 +409,7 @@ func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx c
 	if view.DraftOverlay != nil || selectedPin != payload.RuntimeProfilePin || view.AgentVersion != *planned.Mutation.ExpectedVersion || !assistantJSONEqual(assistantRuntimeBefore(target, current, view, currentPin), operation.Before) || !reflect.DeepEqual(operation.Parameters, operation.After) {
 		return false, nil
 	}
-	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort, payload.WebSearchMode)
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort)
 	if err != nil {
 		return false, err
 	}
@@ -484,7 +444,7 @@ func (repository *Repository) publishAssistantRuntimeConfiguration(ctx context.C
 	if view.DraftOverlay != nil || selectedPin != payload.RuntimeProfilePin {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort, payload.WebSearchMode)
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort)
 	if err != nil {
 		return commandOutcome{}, err
 	}

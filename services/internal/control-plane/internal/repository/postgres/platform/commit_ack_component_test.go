@@ -120,6 +120,8 @@ func testCommitAckArtifact(t *testing.T, ctx context.Context, path, fault string
 		claimed := items[0]
 		usage := turnUsageFixture()
 		request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: "commit-ack-complete"}, LeaseRef: stringMap(claimed, "leaseRef"), Fence: stringMap(claimed, "fence"), Generation: runtimeRevisionMapInt64(claimed, "generation"), Success: true, ResultSummary: "Verified commit ACK fixture", Artifacts: []*controlplanev1.CompletedArtifactInput{{FileName: "receipt.md", MediaType: "text/markdown", SizeBytes: int64(len(body)), Content: body, Sha256: digestHex}}, Usage: &controlplanev1.TokenUsage{TotalTokens: usage.TotalTokens, InputTokens: usage.InputTokens, CachedInputTokens: usage.CachedInputTokens, CacheWriteInputTokens: usage.CacheWriteInputTokens, OutputTokens: usage.OutputTokens, ReasoningOutputTokens: usage.ReasoningOutputTokens, ModelContextWindow: usage.ModelContextWindow}}
+		checkpoint := nativeCheckpointForClaimFixture(claimed)
+		request.NativeSession = &controlplanev1.NativeSessionCheckpoint{SessionId: checkpoint.SessionID, Version: checkpoint.Version, Generation: checkpoint.Generation, RelativePath: checkpoint.RelativePath, Sha256: checkpoint.SHA256, SizeBytes: checkpoint.SizeBytes}
 		wire, err = proto.Marshal(request)
 		if err != nil {
 			t.Fatal("encode native commit ACK fixture")

@@ -2,7 +2,7 @@
 WITH candidate AS (
     INSERT INTO control_plane.provider_accounts
         (ref, organization_id, definition_key, stable_key, name, state, enabled, created_by)
-    SELECT 'pacc_affinity_test', organization.id, 'openai-codex',
+    SELECT 'pacc_affinity_test', organization.id, 'opencode-synthetic',
            'affinity-test', 'Affinity test', 'PENDING_AUTHORIZATION', false, subject.id
     FROM control_plane.organizations organization
     JOIN control_plane.subjects subject ON subject.organization_id = organization.id

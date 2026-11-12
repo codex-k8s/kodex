@@ -104,7 +104,7 @@ func TestAssistantTaskSessionReadComponent(t *testing.T) {
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "task-session-agent", "Task reader")
 	first := execute(command.LaunchRun, owner, "first", nil, command.LaunchRunInput{ProjectRef: project.Ref, Task: "FIRST_PUBLIC_USER_INPUT", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
 	firstLease := claim("first-claim")
-	execute(command.CompleteExecution, complete, "first-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: runtimeRevisionMapInt64(firstLease, "generation"), Success: true, ResultSummary: "FIRST_PUBLIC_RESULT", Usage: turnUsageFixture()})
+	execute(command.CompleteExecution, complete, "first-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(firstLease), LeaseRef: stringMap(firstLease, "leaseRef"), Fence: stringMap(firstLease, "fence"), Generation: runtimeRevisionMapInt64(firstLease, "generation"), Success: true, ResultSummary: "FIRST_PUBLIC_RESULT", Usage: turnUsageFixture()})
 	second := execute(command.AddSessionTurn, owner, "second", nil, command.SessionTurnInput{SessionRef: first.SessionRef, RunRef: first.Ref, Task: "SECOND_PUBLIC_USER_INPUT"}).Run
 	secondLease := claim("second-claim")
 	latestEvent := ""

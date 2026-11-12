@@ -74,9 +74,19 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
 	}, true)
 	if err != nil {
+		if errors.Is(err, errs.ErrForbidden) && payload.NativeSession != nil && payload.NativeSession.Validate() == nil {
+			// A closed lease may still report its exact stopped-writer fact in the owner transaction.
+			// Закрытая lease может передать exact stopped-writer fact основной owner-транзакции.
+			return nil, validateUnpreparedCompletionArtifacts(payload.Artifacts)
+		}
 		return nil, err
 	}
 	if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
+		if errors.Is(err, errs.ErrForbidden) && payload.NativeSession != nil && payload.NativeSession.Validate() == nil {
+			// Do not write S3 or rewrite the immutable intent; the owner rechecks denial and checkpoint CAS.
+			// Не записываем S3 и не меняем immutable intent; owner повторяет проверку отказа и checkpoint CAS.
+			return nil, validateUnpreparedCompletionArtifacts(payload.Artifacts)
+		}
 		return nil, err
 	}
 	_, expired, err := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, stringMap(lease, "runID"))
@@ -86,20 +96,7 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	if expired {
 		// Expiry будет committed основной owner-транзакцией. До неё нельзя
 		// публиковать новые objects; исходная валидация bytes сохраняется.
-		var total int64
-		for _, artifact := range payload.Artifacts {
-			if len(payload.Artifacts) > 16 || artifact.Prepared != nil || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
-				artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
-				return nil, errs.ErrInvalid
-			}
-			total += artifact.SizeBytes
-			digest := sha256.Sum256(artifact.Content)
-			if total > maximumArtifactBytes || !strings.EqualFold(strings.TrimSpace(artifact.SHA256), hex.EncodeToString(digest[:])) ||
-				artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content).ScanState != artifactpolicy.ScanClean {
-				return nil, errs.ErrInvalid
-			}
-		}
-		return nil, nil
+		return nil, validateUnpreparedCompletionArtifacts(payload.Artifacts)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
@@ -166,6 +163,27 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	}
 	input.Payload = payload
 	return prepared, nil
+}
+
+// validateUnpreparedCompletionArtifacts preserves bounded shape, digest and local content checks
+// when terminal processing must not stage new objects; it neither scans externally nor grants publication.
+// validateUnpreparedCompletionArtifacts сохраняет проверки формы, размера, digest и локального содержимого,
+// когда terminal processing не должен создавать объекты; внешнее сканирование и публикация не разрешаются.
+func validateUnpreparedCompletionArtifacts(artifacts []command.CompletedArtifact) error {
+	var total int64
+	for _, artifact := range artifacts {
+		if len(artifacts) > 16 || artifact.Prepared != nil || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
+			artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
+			return errs.ErrInvalid
+		}
+		total += artifact.SizeBytes
+		digest := sha256.Sum256(artifact.Content)
+		if total > maximumArtifactBytes || !strings.EqualFold(strings.TrimSpace(artifact.SHA256), hex.EncodeToString(digest[:])) ||
+			artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content).ScanState != artifactpolicy.ScanClean {
+			return errs.ErrInvalid
+		}
+	}
+	return nil
 }
 
 // requireRuntimeArtifactWrite requires the artifact capability in both current agent and pinned

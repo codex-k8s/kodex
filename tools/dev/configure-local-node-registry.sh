@@ -11,7 +11,7 @@ usage() {
   printf '%s\n' \
     'Usage: configure-local-node-registry.sh --mode apply|readback' \
     '  --context <exact-context> --material-directory <path>' \
-    '  --promoted-pull-host <dns>' >&2
+    '  --promoted-pull-host <dns> [--bind-platform-registry]' >&2
 }
 
 # shellcheck source=lib/node-registry.sh
@@ -30,9 +30,11 @@ case "$mode" in apply|readback) ;; *) fail 'mode is invalid' ;; esac
   "$promoted_pull_host" == *.* ]] || fail 'promoted pull host is invalid'
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 if [[ "$context" == k3d-* ]]; then
+  platform_registry_arguments=()
+  [[ "$bind_platform_registry" != true ]] || platform_registry_arguments+=(--bind-platform-registry)
   exec "$script_directory/configure-k3d-node-registry.sh" --mode "$mode" \
     --context "$context" --material-directory "$material_directory" \
-    --promoted-pull-host "$promoted_pull_host"
+    --promoted-pull-host "$promoted_pull_host" "${platform_registry_arguments[@]}"
 fi
 for command_name in jq kubectl sha256sum stat sudo systemctl yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
@@ -105,6 +107,11 @@ expected_host=$(jq -cS --arg host "$promoted_pull_host" '
   {mirror:.mirrors[$host],config:.configs[$host]}
 ' "$expected_json_file")
 [[ "$actual_host" == "$expected_host" ]] || fail 'K3s promoted pull configuration mismatch'
+if [[ "$bind_platform_registry" == true ]]; then
+  actual_platform=$(sudo -n yq -o=json "$registry_configuration" | jq -cS '.mirrors["registry.local.kodex"]')
+  expected_platform=$(jq -cS '.mirrors["registry.local.kodex"]' "$expected_json_file")
+  [[ "$actual_platform" == "$expected_platform" ]] || fail 'K3s platform registry mirror mismatch'
+fi
 for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$private_key_file:$system_private_key"; do
   source_path=${pair%%:*}
   target_path=${pair#*:}

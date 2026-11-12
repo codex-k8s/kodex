@@ -593,22 +593,6 @@ if [[ "$mode" == apply ]]; then
   for node_command in node npm npx corepack; do
     ln -sfn "/usr/local/node/bin/$node_command" "/usr/local/bin/$node_command"
   done
-  # Сетевой npm install '@openai/codex@0.160.0' намеренно запрещён: пакеты
-  # извлекаются только после проверки repo-owned SHA-512 без lifecycle scripts.
-  codex_install_root=/usr/local/lib/kodex-cli
-  download_integrity_artifact codex-cli "$temporary_directory/codex-cli.tgz"
-  download_integrity_artifact codex-linux-x64 "$temporary_directory/codex-linux-x64.tgz"
-  rm -rf -- "$codex_install_root"
-  extract_npm_package "$temporary_directory/codex-cli.tgz" \
-    "$codex_install_root/node_modules/@openai/codex"
-  extract_npm_package "$temporary_directory/codex-linux-x64.tgz" \
-    "$codex_install_root/node_modules/@openai/codex-linux-x64"
-  chown -R root:root "$codex_install_root"
-  chmod -R go-w "$codex_install_root"
-  chmod 0755 "$codex_install_root/node_modules/@openai/codex/bin/codex.js"
-  ln -sfn "$codex_install_root/node_modules/@openai/codex/bin/codex.js" \
-    /usr/local/bin/codex
-
   configure_provider_apparmor_profile
 
   download_artifact helm "$temporary_directory/helm.tar.gz"
@@ -695,7 +679,7 @@ EOF
 fi
 
 systemctl is-active --quiet k3s || fail 'k3s service is not active'
-for command_name in certutil codex cosign dig docker go helm node npm kubectl nsc tsh yq; do
+for command_name in certutil cosign dig docker go helm node npm kubectl nsc tsh yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "installed command is absent: $command_name"
 done
 for command_name in tctl teleport; do
@@ -727,16 +711,6 @@ for teleport_command in teleport tctl; do
   [[ "$teleport_version" == "$teleport_client_version" ]] ||
     fail "installed $teleport_command version differs from the component lock"
 done
-codex_version=$(runuser --user nobody -- env HOME=/tmp /usr/local/bin/codex --version |
-  awk 'NR == 1 && $1 == "codex-cli" {print $2}')
-require_locked_version codex-cli "$codex_version"
-codex_package_root=/usr/local/lib/kodex-cli/node_modules/@openai
-jq -e --arg version "$(locked_artifact_version codex-cli)" '.version == $version' \
-  "$codex_package_root/codex/package.json" >/dev/null ||
-  fail 'installed Codex CLI package version differs from the component lock'
-jq -e --arg version "$(locked_artifact_version codex-linux-x64)" '.version == $version' \
-  "$codex_package_root/codex-linux-x64/package.json" >/dev/null ||
-  fail 'installed Codex platform package version differs from the component lock'
 systemctl is-active --quiet docker || fail 'Docker service is not active'
 docker buildx version >/dev/null 2>&1 || fail 'Docker buildx is unavailable'
 readback_locked_host_packages

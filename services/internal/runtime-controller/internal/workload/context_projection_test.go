@@ -180,7 +180,7 @@ func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 		context         bool
 	}{
 		{name: "initial", context: true},
-		{name: "unchanged resume", sessionID: "10000000-0000-4000-8000-000000000001", context: true},
+		{name: "unchanged resume", sessionID: "ses_native", context: true},
 		{name: "changed context resets thread", context: true},
 		{name: "removed context resets thread"},
 	} {
@@ -190,7 +190,10 @@ func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 				testContextRevision(execution.Revision)
 			}
 			// Решение о resume принимает CP до sealing, controller его не меняет.
-			execution.Revision.CodexSessionId = test.sessionID
+			if test.sessionID != "" {
+				path, _ := runtimecontract.NativeSessionExportPath(test.sessionID, 1)
+				execution.Revision.NativeSession = &cp.NativeSessionCheckpoint{SessionId: test.sessionID, Version: runtimecontract.OpenCodeVersion, Generation: 1, RelativePath: path, Sha256: strings.Repeat("a", 64), SizeBytes: 800}
+			}
 			sealTestTurnExecution(execution)
 			raw, err := proto.Marshal(execution)
 			if err != nil {
@@ -206,7 +209,7 @@ func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if input.CodexSessionID != test.sessionID || input.RuntimeRevisionDigest != execution.Revision.RevisionDigest {
+			if (input.NativeSession != nil && input.NativeSession.SessionID != test.sessionID || input.NativeSession == nil && test.sessionID != "") || input.RuntimeRevisionDigest != execution.Revision.RevisionDigest {
 				t.Fatal("owner-sealed resume decision changed at consumer boundary")
 			}
 			policy := runtimecontract.RuntimeWorkspacePolicyV1()
@@ -224,7 +227,7 @@ func TestOwnerSealedContextResumeSurvivesProtoAndProjection(t *testing.T) {
 			if err != nil || !strings.Contains(string(encoded), `"context_snapshot"`) || len(data) == 0 {
 				t.Fatal("runtime context did not survive immutable projection")
 			}
-			received.Revision.CodexSessionId = "10000000-0000-4000-8000-000000000002"
+			received.Revision.NativeSession = &cp.NativeSessionCheckpoint{SessionId: "ses_foreign"}
 			if _, _, err := manager.BuildTurnInput(received); err == nil {
 				t.Fatal("unsealed resume override was accepted")
 			}
@@ -273,11 +276,11 @@ func TestContextVolumeSeparatesInitWriterFromRuntimeReaders(t *testing.T) {
 			}
 		}
 		want := 1
-		if container.Name == "provider-credential-relay" || container.Name == "workspace-prepare" {
+		if container.Name == "provider-credential-relay" || container.Name == "workspace-prepare" || container.Name == "workspace-executor" {
 			want = 0
 		}
 		if count != want {
-			t.Fatal("context mount consumer is invalid")
+			t.Fatalf("context mount consumer %s is invalid: got=%d want=%d", container.Name, count, want)
 		}
 	}
 }

@@ -31,7 +31,7 @@ def fixture():
 
 
 def request(**fields):
-    values = dict(stage='TERMINAL_WAIT', category='PROVIDER', detail='STREAM_CLOSED', code=0,
+    values = dict(stage='TERMINAL_WAIT', category='PROVIDER', detail='NONE', code=0,
                   notification='NONE', account='NONE', notification_error='NONE', stream_error='NONE')
     values.update(fields)
     return ('2026/10/07 07:49:00 ' + CAPTURE.REQUEST_PREFIX + '{stage}; class: {category}; '
@@ -52,6 +52,24 @@ class FakeClock:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_native_request_format_and_closed_vocabulary_match_producer(self):
+        root = Path(__file__).resolve().parents[2] / 'services/jobs/agent-runner/internal/codex'
+        process = (root / 'process.go').read_text()
+        stages = set(re.findall(r'providerStage\w+\s+providerExecutionStage = "([A-Z_]+)"', process))
+        self.assertEqual(CAPTURE.STAGES, stages)
+        producer = re.search(r'providerSafeFailureLog\s*=\s*"([^"]+)"', (root / 'broker.go').read_text()).group(1)
+        for stage in CAPTURE.STAGES:
+            for category in CAPTURE.CLASSES:
+                parsed = CAPTURE.parse_line((producer % (stage, category)).encode())
+                self.assertEqual(parsed['stage'], stage)
+                self.assertEqual(parsed['class'], category)
+                self.assertEqual(parsed['detail'], 'NONE')
+        retired = request().replace(CAPTURE.REQUEST_PREFIX.encode(), b'Codex provider request failed at safe stage: ')
+        self.assertIsNone(CAPTURE.parse_line(retired))
+        for code in CAPTURE.TERMINAL_CODES:
+            self.assertEqual(CAPTURE.parse_line((CAPTURE.TERMINAL_PREFIX + code).encode()),
+                             {'kind': 'TERMINAL_FAILURE', 'failure_code': code})
+
     def test_workspace_completion_projects_only_closed_stage_and_reason(self):
         for stage in CAPTURE.WORKSPACE_COMPLETION_STAGES:
             for reason in CAPTURE.WORKSPACE_COMPLETION_REASONS:
@@ -110,23 +128,6 @@ class CaptureTests(unittest.TestCase):
             CAPTURE.parse_line(duplicate.encode())
         self.assertIsNone(CAPTURE.parse_line(json.dumps(dict(base, msg=SENTINEL)).encode()))
 
-    def test_resume_source_closed_reasons_and_exact_capture(self):
-        for detail in ('RESUME_SOURCE_SCHEMA', 'RESUME_SOURCE_ID', 'RESUME_SOURCE_LOCATOR',
-                       'RESUME_SOURCE_OPEN', 'RESUME_SOURCE_METADATA', 'RESUME_SOURCE_IDENTITY'):
-            with self.subTest(detail=detail):
-                diagnostic = request(stage='THREAD_READ', detail=detail)
-                parsed = CAPTURE.parse_line(diagnostic)
-                self.assertEqual(parsed['kind'], 'REQUEST_FAILURE')
-                self.assertEqual(parsed['detail'], detail)
-                result, _, _, _ = self.exercise(diagnostic=diagnostic)
-                self.assertEqual(result['diagnostic']['detail'], detail)
-                self.assertEqual(result['rejoin'], 'VERIFIED')
-                self.assertNotIn(SENTINEL, json.dumps(result))
-                for invalid in ({'stage': 'ARCHIVE_CAPTURE'}, {'category': 'AUTHENTICATION'},
-                                {'code': -32603}, {'notification': 'UNKNOWN'},
-                                {'account': 'SHUTDOWN'}, {'detail': 'RESUME_SOURCE_'+SENTINEL}):
-                    with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
-                        CAPTURE.parse_line(request(**dict({'stage': 'THREAD_READ', 'detail': detail}, **invalid)))
 
     def exercise(self, proof=None, columns=None, options=None, after=None, log=None, diagnostic=None):
         baseline, baseline_columns, baseline_options = fixture()
@@ -450,63 +451,9 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaises(CAPTURE.Failure):
             CAPTURE.capture(options, read, lambda pod: self.fail('changed follow'))
 
-    def test_known_request_fields_and_account_classification(self):
-        parsed = CAPTURE.parse_line(request(stage='ACCOUNT_READ', detail='RPC_ERROR', code=-32603,
-                                            account='DISCOVERY_UNAUTHORIZED'))
-        self.assertEqual(parsed['rpc_code'], -32603)
-        self.assertEqual(parsed['account_read'], 'DISCOVERY_UNAUTHORIZED')
-        for stage in CAPTURE.STAGES:
-            self.assertEqual(CAPTURE.parse_line(request(stage=stage))['stage'], stage)
-        for category in CAPTURE.CLASSES:
-            self.assertEqual(CAPTURE.parse_line(request(category=category))['class'], category)
 
-    def test_closed_notification_and_terminal_codes(self):
-        for method in CAPTURE.NOTIFICATIONS - {'NONE'}:
-            parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID', notification=method,
-                                                notification_error='ENVELOPE'))
-            self.assertEqual(parsed['notification'], method)
-        for code in CAPTURE.TERMINAL_CODES:
-            result = CAPTURE.parse_line(('2026/10/07 07:49:00 ' + CAPTURE.TERMINAL_PREFIX + code).encode())
-            self.assertEqual(result, {'kind': 'TERMINAL_FAILURE', 'failure_code': code})
 
-    def test_enum_sets_match_exact_repo_producers(self):
-        source = Path(__file__).resolve().parents[2] / 'services/jobs/agent-runner/internal/codex'
-        process = (source / 'process.go').read_text()
-        stages = set(re.findall(r'providerStage\w+\s+providerExecutionStage = "([A-Z_]+)"', process))
-        self.assertEqual(CAPTURE.STAGES, stages)
-        parser = (source / 'parser.go').read_text()
-        reasons = set(re.findall(r'tokenUsage\w+\s+tokenUsageFailureReason = "([A-Z_]+)"', parser))
-        self.assertEqual(CAPTURE.TOKEN_USAGE_ERRORS, reasons)
-        usage_guard = process.split('var usageFailure *tokenUsageFailure', 1)[1].split(
-            'return &appServerCallFailure', 1)[0]
-        self.assertEqual(CAPTURE.TOKEN_USAGE_METHODS,
-                         set(re.findall(r'method == "([A-Za-z/._]+)"', usage_guard)))
-        methods = parser.split('var serverNotificationMethods = stringSet(', 1)[1].split(')', 1)[0]
-        broker = (source / 'broker.go').read_text()
-        additional = broker.split('func safeNotificationMethod(', 1)[1].split('default:', 1)[0]
-        notifications = set(re.findall(r'"([A-Za-z/._]+)"', methods + additional))
-        self.assertEqual(CAPTURE.NOTIFICATIONS, notifications | {'NONE', 'UNKNOWN'})
-        terminal = parser.split('func parseCodexErrorInfo(', 1)[1].split('func (state *protocolState) terminalResult', 1)[0]
-        codes = set(re.findall(r'return "([a-z_]+)", true', terminal))
-        self.assertEqual(CAPTURE.TERMINAL_CODES, codes | {
-            'provider_error_info_invalid', 'provider_interrupted', 'RUNTIME_ARTIFACT_INVALID'})
-        account = (source / 'account_read_failure.go').read_text().split('func safeAccountReadFailure(', 1)[1]
-        self.assertEqual(CAPTURE.ACCOUNT_READ, set(re.findall(r'"([A-Z_]+)"', account)))
-        stream = (source / 'stream_failure.go').read_text()
-        reasons = set(re.findall(r'streamFailure\w+\s+appServerStreamFailureReason = "([A-Z_]+)"', stream))
-        self.assertEqual(CAPTURE.STREAM_ERRORS, reasons | {'NONE'})
 
-    def test_current_request_matches_actual_producer_format(self):
-        source = Path(__file__).resolve().parents[2] / 'services/jobs/agent-runner/internal/codex/broker.go'
-        producer = re.search(r'providerSafeFailureLog\s*=\s*"([^"]+)"', source.read_text()).group(1)
-        for stream_error in CAPTURE.STREAM_ERRORS:
-            with self.subTest(stream_error=stream_error):
-                line = producer % ('TERMINAL_WAIT', 'PROVIDER', 'CONTEXT_CANCELLED', 0,
-                                   'NONE', 'NONE', 'NONE', stream_error)
-                actual = CAPTURE.parse_line(line.encode())
-                self.assertEqual(actual['detail'], 'CONTEXT_CANCELLED')
-                self.assertEqual(actual['stream_error'], stream_error)
-                self.assertNotIn(SENTINEL, json.dumps(actual))
 
     def test_stream_error_rejects_legacy_unknown_and_extra_fields(self):
         for stream_error in ('UNKNOWN', SENTINEL, 'NONE '+SENTINEL, ''):
@@ -522,87 +469,8 @@ class CaptureTests(unittest.TestCase):
                     CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
                 CAPTURE.parse_line(line)
 
-    def test_stream_error_survives_dual_capture_with_exact_ack_before_cleanup(self):
-        proof, columns, options = fixture()
-        options.include_client_observation = True
-        ack = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode() + b'\n'
-        client = json.dumps({'msg': CAPTURE.CLIENT_MESSAGE, 'category': 'TERMINAL_RESULT',
-                             'context_state': 'ACTIVE', 'activity_failed': False}).encode() + b'\n'
-        gets, checkpoints, closed = 0, [], []
 
-        def read(args):
-            nonlocal gets
-            if args[0] == 'get':
-                gets += 1
-                return columns if gets < 3 else b''
-            return ack
 
-        def follow(pod):
-            try:
-                yield 'PROVIDER', ack
-                yield 'CLIENT', client
-                yield 'PROVIDER', request(detail='STREAM_INVALID', stream_error='FRAME_TOO_LARGE')
-            finally:
-                closed.append(pod['uid'])
-
-        clock = FakeClock()
-        actual = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep,
-                                 on_observation=checkpoints.append)
-        self.assertEqual(actual['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
-        self.assertEqual(actual['diagnostic']['stream_error'], 'FRAME_TOO_LARGE')
-        self.assertEqual(actual['client_observation']['category'], 'TERMINAL_RESULT')
-        self.assertFalse(actual['client_observation']['activity_failed'])
-        self.assertEqual([row['source'] for row in checkpoints], ['ACK', 'CLIENT', 'PROVIDER'])
-        for row in checkpoints:
-            for key in ('session_ref', 'turn_ref', 'attempt', 'input_digest',
-                        'runtime_revision_digest', 'execution_binding_digest'):
-                self.assertEqual(row[key], proof[key])
-        self.assertEqual(closed, [actual['pod']['uid']])
-        self.assertNotIn(SENTINEL, json.dumps(actual))
-
-    def test_closed_token_usage_reasons_bind_exact_method_and_preserve_privacy(self):
-        for reason in CAPTURE.TOKEN_USAGE_ERRORS | {'TOKEN_USAGE'}:
-            for method in CAPTURE.TOKEN_USAGE_METHODS:
-                with self.subTest(reason=reason, method=method):
-                    parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                        notification=method, notification_error=reason))
-                    self.assertEqual(parsed['notification_error'], reason)
-                    self.assertEqual(parsed['notification'], method)
-                    self.assertNotIn(SENTINEL, json.dumps(parsed))
-                    self.assertEqual(set(parsed), {'kind', 'stage', 'class', 'detail', 'rpc_code',
-                                                  'notification', 'account_read', 'notification_error', 'stream_error'})
-            if reason != 'TOKEN_USAGE':
-                for method in CAPTURE.NOTIFICATIONS - CAPTURE.TOKEN_USAGE_METHODS:
-                    with self.subTest(reason=reason, foreign_method=method), self.assertRaisesRegex(
-                            CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
-                        CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                            notification=method, notification_error=reason))
-        for method in CAPTURE.TOKEN_USAGE_METHODS:
-            with self.subTest(method=method), self.assertRaisesRegex(
-                    CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
-                CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                    notification=method, notification_error='TOKEN_USAGE_'+SENTINEL))
-            self.assertNotIn(SENTINEL, str(caught.exception))
-
-    def test_new_usage_receipt_diagnostics_pass_exact_capture_and_remain_private(self):
-        for reason in ('TOKEN_USAGE_RECEIPT_CONFLICT', 'TOKEN_USAGE_RECEIPT_LIMIT', 'TOKEN_USAGE_OVERFLOW'):
-            for method in ('thread/tokenUsage/updated', 'rawResponse/completed'):
-                with self.subTest(reason=reason, method=method):
-                    diagnostic = request(detail='NOTIFICATION_INVALID', notification=method,
-                                         notification_error=reason)
-                    result, _, followed, closed = self.exercise(diagnostic=diagnostic)
-                    self.assertEqual(result['diagnostic']['notification_error'], reason)
-                    self.assertEqual(result['diagnostic']['notification'], method)
-                    self.assertEqual(result['rejoin'], 'VERIFIED')
-                    self.assertEqual(len(followed), 1)
-                    self.assertEqual(closed, [True])
-                    self.assertNotIn(SENTINEL, json.dumps(result))
-                    self.assertEqual(CAPTURE.diagnostic_from_chunks(iter([diagnostic])), result['diagnostic'])
-            for method in ('rawResponse/other', SENTINEL):
-                with self.subTest(reason=reason, method=method):
-                    with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
-                        CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                            notification=method, notification_error=reason))
 
     def test_unknown_or_malformed_diagnostic_never_reflects_sentinel(self):
         for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'stream_error', 'code'):
@@ -1148,7 +1016,7 @@ class WorkloadCaptureTests(unittest.TestCase):
         self.assertEqual(result['provider_input_acceptance'], 'UNKNOWN')
         self.assertEqual(result['execution_binding_recomputed'], 'NOT_RUN')
         self.assertEqual(result['rejoin'], 'VERIFIED')
-        self.assertEqual(result['diagnostic']['detail'], 'STREAM_CLOSED')
+        self.assertEqual(result['diagnostic']['detail'], 'NONE')
         self.assertNotIn(SENTINEL, json.dumps(result))
         self.assertNotIn('task_sha256', result)
         self.assertNotIn('assistant_scope', result)
@@ -1584,9 +1452,9 @@ class ClientObservationTests(unittest.TestCase):
     def test_pair_eof_flush_and_earliest_only_and_unknown_source_closed(self):
         ack, _, _, _ = self.bound()
         result, checkpoints, _, _ = self.exercise([
-            ('PROVIDER', ack), ('PROVIDER', request()), ('PROVIDER', request(detail='STREAM_INVALID')),
+            ('PROVIDER', ack), ('PROVIDER', request()), ('PROVIDER', request()),
             ('CLIENT', client_line().rstrip(b'\n')), ('CLIENT', None)])
-        self.assertEqual(result['diagnostic']['detail'], 'STREAM_CLOSED')
+        self.assertEqual(result['diagnostic']['detail'], 'NONE')
         self.assertEqual(result['client_observation']['category'], 'STREAM_READ')
         self.assertEqual([item['source'] for item in checkpoints], ['ACK', 'PROVIDER', 'CLIENT'])
         for events, code in (([('FOREIGN', request())], 'OBSERVATION_SOURCE_INVALID'),

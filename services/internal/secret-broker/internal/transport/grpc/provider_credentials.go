@@ -140,16 +140,7 @@ func (server *Server) MaterializeAPIKey(
 	}
 	apiKey := append([]byte(nil), request.GetApiKey()...)
 	defer clear(apiKey)
-	var credential kubernetesstore.ProviderCredentialDescriptor
-	var masked string
-	var err error
-	if request.GetProviderDefinitionKey() == "" || request.GetProviderDefinitionKey() == "openai-codex" {
-		credential, masked, err = server.providerCredentials.MaterializeAPIKey(ctx, request.GetAttemptRef(), request.GetAccountRef(), apiKey)
-	} else if gateway, ok := server.providerCredentials.(gatewayCredentialMaterializer); ok {
-		credential, masked, err = gateway.MaterializeGatewayAPIKey(ctx, request.GetAttemptRef(), request.GetAccountRef(), request.GetProviderDefinitionKey(), apiKey)
-	} else {
-		err = providercredential.ErrInvalidInput
-	}
+	credential, masked, err := server.providerCredentials.MaterializeGatewayAPIKey(ctx, request.GetAttemptRef(), request.GetAccountRef(), request.GetProviderDefinitionKey(), apiKey)
 	if err != nil {
 		return nil, providerCredentialError(err)
 	}
@@ -327,12 +318,4 @@ func providerCredentialCleanupError(err error) error {
 	default:
 		return status.Error(codes.Unavailable, "provider credential cleanup is unavailable")
 	}
-}
-
-// gatewayCredentialMaterializer keeps gateway credentials out of legacy materializers during mixed-version rollout.
-// gatewayCredentialMaterializer не допускает gateway credentials в legacy materializers при mixed-version rollout.
-type gatewayCredentialMaterializer interface {
-	// MaterializeGatewayAPIKey rejects unconfigured definitions before secret publication.
-	// MaterializeGatewayAPIKey отклоняет unconfigured definitions до secret publication.
-	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
 }

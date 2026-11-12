@@ -56,7 +56,6 @@ type assistantAgentRuntimeReadSnapshot struct {
 			Weight     int64  `json:"weight"`
 		} `json:"provider_accounts"`
 		ReasoningEffort         string `json:"reasoning_effort"`
-		WebSearchMode           string `json:"web_search_mode"`
 		PublishedOverlayRef     string `json:"published_overlay_ref"`
 		PublishedOverlayVersion int64  `json:"published_overlay_version"`
 		PublishedOverlayDigest  string `json:"published_overlay_digest"`
@@ -118,16 +117,14 @@ func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, r
 	if !ok {
 		return nil, invalid
 	}
-	legacy := len(model) == 5 && onlyKeys(model, "ref", "version", "digest", "provider", "model")
-	prepared := len(model) == 14 && onlyKeys(model, "ref", "version", "digest", "provider", "model", "runtime_profile_ref", "provider_policy_mode", "provider_accounts", "reasoning_effort", "web_search_mode", "published_overlay_ref", "published_overlay_version", "published_overlay_digest", "has_draft_overlay")
-	if !legacy && !prepared {
+	if len(model) != 13 || !onlyKeys(model, "ref", "version", "digest", "provider", "model", "runtime_profile_ref", "provider_policy_mode", "provider_accounts", "reasoning_effort", "published_overlay_ref", "published_overlay_version", "published_overlay_digest", "has_draft_overlay") {
 		return nil, invalid
 	}
-	if prepared {
+	{
 		if _, ok := model["has_draft_overlay"].(bool); !ok {
 			return nil, invalid
 		}
-		for _, key := range []string{"reasoning_effort", "web_search_mode"} {
+		for _, key := range []string{"reasoning_effort"} {
 			if _, ok := model[key].(string); !ok {
 				return nil, invalid
 			}
@@ -207,12 +204,12 @@ func validAssistantAgentRuntimeReadSnapshot(value assistantAgentRuntimeReadSnaps
 	return validAssistantCatalogDigest(value.VerifiedToolInventoryHash)
 }
 
-// validAssistantAgentRuntimePreparationSnapshot validates all v2-only profile/policy/overlay metadata; legacy reads never synthesize those missing pins.
-// validAssistantAgentRuntimePreparationSnapshot проверяет все новые метаданные профиля, политики и overlay v2; устаревшее чтение не синтезирует отсутствующие pins.
+// validAssistantAgentRuntimePreparationSnapshot requires complete profile/policy/overlay metadata without a legacy read path.
+// validAssistantAgentRuntimePreparationSnapshot требует полные метаданные профиля, политики и overlay без legacy read path.
 func validAssistantAgentRuntimePreparationSnapshot(value assistantAgentRuntimeReadSnapshot) bool {
 	model := value.ModelConfiguration
 	if !validAssistantResourceRef(model.RuntimeProfileRef) || !validAssistantResourceRef(model.PublishedOverlayRef) || model.PublishedOverlayVersion < 1 || model.PublishedOverlayVersion > 9007199254740991 || !validAssistantCatalogDigest(model.PublishedOverlayDigest) ||
-		model.WebSearchMode != "" && !runtimecontract.ValidWebSearchMode(model.WebSearchMode) || model.ReasoningEffort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", model.ReasoningEffort, runtimecontract.ReasoningSupported) != nil ||
+		model.ReasoningEffort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", model.ReasoningEffort, runtimecontract.ReasoningSupported) != nil ||
 		len(model.ProviderAccounts) < 1 || len(model.ProviderAccounts) > 128 || model.ProviderPolicyMode != "FIXED" && model.ProviderPolicyMode != "LEAST_USED" && model.ProviderPolicyMode != "WEIGHTED" || model.ProviderPolicyMode == "FIXED" && len(model.ProviderAccounts) != 1 {
 		return false
 	}

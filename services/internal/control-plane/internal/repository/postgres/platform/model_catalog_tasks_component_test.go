@@ -133,9 +133,9 @@ func testCatalogOwnerProbe(t *testing.T, ctx context.Context, repository *Reposi
 	if _, err := repository.ResolveProviderModelCatalogProof(ctx, wrong); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("foreign digest: %v", err)
 	}
-	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: "REMOTE_CODEX", Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}}, {ID: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}}, {ID: "non-reasoning"}}}
-	if task.AuthorizationMethod == "API_KEY" {
-		observation.Source = "REMOTE_API"
+	observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: "REMOTE_API", Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}}, {ID: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}}, {ID: "non-reasoning"}}}
+	if task.AuthorizationMethod != "API_KEY" {
+		t.Fatal("retired catalog method claimed")
 	}
 	changed := task
 	changed.ClaimGeneration++
@@ -213,10 +213,10 @@ func seedObservedCatalogFixture(t *testing.T, ctx context.Context, repository *R
 		t.Fatal(err)
 	}
 	for _, task := range tasks {
-		source := "REMOTE_CODEX"
-		if task.AuthorizationMethod == "API_KEY" {
-			source = "REMOTE_API"
+		if task.AuthorizationMethod != "API_KEY" {
+			t.Fatal("retired catalog method claimed")
 		}
+		source := "REMOTE_API"
 		observation := platformrepo.ProviderModelCatalogObservation{AccountRef: task.AccountRef, CredentialRef: task.CredentialRef, Source: source, Failure: "NONE", ObservedAt: time.Now(), Models: []platformrepo.ProviderModelCatalogRecord{
 			{ID: "gpt-5", DefaultReasoningEffort: "high", ReasoningEfforts: []string{"low", "medium", "high"}, IsDefault: true},
 			{ID: "future-model", DefaultReasoningEffort: "adaptive", ReasoningEfforts: []string{"adaptive"}},

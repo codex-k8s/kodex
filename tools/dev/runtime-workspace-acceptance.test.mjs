@@ -565,11 +565,11 @@ test("Точный выдаваемый модели probe выполняет CR
       "knowledge",
       "context/skills",
       "context/memory",
-      ".kodex/state/codex-home",
+      ".kodex/state/opencode",
       ".kodex/outbox",
     ])
       mkdirSync(join(root, path), { recursive: true, mode: 0o700 });
-    const credential = join(root, ".kodex/state/codex-home/auth.json");
+    const credential = join(root, ".kodex/state/opencode/auth.json");
     writeFileSync(credential, "synthetic-fixture", { mode: 0o600 });
     const args = [
       "--unshare-user",
@@ -601,7 +601,7 @@ test("Точный выдаваемый модели probe выполняет CR
       ]),
       "--ro-bind",
       credential,
-      "/workspace/.kodex/state/codex-home/auth.json",
+      "/workspace/.kodex/state/opencode/auth.json",
       "--chdir",
       "/workspace",
       "--remount-ro",

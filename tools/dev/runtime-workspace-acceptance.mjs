@@ -113,7 +113,7 @@ async function runWorkspaceProbe(nonce) {
     results[key] = denied(`${path}/mvp-${nonce}`);
   }
   results.credential = denied(
-    "/workspace/.kodex/state/codex-home/auth.json",
+    "/workspace/.kodex/state/opencode/auth.json",
     true,
   );
   const alias = `${directory}/context-alias`;

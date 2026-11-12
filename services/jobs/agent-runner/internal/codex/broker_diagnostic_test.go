@@ -23,17 +23,18 @@ func diagnosticInput() model.Input {
 // TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements сериализует и читает bound synthetic failures, требуя safe stage/detail и measured usage, immutable diagnostic accessors, отказ другой attempt и невозможность подделки private state через JSON.
 func TestBrokerDiagnosticTransfersOnlyClosedSourceCauseWithMeasurements(t *testing.T) {
 	input := diagnosticInput()
-	for _, stage := range []providerExecutionStage{providerStageHomePrepare, providerStageTerminalWait, providerStageUnknown} {
+	for _, stage := range []providerExecutionStage{providerStageHomePrepare, providerStageArchiveRestore, providerStageProcessStart,
+		providerStageThreadBind, providerStageProcessStop, providerStageArchiveCapture, providerStageTerminalWait, providerStageUnknown} {
 		var wire bytes.Buffer
 		writer := &brokerFrameWriter{writer: &wire, input: &input}
 		usage := runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}
-		err := atProviderStage(stage, &appServerCallFailure{detail: "STREAM_CLOSED"})
+		err := errors.Join(atProviderStage(stage, errors.New("PRIVATE_NATIVE_SENTINEL")), atProviderStage(providerStageMCPBridge, errProviderBrokerFailed))
 		if writeProviderBrokerResultFailure(writer, Result{Usage: usage}, err) != nil {
 			t.Fatal("write failed")
 		}
 		result, failure := readBoundProviderBrokerResponse(bytes.NewReader(wire.Bytes()), &input, providerWriterUID)
 		diagnostic := result.ProviderDiagnostic(input)
-		if failure == nil || diagnostic == nil || diagnostic.Stage != string(stage) || diagnostic.Detail != "STREAM_CLOSED" || result.Usage != usage || result.Outcome != "" {
+		if failure == nil || diagnostic == nil || diagnostic.Stage != string(stage) || diagnostic.Detail != "NONE" || result.Usage != usage || result.Outcome != "" {
 			t.Fatal("failure diagnostic changed execution outcome or lost binding")
 		}
 		diagnostic.Stage = "PRIVATE_SENTINEL"

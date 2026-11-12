@@ -1,3 +1,4 @@
+import { validModelMeasurement } from "@/shared/api/model-measurement";
 import type {
   Artifact,
   AssistantConversation,
@@ -16,6 +17,7 @@ export type PresentedRunEvent = RunEvent & {
 };
 
 export interface RunActivityItem {
+  modelMeasurement?: RunEvent["modelMeasurement"];
   id: string;
   kind: "initiator" | "agent" | "tool" | "system";
   actor: string;
@@ -35,7 +37,11 @@ export interface RunActivityItem {
   revision?: number;
   historical: boolean;
   eventType?: RunEvent["type"];
-  serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
+  serviceProgressCode?:
+    | "WORKLOAD_SCHEDULED"
+    | "MODEL_REQUEST_RUNNING"
+    | "MODEL_CONTEXT_COMPACTING"
+    | "NATIVE_SESSION_RECOVERING";
   serviceCancellationCode?: RunEvent["serviceCode"];
   serviceCompletionCode?: "ROOT_PROCESS_COMPLETED";
   executionNodeType?: RunNode["type"];
@@ -395,6 +401,12 @@ export function buildRunTranscriptItems(
       state: event.nodeState ?? event.runState,
       messageKind: callback ? "INTERMEDIATE_MESSAGE" : event.messageKind,
       toolCall: tool,
+      modelMeasurement:
+        scope &&
+        event.modelMeasurement &&
+        validModelMeasurement(event.modelMeasurement)
+          ? event.modelMeasurement
+          : undefined,
       artifactRef: event.artifactRef,
       artifact: event.artifact,
       execution: scope ? event.execution : undefined,
@@ -531,6 +543,8 @@ const serviceTerminalEvents = new Set([
 const serviceProgressCodes = new Set([
   "WORKLOAD_SCHEDULED",
   "MODEL_REQUEST_RUNNING",
+  "MODEL_CONTEXT_COMPACTING",
+  "NATIVE_SESSION_RECOVERING",
 ]);
 export function assistantFailureMessageKey(
   value: string | undefined,
@@ -546,7 +560,10 @@ function transcriptServiceProgressCode(
   value: string | undefined,
 ): RunActivityItem["serviceProgressCode"] {
   const code = value?.trim().replace(/^i18n:/, "");
-  return code === "WORKLOAD_SCHEDULED" || code === "MODEL_REQUEST_RUNNING"
+  return code === "WORKLOAD_SCHEDULED" ||
+    code === "MODEL_REQUEST_RUNNING" ||
+    code === "MODEL_CONTEXT_COMPACTING" ||
+    code === "NATIVE_SESSION_RECOVERING"
     ? code
     : undefined;
 }
@@ -621,7 +638,8 @@ export function activeTranscriptItemId(
     JSON.stringify([execution.runRef, execution.nodeRef, execution.sessionRef]);
   for (const item of items) {
     const scope = executionKey(item.execution);
-    if (!scope || !item.execution || item.historical) continue;
+    if (!scope || !item.execution || item.historical || item.modelMeasurement)
+      continue;
     const key = sessionKey(item.execution);
     const previous = current.get(key);
     if (
@@ -646,6 +664,7 @@ export function activeTranscriptItemId(
       scope &&
       item.execution &&
       !item.historical &&
+      !item.modelMeasurement &&
       item.kind !== "initiator" &&
       !(
         item.phase === "USER" && item.messageOrigin !== "CALLBACK_CONTINUATION"

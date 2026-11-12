@@ -80,13 +80,7 @@ func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	default:
 		return value, errPromptService
 	}
-	if input.CodexSessionID != "" {
-		// Вид базовых инструкций не меняется при resume. Сообщение продолжения
-		// находится отдельно в owner-sealed SessionContext и обязательно для него.
-		if notice, err := CurrentContinuationNotice(input); err != nil || !notice {
-			return value, errPromptService
-		}
-	}
+
 	if promptJSONUnique(json.NewDecoder(strings.NewReader(input.Instructions)), 0) != nil {
 		return value, errPromptService
 	}
@@ -157,6 +151,11 @@ func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	}
 	if len(seen) != len(required) {
 		return value, errPromptService
+	}
+	if input.NativeSession != nil && len(input.SessionContext) > 0 {
+		if _, err := ValidateRuntimeSessionContext(input); err != nil {
+			return value, err
+		}
 	}
 	return value, nil
 }

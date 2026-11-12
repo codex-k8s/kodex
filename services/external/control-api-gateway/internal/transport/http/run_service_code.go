@@ -7,7 +7,7 @@ package httptransport
 // отмены/завершения до локализации. События с сообщениями, выводом инструментов, артефактами,
 // progress или integration invocation не меняются.
 func projectRunEventServiceCode(value map[string]any) {
-	for _, field := range []string{"message", "toolCall", "artifact", "artifactRef", "progress", "integrationInvocationRef"} {
+	for _, field := range []string{"message", "toolCall", "artifact", "artifactRef", "progress", "integrationInvocationRef", "modelMeasurement"} {
 		if _, present := value[field]; present {
 			return
 		}

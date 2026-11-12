@@ -125,15 +125,12 @@ emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
   local workload="" grant_signer_secret="" cpu_request=100m cpu_limit=1 memory_request=128Mi memory_limit=1Gi tmp_limit=64Mi
   if [[ $phase == scan ]]; then
-    memory_request=256Mi
-    memory_limit=2Gi
+    # Полный RoleImage превышает 2Gi live heap Syft; transport profile не меняет объём SBOM.
+    cpu_request=1
+    cpu_limit=4
+    memory_request=2Gi
+    memory_limit=16Gi
     tmp_limit=32Gi
-    if [[ $security_profile == trusted-cluster ]]; then
-      cpu_request=1
-      cpu_limit=4
-      memory_request=2Gi
-      memory_limit=16Gi
-    fi
   fi
   if [[ $phase == claim || $phase == admit ]]; then
     workload='image-admission'

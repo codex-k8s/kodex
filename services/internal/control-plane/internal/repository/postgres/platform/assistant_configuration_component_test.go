@@ -292,7 +292,6 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		}
 	}
 	operation := entity.AssistantPlanOperation{Key: "model", Type: "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", Title: "Prepare model", Summary: "Synthetic versioned model configuration", Parameters: map[string]any{"agentRef": agentRef, "runtimeProfileRef": view.Configuration.RuntimeProfileRef, "model": "gpt-5", "reasoningEffort": "low", "providerPolicyMode": view.Configuration.ProviderPolicy.Mode, "providerAccounts": minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates)}}
-	operation.Parameters["webSearchMode"] = "cached"
 	propose := func(op entity.AssistantPlanOperation, key string) entity.AssistantPlan {
 		t.Helper()
 		return *executeWorkerAssistantPlan(t, ctx, service, worker, lease, prefix+"-"+key, op).Plan
@@ -340,7 +339,6 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	edited := plan.Operations[0]
 	edited.Parameters = cloneAssistantFields(edited.Parameters)
 	edited.Parameters["reasoningEffort"] = "medium"
-	edited.Parameters["webSearchMode"] = "live"
 	updated := execute(command.UpdateAssistantPlan, "model-edit", plan, command.AssistantPlanDraftInput{PlanRef: plan.Ref, Summary: plan.Summary, Operations: []entity.AssistantPlanOperation{edited}})
 	plan = *updated.Plan
 	validated := validate(plan, "model-validate")
@@ -357,14 +355,13 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("model config not published: %v", err)
 	}
 	parsed, err := runtimecontract.ParseConfigOverlay(changed.PublishedOverlay.Content)
-	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.WebSearchMode != "live" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
+	if err != nil || parsed.ModelReasoningEffort != "medium" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
 		t.Fatalf("reasoning overlay not published: %v", err)
 	}
 	noChange := operation
 	noChange.Key = "unchanged-runtime"
 	noChange.Parameters = cloneAssistantFields(operation.Parameters)
 	noChange.Parameters["reasoningEffort"] = "medium"
-	delete(noChange.Parameters, "webSearchMode") // отсутствие сохраняет опубликованный режим
 	actualChange := noChange
 	actualChange.Key = "changed-runtime"
 	actualChange.Parameters = cloneAssistantFields(noChange.Parameters)
@@ -392,8 +389,10 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	}{
 		{"invalid-title", errs.ErrInvalid},
 		{"invalid-search-mode", errs.ErrInvalid},
+		{"retired-search-mode", errs.ErrInvalid},
 		{"null-search-mode", errs.ErrInvalid},
 		{"ineligible-account", errs.ErrConflict},
+		{"unqualified-model", errs.ErrConflict},
 		{"stale-lease", errs.ErrForbidden},
 	} {
 		candidate := noChange
@@ -402,10 +401,15 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		switch invalid.name {
 		case "invalid-title":
 			candidate.Title = ""
+		case "retired-search-mode":
+			candidate.Parameters["webSearchMode"] = "live"
 		case "invalid-search-mode":
 			candidate.Parameters["webSearchMode"] = "future-mode"
 		case "null-search-mode":
 			candidate.Parameters["webSearchMode"] = nil
+		case "unqualified-model":
+			candidate.Parameters["model"] = "future-model"
+			candidate.Parameters["reasoningEffort"] = "adaptive"
 		case "ineligible-account":
 			candidate.Parameters["providerAccounts"] = []map[string]any{{"accountRef": "pacc_absent_synthetic", "weight": 1}}
 		case "stale-lease":
@@ -431,16 +435,16 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	if replay.Plan == nil || !assistantJSONEqual(replay.PlanReceipt, applied.PlanReceipt) {
 		t.Fatal("runtime lost-ACK replay duplicated publication")
 	}
-	operation.Parameters["model"], operation.Parameters["reasoningEffort"] = "future-model", "adaptive"
+	operation.Parameters["model"], operation.Parameters["reasoningEffort"] = "non-reasoning", ""
 	modelSwitch := propose(operation, "future-model-proposal")
 	modelSwitchValidated := validate(modelSwitch, "future-model-validate")
 	apply(modelSwitchValidated, "future-model-apply")
 	changed, err = service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
-	if err != nil || changed.Configuration.Model != "future-model" {
+	if err != nil || changed.Configuration.Model != "non-reasoning" {
 		t.Fatalf("model switch did not use prospective overlay: %v", err)
 	}
 	parsed, err = runtimecontract.ParseConfigOverlay(changed.PublishedOverlay.Content)
-	if err != nil || parsed.ModelReasoningEffort != "adaptive" {
+	if err != nil || parsed.ModelReasoningEffort != "" {
 		t.Fatal("model switch lost catalog-compatible reasoning")
 	}
 	operation.Parameters["model"] = "gpt-5"

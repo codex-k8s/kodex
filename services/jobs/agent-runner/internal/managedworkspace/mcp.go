@@ -20,6 +20,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// errReadRange identifies a rejected read range before any filesystem access. It contains
+// no caller data and permits correcting arguments without implying an uncertain command effect.
+// errReadRange обозначает отклонённый диапазон до доступа к файлам. Данных caller нет;
+// аргументы можно исправить без предположения о неопределённом результате команды.
+var errReadRange = errors.New("Workspace read range is invalid: offset_bytes must be 0..1048576 and maximum_bytes must be 4..32768, or omitted for the default 32768. No file was read or changed.")
+
 // OwnerCall uses the same authenticated controller MCP boundary as the primary provider tools.
 // It must not resolve endpoints, accept credentials or automatically repeat a lost write response.
 // OwnerCall использует ту же authenticated controller MCP boundary, что основные provider tools.
@@ -224,7 +230,11 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer func() { cancel(); handler.calls.Lock(); delete(handler.pending, key); handler.calls.Unlock() }()
 		value, callErr := handler.call(ctx, callID, params.Name, params.Arguments)
 		if callErr != nil {
-			result = map[string]any{"isError": true, "content": []map[string]string{{"type": "text", "text": "Managed workspace operation failed or was denied; do not retry an unknown command outcome. Inspect current files and owner state."}}}
+			message := "Managed workspace operation failed or was denied; do not retry an unknown command outcome. Inspect current files and owner state."
+			if errors.Is(callErr, errReadRange) {
+				message = errReadRange.Error()
+			}
+			result = map[string]any{"isError": true, "content": []map[string]string{{"type": "text", "text": message}}}
 		} else {
 			encoded, e := json.Marshal(value)
 			if e != nil {
@@ -308,15 +318,19 @@ func (handler *Handler) call(ctx context.Context, id, name string, arguments jso
 		var params struct {
 			Path    string `json:"path"`
 			Offset  int64  `json:"offset_bytes,omitempty"`
-			Maximum int64  `json:"maximum_bytes,omitempty"`
+			Maximum *int64 `json:"maximum_bytes,omitempty"`
 		}
 		if internalrpcauth.DecodeStrictJSON(arguments, &params) != nil {
 			return nil, errFiles
 		}
-		if params.Maximum == 0 {
-			params.Maximum = 32768
+		maximum := int64(32768)
+		if params.Maximum != nil {
+			maximum = *params.Maximum
 		}
-		result, err = handler.store.read(ctx, params.Path, params.Offset, params.Maximum)
+		if params.Offset < 0 || params.Offset > maximumFileBytes || maximum < 4 || maximum > 32768 {
+			return nil, errReadRange
+		}
+		result, err = handler.store.read(ctx, params.Path, params.Offset, maximum)
 	case runtimecontract.WorkspaceToolWrite:
 		var params struct {
 			Path     string `json:"path"`

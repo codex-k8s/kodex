@@ -1,0 +1,30 @@
+{
+  "schema": "kodex.scoped-monitoring-images/v1",
+  "chartVersion": "88.5.4",
+  "images": {
+    "operator": {
+      "source": "quay.io/prometheus-operator/prometheus-operator:v0.93.1",
+      "digest": "sha256:e52bb28fd41c98dd407c7a8cba8bdcfe7eabd7447e250afaf1fe7bb816dedbff"
+    },
+    "reloader": {
+      "source": "quay.io/prometheus-operator/prometheus-config-reloader:v0.93.1",
+      "digest": "sha256:428f088fe6fe07ab138bda92113664b04848a1dc408e4d3680a60ecdb55d1a65"
+    },
+    "prometheus": {
+      "source": "quay.io/prometheus/prometheus:v3.14.0-distroless",
+      "digest": "sha256:50c707e96da5ade383cb1707790576480485e93de06aa60ad8802cb5f744bd0a"
+    },
+    "alertmanager": {
+      "source": "quay.io/prometheus/alertmanager:v0.34.0",
+      "digest": "sha256:690c7b525f4367aa91f73e2f91c632206d32e97c6384bdbf2fb7a861b420340d"
+    },
+    "grafana": {
+      "source": "docker.io/grafana/grafana:13.2.0",
+      "digest": "sha256:3fd54ae1214669f8355f065ec9f6445d5279a3d77095ab048ca045685272429b"
+    },
+    "sidecar": {
+      "source": "quay.io/kiwigrid/k8s-sidecar:2.10.1",
+      "digest": "sha256:7eac5c4fed714a18d038fc9fea57d8744d113367935dac0ea4eb6a87cef704a3"
+    }
+  }
+}

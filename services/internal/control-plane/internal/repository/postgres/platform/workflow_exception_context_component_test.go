@@ -81,7 +81,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 			t.Fatal("context fixture did not claim exact published producer")
 		}
 		workflowExceptionArtifactWriteAuthority(t, f, producer, claims[0])
-		payload := command.CompleteExecutionInput{LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact(name, []byte("Точные данные "+name+"\n"))}}
+		payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(claims[0]), LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact(name, []byte("Точные данные "+name+"\n"))}}
 		if mode == "invalid-manager-complete" && index == 1 {
 			payload.ResultSummary = "Not a closed result declaration; the captured file remains data."
 		}
@@ -158,7 +158,7 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 	}
 	page, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100})
 	if err != nil || page.Total != 2 || len(page.Items) != 2 || page.Next != "" {
-		t.Fatal("manager catalog does not contain exactly source and dependency files", completionOutcomeClass(err))
+		t.Fatalf("manager catalog does not contain exactly source and dependency files: outcome=%s total=%d items=%d next=%t", completionOutcomeClass(err), page.Total, len(page.Items), page.Next != "")
 	}
 	metadataActor := runtimeFilesTestPrincipal(t, ctx, repository, "metadata")
 	for _, file := range page.Items {
@@ -233,6 +233,16 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if _, err := service.GetExecutionFileManifest(ctx, manifestActor, execution, query.Page{Size: 100}); !errors.Is(err, errs.ErrNotFound) {
 			t.Fatal("expired manager lease retained file access", completionOutcomeClass(err))
 		}
+		if pending := f.claims("context-reclaim-before-native-stop"); len(pending) != 0 {
+			t.Fatal("expired manager was replaced before native writer reconciliation")
+		}
+		checkpoint := f.execute(command.CompleteExecution, "context-expired-native-checkpoint", nil, command.CompleteExecutionInput{
+			NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: execution.LeaseRef, Fence: execution.Fence,
+			Generation: execution.Generation, Success: true, ResultSummary: "Stopped native manager checkpoint", Usage: turnUsageFixture(),
+		})
+		if checkpoint.Runtime["nativeCheckpointRecorded"] != true {
+			t.Fatal("expired native manager checkpoint was not recorded")
+		}
 		fresh := f.claims("context-reclaim")
 		if len(fresh) != 1 || stringMap(fresh[0], "nodeRef") != stringMap(lease, "nodeRef") || stringMap(fresh[0], "leaseRef") == stringMap(lease, "leaseRef") || runtimeRevisionMapInt64(fresh[0], "generation") <= runtimeRevisionMapInt64(lease, "generation") {
 			t.Fatal("manager recovery did not create a fresh fenced lease")
@@ -287,7 +297,9 @@ func workflowExceptionArtifactWriteAuthority(t *testing.T, f *workflowRecoveryRe
 	if err != nil {
 		t.Fatal("resolve artifact authority observer", completionOutcomeClass(err))
 	}
-	tx, err := f.pool.BeginTx(f.ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly})
+	// The production authority query locks agent/actor rows against concurrent revocation.
+	// Production-запрос полномочий блокирует строки agent/actor от конкурентного отзыва.
+	tx, err := f.pool.BeginTx(f.ctx, pgx.TxOptions{})
 	if err != nil {
 		t.Fatal("begin artifact authority observer", completionOutcomeClass(err))
 	}

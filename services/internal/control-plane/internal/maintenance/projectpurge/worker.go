@@ -225,7 +225,7 @@ func (processor *Processor) process(ctx context.Context, candidate platform.Proj
 // deleteObject проверяет project/subject/archive границу ключа и серверный lineage, отвергает общие объекты, читает точную версию и подтверждает её отсутствие после удаления в выбранном хранилище. NotFound означает успешный повтор; несовпадение владения/чтения блокирует удаление.
 func (processor *Processor) deleteObject(ctx context.Context, candidate platform.ProjectPurgeCandidate, item platform.ProjectPurgeExternalItem) error {
 	artifactPrefix := "organizations/" + candidate.OrganizationRef + "/projects/" + candidate.ProjectRef + "/artifacts/"
-	archivePrefix := "session-archive/v1/" + candidate.OrganizationRef + "/"
+	archivePrefix := "session-archive/v3/" + candidate.OrganizationRef + "/"
 	if !objectstorage.ValidKey(item.Target) {
 		return errors.New("project purge object escaped project scope")
 	}

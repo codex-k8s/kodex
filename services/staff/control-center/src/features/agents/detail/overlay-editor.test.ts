@@ -3,6 +3,8 @@ import { parse } from "smol-toml";
 import { overlaySchemaFixture as schema } from "@/test-utils/runtime-catalog-fixture";
 import {
   changeOverlayEffort,
+  changeOverlayPreference,
+  overlayPreference,
   overlayCompletions,
   overlayEffort,
   overlayHover,
@@ -12,37 +14,60 @@ import {
   tomlCompletionQuery,
 } from "./code-editor";
 describe("Versioned overlay editor", () => {
-  it("оснастка сохраняет canonical web_search и effort editor не удаляет live", () => {
-    expect(schema.fields.map((field) => field.key)).toEqual([
-      "model_reasoning_effort",
-      "web_search",
-      "personality",
-      "allow_login_shell",
-      "history.persistence",
-    ]);
-    expect(
-      schema.fields.find((field) => field.key === "web_search"),
-    ).toMatchObject({
-      allowedValues: ["disabled", "cached", "indexed", "live"],
-      defaultValue: "cached",
+  it("изменяет native preferences без потери других настроек и возвращает наследование", () => {
+    const content =
+      'model_reasoning_effort = "high"\n[context]\nprune = false\n[cache]\noptimization = "NO_HINTS"';
+    const changed = changeOverlayPreference(
+      content,
+      schema,
+      "context.auto_compaction",
+      "true",
+    );
+    expect(parse(changed)).toEqual({
+      model_reasoning_effort: "high",
+      context: { prune: false, auto_compaction: true },
+      cache: { optimization: "NO_HINTS" },
     });
+    expect(overlayPreference(changed, schema, "context.auto_compaction")).toBe(
+      "true",
+    );
     expect(
-      parse(changeOverlayEffort('web_search = "live"', schema, "low")),
-    ).toEqual({
+      overlayPreference(
+        changeOverlayPreference(changed, schema, "context.auto_compaction", ""),
+        schema,
+        "context.auto_compaction",
+      ),
+    ).toBe("");
+    expect(parse(changeOverlayEffort(changed, schema, "low"))).toMatchObject({
+      context: { prune: false },
+      cache: { optimization: "NO_HINTS" },
       model_reasoning_effort: "low",
-      web_search: "live",
     });
     expect(() =>
-      changeOverlayEffort('web_search = "unknown"', schema, "low"),
+      changeOverlayPreference(changed, schema, "cache.no_store", "unknown"),
     ).toThrow();
+    expect(() =>
+      changeOverlayPreference(
+        'cache.qualification = "SUPPORTED"',
+        schema,
+        "cache.no_store",
+        "true",
+      ),
+    ).toThrow();
+    expect(
+      overlayPreference('context.prune = "false"', schema, "context.prune"),
+    ).toBeUndefined();
+    expect(
+      overlayPreference("context.prune = ", schema, "context.prune"),
+    ).toBeUndefined();
   });
   it("изменяет effort через TOML parser, сохраняя dotted и quoted поля", () => {
-    const content = `"personality" = 'friendly'\n["history"]\npersistence = "none"\n`;
+    const content = `"cache".optimization = 'NO_HINTS'\n["context"]\nprune = false\n`;
     const changed = changeOverlayEffort(content, schema, "low");
     expect(parse(changed)).toEqual({
       model_reasoning_effort: "low",
-      personality: "friendly",
-      history: { persistence: "none" },
+      cache: { optimization: "NO_HINTS" },
+      context: { prune: false },
     });
     expect(overlayEffort(changed, schema)).toBe("low");
     expect(parse(changeOverlayEffort(changed, schema, ""))).toEqual(
@@ -74,10 +99,10 @@ describe("Versioned overlay editor", () => {
         (item) => item.label,
       ),
     ).toEqual(schema.fields.map((field) => field.key));
-    const content = '["history"]\nper';
+    const content = '["cache"]\nopt';
     expect(
-      overlayCompletions(schema, "per", { content, cursor: content.length }),
-    ).toMatchObject([{ label: "persistence", apply: "persistence = " }]);
+      overlayCompletions(schema, "opt", { content, cursor: content.length }),
+    ).toMatchObject([{ label: "optimization", apply: "optimization = " }]);
     const value = 'model_reasoning_effort = "h';
     expect(
       overlayCompletions(schema, '"h', {
@@ -93,9 +118,9 @@ describe("Versioned overlay editor", () => {
     ).toEqual([]);
   });
   it("hover возвращает только owner description и hover для точного ключа", () => {
-    const content = '["history"]\npersistence = "none"';
+    const content = '["cache"]\noptimization = "NO_HINTS"';
     expect(overlayHover(schema, content, 17)?.text).toContain(
-      schema.fields.find((field) => field.key === "history.persistence")?.hover,
+      schema.fields.find((field) => field.key === "cache.optimization")?.hover,
     );
     expect(overlayHover(schema, 'model = "server"', 2)).toBeUndefined();
   });

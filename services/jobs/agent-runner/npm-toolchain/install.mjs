@@ -32,7 +32,6 @@ export const securityFloors = {
 // Разные поддержанные major одного пакета проверяются независимо.
 const majorSecurityFloors = { undici: { 8: "8.12.2" } };
 export const commands = {
-  codex: "@openai/codex",
   tsc: "typescript",
   tsserver: "typescript",
   "create-vue": "create-vue",
@@ -346,28 +345,7 @@ export function publishLinks(
     link(binTarget(root, name, command), join(globalBin, command));
   for (const command of ["npm", "npx"])
     link(join(npmRoot, "bin", `${command}-cli.js`), join(globalBin, command));
-  if (process.platform !== "linux" || !["x64", "arm64"].includes(process.arch))
-    fail("NPM_CODEX_PLATFORM_UNSUPPORTED");
-  const nativeDirectory = join(
-    root,
-    "node_modules",
-    "@openai",
-    `codex-linux-${process.arch}`,
-  );
-  const triple =
-    process.arch === "x64"
-      ? "x86_64-unknown-linux-musl"
-      : "aarch64-unknown-linux-musl";
-  const native = realpathSync(
-    join(nativeDirectory, "vendor", triple, "bin", "codex-code-mode-host"),
-  );
-  if (
-    !native.startsWith(realpathSync(nativeDirectory) + "/") ||
-    !lstatSync(native).isFile() ||
-    !(lstatSync(native).mode & 0o111)
-  )
-    fail("NPM_CODEX_NATIVE_TARGET_INVALID");
-  link(native, join(globalBin, "codex-code-mode-host"));
+
 }
 async function main() {
   const root = dirname(fileURLToPath(import.meta.url)),

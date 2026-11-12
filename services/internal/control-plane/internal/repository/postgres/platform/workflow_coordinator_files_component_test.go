@@ -132,6 +132,7 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 		t.Fatal(err)
 	}
 	configureComponentArtifactScanner(t, repository)
+	configureComponentModelProvider(t, repository)
 	if err = repository.ConfigureProviderCredential(ProviderCredentialConfig{
 		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
 		SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64),
@@ -183,7 +184,7 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 		return items[0]
 	}
 	completion := func(lease map[string]any, text string) command.CompleteExecutionInput {
-		result := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
+		result := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
 			Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified fixture", Usage: turnUsageFixture()}
 		if text != "" {
 			digest := sha256.Sum256([]byte(text))

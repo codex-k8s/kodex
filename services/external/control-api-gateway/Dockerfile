@@ -16,6 +16,7 @@ COPY libs/go/i18n/ libs/go/i18n/
 COPY libs/go/integrationpackage/ libs/go/integrationpackage/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/modelmeasurementwire/ libs/go/modelmeasurementwire/
 COPY libs/go/oidcidentity/ libs/go/oidcidentity/
 COPY libs/go/oidcverifier/ libs/go/oidcverifier/
 COPY libs/go/repositorybundle/ libs/go/repositorybundle/

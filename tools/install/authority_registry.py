@@ -122,12 +122,47 @@ def verify_published_resume(state, resources, startup_only=True, completion=None
     return {'status': 'PUBLISHED_AUTHORITY_RESUME_PREFLIGHT_PASSED', 'sourceRevision': 1, 'migrations': 'VERIFIED_NOT_REPEATED', 'authorityHistory': 'PRESERVED_NOT_REPLAYED'}
 
 
-def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None, artifact_antivirus_mode='required'):
+BOOTSTRAP_BUSINESS_SQL = "SELECT json_build_object('runs',(SELECT count(*) FROM control_plane.runs),'turns',(SELECT count(*) FROM control_plane.session_turns));"
+
+
+def verify_initial_runtime(state, resources):
+    """Допускает пустой runtime либо ещё не исполнявшийся штатный warm Pod первого bootstrap."""
+    pods = json.loads(state.call(['-n', 'kodex-runtime', 'get', 'pods', '-o', 'json']))['items']
+    if not pods:
+        return
+    require(len(pods) == 1, 'EMPTY_RUNTIME_REQUIRED_FOR_INITIAL_RESUME')
+    pod = pods[0];meta = pod.get('metadata', {});spec = pod.get('spec', {});status = pod.get('status', {})
+    labels = meta.get('labels', {})
+    require(meta.get('name') == 'system-assistant-warm' and not meta.get('deletionTimestamp') and
+            labels.get('runtime.kodex.dev/mode') == 'warm' and labels.get('runtime.kodex.dev/managed') == 'true' and
+            labels.get('app.kubernetes.io/name') == 'agent-runner' and spec.get('serviceAccountName') == 'agent-runner' and
+            status.get('phase') == 'Pending', 'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    image = provider_sandbox_profile.source_policy(resources)['data']['nodeReadbackImage']
+    containers = spec.get('containers', []);initializers = spec.get('initContainers', [])
+    require(len(containers) == 3 and {c.get('name') for c in containers} == {'role-runtime', 'provider-runtime', 'provider-credential-relay'} and
+            len(initializers) == 2 and {c.get('name') for c in initializers} == {'workspace-prepare', 'workspace-init'} and
+            all(c.get('image') == image for c in containers + initializers) and not spec.get('ephemeralContainers'),
+            'EXACT_INSTALLATION_WARM_IMAGES_REQUIRED')
+    for field, expected in [('containerStatuses', containers), ('initContainerStatuses', initializers)]:
+        observed = status.get(field, [])
+        require(len(observed) == len(expected) and {c.get('name') for c in observed} == {c['name'] for c in expected} and
+                all(c.get('restartCount') == 0 and not c.get('imageID') and not c.get('lastState') and
+                    not c.get('ready') and not c.get('started') and set(c.get('state', {})) == {'waiting'} for c in observed),
+                'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    require(not status.get('ephemeralContainerStatuses'), 'UNSTARTED_INSTALLATION_WARM_REQUIRED')
+    raw = state.call(['-n', 'kodex-system', 'exec', 'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d', 'control_plane',
+                      '-v', 'ON_ERROR_STOP=1', '-c', BOOTSTRAP_BUSINESS_SQL])
+    require(json.loads(raw) == {'runs': 0, 'turns': 0}, 'EMPTY_BOOTSTRAP_BUSINESS_HISTORY_REQUIRED')
+
+
+def verify_workload_resume(state, resources, previous, buildkit_profile='standard', repair_api_endpoints=False, clamav_mode='enabled', repair_egress_secret_access=False, component_image=None, completion=None, previous_component_image=None, provider_apparmor_profile=None, artifact_antivirus_mode='required', clamav_storage_profile='shared-rwx', preserve_observability_profile=False):
     """Продолжение initial graph допускает только точные явно выбранные profile deltas."""
-    expected = buildkit_runtime_profile.transform(observability_profile.transform(previous, disabled=True), buildkit_profile)
+    require(type(preserve_observability_profile) is bool, 'EXPLICIT_OBSERVABILITY_PRESERVATION_REQUIRED')
+    baseline = copy.deepcopy(previous) if preserve_observability_profile else observability_profile.transform(previous, disabled=True)
+    expected = buildkit_runtime_profile.transform(baseline, buildkit_profile)
     require(type(repair_api_endpoints) is bool, 'EXPLICIT_API_ENDPOINT_REPAIR_REQUIRED')
     if repair_api_endpoints:expected = kubernetes_api_profile.transform(expected)
-    if clamav_mode != 'enabled' or artifact_antivirus_mode != 'required':expected = clamav_profile.transform(expected, clamav_mode, artifact_antivirus_mode)
+    if clamav_mode != 'enabled' or artifact_antivirus_mode != 'required' or clamav_storage_profile != 'shared-rwx':expected = clamav_profile.transform(expected, clamav_mode, artifact_antivirus_mode, clamav_storage_profile)
     require(type(repair_egress_secret_access) is bool, 'EXPLICIT_EGRESS_SECRET_REPAIR_REQUIRED')
     if repair_egress_secret_access:expected = egress_secret_access.transform(expected)
     expected = provider_sandbox_profile.transform(expected, provider_apparmor_profile)
@@ -168,8 +203,7 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
                 except Rejected:
                     pass
             verify_resource(after[identity], deployment)
-    runtime = json.loads(state.call(['-n', 'kodex-runtime', 'get', 'pods', '-o', 'json']))['items']
-    require(not runtime, 'EMPTY_RUNTIME_REQUIRED_FOR_INITIAL_RESUME')
+    verify_initial_runtime(state, resources)
     return dict(status='WORKLOAD_BOOTSTRAP_RESUME_PREFLIGHT_PASSED', deployments=len(live),
                 migrations='VERIFIED_NOT_REPEATED', authorityHistory='PRESERVED_NOT_REPLAYED')
 
@@ -221,6 +255,8 @@ def main():
     parser.add_argument('--job-name')
     parser.add_argument('--repair-kubernetes-api-endpoints', action='store_true')
     parser.add_argument('--repair-egress-secret-access', action='store_true')
+    parser.add_argument('--preserve-observability-profile', action='store_true')
+    parser.add_argument('--clamav-storage-profile', choices=['shared-rwx','node-local-rwo'], default='shared-rwx')
     parser.add_argument('--clamav-mode', choices=['enabled','disabled'], default='enabled')
     parser.add_argument('--artifact-antivirus-mode', choices=['required','disabled'], default='required')
     parser.add_argument('--provider-apparmor-profile', choices=('', provider_sandbox_profile.PROFILE))
@@ -234,6 +270,7 @@ def main():
     args = parser.parse_args()
     completion = bootstrap_completion.from_arguments(args)
     require(completion is None or args.mode in ('preflight-resume', 'preflight-published', 'preflight-workloads', 'verify-bootstrap'), 'BOOTSTRAP_COMPLETION_MODE_REJECTED')
+    require(not args.preserve_observability_profile or args.mode == 'preflight-workloads', 'OBSERVABILITY_PRESERVATION_MODE_REJECTED')
     component_image = None
     if any((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)):
         require(args.mode == 'preflight-workloads' and all((args.component_image_profile, args.component_image_profile_sha256, args.base_release_lock)), 'EXPLICIT_COMPONENT_WORKLOAD_PROFILE_REQUIRED')
@@ -243,7 +280,7 @@ def main():
         args.previous_component_image_profile, args.previous_component_image_profile_sha256, args.base_release_lock)
     require(not args.repair_egress_secret_access or args.mode == 'preflight-workloads', 'EGRESS_SECRET_REPAIR_MODE_REJECTED')
     require(not args.repair_kubernetes_api_endpoints or args.mode == 'preflight-workloads', 'API_ENDPOINT_REPAIR_MODE_REJECTED')
-    require((args.clamav_mode == 'enabled' and args.artifact_antivirus_mode == 'required') or args.mode == 'preflight-workloads', 'CLAMAV_MODE_OPERATION_REJECTED')
+    require((args.clamav_mode == 'enabled' and args.artifact_antivirus_mode == 'required' and args.clamav_storage_profile == 'shared-rwx') or args.mode == 'preflight-workloads', 'CLAMAV_MODE_OPERATION_REJECTED')
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
     resources = list(filter(None, yaml.safe_load_all(raw)));require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
@@ -266,7 +303,7 @@ def main():
             raw = args.previous_render.read_bytes()
             require(len(raw) <= 16 << 20 and hashlib.sha256(raw).hexdigest() == args.previous_render_sha256, 'PREVIOUS_RENDER_DIGEST_REQUIRED')
             previous = list(filter(None, yaml.safe_load_all(raw)))
-            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode)))
+            print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode, args.clamav_storage_profile, args.preserve_observability_profile)))
         elif args.mode == 'verify-bootstrap':
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))

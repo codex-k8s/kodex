@@ -39,6 +39,10 @@ export function runtimeProgressKey(
       return "runs.runtimeProgress.workloadScheduled";
     case "MODEL_REQUEST_RUNNING":
       return "runs.runtimeProgress.modelRequestRunning";
+    case "MODEL_CONTEXT_COMPACTING":
+      return "runs.runtimeProgress.modelContextCompacting";
+    case "NATIVE_SESSION_RECOVERING":
+      return "runs.runtimeProgress.nativeSessionRecovering";
     case "RUNTIME_PROVIDER_UNAVAILABLE":
       return "runs.runtimeProgress.providerUnavailable";
     default:

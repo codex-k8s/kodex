@@ -47,7 +47,7 @@ cmp \
   fail 'Keycloak database CA private key does not match the certificate'
 
 kubectl create namespace identity --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-kubectl create namespace kodex-system --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+python3 "${BASH_SOURCE[0]%/*}/../install/ensure_namespace.py" --context "$context" --namespace kodex-system
 if [[ "$management_surfaces" != control-center ]]; then
   kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 fi

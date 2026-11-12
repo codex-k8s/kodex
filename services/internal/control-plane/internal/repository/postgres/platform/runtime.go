@@ -448,7 +448,6 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID                                                                               string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -570,7 +569,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.managedWorkspace, &candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID, &candidate.schedulingFits, &candidate.schedulingPossible); err != nil {
+			&candidate.schedulingFits, &candidate.schedulingPossible); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -720,6 +719,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if effectiveEffort == "" {
 				reasoningMode = runtimecontract.ReasoningUnsupported
 			}
+			if modelProvider.ValidateRuntimePreferences(candidate.model, candidate.configOverlay, effectiveEffort, reasoningMode) != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
 			nodeID, nodeRef, runID, runRef := candidate.nodeID, candidate.nodeRef, candidate.runID, candidate.runRef
 			rootRunID, projectID, projectRef := candidate.rootRunID, candidate.projectID, candidate.projectRef
 			sessionID, sessionRef, task, agentRef := candidate.sessionID, candidate.sessionRef, candidate.task, candidate.agentRef
@@ -746,7 +748,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 			attempt, generation, turnRef, stableKey := candidate.attempt, candidate.generation, candidate.turnRef, candidate.stableKey
 			rawIntegrationGrants, rawDelegationTargets := candidate.rawIntegrationGrants, candidate.rawDelegationTargets
-			callbackEdgeRef, rawSessionContext := candidate.callbackEdgeRef, candidate.rawSessionContext
+			callbackEdgeRef := candidate.callbackEdgeRef
 			turnID, agentID := candidate.turnID, candidate.agentID
 			roleDefinitionID, roleDefinitionRef := candidate.roleDefinitionID, candidate.roleDefinitionRef
 			roleImageRecipeID, roleImageRecipeRef := candidate.roleImageRecipeID, candidate.roleImageRecipeRef
@@ -760,7 +762,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			configOverlayID, configOverlayRef, configOverlayVersion, configOverlayDigest, configOverlay := candidate.configOverlayID, candidate.configOverlayRef, candidate.configOverlayVersion, candidate.configOverlayDigest, candidate.configOverlay
 			environmentBindingID, environmentBindingRef, environmentBindingVersion, environmentBindingDigest := candidate.environmentBindingID, candidate.environmentBindingRef, candidate.environmentBindingVersion, candidate.environmentBindingDigest
 			runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentVersion, runtimeEnvironmentDigest := candidate.runtimeEnvironmentID, candidate.runtimeEnvironmentRef, candidate.runtimeEnvironmentVersion, candidate.runtimeEnvironmentDigest
-			codexSessionID := candidate.codexSessionID
 			fence, err := newRef("fnc")
 			if err != nil {
 				return commandOutcome{}, err
@@ -799,11 +800,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			_ = jsonUnmarshal(rawArtifacts, &artifacts)
 			var attachmentSets []map[string]string
 			_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
-			var sessionContext []map[string]string
-			if err := jsonUnmarshal(rawSessionContext, &sessionContext); err != nil {
-				return commandOutcome{}, errs.ErrConflict
-			}
-			sessionContext = boundedRuntimeSessionHistory(sessionContext)
+			sessionContext := []map[string]string{}
 			eligibilityStage = "runtime_environment"
 			var environmentValues []runtimecontract.RuntimeEnvironmentValue
 			var secretProjections []runtimecontract.RuntimeSecretProjection
@@ -1055,7 +1052,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				return commandOutcome{}, err
 			}
 			snapshot := map[string]any{
-				"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
+				"rootInitiatorRef": candidate.initiatorRef, "organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
 				"turnRef": turnRef, "attempt": attempt, "task": task,
 				"agentRef": agentRef, "stableKey": stableKey, "runtimeKey": runtimeKey,
 				"assistantScope": string(runtimeAssistantScope(stableKey)), "assistantProfileRef": candidate.assistantProfileRef,
@@ -1109,7 +1106,6 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"environmentImage": environmentImage, "environmentTools": environmentTools,
 				"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
 				"workspacePolicy": workspacePolicy,
-				"codexSessionID":  codexSessionID,
 			}
 			if modelProvider != nil {
 				snapshot["modelProvider"] = modelProvider
@@ -1135,7 +1131,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonRuntimeContext, err)
 			}
 			snapshot["contextSnapshot"] = contextSnapshot
-			snapshot["codexSessionID"], err = runtimeSessionResumeID(ctx, tx, scope, snapshot, codexSessionID)
+			if provider == "opencode" {
+				delete(snapshot, "codexSessionID")
+				native, sourceErr := nativeSessionSource(ctx, tx, scope, snapshot)
+				err = sourceErr
+				if native != nil {
+					snapshot["nativeSession"] = native
+				}
+			} else {
+				err = errs.ErrConflict
+			}
 			if err != nil {
 				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonSessionResume, err)
 			}
@@ -1193,6 +1198,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			}
 			if err := claimSessionWorkspaceTx(ctx, tx, scope, workspaceBinding, leaseRef); err != nil {
 				return commandOutcome{}, err
+			}
+			if provider == "opencode" {
+				if err := claimNativeSessionWriter(ctx, tx, scope, sessionID, runtimeRevisionID, leaseRef); err != nil {
+					return commandOutcome{}, err
+				}
 			}
 			if err := registerRuntimeMaterializationTx(ctx, tx, scope.organizationID, runtimeMaterializationInput{
 				WorkloadInstance: payload.WorkloadInstance, LeaseRef: leaseRef, Fence: fence,
@@ -1544,7 +1554,7 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		profileRevision = stringMap(values, "runtimeRevision")
 	}
 	input := runtimecontract.RunnerInput{
-		OrganizationRef: stringMap(values, "organizationRef"), RunRef: stringMap(values, "runRef"),
+		RootInitiatorRef: stringMap(values, "rootInitiatorRef"), OrganizationRef: stringMap(values, "organizationRef"), RunRef: stringMap(values, "runRef"),
 		ProjectRef: stringMap(values, "projectRef"), NodeRef: stringMap(values, "nodeRef"),
 		SessionRef: stringMap(values, "sessionRef"), TurnRef: stringMap(values, "turnRef"),
 		AgentRef: stringMap(values, "agentRef"), Attempt: int32(runtimeRevisionMapInt64(values, "attempt")),
@@ -1578,7 +1588,6 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		ConfigOverlayRef: stringMap(values, "configOverlayRef"), ConfigOverlayVersion: runtimeRevisionMapInt64(values, "configOverlayVersion"), ConfigOverlayDigest: stringMap(values, "configOverlayDigest"), ConfigOverlay: stringMap(values, "configOverlay"),
 		RuntimeEnvironmentRef: stringMap(values, "runtimeEnvironmentRef"), RuntimeEnvironmentVersion: runtimeRevisionMapInt64(values, "runtimeEnvironmentVersion"), RuntimeEnvironmentDigest: stringMap(values, "runtimeEnvironmentDigest"),
 		EnvironmentBindingRef: stringMap(values, "environmentBindingRef"), EnvironmentBindingVersion: runtimeRevisionMapInt64(values, "environmentBindingVersion"), EnvironmentBindingDigest: stringMap(values, "environmentBindingDigest"),
-		CodexSessionID: stringMap(values, "codexSessionID"),
 	}
 	if value, ok := values["input"].(map[string]any); ok {
 		input.BoundedInput = value
@@ -1689,6 +1698,17 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 			return "", errs.ErrConflict
 		}
 		input.WorkspaceStorage = workspaceBinding
+	}
+	if value, present := values["nativeSession"]; present {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return "", errs.ErrConflict
+		}
+		native, err := runtimecontract.DecodeNativeSessionCheckpoint(raw)
+		if err != nil || native.ValidateWorkspace(input.WorkspaceStorage) != nil {
+			return "", errs.ErrConflict
+		}
+		input.NativeSession = &native
 	}
 	return runtimecontract.RuntimeRevisionDigest(input, runtimecontract.RuntimeRevisionCredentialSource{
 		SecretName: stringMap(values, "providerSecretName"), SecretUID: stringMap(values, "providerSecretUID"),
@@ -1939,6 +1959,9 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if payload.ModelMeasurement != nil {
+		return repository.reportModelMeasurement(ctx, tx, scope, payload, lease)
+	}
 	if payload.Financial != nil {
 		if payload.Message != nil || payload.Progress != "" {
 			return commandOutcome{}, errs.ErrInvalid
@@ -2003,7 +2026,6 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, errs.ErrInvalid
 	}
 
-	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -2016,6 +2038,16 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if rootAlreadyTerminal {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if payload.Success && payload.NativeSession == nil {
+		if err := requireNativeCompletion(ctx, tx, scope, lease, payload.LeaseRef); err != nil {
+			return commandOutcome{}, err
+		}
+	}
+	if payload.NativeSession != nil {
+		if err := completeNativeSessionCheckpoint(ctx, tx, scope, lease, payload.LeaseRef, *payload.NativeSession); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	if !payload.Success && payload.SafeErrorCode == "PROVIDER_AUTH_REJECTED" {
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionMarkProviderReauthorizationRequired, pgx.StrictNamedArgs{
 			"organization_id":     scope.organizationID,
@@ -2026,7 +2058,17 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	if len(payload.Artifacts) > 0 {
 		if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
-			return commandOutcome{}, err
+			if !errors.Is(err, errs.ErrForbidden) || payload.NativeSession == nil {
+				return commandOutcome{}, err
+			}
+			// Keep the verified stopped checkpoint while refusing every new artifact and success outcome.
+			// The original intent remains bound to its receipt; prepared object versions are cleaned after commit.
+			// Сохраняем проверенный stopped checkpoint, отклоняя все новые artifacts и SUCCESS.
+			// Исходный intent закреплён receipt; подготовленные версии объектов очищаются после commit.
+			payload.Success = false
+			payload.SafeErrorCode = runtimeInputInvalidCode
+			payload.ResultSummary = runtimeClaimEligibilityChanged
+			payload.Artifacts = nil
 		}
 	}
 	nodeState, runState := "SUCCEEDED", "RUNNING"
@@ -2059,24 +2101,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if hasArchiveBinding {
-		if err := lockSessionContentGeneration(ctx, tx, scope.organizationID, sessionID); err != nil {
-			return commandOutcome{}, err
-		}
-		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
-			"organization_id":      scope.organizationID,
-			"session_id":           sessionID,
-			"runtime_revision_id":  lease["runtimeRevisionID"],
-			"codex_session_id":     payload.CodexSessionID,
-			"source_relative_path": payload.ArchiveRelativePath,
-			"source_sha256":        payload.ArchiveSHA256,
-			"source_size_bytes":    payload.ArchiveSizeBytes,
-			"retention_seconds":    int64((30 * 24 * time.Hour) / time.Second),
-		})
-		if err != nil || stored.RowsAffected() != 1 {
-			return commandOutcome{}, fmt.Errorf("record session storage binding: %w", errs.ErrUnavailable)
-		}
-	}
+
 	artifactRefs := []string{}
 	artifactIDs := make([]string, 0, len(payload.Artifacts))
 	var artifactBytes int64
@@ -2455,7 +2480,7 @@ func runtimeSafeErrorCode(code string) bool {
 		return true
 	}
 	switch code {
-	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
+	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", runtimeInputInvalidCode, "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
 		return true
 	default:
 		return false
@@ -2914,7 +2939,7 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 			}
 		}
 		if err == nil && !evidenceAuthority {
-			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged)
+			return false, repository.closeWorkflowEvidenceDeliveryTx(ctx, tx, current, rootRunID, parentNodeID, projectID, runtimeInputInvalidCode, runtimeClaimEligibilityChanged)
 		}
 	}
 	if errors.Is(err, pgx.ErrNoRows) {

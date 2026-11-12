@@ -94,10 +94,10 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Полный actual036111/306 закреплён независимо от явно названной inverse010 проекции284.
+	// Полный actual041111/308 закреплён независимо от явно названной inverse010 проекции284.
 	// Полный shape также проверяется shipped current postcondition до запуска component suite.
-	if graphNodes != 111 || graphNodeDigest != "3eb558fae167872ba6bd17bc68f7a303" || graphEdges != 306 ||
-		graphEdgeDigest != "19782286a860f9e05cdaad7b6e5f8ef3" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
+	if graphNodes != 111 || graphNodeDigest != "3eb558fae167872ba6bd17bc68f7a303" || graphEdges != 308 ||
+		graphEdgeDigest != "d6aa5b9aa21c5e065c3106f2a6119e0f" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
@@ -105,11 +105,11 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	configureComponentArtifactScanner(t, repository)
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatal(err)
+	configureComponentProviderAndRoleImages(t, repository)
+	profile := *repository.defaultModelProvider()
+	profile.Models = append(profile.Models, runtimecontract.ModelProviderModel{ID: "non-reasoning", ContextWindowTokens: 32768, MaximumOutputTokens: 1024})
+	if err := repository.ConfigureModelProvider(profile, "gpt-5"); err != nil {
+		t.Fatal("configure alternate assistant model", err)
 	}
 	if err := repository.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)

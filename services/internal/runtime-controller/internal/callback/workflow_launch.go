@@ -81,7 +81,7 @@ func (server *Server) launchWorkflow(ctx context.Context, input runtimecontract.
 	}
 	requestCtx, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
-	response, err := server.control.Runtime.LaunchWorkflowExecution(requestCtx, &controlplanev1.LaunchWorkflowExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, WorkflowRef: workflow, Task: task, Input: structure, Title: title, ExpectedPublishedRef: publishedRef, ExpectedSpecDigest: digest, ExpectedWorkflowVersion: workflowVersion})
+	response, err := server.control.Runtime.LaunchWorkflowExecution(requestCtx, &controlplanev1.LaunchWorkflowExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: runtimeToolMutationKey(input, callID)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, WorkflowRef: workflow, Task: task, Input: structure, Title: title, ExpectedPublishedRef: publishedRef, ExpectedSpecDigest: digest, ExpectedWorkflowVersion: workflowVersion})
 	if err != nil {
 		return nil, err
 	}

@@ -38,7 +38,14 @@ case "$repository" in
   registry.local.kodex/kodex/stt-hot-reload|registry.local.kodex/kodex/integration-hot-reload|\
   registry.local.kodex/kodex/backup-controller|registry.local.kodex/kodex/registry-pull-authorizer|\
   registry.local.kodex/kodex/control-plane|registry.local.kodex/kodex/runtime-controller|\
-  registry.local.kodex/kodex/staff-control-center|registry.local.kodex/kodex/control-api-gateway) ;;
+  registry.local.kodex/kodex/staff-control-center|registry.local.kodex/kodex/control-api-gateway|\
+  registry.local.kodex/kodex/dockerfile|registry.local.kodex/kodex/role-base-documents|\
+  registry.local.kodex/kodex/secret-broker|registry.local.kodex/kodex/egress-gateway|\
+  registry.local.kodex/kodex/interaction-gateway|registry.local.kodex/kodex/integration-gateway|\
+  registry.local.kodex/kodex/integration-synthetic|registry.local.kodex/kodex/stt-tts-service|\
+  registry.local.kodex/kodex/automation-scheduler|registry.local.kodex/kodex/artifact-retention|\
+  registry.local.kodex/kodex/email-bridge|registry.local.kodex/kodex/email-bridge-migration|\
+  registry.local.kodex/kodex/image-admission-controller) ;;
   *) fail 'repository is outside the closed local platform profile' ;;
 esac
 [[ "$tag" == "$repository":* ]] || fail 'tagged reference does not match repository'

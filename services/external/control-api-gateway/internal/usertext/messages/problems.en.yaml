@@ -1080,3 +1080,8 @@ INTEGRATION_APPROVAL_REVOKED:
   other: Temporary approval revoked; new actions require consent
 INTEGRATION_APPROVAL_EXPIRED:
   other: Temporary approval expired; the action has not started
+
+MODEL_MEASUREMENT_RECORDED:
+  other: Model measurement recorded
+INFERENCE_CACHE_POLICY_UNSUPPORTED:
+  other: The model route does not support the required cache policy

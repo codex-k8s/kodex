@@ -78,8 +78,8 @@ func TestCanaryDoesNotCountImmutableContextAgainstWritableQuota(t *testing.T) {
 // TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota создаёт чрезмерный синтетический provider state с ограниченными правами и требует готовность без обхода этой отдельной области квоты.
 func TestCanaryDoesNotTraverseSeparateSessionVolumeForWorkspaceQuota(t *testing.T) {
 	root := t.TempDir()
-	private := filepath.Join(root, ".kodex/state/codex-home/private")
-	for _, path := range []string{".kodex/outbox", "input", "knowledge", ".kodex/state/codex-home/private"} {
+	private := filepath.Join(root, ".kodex/state/opencode/private")
+	for _, path := range []string{".kodex/outbox", "input", "knowledge", ".kodex/state/opencode/private"} {
 		if err := os.MkdirAll(filepath.Join(root, path), 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +263,7 @@ func TestWorkspaceDenialsAreExactAndDoNotContainPaths(t *testing.T) {
 	if _, reason := policy.AccessForPath("/workspace/../foreign"); reason != runtimecontract.RuntimeWorkspacePathOutsideWorkspace {
 		t.Fatalf("traversal reason=%q", reason)
 	}
-	for _, protected := range []string{"/workspace/input/file", "/workspace/knowledge/memory.md", "/workspace/.kodex/state/codex-home/auth.json"} {
+	for _, protected := range []string{"/workspace/input/file", "/workspace/knowledge/memory.md", "/workspace/.kodex/state/opencode/auth.json"} {
 		if access, reason := policy.AccessForPath(protected); access != runtimecontract.RuntimeWorkspaceReadOnly || reason != "" {
 			t.Fatalf("protected path %q policy=(%q,%q)", protected, access, reason)
 		}

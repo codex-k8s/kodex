@@ -3,7 +3,7 @@ SELECT task.id::text, task.ref, task.kind, task.content_generation, task.input_d
        COALESCE(task.object_key, ''), COALESCE(task.object_version, ''), task.attempt,
        organization.ref, COALESCE(project.ref, ''), session.ref, provider.ref,
        revision.ref, revision.generation, revision.revision_digest,
-       storage.codex_session_id::text, storage.source_relative_path,
+       storage.native_session_id::text, storage.source_relative_path,
        storage.source_sha256, storage.source_size_bytes,
        COALESCE(archive.ref, ''), COALESCE(archive.format_version, 0),
        COALESCE(archive.object_key, ''), COALESCE(archive.object_version, ''),

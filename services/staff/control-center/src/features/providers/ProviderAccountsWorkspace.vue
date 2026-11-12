@@ -56,7 +56,6 @@ import {
   upsertProviderAccount,
   type ProviderAccount,
   type ProviderAuthorizationMethod,
-  type ProviderDefinitionKey,
 } from "./model";
 import { useProvidersStore } from "./store";
 
@@ -94,7 +93,7 @@ const replacingApiKey = ref(false);
 const localProblem = ref<AppProblem>();
 const createForm = reactive({
   name: "",
-  definitionKey: "" as ProviderDefinitionKey | "",
+  definitionKey: "",
 });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const definitionsRoot = ref<HTMLElement>();
@@ -188,7 +187,10 @@ async function searchDefinitions(
   };
 }
 function chooseDefinition(value: unknown): void {
-  createForm.definitionKey = value === "openai-codex" ? value : "";
+  createForm.definitionKey =
+    typeof value === "string" && /^[a-z][a-z0-9-]{0,95}$/.test(value)
+      ? value
+      : "";
 }
 const authorizationDefinition = computed(() =>
   definitions.value.find(
@@ -644,10 +646,7 @@ onBeforeUnmount(() => {
                       <Info :size="18" aria-hidden="true" />
                     </button>
                     <button
-                      v-if="
-                        account.authorization?.method === 'DEVICE_CODE' &&
-                        accountAllows(account, 'REFRESH_AUTHORIZATION')
-                      "
+                      v-if="accountAllows(account, 'REFRESH_AUTHORIZATION')"
                       type="button"
                       class="icon-button"
                       :title="$t('providers.checkAuthorization')"
@@ -1062,10 +1061,23 @@ onBeforeUnmount(() => {
           </section>
 
           <section v-else class="authorization-panel">
+            <button
+              v-if="
+                accountAllows(authorizationAccount, 'REFRESH_AUTHORIZATION')
+              "
+              class="button"
+              type="button"
+              :disabled="
+                busyRefs.includes(authorizationAccount.ref) ||
+                authorizationRecoveryPending
+              "
+              @click="refreshAuthorization"
+            >
+              <RefreshCw :size="16" />{{ $t("providers.checkAuthorization") }}
+            </button>
             <template
               v-if="
-                authorizationAccount.authorization?.state === 'AUTHORIZED' &&
-                !replacingApiKey
+                authorizationAccount.state === 'AUTHORIZED' && !replacingApiKey
               "
             >
               <Check :size="24" aria-hidden="true" />

@@ -13,6 +13,7 @@ import type { Incident } from "./Incident";
 import type { RunEventActor } from "./RunEventActor";
 import type { RunEventMessageKind } from "./RunEventMessageKind";
 import type { RunToolCall } from "./RunToolCall";
+import type { ModelMeasurement } from "./ModelMeasurement";
 import type { RunEventExecution } from "./RunEventExecution";
 import type { RunMessage } from "./RunMessage";
 
@@ -42,6 +43,7 @@ export interface RunEvent {
   messageKind: RunEventMessageKind;
   toolCall?: RunToolCall;
   integrationInvocationRef?: string;
+  modelMeasurement?: ModelMeasurement;
   execution?: RunEventExecution;
   message?: RunMessage;
 }

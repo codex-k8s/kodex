@@ -11,7 +11,7 @@ usage() {
   printf '%s\n' \
     'Usage: configure-k3d-node-registry.sh --mode apply|readback' \
     '  --context <k3d-context> --material-directory <path>' \
-    '  --promoted-pull-host <dns>' >&2
+    '  --promoted-pull-host <dns> [--bind-platform-registry]' >&2
 }
 
 # shellcheck source=lib/node-registry.sh
@@ -151,6 +151,11 @@ for node in "${nodes[@]}"; do
   expected_host=$(jq -cS --arg host "$promoted_pull_host" \
     '{mirror:.mirrors[$host],config:.configs[$host]}' "$expected_json_file")
   [[ "$actual_host" == "$expected_host" ]] || fail 'k3d promoted pull configuration mismatch'
+  if [[ "$bind_platform_registry" == true ]]; then
+    actual_platform=$(docker exec "$node" cat "$registry_configuration" | yq -o=json | jq -cS '.mirrors["registry.local.kodex"]')
+    expected_platform=$(jq -cS '.mirrors["registry.local.kodex"]' "$expected_json_file")
+    [[ "$actual_platform" == "$expected_platform" ]] || fail 'k3d platform registry mirror mismatch'
+  fi
   docker exec "$node" grep -Fqx "$load_balancer_ip $promoted_pull_host" /etc/hosts ||
     fail 'k3d promoted pull host alias mismatch'
   for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$private_key_file:$system_private_key"; do

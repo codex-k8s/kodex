@@ -50,7 +50,7 @@ func RuntimeWorkspaceToolsAvailable(input RunnerInput) bool {
 	return input.EnvironmentPolicy.ManagedWorkspace && input.Mode == RunnerModeTurn && input.Provider == "opencode" &&
 		input.ModelProvider != nil && input.ModelProvider.Validate() == nil &&
 		input.ModelProvider.Engine == "opencode" &&
-		input.AssistantScope == AssistantScopeNone && input.CodexSandbox == "workspace-write" && input.ProjectRef != "" &&
+		input.AssistantScope == AssistantScopeNone && input.WorkspaceAccess == "workspace-write" && input.ProjectRef != "" &&
 		input.LeaseRef != "" && input.LeaseFence != "" && input.LeaseGeneration > 0 &&
 		sha256Pattern.MatchString(input.InputDigest) && sha256Pattern.MatchString(input.RuntimeRevisionDigest) &&
 		slices.Contains(input.Capabilities, ArtifactCapability) && input.WorkspacePolicy.Validate() == nil

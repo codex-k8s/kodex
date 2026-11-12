@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -19,6 +20,7 @@ import (
 // области и откат новой публикацией, скрывая неопубликованные и чужие ревизии.
 func testConfigOverlayHistory(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
+	seedObservedCatalogFixture(t, ctx, repository)
 	service, owner := newProjectOwnerComponentService(t, ctx, repository)
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "overlay-history-project"}, Payload: command.ProjectInput{Name: "Overlay history", Purpose: "Verify published revision selection", Language: "en"}})
 	if err != nil {
@@ -41,13 +43,25 @@ func testConfigOverlayHistory(t *testing.T, ctx context.Context, repository *Rep
 		return view
 	}
 	unpublishedRef := ""
-	for i, content := range []string{"personality = \"friendly\"\n", "personality = \"pragmatic\"\n"} {
+	for i, content := range []string{"model_reasoning_effort = \"low\"\n[context]\nprune = false\n[cache]\noptimization = \"NO_HINTS\"\n", "model_reasoning_effort = \"medium\"\n[context]\nauto_compaction = true\n[cache]\noptimization = \"PROVIDER_DEFAULT\"\n"} {
 		invoke(command.CreateConfigOverlayDraft, fmt.Sprintf("overlay-history-create-%d", i), content, "")
 		unpublishedRef = view.DraftOverlay.Ref
 		invoke(command.ValidateConfigOverlayDraft, fmt.Sprintf("overlay-history-validate-%d", i), "", "")
 		invoke(command.PublishConfigOverlayDraft, fmt.Sprintf("overlay-history-publish-%d", i), "", "")
 	}
-	invoke(command.CreateConfigOverlayDraft, "overlay-history-unpublished", "personality = \"friendly\"\n", "")
+	if !strings.Contains(view.SafeEffectiveConfig, "PROVIDER_DEFAULT") || !strings.Contains(view.SafeEffectiveConfig, "NOT_PROVEN") {
+		t.Fatal("published native effective readback is missing")
+	}
+	invoke(command.CreateConfigOverlayDraft, "overlay-strict-create", "[cache]\nno_store = true\nrequired = false", "")
+	invoke(command.ValidateConfigOverlayDraft, "overlay-strict-validate", "", "")
+	if view.DraftOverlay.State != "INVALID" || len(view.DraftOverlay.ValidationMessages) != 1 || view.DraftOverlay.ValidationMessages[0] != "i18n:INFERENCE_CACHE_POLICY_UNSUPPORTED" {
+		t.Fatal("unsupported strict policy was validated")
+	}
+	strictVersion := view.AgentVersion
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PublishConfigOverlayDraft, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "overlay-strict-publish", ExpectedVersion: &strictVersion}, Payload: command.ConfigOverlayInput{AgentRef: agent.Ref}}); !errors.Is(err, errs.ErrConflict) {
+		t.Fatal("strict unsupported policy was published")
+	}
+	invoke(command.CreateConfigOverlayDraft, "overlay-history-unpublished", "model_reasoning_effort = \"low\"\n", "")
 	version := view.AgentVersion
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RollbackConfigOverlay, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "overlay-history-reject-unpublished", ExpectedVersion: &version},

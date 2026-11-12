@@ -152,11 +152,11 @@ for (const [name, floor] of [
     assert.doesNotThrow(() => checkVersion(name, floor));
   });
 }
-test("сохраняет прежние CLI и закрытые manifest/lock без bundled deps", () => {
+test("сохраняет инструменты роли без встроенного Codex CLI", () => {
   assert.doesNotThrow(() => verifyLock(root));
+  assert.equal(commands.codex, undefined);
   assert.doesNotThrow(() => verifyLock(join(root, "npm-cli"), true));
   for (const command of [
-    "codex",
     "tsc",
     "vite",
     "vue-tsc",

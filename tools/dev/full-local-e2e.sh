@@ -291,8 +291,9 @@ run_deployed_integration_e2e() {
   [[ -f "$credentials_file" && ! -L "$credentials_file" &&
     $((8#$(stat -c '%a' "$credentials_file") & 8#077)) == 0 ]] ||
     fail 'local owner credentials are absent or unsafe'
-  # shellcheck disable=SC1090
-  source "$credentials_file"
+  # shellcheck source=lib/local-credentials.sh
+  source "$repository_root/tools/dev/lib/local-credentials.sh"
+  kodex_load_local_credentials "$credentials_file"
   endpoint_ip=${KODEX_DEV_ENDPOINT_IP:-127.0.0.1}
   dns_suffix=${endpoint_ip//./.}.nip.io
   public_host=${KODEX_DEV_PUBLIC_HOST:-control.$dns_suffix}

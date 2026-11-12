@@ -4,7 +4,7 @@ title: Устойчивое рабочее состояние сотрудник
 type: operation-contract
 status: approved
 owner: developer
-version: 1.0.29
+version: 1.0.30
 updated: 2026-11-11
 ---
 
@@ -153,10 +153,12 @@ set получает собственный существующий namespace. 
 
 ## Архив и ограничение ресурсов
 
-Legacy archive v1 сохраняет прежние bytes и reader. Закрытый v2 work manifest
+После чистого OpenCode-only перехода #2108 native archive имеет format3;
+format1 и его reader не допускаются. Старые данные не переносятся.
+Закрытый v2 work manifest
 содержит только scope, generation, writer commitments, digest/размер дерева и
 ограниченный список immutable data parts. Secret lease fence, provider auth,
-input/context и чужие файлы в архив не входят. Отсутствующий Codex session ID
+input/context и чужие файлы в архив не входят. Отсутствующий native session ID
 не выдумывается для work, появившегося до запуска модели.
 
 Canonical stream ограничен прежними work byte/file quotas. Частей не больше32,
@@ -227,19 +229,19 @@ V1 receipt при наличии work не разрешает удаление �
 их exact UID readback. После v2 записей восстановление требует совместимого
 forward reader; удаление metadata ради старого бинарного rollback запрещено.
 
-### Граница прежнего архиватора
+### Граница отдельного архиватора native state
 
 | Операция | Проверка owner | Переход/событие |
 | --- | --- | --- |
 | Первое создание workspace | Exact session lock и отсутствие READY/CLAIMED SNAPSHOT, RESTORE, DELETE_PVC | Snapshot тоже исключён: его completion назначает DELETE_PVC |
-| Выбор legacy task | Workspace отсутствует до LIMIT; task и session блокируются SKIP LOCKED | Lock совпадает с первым созданием workspace; busy session пропускается |
-| Legacy claim | Следующий SQL statement с fresh READ COMMITTED snapshot повторяет отсутствие workspace | Отказ не меняет task/storage, lease/grant и event не создаются |
+| Выбор native task | Workspace отсутствует до LIMIT; task и session блокируются SKIP LOCKED | Lock совпадает с первым созданием workspace; busy session пропускается |
+| Native claim | Следующий SQL statement с fresh READ COMMITTED snapshot повторяет отсутствие workspace | Отказ не меняет task/storage, lease/grant и event не создаются |
 | Renew/complete | Existing lease/fence/generation плюс отсутствие workspace | Чужой профиль не продлевает grant и не подтверждает PVC deletion |
-| Expiry/retry/cleanup | Legacy materializer исключает любую session с workspace | Неизвестная прежняя custody сохраняется; expiry не является join proof |
-| Legacy object GC | Только format1 и session без workspace | V2 manifest/parts и ссылки не удаляются прежним consumer |
+| Expiry/retry/cleanup | Native materializer исключает любую session с workspace | Неизвестная custody сохраняется; expiry не является join proof |
+| Native object GC | Только format3, истёкшая retention и session без workspace | V2 manifest/parts и ссылки не удаляются отдельным native consumer |
 
 Проверка использует два настоящих PostgreSQL соединения для обоих порядков
-session lock. Отдельная смешанная fixture с workspace и legacy CLAIMED task
+session lock. Отдельная смешанная fixture с workspace и native CLAIMED task
 существует только в откатываемой disposable транзакции: положительный renew
 до workspace, отказ после, запрет completion/нового claim, сохранение CLAIMED
 после expiry и блокировка project purge. Полный прежний snapshot/restore/GC

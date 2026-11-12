@@ -19,6 +19,9 @@ kubeconfig="$temporary_directory/kubeconfig"
 mkdir -p "$fixture_root/tools/dev" "$fixture_root/scripts/tests" \
   "$fixture_root/services/staff/control-center" "$fake_bin"
 cp "$entrypoint" "$fixture_root/tools/dev/full-local-e2e.sh"
+mkdir -p "$fixture_root/tools/dev/lib"
+cp "$repository_root/tools/dev/lib/local-credentials.sh" "$fixture_root/tools/dev/lib/"
+cp "$repository_root/tools/dev/local_credentials.py" "$fixture_root/tools/dev/"
 cat >"$fixture_root/tools/dev/verify-hot-reload.sh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -35,11 +38,14 @@ chmod +x "$fixture_root/services/staff/control-center/node_modules/.bin/tsc" \
 printf 'fixture\n' >"$kubeconfig"
 install -d -m 0700 "$state_directory"
 cat >"$state_directory/credentials.env" <<'EOF'
-KODEX_LOCAL_OWNER_USERNAME=contract-owner
-KODEX_LOCAL_OWNER_PASSWORD=contract-password
-KODEX_DEV_TLS_MODE=public-acme
+KODEX_LOCAL_ADMIN_USERNAME="contract-admin"
+KODEX_LOCAL_ADMIN_PASSWORD="contract-admin-password"
+KODEX_LOCAL_OWNER_USERNAME="contract-owner"
+KODEX_LOCAL_OWNER_EMAIL="owner@example.invalid"
+KODEX_LOCAL_OWNER_PASSWORD="contract-password"
 EOF
 chmod 0600 "$state_directory/credentials.env"
+export KODEX_DEV_TLS_MODE=public-acme
 
 cat >"$fake_bin/kubectl" <<'EOF'
 #!/usr/bin/env bash

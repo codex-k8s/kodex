@@ -75,7 +75,7 @@ func TestRuntimeTerminalStorageComponent(t *testing.T) {
 			}
 			lease := items[0]
 			thread := fmt.Sprintf("00000000-0000-4000-8000-%012d", index+3)
-			execute(command.CompleteExecution, worker, name+"-initial-complete", command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), CodexSessionID: thread, ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/05/rollout-2026-10-05T00-00-00-" + thread + ".jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128})
+			execute(command.CompleteExecution, worker, name+"-initial-complete", command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture(thread, 1, strings.Repeat("a", 64), 128)})
 			setState := func(state string) {
 				if _, err := pool.Exec(ctx, queryRuntimeTerminalStorageFixture, pgx.StrictNamedArgs{"session_ref": sessionRef, "state": state}); err != nil {
 					t.Fatal(err)

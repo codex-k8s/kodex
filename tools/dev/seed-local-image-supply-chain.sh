@@ -10,10 +10,12 @@ usage() {
   printf '%s\n' \
     'Usage: seed-local-image-supply-chain.sh --context <exact-context>' \
     '  --state-directory <path> [--render <path>] [--component all|runner|session-archive|role-image-builder]' \
+    '  [--portable-target <private-json>; explicit approved portable target]' \
     '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>] [--k3s-sudo]' >&2
 }
 
 context=""
+portable_target=""
 state_directory=""
 render=""
 component=all
@@ -24,6 +26,7 @@ kubectl_command=(kubectl)
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
+    --portable-target) portable_target=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
     --component) component=${2:-}; shift 2 ;;
@@ -58,11 +61,29 @@ for command_name in docker jq sha256sum tar yq python3 timeout "${kubectl_comman
 done
 
 namespace=kodex-system
+if [[ -n "$portable_target" ]]; then
+  [[ "$component" == runner ]] || fail 'portable publication requires exact runner component'
+  portable_directory=$(umask 077; mktemp -d)
+  trap 'rm -rf -- "$portable_directory"' EXIT
+  portable_source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+  # До чтения credentials фиксируем точный cluster/namespace/installation и registry UID.
+  (umask 077
+    "${kubectl_command[@]}" --context "$context" get namespace kube-system -o json >"$portable_directory/cluster.json"
+    "${kubectl_command[@]}" --context "$context" get namespace "$namespace" -o json >"$portable_directory/namespace.json"
+    "${kubectl_command[@]}" --context "$context" -n "$namespace" get configmap kodex-installation-profile -o json >"$portable_directory/installation.json"
+    "${kubectl_command[@]}" --context "$context" -n "$namespace" get deployment kodex-image-registry-promotion -o json >"$portable_directory/resource.json"
+  )
+  node "$portable_source_root/tools/release/portable-runner-target-cli.mjs" "$portable_target" "$portable_directory" "$context" >/dev/null ||
+    fail 'portable promotion target rejected'
+  rm -rf -- "$portable_directory"
+  trap - EXIT
+else
 "${kubectl_command[@]}" --context "$context" -n "$namespace" get deployment kodex-image-registry-promotion -o json | \
   jq -e '.metadata.namespace == "kodex-system" and
     .metadata.labels."app.kubernetes.io/part-of" == "kodex" and
     .metadata.labels."kodex.dev/local-profile" == "hot-reload"' >/dev/null ||
   fail 'exact disposable promotion registry is required'
+fi
 tools_tag=$(<"$tool_state_directory/image-supply-chain-tools-docker-tag")
 [[ "$tools_tag" =~ ^kodex-local/image-admission-tools:[a-f0-9]{64}$ ]] ||
   fail 'local admission tools Docker tag is invalid'

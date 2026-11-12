@@ -66,11 +66,11 @@ func TestProviderAccountCommandProjectionPreservesBinding(t *testing.T) {
 			if test.zeroVersion {
 				account.Version = 0
 			}
-			var verify *cp.VerifyProviderAccountDeviceAuthorizationResponse
+			var verify *cp.VerifyProviderAccountAuthorizationResponse
 			var reauthorize *cp.ReauthorizeProviderAccountDeviceCodeResponse
 			var deleted *cp.DeleteProviderAccountResponse
 			if !test.nilReply {
-				verify = &cp.VerifyProviderAccountDeviceAuthorizationResponse{Account: account}
+				verify = &cp.VerifyProviderAccountAuthorizationResponse{Account: account}
 				reauthorize = &cp.ReauthorizeProviderAccountDeviceCodeResponse{Account: account}
 				deleted = &cp.DeleteProviderAccountResponse{Account: account}
 			}
@@ -93,7 +93,7 @@ func TestProviderAccountCommandsKeepRPCErrorProfiles(t *testing.T) {
 		name, verb, suffix, method string
 		device                     bool
 	}{
-		{"verify", http.MethodPost, "/device-authorization/verification", cp.PlatformCommandService_VerifyProviderAccountDeviceAuthorization_FullMethodName, false},
+		{"verify", http.MethodPost, "/verification", cp.PlatformCommandService_VerifyProviderAccountAuthorization_FullMethodName, false},
 		{"reauthorize", http.MethodPost, "/device-reauthorizations", cp.PlatformCommandService_ReauthorizeProviderAccountDeviceCode_FullMethodName, true},
 		{"delete", http.MethodDelete, "", cp.PlatformCommandService_DeleteProviderAccount_FullMethodName, false},
 	} {

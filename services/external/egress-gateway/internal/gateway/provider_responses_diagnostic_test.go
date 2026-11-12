@@ -111,8 +111,8 @@ func TestProviderResponsesPolicyFailureKeepsExistingDenial(t *testing.T) {
 	for _, test := range []struct{ mutation, want string }{
 		{"emptyURI", "REQUEST_ENVELOPE"}, {"absoluteURI", "REQUEST_ENVELOPE"},
 		{"foreignHost", "HOST"}, {"foreignPort", "HOST"},
-		{"method", "METHOD_PATH"}, {"protocol", "WS_SUBPROTOCOL"},
-		{"extensions", "WS_EXTENSIONS"}, {"key", "WS_HANDSHAKE"},
+		{"method", "METHOD_PATH"}, {"protocol", "METHOD_PATH"},
+		{"extensions", "METHOD_PATH"}, {"key", "METHOD_PATH"},
 	} {
 		t.Run(test.mutation, func(t *testing.T) {
 			request := syntheticUpgradeRequest(t, target.Hostname)
@@ -160,7 +160,7 @@ func TestProviderResponsesValidExtensionDoesNotMaskHandshakeFailure(t *testing.T
 	request.Header.Set("Sec-WebSocket-Key", "private-invalid-key-sentinel")
 	target := connect.Target{Hostname: "api.openai.com", Port: 443}
 	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
-	if proxyRequestAllowed(request, target, access) || providerResponsesPolicyFailure(request, target, access) != "WS_HANDSHAKE" {
+	if proxyRequestAllowed(request, target, access) || providerResponsesPolicyFailure(request, target, access) != "METHOD_PATH" {
 		t.Fatal("valid extension masked malformed handshake")
 	}
 }

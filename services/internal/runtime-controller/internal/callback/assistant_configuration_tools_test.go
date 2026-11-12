@@ -46,18 +46,15 @@ func TestSystemAssistantImageSchemaAllowsOnlyCatalogTemplateOmission(t *testing.
 	t.Fatal("system assistant image operation is missing")
 }
 
-// TestAssistantRuntimeConfigurationSearchClosedOwnBoundary checks hosted-search modes follow the runtime contract in both scopes, omission preserves the existing path and PROJECT cannot target another helper.
-// Selecting a hosted-search mode does not test or enable arbitrary network access.
-// TestAssistantRuntimeConfigurationSearchClosedOwnBoundary проверяет соответствие режимов серверного поиска контракту выполнения в обеих областях, сохранение прежнего пути при отсутствии поля и запрет чужого помощника в проектной области.
-// Выбор режима серверного поиска не проверяет и не включает произвольный сетевой доступ.
-func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
+// TestAssistantRuntimeConfigurationRejectsRetiredSearch rejects every retired search value and preserves current owner boundaries.
+// TestAssistantRuntimeConfigurationRejectsRetiredSearch отклоняет все удалённые search values и сохраняет границы владельца.
+func TestAssistantRuntimeConfigurationRejectsRetiredSearch(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		input := assistantConfigurationFixture(scope)
 		for _, mode := range []any{nil, "", "disabled", "cached", "indexed", "live", "LIVE", "future", true, map[string]any{"private": "sentinel"}} {
 			parameters := assistantConfigurationParameters(input.AgentRef)
 			parameters["webSearchMode"] = mode
-			text, ok := mode.(string)
-			want := ok && runtimecontract.ValidWebSearchMode(text)
+			want := false
 			if assistantConfigurationParametersAllowed(input, prepareAssistantConfigurationOperation, parameters) != want {
 				t.Fatal("unknown mode crossed own configuration boundary")
 			}
@@ -72,8 +69,8 @@ func TestAssistantRuntimeConfigurationSearchClosedOwnBoundary(t *testing.T) {
 		}
 	}
 	properties := assistantRuntimeConfigurationSchema(opaqueRefSchema())["properties"].(map[string]any)
-	if !reflect.DeepEqual(properties["webSearchMode"].(map[string]any)["enum"], []string{"disabled", "cached", "indexed", "live"}) {
-		t.Fatal("public typed modes differ from the pinned SDK")
+	if properties["webSearchMode"] != nil {
+		t.Fatal("retired search field is still advertised")
 	}
 }
 
@@ -142,7 +139,7 @@ func TestAssistantConfigurationCatalogKeepsExactSelfAcrossScreenContexts(t *test
 					t.Fatal("missing closed configuration schema")
 				}
 				properties := configuration["properties"].(map[string]any)
-				if len(properties) != 7 || properties["model"].(map[string]any)["maxLength"] != 128 {
+				if len(properties) != 6 || properties["model"].(map[string]any)["maxLength"] != 128 {
 					t.Fatal("configuration schema exposed extra fields or differs from owner model bound")
 				}
 				account := properties["providerAccounts"].(map[string]any)["items"].(map[string]any)
@@ -292,7 +289,7 @@ func TestPreparedAgentRuntimeConfigurationClosedProjectPolicy(t *testing.T) {
 			}
 			found = true
 			params := schema["properties"].(map[string]any)["parameters"].(map[string]any)
-			if params["additionalProperties"] != false || len(params["properties"].(map[string]any)) != 7 {
+			if params["additionalProperties"] != false || len(params["properties"].(map[string]any)) != 6 {
 				t.Fatal("ordinary schema exposed authority fields")
 			}
 			if params["properties"].(map[string]any)["agentRef"].(map[string]any)["enum"] != nil {

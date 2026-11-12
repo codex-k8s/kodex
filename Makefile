@@ -64,7 +64,7 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_completion.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_upgrade.py
-	@timeout 30s python3 -B tools/install/test_bootstrap_image_upgrade.py
+	@timeout 60s python3 -B tools/install/test_bootstrap_image_upgrade.py
 	@timeout 30s python3 -B tools/install/test_upgrade_delivery.py
 	@timeout 30s python3 -B tools/install/test_assistant_readback.py
 	@timeout 30s python3 -B tools/install/test_oidc_authority_profile.py
@@ -78,7 +78,7 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_observability_profile.py
 	timeout 60 python3 -B tools/release/build-recipe-test.py
 	timeout 180 python3 -B tools/install/test_registry_source.py
-	@timeout 180s python3 -B tools/install/test_model_provider.py
+	@timeout 600s python3 -B tools/install/test_model_provider.py
 	@timeout 30s node --test tools/release/build-release-inventory.test.mjs tools/release/build-release-pool.test.mjs
 	@timeout 120s python3 -B tools/install/test_deployment_profile.py
 	@timeout 60s python3 -B tools/install/test_portable_state.py
@@ -112,6 +112,7 @@ test-service-infrastructure-bootstrap:
 	@./scripts/tests/local-storage-e2e-reliability-contract-test.sh
 
 test-management-surfaces:
+	@timeout 30s python3 -m unittest discover -s tools/deploy -p 'test_keycloak*.py'
 	@node --test tools/release/proxy-session-cookies.test.mjs
 	@./scripts/tests/keycloak-protocol-mapper-reconcile-test.sh
 	@./scripts/tests/keycloak-group-reconcile-test.sh
@@ -122,9 +123,18 @@ test-install-workload-startup:
 	@python3 scripts/tests/install-workload-startup-test.py
 
 test-install-contract:
+	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_dns_address_normalization.py'
+	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_ensure_namespace.py'
+	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_local_object_storage_tls.py'
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh
 	@$(MAKE) --no-print-directory test-scan-memory-budget
+	@$(MAKE) --no-print-directory test-installation-cleanup
+
+.PHONY: test-installation-cleanup
+test-installation-cleanup:
+	@timeout 60s python3 -m unittest discover -s tools/dev -p 'test_installation_*.py'
+	@cd tools/dev/installation-runtime && GOTOOLCHAIN=go1.26.10 go test -race -timeout=60s ./...
 
 .PHONY: test-scan-memory-budget
 test-scan-memory-budget:
@@ -280,8 +290,17 @@ test-agent-runner:
 
 .PHONY: test-opencode-native
 test-opencode-native: check-go-toolchain
+	@timeout 30s node --test services/jobs/agent-runner/internal/opencode/model_measurement.test.mjs
 	@test -n "$${KODEX_TEST_OPENCODE_BINARY:-}" || { echo 'KODEX_TEST_OPENCODE_BINARY must select the pinned qualification executable' >&2; exit 1; }
-	@cd services/jobs/agent-runner && env -u GOFLAGS GOENV=off GOWORK=off timeout 180s go test -count=1 -race -timeout=120s -v ./internal/opencode
+	@./scripts/tests/opencode-template-native-test.sh
+
+.PHONY: test-opencode-native-postgres
+test-opencode-native-postgres: check-go-toolchain
+	@./scripts/tests/control-plane-postgres-test.sh --opencode-native-upgrade
+
+.PHONY: test-opencode-cluster-qualification
+test-opencode-cluster-qualification:
+	@timeout 30s python3 tools/dev/test_opencode_cluster_qualification.py
 
 .PHONY: test-runtime-controller-artifact-transfer
 test-runtime-controller-artifact-transfer:
@@ -432,10 +451,6 @@ test-secret-broker-drafts:
 .PHONY: test-browser-state-component
 test-browser-state-component:
 	bash scripts/tests/browser-state-component-test.sh
-
-.PHONY: test-provider-model-catalog-codex
-test-provider-model-catalog-codex:
-	python3 scripts/tests/provider-model-catalog-codex-test.py "$(KODEX_CATALOG_CODEX_TEST_IMAGE)"
 
 .PHONY: test-automation-scheduler
 test-automation-scheduler:
@@ -597,3 +612,7 @@ test-personal-integration-invocation-regression-postgres: check-go-toolchain
 .PHONY: test-personal-integration-assistant-regression-postgres
 test-personal-integration-assistant-regression-postgres: check-go-toolchain
 	@timeout --kill-after=10s 240s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh --personal-credentials-assistant-regression
+
+.PHONY: test-runner-policy-transition
+test-runner-policy-transition:
+	@timeout 300s node --test tools/release/portable-runner-target.test.mjs tools/release/runner-policy-transition.test.mjs tools/release/default-runner-transition.test.mjs

@@ -323,7 +323,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		if readProof() != expected {
 			t.Fatal("same-node bridge allocated an external effect")
 		}
-		f.execute(command.CompleteExecution, "effect-generation-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Тот же Git receipt после настоящего lease expiry.\n"))}})
+		f.execute(command.CompleteExecution, "effect-generation-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(retry), LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Тот же Git receipt после настоящего lease expiry.\n"))}})
 		final := f.read()
 		if final.state != "SUCCEEDED" || len(final.journals["a"]) != 1 || !final.journals["a"][0].Accepted || final.journals["a"][0].Results[0].ReceiptRef != receipt {
 			t.Fatal("validated execution bridge did not precede ambiguous legacy lineage")
@@ -346,7 +346,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		}
 		return
 	}
-	f.execute(command.CompleteExecution, "effect-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
+	f.execute(command.CompleteExecution, "effect-missing-artifact", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(origin), LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
 	completedOrigin := origin
 	if bundle {
 		deferred := f.read()
@@ -366,7 +366,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		if err != nil || stringMap(ackReceipt, "receiptRef") != receipt || stringMap(ackReceipt, "invocationRef") != stringMap(invocation, "invocationRef") {
 			t.Fatal("fresh ACK execution did not rejoin exact previous PR receipt", completionOutcomeClass(err))
 		}
-		f.execute(command.CompleteExecution, "effect-bundle-ack-missing-artifact", nil, command.CompleteExecutionInput{LeaseRef: stringMap(ack, "leaseRef"), Fence: stringMap(ack, "fence"), Generation: runtimeRevisionMapInt64(ack, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
+		f.execute(command.CompleteExecution, "effect-bundle-ack-missing-artifact", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(ack), LeaseRef: stringMap(ack, "leaseRef"), Fence: stringMap(ack, "fence"), Generation: runtimeRevisionMapInt64(ack, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration})
 		completedOrigin = ack
 	}
 	snapshot := f.read()
@@ -463,7 +463,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 		t.Fatal("rejoin admitted another provider write")
 	}
 	if mode == "same-business-continues" {
-		f.execute(command.CompleteExecution, "effect-capture-progress", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("EARLY capture перед final declaration.\n"))}})
+		f.execute(command.CompleteExecution, "effect-capture-progress", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(retry), LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["report"]}`, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("EARLY capture перед final declaration.\n"))}})
 		technical := f.claims("effect-technical-continuation")
 		if len(technical) != 1 || stringMap(technical[0], "nodeRef") == stringMap(retry, "nodeRef") || stringMap(technical[0], "runRef") != stringMap(retry, "runRef") {
 			t.Fatal("capture did not create exact same-business CONTINUES")
@@ -480,7 +480,7 @@ func runWorkflowEffectRejoinScenario(t *testing.T, mode string) {
 			t.Fatal("technical receipt bridge recreated an effect")
 		}
 	}
-	f.execute(command.CompleteExecution, "effect-retry-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Полный обязательный отчёт.\n"))}})
+	f.execute(command.CompleteExecution, "effect-retry-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(retry), LeaseRef: stringMap(retry, "leaseRef"), Fence: stringMap(retry, "fence"), Generation: runtimeRevisionMapInt64(retry, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: declaration, Artifacts: []command.CompletedArtifact{workflowCaptureProgressArtifact("report.md", []byte("Полный обязательный отчёт.\n"))}})
 	final := f.read()
 	if final.state != "SUCCEEDED" || len(final.journals["a"]) != 2 || !final.journals["a"][1].Accepted || len(final.journals["a"][1].Results) != 2 || final.journals["a"][1].Results[0].ReceiptRef != receipt {
 		t.Fatal("new attempt evaluator did not accept exact previous receipt through rejoin")

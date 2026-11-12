@@ -24,7 +24,7 @@ import (
 // canonicalSessionArchiveKey confines fixture operations to a versioned session-archive object key.
 // RU: canonicalSessionArchiveKey ограничивает операции оснастки версионированным ключом архива сессии.
 var canonicalSessionArchiveKey = regexp.MustCompile(
-	`^session-archive/v1/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$`,
+	`^session-archive/v3/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$`,
 )
 
 // TestSeaweedFSSessionArchiveBackupFixtureE2E runs explicit prepare, mutate, verify and cleanup fixture phases.

@@ -6,13 +6,15 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 image=${KODEX_INTEGRATION_RUNTIME_TEST_IMAGE:?KODEX_INTEGRATION_RUNTIME_TEST_IMAGE is required}
 [[ "$image" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
 docker image inspect "$image" >/dev/null
+# Переменные раскрывает shell контейнера, а не shell проверяющего хоста.
+# shellcheck disable=SC2016
 timeout 30s docker run --rm --pull=never --network none \
   --read-only --user 10001:10001 --cap-drop ALL --security-opt no-new-privileges \
   --mount "type=bind,src=$root,dst=/workspace,readonly" \
   --tmpfs /tmp:rw,nosuid,nodev,size=67108864,mode=1777 \
   --entrypoint /bin/sh "$image" -ec '
     test "$(go env GOVERSION)" = go1.26.10
-    test "$(/usr/bin/git --version)" = "git version 2.52.0"
+    test "$(/usr/bin/git --version)" = "git version 2.52.1"
     test -s /etc/ssl/certs/ca-certificates.crt
     test -x /usr/libexec/git-core/git-remote-https
     directory=$(mktemp -d /tmp/kodex-writeback-test-XXXXXX)

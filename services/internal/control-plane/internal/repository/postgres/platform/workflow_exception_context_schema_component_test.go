@@ -19,6 +19,7 @@ func TestWorkflowExceptionContextMigrationProofComponent(t *testing.T) {
 		{"canonical", ""}, {"public_execute", "workflowContextFunctions"}, {"security_definer", "workflowContextFunctions"},
 		{"search_path", "workflowContextFunctions"}, {"changed_source", "workflowContextFunctions"},
 		{"extra_overload", "workflowContextExactFunctions"}, {"changed_union", "functionSources"},
+		{"removed_server_frontier", "visibilitySource"},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)

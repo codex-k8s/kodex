@@ -15,7 +15,7 @@ LEFT JOIN control_plane.session_archives source ON source.id=w.source_archive_id
 JOIN control_plane.runtime_revisions r ON r.id=COALESCE(l.runtime_revision_id,source.runtime_revision_id) AND r.organization_id=w.organization_id AND r.session_id=w.session_id
  AND r.project_id=w.project_id AND r.agent_id=w.agent_id
 WHERE w.organization_id=@organization_id::uuid AND w.session_id=@session_id::uuid
- AND r.safe_snapshot->'roleRuntimeContractRevision'='4'::jsonb
+ AND r.safe_snapshot->'roleRuntimeContractRevision'='5'::jsonb
  AND r.safe_snapshot #>> '{workspaceStorage,profile}'='SESSION_WORKSPACE_V2'
  AND r.safe_snapshot #>> '{workspaceStorage,workspace_ref}'=w.ref
  AND r.safe_snapshot #> '{workspaceStorage,generation}'=to_jsonb(

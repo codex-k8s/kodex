@@ -11,11 +11,11 @@ import (
 )
 
 // queryProviderVerificationStart embeds verification creation only for an enabled authorized
-// account with current credential, latest authorized DEVICE_CODE attempt and no pending
+// account with current credential, exact configured API_KEY route and no pending
 // verification. It pins account version and credential revision; reachability is not established
 // by insertion.
 // queryProviderVerificationStart встраивает создание verification только для enabled authorized
-// account с current credential, latest authorized DEVICE_CODE attempt и без pending verification.
+// account с current credential, exact configured API_KEY route и без pending verification.
 // Фиксирует account version и credential revision; вставка не доказывает reachability.
 //
 //go:embed sql/provider_verification_start.sql
@@ -54,9 +54,9 @@ var queryProviderVerificationLinkTask string
 
 // queryProviderVerificationComplete embeds terminal verification from the linked observation with
 // exact account-version/credential pins before deadline. Only a fresh NONE-failure
-// REMOTE_API/REMOTE_CODEX observation is VERIFIED; other linked observations fail.
+// REMOTE_API observation is VERIFIED; other linked observations fail.
 // queryProviderVerificationComplete встраивает terminal verification по linked observation с exact
-// account-version/credential pins до deadline. Только свежая NONE-failure REMOTE_API/REMOTE_CODEX
+// account-version/credential pins до deadline. Только свежая NONE-failure REMOTE_API
 // observation даёт VERIFIED; прочие linked observations дают отказ.
 //
 //go:embed sql/provider_verification_complete.sql
@@ -108,6 +108,9 @@ func (repository *Repository) hydrateProviderVerifications(ctx context.Context, 
 // добавляет current pinned attempt до отмены прежней catalog work. Недопустимая вставка даёт
 // Conflict. Не запускает provider probe и не фиксирует caller transaction.
 func (repository *Repository) startProviderVerification(ctx context.Context, tx pgx.Tx, current scope, accountID string) error {
+	if repository.modelProviderCatalog == nil {
+		return errs.ErrConflict
+	}
 	if err := repository.expireProviderVerifications(ctx, tx, accountID, false); err != nil {
 		return err
 	}
@@ -117,7 +120,7 @@ func (repository *Repository) startProviderVerification(ctx context.Context, tx 
 	}
 	var id string
 	err = tx.QueryRow(ctx, queryProviderVerificationStart, pgx.StrictNamedArgs{
-		"verification_ref": ref, "organization_id": current.organizationID, "account_id": accountID, "actor_id": current.actorID,
+		"provider_definitions": repository.modelProviderDefinitionKeys(), "verification_ref": ref, "organization_id": current.organizationID, "account_id": accountID, "actor_id": current.actorID,
 	}).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errs.ErrConflict

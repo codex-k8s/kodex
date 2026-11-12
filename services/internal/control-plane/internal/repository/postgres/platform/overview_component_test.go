@@ -69,7 +69,7 @@ func TestOverviewEligibilityComponent(t *testing.T) {
 		return items[0]
 	}
 	complete := func(key string, lease map[string]any) {
-		runtimeExecute(command.CompleteExecution, key, command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified bounded overview result", Usage: turnUsageFixture()})
+		runtimeExecute(command.CompleteExecution, key, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Verified bounded overview result", Usage: turnUsageFixture()})
 	}
 	initial := claim("manager-claim", gated.Ref)
 	child := runtimeExecute(command.DelegateExecution, "delegate-child", command.DelegateInput{LeaseRef: stringMap(initial, "leaseRef"), Fence: stringMap(initial, "fence"), Generation: runtimeRevisionMapInt64(initial, "generation"), TargetAgentRef: agentB.Ref, WorkflowStepKey: "review", Task: "Review the bounded result."}).Run

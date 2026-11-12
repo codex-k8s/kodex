@@ -5,7 +5,7 @@ SELECT configuration.ref, revision.ref, revision.revision, revision.digest,
        COALESCE(revision.content::jsonb -> 'stt' ->> 'language',''),
        revision.content::jsonb -> 'stt' ->> 'permissionKey',
        COALESCE(account.enabled AND account.state = 'AUTHORIZED' AND credential.id IS NOT NULL, false),
-       COALESCE(definition.enabled AND definition.stable_key = 'openai-codex', false), COALESCE(definition.capabilities, '{}'::jsonb),
+       COALESCE(definition.enabled AND definition.stable_key = 'opencode-openai', false), COALESCE(definition.capabilities, '{}'::jsonb),
        COALESCE(credential.revision_number, 0),
        COALESCE((
            SELECT attempt.method = 'API_KEY'

@@ -5,33 +5,16 @@ import (
 	"testing"
 )
 
-// TestNativeSearchOverlayCanonicalSafeReadback preserves each search mode and its distinct digest, rejects malformed overrides without input disclosure and does not materialize an absent owner selection.
-// TestNativeSearchOverlayCanonicalSafeReadback сохраняет каждый режим поиска и его отдельный дайджест, отклоняет некорректные настройки без раскрытия входа и не создаёт отсутствующий выбор владельца.
-func TestNativeSearchOverlayCanonicalSafeReadback(t *testing.T) {
-	seen := map[string]bool{}
+// TestRetiredNativeSearchCannotEnterOpenCodeOverlay rejects every retired mode without exposing submitted values.
+// TestRetiredNativeSearchCannotEnterOpenCodeOverlay отклоняет все удалённые режимы без раскрытия переданных значений.
+func TestRetiredNativeSearchCannotEnterOpenCodeOverlay(t *testing.T) {
 	for _, mode := range []string{"disabled", "cached", "indexed", "live"} {
-		raw := "web_search = \"" + mode + "\"\n"
-		canonical, digest, err := CanonicalConfigOverlay(raw)
-		if err != nil || seen[digest] {
-			t.Fatal("mode was rejected or collapsed into another immutable digest")
-		}
-		seen[digest] = true
-		parsed, err := ParseConfigOverlay(canonical)
-		if err != nil || parsed.WebSearchMode != mode {
-			t.Fatal("canonical mode was lost")
-		}
-		readback, err := RenderSafeEffectiveConfig(SafeEffectiveConfigInput{Model: "fixture-model", Overlay: canonical})
-		if err != nil || !strings.Contains(readback, raw) || strings.Contains(readback, "allowed_domains") {
-			t.Fatal("safe readback lost mode or conflated sandbox egress")
+		if _, err := ParseConfigOverlay("web_search = \"" + mode + "\"\n"); err == nil || strings.Contains(err.Error(), mode) {
+			t.Fatal("retired native search accepted or disclosed")
 		}
 	}
-	for _, raw := range []string{`web_search = ""`, `web_search = "LIVE"`, `web_search = "future"`, `web_search = true`, `web_search = ["live"]`, `web_search = "live"` + "\nweb_search = \"cached\"", `[tools.web_search]` + "\nallowed_domains = [\"private-sentinel\"]"} {
-		if _, err := ParseConfigOverlay(raw); err == nil || strings.Contains(err.Error(), "private-sentinel") {
-			t.Fatal("unknown mode, structure, duplicate or secret-like input was accepted/disclosed")
-		}
-	}
-	parsed, err := ParseConfigOverlay("")
-	if err != nil || parsed.WebSearchMode != "" {
-		t.Fatal("absent setting was silently materialized into a new owner selection")
+	readback, err := RenderSafeEffectiveConfig(SafeEffectiveConfigInput{Model: "fixture-model"})
+	if err != nil || strings.Contains(readback, "web_search") || strings.Contains(readback, "history") {
+		t.Fatal("retired runtime settings were materialized")
 	}
 }

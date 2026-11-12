@@ -154,7 +154,7 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 				return items[0]
 			}
 			complete := func(turn string, item map[string]any) {
-				execute(command.CompleteExecution, worker, key+turn+"-complete", nil, command.CompleteExecutionInput{LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()})
+				execute(command.CompleteExecution, worker, key+turn+"-complete", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(item), LeaseRef: stringMap(item, "leaseRef"), Fence: stringMap(item, "fence"), Generation: runtimeRevisionMapInt64(item, "generation"), Success: true, ResultSummary: "Synthetic completion", Usage: turnUsageFixture()})
 			}
 			first := claim("first")
 			stored, err := r.GetPromptMaterializationSnapshot(ctx, resolved, "RUN", stringMap(first, "runRef"))
@@ -226,21 +226,16 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 			}
 			copiedJSON, _ := json.Marshal(second)
 			var changed map[string]any
-			if json.Unmarshal(copiedJSON, &changed) != nil || !runtimeSessionResumeCompatible(changed, changed) {
+			if json.Unmarshal(copiedJSON, &changed) != nil || !nativeSessionResumeCompatible(changed, changed) {
 				t.Fatal("saved fresh assistant context is not self-compatible")
 			}
-			var historical map[string]any
-			if json.Unmarshal(copiedJSON, &historical) != nil {
-				t.Fatal("historical instruction fixture decode")
-			}
-			delete(historical["promptSnapshot"].(map[string]any), "platformInstructions")
-			delete(historical["promptSnapshot"].(map[string]any)["semanticValues"].(map[string]any), "CONSTRAINTS")
-			if !runtimeSessionResumeCompatible(historical, historical) || runtimeSessionResumeCompatible(second, historical) || runtimeSessionResumeCompatible(historical, second) {
-				t.Fatal("changed platform instruction dependency bypassed native cold/history selection")
-			}
 			changed["promptSnapshot"].(map[string]any)["assistantCore"].(map[string]any)["Ref"] = "ins_core_changed"
-			if runtimeSessionResumeCompatible(second, changed) {
-				t.Fatal("changed assistant base reused old provider thread")
+			if !nativeSessionResumeCompatible(second, changed) {
+				t.Fatal("fresh instructions incorrectly discarded the native transcript")
+			}
+			changed["agentRef"] = "agt_foreign_fixture"
+			if nativeSessionResumeCompatible(second, changed) {
+				t.Fatal("foreign assistant adopted the native transcript")
 			}
 			components, err := continuationComponents(map[string]any{"promptSnapshot": next})
 			if err != nil || len(components["INSTRUCTIONS"]) < 2 {

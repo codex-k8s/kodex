@@ -524,6 +524,15 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		if len(runtimecontract.DiagnoseConfigOverlay(content, efforts)) != 0 {
 			state = "INVALID"
 			problems = []string{"i18n:CONFIG_OVERLAY_INVALID_OR_PROTECTED"}
+		} else if _, _, preferenceErr := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); preferenceErr != nil {
+			if !errors.Is(preferenceErr, errs.ErrConflict) && !errors.Is(preferenceErr, errs.ErrInvalid) {
+				return commandOutcome{}, preferenceErr
+			}
+			state = "INVALID"
+			problems = []string{"i18n:CONFIG_OVERLAY_INVALID_OR_PROTECTED"}
+			if errors.Is(preferenceErr, runtimecontract.ErrInferenceCachePolicy) {
+				problems = []string{"i18n:INFERENCE_CACHE_POLICY_UNSUPPORTED"}
+			}
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeConfigurationValidateOverlay, draftID, state, asJSON(problems)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable

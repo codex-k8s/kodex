@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"io"
 	"log/slog"
 	"net"
@@ -630,7 +631,8 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	var payload runtimecontract.RunnerProgressRequest
 	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
-		payload.Financial == nil && payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.ModelMeasurement == nil && payload.Financial == nil && payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.ModelMeasurement != nil && (payload.Financial != nil || payload.Message != nil || payload.ProviderProcess != nil || payload.Progress != "" || payload.ModelMeasurement.Validate() != nil) ||
 		payload.Financial != nil && (payload.Message != nil || payload.ProviderProcess != nil || payload.Progress != "" || payload.Financial.Validate() != nil) ||
 		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) ||
 		payload.ProviderProcess != nil && (payload.Message != nil || payload.Progress != runtimecontract.ProviderProcessInitializedProgress || !payload.ProviderProcess.Matches(input)) {
@@ -641,7 +643,9 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
 	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
-	if payload.Financial != nil {
+	if payload.ModelMeasurement != nil {
+		projection.ModelMeasurement = modelmeasurementwire.ToProto(payload.ModelMeasurement)
+	} else if payload.Financial != nil {
 		projection.Financial = providerfinancewire.ObservationToProto(*payload.Financial)
 	} else if message := payload.Message; message != nil {
 		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))
@@ -689,6 +693,8 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		rejectionReason = completionProvenanceReason
 	} else if payload.ProviderDiagnostic != nil && !payload.ProviderDiagnostic.Matches(input) {
 		rejectionReason = completionProviderDiagnosticReason
+	} else if input.Provider == "opencode" && payload.Success && payload.NativeSession == nil || payload.NativeSession != nil && payload.NativeSession.ValidateCompletion(input) != nil {
+		rejectionReason = completionProvenanceReason
 	}
 	if rejectionReason != "" {
 		server.logCompletionRejection(request.Context(), input, completionPayloadStage, rejectionReason, codes.InvalidArgument)
@@ -702,7 +708,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(request.Context()), server.config.RequestTimeout)
 	defer cancel()
 	usage := &controlplanev1.TokenUsage{Completeness: controlplanev1.UsageCompleteness(payload.Usage.Completeness), TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
-	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, CodexSessionId: payload.CodexSessionID, CodexArchiveRelativePath: payload.ArchiveRelativePath, CodexArchiveSha256: payload.ArchiveSHA256, CodexArchiveSizeBytes: payload.ArchiveSizeBytes})
+	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, NativeSession: nativeCompletionProto(payload.NativeSession)})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
 		server.logCompletionRejection(ctx, input, completionOwnerRPCStage, completionRPCRejectedReason, status.Code(err))
 		writeControlError(writer, err)
@@ -1440,7 +1446,7 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.ProposeAssistantPlan(requestContext, &controlplanev1.ProposeAssistantPlanRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: runtimeToolMutationKey(input, callID)},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		Summary: strings.TrimSpace(summary), Operations: operations,
 	})
@@ -1855,7 +1861,7 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 			assistantRequiredStrings(parameters, "recipeRef") && assistantOptionalStrings(parameters, "name", "environmentKey", "dockerfile") && len(parameters) > 2
 	case "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "PREPARE_AGENT_RUNTIME_CONFIGURATION":
 		if !input.IsAssistant() || input.AgentRef == "" || parameters == nil ||
-			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts") ||
+			!onlyKeys(parameters, "agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts") ||
 			!assistantRequiredStrings(parameters, "agentRef", "runtimeProfileRef", "model", "providerPolicyMode") {
 			return false
 		}
@@ -1867,12 +1873,6 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 			return false
 		}
 		effort, ok := parameters["reasoningEffort"].(string)
-		if raw, present := parameters["webSearchMode"]; present {
-			searchMode, valid := raw.(string)
-			if !valid || !runtimecontract.ValidWebSearchMode(searchMode) {
-				return false
-			}
-		}
 		if !ok || effort != "" && runtimecontract.ValidateEffectiveReasoningEffort("", effort, runtimecontract.ReasoningSupported) != nil {
 			return false
 		}
@@ -2258,7 +2258,7 @@ func (server *Server) proposeAssistantMetadata(ctx context.Context, input runtim
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.ProposeAssistantMetadata(requestContext, &controlplanev1.ProposeAssistantMetadataRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: runtimeToolMutationKey(input, callID)},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Title: strings.TrimSpace(title),
 	})
 	if err != nil || response.GetConversation().GetRef() == "" {
@@ -2285,7 +2285,7 @@ func (server *Server) proposeRunMetadata(ctx context.Context, input runtimecontr
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.ProposeRunMetadata(requestContext, &controlplanev1.ProposeRunMetadataRequest{
-		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))},
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: runtimeToolMutationKey(input, callID)},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		Title: strings.TrimSpace(title), ActivitySummary: strings.TrimSpace(activity),
 	})
@@ -2369,7 +2369,7 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 	if revision == 1 {
 		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
 	}
-	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, string(callID))))
+	digest := sha256.Sum256([]byte(runtimeToolMutationKey(input, callID)))
 	callRef := "tcl_" + hex.EncodeToString(digest[:16])
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
@@ -2694,7 +2694,7 @@ func (server *Server) delegate(ctx context.Context, input runtimecontract.Runner
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
-	response, err := server.control.Runtime.DelegateExecution(requestContext, &controlplanev1.DelegateExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID))}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, TargetAgentRef: target, WorkflowStepKey: stepKey, Task: task, Input: structure})
+	response, err := server.control.Runtime.DelegateExecution(requestContext, &controlplanev1.DelegateExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: runtimeToolMutationKey(input, callID)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, TargetAgentRef: target, WorkflowStepKey: stepKey, Task: task, Input: structure})
 	if err != nil {
 		return nil, err
 	}
@@ -2727,7 +2727,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 		return nil, errors.New("integration input digest is invalid")
 	}
 	inputDigest := sha256.Sum256(inputBytes)
-	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: grant.ConnectionRef, CapabilityKey: grant.CapabilityKey, BoundedInput: structure, IdempotencyKey: stableKey(input.LeaseRef, string(callID))}
+	resolveRequest := &controlplanev1.ResolveIntegrationInvocationRequest{RunRef: input.RunRef, NodeRef: input.NodeRef, ConnectionRef: grant.ConnectionRef, CapabilityKey: grant.CapabilityKey, BoundedInput: structure, IdempotencyKey: runtimeToolMutationKey(input, callID)}
 	var resolved *controlplanev1.ResolveIntegrationInvocationResponse
 	for attempt := 0; attempt < 2; attempt++ {
 		requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
+import ModelExecutionPolicyNotice from "./ModelExecutionPolicyNotice.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { providerBlockerMessage } from "./usage";
 import { catalogDate, orderedReasoningEfforts } from "./catalog-presentation";
@@ -37,7 +38,6 @@ const catalogLabels = computed(() => ({
   FAILED: t("providers.catalogFailed"),
   EXPIRED: t("providers.catalogExpired"),
   REMOTE_API: t("providers.catalogRemoteApi"),
-  REMOTE_CODEX: t("providers.catalogRemoteCodex"),
   UNAVAILABLE: t("providers.catalogUnavailable"),
   UNVERIFIED_SOURCE: t("providers.catalogUnverified"),
   AUTHORIZATION_REJECTED: t("providers.catalogAuthorizationRejected"),
@@ -218,6 +218,10 @@ function choose(value: string | null | readonly string[]): void {
       :disabled="disabled || !definitionKey || !accountRefs.length"
       :clearable="false"
       @update:model-value="choose"
+    />
+    <ModelExecutionPolicyNotice
+      :definition-key="definitionKey"
+      :model="modelValue"
     />
     <ProblemNotice v-if="problem" :problem="problem" />
     <small v-if="catalogCaption">{{ catalogCaption }}</small>

@@ -255,7 +255,7 @@ func testWorkflowCaptureProgressComponent(t *testing.T, denseCatalog bool) {
 	}
 	earlyBody := []byte("Ранний материал: проверяется точная ревизия, а не новый HEAD.\n")
 	artifact := workflowCaptureProgressArtifact("early.md", earlyBody)
-	progress := complete("capture", command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"),
+	progress := complete("capture", command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(first), LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"),
 		Success: true, Usage: turnUsageFixture(), ResultSummary: `{"schema":"kodex.workflow-capture-progress.v1","phase":"CAPTURE_PROGRESS","cause":"ARTIFACTS_FOR_CONTINUATION","artifactKeys":["source"]}`, Artifacts: []command.CompletedArtifact{artifact}})
 	afterCapture := read()
 	if len(progress.CreatedRefs) != 1 || afterCapture.State != "RUNNING" || afterCapture.Journals != 0 || afterCapture.Continues != 1 || afterCapture.NodeCount != 3 || afterCapture.ClaimedLeases != 0 || afterCapture.RunCount != initial.RunCount {
@@ -288,7 +288,7 @@ func testWorkflowCaptureProgressComponent(t *testing.T, denseCatalog bool) {
 	if err != nil {
 		t.Fatal("encode exact early artifact declaration")
 	}
-	finalProducer := complete("producer-final", command.CompleteExecutionInput{LeaseRef: stringMap(continued, "leaseRef"), Fence: stringMap(continued, "fence"), Generation: runtimeRevisionMapInt64(continued, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: string(finalDeclaration)})
+	finalProducer := complete("producer-final", command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(continued), LeaseRef: stringMap(continued, "leaseRef"), Fence: stringMap(continued, "fence"), Generation: runtimeRevisionMapInt64(continued, "generation"), Success: true, Usage: turnUsageFixture(), ResultSummary: string(finalDeclaration)})
 	accepted := read()
 	anchor := workflowCaptureProgressNodeByRef(t, accepted, producer.Ref)
 	finished := workflowCaptureProgressNodeByRef(t, accepted, continuation.Ref)
@@ -314,7 +314,7 @@ func testWorkflowCaptureProgressComponent(t *testing.T, denseCatalog bool) {
 		t.Fatal("consumer did not receive the exact accepted producer snapshot")
 	}
 	assertWorkflowCaptureProgressFile(t, ctx, repository, service, consumerLease, earlyFile.ArtifactRef, earlyFile.Name, earlyFile.Digest, earlyFile.Revision, earlyBody)
-	consumerResult := complete("consumer-final", command.CompleteExecutionInput{LeaseRef: stringMap(consumerLease, "leaseRef"), Fence: stringMap(consumerLease, "fence"), Generation: runtimeRevisionMapInt64(consumerLease, "generation"), Success: true, Usage: turnUsageFixture(),
+	consumerResult := complete("consumer-final", command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(consumerLease), LeaseRef: stringMap(consumerLease, "leaseRef"), Fence: stringMap(consumerLease, "fence"), Generation: runtimeRevisionMapInt64(consumerLease, "generation"), Success: true, Usage: turnUsageFixture(),
 		ResultSummary: `{"schema":"kodex.workflow-result.v1","results":[{"key":"report","source":{"kind":"CURRENT_COMPLETION"}}]}`,
 		Artifacts:     []command.CompletedArtifact{workflowCaptureProgressArtifact("consumer.md", []byte("Проверенный результат потребителя.\n"))}})
 	final := read()

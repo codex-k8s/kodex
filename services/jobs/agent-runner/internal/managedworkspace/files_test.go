@@ -29,7 +29,7 @@ func fileStoreFixture(t *testing.T) *fileStore {
 		BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.40/32"},
 		Models: []runtimecontract.ModelProviderModel{{ID: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}},
 	}
-	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, Provider: "opencode", CodexSandbox: "workspace-write", ModelProvider: &provider,
+	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, Provider: "opencode", WorkspaceAccess: "workspace-write", ModelProvider: &provider,
 		AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_fixture", LeaseRef: "lea_fixture", LeaseFence: "fence_fixture", LeaseGeneration: 1,
 		InputDigest: strings.Repeat("a", 64), RuntimeRevisionDigest: strings.Repeat("b", 64), Capabilities: []string{runtimecontract.ArtifactCapability},
 		WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(), EnvironmentPolicy: runtimecontract.DefaultRuntimeEnvironmentPolicy()}

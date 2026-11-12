@@ -24,6 +24,7 @@ for line in sys.stdin:
         continue
     if address.version == family:
         result.add(str(address))
-print("\n".join(sorted(result)))
+if result:
+    print("\n".join(sorted(result)))
 ' "$family"
 }

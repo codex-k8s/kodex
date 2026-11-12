@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { planDefaultRunner as createDefaultRunnerPlan, requirePublishedNodeReadback, requireRuntimeBinding } from "./default-runner-transition.mjs";
 function publicPolicy(host="pull.kodex.works",digest=`sha256:${"b".repeat(64)}`){return{apiVersion:"v1",kind:"ConfigMap",metadata:{name:"policy-next",namespace:"kodex-system",labels:{"app.kubernetes.io/part-of":"kodex","kodex.dev/owner-intent":"true"}},immutable:true,data:{pullRegistryHost:host,promotedPullRepository:`${host}/kodex/roles`,pullCredentialGeneration:"1",trustedRoleBaseDigest:digest,nodeReadbackImage:`${host}/kodex/agent-runner@${digest}`}};}
 const planDefaultRunner=(values,reference,id,policy=publicPolicy())=>createDefaultRunnerPlan(values,reference,id,policy);
@@ -14,6 +16,26 @@ test("план закрыто отклоняет чужой профиль, ра
 test("переход требует опубликованный exact node readback runner",()=>{const policy=publicPolicy();assert.doesNotThrow(()=>requirePublishedNodeReadback(policy,nextRef));policy.data.nodeReadbackImage=oldRef;assert.throws(()=>requirePublishedNodeReadback(policy,nextRef),/NOT_PUBLISHED/);});
 
 test("переход требует заранее переключённый закрытый runtime binding",()=>{const policy=publicPolicy(),binding={apiVersion:"admissionregistration.k8s.io/v1",kind:"ValidatingAdmissionPolicyBinding",metadata:{name:"runtime-role-pod-exact-secret-projection"},spec:{policyName:"runtime-role-pod-exact-secret-projection",validationActions:["Deny"],paramRef:{name:"policy-next",namespace:"kodex-system",parameterNotFoundAction:"Deny"}}};assert.doesNotThrow(()=>requireRuntimeBinding(policy,binding,nextRef));binding.spec.paramRef.name="policy-old";assert.throws(()=>requireRuntimeBinding(policy,binding,nextRef),/NOT_TRANSITIONED/);});
+
+test("default runner проверяет фактическую sandbox-проекцию общим renderer", () => {
+ const source = `import json
+from test_provider_sandbox_profile import fixture
+import provider_sandbox_profile as p
+v=fixture()[:3]
+d=v[0]['data']
+d.update(pullRegistryHost='images.example.invalid',promotedPullRepository='images.example.invalid/kodex/roles',pullCredentialGeneration='1',trustedRoleBaseDigest='sha256:'+'a'*64,nodeReadbackImage='images.example.invalid/kodex/agent-runner@sha256:'+'a'*64)
+d['policySHA256']=p.digest({k:x for k,x in d.items() if k not in ('policySHA256','orchestrationRevision')})
+print(json.dumps([p.transform(v, ''),p.transform(v,p.PROFILE)]))`;
+ const fixtures = JSON.parse(execFileSync('python3', ['-c', source], {cwd:fileURLToPath(new URL('../install',import.meta.url)),encoding:'utf8'}));
+ for (const values of fixtures) {
+  const check = v => requireRuntimeBinding(v[0], v[2], v[0].data.nodeReadbackImage, v);
+  assert.doesNotThrow(() => check(values));
+  for (const mutate of [v=>v[3].data.roleRuntimeContractRevision='99',v=>v[3].data.extra='rejected',v=>v[2].spec.validationActions=['Warn'],v=>v[1].spec.template.metadata.annotations['kodex.dev/provider-sandbox-profile-sha256']='f'.repeat(64),v=>v[0].data.requiredTools='tampered',v=>v[1].spec.template.spec.containers[0].env[0].valueFrom.configMapKeyRef.name='foreign']) {
+   const bad=structuredClone(values);mutate(bad);assert.throws(()=>check(bad),/NOT_TRANSITIONED/);
+  }
+  const missing=values.slice(0,3);assert.throws(()=>check(missing),/NOT_TRANSITIONED/);
+ }
+});
 
 function trustedHotDeployment(name){
  const value=deployment(name);value.metadata.labels["kodex.dev/environment"]="staging";
@@ -73,4 +95,40 @@ test("actual public policy repository связывает old/new defaults; unkno
  assert.throws(()=>planDefaultRunner(changed,policy.data.nodeReadbackImage,"33333333-3333-4333-8333-333333333333",policy),/CURRENT_DEFAULT_RUNNER_INVALID/);
  assert.throws(()=>planDefaultRunner(values,nextRef,"33333333-3333-4333-8333-333333333333",policy),/NOT_PUBLISHED/);
  assert.throws(()=>createDefaultRunnerPlan(values,policy.data.nodeReadbackImage,"33333333-3333-4333-8333-333333333333"),/NOT_PUBLISHED/);
+});
+
+test('portable default runner сохраняет strategy и требует exact UID обоих consumers',async()=>{
+ const {portableRunnerTarget}=await import('./portable-runner-target.mjs');
+ const {fingerprint}=await import('./scoped-release.mjs');
+ const values=['control-plane','runtime-controller'].map(deployment);
+ for(const value of values){delete value.metadata.labels['kodex.dev/local-profile'];value.metadata.labels['kodex.dev/environment']='production';value.metadata.labels['kodex.dev/profile']='web-only';}
+ const uid='55555555-5555-4555-8555-555555555555';
+ const installation={apiVersion:'v1',kind:'ConfigMap',metadata:{name:'kodex-installation-profile',namespace:'kodex-system',uid,labels:{'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/managed-by':'kodex-install'}},data:{'profile.json':'synthetic'}};
+ const profile={schema:'kodex.portable-runner-target/v1',context:'synthetic',clusterUID:uid,namespaceUID:uid,installationUID:uid,installationSHA256:fingerprint(installation.data),resources:values.map(v=>({apiVersion:v.apiVersion,kind:v.kind,name:v.metadata.name,uid:v.metadata.uid}))};
+ const target=portableRunnerTarget(profile,{context:'synthetic',clusterUID:uid,namespaceUID:uid,installation});
+ const plan=createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',publicPolicy(),target);
+ for(const operation of plan.operations)assert.deepEqual(operation.patch.at(-1).value.strategy,values.find(v=>v.metadata.name===operation.name).spec.strategy);
+ values[1].metadata.uid=uid;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',publicPolicy(),target));
+});
+
+test('canonical ConfigMap defaults сохраняют ссылочную конфигурацию и закрыто проверяют источник',()=>{
+ const policy=publicPolicy(),old=publicPolicy('pull.kodex.works',`sha256:${'a'.repeat(64)}`);old.metadata.name='policy-old';
+ const values=['control-plane','runtime-controller'].map(deployment);
+ for(const value of values){
+  const app=value.spec.template.spec.containers[0];
+  for(const entry of app.env){
+   const field=entry.name.endsWith('DEFAULT_ROLE_IMAGE_REFERENCE')?'nodeReadbackImage':entry.name==='CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST'?'trustedRoleBaseDigest':null;
+   if(field){delete entry.value;entry.valueFrom={configMapKeyRef:{name:field==='nodeReadbackImage'?old.metadata.name:policy.metadata.name,key:field}};}
+  }
+ }
+ const plan=createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[old]);
+ for(const op of plan.operations){const entry=op.patch.at(-1).value.template.spec.containers[0].env.find(e=>e.name===op.key);assert.equal(entry.value,undefined);assert.deepEqual(entry.valueFrom,{configMapKeyRef:{name:policy.metadata.name,key:'nodeReadbackImage'}});assert.equal(op.beforeReference,oldRef);}
+ for(const mutate of [
+  app=>app.env[0].valueFrom.configMapKeyRef.optional=true,
+  app=>app.env[0].valueFrom.configMapKeyRef.key='foreign',
+  app=>app.env[0].valueFrom.configMapKeyRef.name='foreign',
+  app=>app.env[0].value='injected',
+  app=>app.env.push(structuredClone(app.env[0])),
+ ]){const changed=structuredClone(values);mutate(changed[0].spec.template.spec.containers[0]);assert.throws(()=>createDefaultRunnerPlan(changed,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[old]),/EXACT_POLICY_CONFIG_REQUIRED/);}
+ const mutable=structuredClone(old);mutable.immutable=false;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[mutable]),/EXACT_POLICY_CONFIG_REQUIRED/);
 });

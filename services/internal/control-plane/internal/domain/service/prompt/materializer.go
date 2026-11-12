@@ -84,6 +84,7 @@ type Snapshot struct {
 // effective capabilities и диагностику; неполные семантические результаты не выдают исполняемый
 // текст и дайджест.
 type Materialization struct {
+	Dependencies                                                                   []Dependency
 	Complete                                                                       bool
 	ContextPin                                                                     entity.PromptContextPin
 	RuntimeDiff                                                                    *RuntimeDiff
@@ -134,11 +135,16 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 	if err != nil {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_SYNTAX_INVALID", Message: "Prompt template syntax is invalid", Line: 1, Column: 1}}
 	}
-	if unknown, position := firstUnknownTemplateField(parsed.Tree.Root, allowedVariables); unknown != "" {
-		line, column := templateLineColumn(templateText, position)
-		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_TEMPLATE_VARIABLE_UNKNOWN", Message: "Prompt template contains an unknown variable", Line: line, Column: column, VariableName: unknown}}
+	analysis := analyzeTemplate(parsed, allowedVariables, validationTemplateData())
+	if analysis.unknown != "" {
+		line, column := templateLineColumn(templateText, analysis.position)
+		code := "PROMPT_TEMPLATE_VARIABLE_UNKNOWN"
+		if analysis.execution {
+			code = "PROMPT_TEMPLATE_EXECUTION_INVALID"
+		}
+		return []Diagnostic{{Severity: "ERROR", Code: code, Message: "Prompt template contains an unsupported expression or exceeds its execution budget", Line: line, Column: column, VariableName: analysis.unknown}}
 	}
-	if _, valid := templateSlots(parsed.Tree.Root); !valid {
+	if _, valid := templateSlots(parsed); !valid {
 		return []Diagnostic{{Severity: "ERROR", Code: "PROMPT_SLOT_INVALID", Message: "Prompt slots require a standalone literal insertion", Line: 1, Column: 1}}
 	}
 	if _, err := executeTemplate(parsed, validationTemplateData()); err != nil {
@@ -154,10 +160,21 @@ func Validate(templateText string, allowedVariables map[string]string) []Diagnos
 // Materialize выбирает семантическое построение только по service revision снимка и использует
 // историческое построение исключительно при отсутствии этой ревизии.
 func Materialize(templateText string, snapshot Snapshot) (Materialization, error) {
+	var result Materialization
+	var err error
 	if snapshot.ServiceTemplateRevision != "" {
-		return materializeSemantic(templateText, snapshot)
+		result, err = materializeSemantic(templateText, snapshot)
+	} else {
+		result, err = materializeLegacy(templateText, snapshot)
 	}
-	return materializeLegacy(templateText, snapshot)
+	if err != nil {
+		return result, err
+	}
+	result.Dependencies, err = templateDependencies(templateText, snapshot)
+	if err != nil {
+		return Materialization{}, err
+	}
+	return result, nil
 }
 
 // materializeLegacy replays historical snapshots with canonical values, separately redacted
@@ -391,87 +408,6 @@ func parseTemplate(templateText string) (*template.Template, error) {
 	return template.New("prompt").Option("missingkey=error").Funcs(template.FuncMap{"slot": validateSlot}).Parse(templateText)
 }
 
-// firstUnknownTemplateField walks template branches in source order and returns the first
-// disallowed variable, item field, function or nested-template use with its parser position.
-// firstUnknownTemplateField обходит ветви шаблона в исходном порядке и возвращает первую
-// запрещённую переменную, поле элемента, функцию либо вложенный template с позицией parser.
-func firstUnknownTemplateField(node parse.Node, allowed map[string]string) (string, parse.Pos) {
-	if node == nil || (reflect.ValueOf(node).Kind() == reflect.Pointer && reflect.ValueOf(node).IsNil()) {
-		return "", 0
-	}
-	switch current := node.(type) {
-	case *parse.ListNode:
-		for _, child := range current.Nodes {
-			if unknown, position := firstUnknownTemplateField(child, allowed); unknown != "" {
-				return unknown, position
-			}
-		}
-	case *parse.ActionNode:
-		return firstUnknownTemplateField(current.Pipe, allowed)
-	case *parse.IfNode:
-		return firstUnknownBranchField(&current.BranchNode, allowed)
-	case *parse.RangeNode:
-		return firstUnknownBranchField(&current.BranchNode, allowed)
-	case *parse.WithNode:
-		return firstUnknownBranchField(&current.BranchNode, allowed)
-	case *parse.TemplateNode:
-		return "template", current.Position()
-	case *parse.PipeNode:
-		for _, command := range current.Cmds {
-			if unknown, position := firstUnknownTemplateField(command, allowed); unknown != "" {
-				return unknown, position
-			}
-		}
-	case *parse.CommandNode:
-		if len(current.Args) > 0 {
-			if function, ok := current.Args[0].(*parse.IdentifierNode); ok && function.Ident == "slot" {
-				if len(current.Args) != 2 {
-					return "slot", current.Position()
-				}
-				name, ok := current.Args[1].(*parse.StringNode)
-				if !ok {
-					return "slot", current.Position()
-				}
-				if _, err := validateSlot(name.Text); err != nil {
-					return "slot", current.Position()
-				}
-			}
-		}
-		for _, argument := range current.Args {
-			if unknown, position := firstUnknownTemplateField(argument, allowed); unknown != "" {
-				return unknown, position
-			}
-		}
-	case *parse.FieldNode:
-		name := strings.Join(current.Ident, ".")
-		if !allowedTemplateField(name, allowed) {
-			return name, current.Position()
-		}
-	case *parse.ChainNode:
-		if unknown, position := firstUnknownTemplateField(current.Node, allowed); unknown != "" {
-			return unknown, position
-		}
-		if name := strings.Join(current.Field, "."); name != "" && !allowedTemplateItemField(name) {
-			return name, current.Position()
-		}
-	case *parse.VariableNode:
-		if len(current.Ident) == 1 {
-			return current.Ident[0], current.Position()
-		}
-		name := strings.Join(current.Ident[1:], ".")
-		if !allowedTemplateItemField(name) {
-			return name, current.Position()
-		}
-	case *parse.IdentifierNode:
-		if !allowedTemplateFunction(current.Ident) {
-			return current.Ident, current.Position()
-		}
-	case *parse.DotNode:
-		return ".", current.Position()
-	}
-	return "", 0
-}
-
 // templateLineColumn converts a one-based parser byte position into one-based line and Unicode
 // column, falling back to the first position for invalid offsets.
 // templateLineColumn преобразует байтовую позицию parser от единицы в строку и Unicode-столбец от
@@ -557,35 +493,6 @@ func allowedTemplateFunction(name string) bool {
 	default:
 		return false
 	}
-}
-
-// firstUnknownBranchField checks the condition, main body and else body in order for the first
-// disallowed template field or operation.
-// firstUnknownBranchField по порядку проверяет условие, основное тело и else на первое запрещённое
-// поле либо операцию шаблона.
-func firstUnknownBranchField(branch *parse.BranchNode, allowed map[string]string) (string, parse.Pos) {
-	for _, node := range []parse.Node{branch.Pipe, branch.List, branch.ElseList} {
-		if unknown, position := firstUnknownTemplateField(node, allowed); unknown != "" {
-			return unknown, position
-		}
-	}
-	return "", 0
-}
-
-// allowedTemplateField accepts catalog names, their namespace prefixes or closed descriptor item
-// fields; it does not prove that a value is available in the current snapshot.
-// allowedTemplateField принимает имена каталога, префиксы их пространств либо закрытые поля
-// элементов дескриптора без подтверждения доступности значения в текущем снимке.
-func allowedTemplateField(name string, allowed map[string]string) bool {
-	if _, ok := allowed[name]; ok {
-		return true
-	}
-	for candidate := range allowed {
-		if strings.HasPrefix(candidate, name+".") {
-			return true
-		}
-	}
-	return allowedTemplateItemField(name)
 }
 
 // allowedTemplateItemField accepts only the fixed file/tool descriptor field names usable in
@@ -771,6 +678,9 @@ func redactTemplateData(value any, path string) any {
 // executeTemplate исполняет разобранный шаблон в ограниченный буфер prompt, отбрасывая частичный
 // вывод при ошибке исполнения либо записи.
 func executeTemplate(parsed *template.Template, data map[string]any) (string, error) {
+	if analyzeTemplate(parsed, Catalog(), data).unknown != "" {
+		return "", ErrInvalid
+	}
 	var output boundedPromptBuffer
 	if err := parsed.Execute(&output, data); err != nil {
 		return "", err

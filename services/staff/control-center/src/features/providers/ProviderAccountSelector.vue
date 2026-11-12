@@ -19,7 +19,6 @@ import {
   normalizeProviderAccountCandidates,
   type ProviderAccount,
   type ProviderAccountCandidate,
-  type ProviderDefinitionKey,
   type ProviderPolicyMode,
 } from "./model";
 
@@ -52,8 +51,9 @@ function current(account: ProviderAccount): boolean {
   return hasCurrentUsage(account, props.usageContext, freshness.value);
 }
 const definitionKey = computed(() =>
-  props.definitionKey === "openai-codex" && props.usageContext.runtimeProfileRef
-    ? (props.definitionKey as ProviderDefinitionKey)
+  /^[a-z][a-z0-9-]{0,95}$/.test(props.definitionKey) &&
+  props.usageContext.runtimeProfileRef
+    ? props.definitionKey
     : undefined,
 );
 const selectedRefs = computed(() =>
@@ -332,7 +332,7 @@ function changeWeight(accountRef: string, event: Event): void {
                 item.description || $t("providers.externalAccountPending")
               }}</small
               ><small
-                >OpenAI Codex ·
+                >{{ item.account.definitionKey }} ·
                 {{
                   item.account.authorization
                     ? $t(

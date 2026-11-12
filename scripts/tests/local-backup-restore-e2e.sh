@@ -42,7 +42,7 @@ if [[ -n "$requested_backup_id" && ! "$requested_backup_id" =~ ^[0-9]{8}T[0-9]{6
   fail 'requested verified backup identifier is invalid'
 fi
 if [[ -n "$expected_object_key" || -n "$expected_object_file" ]]; then
-  [[ "$expected_object_key" =~ ^session-archive/v1/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$ ]] ||
+  [[ "$expected_object_key" =~ ^session-archive/v3/org_[a-z0-9]+/prj_[a-z0-9]+/ses_[a-z0-9]+/g[1-9][0-9]*/sat_[a-z0-9]+-a[1-9][0-9]*\.tar$ ]] ||
     fail 'expected session archive object key is not canonical'
   [[ "$expected_object_file" == /* && -f "$expected_object_file" && -s "$expected_object_file" &&
     ! -L "$expected_object_file" ]] || fail 'expected session archive object file is absent or unsafe'

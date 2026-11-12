@@ -18,7 +18,7 @@ root = pathlib.Path(os.environ["RUNNER_FIXTURE"])
 name, args = pathlib.Path(sys.argv[0]).name, sys.argv[1:]
 with (root / "calls.jsonl").open("a") as stream:
     stream.write(json.dumps({"name": name, "args": args}) + "\n")
-if name == "docker" and args == ["buildx", "version"]:
+if name == "docker" and (args == ["buildx", "version"] or args[:2] == ["buildx", "inspect"]):
     sys.exit(0)
 if name == "ensure-local-buildx-builder.sh":
     sys.exit(0)
@@ -124,6 +124,19 @@ class BuildLocalRunnerProfile(unittest.TestCase):
                              (c["name"] == "docker" and c["args"][:2] == ["buildx", "build"])
                              for c in self.calls()))
         return result
+
+    def test_build_only_qualifies_full_oci_without_import_or_installed_pin(self):
+        result = self.run_builder('--build-only', '--image-profile', 'full')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.state / 'agent-runner-image').exists())
+        self.assertFalse(any(call['name'] == 'import-local-image.sh' for call in self.calls()))
+        self.assertEqual(len(list((self.state / 'cache').glob('*.provenance.json'))), 1)
+        self.assertIn('LOCAL_OCI_BUILD_ONLY', result.stdout)
+        self.assertNotIn('image ready', result.stdout)
+
+    def test_duplicate_build_only_stops_before_tools(self):
+        self.assertNotEqual(self.run_builder('--build-only', '--build-only').returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_reuse_cache_imports_existing_exact_full_archive_without_build_or_cache_writes(self):
         cache, manifest, _previous = self.reuse_fixture()
@@ -301,7 +314,7 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         required = ("bash", "curl", "git", "gh", "jq", "yq", "ripgrep", "make", "just", "go", "goimports", "gofumpt",
                            "golangci-lint", "staticcheck", "goose", "sqlc", "buf", "protoc", "protoc-gen-go", "protoc-gen-go-grpc",
                            "grpcurl", "mockgen", "oapi-codegen", "node", "npm", "pnpm", "yarn", "typescript", "eslint", "prettier",
-                           "vite", "vue-tsc", "vitest", "playwright", "chromium", "playwright-mcp", "wscat", "codex")
+                           "vite", "vue-tsc", "vitest", "playwright", "chromium", "playwright-mcp", "wscat", "opencode")
         probes = (ROOT / "libs/go/runtimecontract/image_inventory.go").read_text().split('return []ImageToolProbe{', 1)[1].split('optional(probe(', 1)[0]
         observed = re.findall(r'probe\("([^"]+)"|Name: "([^"]+)"', probes)
         self.assertEqual(tuple(left or right for left, right in observed), required)
@@ -309,11 +322,14 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         for executable in required:
             self.assertIn(executable, dockerfile + manifest)
 
-    def test_local_codex_default_remains_in_its_own_stage(self):
+    def test_only_opencode_runtime_is_built(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()
-        local = dockerfile.split(" AS local-codex-cli\n", 1)[1].split("\nFROM ", 1)[0]
-        self.assertIn("ARG KODEX_CODEX_PACKAGE=@openai/codex@0.160.0", local)
-        self.assertLess(local.index("ARG KODEX_CODEX_PACKAGE="), local.index("RUN "))
+        manifest = (ROOT / "services/jobs/agent-runner/npm-toolchain/package.json").read_text()
+        self.assertNotIn("@openai/codex", dockerfile + manifest)
+        self.assertNotIn("AS local-codex-cli", dockerfile)
+        self.assertNotIn("/usr/local/bin/codex", dockerfile)
+        self.assertIn("AS opencode-binary", dockerfile)
+        self.assertIn("/out/opencode /usr/local/bin/opencode", dockerfile)
 
     def test_security_refresh_and_native_browser_are_source_pinned_before_runner(self):
         full = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text().split(" AS full-runtime\n", 1)[1]
@@ -427,7 +443,8 @@ return {newPage:async()=>({setContent:async(value)=>{if(value!=="<title>kodex</t
         source_copy = full.index('COPY --from=runner-build ')
         self.assertGreater(source_copy, installation_end)
         early_copies = re.findall(r'(?m)^COPY .*?--from=([^ ]+)', full[:installation_end])
-        self.assertEqual(early_copies, ["toolchain-build", "platform-cli-build", "build"])
+        self.assertEqual(early_copies, ["opencode-binary", "toolchain-build", "platform-cli-build", "build"])
+        self.assertNotRegex(stages["opencode-binary"][1], r'(?m)^(?:COPY|ADD) ')
 
     def test_full_guard_stages_exact_runner_after_prepare_before_install(self):
         dockerfile = (ROOT / "services/jobs/agent-runner/Dockerfile").read_text()

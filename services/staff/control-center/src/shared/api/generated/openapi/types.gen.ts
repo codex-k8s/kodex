@@ -1480,7 +1480,7 @@ export type ConfigOverlayDiagnostic = {
 };
 
 export type ConfigOverlayField = {
-    key: 'model_reasoning_effort' | 'web_search' | 'personality' | 'allow_login_shell' | 'history.persistence';
+    key: 'model_reasoning_effort' | 'context.auto_compaction' | 'context.prune' | 'cache.optimization' | 'cache.reuse_scope' | 'cache.no_reuse' | 'cache.no_store' | 'cache.required';
     valueType: 'string' | 'boolean';
     allowedValues: Array<string>;
     defaultValue: string;
@@ -1494,6 +1494,9 @@ export type ConfigOverlaySchema = {
     digest: string;
     maximumBytes: 65536;
     fields: [
+        ConfigOverlayField,
+        ConfigOverlayField,
+        ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
@@ -2166,12 +2169,16 @@ export type ProviderModelCatalogStatus = {
     state: 'PENDING' | 'READY' | 'FAILED' | 'EXPIRED';
     observedAt?: Timestamp;
     expiresAt?: Timestamp;
-    source?: 'REMOTE_API' | 'REMOTE_CODEX';
+    source?: 'REMOTE_API';
     failure?: 'NONE' | 'UNAVAILABLE' | 'UNVERIFIED_SOURCE' | 'AUTHORIZATION_REJECTED';
 };
 
 export type ProviderDefinition = {
-    key: 'openai-codex';
+    managedBy?: 'git';
+    sourceRevision?: string;
+    engineVersion?: '1.19.5';
+    runtimePolicies?: Array<ModelExecutionPolicy>;
+    key: string;
     name: string;
     description: string;
     authorizationMethods: Array<'DEVICE_CODE' | 'API_KEY'>;
@@ -2181,6 +2188,52 @@ export type ProviderDefinition = {
     available: boolean;
     ready: boolean;
     readinessBlockers: Array<string>;
+};
+
+export type ModelContextPolicy = {
+    revision: 1;
+    autoCompaction: boolean;
+    prune: boolean;
+};
+
+export type ModelCacheQualification = {
+    mechanism: 'NONE' | 'VLLM_CACHE_SALT' | 'OPENAI_PROMPT_CACHE_KEY' | 'ANTHROPIC_EPHEMERAL';
+    status: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    source: 'NONE' | 'DECLARED' | 'OBSERVED';
+    backendVersion: string;
+    evidenceSha256: string;
+    routeSha256: string;
+};
+
+export type ModelCachePolicy = {
+    revision: 1;
+    optimization: 'PROVIDER_DEFAULT' | 'NO_HINTS' | 'OPTIMIZE';
+    reuseScope: 'PROJECT' | 'INITIATOR' | 'SESSION';
+    noReuse: boolean;
+    noStore: boolean;
+    required: boolean;
+    qualification: ModelCacheQualification;
+};
+
+export type ModelCacheResolution = {
+    requested?: ModelCachePolicy;
+    mechanism: 'NONE' | 'VLLM_CACHE_SALT' | 'OPENAI_PROMPT_CACHE_KEY' | 'ANTHROPIC_EPHEMERAL';
+    reuseScope: 'PROJECT' | 'INITIATOR' | 'SESSION' | 'PROVIDER_BOUNDARY' | 'PROVIDER_ACCOUNT_ROUTING_KEY' | 'PROVIDER_ACCOUNT';
+    status: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    reason: string;
+    noReuse: boolean;
+    noStore: boolean;
+    proxyResponseCache: 'NOT_APPLICABLE' | 'BYPASS_READ_WRITE' | 'UNQUALIFIED';
+    physicalIsolation: 'NOT_PROVEN';
+};
+
+export type ModelExecutionPolicy = {
+    modelId: string;
+    contextWindowTokens: number;
+    maximumOutputTokens: number;
+    context: ModelContextPolicy;
+    cache: ModelCacheResolution;
+    eligible: boolean;
 };
 
 export type ProviderDefinitionPage = {
@@ -2326,7 +2379,17 @@ export type PromptTemplateValidation = {
     contextPin?: PromptContextPin;
 };
 
+export type PromptTemplateDependency = {
+    templateDigest: string;
+    path: string;
+    stability: 'STATIC_LITERAL' | 'VERSION_PINNED' | 'TURN_LIVE' | 'UNKNOWN';
+    sensitivity: 'PRIVATE';
+    trustScope: 'OWNER_TEMPLATE' | 'DATA_ONLY';
+    sourceDigest?: string;
+};
+
 export type PromptTemplatePreview = {
+    dependencies?: Array<PromptTemplateDependency>;
     safePreview: string;
     fullMaterializedPrompt?: string;
     diagnostics: Array<PromptTemplateDiagnostic>;
@@ -3401,6 +3464,7 @@ export type RunEvent = {
      * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
      */
     integrationInvocationRef?: string;
+    modelMeasurement?: ModelMeasurement;
     execution?: RunEventExecution;
     message?: RunMessage;
     occurredAt: Timestamp;
@@ -3412,6 +3476,25 @@ export type RunEvent = {
     artifact?: Artifact;
     incident?: Incident;
 };
+
+export type ModelMeasurement = {
+    ref: string;
+    source: ModelMeasurementSource;
+    phase: ModelMeasurementPhase;
+    outcome: ModelMeasurementOutcome;
+    completeness: ModelMeasurementCompleteness;
+    durationMs?: number;
+    ttftMs?: number;
+    usage?: TokenUsage;
+};
+
+export type ModelMeasurementSource = 'HTTP_REQUEST' | 'NATIVE_STEP';
+
+export type ModelMeasurementPhase = 'NORMAL' | 'COMPACTION' | 'AUXILIARY';
+
+export type ModelMeasurementOutcome = 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export type ModelMeasurementCompleteness = 'COMPLETE' | 'PARTIAL' | 'UNKNOWN';
 
 export type RunEventExecution = {
     runRef: OpaqueRef;
@@ -3468,7 +3551,7 @@ export type RunGraph = {
  */
 export type RunSessionReadiness = {
     sessionRef: OpaqueRef;
-    storageState: 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
+    storageState: 'INITIALIZING' | 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
     reason: 'STORAGE_NOT_LIVE' | 'SESSION_ACCOUNT_UNAVAILABLE' | 'EARLIER_EXECUTION' | 'NO_SESSION_BLOCKER';
     latestArchiveTask?: RunSessionArchiveTask;
 };
@@ -4078,7 +4161,7 @@ export type ProviderAuthorization = {
 export type ProviderAccount = {
     ref: OpaqueRef;
     version: number;
-    definitionKey: 'openai-codex';
+    definitionKey: string;
     name: string;
     externalAccountMasked: string;
     /**
@@ -4277,7 +4360,7 @@ export type ProviderAccountPage = {
 };
 
 export type ProviderAccountCreateInput = {
-    definitionKey: 'openai-codex';
+    definitionKey: string;
     name: string;
 };
 
@@ -5097,6 +5180,7 @@ export type RunEventWritable = {
      * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
      */
     integrationInvocationRef?: string;
+    modelMeasurement?: ModelMeasurement;
     execution?: RunEventExecution;
     message?: RunMessage;
     occurredAt: Timestamp;
@@ -7490,7 +7574,7 @@ export type ListProviderAccountsData = {
         usageModel?: string;
         usageReasoningEffort?: string;
         state?: 'PENDING_AUTHORIZATION' | 'AUTHORIZED' | 'REAUTHORIZATION_REQUIRED' | 'REVOKED' | 'DISABLED' | 'DELETING' | 'DELETED';
-        definitionKey?: 'openai-codex';
+        definitionKey?: string;
         query?: string;
         pageSize?: number;
         pageToken?: string;
@@ -7858,7 +7942,7 @@ export type RefreshProviderAccountAuthorizationResponses = {
 
 export type RefreshProviderAccountAuthorizationResponse = RefreshProviderAccountAuthorizationResponses[keyof RefreshProviderAccountAuthorizationResponses];
 
-export type VerifyProviderAccountDeviceAuthorizationData = {
+export type VerifyProviderAccountAuthorizationData = {
     body?: never;
     headers: {
         'If-Match': string;
@@ -7869,26 +7953,26 @@ export type VerifyProviderAccountDeviceAuthorizationData = {
         providerAccountRef: OpaqueRef;
     };
     query?: never;
-    url: '/api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification';
+    url: '/api/v1/provider-accounts/{providerAccountRef}/verification';
 };
 
-export type VerifyProviderAccountDeviceAuthorizationErrors = {
+export type VerifyProviderAccountAuthorizationErrors = {
     /**
      * Безопасная ошибка API
      */
     default: Problem;
 };
 
-export type VerifyProviderAccountDeviceAuthorizationError = VerifyProviderAccountDeviceAuthorizationErrors[keyof VerifyProviderAccountDeviceAuthorizationErrors];
+export type VerifyProviderAccountAuthorizationError = VerifyProviderAccountAuthorizationErrors[keyof VerifyProviderAccountAuthorizationErrors];
 
-export type VerifyProviderAccountDeviceAuthorizationResponses = {
+export type VerifyProviderAccountAuthorizationResponses = {
     /**
-     * Device authorization проверена авторитетным provider adapter
+     * Создана или прочитана проверка текущего API-подключения; результат приходит через account readback
      */
     200: ProviderAccount;
 };
 
-export type VerifyProviderAccountDeviceAuthorizationResponse = VerifyProviderAccountDeviceAuthorizationResponses[keyof VerifyProviderAccountDeviceAuthorizationResponses];
+export type VerifyProviderAccountAuthorizationResponse = VerifyProviderAccountAuthorizationResponses[keyof VerifyProviderAccountAuthorizationResponses];
 
 export type ReauthorizeProviderAccountDeviceCodeData = {
     body?: never;

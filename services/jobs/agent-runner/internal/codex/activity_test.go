@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -16,148 +15,6 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
-
-// TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce verifies immediate completed-message
-// and two-revision tool projection, snapshot replay suppression and exclusion of raw commands/reasoning.
-// Exactly-once here concerns the local projection, not a distributed delivery guarantee.
-// TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce проверяет немедленную публикацию готовых
-// сообщений и двух ревизий инструмента, подавление повторного снимка и сокрытие команд/рассуждений.
-// Однократность относится к локальной проекции, а не распределённой гарантии доставки.
-func TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce(t *testing.T) {
-	state := newProtocolState(testThreadID)
-	state.threadID, state.turnID, state.workspaceRoot = testThreadID, testTurnID, "/workspace"
-	var activities []runtimecontract.RuntimeActivity
-	state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
-		activities = append(activities, activity)
-		return nil
-	}
-	commentary := raw(`{"id":"commentary-one","text":"Проверяю состояние","phase":"commentary","type":"agentMessage"}`)
-	if err := state.consumeItem(commentary, false, 10); err != nil || len(activities) != 0 {
-		t.Fatal("started message was published")
-	}
-	if err := state.consumeItem(commentary, true, 20); err != nil || len(activities) != 1 || activities[0].Message.Phase != runtimecontract.RuntimeMessageCommentary || state.terminals != 0 {
-		t.Fatal("commentary did not stream before turn completion")
-	}
-	started := raw(`{"command":"SECRET_COMMAND","commandActions":[],"cwd":"/workspace","exitCode":null,"id":"native-one","status":"inProgress","type":"commandExecution"}`)
-	if err := state.consumeItem(started, false, 30); err != nil {
-		t.Fatal(err)
-	}
-	if len(activities) != 2 || activities[1].ToolCall.State != runtimecontract.NativeToolStateRunning || activities[1].ToolCall.Revision != 1 || activities[1].ToolCall.DurationMS != 0 || activities[1].ToolCall.SafeResult != "" {
-		t.Fatal("native start did not stream")
-	}
-	completed := raw(`{"command":"SECRET_COMMAND","commandActions":[],"cwd":"/workspace","exitCode":0,"id":"native-one","status":"completed","type":"commandExecution"}`)
-	if err := state.consumeItem(completed, true, 80); err != nil {
-		t.Fatal(err)
-	}
-	if len(activities) != 3 || activities[2].ToolCall.Revision != 2 || activities[2].ToolCall.State != runtimecontract.NativeToolStateSucceeded || activities[2].ToolCall.DurationMS != 50 {
-		t.Fatal("native completion did not stream")
-	}
-	final := raw(`{"id":"final-one","text":"Готово","phase":"final_answer","type":"agentMessage"}`)
-	if err := state.consumeItem(final, true, 90); err != nil || len(activities) != 4 || activities[3].Message.Phase != runtimecontract.RuntimeMessageFinal {
-		t.Fatal("final did not stream")
-	}
-	for _, item := range []json.RawMessage{commentary, completed, final} {
-		if err := state.consumeItem(item, true, 0); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if len(activities) != 4 {
-		t.Fatal("authoritative snapshot duplicated activity")
-	}
-	encoded, _ := json.Marshal(activities)
-	if bytes.Contains(encoded, []byte("SECRET_COMMAND")) {
-		t.Fatal("native raw command escaped projection")
-	}
-	if err := state.consumeItem(raw(`{"id":"reasoning-one","summary":["SECRET_REASONING"],"content":[],"type":"reasoning"}`), true, 0); err != nil {
-		t.Fatal(err)
-	}
-	if len(activities) != 4 {
-		t.Fatal("reasoning was published")
-	}
-}
-
-// TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion keeps distinct final-phase messages in history
-// without treating them as turn completion; only the authoritative terminal selects or discards the final text.
-// TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion сохраняет разные сообщения финальной фазы в истории
-// без завершения хода; только авторитетный итог выбирает либо отбрасывает окончательный текст.
-func TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion(t *testing.T) {
-	for _, status := range []string{"completed", "failed", "interrupted"} {
-		t.Run(status, func(t *testing.T) {
-			state := newProtocolState(testThreadID)
-			state.threadID, state.turnID, state.workspaceRoot = testThreadID, testTurnID, "/workspace/work"
-			state.turnStarted = 1
-			var activities []runtimecontract.RuntimeActivity
-			state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
-				activities = append(activities, activity)
-				return nil
-			}
-			question := raw(`{"id":"final-question","text":"Какой профиль используется?","phase":"final_answer","type":"agentMessage"}`)
-			commentary := raw(`{"id":"commentary-after-question","text":"Сохраняю проверенный результат","phase":"commentary","type":"agentMessage"}`)
-			answer := raw(`{"id":"final-result","text":"Итоговый результат","phase":"final_answer","type":"agentMessage"}`)
-			for _, item := range []json.RawMessage{question, commentary, answer, question, answer} {
-				if err := state.consumeItem(item, true, 10); err != nil {
-					t.Fatalf("valid distinct message or exact replay rejected: %v", err)
-				}
-			}
-			if len(activities) != 3 || state.terminals != 0 || state.result.Outcome != "" || state.result.FinalMessage != "" || state.finalID != "final-result" {
-				t.Fatal("message phase completed the turn, replay replaced the result, or history was lost")
-			}
-			if activities[0].Message.Phase != runtimecontract.RuntimeMessageFinal || activities[1].Message.Phase != runtimecontract.RuntimeMessageCommentary || activities[2].Message.Phase != runtimecontract.RuntimeMessageFinal {
-				t.Fatal("native message phases changed")
-			}
-			mutated := raw(`{"id":"final-question","text":"Изменённый текст","phase":"final_answer","type":"agentMessage"}`)
-			if err := state.consumeItem(mutated, true, 20); err == nil || len(activities) != 3 || state.finalID != "final-result" {
-				t.Fatal("changed completed item accepted")
-			}
-			errorJSON := "null"
-			if status == "failed" {
-				errorJSON = `{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}}}`
-			}
-			terminal := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` + testTurnID + `","items":[` + string(question) + `,` + string(commentary) + `,` + string(answer) + `],"status":"` + status + `","error":` + errorJSON + `}}`)
-			if err := state.notification("turn/completed", terminal); err != nil || len(activities) != 3 || state.terminals != 1 {
-				t.Fatalf("authoritative turn completion rejected or replayed: %v", err)
-			}
-			if status == "completed" && (state.result.Outcome != "SUCCEEDED" || state.result.FinalMessage != "Итоговый результат") {
-				t.Fatal("last final answer was not selected")
-			}
-			if status == "failed" && (state.result.Outcome != "FAILED" || state.result.FinalMessage != "" || state.result.FailureCode != "provider_transport_failure") {
-				t.Fatal("message converted failed provider turn to success")
-			}
-			if status == "interrupted" && (state.result.Outcome != "FAILED" || state.result.FinalMessage != "" || state.result.FailureCode != "provider_interrupted") {
-				t.Fatal("message converted interrupted provider turn to success")
-			}
-		})
-	}
-}
-
-// TestProtocolActivityBoundaryAndStickyDeliveryFailure checks callback-error redaction and sticky failure,
-// oversize rejection and omission of messages with an absent phase rather than guessing one.
-// TestProtocolActivityBoundaryAndStickyDeliveryFailure проверяет сокрытие и сохранение отказа callback,
-// отказ слишком большому сообщению и пропуск отсутствующей фазы без её угадывания.
-func TestProtocolActivityBoundaryAndStickyDeliveryFailure(t *testing.T) {
-	state := newProtocolState(testThreadID)
-	calls := 0
-	state.onActivity = func(runtimecontract.RuntimeActivity) error { calls++; return errors.New("PRIVATE_CALLBACK_DIAGNOSTIC") }
-	item := raw(`{"id":"message-one","text":"safe","phase":"commentary","type":"agentMessage"}`)
-	if err := state.consumeItem(item, true, 0); err == nil || strings.Contains(err.Error(), "PRIVATE") {
-		t.Fatal("callback failure was not safely rejected")
-	}
-	if err := state.publishActivity(runtimecontract.RuntimeActivity{Message: &runtimecontract.RuntimeAgentMessage{ItemID: "message-two", Phase: "COMMENTARY", Revision: 1, Text: "safe"}}); err == nil || calls != 1 {
-		t.Fatal("delivery continued after failure")
-	}
-	state = newProtocolState(testThreadID)
-	state.onActivity = func(runtimecontract.RuntimeActivity) error { calls++; return nil }
-	large, _ := json.Marshal(map[string]any{"id": "large", "text": strings.Repeat("x", runtimecontract.MaximumRuntimeMessageBytes+1), "phase": "commentary", "type": "agentMessage"})
-	if err := state.consumeItem(large, true, 0); err == nil {
-		t.Fatal("oversized public message accepted")
-	}
-	if err := state.consumeItem(raw(`{"id":"missing-phase","text":"safe","type":"agentMessage"}`), true, 0); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 1 {
-		t.Fatal("unknown phase was guessed")
-	}
-}
 
 // TestBrokerStreamDeliversActivityBeforeExactTerminal uses a gated pipe to prove activity arrives before
 // completion and cannot invent it; the later failure must preserve the measured token usage.
@@ -323,38 +180,6 @@ func TestBrokerUDSCancelInterruptsPeerAndPreservesReadGrace(t *testing.T) {
 		t.Fatal("cancel closed the usage delivery path")
 	}
 	if err := <-written; err != nil {
-		t.Fatal(err)
-	}
-}
-
-// TestAppServerWaitTerminalStreamsNotificationBeforeTerminal drives the in-process event channel and
-// requires notification delivery before turn/completed, without launching an external app server.
-// TestAppServerWaitTerminalStreamsNotificationBeforeTerminal подаёт события через канал внутри процесса
-// и требует доставки сообщения до turn/completed без запуска внешнего app server.
-func TestAppServerWaitTerminalStreamsNotificationBeforeTerminal(t *testing.T) {
-	state := newProtocolState(testThreadID)
-	state.threadID, state.turnID, state.turnStarted = testThreadID, testTurnID, 1
-	observed := make(chan struct{}, 1)
-	state.onActivity = func(runtimecontract.RuntimeActivity) error { observed <- struct{}{}; return nil }
-	events := make(chan streamEvent)
-	server := &appServer{messages: events}
-	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- server.waitTerminal(ctx, state) }()
-	events <- streamEvent{message: wireMessage{kind: messageNotification, method: "item/completed", payload: raw(`{"completedAtMs":1,"item":{"id":"final-live","text":"safe","phase":"final_answer","type":"agentMessage"},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `"}`)}}
-	select {
-	case <-observed:
-	case <-ctx.Done():
-		t.Fatal("process notification did not stream")
-	}
-	select {
-	case <-done:
-		t.Fatal("message invented terminal")
-	default:
-	}
-	events <- streamEvent{message: wireMessage{kind: messageNotification, method: "turn/completed", payload: raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` + testTurnID + `","items":[],"status":"completed"}}`)}}
-	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
 }

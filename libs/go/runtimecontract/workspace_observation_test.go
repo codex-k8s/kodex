@@ -119,7 +119,7 @@ func TestWorkspaceOwnerAcknowledgementIsClosedAndSecretFree(t *testing.T) {
 // Closed BLOCKED causes не содержат arbitrary errors и не доказывают остановку отсутствующего Pod.
 func TestWorkspaceV2RequiresPinnedRoleABIAndClosedBlockCauses(t *testing.T) {
 	_, input, binding := workspaceQuiescenceFixture()
-	for _, revision := range []uint64{0, 1, 3, 5} {
+	for _, revision := range []uint64{0, 1, 3, 4, 6} {
 		input.RoleRuntimeContractRevision = revision
 		if binding.ValidateForInput(input) == nil {
 			t.Fatal("unsupported role ABI accepted V2 work")

@@ -64,6 +64,17 @@ func (repository *Repository) ListProviderDefinitions(ctx context.Context, princ
 		if json.Unmarshal(capabilities, &capabilityMap) != nil {
 			return nil, "", errs.ErrUnavailable
 		}
+		if profile := capabilityMap["modelProvider"]; profile != nil {
+			raw, encodeErr := json.Marshal(profile)
+			if encodeErr != nil {
+				return nil, "", errs.ErrUnavailable
+			}
+			config, decodeErr := runtimecontract.DecodeModelProviderConfiguration(raw)
+			if decodeErr != nil || config.DefinitionKey() != item.Key {
+				return nil, "", errs.ErrUnavailable
+			}
+			item.ModelProvider = &config
+		}
 		item.Description = item.Name
 		item.AuthorizationMethods = []string{"API_KEY"}
 		if enabled, _ := capabilityMap["deviceAuthorization"].(bool); enabled {
@@ -677,7 +688,7 @@ func providerAccountActions(item entity.ProviderAccount, canManage, canAuthorize
 	}
 	switch item.State {
 	case "AUTHORIZED":
-		if canAuthorize && item.Authorization != nil && item.Authorization.Method == "DEVICE_CODE" {
+		if canAuthorize && (item.Authorization == nil || item.Authorization.Method == "API_KEY") {
 			actions = append(actions, "CONFIGURE_CREDENTIAL")
 			if item.Verification == nil || item.Verification.State != "PENDING" {
 				actions = append(actions, "REFRESH_AUTHORIZATION")

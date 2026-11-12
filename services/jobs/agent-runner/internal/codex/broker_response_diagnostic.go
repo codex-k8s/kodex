@@ -72,7 +72,7 @@ const (
 	brokerResponseActivityFailed brokerResponseFailureCategory = "ACTIVITY_DELIVERY"
 	// brokerResponseFailureMessage is the fixed Error string for every typed response failure, deliberately excluding category inputs and wrapped cause text.
 	// brokerResponseFailureMessage — фиксированная строка Error всех typed response failures, намеренно исключающая category inputs и wrapped cause text.
-	brokerResponseFailureMessage = "Codex provider broker response failed"
+	brokerResponseFailureMessage = "OpenCode provider broker response failed"
 )
 
 // brokerResponseFailure privately stores category and original cause so sentinel matching survives, while its Error and default JSON surface do not serialize that cause. Consumers must use the closed classifier for logging rather than unwrapping private errors.

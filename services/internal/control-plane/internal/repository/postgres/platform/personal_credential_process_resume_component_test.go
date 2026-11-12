@@ -100,7 +100,7 @@ func personalProcessReceiptHash(t *testing.T, ctx context.Context, repository *R
 // Проверяются transaction/identity, а не реальные байты native rollout либо объекта.
 func completePersonalProcessTurn(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, state personalProcessResumeState) {
 	t.Helper()
-	result, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "personal-process-turn-" + state.Attempt}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic personal process result", Usage: turnUsageFixture(), CodexSessionID: state.NativeSessionID, ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/11/07/rollout-2026-11-07T00-00-00-" + state.NativeSessionID + ".jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128}})
+	result, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "personal-process-turn-" + state.Attempt}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic personal process result", Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture(state.NativeSessionID, 1, strings.Repeat("a", 64), 128)}})
 	if err != nil || result.Run == nil || result.Run.State != "SUCCEEDED" {
 		t.Fatal("complete process-resume turn", err)
 	}
@@ -195,7 +195,7 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 		t.Fatal("process reconstruction changed original identity or successful receipt")
 	}
 	lease := claimComponentExecution(t, ctx, service, worker, state.RunRef, "personal-process-child-"+state.Attempt)
-	if stringMap(lease, "sessionRef") != state.SessionRef || (stringMap(lease, "codexSessionID") == state.NativeSessionID) != state.ExpectNative || !state.ExpectNative && stringMap(lease, "codexSessionID") != "" {
+	if stringMap(lease, "sessionRef") != state.SessionRef || (stringMap(lease, "nativeSessionID") == state.NativeSessionID) != state.ExpectNative || !state.ExpectNative && stringMap(lease, "nativeSessionID") != "" {
 		var previousJSON, currentJSON []byte
 		if err := pool.QueryRow(ctx, `SELECT revision.safe_snapshot FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id JOIN control_plane.runtime_revisions revision ON revision.id=storage.runtime_revision_id WHERE session.ref=$1`, state.SessionRef).Scan(&previousJSON); err != nil {
 			t.Fatal("read prior synthetic compatibility snapshot", err)
@@ -207,9 +207,9 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 		if json.Unmarshal(previousJSON, &previous) != nil || json.Unmarshal(currentJSON, &current) != nil {
 			t.Fatal("decode synthetic compatibility snapshots")
 		}
-		_, previousMCPError := runtimeSessionMCPDependencies(previous)
-		_, currentMCPError := runtimeSessionMCPDependencies(current)
-		t.Log("synthetic compatibility", runtimeSessionResumeCompatible(previous, current), "MCP validity", previousMCPError == nil, currentMCPError == nil, "session match", stringMap(lease, "sessionRef") == state.SessionRef, "native match", stringMap(lease, "codexSessionID") == state.NativeSessionID)
+		_, previousMCPError := managedMCPInputFromOwnerSnapshot(previousJSON)
+		_, currentMCPError := managedMCPInputFromOwnerSnapshot(currentJSON)
+		t.Log("synthetic compatibility", nativeSessionResumeCompatible(previous, current), "MCP validity", previousMCPError == nil, currentMCPError == nil, "session match", stringMap(lease, "sessionRef") == state.SessionRef, "native match", stringMap(lease, "nativeSessionID") == state.NativeSessionID)
 		for key, value := range previous {
 			before, _ := json.Marshal(value)
 			after, _ := json.Marshal(current[key])

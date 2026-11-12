@@ -188,7 +188,7 @@ func loadConfig() (Config, error) {
 		NATSStream:                      "CONTROL_PLANE",
 		NATSReplicas:                    3,
 		NATSMaxBytes:                    32 << 30,
-		DefaultRuntimeProvider:          "openai-codex",
+		DefaultRuntimeProvider:          "opencode",
 		DefaultRuntimeModel:             "gpt-6.1-sol",
 		IntegrationCredentialNamespace:  "kodex-system",
 		IntegrationCredentialSecretName: "kodex-integration-credentials",
@@ -293,7 +293,7 @@ func (config Config) validate() error {
 		config.PostgresMaxConnections < 2 || config.PostgresMaxConnections > 64 ||
 		config.NATSStream != "CONTROL_PLANE" || config.NATSReplicas < 1 || config.NATSReplicas > 5 || config.NATSMaxBytes < 256<<20 ||
 		config.InstanceID == "" || len(config.InstanceID) > 128 ||
-		config.DefaultRuntimeProvider != "openai-codex" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
+		config.DefaultRuntimeProvider != "opencode" || !validRuntimeIdentifier(config.DefaultRuntimeModel) ||
 		!validBootstrapProviderCredentialConfig(config) ||
 		config.IntegrationCredentialNamespace != "kodex-system" || config.IntegrationCredentialSecretName != "kodex-integration-credentials" ||
 		!validDNSLabel(config.RuntimeSecretNamespace) ||

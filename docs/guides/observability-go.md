@@ -4,8 +4,8 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.7
-updated: 2026-10-26
+version: 1.1.10
+updated: 2026-11-12
 ---
 
 # Наблюдаемость Go-сервисов
@@ -145,6 +145,14 @@ exporters остаётся рабочим; enabled-профиль сохраня
 метрики и закрытые локальные технические события, которые нельзя обобщить.
 
 ## Метрики
+
+В потоковом адаптере отметка завершения сообщения не заменяет получение его
+измерений. Upstream может сериализовать ранее поставленное в очередь событие
+после изменения исходного объекта. Наблюдатель согласует terminal и usage по
+точному сообщению, дедуплицирует повторные части в ограниченном окне и дожидается
+измерений финального сообщения до закрытия потока. История целиком в памяти не
+накапливается; неопределённый исход не превращается в успешное завершение.
+Регрессия закреплённого OpenCode: [#2108](../operations/opencode-native-sessions-2108.md).
 
 Обязательные технические семейства:
 
@@ -364,3 +372,31 @@ summary до normal cleanup, а private UID/tuple остаются safe log meta
 owner ACK. Локальный record и лог не подменяют durable owner commit. Смена Pod
 не наследует grace прежнего UID; диагностика не расширяет lease/retry либо
 полномочия. Пример: [#1941](../operations/runtime-initialization-failure.md).
+
+## Измерения фактических model requests
+
+Каждый вариант закрытого объединения событий проверяется и обрабатывается
+явно на всём пути producer/broker/callback. Добавление progress или measurement
+не разрешает трактовать оставшуюся ветку как tool call и разыменовывать пустой
+указатель. Проверка framed transport включает новые варианты, смешанную нагрузку
+и неизвестную фазу; наблюдение не заменяет terminal result.
+
+Native step, бизнес-ход и HTTP attempt являются разными единицами. TTFT
+измеряется от actual send до первого содержательного streaming delta, а не
+по времени SSE-события agent runtime. HTTP retries получают отдельные receipts;
+summary/обычный/auxiliary вызов классифицируется в доверенном adapter. Private
+classification metadata удаляется до upstream и не становится authority.
+
+Доставка measurement использует exact owner lease и immutable receipt. Перед
+повторной выдачей receipt проверяются текущие authority, fence, deadline и
+terminal state. Callback не меняет фазу исполнения. Для длинных сессий нельзя
+сканировать всю историю на каждом шаге; indexed semantic receipt и bounded
+stream processing сохраняют постоянный локальный working set.
+
+Post-commit Prometheus counters не являются durable billing: crash или потеря
+COMMIT acknowledgement может оставить пропуск. Авторитетный источник —
+сохранённое owner event с защищённым read path. Неизвестные usage/TTFT/cost не
+заменяются нулём, cache-read/cache-write/reasoning не прибавляются повторно к
+input/output. Provider accounting не доказывает физическую изоляцию кеша.
+Все labels берутся из закрытого словаря; prompt, salt, alias и execution IDs
+в общие metrics не попадают. Пример: #2108.

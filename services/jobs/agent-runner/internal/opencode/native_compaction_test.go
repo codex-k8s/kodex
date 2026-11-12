@@ -11,11 +11,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 // nativeFixture records model wire and managed tool effects; upstream OpenCode still owns the loop.
 // nativeFixture фиксирует model wire и managed tool effects; циклом по-прежнему владеет upstream OpenCode.
 type nativeFixture struct {
+	modelDelay       time.Duration
 	proxyCacheBypass bool
 	cacheExpectation *nativeCacheWireExpectation
 	cacheSalts       map[string]bool
@@ -129,6 +132,9 @@ func (fixture *nativeFixture) model(writer http.ResponseWriter, request *http.Re
 		return
 	}
 	fixture.mu.Lock()
+	if request.Header.Get("x-kodex-model-phase") != "" {
+		fixture.violations = append(fixture.violations, "private measurement header reached provider")
+	}
 	if fixture.proxyCacheBypass {
 		if len(input.Cache) != 2 || !input.Cache["no-cache"] || !input.Cache["no-store"] {
 			fixture.violations = append(fixture.violations, "proxy response-cache read/write bypass missing")
@@ -187,6 +193,12 @@ func (fixture *nativeFixture) model(writer http.ResponseWriter, request *http.Re
 		fmt.Fprintf(writer, "data: %s\n\n", raw)
 	}
 	chunk(map[string]any{"role": "assistant"}, nil)
+	if fixture.modelDelay > 0 {
+		if flusher, ok := writer.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(fixture.modelDelay)
+	}
 	finish := "stop"
 	switch {
 	case identityMode && call > 24:
@@ -251,7 +263,20 @@ func TestNativeCompactionContinuesManagedToolLoop(t *testing.T) {
 		t.Fatalf("native loop qualification failed: tools=%d summaries=%d compacted=%d violations=%v", fixture.tools, fixture.summaries, result.Compactions, fixture.violations)
 	}
 	if result.Usage.OutputTokens != int64(fixture.modelCalls*24) {
-		t.Fatal("native event drain lost or duplicated measured model steps")
+		messages, readErr := server.client.Messages(t.Context(), session.ID, 100, "")
+		var storedOutput int64
+		for _, message := range messages {
+			for _, raw := range message.Parts {
+				var part struct {
+					Type   string
+					Tokens nativeTokens
+				}
+				if json.Unmarshal(raw, &part) == nil && part.Type == "step-finish" {
+					storedOutput += part.Tokens.Output
+				}
+			}
+		}
+		t.Fatalf("native event drain lost or duplicated measured model steps: observed_output=%d stored_output=%d read_failed=%t expected_output=%d model_calls=%d compactions=%d", result.Usage.OutputTokens, storedOutput, readErr != nil, fixture.modelCalls*24, fixture.modelCalls, result.Compactions)
 	}
 	if result.FinalText != "SYNTHETIC_FINAL_COUNTER_12" || commentaryCount == 0 || result.Usage.InputTokens == 0 {
 		t.Fatal("compaction summary was mistaken for the final response")
@@ -271,7 +296,11 @@ func nativeToolConfiguration(t *testing.T, fixture *nativeFixture) map[string]an
 	provider := config["provider"].(map[string]any)["synthetic"].(map[string]any)
 	provider["options"].(map[string]string)["baseURL"] = model.URL + "/v1"
 	provider["models"].(map[string]any)["tiny"] = map[string]any{"limit": map[string]int{"context": 16384, "output": 2048}}
-	config["compaction"] = map[string]any{"auto": true, "prune": false, "reserved": 2048}
+	policy, err := (runtimecontract.ModelProviderModel{}).ResolveRuntimeContext("[context]\nauto_compaction = true\nprune = false")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config["compaction"] = map[string]any{"auto": policy.AutoCompaction, "prune": policy.Prune, "reserved": 2048}
 	config["agent"] = map[string]any{"compaction": map[string]string{"prompt": "SYNTHETIC_NATIVE_COMPACTION. Preserve completed counter steps and the next ordinal."}}
 	config["permission"] = map[string]string{"*": "deny", "kodex_*": "allow"}
 	config["mcp"] = map[string]any{"kodex": map[string]any{"type": "remote", "url": mcp.URL, "enabled": true, "oauth": false}}

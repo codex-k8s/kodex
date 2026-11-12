@@ -14,14 +14,14 @@ import (
 // current credentials and authorization method. Pending verification or absence of a recent
 // matching completion makes an account due; existing pending/claimed tasks exclude it. It returns
 // metadata, not credential values.
-// An absent interactive attempt uses API_KEY only for the exact active deployment gateway;
-// other providers retain DEVICE_CODE and a saved authorized method always takes precedence.
+// Only the exact configured provider with API_KEY credentials can produce claims;
+// missing configuration and retired authorization methods do not fall back to another runtime.
 // queryModelCatalogClaimAccounts встраивает bounded SKIP LOCKED enabled authorized accounts с
 // точными current credentials и authorization method. Pending verification либо отсутствие свежего
 // matching completion делает account кандидатом; прежняя pending/claimed task его исключает.
 // Возвращает metadata, а не значения credentials.
-// При отсутствии interactive attempt API_KEY выбирается лишь для точного active deployment
-// gateway; прочие providers сохраняют DEVICE_CODE, сохранённый authorized method приоритетен.
+// Claim получает лишь точный настроенный provider с API_KEY; отсутствие конфигурации
+// и снятые способы авторизации не переключают исполнение на другой runtime.
 //
 //go:embed sql/model_catalog__claim_accounts.sql
 var queryModelCatalogClaimAccounts string
@@ -79,17 +79,14 @@ func (repository *Repository) ClaimProviderModelCatalogTasks(ctx context.Context
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, queryModelCatalogExpireTasks); err != nil {
+	gatewayDefinitions := repository.modelProviderDefinitionKeys()
+	if _, err := tx.Exec(ctx, queryModelCatalogExpireTasks, gatewayDefinitions); err != nil {
 		return nil, errs.ErrUnavailable
 	}
 	if err := repository.expireProviderVerifications(ctx, tx, "", true); err != nil {
 		return nil, err
 	}
-	gatewayDefinition := ""
-	if repository.modelProvider != nil {
-		gatewayDefinition = repository.modelProvider.DefinitionKey()
-	}
-	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit, gatewayDefinition)
+	rows, err := tx.Query(ctx, queryModelCatalogClaimAccounts, limit, gatewayDefinitions)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}

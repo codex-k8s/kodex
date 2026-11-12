@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fingerprint } from "./scoped-release.mjs";
-import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance } from "./runner-policy-model.mjs";
+import { policyBase, policyDigest, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance, policyEnvironmentValue } from "./runner-policy-model.mjs";
 import { planToolsMetadata } from "./policy-tools-metadata.mjs";
 import { planReaderRecovery, requireCompatibleReaderBeforeMaintenance, requireDrainedInventory, samePlan } from "./runner-policy-transition.mjs";
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync, rmSync } from "node:fs";
@@ -260,7 +260,7 @@ test("maintenance принимает только уже Ready reader, а UNKNOW
     "https://github.com/codex-k8s/kodex/issues/1648"), /READER_RECOVERY_UNKNOWN_REQUIRED/);
 });
 
-for (const issuerOnly of [false,true]) test("public CLI ordered maintenance, exact predecessors and UNKNOWN: "+(issuerOnly?"issuer":"runner"), () => {
+for (const [issuerOnly, portable] of [[false,false],[true,false],[false,true]]) test("публичный CLI: упорядоченный переход, predecessor и UNKNOWN: "+(portable?"portable":issuerOnly?"issuer":"runner"), () => {
   const directory = mkdtempSync(join(tmpdir(), "kodex-policy-cli-"));
   try {
     const bin = join(directory, "bin"); mkdirSync(bin);
@@ -274,6 +274,28 @@ for (const issuerOnly of [false,true]) test("public CLI ordered maintenance, exa
         policyName: "kodex-image-admission-controller-jobs", paramRef: { name: policyBase, namespace: "kodex-system", parameterNotFoundAction: "Deny" }, validationActions: ["Deny"] } },
       { kind: "Role", metadata: metadata("image-admission-controller"), rules: ["configmaps", "imageadmissionpolicyparameters"].map((resource) => ({ resources: [resource], verbs: ["get"], resourceNames: [policyBase] })) },
     ];
+    const portableArgs = [], confirmation = portable ? "APPLY-PORTABLE-RUNNER-POLICY" : "APPLY-STAGING-RUNNER-POLICY";
+    if (portable) {
+      const app = objects.find(value=>value.kind==="Deployment"&&value.metadata.name==="control-plane").spec.template.spec.containers[0];
+      for(const [name,key] of [["CONTROL_PLANE_IMAGE_POLICY_REVISION","policyRevision"],["CONTROL_PLANE_IMAGE_POLICY_SHA256","policySHA256"],["CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST","trustedRoleBaseDigest"]]) {
+        const entry=app.env.find(item=>item.name===name);delete entry.value;entry.valueFrom={configMapKeyRef:{name:policyBase,key}};
+      }
+      for (const value of objects) {
+        delete value.metadata.labels["kodex.dev/local-profile"];
+        value.metadata.labels["kodex.dev/environment"] = "production";
+        value.metadata.labels["kodex.dev/profile"] = "web-only";
+        if (value.kind === "Role") value.apiVersion = "rbac.authorization.k8s.io/v1";
+      }
+      const installation = { apiVersion:"v1", kind:"ConfigMap", metadata:metadata("kodex-installation-profile"), data:{"profile.json":"synthetic"} };
+      installation.metadata.labels["app.kubernetes.io/managed-by"] = "kodex-install";
+      const path = join(directory,"portable-target.json");
+      writeFileSync(path, JSON.stringify({schema:"kodex.portable-runner-target/v1",context:"default",
+        clusterUID:metadata("kube-system").uid,namespaceUID:metadata("kodex-system").uid,
+        installationUID:installation.metadata.uid,installationSHA256:fingerprint(installation.data),
+        resources:objects.filter(x=>["Deployment","ConfigMap","Role","ImageAdmissionPolicyParameters"].includes(x.kind)).map(x=>({apiVersion:x.apiVersion,kind:x.kind,name:x.metadata.name,uid:x.metadata.uid})),
+      }),{mode:0o600});
+      objects.push(installation); portableArgs.push("--portable-target",path);
+    }
     writeFileSync(statePath, JSON.stringify(objects));
     writeFileSync(join(bin, "kubectl"), `#!/usr/bin/env node
 const fs=require('node:fs');
@@ -314,7 +336,7 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
 `,{mode:0o755});
     const cli = fileURLToPath(new URL("./runner-policy-transition.mjs", import.meta.url));
     const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath };
-    const run = (args) => execFileSync(process.execPath, [cli, ...args, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
+    const run = (args) => execFileSync(process.execPath, [cli, ...args, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
     const bundle = join(directory, "bundle.json");
     run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest,
       ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:["--node-readback-image",`pull.kodex.works/kodex/agent-runner@${newDigest}`]), "--output", bundle]);
@@ -323,7 +345,7 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
     for (const phase of phases) {
       const plan = join(directory, `${phase}.json`), evidence = join(directory, `${phase}.jsonl`);
       run(["plan", ...common, "--phase", phase, "--output", plan]);
-      run(["apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY"]);
+      run(["apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", confirmation]);
       assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "PASS");
     }
     const final = JSON.parse(readFileSync(statePath));
@@ -335,7 +357,7 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
     const plan = join(directory, "lost.json"), evidence = join(directory, "lost.jsonl");
     run(["plan", ...common, "--phase", "maintenance", "--output", plan]);
     const before = readFileSync(callsPath, "utf8").trim().split("\n").length;
-    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", "APPLY-STAGING-RUNNER-POLICY", ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", confirmation, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "UNKNOWN");
     assert.equal(readFileSync(callsPath, "utf8").trim().split("\n").length, before + 1);

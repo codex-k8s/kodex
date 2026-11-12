@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"testing"
@@ -144,10 +145,13 @@ func testArtifactReadWriteBoundary(t *testing.T, ctx context.Context, repository
 	}
 	content := []byte("Readonly context is not write authority.")
 	digest := sha256.Sum256(content)
+	completion := command.CompleteExecutionInput{
+		LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Success: true, ResultSummary: "Readonly output",
+		Artifacts: []command.CompletedArtifact{{FileName: "result.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content)), Content: content}}}
+	// Without a stopped native checkpoint, denial must leave the lease available for fresh read checks.
+	// Без stopped native checkpoint отказ оставляет аренду для проверки свежих прав чтения.
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
-		Mutation: value.Mutation{IdempotencyKey: prefix + "output-denied"}, Payload: command.CompleteExecutionInput{
-			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Success: true, ResultSummary: "Readonly output",
-			Artifacts: []command.CompletedArtifact{{FileName: "result.txt", MediaType: "text/plain", SHA256: hex.EncodeToString(digest[:]), SizeBytes: int64(len(content)), Content: content}}}})
+		Mutation: value.Mutation{IdempotencyKey: prefix + "output-denied"}, Payload: completion})
 	if !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("readonly input expanded output authority: %v", err)
 	}
@@ -180,5 +184,22 @@ func testArtifactReadWriteBoundary(t *testing.T, ctx context.Context, repository
 	if err != nil || preview.Complete || preview.Prompt != "" {
 		t.Fatalf("permission-incomplete preview claimed runtime readiness: %v", err)
 	}
-	completeClaimedExecution(t, ctx, service, worker, lease, prefix+"done", false)
+	completion.NativeSession = nativeCheckpointForClaimFixture(lease)
+	completed, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "done"}, Payload: completion})
+	if err != nil || completed.Run == nil || completed.Run.State != "FAILED" || completed.Run.SafeErrorCode != runtimeInputInvalidCode || len(completed.CreatedRefs) != 0 {
+		t.Fatal("denied output did not retain a failed native completion", err)
+	}
+	var proof []byte
+	if err := repository.pool.QueryRow(ctx, nativeCompletionRevokeProof, launch.Run.Ref).Scan(&proof); err != nil {
+		t.Fatal(err)
+	}
+	var state struct {
+		WriterOpen                        bool
+		Checkpoint                        bool
+		Leases, Artifacts, ArtifactEvents int
+	}
+	if json.Unmarshal(proof, &state) != nil || state.WriterOpen || !state.Checkpoint || state.Leases != 0 || state.Artifacts != 0 || state.ArtifactEvents != 0 {
+		t.Fatalf("denied output changed publication authority or lost checkpoint: %s", proof)
+	}
 }

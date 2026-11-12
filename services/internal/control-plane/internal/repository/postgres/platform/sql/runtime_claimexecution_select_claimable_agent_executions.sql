@@ -74,7 +74,9 @@ SELECT n.id::text,
                THEN ARRAY['platform.artifact.manage']::text[]
            WHEN workflow_version.id IS NOT NULL
             AND n.workflow_step_key LIKE 'workflow.coordinator.%'
-               THEN ARRAY['platform.run.delegate']::text[]
+               -- Локальные файлы координатора требуют выданного агенту artifact grant;
+               -- этот allowlist ещё пересекается с actor/agent/current gate authority.
+               THEN ARRAY['platform.run.delegate','platform.artifact.manage']::text[]
            ELSE COALESCE((
                SELECT ARRAY(
                    SELECT capability.value
@@ -536,28 +538,8 @@ SELECT n.id::text,
            ORDER BY edge.created_at
            LIMIT 1
        ), ''),
-       COALESCE((
-           SELECT jsonb_agg(jsonb_build_object(
-                                'role', CASE
-                                    WHEN history.actor_kind = 'USER' THEN 'USER'
-                                    ELSE 'ASSISTANT'
-                                END,
-                                'content', history.content
-                            )
-                            ORDER BY history.turn_number)
-           FROM (
-               SELECT previous.actor_kind,
-                      previous.content,
-                      previous.turn_number
-               FROM control_plane.session_turns previous
-               WHERE previous.session_id = r.session_id
-                 AND previous.organization_id = r.organization_id
-                 AND previous.id <> COALESCE(n.turn_id, '00000000-0000-0000-0000-000000000000'::uuid)
-                 AND previous.state = 'COMPLETED'
-               ORDER BY previous.turn_number DESC
-               LIMIT 20
-           ) history
-       ), '[]'::jsonb),
+       -- Native OpenCode owns prior model messages; only a fresh continuation notice is appended by the owner.
+       '[]'::jsonb,
        COALESCE(n.turn_id::text, ''),
        a.id::text,
        rd.id::text,
@@ -604,7 +586,6 @@ SELECT n.id::text,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
        runtime_environment.rbac_digest,
-       COALESCE(session_storage.codex_session_id::text, ''),
        scheduling.fits,
        scheduling.possible
 FROM control_plane.run_nodes n

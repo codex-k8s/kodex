@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.7
-updated: 2026-10-27
+version: 1.0.8
+updated: 2026-11-12
 ---
 
 # Общие библиотеки Go
@@ -460,3 +460,12 @@ nonblocking descriptor позволяет создать pollable File, а от�
 первого frame. Ни успешный `io.Pipe` mock, ни EOF, заранее отправленный fixture,
 не подменяют это доказательство. Наличие caller cancellation не означает
 самостоятельный initial idle deadline CLI: такой бюджет описывается отдельно.
+
+### `modelmeasurementwire`
+
+Узкий adapter сохраняет необязательные поля `runtimecontract.ModelMeasurement`
+при переводе в control-plane Proto и обратно. Его production consumers —
+runtime-controller, control-plane и public gateway. Копии независимы; отсутствие
+TTFT/usage не превращается в ноль. Closed validation остаётся в runtimecontract,
+owner authority — в CP, receipt и metrics lifecycle — у deployable. Adapter не
+выполняет I/O, не назначает actor/session и не добавляет provider fallback.

@@ -118,7 +118,7 @@ WITH expired_locked AS MATERIALIZED (
            prepared.project_id, prepared.session_id, 'SNAPSHOT', 'READY',
            prepared.content_generation,
            encode(digest(prepared.session_ref || chr(31) || prepared.content_generation::text, 'sha256'), 'hex'),
-           'session-archive/v1/' || prepared.organization_ref || '/' || prepared.project_ref || '/' ||
+           'session-archive/v3/' || prepared.organization_ref || '/' || prepared.project_ref || '/' ||
            prepared.session_ref || '/g' || prepared.content_generation::text || '/sat_' || prepared.id::text || '-a0.tar',
            @maximum_attempts
     FROM snapshot_prepared prepared
@@ -170,7 +170,7 @@ WITH expired_locked AS MATERIALIZED (
     JOIN control_plane.sessions session ON session.id = archive.session_id
     LEFT JOIN control_plane.projects gc_project ON gc_project.id=archive.project_id
     WHERE archive.retention_until <= clock_timestamp()
-      AND archive.format_version=1
+      AND archive.format_version=3
       AND NOT EXISTS (SELECT 1 FROM control_plane.session_workspace_storage workspace WHERE workspace.session_id=archive.session_id)
       AND (archive.project_id IS NULL OR gc_project.lifecycle <> 'PURGE_PENDING')
       AND archive.lifecycle_state IN ('SUPERSEDED', 'AVAILABLE')

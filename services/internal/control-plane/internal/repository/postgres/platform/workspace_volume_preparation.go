@@ -130,7 +130,7 @@ func (repository *Repository) prepareWorkspaceVolumeTx(ctx context.Context, tx p
 			"organization_id": current.organizationID, "workspace_ref": binding.WorkspaceRef,
 			"volume_ref": volumeRef, "create_task_ref": taskRef}))
 		if err != nil {
-			return nil, false, errs.ErrConflict
+			return nil, false, workspaceOwnerRowError(err)
 		}
 		logical := runtimecontract.WorkspaceVolumeInput{Profile: runtimecontract.WorkspaceVolumeLocalPathProfile,
 			Scope: binding.Scope, WorkspaceRef: binding.WorkspaceRef, VolumeGeneration: value.generation, CreateTaskRef: taskRef}
@@ -234,7 +234,7 @@ func (repository *Repository) prepareWorkspaceVolumeIntentTx(ctx context.Context
 		"volume_id": custody.id, "generation": custody.generation, "pvc_uid": custody.pvcUID,
 		"preparation_task_ref": preparationRef}))
 	if err != nil {
-		return errs.ErrConflict
+		return workspaceOwnerRowError(err)
 	}
 	logical := runtimecontract.WorkspaceVolumeInput{Profile: runtimecontract.WorkspaceVolumeLocalPathProfile,
 		Scope: binding.Scope, WorkspaceRef: binding.WorkspaceRef, VolumeGeneration: custody.generation,

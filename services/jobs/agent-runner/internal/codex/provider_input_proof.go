@@ -20,7 +20,7 @@ import (
 const (
 	// providerInputProofMessage fixes the diagnostic message for an acknowledged turn/start projection.
 	// providerInputProofMessage фиксирует diagnostic message подтверждённой проекции turn/start.
-	providerInputProofMessage = "Codex provider input acknowledged"
+	providerInputProofMessage = "OpenCode provider input acknowledged"
 	// providerInputProofEventKey names the structured event field rather than deriving it from payload.
 	// providerInputProofEventKey задаёт имя структурированного event field, не получая его из payload.
 	providerInputProofEventKey = "event"
@@ -141,37 +141,6 @@ func providerInputProofLogger(logger *slog.Logger) providerInputProofObserver {
 		logger.LogAttrs(ctx, slog.LevelInfo, providerInputProofMessage,
 			slog.String(providerInputProofEventKey, providerInputProofEvent), slog.Any(providerInputProofKey, proof))
 	}
-}
-
-// startTurnWithInputProof derives current turn parameters and, when requested, a projection from
-// verified in-memory input rather than mounted WARM state. It emits only after turn/start succeeds
-// and binds an in-progress turn; an ACK is not completion, billing or durable log-delivery proof.
-// startTurnWithInputProof строит текущие turn parameters и необязательную проекцию из проверенного
-// in-memory input, не mounted WARM state. Выдача происходит лишь после успешного turn/start
-// и binding in-progress turn; ACK не доказывает завершение, биллинг или устойчивую доставку лога.
-func (server *appServer) startTurnWithInputProof(ctx context.Context, state *protocolState, input model.Input, prompt []byte, observer providerInputProofObserver) error {
-	params, err := turnStartParams(input, state.threadID, prompt)
-	if err != nil {
-		return atProviderStage(providerStageTurnParameters, err)
-	}
-	var proof providerInputProof
-	if observer != nil {
-		proof, err = newProviderInputProof(input, params)
-		if err != nil {
-			return atProviderStage(providerStageTurnParameters, err)
-		}
-	}
-	raw, err := server.call(ctx, state, "turn/start", params)
-	if err != nil {
-		return atProviderStage(providerStageTurnStart, err)
-	}
-	if err := state.bindTurn(raw); err != nil {
-		return atProviderStage(providerStageTurnStart, err)
-	}
-	if observer != nil {
-		observer(ctx, proof)
-	}
-	return nil
 }
 
 // newProviderInputProof expects already verified input and bounds/checks the first text item,

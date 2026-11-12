@@ -11,6 +11,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// queryRuntimeCatalogNativeModelCompatible prevents accepting a continuation that the native restore contract must reject; a new model requires an explicit new session.
+// queryRuntimeCatalogNativeModelCompatible не допускает продолжение, которое отвергнет контракт native restore; другая модель требует явной новой сессии.
+//
+//go:embed sql/runtime_catalog__native_model_compatible.sql
+var queryRuntimeCatalogNativeModelCompatible string
+
 // queryRuntimeCatalogBindSession embeds insertion of session/account catalog pins and model
 // snapshot tied to the current agent policy within the supplied tenant. Validation, authorization,
 // exactly-one-row handling and commit belong to the caller.
@@ -142,6 +148,13 @@ func checkedSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, 
 // verified candidate и retained binding только при необходимости; lock flag не обходит eligibility
 // и не выдаёт actor authority.
 func checkedSessionModelCatalogSnapshot(ctx context.Context, tx pgx.Tx, organizationID, sessionID, accountRef string, configuration entity.AgentRuntimeConfiguration, overlay string, lock bool) (entity.ProviderAccountCandidate, *sessionCatalogBinding, error) {
+	var compatible bool
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogNativeModelCompatible, organizationID, sessionID, configuration.Model, configuration.RuntimeProfileRef).Scan(&compatible); err != nil {
+		return entity.ProviderAccountCandidate{}, nil, errs.ErrUnavailable
+	}
+	if !compatible {
+		return entity.ProviderAccountCandidate{}, nil, errs.ErrConflict
+	}
 	binding, err := readSessionModelCatalog(ctx, tx, organizationID, sessionID, accountRef)
 	if err != nil {
 		return entity.ProviderAccountCandidate{}, nil, err

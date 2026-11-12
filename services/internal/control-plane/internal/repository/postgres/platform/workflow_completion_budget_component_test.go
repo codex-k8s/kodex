@@ -80,7 +80,7 @@ func TestWorkflowPDLCCompletionRPCBudgetComponent(t *testing.T) {
 			previous := lease
 			lease = fixture.claimOutcome(previous, f.agents["author"])
 			assertClosed := workflowPDLCReadHistory(fixture, previous, lease, 70)
-			payload := command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"),
+			payload := command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(lease), LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"),
 				Success: true, Usage: turnUsageFixture(), ResultSummary: evidenceDeclaration(declarations...)}
 			key := fixture.key("bounded-complete")
 			var first command.Result

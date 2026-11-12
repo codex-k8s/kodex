@@ -17,6 +17,11 @@ func TestRuntimeRevisionDigestBindsImmutableSnapshotAndExcludesLease(t *testing.
 		t.Fatal(err)
 	}
 
+	changedRoot := input
+	changedRoot.RootInitiatorRef = "usr_other000"
+	if digest, _ := RuntimeRevisionDigest(changedRoot, source); digest == baseline {
+		t.Fatal("root initiator was not bound to immutable revision")
+	}
 	changed := input
 	changed.PromptTemplateDigest = strings.Repeat("e", 64)
 	if digest, _ := RuntimeRevisionDigest(changed, source); digest == baseline {

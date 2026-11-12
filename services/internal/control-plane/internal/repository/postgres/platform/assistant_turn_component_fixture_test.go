@@ -34,6 +34,7 @@ func newWarmTurnComponentFixture(t *testing.T, ctx context.Context, pool *pgxpoo
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureSyntheticRuntimeComponentRepository(t, r)
 	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1",
 		SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("e", 64)}); err != nil {
 		t.Fatal(err)

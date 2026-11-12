@@ -62,11 +62,11 @@ func (*unavailableProviderMaterializer) ObserveDeviceAuthorization(context.Conte
 	return ProviderAuthorizationObservation{}, nil
 }
 
-// MaterializeAPIKey returns empty synthetic descriptor and masked label for the unused
+// MaterializeGatewayAPIKey returns empty synthetic descriptor and masked label for the unused
 // key-materialization branch of the readiness fixture.
-// MaterializeAPIKey возвращает пустые синтетические дескриптор и скрытую метку для неиспользуемой
+// MaterializeGatewayAPIKey возвращает пустые синтетические дескриптор и скрытую метку для неиспользуемой
 // ветки материализации ключа оснастки readiness.
-func (*unavailableProviderMaterializer) MaterializeAPIKey(context.Context, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
+func (*unavailableProviderMaterializer) MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (entity.ProviderCredentialDescriptor, string, error) {
 	return entity.ProviderCredentialDescriptor{}, "", nil
 }
 

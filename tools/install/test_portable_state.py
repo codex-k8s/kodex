@@ -27,6 +27,18 @@ def live(desired):
     return result
 
 
+class DiagnosticSafety(unittest.TestCase):
+    def test_rejected_read_records_identity_without_payload(self):
+        state = State('test-context')
+        state.routes[('v1', 'Secret')] = ('/api/v1', 'secrets', True)
+        value = {'apiVersion': 'v1', 'kind': 'Secret', 'metadata': {'name': 'synthetic', 'namespace': 'kodex-system'},
+                 'stringData': {'password': 'synthetic-sensitive-value'}}
+        with patch.object(state, 'call', side_effect=Rejected('KUBERNETES_OPERATION_FAILED_RECONCILE_REQUIRED')):
+            with self.assertRaises(Rejected):state.get(value)
+        self.assertEqual(state.resource_hint, 'v1|Secret|kodex-system|synthetic')
+        self.assertNotIn('synthetic-sensitive-value', state.resource_hint)
+
+
 class FixtureState(State):
     def __init__(self, objects):
         super().__init__('test-context')

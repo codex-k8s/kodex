@@ -4,8 +4,8 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.3.0
-updated: 2026-10-02
+version: 2.4.12
+updated: 2026-11-12
 ---
 
 # Чистое развертывание Kodex
@@ -64,6 +64,19 @@ registry и workloads Kodex принадлежат `kodex-system`. Смешив�
 
 ### Готовый Kubernetes
 
+Для новой пустой БД authority renderer получает явный
+`--authority-registry-configuration <json>` с содержимым
+`{"schema":"kodex.authority-registry/v1","source_revision":1}`.
+Историческая ревизия каталога в исходниках не является первой ревизией новой
+установки: publisher закрыто отклоняет её до публикации. Этот input сохраняется
+вместе с release lock и применяется при каждом воспроизведении render; после
+первой публикации ревизия меняется только штатным протоколом ротации.
+Если bootstrap Jobs уже завершились, а publisher отказал до первого durable
+effect, используется проверяемое
+[продолжение initial authority bootstrap](portable-install.md#registry-authority-при-первой-установке-и-после-частичного-bootstrap).
+Повторный запуск миграций или удаление нового состояния для такого исправления
+не требуется.
+
 `KODEX_INSTALL_MODE=existing-kubernetes` не обновляет ОС и не устанавливает
 k3s. Оператор передаёт exact kubeconfig/context и выбирает компоненты. Для
 установки только приложения инфраструктурные зависимости должны уже
@@ -92,7 +105,129 @@ authority, но направляет raw TLS tunnel на этот внутрен
 namespace пока закрыто отклоняется, чтобы manifests и security policy не
 создавали ложную изоляцию.
 
+После полного завершения платформенного bootstrap и перед открытием Control Center
+установить отдельную dependency
+[proxy session store](../operations/proxy-session-store-1383.md), затем выполнить
+`infra/management-surfaces/bootstrap.sh --mode apply-surfaces` с выбранным
+профилем как минимум `control-center`. Одних PWA/API Deployment и Ingress
+недостаточно: маршруты ссылаются на управляемые OAuth2 Proxy middleware.
+Для локальной чистой установки используется explicit UID-bound fresh profile
+session store; смена environment labels для обхода staging gate запрещена.
+OIDC connect address содержит порт **Service** (у bundled SSO —443),
+`--oidc-target-port` — порт **Pod** (8443). SNI остаётся публичным hostname,
+проверка CA обязательна. Portable release использует OAuth2 chain без
+hot-reload retry; readback допускает только эти две канонические цепочки.
+API portable release идёт через TLS Service `staff-control-center` и его
+проверяемый nginx upstream к gateway; hot-reload использует непосредственно TLS
+Service `control-api-gateway`. В обоих случаях `/api/v1` сохраняет точный auth
+middleware без browser error redirect, priority200 и порт `https`. Произвольный
+backend либо plaintext не допускаются.
+Initial-resume выполняется до установки management Deployment: его guard
+проверяет точный набор платформенных компонентов. Runtime должен быть пустым;
+допускается только первоначальный `system-assistant-warm` в Pending с exact
+runner images, полным набором waiting statuses, без запусков/restarts контейнеров
+и при нулевых `runs`/`session_turns`. Этот Pod не удаляется и не считается готовым:
+публикация release artifacts ещё должна обеспечить его первый pull/start.
+Работающий warm Pod, бизнес-история, неизвестный Pod или неполный status
+закрывают initial-resume; это не maintenance/Stop/retry действующей сессии.
+
+### Ограничение Go-памяти проверки образа
+
+Если фактический scan завершился `OOMKilled` при контейнерном лимите 2 GiB,
+canonical renderer принимает `--image-admission-memory-profile bounded-2g`.
+Он включает существующий component `image-admission-memory-budget`: только
+ключ `scan-go-memory-limit-mib=768` в ConfigMap `kodex-image-admission`.
+Wrapper передаёт `GOMEMLIMIT=768MiB` Syft/Grype и проверяет конечный cgroup v2
+limit с резервом не меньше25%. Профиль `default` сохраняет прежнее поведение.
+Резерв выбран после повторного OOM при1536MiB; реальная проверка768MiB также
+завершилась OOM на полном RoleImage. Это мягкий предел Go runtime, а не гарантия
+отсутствия OOM. Увеличенный контейнерный бюджет описан ниже в разделе
+«Память полного SBOM»; сканирование, подписи и правила допуска сохраняются.
+
+В уже установленном окружении сначала завершить текущие admission attempts,
+сохранить terminal status, получить render и адресный plan для exact ConfigMap,
+проверить UID/resourceVersion, применить и перечитать только этот ресурс.
+Новую попытку создаёт штатная `REQUEST_BUILD`; старый FAILED не переписывается.
+Нужны новые SBOM/vulnerability/signature/receipt и promotion до запуска образа.
+Компонент и правила merge проверены по официальной документации Kustomize
+через Context7; `make test-scan-memory-budget` исполняет wrapper и Kustomize.
+
+### Подготовка полного runner без изменения кластера
+
+`tools/dev/build-local-runner.sh --build-only --image-profile full
+--source-root <clean-exact-worktree> --state-directory <private-directory>`
+собирает OCI и проверяет exact source/binary provenance тем же verifier, что
+обычная доставка. Режим требует существующий builder `kodex-local-dev`,
+не пересоздаёт builder/network, не импортирует образ в Kubernetes и не записывает
+`agent-runner-image` как установленный pin. Manifest и provenance остаются в
+private cache; последующий import использует прежние exact-manifest guards.
+Полный runner ещё не является допущенным RoleImage: supply-chain admission,
+материализация среды, pod readback и реальный workspace path проверяются отдельно.
+Если runtime использует provider sandbox projection, сначала согласовать её
+с новой image policy при остановленных новых исполнениях. Затем
+`tools/release/default-runner-transition.mjs` проверяет live source/projection,
+binding и controller через общий `provider_sandbox_profile.py --check-live`.
+Переход меняет default двух приложений с UID/resourceVersion guards; admission
+остаётся закрытым до завершения rollout. Успешный readback не обновляет ранее
+опубликованные среды проектов: для них нужны новые RoleImage и явная привязка.
+
+Вспомогательные authority/admission/builder образы готовятся отдельно через
+`tools/dev/build-local-image-supply-chain.sh --build-only --component all
+--source-root <clean-exact-worktree> --state-directory <private-directory>`.
+Этот режим требует прежний builder, не вызывает Kubernetes и сохраняет
+`*-oci-image` и `build-only.json` с `import=NOT_RUN`; прежние указатели установленных
+образов не меняются. Полный supply-chain admission проверяется после установки.
+
+Установщик передаёт каждому дочернему `kubectl` явные kubeconfig/context через
+`tools/install/target_kubectl.py` в приватном временном PATH. Он не вызывает
+`config use-context` и не изменяет конфигурацию хоста. Для отдельных repo helpers
+тот же launcher можно разместить как `kubectl` в приватном PATH и задать
+`KODEX_TARGET_KUBECTL`, `KODEX_TARGET_KUBECONFIG`, `KODEX_TARGET_CONTEXT`.
+Подмена target flags и изменение host config закрыто отклоняются; обычные операции
+с ресурсами сохраняют собственные ownership guards соответствующего helper.
+
+Bootstrap identity, NATS и trust-manager создаёт namespace Kodex через
+`tools/install/ensure_namespace.py`: метка владельца устанавливается в том же
+create, существующий чужой namespace не присваивается установке. Если ранний
+bootstrap этой же новой установки уже создал namespace без метки, оператор
+проверяет creation receipt и передаёт его exact UID через `--created-uid`.
+Helper допускает только четыре namespace платформы, проверяет UID/resourceVersion
+перед patch и UID после записи; прочие labels сохраняются. Обычный повторный
+запуск не требует этого параметра и не изменяет уже подтверждённое владение.
+Это исправление metadata новой установки, а не импорт старых данных.
+
 ### Локальный hot-reload
+
+Для immutable candidate на локальном кластере S3 можно подготовить из того же
+`deploy/k8s/base/local-object-storage`, закрепив SeaweedFS/AWS CLI по
+`tools/dev/components.lock.json`. `tools/install/local_object_storage_tls.py storage`
+принимает этот render, публичную CA и exact ClusterIssuer; создаёт Certificate
+для `seaweedfs-s3.kodex-system.svc.cluster.local`, включает штатный TLS на 8333
+без второго HTTP listener и переводит probes/bucket bootstrap на проверяемый HTTPS.
+Credentials создаются заново в private state и материализуются как immutable
+`kodex-external-s3`: полный набор metadata/credentials/S3 identity в `kodex-system`,
+только `access-key`/`secret-key` в `kodex-runtime`. Перед первым apply проверяется
+отсутствие всех точных объектов, cluster/namespace UID и сохраняется hash render.
+Повторный apply использует те же credentials; их молчаливая регенерация запрещена.
+
+Фаза `consumers` того же helper применяется к полному release render до его
+закрепления: control-plane, retention, backup-controller и session-archive получают
+публичную CA; `SESSION_ARCHIVE_OBJECT_STORAGE_CA_CONFIG_MAP` доставляет её каждому
+временному archive worker штатным controller. Ни один `ALLOW_INSECURE_LOCAL` не
+включается. Сценарий: bootstrap Job создаёт versioned buckets и проверяет точные
+write/read/delete receipts → control-plane владеет storage metadata и task/grant →
+session-archive создаёт exact worker в `kodex-runtime` → worker обращается к S3
+с той же CA/hostname и возвращает owner-bound receipt. NetworkPolicy связывает
+оба namespace с точными pod selectors. TLS/readiness не заменяют приёмку native
+checkpoint, workspace PVC и восстановления; эти проверки выполняются после
+установки полного RoleImage.
+
+Проверены Context7 `/seaweedfs/seaweedfs` и исходники
+[SeaweedFS 4.41](https://github.com/seaweedfs/seaweedfs/blob/4.41/weed/command/s3.go):
+сертификат и ключ при `s3.port.https=0` обслуживают TLS на основном S3 port.
+Проверки преобразования: `python3 -m unittest discover -s tools/install
+-p test_local_object_storage_tls.py`; отрицательные случаи включают отсутствующий
+consumer, повторный ресурс и некорректную CA.
 
 `dev.sh up` добавляет к web-only render SeaweedFS release 4.41 в
 `kodex-system`: один StatefulSet с PVC, внутренний S3 Service на TCP/8333,
@@ -101,20 +236,168 @@ deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
 не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
 control-plane; повторный apply выполняет exact Secret/job/readiness readback.
 
-Перед первым `dev.sh up` оператор передаёт приватный auth snapshot, который
-текущий Codex CLI подтверждает через `codex login status`:
+Перед первым `dev.sh up` оператор передаёт утверждённый каталог OpenCode
+и приватный regular файл API key (0600, текущий владелец, без symlink/hardlink):
 
 ```bash
-KODEX_DEV_PROVIDER_AUTH_FILE="$HOME/.codex/auth.json" ./dev.sh up
+KODEX_MODEL_PROVIDER_CONFIGURATION_FILE=/private/providers.json \
+KODEX_MODEL_PROVIDER_API_KEY_FILE=/private/provider-api-key \
+./dev.sh up --kubeconfig /private/kubeconfig --context approved-local
 ```
 
-После `provider-import --account-key default-openai-codex` последующие запуски
-автоматически используют
-`.kodex-dev/provider-accounts/default-openai-codex/auth.json`. Синтетический
-credential и режим `local-development` запрещены: они не создают ложный
-`AUTHORIZED` account и не позволяют объявить системного помощника готовым.
-`dev.sh down` удаляет только application namespaces `kodex-runtime`,
-`kodex-system`, `identity` и `kodex-trust`; общие контроллеры k3s сохраняются.
+Файл имеет единственный формат `kodex.model-provider-catalog/v1` по
+`contracts/model-provider/v1/catalog.schema.json`: `managed_by=git`, одна
+`source_revision`, явные `default_provider`/`default_model` и от 1 до 16
+`providers`. Каждый элемент — закрытый `kodex.model-provider/v1` с той же
+source revision. Default provider — точный `opencode-<provider_id>`, а не имя
+модели. Одинаковый alias у разных providers допустим; общий hostname требует
+одинаковых address pins. Отдельный старый descriptor вместо каталога отвергается.
+Флаг `--model-provider-default-model` и одноимённый env, если заданы, служат только
+проверкой совпадения с каталогом и не переопределяют его. Первичный API key
+принадлежит исключительно default provider; остальные accounts создаются через
+штатные UI/API, с собственными credentials и проверкой доступности моделей.
+Изменение каталога требует drain и остановки старых consumers перед применением
+совместимого immutable render; hot reload маршрутов не поддерживается.
+
+Локальный bootstrap использует тот же `tools/install/model-provider.py`, что
+`install.sh`: проверяет exact provider/model/endpoint, создаёт typed credential
+и отдельный секретный cache namespace key. Render доставляет immutable
+конфигурацию control-plane, secret-broker и egress-gateway с проверяемым digest.
+Codex CLI, ChatGPT auth snapshots и автоматический импорт прежних аккаунтов
+не поддерживаются. Дополнительные аккаунты создаются через штатный UI/API.
+Повторный запуск с тем же API key сохраняет namespace; другая конфигурация или
+ключ требуют явного управления credential, а не молчаливой перезаписи bootstrap.
+В `trusted-cluster` допустим отложенный ввод credential; это не означает
+готовность системного помощника. `protected` требует файл ключа до изменений.
+
+Локальные `credentials.env` и `access-identities.env` содержат только закрытый
+набор строк `KEY="value"` с JSON-экранированием внутри значения. Их создаёт
+`tools/dev/local_credentials.py`; shell подключает только код loader, а не файл
+данных. Reader проверяет владельца, приватный каталог, regular файл без
+symlink/hardlink, размер, полный набор и уникальность ключей. Повторное применение
+сверяет переданные owner credentials без перезаписи. Старый shell-формат не
+исполняется и не импортируется: для чистой установки нужен новый приватный state.
+Проверки без credentials и кластера: `python3 -m unittest discover -s tools/dev
+-p test_local_credentials.py`, `bash scripts/tests/full-local-e2e-entrypoint-test.sh`
+и `bash scripts/tests/remote-disposable-cluster-contract-test.sh`. Через Context7
+`/python/cpython` проверены `os.open`/`dir_fd`/`O_NOFOLLOW`, `fstat` и публикация
+`os.link` в [официальной документации](https://docs.python.org/3/library/os.html).
+
+`dev.sh down` содержит удаление фиксированных application namespaces, включая
+`identity`, и не доказывает их исключительное владение. В разделяемом кластере
+эту команду не применять: сначала нужен адресный inventory/plan с UID и
+доказательством принадлежности каждого ресурса. Разрешение очистить Kodex не
+разрешает удалять общий IdP, чужие workloads или данные.
+
+Для согласованной полной очистки локального k3d доступен адресный путь
+`installation_inventory.py → installation_cleanup.py → installation_apply.py`
+из `tools/dev`. Он не заменяет разрешение владельца на уничтожение данных.
+До применения требуется committed source, exact kubeconfig/context, cluster UID
+из `kube-system`, node UID и приватный каталог0700 для inventory/plan/journal.
+Публичные fixtures используют только synthetic identities; фактический inventory
+и журнал не публикуются в Issue/PR.
+
+Inventory вызывается с явными `--kubectl`, `--kubeconfig`, `--context`,
+`--with-k3d-storage` и `--output`. Он читает metadata всех API ресурсов без
+Secret data/last-applied; для закрытых типов извлекает только ссылки на
+зависимости, состояния Pod и image IDs. Для каждого local-path PV проверяются
+claim UID, exact каталог, affinity, node UID, k3d container ID, device/inode и
+отсутствие symlink. Неизвестное происхождение, неполный discovery, чужой consumer,
+чужой дочерний объект или пересечение foreign hostPath запрещают зависимую очистку.
+
+Plan принимает `--inventory`, SHA256 фактических bytes через
+`--inventory-sha256`, `--context`, `--cluster-uid`, повторяемый `--node-uid`
+и `--output`. Он сохраняет ownership proofs и source SHA; `OWNERSHIP_CLASSIFIED`
+означает классификацию, а не выполненную очистку. Имена namespace сами по себе
+не доказывают принадлежность, third-party CRD и общие cluster capabilities
+сохраняются.
+
+Apply получает те же client/config/context, `--inventory`,
+`--inventory-sha256`, `--plan`, `--plan-sha256`, `--journal` и одну `--phase`.
+Без `--execute` выполняется только preflight. Фазы идут в порядке `admission`,
+`producers`, `workloads`, `pods`, `claims`, `objects`, `namespaces`.
+При DiskPressure перед `claims` доступна дополнительная фаза `storage`: после
+отсутствия workload/Pod и положительного CRI join она удаляет только exact
+local-path каталоги исходных PV. UID/claim/affinity, node/container ID,
+canonical path, device/inode и отсутствие вложенных mount points проверяются
+заново. Внутренние symlink не обходятся; корневой symlink отклоняется. PVC/PV
+ещё сохраняют доказательство принадлежности, а после удаления данных проходят
+обычную фазу `claims` и штатный reclaimer. Каждый erase имеет отдельный fsync intent
+и readback отсутствия каталога. Эта необратимая фаза разрешена только при полном
+уничтожении старых данных, а не при обновлении с сохранением сессий.
+Сертификаты удаляются в `objects`: недоступный общий webhook не должен блокировать
+независимую остановку workloads и освобождение диска Kodex. Общий webhook при этом
+не отключается, его failure policy и finalizers не изменяются.
+Каждая фаза заново проверяет target и ownership, имеет бюджет600 секунд и
+ожидает авторитетного отсутствия удалённых UID. Все удаления адресные, с UID/RV
+preconditions и `Orphan`; force-delete, снятие finalizers, wildcard delete и
+глобальный prune отсутствуют. Перед каждым эффектом журнал fsync фиксирует intent.
+Повторный запуск той же фазы с тем же журналом проверяет отсутствие/оставшееся
+удаление; replacement UID не удаляется. Снятие ownerReferences допускается только
+для exact parent UID с записанным intent. Остальной ownership drift закрыто
+останавливает применение.
+
+При исправлении исполнителя во время незавершённой очистки исходные plan/inventory
+и журнал сохраняются. После квалификации нового committed descendant явно
+передаётся `--executor-sha`; exact HEAD и отсутствие изменений кода проверяются,
+новый SHA записывается в preflight. Это не меняет digest/область исходного плана
+и не разрешает другие ресурсы. По умолчанию executor SHA равен source SHA плана.
+
+Для уже осиротевшего после прерывания ingress-shim Certificate допускается только
+узкий read-only reconciliation: в журнале должны быть удаления exact старых
+Certificate и использующих его Ingress, совпасть namespace, имя TLS Secret и полный
+закрытый набор issuer/output references. Новый объект должен иметь producer
+`cert-manager-ingress-shim` и не иметь чужого ownerRef. После нового доказательства
+удаление использует его новый UID/RV; один старый intent такого права не даёт.
+Связанный CSR/Secret/Event проходит обычную UID/producer closure. Механизм
+[ingress-shim](https://cert-manager.io/docs/usage/ingress/) проверен через
+Context7 `/websites/cert-manager_io`; воспроизводимый сценарий replacement включён
+в `make test-installation-cleanup`.
+
+Перед claims проверяется завершение containers через CRI exact k3d nodes.
+Перед namespace дополнительно требуется отсутствие PV и физических каталогов
+всех исходных томов. Недоступный узел, зависший finalizer или reclaimer при
+DiskPressure оставляет фазу незавершённой; отсутствие Pod в API не заменяет
+положительный writer join. Этот путь не удаляет файлы хоста вне этих PV, image cache и внешние
+S3/БД: для них нужны отдельные доказательства ownership и адресные операции.
+Возврат после согласованного уничтожения данных — новая совместимая установка;
+legacy backup/reader и выдуманный goose down не применяются.
+
+Старые локальные node images очищаются отдельно через
+`tools/dev/installation_images.py plan|apply`. Нужны исходный cleanup plan с
+SHA256, exact client/context, приватные image plan/journal и SHA256 статического
+helper, собранного из `tools/dev/installation-runtime` на чистом committed HEAD.
+Build info helper должен подтверждать тот же SHA. Plan копирует проверенные
+bytes в новый private task directory каждого exact k3d container и проверяет
+readback хеша; Kubernetes workloads при этом не создаются.
+Удаляются только references canonical components в локальной области Kodex;
+чужие aliases того же digest и используемые образы сохраняются.
+Promoted registry определяется по exact UID существующих immutable
+`kodex-image-admission-policy-*`, а не по переданному URL. Его aliases и bare CRI
+image references удаляются только при наличии ещё существующего local reference
+того же target. Alias удаляется первым, local witness — последним; неизвестный
+registry или consumer сохраняет всю группу. Повторное применение заново сверяет
+policy UID/host/repository. Очистку образов поэтому завершают до фазы `objects`.
+Apply использует
+typed containerd API через локальный Unix socket, namespace `k8s.io` и
+`DeleteImageRequest.Target.Digest`. Server-side precondition защищает от замены
+tag между проверкой и удалением. Синхронный GC следует штатному графу ссылок
+containerd; blobs, snapshots, leases и общие base images напрямую не удаляются.
+После каждого удаления проверяется отсутствие reference, после узла — сохранность
+невыбранных references. План имеет бюджет900 секунд; lost ACK разрешается readback.
+Проверены Context7 `/containerd/containerd/v2.2.1` и source
+[containerd2.2.3 image store](https://github.com/containerd/containerd/blob/v2.2.3/core/metadata/images.go):
+digest проверяется внутри metadata transaction. Native API client закреплён на
+`github.com/containerd/containerd/api v1.10.0`; поддержка exact node runtime
+проверяется отдельно от fixtures.
+
+Безопасная локальная проверка: `make test-installation-cleanup` (бюджет60 секунд,
+synthetic API и filesystem fixtures, ожидается exit0). Она входит в
+`make test-install-contract` и не доказывает фактическую очистку кластера.
+Через Context7 `/websites/kubernetes_io` проверены
+[Orphan deletion](https://kubernetes.io/docs/tasks/administer-cluster/use-cascading-deletion/)
+и DeleteOptions UID/resourceVersion preconditions. Совместимость с конкретным
+API server подтверждается readback применения, отдельно от unit fixtures.
 
 Локальный профиль по умолчанию использует
 `--management-surfaces control-center-grafana`: Grafana устанавливается, а
@@ -520,3 +803,44 @@ Docker auth в jq через private files/JSON stdin, а не `--arg` со зн
 не появляются в argv. Временные файлы имеют0600 внутри0700. При обновлении
 node registry сохраняется прежнее удаление завершающих LF из credential files.
 Это не меняет auth scopes, CA/TLS policy или существующие secret refs.
+
+
+### Доставка устойчивого workspace
+
+Для полной приёмки файлов canonical renderer получает
+`--session-workspace-profile SESSION_WORKSPACE_V2`. Закрытый transform проверяет
+ABI5 владельца и immutable images, exact envFrom и отсутствие shadow env.
+Он назначает профиль одновременно control-plane/session-archive и согласованный
+`local-path`/`20Gi` runtime-controller/session-archive; маркер Pod template
+обеспечивает rollout после изменения ConfigMap. Default `disabled` не меняет
+render и не служит командой удаления уже существующего V2 состояния.
+
+Перед переходом установленного стенда подтверждаются current schema041,
+совместимые CP/RC/runner/archive images и отсутствие активных runs/archive tasks.
+Применение: ConfigMap consumers, затем archive controller и runtime-controller,
+последним control-plane owner; каждый Deployment проверяется по UID/spec и
+readiness. Только после этого разрешается model claim тестового AGENT/WORKFLOW.
+Manifest не заменяет проверку реального PREPARE_WORKSPACE_VOLUME, owner ACK,
+PVC/S3 checkpoint и restore. Матрица lifecycle сохранена в
+[runtime-workspace-durability-1953](../operations/runtime-workspace-durability-1953.md).
+Отключение флага не разрешает fallback, потерю файлов или удаление bindings.
+
+
+### Память полного SBOM
+
+Полный OpenCode RoleImage на локальном стенде исчерпал прежние2Gi при scan Syft
+даже с мягкими1536/768MiB: наблюдался рост RSS до1785MiB перед OOM, без dirty
+page tail. Мягкий Go limit не ограничивает обязательный live heap. Renderer
+использует один bounded профиль scan для protected/trusted-cluster:
+requests CPU1/memory2Gi, limits CPU4/memory16Gi, tmp32Gi. Прочие фазы сохраняют
+прежние128Mi/1Gi; CEL проверяет точные ресурсы каждой фазы. Это не разрешение
+понизить severity gate, пропустить cataloger либо принять неполный SBOM.
+
+Сначала завершаются старые attempts и сохраняется их failure evidence, затем
+доставляется immutable admission-controller с новым renderer и совместимая CEL
+policy. При `observability-profile=disabled` также пересобираются производный
+immutable renderer, его ConfigMap/mount и CEL opt-in штатным
+`observability_profile.admission_profile`: digest исходного renderer должен
+совпасть с новым образом. Один image patch оставит старую закреплённую копию и
+закрыто остановит создание Jobs. Новый scan создаётся owner-командой после
+readback; live успех должен быть подтверждён отдельно.

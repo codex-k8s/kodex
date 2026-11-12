@@ -4,4 +4,4 @@ configMapGenerator:
   - name: kodex-image-admission
     behavior: merge
     literals:
-      - scan-go-memory-limit-mib=1536
+      - scan-go-memory-limit-mib=768

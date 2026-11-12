@@ -105,7 +105,7 @@ func TestArtifactProjectionChecksExactOwnerResponseBeforeExposingBytes(t *testin
 		t.Run(scenario, func(t *testing.T) {
 			manager, _, input, _, ticket := providerCredentialRefreshRouteFixture(t, func(input *runtimecontract.RunnerInput) {
 				input.Capabilities = append(input.Capabilities, runtimecontract.ArtifactCapability)
-				input.CodexSandbox = "workspace-write"
+				input.WorkspaceAccess = "workspace-write"
 				input.InputArtifacts = []runtimecontract.RunnerInputArtifact{{
 					Ref: "artifact_abcdefgh", FileName: "knowledge.txt", MediaType: "text/plain",
 					Digest: digest, SizeBytes: int64(len(content)), Revision: 1, Version: 2,

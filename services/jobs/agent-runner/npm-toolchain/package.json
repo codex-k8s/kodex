@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@hey-api/openapi-ts": "0.99.0",
-    "@openai/codex": "0.160.0",
     "@playwright/mcp": "0.0.77",
     "@playwright/test": "1.61.1",
     "create-vue": "3.22.4",

@@ -240,7 +240,7 @@ func (f *repositoryBundleFixture) decide(decision string) {
 // completeOrigin завершает лишь pinned original lease; callback не подменяет другой run, turn, attempt либо revision.
 func (f *repositoryBundleFixture) completeOrigin() {
 	f.t.Helper()
-	_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: "bundle-origin-complete"}, Payload: command.CompleteExecutionInput{LeaseRef: f.input.LeaseRef, Fence: f.input.Fence, Generation: f.input.Generation, Success: true, ResultSummary: nonemptyBundleFixtureSummary(f.originResultSummary), Usage: turnUsageFixture()}})
+	_, err := f.service.Execute(f.ctx, command.Command{Kind: command.CompleteExecution, Principal: f.worker, Mutation: value.Mutation{IdempotencyKey: "bundle-origin-complete"}, Payload: command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(f.origin), LeaseRef: f.input.LeaseRef, Fence: f.input.Fence, Generation: f.input.Generation, Success: true, ResultSummary: nonemptyBundleFixtureSummary(f.originResultSummary), Usage: turnUsageFixture()}})
 	if err != nil {
 		f.t.Fatal("complete origin", err)
 	}

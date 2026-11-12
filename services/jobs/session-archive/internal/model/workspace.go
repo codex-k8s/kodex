@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -51,39 +50,28 @@ func (result Result) MatchesWorkspaceRestore(task Task) bool {
 		SourceSHA256: source.TreeSHA256, SourceSizeBytes: source.Bytes, SourceEntryCount: source.Entries})
 }
 
-// decodeWorkspaceAwareTask preserves legacy decoding while requiring canonical strict V2 task bytes.
-// Null, alias-case, unknown or duplicate Workspace keys cannot downgrade a new-profile task to legacy.
-// decodeWorkspaceAwareTask сохраняет legacy decoding и требует canonical strict V2 task bytes.
-// Null, alias-case, unknown и duplicate Workspace keys не понижают новый профиль до legacy.
+// decodeWorkspaceAwareTask accepts only canonical closed native/V2 tasks, never legacy wire.
+// Duplicate, alias-case or unknown fields cannot change the worker's interpretation.
+// decodeWorkspaceAwareTask принимает только canonical closed native/V2 tasks без legacy wire.
+// Duplicate, alias-case и unknown поля не меняют интерпретацию worker.
 func decodeWorkspaceAwareTask(raw []byte) (Task, error) {
-	var fields map[string]json.RawMessage
 	var decoded wireTask
-	if len(raw) < 1 || len(raw) > MaximumTaskBytes || json.Unmarshal(raw, &fields) != nil || json.Unmarshal(raw, &decoded) != nil {
+	if len(raw) < 1 || len(raw) > MaximumTaskBytes || runtimecontract.DecodeWorkspaceStorageTaskJSON(raw, &decoded) != nil {
 		return Task{}, errWorkspaceTaskInvalid
 	}
-	newProfile := false
-	for key := range fields {
-		newProfile = newProfile || strings.EqualFold(key, "Workspace")
-	}
-	if newProfile {
-		decoded = wireTask{}
-		if runtimecontract.DecodeWorkspaceStorageTaskJSON(raw, &decoded) != nil || decoded.Workspace == nil {
-			return Task{}, errWorkspaceTaskInvalid
-		}
-		canonical, err := json.Marshal(decoded)
-		if err != nil || !bytes.Equal(raw, canonical) {
-			return Task{}, errWorkspaceTaskInvalid
-		}
+	canonical, err := json.Marshal(decoded)
+	if err != nil || !bytes.Equal(raw, canonical) {
+		return Task{}, errWorkspaceTaskInvalid
 	}
 	return Task(decoded), nil
 }
 
 // validateWorkspace maps the actual worker task into the same closed contract used by its owner.
-// Legacy-only fields stay forbidden even when the shared work envelope is valid.
+// Native single-file fields stay forbidden even when the shared work envelope is valid.
 // validateWorkspace переводит actual worker task в тот же закрытый контракт, что использует owner.
-// Legacy-only поля запрещены даже при валидном общем work envelope.
+// Native single-file поля запрещены даже при валидном общем work envelope.
 func (task Task) validateWorkspace() error {
-	if task.CodexSessionID != "" || task.SourceRelativePath != "" || task.SourceSHA256 != "" ||
+	if task.NativeSessionID != "" || task.SourceRelativePath != "" || task.SourceSHA256 != "" ||
 		task.SourceSizeBytes != 0 || task.Archive != nil {
 		return errWorkspaceTaskInvalid
 	}

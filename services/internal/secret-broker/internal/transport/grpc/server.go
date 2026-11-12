@@ -137,11 +137,11 @@ type ProviderCredentialMaterializer interface {
 	// ObserveDeviceAuthorization reads attempt state and may persist expiry; it is not the read-only cleanup observer.
 	// ObserveDeviceAuthorization читает attempt state и может фиксировать expiry; это не read-only cleanup observer.
 	ObserveDeviceAuthorization(context.Context, string) (kubernetesstore.ProviderAuthorizationAttempt, error)
-	// MaterializeAPIKey stores the validated account/attempt credential and returns its exact descriptor and display label;
+	// MaterializeGatewayAPIKey stores the validated account/attempt credential and returns its exact descriptor and display label;
 	// plaintext remains sensitive input, never a diagnostic or ordinary response field.
-	// MaterializeAPIKey сохраняет проверенный account/attempt credential и возвращает точные descriptor и display label;
+	// MaterializeGatewayAPIKey сохраняет проверенный account/attempt credential и возвращает точные descriptor и display label;
 	// plaintext остаётся чувствительным входом, не diagnostic или обычным response field.
-	MaterializeAPIKey(context.Context, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
+	MaterializeGatewayAPIKey(context.Context, string, string, string, []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error)
 	// Discard stops local pending work where needed and removes only the supplied pinned attempt or credential.
 	// Discard при необходимости останавливает локальный pending work и удаляет лишь переданные pinned attempt/credential.
 	Discard(context.Context, providercredential.DiscardMaterialization) error
@@ -154,11 +154,11 @@ type ProviderCredentialMaterializer interface {
 	// CleanupAuthorizationWithRecovery performs fenced authorization cleanup using the bound recovery descriptor.
 	// CleanupAuthorizationWithRecovery выполняет fenced authorization cleanup по связанному recovery descriptor.
 	CleanupAuthorizationWithRecovery(context.Context, kubernetesstore.ProviderAuthorizationCleanupTarget, kubernetesstore.ProviderCleanupRecoveryIdentity) (kubernetesstore.ProviderCredentialCleanupResult, error)
-	// ObserveModelCatalog queries the configured catalog method using the exact account/credential descriptor,
+	// ObserveModelCatalogForDefinition queries the configured catalog method using the exact account/credential descriptor,
 	// not an arbitrary caller-selected provider URL or credential body.
-	// ObserveModelCatalog запрашивает настроенный catalog method по точным account/credential descriptor,
+	// ObserveModelCatalogForDefinition запрашивает настроенный catalog method по точным account/credential descriptor,
 	// не произвольному provider URL или credential body caller.
-	ObserveModelCatalog(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string) (providercredential.ModelCatalog, error)
+	ObserveModelCatalogForDefinition(context.Context, string, kubernetesstore.ProviderCredentialDescriptor, string, string) (providercredential.ModelCatalog, error)
 }
 
 // Option configures a server during trusted composition; it is not a runtime mutation or authorization API.

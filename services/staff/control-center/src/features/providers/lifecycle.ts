@@ -21,7 +21,7 @@ import {
   loadProviderAccount,
   reauthorizeProviderDevice,
   startDeviceAuthorization,
-  verifyDeviceAuthorization,
+  verifyAccountAuthorization,
 } from "./api";
 import type { ProviderAccount } from "./model";
 import { asProblem } from "@/shared/api/problem";
@@ -210,7 +210,7 @@ async function performProviderLifecycle(
         break;
       case "VERIFY":
         result = {
-          account: await verifyDeviceAuthorization(original, attempt.key),
+          account: await verifyAccountAuthorization(original, attempt.key),
         };
         break;
       case "REAUTHORIZE":

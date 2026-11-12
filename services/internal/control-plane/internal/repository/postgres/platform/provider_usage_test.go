@@ -141,7 +141,8 @@ func TestProviderUsageOpenCodeManagedWorkspace(t *testing.T) {
 		{name: "managed-commands", count: 2, managed: true},
 		{name: "unmanaged-commands", count: 2, denied: "RUNTIME_PROFILE_UNAVAILABLE"},
 		{name: "missing-environment", count: -1, managed: true, denied: "RUNTIME_PROFILE_UNAVAILABLE"},
-		{name: "overlay", count: 2, managed: true, overlay: "model_reasoning_effort = \"low\"", denied: "RUNTIME_PROFILE_UNAVAILABLE"},
+		{name: "retired-overlay", count: 2, managed: true, overlay: "personality = \"friendly\"", denied: "RUNTIME_PROFILE_UNAVAILABLE"},
+		{name: "overlay", count: 2, managed: true, overlay: "model_reasoning_effort = \"low\"", denied: "EFFORT_UNSUPPORTED"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			account, context := providerUsageFixture()

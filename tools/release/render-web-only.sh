@@ -27,6 +27,9 @@ usage() {
     '  [--authority-registry-configuration <json>]' \
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
     '  [--disable-observability; exporters only]' \
+    '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
+    '  [--session-workspace-profile disabled|SESSION_WORKSPACE_V2; default disabled]' \
+    '  [--image-admission-memory-profile default|bounded-2g; default default]' \
     '  [--clamav-mode enabled|disabled; default enabled]' \
     '  [--artifact-antivirus-mode required|disabled; default required, disabled marks ordinary files NOT_SCANNED]' \
     '  [--disable-monitoring-resources; no Prometheus Operator resources]' \
@@ -72,6 +75,9 @@ oidc_pod_component=""
 oidc_target_port=""
 disable_observability=false
 clamav_mode=enabled
+clamav_storage_profile=shared-rwx
+image_admission_memory_profile=default
+session_workspace_profile=disabled
 artifact_antivirus_mode=required
 image_policy_inputs_mode=direct
 disable_monitoring_resources=false
@@ -113,6 +119,9 @@ while (($# > 0)); do
     --oidc-pod-component) oidc_pod_component="${2:-}"; shift 2 ;;
     --oidc-target-port) oidc_target_port="${2:-}"; shift 2 ;;
     --disable-observability) disable_observability=true; shift ;;
+    --clamav-storage-profile) clamav_storage_profile="${2:-}"; shift 2 ;;
+    --session-workspace-profile) session_workspace_profile="${2:-}"; shift 2 ;;
+    --image-admission-memory-profile) image_admission_memory_profile="${2:-}"; shift 2 ;;
     --clamav-mode) clamav_mode="${2:-}"; shift 2 ;;
     --artifact-antivirus-mode) artifact_antivirus_mode="${2:-}"; shift 2 ;;
     --disable-monitoring-resources) disable_monitoring_resources=true; shift ;;
@@ -123,6 +132,11 @@ while (($# > 0)); do
     *) usage; fail "unsupported argument: $1" ;;
   esac
 done
+
+case "$image_admission_memory_profile" in
+  default|bounded-2g) ;;
+  *) fail 'image admission memory profile is invalid' ;;
+esac
 
 script_directory=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 repository_root=$(cd -- "$script_directory/../.." && pwd -P)
@@ -136,7 +150,7 @@ fi
 case "$image_policy_inputs_mode" in direct|versioned) ;; *) fail 'image policy inputs mode is invalid' ;; esac
 if [[ -n "$model_provider_configuration" ]]; then
   python3 "$repository_root/tools/install/model-provider.py" validate --configuration "$model_provider_configuration" >/dev/null || fail 'model provider configuration is invalid'
-  agent_runner_component=agent-runner-opencode
+  agent_runner_component=agent-runner
 elif [[ -n "$model_provider_default_model" ]]; then
   fail 'model provider default requires configuration'
 fi
@@ -169,7 +183,7 @@ fi
 
 [[ -r "$lock_file" ]] || fail 'release lock is not readable'
 if [[ -n "$model_provider_configuration" ]]; then
-  [[ "$(jq -r '.role_base_runtime_engine // "codex"' "$lock_file")" == opencode ]] || fail 'OpenCode requires a matching role-base runtime profile'
+  [[ "$(jq -r '.role_base_runtime_engine // "opencode"' "$lock_file")" == opencode ]] || fail 'OpenCode requires a matching role-base runtime profile'
 fi
 [[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ "$lock_sha256" =~ ^[a-f0-9]{64}$ && "$lock_sha256" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -260,7 +274,22 @@ source_sha=$(jq -er '.source_sha' "$lock_file")
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 rendered="$temporary_directory/$profile.yaml"
-kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
+if [[ "$image_admission_memory_profile" == bounded-2g ]]; then
+  # Доверенный component добавляет только Go budget; requests/limits и admission
+  # guards остаются прежними. Пути задаются репозиторием, не входным manifest.
+  python3 - "$temporary_directory" "$repository_root" "$profile" <<'PY'
+import json, os, pathlib, sys
+target, root, profile = map(pathlib.Path, sys.argv[1:])
+(target / 'kustomization.yaml').write_text(json.dumps({
+    'apiVersion': 'kustomize.config.k8s.io/v1beta1', 'kind': 'Kustomization',
+    'resources': [os.path.relpath(root / 'deploy/k8s/profiles' / profile, target)],
+    'components': [os.path.relpath(root / 'deploy/k8s/components/image-admission-memory-budget', target)],
+}))
+PY
+  kubectl kustomize "$temporary_directory" --load-restrictor=LoadRestrictionsNone >"$rendered"
+else
+  kubectl kustomize "$repository_root/deploy/k8s/profiles/$profile" >"$rendered"
+fi
 
 # SSH targets поступают только из явно выбранных public connection snapshots.
 # Каждый документ добавляет exact /32(/128):22; wildcard и тестовый IP отсутствуют.
@@ -388,10 +417,11 @@ KUBERNETES_API_ENDPOINT_RULE="$api_endpoint_rule" yq -i '
 ' "$rendered"
 
 python3 "$repository_root/tools/install/kubernetes_api_profile.py" --render "$rendered"
+case "$clamav_storage_profile" in shared-rwx|node-local-rwo) ;; *) fail 'ClamAV storage profile is invalid' ;; esac
 case "$clamav_mode" in enabled|disabled) ;; *) fail 'ClamAV mode is invalid' ;; esac
 case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antivirus mode is invalid' ;; esac
-if [[ "$clamav_mode" == disabled || "$artifact_antivirus_mode" == disabled ]]; then
-  python3 "$repository_root/tools/install/clamav_profile.py" --render "$rendered" --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode"
+if [[ "$clamav_mode" == disabled || "$artifact_antivirus_mode" == disabled || "$clamav_storage_profile" != shared-rwx ]]; then
+  python3 "$repository_root/tools/install/clamav_profile.py" --render "$rendered" --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile"
 fi
 
 if [[ "$disable_observability" == true ]]; then
@@ -446,7 +476,7 @@ if [[ "$profile" == "web-with-mattermost" ]]; then
   ' "$rendered"
 fi
 
-runtime_contract_file="$repository_root/contracts/runtime-controller/v9/agent-runner-input.schema.json"
+runtime_contract_file="$repository_root/contracts/runtime-controller/v10/agent-runner-input.schema.json"
 runtime_contract_digest=$(jq -cS . "$runtime_contract_file" | sha256sum | awk '{print $1}')
 [[ "$runtime_contract_digest" =~ ^[a-f0-9]{64}$ &&
   "$runtime_contract_digest" != 0000000000000000000000000000000000000000000000000000000000000000 ]] ||
@@ -491,7 +521,7 @@ FRONTEND_SHA256="$frontend_sha256" yq -i '
     .data.builderSHA256 = "0168606be2315b7c807a03b3d8aa79beefdb31c98740cebdffdfeebf31190c9f" |
     .data.frontendSHA256 = strenv(FRONTEND_SHA256) |
     .data.toolchainSHA256 = strenv(LOCK_DIGEST) |
-    .data.roleRuntimeContractRevision = "3" |
+    .data.roleRuntimeContractRevision = "5" |
     .data.roleRuntimeContractSHA256 = strenv(RUNTIME_CONTRACT_DIGEST)
   ) |
   with(select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime");
@@ -671,6 +701,9 @@ EGRESS_POLICY_NAME="$egress_policy_name" yq -i '
   )
 ' "$rendered"
 
+python3 "$repository_root/tools/install/egress_bootstrap_projection.py" --render "$rendered" ||
+  fail 'egress bootstrap projection failed'
+
 # Kustomize versions bundled with kubectl may classify newer cluster-scoped
 # APIs as namespaced. Canonicalize their identity before duplicate detection
 # and server-side apply.
@@ -721,6 +754,9 @@ if [[ -n "$native_integration_configuration$native_integration_configuration_sha
     --configuration "$native_integration_configuration" --configuration-sha256 "$native_integration_configuration_sha256" ||
     fail 'native integration profile render rejected'
 fi
+
+python3 "$repository_root/tools/install/workspace_storage_profile.py" --render "$rendered" \
+  --profile "$session_workspace_profile" || fail 'workspace storage profile render rejected'
 
 # Canonicalize duplicate resources before validation. The web-only aggregate may
 # include a shared ConfigMap through more than one component base, but the bytes

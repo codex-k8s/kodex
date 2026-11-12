@@ -8,12 +8,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
@@ -184,12 +183,12 @@ type deviceWorker struct {
 // учитывая только local device workers под mutex. Он не владеет account полномочиями; lifecycle и
 // порядок shutdown обеспечивает composition.
 type Service struct {
-	modelProvider *runtimecontract.ModelProviderConfiguration
-	gatewayHTTP   modelCatalogHTTPClient
-	lifecycle     context.Context
-	store         Store
-	appServer     AppServer
-	deviceTTL     time.Duration
+	modelProviderCatalog *runtimecontract.ModelProviderCatalog
+	gatewayHTTP          map[string]modelCatalogHTTPClient
+	lifecycle            context.Context
+	store                Store
+	credentialBackend    CredentialBackend
+	deviceTTL            time.Duration
 
 	mu       sync.Mutex
 	sessions map[string]*deviceWorker
@@ -200,19 +199,19 @@ type Service struct {
 // tracking and starts no provider process or background work.
 // New проверяет lifecycle/зависимости и device TTL от минуты до часа, создаёт local worker учёт и не
 // запускает provider процесс или background работу.
-func New(lifecycle context.Context, store Store, appServer AppServer, deviceTTL time.Duration) (*Service, error) {
-	if lifecycle == nil || store == nil || appServer == nil || deviceTTL < time.Minute || deviceTTL > time.Hour {
+func New(lifecycle context.Context, store Store, credentialBackend CredentialBackend, deviceTTL time.Duration) (*Service, error) {
+	if lifecycle == nil || store == nil || credentialBackend == nil || deviceTTL < time.Minute || deviceTTL > time.Hour {
 		return nil, errors.New("provider credential materializer configuration is invalid")
 	}
-	return &Service{lifecycle: lifecycle, store: store, appServer: appServer, deviceTTL: deviceTTL, sessions: map[string]*deviceWorker{}}, nil
+	return &Service{lifecycle: lifecycle, store: store, credentialBackend: credentialBackend, deviceTTL: deviceTTL, sessions: map[string]*deviceWorker{}}, nil
 }
 
-// Check joins storage and app-server readiness errors so both dependencies are probed rather than
+// Check joins storage and managed provider readiness errors so both dependencies are probed rather than
 // short-circuiting after the first failure.
-// Check объединяет storage и app-server readiness ошибки, проверяя обе зависимости без остановки после
+// Check объединяет storage и managed provider readiness ошибки, проверяя обе зависимости без остановки после
 // первого отказа.
 func (service *Service) Check(ctx context.Context) error {
-	return errors.Join(service.store.Check(ctx), service.appServer.Check(ctx))
+	return errors.Join(service.store.Check(ctx), service.credentialBackend.Check(ctx))
 }
 
 // StartDeviceAuthorization derives stable account/attempt references and reuses an exact unexpired
@@ -241,7 +240,7 @@ func (service *Service) StartDeviceAuthorization(
 	if !errors.Is(err, kubernetesstore.ErrProviderAttemptNotFound) {
 		return DeviceAuthorization{}, errors.Join(ErrConflict, err)
 	}
-	session, err := service.appServer.StartDeviceAuthorization(ctx, materializerRef, homeName)
+	session, err := service.credentialBackend.StartDeviceAuthorization(ctx, materializerRef, homeName)
 	if err != nil {
 		return DeviceAuthorization{}, err
 	}
@@ -424,40 +423,6 @@ func (service *Service) ObserveDeviceAuthorization(
 		}
 	}
 	return stored, nil
-}
-
-// MaterializeAPIKey validates reference/key bounds and unsafe separators, serializes a private API-key
-// auth record and publishes immutable material before returning descriptor and a fixed account label.
-// Encoded bytes are cleared; the original input and immutable Go string copies are not erased here.
-// MaterializeAPIKey проверяет границы reference/key и опасные разделители, сериализует приватную API-key
-// auth запись и публикует immutable material до возврата descriptor и фиксированной account метки.
-// Encoded байты обнуляются; исходный вход и immutable Go string копии здесь не стираются.
-func (service *Service) MaterializeAPIKey(
-	ctx context.Context,
-	attemptRef, accountRef string,
-	apiKey []byte,
-) (kubernetesstore.ProviderCredentialDescriptor, string, error) {
-	if _, _, err := deviceAuthorizationReferences(attemptRef, accountRef); err != nil ||
-		len(apiKey) < minimumAPIKeyBytes || len(apiKey) > maximumAPIKeyBytes ||
-		len(strings.TrimSpace(string(apiKey))) != len(apiKey) || strings.ContainsAny(string(apiKey), "\r\n\x00") {
-		return kubernetesstore.ProviderCredentialDescriptor{}, "", ErrInvalidInput
-	}
-	encoded, err := json.Marshal(struct {
-		APIKey   string `json:"OPENAI_API_KEY"`
-		AuthMode string `json:"auth_mode"`
-	}{APIKey: string(apiKey), AuthMode: "apikey"})
-	if err != nil {
-		return kubernetesstore.ProviderCredentialDescriptor{}, "", errors.New("encode provider API key authorization")
-	}
-	defer clear(encoded)
-	descriptor, err := service.store.CreateProviderCredential(ctx, attemptRef, accountRef, encoded)
-	if errors.Is(err, kubernetesstore.ErrProviderCredentialConflict) {
-		return kubernetesstore.ProviderCredentialDescriptor{}, "", ErrConflict
-	}
-	if err != nil {
-		return kubernetesstore.ProviderCredentialDescriptor{}, "", err
-	}
-	return descriptor, "API key account", nil
 }
 
 // Close snapshots and removes local worker registrations, closes each session and waits for all

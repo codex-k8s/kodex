@@ -30,57 +30,14 @@ MAX_BYTES = 512 << 10
 MAX_LINE = 4096
 MAX_FOLLOW_REJOINS = 2
 PRE_ACK_READ_RETRY_CODES = frozenset(('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT'))
-STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE '
-                   'HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS '
-                   'ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE '
-                   'TURN_PARAMETERS TURN_START TERMINAL_WAIT THREAD_READ PROCESS_STOP '
-                   'TERMINAL_RESULT ARCHIVE_CAPTURE UNKNOWN'.split())
-CLASSES = frozenset('AUTHENTICATION AUTHORITY MCP CONFIGURATION PROVIDER ACCOUNT_RESPONSE_SCHEMA'.split())
-DETAILS = frozenset('NONE REQUEST_WRITE CONTEXT_CANCELLED STREAM_CLOSED STREAM_INVALID '
-                    'NOTIFICATION_INVALID REQUEST_REJECTED RESPONSE_CORRELATION MESSAGE_KIND RPC_ERROR '
-                    'RESUME_SOURCE_SCHEMA RESUME_SOURCE_ID RESUME_SOURCE_LOCATOR RESUME_SOURCE_OPEN '
-                    'RESUME_SOURCE_METADATA RESUME_SOURCE_IDENTITY'.split())
-ACCOUNT_READ = frozenset('NONE UNKNOWN REQUIREMENTS_LOAD MISSING_ACCOUNT_ID DISCOVERY_CANCELLED '
-                         'ACCOUNT_CHANGED DISCOVERY_UNAUTHORIZED DISCOVERY_FAILED MISSING_WORKSPACE '
-                         'DUPLICATE_WORKSPACE REQUIREMENTS_RELOAD CONFIGURATION_CHANGED SHUTDOWN '
-                         'DISCOVERY_TIMEOUT MISSING_BACKEND_ORIGIN INVALID_ROUTING_OVERRIDE '
-                         'BACKEND_IS_NOT_ORIGIN BACKEND_CONFLICT INVALID_BACKEND_URL INVALID_BACKEND_ORIGIN'.split())
-TOKEN_USAGE_ERRORS = frozenset('TOKEN_USAGE_STRUCTURE TOKEN_USAGE_REQUIRED_MISSING TOKEN_USAGE_REQUIRED_NULL '
-                              'TOKEN_USAGE_REQUIRED_TYPE TOKEN_USAGE_OPTIONAL_NULL TOKEN_USAGE_OPTIONAL_TYPE '
-                              'TOKEN_USAGE_NEGATIVE TOKEN_USAGE_TOTAL_ARITHMETIC TOKEN_USAGE_CACHE_INPUT_BOUND '
-                              'TOKEN_USAGE_REASONING_OUTPUT_BOUND TOKEN_USAGE_LAST_EXCEEDS_TOTAL '
-                              'TOKEN_USAGE_RECEIPT_CONFLICT TOKEN_USAGE_RECEIPT_LIMIT TOKEN_USAGE_OVERFLOW'.split())
-TOKEN_USAGE_METHODS = frozenset(('thread/tokenUsage/updated', 'rawResponse/completed'))
-NOTIFICATION_ERRORS = frozenset('NONE UNKNOWN METHOD ENVELOPE TUPLE ITEM TIMESTAMP MESSAGE '
-                                'TOKEN_USAGE TERMINAL LIFECYCLE MCP PROVIDER_ERROR'.split()) | TOKEN_USAGE_ERRORS
-NOTIFICATIONS = frozenset('''NONE UNKNOWN error thread/started thread/status/changed thread/archived
-thread/deleted thread/unarchived thread/closed skills/changed thread/name/updated thread/goal/updated
-thread/goal/cleared thread/settings/updated thread/tokenUsage/updated turn/started hook/started
-turn/completed hook/completed turn/diff/updated turn/plan/updated item/started
-item/autoApprovalReview/started item/autoApprovalReview/completed item/completed item/agentMessage/delta
-item/plan/delta command/exec/outputDelta process/outputDelta process/exited item/commandExecution/outputDelta
-item/commandExecution/terminalInteraction item/fileChange/outputDelta item/fileChange/patchUpdated
-serverRequest/resolved item/mcpToolCall/progress mcpServer/oauthLogin/completed rawResponseItem/completed
-rawResponse/completed mcpServer/startupStatus/updated account/updated account/rateLimits/updated
-app/list/updated remoteControl/status/changed externalAgentConfig/import/progress
-externalAgentConfig/import/completed fs/changed item/reasoning/summaryTextDelta item/reasoning/summaryPartAdded
-item/reasoning/textDelta thread/compacted model/rerouted model/verification turn/moderationMetadata
-model/safetyBuffering/updated warning guardianWarning deprecationNotice configWarning
-fuzzyFileSearch/sessionUpdated fuzzyFileSearch/sessionCompleted thread/realtime/started
-thread/realtime/itemAdded thread/realtime/transcript/delta thread/realtime/transcript/done
-thread/realtime/outputAudio/delta thread/realtime/sdp thread/realtime/error thread/realtime/closed
-windows/worldWritableWarning windowsSandbox/setupCompleted account/login/completed
-thread/reverted thread/attachment/updated thread/queue/changed project/changed thread/project/updated
-thread/environment/connected thread/environment/disconnected autoApprovalReview/strictReviewRequired
-mcpServer/event/stream/notification account/gatewayOAuth/changed modelProvider/authRecoveryStarted
-modelProvider/authRecoveryCompleted thread/realtime/item/started thread/realtime/item/transcript/delta
-thread/realtime/item/completed'''.split())
+STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE HOME_PREPARE ACCOUNT_PIN TERMINAL_WAIT UNKNOWN'.split())
+CLASSES = frozenset("AUTHENTICATION AUTHORITY MCP CONFIGURATION PROVIDER".split())
 TERMINAL_CODES = frozenset('''provider_error_info_invalid server_overloaded usage_limit_exceeded unauthorized
 cyber_policy context_window_exceeded session_budget_exceeded provider_internal_error provider_bad_request
 thread_rollback_failed provider_sandbox_error provider_other_error active_turn_not_steerable
 provider_transport_failure provider_interrupted RUNTIME_ARTIFACT_INVALID'''.split())
-REQUEST_PREFIX = 'Codex provider request failed at safe stage: '
-TERMINAL_PREFIX = 'Codex provider turn completed with safe failure code: '
+REQUEST_PREFIX = 'Provider request failed at safe stage: '
+TERMINAL_PREFIX = 'OpenCode provider turn completed with safe failure code: '
 CLIENT_MESSAGE = 'runtime execution failed before completion'
 FILESYSTEM_MESSAGE = 'Provider post-join filesystem denied'
 WORKSPACE_COMPLETION_MESSAGE = 'Runtime workspace completion denied'
@@ -99,7 +56,6 @@ CLIENT_CATEGORIES = frozenset('UNKNOWN CALLBACKS POST_TERMINAL FRAME_LIMIT FRAME
                              'DIAGNOSTIC_TUPLE ARCHIVE_PROOF STREAM_READ TERMINAL_ABSENT TERMINAL_RESULT '
                              'ACTIVITY_DELIVERY'.split())
 CLIENT_CONTEXTS = frozenset(('ACTIVE', 'CANCELED', 'DEADLINE_EXCEEDED', 'UNKNOWN'))
-STREAM_ERRORS = frozenset('NONE FRAME_TOO_LARGE MESSAGE_LIMIT EMPTY_FRAME WIRE_INVALID READ_ERROR'.split())
 STAMP = re.compile(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} ')
 REQUEST = re.compile(r'^' + re.escape(REQUEST_PREFIX) +
                      r'([^;]+); class: ([^;]+); detail: ([^;]+); rpc_code: (-?[0-9]{1,19}); '
@@ -138,23 +94,10 @@ def parse_line(raw):
     match = REQUEST.fullmatch(line)
     require(match is not None, 'PROVIDER_DIAGNOSTIC_INVALID')
     stage, category, detail, code, notification, account, notification_error, stream_error = match.groups()
-    code = int(code)
-    require(stage in STAGES and category in CLASSES and detail in DETAILS and
-            notification in NOTIFICATIONS and account in ACCOUNT_READ and
-            notification_error in NOTIFICATION_ERRORS and stream_error in STREAM_ERRORS and
-            -(1 << 63) <= code < (1 << 63),
+    require(stage in STAGES and category in CLASSES and detail == 'NONE' and code == '0' and
+            notification == account == notification_error == stream_error == 'NONE',
             'PROVIDER_DIAGNOSTIC_INVALID')
-    require(detail == 'RPC_ERROR' or code == 0, 'PROVIDER_DIAGNOSTIC_INVALID')
-    require(not detail.startswith('RESUME_SOURCE_') or (stage == 'THREAD_READ' and category == 'PROVIDER'),
-            'PROVIDER_DIAGNOSTIC_INVALID')
-    require(detail == 'NOTIFICATION_INVALID' or
-            (notification == 'NONE' and notification_error == 'NONE'), 'PROVIDER_DIAGNOSTIC_INVALID')
-    require(detail != 'NOTIFICATION_INVALID' or
-            (notification != 'NONE' and notification_error != 'NONE'), 'PROVIDER_DIAGNOSTIC_INVALID')
-    require(notification_error not in TOKEN_USAGE_ERRORS or notification in TOKEN_USAGE_METHODS,
-            'PROVIDER_DIAGNOSTIC_INVALID')
-    require((stage == 'ACCOUNT_READ' and detail == 'RPC_ERROR' and code == -32603) or account == 'NONE',
-            'PROVIDER_DIAGNOSTIC_INVALID')
+    code = 0
     return {'kind': 'REQUEST_FAILURE', 'stage': stage, 'class': category, 'detail': detail,
             'rpc_code': code, 'notification': notification, 'account_read': account,
             'notification_error': notification_error, 'stream_error': stream_error}

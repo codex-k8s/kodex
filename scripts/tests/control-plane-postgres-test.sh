@@ -14,10 +14,22 @@ storage_mode=${KODEX_TEST_POSTGRES_STORAGE:-disk}
 [[ "$storage_mode" == disk || "$storage_mode" == ram ]] || fail 'test PostgreSQL storage must be disk or ram'
 postgres_image='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
 upgrade_container_id=""
-test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestModelProviderBootstrapComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
+test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestNativeSessionOwnerComponent|TestWorkspaceWriterOwnerComponent|TestWorkflowWorkspaceOwnerComponent|TestModelProviderBootstrapComponent|TestModelProviderCatalogComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestNativeCompletionCapabilityRevokeComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --workspace-archive-abi-fresh-install ]]; then
+  upgrade_test='^TestWorkspaceArchiveABIFreshInstall$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --workspace-archive-abi-upgrade ]]; then
+  upgrade_test='^TestWorkspaceArchiveABIUpgrade$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --opencode-native-upgrade ]]; then
+  upgrade_test='^TestOpenCodeNativeSessionCutover$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --workflow-workspace-upgrade ]]; then
   upgrade_test='^TestWorkflowWorkspaceScopeUpgrade$'
   test_pattern=--review-qa-upgrade
@@ -375,6 +387,8 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261112000100) schema_proof=workspace-archive-abi-migration-postcondition.sql; schema_verifier=validWorkspaceArchiveABIMigrationPostcondition ;;
+    20261111000200) schema_proof=opencode-native-sessions-migration-postcondition.sql; schema_verifier=validOpenCodeNativeMigrationPostcondition ;;
     20261111000100) schema_proof=workflow-workspace-migration-postcondition.sql; schema_verifier=validWorkflowWorkspaceMigrationPostcondition ;;
     20261110000200) schema_proof=managed-workspace-migration-postcondition.sql; schema_verifier=validManagedWorkspaceMigrationPostcondition ;;
     20261110000100) schema_proof=artifact-optional-antivirus-migration-postcondition.sql; schema_verifier=validArtifactOptionalAntivirusMigrationPostcondition ;;
@@ -428,10 +442,12 @@ fi
   # Эти координаты существуют только внутри disposable контейнера этой оснастки.
   psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
     -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
+  # Полный baseline включает реальные ожидания lease expiry; общий бюджет15m
+  # не меняет локальные deadlines сценариев и не скрывает assertion failures.
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
     KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=15m \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \

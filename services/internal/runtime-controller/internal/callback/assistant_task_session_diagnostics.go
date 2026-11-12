@@ -179,7 +179,7 @@ func taskSessionFailureAttributes(input runtimecontract.RunnerInput, callID json
 		!validAssistantCatalogDigest(input.InputDigest) || !validAssistantCatalogDigest(input.ExecutionBindingDigest) {
 		return attributes
 	}
-	digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, string(callID))))
+	digest := sha256.Sum256([]byte(runtimeToolMutationKey(input, callID)))
 	return []any{taskSessionStageAttribute, stage, taskSessionBindingAttribute, "AUTHENTICATED_INPUT",
 		"run_ref", input.RunRef, "node_ref", input.NodeRef, "session_ref", input.SessionRef,
 		"turn_ref", input.TurnRef, "attempt", input.Attempt,

@@ -133,6 +133,10 @@ var queryRuntimeClaimFailGraph string
 // runtimeClaimEligibilityChanged задаёт ключ локализации отказа графа при потере доступности runtime-кандидата; сырой диагностикой провайдера не является.
 const runtimeClaimEligibilityChanged = "i18n:RUNTIME_CLAIM_ELIGIBILITY_CHANGED"
 
+// runtimeInputInvalidCode identifies a closed eligibility failure without exposing changed permissions or input.
+// runtimeInputInvalidCode обозначает закрытый отказ доступности без раскрытия изменённых прав или входа.
+const runtimeInputInvalidCode = "RUNTIME_INPUT_INVALID"
+
 // runtimeLeaseExpiredSummary is the audit summary key for a persistently expired claim lease, including cycles that acquire no new candidate.
 // runtimeLeaseExpiredSummary задаёт ключ сводки аудита устойчивого истечения аренды захвата, включая циклы без нового кандидата.
 const runtimeLeaseExpiredSummary = "i18n:RUNTIME_LEASE_EXPIRED"
@@ -249,7 +253,7 @@ func (repository *Repository) recordSystemAssistantTerminalTurn(
 // failRuntimeCandidateGraph fails only the candidate root graph through the specialized input-invalid path; independent roots in the same claim batch keep their own execution state and leases.
 // failRuntimeCandidateGraph завершает ошибкой лишь граф корня кандидата специализированным input-invalid путём; независимые корни той же пачки сохраняют собственные состояния и аренды.
 func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution) error {
-	return repository.failRuntimeGraph(ctx, tx, current, input, candidate, "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged)
+	return repository.failRuntimeGraph(ctx, tx, current, input, candidate, runtimeInputInvalidCode, runtimeClaimEligibilityChanged)
 }
 
 // failRuntimeGraph accepts only the fixed input-invalid/timeout code-summary pairs, applies the root-scoped SQL closure and emits exact run/node/gate events plus run audits in the caller transaction. System-assistant failures also append a terminal turn before queuing terminal interaction deliveries; the outer owner commits the whole result.
@@ -265,7 +269,7 @@ func (repository *Repository) failRuntimeGraph(ctx context.Context, tx pgx.Tx, c
 // Gate, deliveries, leases и invocations меняются в прежней terminal-транзакции; истёкший Gate не
 // получает решения или личности человека, остальные открытые Gate отменяются по прежним правилам.
 func (repository *Repository) failRuntimeGraphWithGateExpiry(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution, code, summary, expiredGateID string) error {
-	ordinary := expiredGateID == "" && ((code == "RUNTIME_INPUT_INVALID" && summary == runtimeClaimEligibilityChanged) || (code == "RUNTIME_TIMEOUT" && summary == runtimeTimeoutSummary))
+	ordinary := expiredGateID == "" && ((code == runtimeInputInvalidCode && summary == runtimeClaimEligibilityChanged) || (code == "RUNTIME_TIMEOUT" && summary == runtimeTimeoutSummary))
 	expiry := expiredGateID != "" && code == "OWNER_GATE_EXPIRED" && summary == ownerGateExpiredSummary
 	ownerRejected := false
 	ownedReadBudget := expiredGateID == "" && input.Kind == command.CompleteIntegrationInvocation && code == "LEGACY_REWORK_READ_LIMIT" && summary == "i18n:LEGACY_REWORK_READ_LIMIT"

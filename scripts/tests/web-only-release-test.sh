@@ -10,6 +10,21 @@ render="$temporary_directory/render.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-only" >"$render"
 optional_render="$temporary_directory/with-mattermost.yaml"
 kubectl kustomize "$repository_root/deploy/k8s/profiles/web-with-mattermost" >"$optional_render"
+# Реальные оба profiles должны доставлять совместимый opt-in всем consumers.
+PYTHONPATH="$repository_root/tools/install" python3 - "$render" "$optional_render" <<'PYTHON'
+import sys,yaml
+from workspace_storage_profile import transform, PROFILE
+for path in sys.argv[1:]:
+    with open(path) as stream: original=list(filter(None,yaml.safe_load_all(stream)))
+    # Unmaterialized base содержит прежний ABI pin; final release renderer задаёт ABI5.
+    for item in original:
+        if item['kind']=='ConfigMap' and 'roleRuntimeContractRevision' in item.get('data',{}):
+            item['data']['roleRuntimeContractRevision']='5'
+    selected=transform(original, PROFILE)
+    assert transform(selected, PROFILE)==selected
+    assert transform(original, 'disabled')==original
+print('Workspace storage profile render: PASS')
+PYTHON
 # Gateway остаётся внутренним Service: публичный API принадлежит ingress PWA.
 # Каждый overlay должен собираться отдельно, без ссылки на удалённый Ingress.
 for gateway_environment in staging production; do

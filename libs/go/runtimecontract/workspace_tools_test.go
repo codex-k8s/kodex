@@ -14,7 +14,7 @@ func workspaceToolInputFixture() RunnerInput {
 	input := modelProviderRunnerFixture()
 	input.Capabilities = append(input.Capabilities, ArtifactCapability)
 	input.AssistantScope = AssistantScopeNone
-	input.CodexSandbox = "workspace-write"
+	input.WorkspaceAccess = "workspace-write"
 	input.WorkspacePolicy = RuntimeWorkspacePolicyV1()
 	input.EnvironmentPolicy = DefaultRuntimeEnvironmentPolicy()
 	input.EnvironmentPolicy.ManagedWorkspace = true
@@ -35,7 +35,7 @@ func TestWorkspaceToolsKeepDefaultAndAssistantProfilesClosed(t *testing.T) {
 		t.Fatal("local workspace tools changed the controller catalog")
 	}
 	for name, mutate := range map[string]func(*RunnerInput){
-		"read-only work":      func(i *RunnerInput) { i.CodexSandbox = "read-only" },
+		"read-only work":      func(i *RunnerInput) { i.WorkspaceAccess = "read-only" },
 		"opted out":           func(i *RunnerInput) { i.EnvironmentPolicy.ManagedWorkspace = false },
 		"Codex default":       func(i *RunnerInput) { i.Provider = "openai" },
 		"assistant project":   func(i *RunnerInput) { i.AssistantScope = AssistantScopeProject },
@@ -152,7 +152,7 @@ func TestManagedWorkspacePathsNeverResolveProviderStateOrPlatformInputs(t *testi
 			t.Fatalf("canonical workspace selector rejected: %q", relative)
 		}
 	}
-	for _, relative := range []string{"", ".", "/workspace/work/a", "../a", "work/../input/a", "work/../../etc/passwd", "work//a", "work/./a", "work/", "work\\a", "work/a\x00b", "work/a\nb", "input/a", "knowledge/a", ".kodex/state/codex-home/auth.json", "outbox/nested/result.json", "worker/a", "outboxx/a", "work/" + strings.Repeat("x", 1024)} {
+	for _, relative := range []string{"", ".", "/workspace/work/a", "../a", "work/../input/a", "work/../../etc/passwd", "work//a", "work/./a", "work/", "work\\a", "work/a\x00b", "work/a\nb", "input/a", "knowledge/a", ".kodex/state/opencode/auth.json", "outbox/nested/result.json", "worker/a", "outboxx/a", "work/" + strings.Repeat("x", 1024)} {
 		if _, ok := ManagedWorkspacePath(input, relative); ok {
 			t.Fatalf("protected or ambiguous selector accepted: %q", relative)
 		}

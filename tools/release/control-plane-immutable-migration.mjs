@@ -17,6 +17,21 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workspace-archive-abi': {
+    anchorProfile:'portable',
+    version:'20261112000100',file:'20261112000100_workspace_archive_runtime_abi.sql',
+    annotation:'kodex.dev/cp-workspace-archive-abi-migration-plan',previousVersion:20261111000200,
+    emptyField:'archiveGuardPredecessor',preconditionFile:'workspace-archive-abi-migration-precondition.sql',
+    postconditionFile:'workspace-archive-abi-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261112000100_workspace_archive_runtime_abi.sql']),
+  },
+  'opencode-native-sessions': {
+    version:'20261111000200',file:'20261111000200_opencode_native_sessions.sql',
+    annotation:'kodex.dev/cp-opencode-native-migration-plan',previousVersion:20261111000100,
+    emptyField:'sessionDataEmpty',preconditionFile:'opencode-native-sessions-migration-precondition.sql',
+    postconditionFile:'opencode-native-sessions-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261111000200_opencode_native_sessions.sql']),
+  },
   'workflow-workspace': {
     version:'20261111000100',file:'20261111000100_workflow_workspace_scope.sql',
     annotation:'kodex.dev/cp-workflow-workspace-migration-plan',previousVersion:20261110000200,
@@ -119,8 +134,14 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     before.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
     before.metadata.labels?.['app.kubernetes.io/component'] === 'migration' &&
     [undefined,'kodex'].includes(before.metadata.labels?.['app.kubernetes.io/part-of']) &&
-    before.metadata.labels?.['kodex.dev/environment'] === 'staging', 'MIGRATOR_IDENTITY_INVALID');
+    before.metadata.labels?.['kodex.dev/environment'] === (configuration.anchorProfile === 'portable' ? 'production' : 'staging') &&
+    (configuration.anchorProfile !== 'portable' || (before.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+      before.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && !before.metadata.labels?.['kodex.dev/local-profile'])), 'MIGRATOR_IDENTITY_INVALID');
   const pod = before.spec?.template?.spec, container = pod?.containers?.[0];
+  const migrationEnvironment = [{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}];
+  // Отключённый observability profile portable renderer сохраняется без произвольного env passthrough.
+  if (configuration.anchorProfile === 'portable' && container?.env?.some(value => value.name === 'OTEL_SDK_DISABLED'))
+    migrationEnvironment.push({name:'OTEL_SDK_DISABLED',value:'true'});
   // YAML 1.1 Kubernetes и YAML 1.2 yq по-разному переводят 0440 в JSON. Права из render
   // не переносятся: новый Job всегда назначает собственные явные десятичные modes.
   const refsOnly = values => (values ?? []).map(value => {
@@ -133,7 +154,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     pod.restartPolicy === 'Never' && pod.containers.length === 1 && container?.name === 'migrate' &&
     fingerprint(container.command) === fingerprint(['/usr/local/bin/control-plane-cli']) &&
     fingerprint(container.args) === fingerprint(['up']) &&
-    fingerprint(container.env) === fingerprint([{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}]) &&
+    fingerprint(container.env) === fingerprint(migrationEnvironment) &&
     !container.envFrom && fingerprint(container.volumeMounts) === fingerprint(mounts) &&
     fingerprint(refsOnly(pod.volumes)) === fingerprint(refsOnly(volumes)) &&
     !pod.hostNetwork && !pod.hostPID && !pod.hostIPC &&
@@ -154,7 +175,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
       securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,fsGroup:10001,fsGroupChangePolicy:'OnRootMismatch',seccompProfile:{type:'RuntimeDefault'}},
       initContainers:[structuredClone(waitForPostgres)],
       containers:[{name:'migrate',image,imagePullPolicy:'Always',command:['/usr/local/bin/control-plane-cli'],args:[configuration.executionCommand ?? 'up'],
-        env:[{name:'CONTROL_PLANE_POSTGRES_ADMIN_DSN_FILE',value:dsnPath}],
+        env:migrationEnvironment,
         securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,readOnlyRootFilesystem:true,allowPrivilegeEscalation:false,capabilities:{drop:['ALL']}},
         resources:{requests:{cpu:'25m',memory:'32Mi'},limits:{cpu:'250m',memory:'128Mi'}},volumeMounts:structuredClone(mounts)}],volumes:structuredClone(volumes)}}}};
   const checkJob = structuredClone(job);
@@ -215,6 +236,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const profile = options['--profile'] ?? 'outbox-index';
   const configuration = immutableMigrationProfile(profile);
   const {version:migrationVersion,file:migrationFile,annotation} = configuration;
+  // Канонический portable сохраняет три replica; прежние stable profiles сохраняют две.
+  const anchorReplicas = configuration.anchorProfile === 'portable' ? 3 : 2;
+  const anchorLocalProfile = configuration.anchorProfile === 'portable' ? undefined : 'stable';
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
   ensure(context === 'k3d-kodex', 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -265,7 +289,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const value = get('deployment','control-plane');
     ensure(value.kind === 'Deployment' && value.metadata?.name === 'control-plane' && value.metadata.namespace === namespace &&
       value.metadata.uid && value.metadata.resourceVersion && value.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
-      value.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' && value.metadata.labels?.['kodex.dev/environment'] === 'staging',
+      value.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' &&
+      value.metadata.labels?.['kodex.dev/environment'] === (configuration.anchorProfile === 'portable' ? 'production' : 'staging') &&
+      (configuration.anchorProfile !== 'portable' || (value.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+        !value.metadata.labels?.['kodex.dev/local-profile'])),
     'MIGRATION_ANCHOR_IDENTITY_INVALID');
     return value;
   };
@@ -346,6 +373,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validPersonalCredentialsMigrationPrecondition(result,profile==='personal-credentials-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'jira-create-fields' || profile === 'jira-create-fields-backup')
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'opencode-native-sessions')
+      ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workspace-archive-abi')
+      ensure(validWorkspaceArchiveABIMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-workspace')
       ensure(validWorkflowWorkspaceMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'managed-workspace')
@@ -375,8 +406,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === profile &&
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
-      parent.anchor.uid === anchor.metadata.uid && [0,2].includes(anchor.spec.replicas) &&
-      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:2}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
+      parent.anchor.uid === anchor.metadata.uid && [0,anchorReplicas].includes(anchor.spec.replicas) &&
+      parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:anchorReplicas}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
     immutableMigrationImage(parent.source,parent.imageEvidence);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
@@ -420,9 +451,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
     ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
     const previousImage = anchor.spec?.template?.spec?.containers?.find(container => container.name === 'control-plane')?.image;
-    ensure(anchor.spec.replicas === 2 && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === 'stable' &&
+    ensure(anchor.spec.replicas === anchorReplicas && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === anchorLocalProfile &&
       anchor.status?.observedGeneration >= anchor.metadata.generation &&
-      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === 2) &&
+      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === anchorReplicas) &&
       /^registry\.local\.kodex\/kodex\/control-plane@sha256:[a-f0-9]{64}$/.test(previousImage ?? '') &&
       !previousImage.endsWith('0'.repeat(64)) && !anchor.spec.template.spec.volumes?.some(volume => volume.hostPath), 'MIGRATION_CP_IMMUTABLE_HEALTH_REQUIRED');
     ensure(previous || !anchor.metadata.annotations?.[annotation], 'MIGRATION_ANCHOR_ALREADY_RESERVED');
@@ -478,7 +509,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
       const digest = plan.anchor.previousImage.split('@').at(-1);
       const ready = actual.status?.observedGeneration >= actual.metadata.generation &&
-        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => actual.status[key] === 2) && pods.length === 2 &&
+        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => actual.status[key] === anchorReplicas) && pods.length === anchorReplicas &&
         pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
           p.spec.containers?.some(c => c.name === 'control-plane' && c.image === plan.anchor.previousImage) &&
           p.status.containerStatuses?.some(c => c.name === 'control-plane' && c.ready && c.imageID?.endsWith(digest)));
@@ -662,7 +693,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           ensure(validWorkspaceBackupACLReadback(proof),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
           journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:proof.gooseVersion,sqlSHA256:plan.backupACLReadbackSQLSHA256});
         }
-        transition('RESUME',state,2);
+        transition('RESUME',state,anchorReplicas);
       }
       state = await waitMigrationMaintenance(observeCP,s => s.stage === 'RESUMED' && s.ready,'MIGRATION_CP_RESUME_TIMEOUT',io.clock);
       journal.append({type:'RESUME_ACK',resourceVersion:state.actual.metadata.resourceVersion});
@@ -676,7 +707,28 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       verifyInputs(state.actual);noActiveMigrations();
       const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true);
       journal.append({type:'OWNER_PREFLIGHT',...proof});
-      ensure(!optionalJob('control-plane-migrate') && !optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
+      const bootstrap = optionalJob('control-plane-migrate');
+      if (bootstrap && configuration.anchorProfile === 'portable') {
+        // Portable сохраняет bootstrap receipt. Наличие старого Job не разрешает
+        // его повтор или удаление; допускается только доказанно завершённый writer.
+        ensure(bootstrap.kind === 'Job' && bootstrap.metadata?.uid && bootstrap.metadata.namespace === namespace &&
+          bootstrap.metadata.name === 'control-plane-migrate' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/component'] === 'migration' &&
+          bootstrap.metadata.labels?.['app.kubernetes.io/part-of'] === 'kodex' &&
+          bootstrap.metadata.labels?.['kodex.dev/environment'] === 'production' &&
+          bootstrap.metadata.labels?.['kodex.dev/profile'] === 'web-only' &&
+          !bootstrap.status?.active && !bootstrap.status?.terminating && bootstrap.status?.succeeded === 1 &&
+          bootstrap.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1 &&
+          bootstrap.status.conditions.some(c => c.type === 'Complete' && c.status === 'True'), 'MIGRATION_BOOTSTRAP_NOT_COMPLETE');
+        const bootstrapPods = JSON.parse(kube(['-n',namespace,'get','pods','-l','batch.kubernetes.io/job-name=control-plane-migrate','-o','json'])).items;
+        ensure(bootstrapPods.every(p => p.metadata?.uid && p.metadata.namespace === namespace &&
+          p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === bootstrap.metadata.uid) &&
+          isProvenStoppedPod(p)), 'MIGRATION_BOOTSTRAP_NOT_JOINED');
+        journal.append({type:'BOOTSTRAP_TERMINAL_READBACK',jobUID:bootstrap.metadata.uid,
+          specSHA256:fingerprint(bootstrap.spec),podUIDs:bootstrapPods.map(p => p.metadata.uid)});
+      } else ensure(!bootstrap, 'MIGRATION_JOB_ALREADY_EXISTS');
+      ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
       const quiesced = observeCP();ensure(quiesced.stage === 'STOPPED' && quiesced.joined, 'MIGRATION_STOP_JOIN_REQUIRED');
       const job = structuredClone(plan.job); job.metadata.annotations = {[annotation]:planSHA256};
       journal.append({type:'CREATE_INTENT',jobName:job.metadata.name});
@@ -999,6 +1051,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workspace-archive-abi': return validWorkspaceArchiveABIMigrationPostcondition(proof);
+    case 'opencode-native-sessions': return validOpenCodeNativeMigrationPostcondition(proof);
     case 'workflow-workspace': return validWorkflowWorkspaceMigrationPostcondition(proof);
     case 'managed-workspace': return validManagedWorkspaceMigrationPostcondition(proof);
     case 'artifact-optional-antivirus': return validArtifactOptionalAntivirusMigrationPostcondition(proof);
@@ -1034,6 +1088,20 @@ export function validImmutableMigrationPostcondition(profile, proof) {
     case 'repository-bundle': return validRepositoryBundleMigrationPostcondition(proof);
     default: return false;
   }
+}
+
+// Новый профиль проверяет только точный переход guard; исторические schema proofs не расширяются.
+export function validWorkspaceArchiveABIMigrationPrecondition(proof) {
+  return proof?.profile==='WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000200 && proof.archiveGuardPredecessor===true &&
+    proof.activeRuntimeLeases===0 && proof.activeArchiveTasks===0;
+}
+
+// Exact body и действующий trigger подтверждают установленный ABI5 без переноса либо удаления данных.
+export function validWorkspaceArchiveABIMigrationPostcondition(proof) {
+  return proof?.profile==='WORKSPACE_ARCHIVE_ABI5_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261112000100 && proof.archiveGuardReady===true &&
+    proof.archiveTriggerReady===true;
 }
 
 // Exact033 сверяет собственные tables/constraints/ACL/guards и полный неизменный predecessor032.
@@ -1234,6 +1302,20 @@ export function validWorkflowWorkspaceMigrationPostcondition(proof) {
     proof.readOnly === 'on' && proof.gooseVersion === 20261111000100 &&
     proof.workflowVersionColumnReady === true && proof.rootVersionReferenceReady === true &&
     proof.scopeFunctionReady === true && proof.workspaceGuardReady === true && proof.archiveTaskGuardReady === true;
+}
+
+// Новый runtime допускается только после отдельно разрешённой очистки session data.
+export function validOpenCodeNativeMigrationPrecondition(proof) {
+  return proof?.profile==='OPENCODE_NATIVE_PREDECESSOR_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000100 && proof.sessionDataEmpty===true &&
+    proof.nativeColumnsAbsent===true && proof.activeRuntimeLeases===0;
+}
+
+// Metadata проверяет именно новый native contract; старый schema proof не заменяет его.
+export function validOpenCodeNativeMigrationPostcondition(proof) {
+  return proof?.profile==='OPENCODE_NATIVE_V1' && proof.database==='control_plane' &&
+    proof.readOnly==='on' && proof.gooseVersion===20261111000200 &&
+    ['nativeColumnsReady','legacyIdentityAbsent','nativeShapeReady','nativeIdentityGuardReady','nativeConstraintsReady','nativeWriterForeignKeysReady','nativePurgeGraphReady','nativePurgeGuardReady','runtimeFileVisibilityReady'].every(key=>proof[key]===true);
 }
 
 // Переход039 расширяет immutable policy при выключенном opt-in и не требует dump либо новых ACL.

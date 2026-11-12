@@ -229,7 +229,7 @@ func (repository *Repository) ResolveTranscriptionCredentialProjection(ctx conte
 	if jsonUnmarshal(rawProviderCapabilities, &providerCapabilities) != nil {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrUnavailable
 	}
-	if !systemSTTModelSupported(model, language) {
+	if !systemSTTModelSupported(model, language) || !openAITranscriptionCapabilities(rawProviderCapabilities) {
 		return platformrepo.TranscriptionCredentialProjection{}, errs.ErrNotFound
 	}
 	result.ExpiresAt = time.Now().UTC().Add(time.Minute)

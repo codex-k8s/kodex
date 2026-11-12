@@ -28,7 +28,7 @@ func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
 		{"/workspace/knowledge/memory.md", RuntimeWorkspaceReadOnly, ""},
 		{"/workspace/context/skills/skill/SKILL.md", RuntimeWorkspaceReadOnly, ""},
 		{"context/memory/records.json", RuntimeWorkspaceReadOnly, ""},
-		{"/workspace/.kodex/state/codex-home/auth.json", RuntimeWorkspaceReadOnly, ""},
+		{"/workspace/.kodex/state/opencode/auth.json", RuntimeWorkspaceReadOnly, ""},
 		{"../other/session", "", RuntimeWorkspacePathOutsideWorkspace},
 		{"/workspace/input/../../other", "", RuntimeWorkspacePathOutsideWorkspace},
 		{"/other/project", "", RuntimeWorkspacePathOutsideWorkspace},

@@ -40,7 +40,7 @@ func assistantAgentRuntimeConfigurationFixture(t *testing.T) (runtimecontract.Ru
 		"published_version_ref": "renvv_fixture123", "published_revision": 4, "published_digest": digest,
 		"image":            map[string]any{"artifact_ref": "imgart_fixture123", "recipe_ref": "recipe_fixture123", "recipe_generation": 2, "reference": "registry.test/runtime@sha256:" + digest, "digest": "sha256:" + digest},
 		"configured_tools": []string{"Configured tool"}, "verified_tool_inventory": inventory,
-		"model_configuration": map[string]any{"ref": "arcfg_fixture123", "version": 5, "digest": digest, "provider": "openai-codex", "model": "gpt-6.1-sol", "runtime_profile_ref": "builtin-safe-runtime", "provider_policy_mode": "FIXED", "provider_accounts": []any{map[string]any{"accountRef": "pacc_fixture123", "weight": 1}}, "reasoning_effort": "high", "web_search_mode": "", "published_overlay_ref": "ovl_fixture123", "published_overlay_version": 2, "published_overlay_digest": digest, "has_draft_overlay": false},
+		"model_configuration": map[string]any{"ref": "arcfg_fixture123", "version": 5, "digest": digest, "provider": "openai-codex", "model": "gpt-6.1-sol", "runtime_profile_ref": "builtin-safe-runtime", "provider_policy_mode": "FIXED", "provider_accounts": []any{map[string]any{"accountRef": "pacc_fixture123", "weight": 1}}, "reasoning_effort": "high", "published_overlay_ref": "ovl_fixture123", "published_overlay_version": 2, "published_overlay_digest": digest, "has_draft_overlay": false},
 		"resources":           runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources}
 	raw, _ := json.Marshal(snapshot)
 	_ = json.Unmarshal(raw, &snapshot)
@@ -256,9 +256,9 @@ func TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets(t *testing.
 	}
 }
 
-// TestAssistantAgentRuntimeConfigurationRollingReadCompatibility accepts only exact v1 and v2 read projections, returns v1 without invented configuration fields and rejects mixed/incomplete shapes.
-// TestAssistantAgentRuntimeConfigurationRollingReadCompatibility принимает только точные проекции чтения v1 и v2, возвращает v1 без выдуманных полей конфигурации и отвергает смешанные и неполные формы.
-func TestAssistantAgentRuntimeConfigurationRollingReadCompatibility(t *testing.T) {
+// TestAssistantAgentRuntimeConfigurationRejectsRetiredReadShapes requires the complete current projection and rejects old, mixed and incomplete shapes.
+// TestAssistantAgentRuntimeConfigurationRejectsRetiredReadShapes требует полную текущую проекцию и отвергает старые, смешанные и неполные формы.
+func TestAssistantAgentRuntimeConfigurationRejectsRetiredReadShapes(t *testing.T) {
 	for _, variant := range []string{"v1", "v2", "v2-defaults", "mixed", "incomplete-v2", "invalid-v1", "null-effort", "null-search", "null-draft"} {
 		t.Run(variant, func(t *testing.T) {
 			input, arguments, response := assistantAgentRuntimeConfigurationFixture(t)
@@ -277,7 +277,7 @@ func TestAssistantAgentRuntimeConfigurationRollingReadCompatibility(t *testing.T
 			}
 			switch variant {
 			case "v2-defaults":
-				model["reasoning_effort"], model["web_search_mode"] = "", ""
+				model["reasoning_effort"] = ""
 			case "null-effort":
 				model["reasoning_effort"] = nil
 			case "null-search":
@@ -302,17 +302,12 @@ func TestAssistantAgentRuntimeConfigurationRollingReadCompatibility(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := castAssistantAgentRuntimeConfiguration(input, request, response)
-			valid := variant == "v1" || variant == "v2" || variant == "v2-defaults"
+			_, err = castAssistantAgentRuntimeConfiguration(input, request, response)
+			valid := variant == "v2" || variant == "v2-defaults"
 			if (err == nil) != valid {
 				t.Fatalf("rolling %s acceptance: %v", variant, err)
 			}
-			if variant == "v1" {
-				projected := result["agent_runtime_configuration"].(map[string]any)["configuration"].(map[string]any)["model_configuration"].(map[string]any)
-				if len(projected) != 5 || !onlyKeys(projected, "ref", "version", "digest", "provider", "model") {
-					t.Fatal("legacy read invented missing owner pins")
-				}
-			}
+
 		})
 	}
 }

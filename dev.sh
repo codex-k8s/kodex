@@ -12,7 +12,6 @@ usage() {
     "       $0 e2e [--resource-prefix <slug>] [--run-timeout-ms <milliseconds>]" \
     "       $0 full-e2e [--check] [--skip-build] [--resource-prefix <slug>]" \
     "         [--target <test-make-target>]..." \
-    "       $0 provider-authorize|provider-import|provider-list [provider options]" \
     '  [--state-directory <path>] [--cluster-marker <root-owned-path>]' \
     '  [--profile web-only|web-with-mattermost]' \
     '  [--security-profile protected|trusted-cluster]' \
@@ -31,15 +30,6 @@ shift
 case "$command_name" in
   full-e2e)
     exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/full-local-e2e.sh" "$@"
-    ;;
-  provider-authorize)
-    exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" authorize "$@"
-    ;;
-  provider-import)
-    exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" import "$@"
-    ;;
-  provider-list)
-    exec "$(dirname -- "${BASH_SOURCE[0]}")/tools/dev/provider-account.sh" list "$@"
     ;;
 esac
 kubeconfig=${KODEX_DEV_KUBECONFIG:-"$HOME/.kube/kodex-dev-local"}
@@ -129,6 +119,22 @@ if [[ "$command_name" == e2e ]]; then
     fail 'E2E resource prefix must be a lowercase 4-40 character slug'
   [[ "$run_timeout_ms" =~ ^[0-9]+$ && "$run_timeout_ms" -ge 60000 && "$run_timeout_ms" -le 1800000 ]] ||
     fail 'E2E run timeout must be between 60000 and 1800000 milliseconds'
+fi
+# Проверка модели предшествует любым изменениям кластера. Старые CLI snapshots
+# не импортируются; bootstrap и release используют один typed API-key producer.
+if [[ "$command_name" == up ]]; then
+  [[ -z "${KODEX_LOCAL_PROVIDER_AUTH_FILE:-}${KODEX_DEV_PROVIDER_AUTH_FILE:-}" ]] ||
+    fail 'retired CLI bootstrap is unsupported; configure a model provider API-key file'
+  if [[ -n "${KODEX_MODEL_PROVIDER_CONFIGURATION_FILE:-}" ]]; then
+    python3 "$repository_root/tools/install/model-provider.py" validate \
+      --configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE" >/dev/null ||
+      fail 'model provider configuration is invalid'
+  elif [[ -n "${KODEX_MODEL_PROVIDER_API_KEY_FILE:-}${KODEX_MODEL_PROVIDER_DEFAULT_MODEL:-}" ]]; then
+    fail 'model provider configuration is required'
+  fi
+  if [[ "$security_profile" == protected && -z "${KODEX_MODEL_PROVIDER_API_KEY_FILE:-}" ]]; then
+    fail 'protected profile requires KODEX_MODEL_PROVIDER_API_KEY_FILE'
+  fi
 fi
 [[ -f "$kubeconfig" && -r "$kubeconfig" ]] || fail 'Kubernetes configuration is absent'
 export KUBECONFIG=$kubeconfig
@@ -575,8 +581,9 @@ fi
 
 credentials_file="$state_directory/credentials.env"
 bash "$repository_root/tools/dev/prepare-local-credentials.sh" "$credentials_file"
-# shellcheck disable=SC1090
-source "$credentials_file"
+# shellcheck source=tools/dev/lib/local-credentials.sh
+source "$repository_root/tools/dev/lib/local-credentials.sh"
+kodex_load_local_credentials "$credentials_file"
 
 cluster_mode=readback
 [[ "$command_name" == up || "$command_name" == identity ]] && cluster_mode=apply
@@ -825,31 +832,22 @@ fi
 "$repository_root/tools/install/materialize-nats-runtime-users.sh" \
   --context "$context" --material-directory "$material_directory" \
   --security-profile "$security_profile"
-default_provider_auth="$state_directory/provider-accounts/default-openai-codex/auth.json"
-provider_auth=${KODEX_LOCAL_PROVIDER_AUTH_FILE:-${KODEX_DEV_PROVIDER_AUTH_FILE:-$default_provider_auth}}
-provider_mode=configured
+provider_mode=deferred
 provider_material_arguments=()
-if [[ "$provider_auth" == /* && -f "$provider_auth" && ! -L "$provider_auth" ]]; then
-  [[ "$(stat -c '%u' "$provider_auth")" == "$(id -u)" &&
-    $((8#$(stat -c '%a' "$provider_auth") & 8#077)) == 0 ]] ||
-    fail 'provider authorization must be owned by the current user and private'
-  [[ "$(stat -c '%s' "$provider_auth")" -le 1048576 ]] ||
-    fail 'provider authorization exceeds the supported size'
-  provider_validation_home=$(mktemp -d "$state_directory/.provider-validation.XXXXXX")
-  chmod 0700 "$provider_validation_home"
-  install -m 0600 "$provider_auth" "$provider_validation_home/auth.json"
-  if ! CODEX_HOME="$provider_validation_home" HOME="$provider_validation_home" \
-    codex login status >/dev/null 2>&1; then
-    rm -rf -- "$provider_validation_home"
-    fail 'Codex does not recognize the provider authorization file'
-  fi
-  rm -rf -- "$provider_validation_home"
+provider_render_arguments=()
+if [[ -n "${KODEX_MODEL_PROVIDER_CONFIGURATION_FILE:-}" ]]; then
+  provider_render_arguments+=(--model-provider-configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE")
+  [[ -z "${KODEX_MODEL_PROVIDER_DEFAULT_MODEL:-}" ]] ||
+    provider_render_arguments+=(--model-provider-default-model "$KODEX_MODEL_PROVIDER_DEFAULT_MODEL")
+fi
+if [[ -n "${KODEX_MODEL_PROVIDER_API_KEY_FILE:-}" ]]; then
+  provider_auth="$material_directory/inputs/model-provider-auth.json"
+  python3 "$repository_root/tools/install/model-provider.py" prepare-auth \
+    --configuration "$KODEX_MODEL_PROVIDER_CONFIGURATION_FILE" \
+    --api-key-file "$KODEX_MODEL_PROVIDER_API_KEY_FILE" --output "$provider_auth" >/dev/null ||
+    fail 'model provider bootstrap rejected'
   provider_material_arguments+=(--provider-auth-file "$provider_auth")
-elif [[ "$security_profile" == trusted-cluster ]]; then
-  provider_mode=deferred
-  provider_auth=""
-else
-  fail 'provider authorization is absent; protected profile requires KODEX_LOCAL_PROVIDER_AUTH_FILE'
+  provider_mode=configured
 fi
 
 "$repository_root/tools/dev/configure-local-node-registry.sh" --mode apply \
@@ -908,6 +906,7 @@ bash "$repository_root/tools/dev/prepare-local-integration-fixture.sh" \
   --state-directory "$state_directory"
 "$repository_root/tools/dev/render-local.sh" --source-root "$repository_root" \
   --mail-configuration "$state_directory/mail-source.json" \
+  "${provider_render_arguments[@]}" \
   --integration-fixture-bearer-token-file "$state_directory/integration-fixture-bearer-token" \
   --profile "$deployment_profile" \
   --security-profile "$security_profile" --host-uid "$(id -u)" --host-gid "$(id -g)" \
@@ -981,38 +980,6 @@ fi
 "$repository_root/infra/management-surfaces/bootstrap.sh" \
   --mode reconcile "${management_surface_arguments[@]}"
 
-provider_metadata=("$state_directory"/provider-accounts/*/account.json)
-restored_provider_accounts=0
-for metadata_file in "${provider_metadata[@]}"; do
-  [[ -e "$metadata_file" ]] || continue
-  [[ -f "$metadata_file" && ! -L "$metadata_file" &&
-    "$(stat -c '%u' "$metadata_file")" == "$(id -u)" &&
-    $((8#$(stat -c '%a' "$metadata_file") & 8#077)) == 0 ]] ||
-    fail 'provider account metadata is unsafe'
-  account_key=$(jq -er '
-    select(.version == 1 and (.accountKey | type == "string") and
-      (.name | type == "string" and length > 0 and length <= 160)) |
-    .accountKey
-  ' "$metadata_file") || fail 'provider account metadata is invalid'
-  account_name=$(jq -er '.name' "$metadata_file") || fail 'provider account name is invalid'
-  [[ "$account_key" == "$(basename -- "$(dirname -- "$metadata_file")")" ]] ||
-    fail 'provider account metadata directory binding is invalid'
-  account_auth_file="$(dirname -- "$metadata_file")/auth.json"
-  if [[ "$provider_mode" == configured && "$account_key" == default-openai-codex ]] &&
-    [[ "$(realpath -e -- "$account_auth_file")" == "$(realpath -e -- "$provider_auth")" ]]; then
-    continue
-  fi
-  "$repository_root/tools/dev/provider-account.sh" import \
-    --kubeconfig "$kubeconfig" --context "$context" --state-directory "$state_directory" \
-    --account-key "$account_key" --name "$account_name" \
-    --auth-file "$account_auth_file" --preserve-current
-  restored_provider_accounts=$((restored_provider_accounts + 1))
-done
-if ((restored_provider_accounts > 0)); then
-  "$repository_root/tools/dev/deploy-local.sh" --context "$context" --mode readback \
-    --render "$state_directory/render.yaml" --state-directory "$state_directory" \
-    --tls-mode "$tls_mode"
-fi
 
 "$repository_root/tools/deploy/configure-keycloak.sh" --context "$context" --mode readback \
   "${keycloak_origin_arguments[@]}"

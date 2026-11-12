@@ -13,23 +13,36 @@ import (
 	kubernetesstore "github.com/codex-k8s/kodex/services/internal/secret-broker/internal/kubernetes"
 )
 
-// ConfigureModelProvider binds the optional Git-owned gateway before workers or requests start.
-// ConfigureModelProvider связывает optional Git-owned gateway до запуска workers и запросов.
-func (service *Service) ConfigureModelProvider(config runtimecontract.ModelProviderConfiguration) error {
-	if config.Validate() != nil {
+// ConfigureModelProviderCatalog pins detached routes and independent catalog transports before startup.
+// ConfigureModelProviderCatalog закрепляет отдельную копию маршрутов и независимые транспорты каталога до запуска.
+func (service *Service) ConfigureModelProviderCatalog(catalog runtimecontract.ModelProviderCatalog) error {
+	cloned, err := catalog.Clone()
+	if err != nil {
 		return ErrInvalidInput
 	}
-	config.Models = append([]runtimecontract.ModelProviderModel(nil), config.Models...)
-	config.AddressCIDRs = append([]string(nil), config.AddressCIDRs...)
-	service.modelProvider = &config
-	service.gatewayHTTP = newGatewayCatalogHTTPClient(config)
+	clients := make(map[string]modelCatalogHTTPClient, len(cloned.Providers))
+	for _, provider := range cloned.Providers {
+		clients[provider.DefinitionKey()] = newGatewayCatalogHTTPClient(provider)
+	}
+	service.modelProviderCatalog = &cloned
+	service.gatewayHTTP = clients
 	return nil
+}
+
+// configuredModelProvider resolves only an exact installation-approved definition before any credential read.
+// configuredModelProvider разрешает только точное definition установки до чтения credentials.
+func (service *Service) configuredModelProvider(definitionKey string) *runtimecontract.ModelProviderConfiguration {
+	if service == nil || service.modelProviderCatalog == nil {
+		return nil
+	}
+	provider, _ := service.modelProviderCatalog.Provider(definitionKey)
+	return provider
 }
 
 // MaterializeGatewayAPIKey accepts only the active owner-selected definition and stores a distinct secret kind.
 // MaterializeGatewayAPIKey принимает только active owner-selected definition и сохраняет отдельный secret kind.
 func (service *Service) MaterializeGatewayAPIKey(ctx context.Context, attemptRef, accountRef, definitionKey string, key []byte) (kubernetesstore.ProviderCredentialDescriptor, string, error) {
-	if service.modelProvider == nil || definitionKey != service.modelProvider.DefinitionKey() {
+	if service.configuredModelProvider(definitionKey) == nil {
 		return kubernetesstore.ProviderCredentialDescriptor{}, "", ErrInvalidInput
 	}
 	if _, _, err := deviceAuthorizationReferences(attemptRef, accountRef); err != nil {
@@ -70,9 +83,9 @@ func newGatewayCatalogHTTPClient(config runtimecontract.ModelProviderConfigurati
 // observeGatewayCatalog пересекает bounded remote availability с deployment-approved model IDs.
 // Operator token ceilings не выдаются за remote capabilities; reasoning остаётся unsupported.
 // Невыбранные remote aliases отбрасываются до проверки совпавших IDs; повторы разрешённой модели отклоняют всё наблюдение.
-func (service *Service) observeGatewayCatalog(ctx context.Context, raw []byte) (ModelCatalog, error) {
-	config := service.modelProvider
-	if config == nil {
+func (service *Service) observeGatewayCatalog(ctx context.Context, definitionKey string, raw []byte) (ModelCatalog, error) {
+	config := service.configuredModelProvider(definitionKey)
+	if config == nil || service.gatewayHTTP[definitionKey] == nil {
 		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
 	key, err := runtimecontract.DecodeGatewayProviderAuthentication(raw, config.DefinitionKey())
@@ -84,9 +97,14 @@ func (service *Service) observeGatewayCatalog(ctx context.Context, raw []byte) (
 	if err != nil {
 		return catalogFailure(ctx, errModelCatalogUnverified)
 	}
-	request.Header.Set("Authorization", "Bearer "+string(key))
+	if config.API == runtimecontract.ModelAPIMessages && config.RouteKind != "LITELLM" {
+		request.Header.Set("x-api-key", string(key))
+		request.Header.Set("anthropic-version", "2023-06-01")
+	} else {
+		request.Header.Set("Authorization", "Bearer "+string(key))
+	}
 	request.Header.Set("Accept", "application/json")
-	response, err := service.gatewayHTTP.Do(request)
+	response, err := service.gatewayHTTP[definitionKey].Do(request)
 	if err != nil {
 		return catalogFailure(ctx, errors.New("gateway catalog request failed"))
 	}

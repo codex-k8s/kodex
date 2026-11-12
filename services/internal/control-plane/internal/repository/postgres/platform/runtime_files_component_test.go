@@ -9,12 +9,14 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
@@ -264,6 +266,7 @@ func testRuntimeProjectFiles(t *testing.T, ctx context.Context, repository *Repo
 	if _, err := service.ReadExecutionArtifact(ctx, reader, execution.LeaseRef, execution.Fence, execution.Generation, late.Ref); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("new file bypassed pinned body grant: %v", err)
 	}
+	testRuntimeFileCapabilityRevoke(t, ctx, repository, service, owner, lease, file)
 	impact, err := service.GetArtifactImpact(ctx, owner, file.ArtifactRef, "DELETE")
 	if err != nil || !impact.Permitted {
 		t.Fatalf("unbound project file delete impact: %v", err)
@@ -299,5 +302,70 @@ func testRuntimeSkillFileManifest(t *testing.T, ctx context.Context, repository 
 	if available && (result.Total < 1 || len(result.Items) < 1) || !available && (result.Total != 0 || len(result.Items) != 0) {
 		diagnoseRuntimeFiles(t, ctx, repository, execution.CatalogRef)
 		t.Fatalf("Skill binding eligibility differs: count=%d total=%d available=%t", len(result.Items), result.Total, available)
+	}
+}
+
+// testRuntimeFileCapabilityRevoke revokes the live agent grant after catalog capture and
+// requires both empty discovery and exact content paths to fail without changing frozen pins.
+// It restores the fixture grant through the owner command within an independent cleanup budget.
+// testRuntimeFileCapabilityRevoke отзывает текущий grant после capture каталога и требует
+// отказа пустого поиска и точного чтения без изменения frozen pins. Grant возвращается
+// командой владельца с независимым ограниченным бюджетом cleanup.
+func testRuntimeFileCapabilityRevoke(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, lease map[string]any, file entity.ExecutionFileDescriptor) {
+	t.Helper()
+	manifestReader := runtimeFilesTestPrincipal(t, ctx, repository, "manifest")
+	searcher := runtimeFilesTestPrincipal(t, ctx, repository, "search")
+	metadataReader := runtimeFilesTestPrincipal(t, ctx, repository, "metadata")
+	previewer := runtimeFilesTestPrincipal(t, ctx, repository, "preview")
+	bodyReader := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.artifact.read"}, "runtime-controller")
+	agent, err := service.GetAgent(ctx, owner, stringMap(lease, "agentRef"))
+	if err != nil {
+		t.Fatal("read agent before file capability revoke", err)
+	}
+	_, err = service.Execute(ctx, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-files-revoke-live", ExpectedVersion: &agent.Version},
+		Payload:  command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: false}})
+	if err != nil {
+		t.Fatal("revoke live file capability", err)
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		current, readErr := service.GetAgent(cleanup, owner, agent.Ref)
+		if readErr != nil {
+			t.Error("read agent for file grant restoration", readErr)
+			return
+		}
+		_, restoreErr := service.Execute(cleanup, command.Command{Kind: command.ChangeAgentCapability, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "runtime-files-restore-live", ExpectedVersion: &current.Version},
+			Payload:  command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: runtimecontract.ArtifactCapability, Enabled: true}})
+		if restoreErr != nil {
+			t.Error("restore fixture file grant", restoreErr)
+		}
+	}()
+	for _, purpose := range []string{runtimecontract.FilePurposeProject, runtimecontract.FilePurposeWorkspaceInput, runtimecontract.FilePurposeRunResult} {
+		execution := runtimeFilesTestContext(t, lease, purpose)
+		// Discovery must be denied even when no entry matches; an empty list is not a current grant.
+		// Discovery отклоняется и при отсутствии совпадений; пустой список не является текущим grant.
+		if _, err := service.GetExecutionFileManifest(ctx, manifestReader, execution, query.Page{Size: 1}); !errors.Is(err, errs.ErrNotFound) {
+			t.Errorf("revoked %s manifest remained available: %v", purpose, err)
+		}
+		if _, err := service.SearchExecutionFiles(ctx, searcher, execution, "absent-revoked-file", query.Page{Size: 1}); !errors.Is(err, errs.ErrNotFound) {
+			t.Errorf("revoked %s empty search remained available: %v", purpose, err)
+		}
+	}
+	execution := runtimeFilesTestContext(t, lease, runtimecontract.FilePurposeProject)
+	exact := query.ExecutionFileRef{EntryRef: file.EntryRef, ArtifactRef: file.ArtifactRef, Revision: file.Revision, Digest: file.Digest}
+	if _, err := service.GetExecutionFileMetadata(ctx, metadataReader, execution, exact); !errors.Is(err, errs.ErrNotFound) {
+		t.Errorf("revoked metadata remained available: %v", err)
+	}
+	if _, err := service.PreviewExecutionFile(ctx, previewer, execution, exact, 16384); !errors.Is(err, errs.ErrNotFound) {
+		t.Errorf("revoked preview remained available: %v", err)
+	}
+	if result, err := service.ReadExecutionArtifact(ctx, bodyReader, execution.LeaseRef, execution.Fence, execution.Generation, file.ArtifactRef); !errors.Is(err, errs.ErrNotFound) {
+		if result.Reader != nil {
+			_ = result.Reader.Close()
+		}
+		t.Errorf("revoked body remained available: %v", err)
 	}
 }

@@ -17,35 +17,20 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
-// TestOptionalRuntimeProfileKeepsDefaultAndOtherIdentitiesUnchanged pins the explicit runtime boundary.
-// TestOptionalRuntimeProfileKeepsDefaultAndOtherIdentitiesUnchanged закрепляет явный выбор runtime и прежние права.
-func TestOptionalRuntimeProfileKeepsDefaultAndOtherIdentitiesUnchanged(t *testing.T) {
+// TestSoleRuntimeProfileRejectsRemovedEngine pins the sole shipped repository and preserves process scopes.
+// TestSoleRuntimeProfileRejectsRemovedEngine закрепляет единственный runtime repository и сохраняет области process identities.
+func TestSoleRuntimeProfileRejectsRemovedEngine(t *testing.T) {
 	t.Parallel()
 	defaults := pullProfiles()
-	for _, engine := range []string{"", "codex"} {
+	for _, engine := range []string{"", "opencode"} {
 		profiles, valid := pullProfilesForRuntime(engine)
 		if !valid || !reflect.DeepEqual(profiles, defaults) {
-			t.Fatal("default pull profiles changed")
+			t.Fatal("sole runtime pull profiles changed")
 		}
 	}
-	profiles, valid := pullProfilesForRuntime("opencode")
-	if !valid {
-		t.Fatal("optional runtime was rejected")
-	}
-	for name, profile := range defaults {
-		if name != "kodex-buildkit-base-pull" && name != "kodex-node-pull-installer" && !reflect.DeepEqual(profile, profiles[name]) {
-			t.Fatal("another identity scope changed")
-		}
-	}
-	for _, name := range []string{"kodex-buildkit-base-pull", "kodex-node-pull-installer"} {
-		want := append(append([]string(nil), defaults[name].repositories...), "kodex/agent-runner-opencode")
-		if !reflect.DeepEqual(profiles[name].repositories, want) {
-			t.Fatal("optional repository scope changed")
-		}
-	}
-	for _, engine := range []string{"unknown", "OPENCODE", " opencode", "opencode,other"} {
+	for _, engine := range []string{"codex", "unknown", "OPENCODE", " opencode", "opencode,other"} {
 		if profiles, valid := pullProfilesForRuntime(engine); valid || profiles != nil {
-			t.Fatal("unknown runtime accepted")
+			t.Fatal("removed or unknown runtime accepted")
 		}
 	}
 	if !reflect.DeepEqual(defaults, pullProfiles()) {
@@ -70,14 +55,14 @@ func TestOptionalRuntimeNodeAuthorizationKeepsSignatureAndIPBinding(t *testing.T
 	}
 	certificate := &x509.Certificate{Subject: pkix.Name{CommonName: name}, IPAddresses: []net.IP{net.ParseIP("192.0.2.1")}, PublicKey: &key.PublicKey}
 	profiles, _ := pullProfilesForRuntime("opencode")
-	request := httptest.NewRequest(http.MethodHead, "https://"+host+"/v2/kodex/agent-runner-opencode/manifests/sha256:abc", nil)
+	request := httptest.NewRequest(http.MethodHead, "https://"+host+"/v2/kodex/agent-runner/manifests/sha256:abc", nil)
 	request.RemoteAddr = "192.0.2.1:1234"
 	request.SetBasicAuth(name, "v1.1."+base64.RawURLEncoding.EncodeToString(signature))
 	if got := decidePullAuthorizationForProfiles(request, certificate, host, profiles); got.failure != "" {
 		t.Fatalf("optional node read denied: %s", got.failure)
 	}
-	if got := decidePullAuthorization(request, certificate, host); got.failure != "node_repository" {
-		t.Fatal("default node grants optional runtime")
+	if got := decidePullAuthorization(request, certificate, host); got.failure != "" {
+		t.Fatal("default node denies sole runtime")
 	}
 	delete(profiles, "kodex-node-pull-installer")
 	if got := decidePullAuthorizationForProfiles(request, certificate, host, profiles); got.failure != "node_repository" {
@@ -109,13 +94,13 @@ func TestOptionalRuntimeActualAuthorizationRetainsCredentialAndRepositoryChecks(
 		method, path, user, password string
 		allowed                      bool
 	}{
-		{http.MethodHead, "/v2/kodex/agent-runner-opencode/manifests/sha256:abc", "synthetic-user", "synthetic-password", true},
-		{http.MethodGet, "/v2/kodex/agent-runner-opencode/blobs/sha256:abc", "synthetic-user", "synthetic-password", true},
-		{http.MethodHead, "/v2/kodex/agent-runner-opencode/manifests/sha256:abc", "synthetic-user", "wrong-password", false},
-		{http.MethodHead, "/v2/kodex/agent-runner-opencode/manifests/sha256:abc", "", "", false},
-		{http.MethodPost, "/v2/kodex/agent-runner-opencode/blobs/uploads/", "synthetic-user", "synthetic-password", false},
-		{http.MethodGet, "/v2/kodex/agent-runner-opencode/tags/list", "synthetic-user", "synthetic-password", false},
-		{http.MethodGet, "/v2/kodex/agent-runner-opencode-other/manifests/sha256:abc", "synthetic-user", "synthetic-password", false},
+		{http.MethodHead, "/v2/kodex/agent-runner/manifests/sha256:abc", "synthetic-user", "synthetic-password", true},
+		{http.MethodGet, "/v2/kodex/agent-runner/blobs/sha256:abc", "synthetic-user", "synthetic-password", true},
+		{http.MethodHead, "/v2/kodex/agent-runner/manifests/sha256:abc", "synthetic-user", "wrong-password", false},
+		{http.MethodHead, "/v2/kodex/agent-runner/manifests/sha256:abc", "", "", false},
+		{http.MethodPost, "/v2/kodex/agent-runner/blobs/uploads/", "synthetic-user", "synthetic-password", false},
+		{http.MethodGet, "/v2/kodex/agent-runner/tags/list", "synthetic-user", "synthetic-password", false},
+		{http.MethodGet, "/v2/kodex/agent-runner-other/manifests/sha256:abc", "synthetic-user", "synthetic-password", false},
 		{http.MethodGet, "/v2/kodex/control-plane/manifests/sha256:abc", "synthetic-user", "synthetic-password", false},
 	}
 	for _, test := range cases {
@@ -134,7 +119,7 @@ func TestOptionalRuntimeActualAuthorizationRetainsCredentialAndRepositoryChecks(
 	defaultProfiles["kodex-buildkit-base-pull"] = defaultProfile
 	request := httptest.NewRequest(http.MethodHead, "https://"+host+cases[0].path, nil)
 	request.SetBasicAuth("synthetic-user", "synthetic-password")
-	if decidePullAuthorizationForProfiles(request, certificate, host, defaultProfiles).failure != "profile_repository" {
-		t.Fatal("default runtime permits optional repository")
+	if decidePullAuthorizationForProfiles(request, certificate, host, defaultProfiles).failure != "" {
+		t.Fatal("default runtime denies sole repository")
 	}
 }

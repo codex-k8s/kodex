@@ -1521,7 +1521,7 @@ paths:
         - name: definitionKey
           in: query
           required: false
-          schema: { type: string, enum: [openai-codex] }
+          schema: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
         - { $ref: "#/components/parameters/PageToken" }
@@ -1803,11 +1803,11 @@ paths:
                 { schema: { $ref: "#/components/schemas/ProviderAccount" } },
             }
         default: { $ref: "#/components/responses/Problem" }
-  /api/v1/provider-accounts/{providerAccountRef}/device-authorization/verification:
+  /api/v1/provider-accounts/{providerAccountRef}/verification:
     parameters: [{ $ref: "#/components/parameters/ProviderAccountRef" }]
     post:
       tags: [Providers]
-      operationId: verifyProviderAccountDeviceAuthorization
+      operationId: verifyProviderAccountAuthorization
       parameters:
         [
           { $ref: "#/components/parameters/IfMatch" },
@@ -1816,7 +1816,7 @@ paths:
         ]
       responses:
         "200":
-          description: Device authorization проверена авторитетным provider adapter
+          description: Создана или прочитана проверка текущего API-подключения; результат приходит через account readback
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProviderAccount" }
@@ -12572,10 +12572,13 @@ components:
             enum:
               [
                 model_reasoning_effort,
-                web_search,
-                personality,
-                allow_login_shell,
-                history.persistence,
+                context.auto_compaction,
+                context.prune,
+                cache.optimization,
+                cache.reuse_scope,
+                cache.no_reuse,
+                cache.no_store,
+                cache.required,
               ],
           }
         valueType: { type: string, enum: [string, boolean] }
@@ -12601,8 +12604,8 @@ components:
         fields:
           {
             type: array,
-            minItems: 5,
-            maxItems: 5,
+            minItems: 8,
+            maxItems: 8,
             items: { $ref: "#/components/schemas/ConfigOverlayField" },
           }
     ConfigOverlayDraftInput:
@@ -14282,7 +14285,7 @@ components:
         state: { type: string, enum: [PENDING, READY, FAILED, EXPIRED] }
         observedAt: { $ref: "#/components/schemas/Timestamp" }
         expiresAt: { $ref: "#/components/schemas/Timestamp" }
-        source: { type: string, enum: [REMOTE_API, REMOTE_CODEX] }
+        source: { type: string, enum: [REMOTE_API] }
         failure:
           {
             type: string,
@@ -14305,7 +14308,14 @@ components:
           readinessBlockers,
         ]
       properties:
-        key: { type: string, enum: [openai-codex] }
+        managedBy: { type: string, enum: [git] }
+        sourceRevision: { type: string, pattern: '^[a-f0-9]{40}$' }
+        engineVersion: { type: string, enum: ['1.19.5'] }
+        runtimePolicies:
+          type: array
+          maxItems: 128
+          items: { $ref: '#/components/schemas/ModelExecutionPolicy' }
+        key: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, maxLength: 160 }
         description: { type: string, maxLength: 500 }
         authorizationMethods:
@@ -14335,6 +14345,62 @@ components:
             maxItems: 16,
             items: { type: string, pattern: "^[A-Z0-9_]+$", maxLength: 80 },
           }
+    ModelContextPolicy:
+      type: object
+      additionalProperties: false
+      required: [revision, autoCompaction, prune]
+      properties:
+        revision: { type: integer, enum: [1] }
+        autoCompaction: { type: boolean }
+        prune: { type: boolean }
+    ModelCacheQualification:
+      type: object
+      additionalProperties: false
+      required: [mechanism, status, source, backendVersion, evidenceSha256, routeSha256]
+      properties:
+        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
+        status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        source: { type: string, enum: [NONE, DECLARED, OBSERVED] }
+        backendVersion: { type: string, maxLength: 64 }
+        evidenceSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
+        routeSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
+    ModelCachePolicy:
+      type: object
+      additionalProperties: false
+      required: [revision, optimization, reuseScope, noReuse, noStore, required, qualification]
+      properties:
+        revision: { type: integer, enum: [1] }
+        optimization: { type: string, enum: [PROVIDER_DEFAULT, NO_HINTS, OPTIMIZE] }
+        reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION] }
+        noReuse: { type: boolean }
+        noStore: { type: boolean }
+        required: { type: boolean }
+        qualification: { $ref: '#/components/schemas/ModelCacheQualification' }
+    ModelCacheResolution:
+      type: object
+      additionalProperties: false
+      required: [mechanism, reuseScope, status, reason, noReuse, noStore, proxyResponseCache, physicalIsolation]
+      properties:
+        requested: { $ref: '#/components/schemas/ModelCachePolicy' }
+        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
+        reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION, PROVIDER_BOUNDARY, PROVIDER_ACCOUNT_ROUTING_KEY, PROVIDER_ACCOUNT] }
+        status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        reason: { type: string, maxLength: 80 }
+        noReuse: { type: boolean }
+        noStore: { type: boolean }
+        proxyResponseCache: { type: string, enum: [NOT_APPLICABLE, BYPASS_READ_WRITE, UNQUALIFIED] }
+        physicalIsolation: { type: string, enum: [NOT_PROVEN] }
+    ModelExecutionPolicy:
+      type: object
+      additionalProperties: false
+      required: [modelId, contextWindowTokens, maximumOutputTokens, context, cache, eligible]
+      properties:
+        modelId: { type: string, maxLength: 128 }
+        contextWindowTokens: { type: integer, minimum: 1, maximum: 2000000 }
+        maximumOutputTokens: { type: integer, minimum: 1, maximum: 2000000 }
+        context: { $ref: '#/components/schemas/ModelContextPolicy' }
+        cache: { $ref: '#/components/schemas/ModelCacheResolution' }
+        eligible: { type: boolean }
     ProviderDefinitionPage:
       type: object
       additionalProperties: false
@@ -14623,6 +14689,17 @@ components:
             items: { $ref: "#/components/schemas/PromptTemplateDiagnostic" },
           }
         contextPin: { $ref: "#/components/schemas/PromptContextPin" }
+    PromptTemplateDependency:
+      type: object
+      additionalProperties: false
+      required: [templateDigest, path, stability, sensitivity, trustScope]
+      properties:
+        templateDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        path: { type: string, minLength: 1, maxLength: 128 }
+        stability: { type: string, enum: [STATIC_LITERAL, VERSION_PINNED, TURN_LIVE, UNKNOWN] }
+        sensitivity: { type: string, enum: [PRIVATE] }
+        trustScope: { type: string, enum: [OWNER_TEMPLATE, DATA_ONLY] }
+        sourceDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
     PromptTemplatePreview:
       type: object
       additionalProperties: false
@@ -14643,6 +14720,10 @@ components:
           sections,
         ]
       properties:
+        dependencies:
+          type: array
+          maxItems: 512
+          items: { $ref: "#/components/schemas/PromptTemplateDependency" }
         safePreview: { type: string, maxLength: 262144 }
         fullMaterializedPrompt: { type: string, maxLength: 1048576 }
         diagnostics:
@@ -16925,6 +17006,7 @@ components:
           minLength: 8
           maxLength: 96
           pattern: "^inv_[A-Za-z0-9_-]+$"
+        modelMeasurement: { $ref: "#/components/schemas/ModelMeasurement" }
         execution: { $ref: "#/components/schemas/RunEventExecution" }
         message: { $ref: "#/components/schemas/RunMessage" }
         occurredAt: { $ref: "#/components/schemas/Timestamp" }
@@ -16935,6 +17017,31 @@ components:
         gate: { $ref: "#/components/schemas/OwnerGate" }
         artifact: { $ref: "#/components/schemas/Artifact" }
         incident: { $ref: "#/components/schemas/Incident" }
+    ModelMeasurement:
+      type: object
+      additionalProperties: false
+      required: [ref, source, phase, outcome, completeness]
+      properties:
+        ref: { type: string, pattern: "^(request|step)_[A-Za-z0-9_-]{8,80}$", maxLength: 88 }
+        source: { $ref: "#/components/schemas/ModelMeasurementSource" }
+        phase: { $ref: "#/components/schemas/ModelMeasurementPhase" }
+        outcome: { $ref: "#/components/schemas/ModelMeasurementOutcome" }
+        completeness: { $ref: "#/components/schemas/ModelMeasurementCompleteness" }
+        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        ttftMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        usage: { $ref: "#/components/schemas/TokenUsage" }
+    ModelMeasurementSource:
+      type: string
+      enum: [HTTP_REQUEST, NATIVE_STEP]
+    ModelMeasurementPhase:
+      type: string
+      enum: [NORMAL, COMPACTION, AUXILIARY]
+    ModelMeasurementOutcome:
+      type: string
+      enum: [COMPLETED, FAILED, CANCELLED]
+    ModelMeasurementCompleteness:
+      type: string
+      enum: [COMPLETE, PARTIAL, UNKNOWN]
     RunEventExecution:
       type: object
       additionalProperties: false
@@ -17023,6 +17130,7 @@ components:
           type: string
           enum:
             [
+              INITIALIZING,
               UNTRACKED,
               LIVE,
               SNAPSHOT_READY,
@@ -18408,7 +18516,7 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        definitionKey: { type: string, enum: [openai-codex] }
+        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, minLength: 1, maxLength: 160 }
         externalAccountMasked: { type: string, maxLength: 200 }
         safeStatusReason:
@@ -18909,7 +19017,7 @@ components:
       additionalProperties: false
       required: [definitionKey, name]
       properties:
-        definitionKey: { type: string, enum: [openai-codex] }
+        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
         name: { type: string, minLength: 1, maxLength: 160 }
     ProviderApiKeyInput:
       type: object

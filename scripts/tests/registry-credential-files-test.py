@@ -315,7 +315,7 @@ class InstallerCredentialFiles(unittest.TestCase):
 
 class CredentialFiles(unittest.TestCase):
     def run_node_case(self, script_path, mode="apply", existing="object",
-                      trailing_newlines=False, alias=True):
+                      trailing_newlines=False, alias=True, bind_platform=False):
         with tempfile.TemporaryDirectory(prefix="kodex-node-credentials-") as directory:
             root = Path(directory)
             work = root / "material/node-pull"
@@ -338,6 +338,8 @@ class CredentialFiles(unittest.TestCase):
                      "unrelated": {"keep": [1, True, "value"]}}
             expected = dict(prior) if existing == "object" else {}
             expected["mirrors"] = {**expected.get("mirrors", {}), host: {"endpoint": ["https://"+host]}}
+            if bind_platform:
+                expected["mirrors"]["registry.local.kodex"] = {"endpoint": ["https://"+host]}
             expected["configs"] = {**expected.get("configs", {}), host: {
                 "auth": {"username": values["username"].rstrip("\n"), "password": values["password"].rstrip("\n")},
                 "tls": {"ca_file": "/etc/rancher/k3s/kodex-registry/ca.crt",
@@ -366,7 +368,7 @@ class CredentialFiles(unittest.TestCase):
                 environment[name] = "public inherited placeholder"
             result = subprocess.run(["/bin/bash", str(script_path), "--mode", mode,
                                      "--context", context, "--material-directory", str(work.parent),
-                                     "--promoted-pull-host", host], env=environment,
+                                     "--promoted-pull-host", host] + (["--bind-platform-registry"] if bind_platform else []), env=environment,
                                     capture_output=True, text=True, timeout=15)
             failed = existing == "multiple" or (mode == "readback" and not alias and "k3d" in script_path.name)
             self.assertEqual(result.returncode != 0, failed, "synthetic node script outcome mismatch")
@@ -396,6 +398,12 @@ class CredentialFiles(unittest.TestCase):
             with self.subTest(script=script.name):
                 self.run_node_case(script, mode="readback")
         self.run_node_case(NODE_SCRIPTS[0], mode="readback", alias=False)
+
+    def test_platform_registry_uses_exact_promoted_tls_endpoint(self):
+        for script in NODE_SCRIPTS:
+            for mode in ("apply", "readback"):
+                with self.subTest(script=script.name, mode=mode):
+                    self.run_node_case(script, mode=mode, bind_platform=True)
 
     def test_node_source_never_passes_secret_arguments(self):
         library = (ROOT / "tools/dev/lib/node-registry.sh").read_text()

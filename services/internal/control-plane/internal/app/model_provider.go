@@ -24,18 +24,21 @@ func configureModelProvider(repository *platformrepository.Repository, config Co
 	}
 	defer file.Close()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > runtimecontract.MaximumModelProviderConfigurationBytes {
+	if err != nil || !info.Mode().IsRegular() || info.Size() > runtimecontract.MaximumModelProviderCatalogBytes {
 		return runtimecontract.ErrModelProviderConfiguration
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, runtimecontract.MaximumModelProviderConfigurationBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(file, runtimecontract.MaximumModelProviderCatalogBytes+1))
 	if err != nil {
 		return errors.New("read model provider configuration")
 	}
-	provider, err := runtimecontract.DecodeModelProviderConfiguration(raw)
+	provider, err := runtimecontract.DecodeModelProviderCatalog(raw)
 	if err != nil {
 		return err
 	}
-	return repository.ConfigureModelProvider(provider, config.ModelProviderDefaultModel)
+	if config.ModelProviderDefaultModel != "" && config.ModelProviderDefaultModel != provider.DefaultModel {
+		return runtimecontract.ErrModelProviderConfiguration
+	}
+	return repository.ConfigureModelProviderCatalog(provider)
 }
 
 // validModelProviderInput keeps optional file/default selection independent of legacy Codex model spelling.
