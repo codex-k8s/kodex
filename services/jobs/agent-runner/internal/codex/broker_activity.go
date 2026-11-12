@@ -273,8 +273,8 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 					return Result{}, errProviderBrokerResponseInvalid
 				}
 				financialSequence = financial.Sequence
-			} else {
-				call := *frame.Activity.ToolCall
+			} else if tool := frame.Activity.ToolCall; tool != nil {
+				call := *tool
 				if previous, exists := toolStates[call.CallID]; exists {
 					if previous.Kind != call.Kind || previous.Revision != 1 || call.Revision != 2 {
 						return Result{}, brokerResponseError(brokerResponseToolLifecycle, errProviderBrokerResponseInvalid)
@@ -286,7 +286,13 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 				if nativeStream && call.Revision == 2 {
 					delete(toolStates, call.CallID)
 				}
+			} else if frame.Activity.Progress == "" && frame.Activity.ModelMeasurement == nil {
+				return Result{}, brokerResponseError(brokerResponseActivitySchema, errProviderBrokerResponseInvalid)
 			}
+			// Validated progress and measurements only reach the callback; they neither
+			// enter the tool ledger nor confirm terminal completion.
+			// Проверенные progress и measurements передаются только callback: они не
+			// входят в журнал инструментов и не подтверждают завершение исполнения.
 			if callbackError == nil && callback != nil && callback(*frame.Activity) != nil {
 				callbackError = errors.New("Codex runtime activity delivery failed")
 				if connection, ok := reader.(net.Conn); ok {

@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.1
+version: 1.4.2
 updated: 2026-11-12
 ---
 
@@ -511,6 +511,17 @@ Native `step-finish` даёт нормализованный расход, но 
 Нужен узкий secret-free measurement path без экспорта prompt/transcript.
 
 ### Исполняемые consumers и границы доказательств
+
+При установленной проверке первый progress выявил nil dereference в broker
+reader: оставшаяся ветка считалась tool call. Reader теперь отдельно допускает
+проверенные progress и measurements, а tool ledger изменяет только ненулевой
+`ToolCall`. Регрессия передаёт recovery/running/compacting и оба источника
+измерений через настоящий framed writer/reader; callback получает исходный
+порядок, а terminal failure остаётся failure. Неизвестная фаза и смешанное
+объединение отклоняются до callback. Изменение не создаёт grant, lease,
+checkpoint, retry или разрешение повторить effect; прежние owner transitions
+из таблицы выше сохраняются. Установленный результат требует нового runner
+digest и отдельного повторного запуска, локальный тест его не заменяет.
 
 `ModelMeasurement` — закрытая проекция максимум4096байт. Native `step-finish`
 сохраняет PARTIAL usage, отдельно cache-read/cache-write/reasoning; HTTP wrapper

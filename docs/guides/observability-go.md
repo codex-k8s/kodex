@@ -4,7 +4,7 @@ title: Наблюдаемость Go-сервисов
 type: guide
 status: approved
 owner: developer
-version: 1.1.9
+version: 1.1.10
 updated: 2026-11-12
 ---
 
@@ -374,6 +374,12 @@ owner ACK. Локальный record и лог не подменяют durable o
 полномочия. Пример: [#1941](../operations/runtime-initialization-failure.md).
 
 ## Измерения фактических model requests
+
+Каждый вариант закрытого объединения событий проверяется и обрабатывается
+явно на всём пути producer/broker/callback. Добавление progress или measurement
+не разрешает трактовать оставшуюся ветку как tool call и разыменовывать пустой
+указатель. Проверка framed transport включает новые варианты, смешанную нагрузку
+и неизвестную фазу; наблюдение не заменяет terminal result.
 
 Native step, бизнес-ход и HTTP attempt являются разными единицами. TTFT
 измеряется от actual send до первого содержательного streaming delta, а не
