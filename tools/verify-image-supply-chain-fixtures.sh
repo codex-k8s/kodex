@@ -546,8 +546,8 @@ if ! yq eval-all -e '
 fi
 if ! yq eval-all -e '
   select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "scan") |
-  .spec.template.spec.containers[0].resources.requests.memory == "256Mi" and
-  .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
+  .spec.template.spec.containers[0].resources.requests.memory == "2Gi" and
+  .spec.template.spec.containers[0].resources.limits.memory == "16Gi" and
   (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) == "32Gi"
 ' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
   echo "scan Job does not have its bounded memory and temporary storage profile" >&2
@@ -922,7 +922,7 @@ jq -cn --slurpfile report "$evidence_source/vulnerability.json" \
 mv "$evidence_source/vulnerability.next.json" "$evidence_source/vulnerability.json"
 provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}')
 # Canonical manifest fixture: все probes честно MISSING, capabilities не назначаются.
-jq -jcn --argjson names '["bash","curl","git","gh","jq","yq","ripgrep","make","just","go","goimports","gofumpt","golangci-lint","staticcheck","goose","sqlc","buf","protoc","protoc-gen-go","protoc-gen-go-grpc","grpcurl","mockgen","oapi-codegen","node","npm","pnpm","yarn","typescript","eslint","prettier","vite","vue-tsc","vitest","playwright","chromium","playwright-mcp","wscat","codex","corepack","python3","pip","kubectl","kustomize","helm","buildctl","docker","shellcheck","hadolint","govulncheck","gitleaks"]' \
+jq -jcn --argjson names '["bash","curl","git","gh","jq","yq","ripgrep","make","just","go","goimports","gofumpt","golangci-lint","staticcheck","goose","sqlc","buf","protoc","protoc-gen-go","protoc-gen-go-grpc","grpcurl","mockgen","oapi-codegen","node","npm","pnpm","yarn","typescript","eslint","prettier","vite","vue-tsc","vitest","playwright","chromium","playwright-mcp","wscat","opencode","corepack","python3","pip","kubectl","kustomize","helm","buildctl","docker","shellcheck","hadolint","govulncheck","gitleaks"]' \
   '{schema:"kodex.dev/image-tool-inventory/v1",specSHA256:("1"*64),immutableBuildSHA256:("2"*64),runtimeContractSHA256:("3"*64),platform:"linux/amd64",tools:[$names|to_entries[]|{name:.value,status:"MISSING",path:"",version:"",sha256:"",required:(.key<38)}]}' \
   >"$temporary_directory/tool-manifest.json"
 tool_manifest_sha=$(sha256sum "$temporary_directory/tool-manifest.json" | awk '{print $1}')

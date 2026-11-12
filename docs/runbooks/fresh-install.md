@@ -139,9 +139,10 @@ canonical renderer принимает `--image-admission-memory-profile bounded-
 ключ `scan-go-memory-limit-mib=768` в ConfigMap `kodex-image-admission`.
 Wrapper передаёт `GOMEMLIMIT=768MiB` Syft/Grype и проверяет конечный cgroup v2
 limit с резервом не меньше25%. Профиль `default` сохраняет прежнее поведение.
-Резерв выбран после повторного OOM при1536MiB; более низкий предел ещё требует
-реальной проверки. Это мягкий предел Go runtime, а не гарантия отсутствия OOM. Requests/limits,
-сканирование, policy, подписи и правила допуска не ослабляются.
+Резерв выбран после повторного OOM при1536MiB; реальная проверка768MiB также
+завершилась OOM на полном RoleImage. Это мягкий предел Go runtime, а не гарантия
+отсутствия OOM. Увеличенный контейнерный бюджет описан ниже в разделе
+«Память полного SBOM»; сканирование, подписи и правила допуска сохраняются.
 
 В уже установленном окружении сначала завершить текущие admission attempts,
 сохранить terminal status, получить render и адресный plan для exact ConfigMap,
@@ -816,3 +817,19 @@ Manifest не заменяет проверку реального PREPARE_WORKS
 PVC/S3 checkpoint и restore. Матрица lifecycle сохранена в
 [runtime-workspace-durability-1953](../operations/runtime-workspace-durability-1953.md).
 Отключение флага не разрешает fallback, потерю файлов или удаление bindings.
+
+
+### Память полного SBOM
+
+Полный OpenCode RoleImage на локальном стенде исчерпал прежние2Gi при scan Syft
+даже с мягкими1536/768MiB: наблюдался рост RSS до1785MiB перед OOM, без dirty
+page tail. Мягкий Go limit не ограничивает обязательный live heap. Renderer
+использует один bounded профиль scan для protected/trusted-cluster:
+requests CPU1/memory2Gi, limits CPU4/memory16Gi, tmp32Gi. Прочие фазы сохраняют
+прежние128Mi/1Gi; CEL проверяет точные ресурсы каждой фазы. Это не разрешение
+понизить severity gate, пропустить cataloger либо принять неполный SBOM.
+
+Сначала завершаются старые attempts и сохраняется их failure evidence, затем
+доставляется immutable admission-controller с новым renderer и совместимая CEL
+policy. Старый renderer после смены CEL закрыто отклоняется. Новый scan создаётся
+owner-командой после readback; live успех должен быть подтверждён отдельно.

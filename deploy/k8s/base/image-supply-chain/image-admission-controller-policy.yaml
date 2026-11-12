@@ -202,6 +202,16 @@ spec:
         !has(variables.main.securityContext.privileged)
       message: Image admission executable or container privileges differ from the owner contract.
     - expression: >-
+        has(variables.main.resources) &&
+        has(variables.main.resources.requests) && has(variables.main.resources.limits) &&
+        variables.main.resources.requests.size() == 2 && variables.main.resources.limits.size() == 2 &&
+        ['cpu', 'memory'].all(key, key in variables.main.resources.requests && key in variables.main.resources.limits) &&
+        string(variables.main.resources.requests['cpu']) == (variables.phase == 'scan' ? '1' : '100m') &&
+        string(variables.main.resources.limits['cpu']) == (variables.phase == 'scan' ? '4' : '1') &&
+        string(variables.main.resources.requests['memory']) == (variables.phase == 'scan' ? '2Gi' : '128Mi') &&
+        string(variables.main.resources.limits['memory']) == (variables.phase == 'scan' ? '16Gi' : '1Gi')
+      message: Image admission resources differ from the bounded phase profile.
+    - expression: >-
         variables.mainEnvironmentNames ==
           'ADMISSION_RUN_ID,POLICY_REVISION,POLICY_SHA256,ADMISSION_TOOLS_IMAGE,ADMISSION_IMAGE,' +
           'PROMOTION_REPOSITORY,PROMOTION_EVIDENCE_REPOSITORY,EVIDENCE_REPOSITORY,' +

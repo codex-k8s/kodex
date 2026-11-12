@@ -16,6 +16,7 @@ import (
 	"github.com/google/cel-go/ext"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
@@ -139,6 +140,15 @@ func TestAdmissionJobPolicyRejectsPrivilegeExpansion(t *testing.T) {
 		t.Fatal(err)
 	}
 	mutations := map[string]func(*batchv1.Job){
+		"missing resource limits": func(job *batchv1.Job) {
+			job.Spec.Template.Spec.Containers[0].Resources.Limits = nil
+		},
+		"phase resource escalation": func(job *batchv1.Job) {
+			job.Spec.Template.Spec.Containers[0].Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1"), corev1.ResourceMemory: resource.MustParse("2Gi")},
+				Limits:   corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4"), corev1.ResourceMemory: resource.MustParse("16Gi")},
+			}
+		},
 		"service account": func(job *batchv1.Job) {
 			job.Spec.Template.Spec.ServiceAccountName = "cluster-admin"
 		},

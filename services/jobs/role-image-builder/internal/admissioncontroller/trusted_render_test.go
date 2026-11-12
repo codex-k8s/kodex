@@ -10,9 +10,9 @@ import (
 )
 
 // TestTrustedAdmissionScanResourcesAreScoped renders every phase in both environment/profile combinations and checks exact CPU/memory budgets.
-// Trusted-cluster scan gets its distinct larger budget; no workload is launched and no resource settings are applied.
+// Scan receives the same bounded budget in both profiles; no workload is launched and no resource settings are applied.
 // TestTrustedAdmissionScanResourcesAreScoped формирует все этапы для обеих сред и профилей и проверяет точные бюджеты CPU и памяти.
-// Scan профиля trusted-cluster получает свой увеличенный бюджет; нагрузки не запускаются и настройки ресурсов не применяются.
+// Scan получает одинаковый ограниченный бюджет в обоих профилях; нагрузки не запускаются и настройки ресурсов не применяются.
 func TestTrustedAdmissionScanResourcesAreScoped(t *testing.T) {
 	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
 	if err != nil {
@@ -32,11 +32,8 @@ func TestTrustedAdmissionScanResourcesAreScoped(t *testing.T) {
 					request, limit := int64(100), int64(1000)
 					memoryRequest, memoryLimit := int64(128<<20), int64(1<<30)
 					if phase == "scan" {
-						memoryRequest, memoryLimit = 256<<20, 2<<30
-						if profile == "trusted-cluster" {
-							request, limit = 1000, 4000
-							memoryRequest, memoryLimit = 2<<30, 16<<30
-						}
+						request, limit = 1000, 4000
+						memoryRequest, memoryLimit = 2<<30, 16<<30
 					}
 					if resources.Requests.Cpu().MilliValue() != request || resources.Limits.Cpu().MilliValue() != limit ||
 						resources.Requests.Memory().Value() != memoryRequest || resources.Limits.Memory().Value() != memoryLimit {

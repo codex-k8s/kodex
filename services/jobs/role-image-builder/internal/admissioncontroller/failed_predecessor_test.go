@@ -107,8 +107,8 @@ func TestFailedPredecessorRecoveryRenderedCEL(t *testing.T) {
 				}
 			}
 			main := rendered.Job.Spec.Template.Spec.Containers[0]
-			if main.Resources.Limits.Memory().String() != "2Gi" {
-				t.Fatal("memory changed without OOM evidence")
+			if main.Resources.Limits.Memory().String() != "16Gi" {
+				t.Fatal("full-image scan memory differs from the bounded profile")
 			}
 			if limit, ok := main.Resources.Limits[corev1.ResourceEphemeralStorage]; ok && limit.Value() < 32<<30 {
 				t.Fatal("ephemeral limit smaller than scratch")
