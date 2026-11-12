@@ -25,3 +25,15 @@ stdin/stdout/stderr, не вызывает `Start`, не создаёт goroutin
 процесса или доказательством join. Наблюдаемость, сигнализация и повтор
 запуска остаются у потребителей. Новые потребители используют конструктор;
 совместимых запасных реализаций подготовки каналов нет.
+
+## Initial connectivity probe
+
+`WaitStartupProbe(ctx, probe, retryable, probeBudget, delay)` исполняет только
+переданную readiness-проверку. Два production consumer — control-plane и
+internal-rpc-authority — сохраняют собственную PostgreSQL/TLS/config policy.
+Повтор допускается лишь при исходном caller deadline и положительном сервисном
+предикате; библиотека не выбирает ошибку для retry и не продлевает deadline.
+Нет goroutine или владения pool. Consumer закрывает rejected pool и не запускает
+workers; при успехе передаёт pool своему Run. `StartupProbeFailure` содержит
+приватные Cause/Budget отдельно, не реализует Error и не печатает значения.
+Это не повтор business command, SQL transaction, bootstrap либо миграции.

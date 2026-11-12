@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.8
-updated: 2026-11-12
+version: 1.0.9
+updated: 2026-11-13
 ---
 
 # Общие библиотеки Go
@@ -65,6 +65,13 @@ provider policy и use cases остаются в сервисе.
 содержимое сертификата/пути/credentials. Diagnostic wrapper не меняет
 применение SDK options, startup budgets и lifecycle.
 Матрица: [#1895](../operations/nats-startup-diagnostic-1895.md).
+
+Общий механизм initial readiness ожидания находится в
+`serviceruntime.WaitStartupProbe`; control-plane и internal-rpc-authority
+используют одну реализацию bounded probe/pause/cancel. Предикат retry,
+PostgreSQL/TLS precedence, этап диагностики и владение pool остаются у сервиса.
+Отсутствие исходного deadline запрещает повтор, а не создаёт новый бесконечный
+бюджет. Новый потребитель не копирует этот цикл в свой app.
 
 ## Границы модулей
 

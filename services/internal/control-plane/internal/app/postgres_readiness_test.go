@@ -264,3 +264,24 @@ func TestPostgresReadinessUnknownBudgetRemainsClosed(t *testing.T) {
 		t.Fatal("unknown budget escaped closed observation")
 	}
 }
+
+// TestPostgresReadinessJoinedDenialWinsConcurrentCancellation prevents a previous refusal from masking authoritative SQLSTATE when cancellation arrives together.
+// TestPostgresReadinessJoinedDenialWinsConcurrentCancellation запрещает прежнему refusal скрыть авторитетный SQLSTATE при одновременной отмене.
+func TestPostgresReadinessJoinedDenialWinsConcurrentCancellation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	calls := 0
+	denied := &pgconn.PgError{Code: "28P01", Message: "SENTINEL_PRIVATE_CREDENTIAL"}
+	pool := &startupPoolFixture{ping: func(context.Context) error {
+		calls++
+		if calls == 1 {
+			return syscall.ECONNREFUSED
+		}
+		cancel()
+		return errors.Join(denied, context.Canceled)
+	}}
+	err := verifyPostgresStartup(ctx, pool)
+	if !errors.Is(err, denied) || !errors.Is(err, context.Canceled) || pool.pings != 2 || pool.closes != 1 || postgresdiagnostic.Class(err) != "database_authentication" {
+		t.Fatal("concurrent cancellation hid permanent denial")
+	}
+}

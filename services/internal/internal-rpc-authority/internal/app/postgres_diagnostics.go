@@ -30,8 +30,9 @@ const (
 // postgresStartupError retains a private typed cause while keeping Error safe even for older CLI callers.
 // postgresStartupError сохраняет закрытую типизированную причину, оставляя Error безопасным и для прежних CLI callers.
 type postgresStartupError struct {
-	step  postgresStartupStep
-	cause error
+	step   postgresStartupStep
+	cause  error
+	budget error
 }
 
 // Error never formats the step, DSN, path, driver message or nested cause.
@@ -40,7 +41,7 @@ func (*postgresStartupError) Error() string { return "PostgreSQL startup failed"
 
 // Unwrap preserves errors.Is/As and context matching without granting retry permission.
 // Unwrap сохраняет errors.Is/As и проверку контекста, не разрешая повтор операции.
-func (e *postgresStartupError) Unwrap() error { return e.cause }
+func (e *postgresStartupError) Unwrap() error { return errors.Join(e.cause, e.budget) }
 
 // postgresStartupDiagnostic emits only registered steps and shared typed classes; raw error strings are never inspected.
 // postgresStartupDiagnostic выдаёт только зарегистрированные этапы и общие типизированные классы; исходные тексты ошибок не разбираются.
@@ -75,4 +76,15 @@ func postgresStartupDiagnostic(err error) (string, string, bool) {
 		return step, "configuration", true
 	}
 	return step, "unknown", true
+}
+
+// retryPostgresStartup admits only a typed connection refusal after higher-priority PostgreSQL/TLS/configuration rejection checks.
+// retryPostgresStartup допускает только типизированный отказ подключения после приоритетных проверок PostgreSQL/TLS/configuration.
+func retryPostgresStartup(err error) bool {
+	var parse *pgconn.ParseConfigError
+	if errors.As(err, &parse) {
+		return false
+	}
+	_, class, _ := postgresStartupDiagnostic(&postgresStartupError{step: postgresPingPool, cause: err})
+	return class == "connection_refused"
 }

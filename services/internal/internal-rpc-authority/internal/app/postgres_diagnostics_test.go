@@ -115,3 +115,39 @@ func TestCapabilityPostgresRejectedConfigurationStaysPrivate(t *testing.T) {
 		}
 	}
 }
+
+// TestAuthorityStartupRetryIsRestricted excludes credentials, permission, TLS, parse, DNS, reset and text-shaped refusals even in joined chains.
+// TestAuthorityStartupRetryIsRestricted исключает credentials, permission, TLS, parse, DNS, reset и текстовые отказы, включая joined цепочки.
+func TestAuthorityStartupRetryIsRestricted(t *testing.T) {
+	if !retryPostgresStartup(&net.OpError{Err: syscall.ECONNREFUSED}) {
+		t.Fatal("typed refusal rejected")
+	}
+	for _, cause := range []error{&pgconn.PgError{Code: "28P01"}, &pgconn.PgError{Code: "42501"}, x509.UnknownAuthorityError{}, &pgconn.ParseConfigError{}, &net.DNSError{IsTemporary: true}, syscall.ECONNRESET, syscall.ETIMEDOUT, context.Canceled, context.DeadlineExceeded, errors.New("connection_refused ECONNREFUSED")} {
+		if retryPostgresStartup(cause) {
+			t.Fatal("permanent failure permits retry")
+		}
+	}
+	for _, cause := range []error{&pgconn.PgError{Code: "28P01"}, &pgconn.PgError{Code: "42501"}, x509.UnknownAuthorityError{}, &pgconn.ParseConfigError{}, context.Canceled} {
+		if retryPostgresStartup(errors.Join(syscall.ECONNREFUSED, cause)) {
+			t.Fatal("refusal conceals authoritative rejection")
+		}
+	}
+}
+
+// TestAuthorityStartupBudgetKeepsRefusal checks that exhausted waiting retains the typed initial failure and an independent context outcome without printing private causes.
+// TestAuthorityStartupBudgetKeepsRefusal проверяет сохранение первичного typed отказа и отдельного context outcome без печати закрытых причин.
+func TestAuthorityStartupBudgetKeepsRefusal(t *testing.T) {
+	err := &postgresStartupError{step: postgresPingPool, cause: syscall.ECONNREFUSED, budget: context.DeadlineExceeded}
+	if !errors.Is(err, syscall.ECONNREFUSED) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("cause or wait budget lost")
+	}
+	text := SafeRuntimeFailure(ModeIssuer, &runtimeStageError{stage: stagePostgres, cause: err})
+	if !strings.Contains(text, "context_state=DEADLINE") || !strings.HasSuffix(text, "postgres_step=PING_POOL postgres_cause=connection_refused") {
+		t.Fatal("refusal hidden by wait budget")
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if pool, err := openCapabilityPostgres(ctx, postgresConnectionConfig{}); pool != nil || !errors.Is(err, context.Canceled) {
+		t.Fatal("canceled startup read config or opened pool")
+	}
+}
