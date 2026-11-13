@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { fingerprint } from './scoped-release.mjs';
+import { fingerprint, withPrivatePatchFile } from './scoped-release.mjs';
 import { portableRunnerTarget } from './portable-runner-target.mjs';
 import { isProvenStoppedPod } from './stable-archive-transition.mjs';
 
@@ -301,11 +301,13 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       e.stage === state.stage && e.resourceVersion === state.actual.metadata.resourceVersion) > last,'COMPONENT_MIGRATION_UNKNOWN_INSPECT_REQUIRED');
     const patch=[{op:'test',path:'/metadata/uid',value:expected.uid},{op:'test',path:'/metadata/resourceVersion',value:state.actual.metadata.resourceVersion},
       {op:'test',path:'/spec',value:state.actual.spec},{op:'replace',path:'/spec',value:wanted}];
-    const args=['-n',namespace,'patch','deployment',name,'--type=json','--patch-file=/dev/stdin'];
-    kube([...args,'--dry-run=server'],JSON.stringify(patch));
-    journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion});
-    try { kube(args,JSON.stringify(patch)); }
-    catch(error) {journal.append({type:'UNKNOWN',step:type,name,code:error.message});throw error;}
+    withPrivatePatchFile(patch, path => {
+      const args=['-n',namespace,'patch','deployment',name,'--type=json',`--patch-file=${path}`];
+      kube([...args,'--dry-run=server']);
+      journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion});
+      try { kube(args); }
+      catch(error) {journal.append({type:'UNKNOWN',step:type,name,code:error.message});throw error;}
+    });
     requireValue(observe(name).stage === stage,'COMPONENT_MIGRATION_HANDOFF_UNCONFIRMED');
   };
   const schemaReady = () => {

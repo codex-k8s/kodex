@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync,lstatSync,mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync } from 'node:fs';
 import { execFileSync,spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
-import { fingerprint } from './scoped-release.mjs';
+import { fingerprint, withPrivatePatchFile } from './scoped-release.mjs';
 import { mailboxMaintenancePlan, withMailboxPatchFile, mailboxKubectlFailureCode } from './control-plane-mailbox-maintenance.mjs';
 const fixture=(path)=>({kind:'Deployment',metadata:{name:'control-plane',namespace:'kodex-system',uid:'cp-uid',resourceVersion:'1',labels:{'kodex.dev/environment':'staging','kodex.dev/local-profile':'hot-reload'}},spec:{replicas:2,template:{metadata:{},spec:{containers:[{name:'control-plane',image:'go@sha256:'+'a'.repeat(64),volumeMounts:[{name:'dev-source',mountPath:'/workspace',readOnly:true}]},{name:'authority',image:'sidecar@sha256:'+'b'.repeat(64)}],volumes:[{name:'dev-source',hostPath:{path}}]}}},status:{availableReplicas:2}});
 test('plan preserves sidecars/security and limits all transitions to exact CP source/replicas',()=>{const before=fixture('/fixture/old');const p=mailboxMaintenancePlan(before,{path:'/fixture/new',revision:'c'.repeat(40)},()=>({revision:'c'.repeat(40)}));assert.equal(p.specs.stopped.replicas,0);assert.equal(p.specs.replaced.replicas,0);assert.equal(p.specs.resumed.replicas,2);assert.deepEqual(p.specs.resumed.template.spec.containers[1],before.spec.template.spec.containers[1]);for(const mutate of [b=>b.metadata.namespace='other',b=>b.metadata.labels['kodex.dev/environment']='production',b=>b.status.availableReplicas=1]){const b=structuredClone(before);mutate(b);assert.throws(()=>mailboxMaintenancePlan(b,p.source,()=>({revision:p.source.revision})));}});
@@ -19,6 +19,7 @@ test('public CLI lost stop ACK resolves authoritative state, without duplicate P
 test('public CLI CAS UNKNOWN-before-apply needs separate exact inspect before same-plan CAS',t=>{const f=cli(t);f.pass('plan');f.edit(s=>s.mode='cas');assert.notEqual(f.run('stop').status,0);f.edit(s=>s.mode='');assert.notEqual(f.run('stop').status,0);assert.equal(f.pass('inspect').stage,'before');f.pass('stop');assert.equal(f.read().calls.filter(a=>a.includes('patch')).length,2);f.edit(s=>s.cp.spec.replicas=7);assert.notEqual(f.run('inspect').status,0);});
 
 test('real kubectl --local: old stdin transport fails; private file preserves exact JSON CAS and cleanup',t=>{
+  assert.equal(withMailboxPatchFile,withPrivatePatchFile);
   const directory=mkdtempSync('/tmp/cpmail-local-');t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const file=join(directory,'deployment.json');
   const before={apiVersion:'apps/v1',kind:'Deployment',metadata:{name:'fixture',uid:'fixture-uid',resourceVersion:'12'},spec:{replicas:2}};

@@ -3,7 +3,9 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { open, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { planSourceChange, validSource } from "./application-source.mjs";
@@ -35,6 +37,19 @@ function canonical(value) {
 
 export function fingerprint(value) {
   return createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
+}
+
+// Синхронный kubectl повторно открывает patch-file по имени: Node child stdin
+// на Linux даёт ENXIO. Существующий #1350 primitive сохраняет spec вне argv/logs.
+export function withPrivatePatchFile(operations, execute) {
+  const directory = mkdtempSync(join(tmpdir(), "kodex-cp-mailbox-patch-"));
+  try {
+    const path = join(directory, "patch.json");
+    writeFileSync(path, JSON.stringify(operations), {flag:"wx",mode:0o600});
+    return execute(path);
+  } finally {
+    rmSync(directory, {recursive:true,force:true});
+  }
 }
 
 export function kubectlInvocation(context, arguments_, k3sSudo = false) {
