@@ -4363,6 +4363,7 @@ enum RuntimeWorkspaceObservationPhase {
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT = 2;
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED = 3;
   RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED = 4;
+  RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND = 5;
 }
 message ObserveWorkspaceRequest {
   MutationContext mutation = 1;
@@ -4380,6 +4381,8 @@ message ObserveWorkspaceRequest {
   string execution_binding_digest = 12;
   // Закрытая причина от контроллера, без назначаемого caller исхода run.
   string block_reason = 13;
+  // Controller-only доказательство остановки до BIND; не writer ACK и не checkpoint.
+  bytes unbound_stop = 14;
 }
 message ObserveWorkspaceResponse {
   // Canonical closed safe writer ACK, не capability/credential.
@@ -4393,6 +4396,8 @@ message ObserveWorkspaceResponse {
   // Immutable outcome прежней команды; не current phase.
   string committed_phase = 7;
   bytes committed_quiescence = 8;
+  // Immutable owner receipt остановленной attempt, не допущенной к записи.
+  bytes unbound_stop = 9;
 }
 
 enum SessionArchiveTaskKind {

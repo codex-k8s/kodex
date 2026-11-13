@@ -59,7 +59,7 @@ func TestIntegrationGitHubBackupSchemaProofComponent(t *testing.T) {
 		filename, profile, catalogField = "personal-credentials-backup-migration-postcondition.sql", "PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_V1", "githubPRCatalog"
 	case 20261107000100:
 		filename, profile, catalogField = "jira-create-fields-backup-migration-postcondition.sql", "JIRA_CREATE_FIELDS_BACKUP_V1", "githubPRCatalog"
-	case 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200, 20261112000100:
+	case 20261109000100, 20261110000100, 20261110000200, 20261111000100, 20261111000200, 20261112000100, 20261113000100:
 		filename, profile, catalogField = "integration-resource-policies-backup-migration-postcondition.sql", "INTEGRATION_RESOURCE_POLICIES_BACKUP_V2", "integrationPolicyFunctions"
 	case 20261108000100:
 		filename, profile, catalogField = "authority-proof-counter-backup-migration-postcondition.sql", "AUTHORITY_PROOF_COUNTER_BACKUP_V1", "githubPRCatalog"

@@ -100,6 +100,8 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "workspace-unbound-stop":
+		verifier = "validWorkspaceUnboundStopMigration"
 	case "workspace-archive-abi":
 		verifier = "validWorkspaceArchiveABIMigration"
 	case "opencode-native-sessions":

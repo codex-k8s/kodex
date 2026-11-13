@@ -147,12 +147,18 @@ func readWorkspaceObservationLease(ctx context.Context, tx pgx.Tx, current scope
 // QUIESCENT replay может вернуть historical ACK после terminal, но не создать нового writer.
 func (repository *Repository) authorizeWorkspaceObservationTx(ctx context.Context, tx pgx.Tx, current scope, input command.Command) error {
 	payload, valid := input.Payload.(command.WorkspaceObservationInput)
-	if !valid || payload.Phase != runtimecontract.WorkspaceObserveBind && payload.Phase != runtimecontract.WorkspaceObserveQuiescent && payload.Phase != runtimecontract.WorkspaceObserveBlocked && payload.Phase != runtimecontract.WorkspaceObserveReleased {
+	if !valid || payload.Phase != runtimecontract.WorkspaceObserveBind && payload.Phase != runtimecontract.WorkspaceObserveQuiescent && payload.Phase != runtimecontract.WorkspaceObserveBlocked && payload.Phase != runtimecontract.WorkspaceObserveReleased && payload.Phase != runtimecontract.WorkspaceObserveUnboundStop {
 		return errs.ErrInvalid
 	}
 	locked, err := readWorkspaceObservationLease(ctx, tx, current, payload)
 	if err != nil {
 		return err
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveUnboundStop {
+		return authorizeWorkspaceUnbound(ctx, tx, current, locked, payload)
+	}
+	if len(payload.UnboundStop) != 0 {
+		return errs.ErrInvalid
 	}
 	if payload.Phase == runtimecontract.WorkspaceObserveReleased {
 		if len(payload.Quiescence) != 0 || payload.PodUID != "" || payload.PVCUID != "" || payload.BlockReason != "" {
@@ -204,6 +210,9 @@ func (repository *Repository) observeWorkspace(ctx context.Context, tx pgx.Tx, c
 	locked, err := readWorkspaceObservationLease(ctx, tx, current, payload)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveUnboundStop {
+		return observeWorkspaceUnbound(ctx, tx, current, locked, payload)
 	}
 	if locked.storageRef != payload.WorkspaceRef || locked.storageGeneration != payload.WorkspaceGeneration || locked.writerLeaseID != locked.leaseID {
 		return commandOutcome{}, errs.ErrConflict
@@ -299,6 +308,10 @@ func workspaceObservationReceiptMetadata(kind command.Kind, result command.Resul
 	if kind != command.ObserveWorkspace {
 		return result
 	}
+	if result.Runtime["workspaceCommittedPhase"] == runtimecontract.WorkspaceObserveUnboundStop {
+		result.Runtime = map[string]any{"workspaceUnboundStop": result.Runtime["workspaceUnboundStop"], "workspaceCommittedPhase": runtimecontract.WorkspaceObserveUnboundStop}
+		return result
+	}
 	result.Runtime = map[string]any{"workspaceWriterAck": result.Runtime["workspaceWriterAck"], "workspaceCommittedPhase": result.Runtime["workspaceCommittedPhase"], "workspaceCommittedQuiescence": result.Runtime["workspaceCommittedQuiescence"]}
 	return result
 }
@@ -318,6 +331,9 @@ func (repository *Repository) refreshWorkspaceObservationReceipt(ctx context.Con
 	locked, err := readWorkspaceObservationLease(ctx, tx, current, payload)
 	if err != nil {
 		return err
+	}
+	if payload.Phase == runtimecontract.WorkspaceObserveUnboundStop {
+		return refreshWorkspaceUnboundReceipt(ctx, tx, current, locked, result)
 	}
 	*result, err = workspaceObservationCurrentReadback(locked, payload, *result)
 	return err

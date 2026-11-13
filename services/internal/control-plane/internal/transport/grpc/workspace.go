@@ -14,7 +14,7 @@ import (
 // ObserveWorkspace принимает только closed writer phases через exact controller-owned RPC.
 // Storage-only terminal observation возвращает immutable ACK без изменения run authority.
 func (server *Server) ObserveWorkspace(ctx context.Context, request *controlplanev1.ObserveWorkspaceRequest) (*controlplanev1.ObserveWorkspaceResponse, error) {
-	if request == nil || len(request.GetQuiescence()) > runtimecontract.MaximumWorkspaceQuiescenceBytes {
+	if request == nil || len(request.GetQuiescence()) > runtimecontract.MaximumWorkspaceQuiescenceBytes || len(request.GetUnboundStop()) > runtimecontract.MaximumWorkspaceQuiescenceBytes {
 		return nil, transportError(errs.ErrInvalid)
 	}
 	var phase string
@@ -27,17 +27,27 @@ func (server *Server) ObserveWorkspace(ctx context.Context, request *controlplan
 		phase = runtimecontract.WorkspaceObserveBlocked
 	case controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED:
 		phase = runtimecontract.WorkspaceObserveReleased
+	case controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND:
+		phase = runtimecontract.WorkspaceObserveUnboundStop
 	default:
 		return nil, transportError(errs.ErrInvalid)
 	}
 	payload := command.WorkspaceObservationInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
 		RuntimeRevisionDigest: request.GetRuntimeRevisionDigest(), ExecutionBindingDigest: request.GetExecutionBindingDigest(),
 		WorkspaceRef: request.GetWorkspaceRef(), WorkspaceGeneration: request.GetWorkspaceGeneration(), Phase: phase,
-		PodUID: request.GetPodUid(), PVCUID: request.GetPvcUid(), Quiescence: append([]byte(nil), request.GetQuiescence()...), BlockReason: request.GetBlockReason()}
+		PodUID: request.GetPodUid(), PVCUID: request.GetPvcUid(), Quiescence: append([]byte(nil), request.GetQuiescence()...), BlockReason: request.GetBlockReason(), UnboundStop: append([]byte(nil), request.GetUnboundStop()...)}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ObserveWorkspace_FullMethodName,
 		command.ObserveWorkspace, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
+	}
+	if phase == runtimecontract.WorkspaceObserveUnboundStop {
+		raw := []byte(mapString(result.Runtime, "workspaceUnboundStop"))
+		record, err := runtimecontract.DecodeWorkspaceUnboundStop(raw)
+		if err != nil || record.Execution.LeaseRef != request.GetLeaseRef() || record.Execution.RuntimeRevisionDigest != request.GetRuntimeRevisionDigest() || mapString(result.Runtime, "workspaceCommittedPhase") != phase {
+			return nil, transportError(errs.ErrUnavailable)
+		}
+		return &controlplanev1.ObserveWorkspaceResponse{CommittedPhase: phase, UnboundStop: raw}, nil
 	}
 	raw := []byte(mapString(result.Runtime, "workspaceWriterAck"))
 	ack, decodeErr := runtimecontract.DecodeWorkspaceWriterAcknowledgement(raw)

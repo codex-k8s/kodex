@@ -3361,11 +3361,12 @@ func (RuntimeWorkspaceDenialReason) EnumDescriptor() ([]byte, []int) {
 type RuntimeWorkspaceObservationPhase int32
 
 const (
-	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED RuntimeWorkspaceObservationPhase = 0
-	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND        RuntimeWorkspaceObservationPhase = 1
-	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT   RuntimeWorkspaceObservationPhase = 2
-	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED     RuntimeWorkspaceObservationPhase = 3
-	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED    RuntimeWorkspaceObservationPhase = 4
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED         RuntimeWorkspaceObservationPhase = 0
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND                RuntimeWorkspaceObservationPhase = 1
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT           RuntimeWorkspaceObservationPhase = 2
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED             RuntimeWorkspaceObservationPhase = 3
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED            RuntimeWorkspaceObservationPhase = 4
+	RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND RuntimeWorkspaceObservationPhase = 5
 )
 
 // Enum value maps for RuntimeWorkspaceObservationPhase.
@@ -3376,13 +3377,15 @@ var (
 		2: "RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT",
 		3: "RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED",
 		4: "RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED",
+		5: "RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND",
 	}
 	RuntimeWorkspaceObservationPhase_value = map[string]int32{
-		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED": 0,
-		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND":        1,
-		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT":   2,
-		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED":     3,
-		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED":    4,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED":         0,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND":                1,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT":           2,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED":             3,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED":            4,
+		"RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND": 5,
 	}
 )
 
@@ -40524,7 +40527,9 @@ type ObserveWorkspaceRequest struct {
 	Quiescence             []byte `protobuf:"bytes,11,opt,name=quiescence,proto3" json:"quiescence,omitempty"`
 	ExecutionBindingDigest string `protobuf:"bytes,12,opt,name=execution_binding_digest,json=executionBindingDigest,proto3" json:"execution_binding_digest,omitempty"`
 	// Закрытая причина от контроллера, без назначаемого caller исхода run.
-	BlockReason   string `protobuf:"bytes,13,opt,name=block_reason,json=blockReason,proto3" json:"block_reason,omitempty"`
+	BlockReason string `protobuf:"bytes,13,opt,name=block_reason,json=blockReason,proto3" json:"block_reason,omitempty"`
+	// Controller-only доказательство остановки до BIND; не writer ACK и не checkpoint.
+	UnboundStop   []byte `protobuf:"bytes,14,opt,name=unbound_stop,json=unboundStop,proto3" json:"unbound_stop,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -40650,6 +40655,13 @@ func (x *ObserveWorkspaceRequest) GetBlockReason() string {
 	return ""
 }
 
+func (x *ObserveWorkspaceRequest) GetUnboundStop() []byte {
+	if x != nil {
+		return x.UnboundStop
+	}
+	return nil
+}
+
 type ObserveWorkspaceResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Canonical closed safe writer ACK, не capability/credential.
@@ -40663,8 +40675,10 @@ type ObserveWorkspaceResponse struct {
 	// Immutable outcome прежней команды; не current phase.
 	CommittedPhase      string `protobuf:"bytes,7,opt,name=committed_phase,json=committedPhase,proto3" json:"committed_phase,omitempty"`
 	CommittedQuiescence []byte `protobuf:"bytes,8,opt,name=committed_quiescence,json=committedQuiescence,proto3" json:"committed_quiescence,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Immutable owner receipt остановленной attempt, не допущенной к записи.
+	UnboundStop   []byte `protobuf:"bytes,9,opt,name=unbound_stop,json=unboundStop,proto3" json:"unbound_stop,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ObserveWorkspaceResponse) Reset() {
@@ -40749,6 +40763,13 @@ func (x *ObserveWorkspaceResponse) GetCommittedPhase() string {
 func (x *ObserveWorkspaceResponse) GetCommittedQuiescence() []byte {
 	if x != nil {
 		return x.CommittedQuiescence
+	}
+	return nil
+}
+
+func (x *ObserveWorkspaceResponse) GetUnboundStop() []byte {
+	if x != nil {
+		return x.UnboundStop
 	}
 	return nil
 }
@@ -92348,7 +92369,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x10\x0eR\x10codex_session_idR\x1bcodex_archive_relative_pathR\x14codex_archive_sha256R\x18codex_archive_size_bytes\"t\n" +
 	"\x19CompleteExecutionResponse\x12&\n" +
 	"\x03run\x18\x01 \x01(\v2\x14.controlplane.v1.RunR\x03run\x12/\n" +
-	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xb2\x04\n" +
+	"\x05graph\x18\x02 \x01(\v2\x19.controlplane.v1.RunGraphR\x05graph\"\xd5\x04\n" +
 	"\x17ObserveWorkspaceRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1b\n" +
 	"\tlease_ref\x18\x02 \x01(\tR\bleaseRef\x12\x14\n" +
@@ -92367,7 +92388,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"quiescence\x18\v \x01(\fR\n" +
 	"quiescence\x128\n" +
 	"\x18execution_binding_digest\x18\f \x01(\tR\x16executionBindingDigest\x12!\n" +
-	"\fblock_reason\x18\r \x01(\tR\vblockReason\"\xe3\x02\n" +
+	"\fblock_reason\x18\r \x01(\tR\vblockReason\x12!\n" +
+	"\funbound_stop\x18\x0e \x01(\fR\vunboundStop\"\x86\x03\n" +
 	"\x18ObserveWorkspaceResponse\x125\n" +
 	"\x16writer_acknowledgement\x18\x01 \x01(\fR\x15writerAcknowledgement\x12#\n" +
 	"\rstorage_state\x18\x02 \x01(\tR\fstorageState\x12\x1e\n" +
@@ -92378,7 +92400,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\rcurrent_tuple\x18\x05 \x01(\bR\fcurrentTuple\x12'\n" +
 	"\x0fwriter_released\x18\x06 \x01(\bR\x0ewriterReleased\x12'\n" +
 	"\x0fcommitted_phase\x18\a \x01(\tR\x0ecommittedPhase\x121\n" +
-	"\x14committed_quiescence\x18\b \x01(\fR\x13committedQuiescence\"\x9a\x03\n" +
+	"\x14committed_quiescence\x18\b \x01(\fR\x13committedQuiescence\x12!\n" +
+	"\funbound_stop\x18\t \x01(\fR\vunboundStop\"\x9a\x03\n" +
 	"\x15SessionArchiveBinding\x12\x1f\n" +
 	"\varchive_ref\x18\x01 \x01(\tR\n" +
 	"archiveRef\x12%\n" +
@@ -97010,13 +97033,14 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	")RUNTIME_WORKSPACE_DENIAL_REASON_READ_ONLY\x10\x01\x122\n" +
 	".RUNTIME_WORKSPACE_DENIAL_REASON_QUOTA_EXCEEDED\x10\x02\x12:\n" +
 	"6RUNTIME_WORKSPACE_DENIAL_REASON_PATH_OUTSIDE_WORKSPACE\x10\x03\x124\n" +
-	"0RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR\x10\x04*\x9b\x02\n" +
+	"0RUNTIME_WORKSPACE_DENIAL_REASON_RUNTIME_IO_ERROR\x10\x04*\xd8\x02\n" +
 	" RuntimeWorkspaceObservationPhase\x123\n" +
 	"/RUNTIME_WORKSPACE_OBSERVATION_PHASE_UNSPECIFIED\x10\x00\x12,\n" +
 	"(RUNTIME_WORKSPACE_OBSERVATION_PHASE_BIND\x10\x01\x121\n" +
 	"-RUNTIME_WORKSPACE_OBSERVATION_PHASE_QUIESCENT\x10\x02\x12/\n" +
 	"+RUNTIME_WORKSPACE_OBSERVATION_PHASE_BLOCKED\x10\x03\x120\n" +
-	",RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED\x10\x04*\xe9\x01\n" +
+	",RUNTIME_WORKSPACE_OBSERVATION_PHASE_RELEASED\x10\x04\x12;\n" +
+	"7RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND\x10\x05*\xe9\x01\n" +
 	"\x16SessionArchiveTaskKind\x12)\n" +
 	"%SESSION_ARCHIVE_TASK_KIND_UNSPECIFIED\x10\x00\x12&\n" +
 	"\"SESSION_ARCHIVE_TASK_KIND_SNAPSHOT\x10\x01\x12%\n" +
