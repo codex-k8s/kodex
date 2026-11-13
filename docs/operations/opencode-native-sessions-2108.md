@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.31
+version: 1.4.32
 updated: 2026-11-13
 ---
 
@@ -1730,3 +1730,53 @@ output2048 реальный native loop проходит12 managed steps и comp
 ограниченные три turns, чтение/hash файла, compaction event, restart/resume и
 точный receipt источника/образа; integration WRITE и скрытое увеличение бюджетов
 для этого не требуются.
+
+## Отмена после BIND и остановка executor
+
+Role, provider и workspace executor остаются обычными контейнерами Pod с двумя
+прежними init containers. Одновременный SIGTERM больше не закрывает executor UDS
+до позднего запроса trusted роли: lifecycle cancellation немедленно запрещает
+`INITIALIZE`/`RUN` и отменяет активную команду, но оставляет только `QUIESCE`
+с прежним binding. Kernel peer admission по-прежнему требует UID10001; executor
+остаётся PID1, UID10002/GID29000 в отдельном PID namespace без credentials.
+
+Executor сохраняет этот handshake максимум70 секунд: существующий синхронный
+MCP budget60 плюс прежние10 секунд quiescence роли. Это покрывает bounded final
+broker delivery57 секунд и последующий handshake10 секунд. HTTP shutdown5 секунд
+и final descendant reap3 секунды помещаются в прежний Pod grace150 секунд.
+Execution deadline, callback authority, двухэтапный BIND/ACK и owner fences не
+продлеваются. Request cancellation активной команды независима от короткого
+контекста доставки stopped-command ACK.
+
+| Переход | Результат, эффект и авторитетная граница |
+| --- | --- |
+| Обычный exact `QUIESCE` | Executor закрывает admission и положительно собирает потомков; полный JSON с Content-Length записывается и flush завершается до закрытия server |
+| SIGTERM до ACK | Активная команда отменяется; новые `INITIALIZE`/`RUN` отклоняются; остаётся только прежний trusted `QUIESCE` в bounded окне |
+| Чужие UID/binding, повтор закрытого instance | Отказ без нового command effect, rebinding и replay |
+| Ошибка cleanup, неполная запись, failed flush или timeout | Положительный ACK не выдаётся; отсутствие подтверждения не становится успешной остановкой |
+| Role получила положительный executor ACK | Только затем вызывается прежний publisher, который отдельно требует sealed provider join и точные execution pins |
+| Нет ACK либо provider proof/owner record отвергнут | Measured failure сохраняет допустимый native checkpoint; workspace остаётся закрытым, будущий writer не допускается |
+| Cancel/delete/expiry/retry | Прежние owner transitions отзывают authority; новый код не оживляет terminal run и не создаёт replacement grant |
+| Старый BLOCKED workspace без quiescence record | Этот fix не создаёт отсутствующее историческое доказательство и не разрешает force-clear, reset либо автоматический retry |
+
+Локальная квалификация использует закреплённый OpenCode1.19.5 с synthetic
+model/MCP и disposable fixture image
+`python@sha256:eb2c62658b8d51bff0acc408504b76521d02030de56a8a3c1e830083e89b89d2`.
+Контейнерные сценарии исполняют настоящий `ServeExecutor` с PID1, двумя отдельными
+PID namespaces, фиксированными UID, cap-drop ALL, read-only root и network=none.
+Только synthetic volumes получают исходные UID/mode; репозиторий, HOME,
+credentials и Docker socket внутрь не монтируются. Инициализатор получает только
+CHOWN для этих volumes; production executor и client не получают capabilities.
+
+Тот же late-ACK сценарий на старом production executor из1664b61a завершается
+отказом на доверенном `QUIESCE` после SIGTERM. Новый executor допускает этот ACK,
+останавливает активную команду и с ошибкой завершает no-ACK сценарий по deadline.
+Handler tests отдельно проверяют failed-flush/закрытый instance; app tests
+проверяют measured failure и порядок ACK→publisher без подделки broker witness.
+Настоящий native process после отмены сохраняет official export, очищает managed
+HOME и продолжает импортированную историю read-only без повтора принятого effect.
+
+Это локальная синтетическая квалификация. Установленные Cancel/Stop, положительный
+owner join и новый turn из сохранённой сессии требуют отдельного readback нового
+полного immutable cohort; локальные тесты не являются этим доказательством.
+Команды воспроизведения приведены в [README runner](../../services/jobs/agent-runner/README.md#квалификация-executor-после-sigterm).

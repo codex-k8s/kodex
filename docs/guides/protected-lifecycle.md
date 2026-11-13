@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.77
+version: 1.1.78
 updated: 2026-11-13
 ---
 
@@ -17,6 +17,15 @@ replicas только по текущему Job UID, известному execut
 подтверждению остановки всех контейнеров; terminal phase, label или NodeLost
 не заменяют этот proof. Такое исключение не выдаёт migration/check PASS и не
 разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
+
+После BIND отмена Pod немедленно закрывает command admission executor и отменяет
+активную команду. Ограниченное ожидание разрешает только `QUIESCE` прежней
+trusted роли с тем же binding. Полностью записанный положительный ACK executor
+предшествует публикации quiescence record; он не заменяет sealed provider join,
+owner fence либо physical Pod join. Timeout, потерянный ACK и отсутствие record
+оставляют workspace закрытым. Изменение shutdown будущих Pod не восстанавливает
+доказательства старого writer. Матрица и локальная квалификация:
+[#2108](../operations/opencode-native-sessions-2108.md#отмена-после-bind-и-остановка-executor).
 
 Отказ до первоначального допуска writer требует отдельного доказательства
 `STOPPED_BEFORE_BIND`: exact retained Pod/UID, исходный доступный Node/UID,

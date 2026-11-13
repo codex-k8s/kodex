@@ -15,6 +15,14 @@ const (
 	// WorkspaceExecutorSocket is shared only between trusted role and executor.
 	// WorkspaceExecutorSocket разделяют только trusted role и executor.
 	WorkspaceExecutorSocket = "/run/kodex/workspace/authority/executor.sock"
+	// WorkspaceQuiescenceTimeoutSeconds bounds the trusted role's stopped-command handshake.
+	// WorkspaceQuiescenceTimeoutSeconds ограничивает handshake роли об остановке команд.
+	WorkspaceQuiescenceTimeoutSeconds = 10
+	// WorkspaceExecutorDrainSeconds retains only QUIESCE after cancellation: the existing
+	// synchronous-result window plus the role handshake, within the unchanged Pod grace.
+	// WorkspaceExecutorDrainSeconds оставляет после отмены только QUIESCE: существующее
+	// окно синхронного результата плюс handshake роли внутри прежнего Pod grace.
+	WorkspaceExecutorDrainSeconds = MaximumSynchronousMCPToolTimeoutSeconds + WorkspaceQuiescenceTimeoutSeconds
 	// WorkspaceCommandChildMode installs kernel filesystem restrictions before exec.
 	// WorkspaceCommandChildMode ставит kernel filesystem restrictions до exec.
 	WorkspaceCommandChildMode = "runtime-workspace-command"

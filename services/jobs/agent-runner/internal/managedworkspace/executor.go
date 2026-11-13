@@ -95,12 +95,13 @@ func (output *cappedOutput) Write(value []byte) (int, error) {
 // commandExecutor сериализует команды и владеет одной immutable initialization. Production
 // instance — PID 1 собственного container PID namespace без credential mounts.
 type commandExecutor struct {
-	mu       sync.Mutex
-	binding  string
-	commands []string
-	closed   bool
-	cleanup  func() error
-	probe    func(context.Context) error
+	mu        sync.Mutex
+	lifecycle context.Context
+	binding   string
+	commands  []string
+	closed    bool
+	cleanup   func() error
+	probe     func(context.Context) error
 }
 
 // executorIdentity verifies the private PID-1/UID/GID boundary before any namespace-wide kill.
@@ -185,10 +186,17 @@ func ServeExecutor(ctx context.Context) error {
 	if os.Chmod(ExecutorSocket, 0o660) != nil {
 		return errExecutor
 	}
-	executor := &commandExecutor{cleanup: reapExecutorChildren, probe: probeExecutorSandbox}
-	server := &http.Server{ReadHeaderTimeout: 3 * time.Second, IdleTimeout: 10 * time.Second, MaxHeaderBytes: 8192, BaseContext: func(net.Listener) context.Context { return ctx }}
-	closed := make(chan struct{})
-	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	executor := &commandExecutor{lifecycle: ctx, cleanup: reapExecutorChildren, probe: probeExecutorSandbox}
+	return serveExecutor(ctx, listener, executor, time.Duration(runtimecontract.WorkspaceExecutorDrainSeconds)*time.Second)
+}
+
+// executorHTTPHandler keeps the closed protocol and acknowledges only a fully flushed
+// QUIESCE response. Lifecycle cancellation closes command admission under executor.mu.
+// executorHTTPHandler сохраняет закрытый protocol и подтверждает только полностью flushed
+// QUIESCE response. Отмена lifecycle закрывает command admission под executor.mu.
+func executorHTTPHandler(lifecycle context.Context, executor *commandExecutor, acknowledged func()) http.Handler {
+	executor.lifecycle = lifecycle
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/execute" || r.URL.RawQuery != "" {
 			http.NotFound(w, r)
 			return
@@ -199,48 +207,113 @@ func ServeExecutor(ctx context.Context) error {
 			http.Error(w, "invalid command request", http.StatusBadRequest)
 			return
 		}
-		result, err := executor.handle(r.Context(), request)
+		requestContext := r.Context()
+		if request.Action != "QUIESCE" {
+			active, cancel := context.WithCancel(requestContext)
+			stop := context.AfterFunc(lifecycle, cancel)
+			defer func() {
+				stop()
+				cancel()
+			}()
+			if lifecycle.Err() != nil {
+				cancel()
+			}
+			requestContext = active
+		}
+		result, err := executor.handle(requestContext, request)
 		if err != nil {
 			http.Error(w, "command unavailable", http.StatusConflict)
 			return
 		}
+		if r.Context().Err() != nil {
+			return
+		}
+		body, err := json.Marshal(result)
+		if err != nil {
+			return
+		}
+		body = append(body, '\n')
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(result)
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		if count, err := w.Write(body); err != nil || count != len(body) {
+			return
+		}
+		if http.NewResponseController(w).Flush() != nil || r.Context().Err() != nil {
+			return
+		}
 		if request.Action == "QUIESCE" {
-			select {
-			case <-closed:
-			default:
-				close(closed)
-			}
+			acknowledged()
 		}
 	})
+}
+
+// serveExecutor retains only the trusted shutdown handshake after cancellation, within a
+// fixed budget. Public startup already checked PID1/UID, filesystem and listener ownership.
+// serveExecutor сохраняет после отмены только trusted shutdown handshake в фиксированном
+// бюджете. Public startup уже проверил PID1/UID, filesystem и владельца listener.
+func serveExecutor(ctx context.Context, listener net.Listener, executor *commandExecutor, drainBudget time.Duration) error {
+	if drainBudget <= 0 || drainBudget > time.Duration(runtimecontract.WorkspaceExecutorDrainSeconds)*time.Second {
+		return errExecutor
+	}
+	commands, cancelCommands := context.WithCancel(ctx)
+	defer cancelCommands()
+	handshake, cancelHandshake := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancelHandshake()
+	closed := make(chan struct{})
+	var acknowledge sync.Once
+	server := &http.Server{
+		ReadHeaderTimeout: 3 * time.Second,
+		IdleTimeout:       10 * time.Second,
+		MaxHeaderBytes:    8192,
+		BaseContext:       func(net.Listener) context.Context { return handshake },
+		Handler: executorHTTPHandler(commands, executor, func() {
+			acknowledge.Do(func() { close(closed) })
+		}),
+	}
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(&executorPeerListener{Listener: listener}) }()
+	acknowledged, serverFinished := false, false
+	var serveErr error
 	select {
 	case <-ctx.Done():
+		// Commands have already lost their parent context. Only the same trusted role
+		// may now send QUIESCE; missing/failed ACK retains the blocked owner outcome.
+		// Команды уже потеряли parent context. Только та же trusted роль может передать
+		// QUIESCE; отсутствие либо failed ACK сохраняет blocked outcome владельца.
+		timer := time.NewTimer(drainBudget)
+		select {
+		case <-closed:
+			acknowledged = true
+		case <-timer.C:
+		case serveErr = <-done:
+			serverFinished = true
+		}
+		timer.Stop()
 	case <-closed:
-	case err := <-done:
-		return err
+		acknowledged = true
+	case serveErr = <-done:
+		serverFinished = true
 	}
-	shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	if server.Shutdown(shutdown) != nil {
+	cancelCommands()
+	cancelHandshake()
+	shutdown, cancelShutdown := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancelShutdown()
+	shutdownErr := server.Shutdown(shutdown)
+	if shutdownErr != nil {
 		_ = server.Close()
-		return errExecutor
 	}
 	executor.mu.Lock()
 	executor.closed = true
 	cleanupErr := executor.cleanup()
 	executor.mu.Unlock()
-	if cleanupErr != nil {
-		return cleanupErr
-	}
-	select {
-	case err := <-done:
-		if !errors.Is(err, http.ErrServerClosed) {
+	if !serverFinished {
+		select {
+		case serveErr = <-done:
+		case <-shutdown.Done():
 			return errExecutor
 		}
-	case <-shutdown.Done():
+	}
+	if !acknowledged || shutdownErr != nil || cleanupErr != nil || !errors.Is(serveErr, http.ErrServerClosed) {
 		return errExecutor
 	}
 	return nil
@@ -285,7 +358,8 @@ func (listener *executorPeerListener) Accept() (net.Conn, error) {
 func (executor *commandExecutor) handle(ctx context.Context, request ExecutorRequest) (CommandResult, error) {
 	executor.mu.Lock()
 	defer executor.mu.Unlock()
-	if executor.closed || len(request.Binding) != 64 {
+	if executor.closed || len(request.Binding) != 64 ||
+		(request.Action != "QUIESCE" && executor.lifecycle != nil && executor.lifecycle.Err() != nil) {
 		return CommandResult{}, errExecutor
 	}
 	if request.Action == "INITIALIZE" {
