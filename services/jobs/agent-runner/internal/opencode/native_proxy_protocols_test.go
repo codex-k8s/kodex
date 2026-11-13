@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 // nativeProtocolProxyModels adds exact synthetic aliases to the isolated proxy without any public upstream.
@@ -70,6 +72,17 @@ func (p *nativeProxyProtocols) serve(w http.ResponseWriter, r *http.Request) boo
 	if body["cache"] != nil || body["disable_fallbacks"] != nil {
 		p.t.Error("proxy-only controls leaked upstream")
 	}
+	if strings.Contains(string(raw), "SYNTHETIC_PROTOCOL_COMPACTION") {
+		if api == "RESPONSES" && body["prompt_cache_key"] != strings.Repeat("c", 64) {
+			p.t.Error("real proxy dropped Responses compaction cache key")
+		}
+		if api == "MESSAGES" {
+			marker, _ := body["cache_control"].(map[string]any)
+			if len(marker) != 1 || marker["type"] != "ephemeral" {
+				p.t.Error("real proxy dropped Messages compaction cache control")
+			}
+		}
+	}
 	p.mu.Lock()
 	if p.calls == nil {
 		p.calls = map[string]int{}
@@ -89,7 +102,24 @@ func (p *nativeProxyProtocols) serve(w http.ResponseWriter, r *http.Request) boo
 		return true
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
-	nativeAdapterFinalStream(w, api)
+	if strings.Contains(string(raw), "SYNTHETIC_LONG_PROTOCOL") {
+		inputTokens, text := 128, "SYNTHETIC_ADAPTER_FINAL"
+		step := "FIRST"
+		if strings.Contains(string(raw), "SYNTHETIC_LONG_PROTOCOL_THIRD_TASK") {
+			step = "THIRD"
+		} else if strings.Contains(string(raw), "SYNTHETIC_LONG_PROTOCOL_SECOND_TASK") {
+			step = "SECOND"
+		}
+		checkpoint := "SYNTHETIC_LONG_PROTOCOL_CHECKPOINT_" + step
+		if strings.Contains(string(raw), "SYNTHETIC_PROTOCOL_COMPACTION") {
+			text = checkpoint + ": retained completed synthetic business turn."
+		} else if !strings.Contains(string(raw), checkpoint) {
+			inputTokens = 20000
+		}
+		nativeAdapterUsageStream(w, api, text, inputTokens)
+	} else {
+		nativeAdapterFinalStream(w, api)
+	}
 	return true
 }
 
@@ -202,6 +232,15 @@ func qualifyNativeProxyProtocols(t *testing.T, binary string, client *http.Clien
 					w.WriteHeader(400)
 					return
 				}
+				if api == "RESPONSES" && body["prompt_cache_key"] != strings.Repeat("c", 64) {
+					t.Error("Responses native compaction request lost its effective cache key")
+				}
+				if api == "MESSAGES" {
+					marker, _ := body["cache_control"].(map[string]any)
+					if len(marker) != 1 || marker["type"] != "ephemeral" {
+						t.Error("Messages native compaction request lost its effective cache control")
+					}
+				}
 				bodyMu.Lock()
 				actualBody = body
 				bodyMu.Unlock()
@@ -220,10 +259,12 @@ func qualifyNativeProxyProtocols(t *testing.T, binary string, client *http.Clien
 			}))
 			defer front.Close()
 			config := nativeConfiguration()
+			config["compaction"] = map[string]any{"auto": true, "prune": true, "reserved": 2048}
+			config["agent"] = map[string]any{"compaction": map[string]any{"prompt": "SYNTHETIC_PROTOCOL_COMPACTION SYNTHETIC_LONG_PROTOCOL"}}
 			provider := config["provider"].(map[string]any)["synthetic"].(map[string]any)
 			provider["npm"] = npm
 			models := provider["models"].(map[string]any)
-			models[alias] = models["tiny"]
+			models[alias] = map[string]any{"limit": map[string]int{"context": 16384, "output": 2048}}
 			delete(models, "tiny")
 			config["model"] = "synthetic/" + alias
 			config["small_model"] = "synthetic/" + alias
@@ -238,7 +279,31 @@ func qualifyNativeProxyProtocols(t *testing.T, binary string, client *http.Clien
 			}
 			config["plugin"] = []string{plugin}
 			t.Cleanup(func() { _ = os.Chmod(filepath.Join(home, "config", "opencode"), 0700) })
-			spec, _ := json.Marshal(map[string]any{"api": api, "provider_id": "synthetic", "model_id": alias, "base_url": front.URL + "/v1", "route_kind": "LITELLM", "inference_cache": map[string]any{"mechanism": mechanism, "namespace": strings.Repeat("c", 64), "no_reuse": false}})
+			// A synthetic qualification exercises the resolver/consumer boundary, not hosted cache capability.
+			// Синтетическая qualification проверяет resolver/consumer boundary, не capability внешнего кеша.
+			fixturePolicy := &runtimecontract.ModelCachePolicy{Revision: 1, Optimization: "OPTIMIZE", ReuseScope: "SESSION", Qualification: runtimecontract.ModelCacheQualification{Mechanism: mechanism, Status: "SUPPORTED", Source: "OBSERVED", BackendVersion: "0.0.0-synthetic", EvidenceSHA256: strings.Repeat("f", 64)}}
+			route := runtimecontract.ModelProviderConfiguration{Engine: "OPENCODE", EngineVersion: runtimecontract.OpenCodeVersion, ProviderID: "synthetic", BaseURL: front.URL + "/v1", API: api, RouteKind: "LITELLM", RouteVersion: runtimecontract.QualifiedLiteLLMVersion, Models: []runtimecontract.ModelProviderModel{{ID: alias, ContextWindowTokens: 16384, MaximumOutputTokens: 2048, CachePolicy: fixturePolicy}}}
+			fixturePolicy.Qualification.RouteSHA256, err = route.ModelCacheRouteDigest(alias)
+			if err != nil {
+				t.Fatal(err)
+			}
+			effective, err := route.ResolveModelCache(alias)
+			if err != nil || effective.Requested == nil || effective.Requested.Optimization != "OPTIMIZE" || effective.Mechanism != mechanism || effective.ProxyResponseCache != "BYPASS_READ_WRITE" || effective.PhysicalIsolation != "NOT_PROVEN" {
+				t.Fatalf("synthetic exact-route cache policy: error=%v mechanism=%s status=%s reason=%s proxy=%s isolation=%s", err, effective.Mechanism, effective.Status, effective.Reason, effective.ProxyResponseCache, effective.PhysicalIsolation)
+			}
+			changed := route
+			changed.BaseURL += "/changed"
+			degraded, err := changed.ResolveModelCache(alias)
+			if err != nil || degraded.Mechanism != "NONE" || degraded.Status != "UNKNOWN" {
+				t.Fatal("changed route reused a foreign optional cache qualification")
+			}
+			fixturePolicy.Required = true
+			_, mismatchErr := changed.ResolveModelCache(alias)
+			fixturePolicy.Required = false
+			if mismatchErr == nil {
+				t.Fatal("changed route accepted a mandatory foreign cache qualification")
+			}
+			spec, _ := json.Marshal(map[string]any{"api": api, "provider_id": "synthetic", "model_id": alias, "base_url": front.URL + "/v1", "route_kind": "LITELLM", "inference_cache": map[string]any{"mechanism": effective.Mechanism, "namespace": strings.Repeat("c", 64), "no_reuse": false}})
 			server := startConfiguredNativeServerEnvironment(t, binary, home, config, []string{"KODEX_MODEL_TRANSPORT=" + string(spec), "KODEX_MCP_PROXY_TOKEN=" + strings.Repeat("a", 64), "KODEX_NATIVE_REVISION=" + strings.Repeat("b", 64)})
 			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 			defer cancel()
@@ -246,9 +311,48 @@ func qualifyNativeProxyProtocols(t *testing.T, binary string, client *http.Clien
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := server.client.Execute(ctx, session.ID, Prompt{MessageID: "msg_D1234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: alias}, System: "SYNTHETIC_CURRENT_SYSTEM", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_CURRENT_TASK"}}}, func(string) bool { return false }, func(string, string) error { return nil })
+			result, err := server.client.Execute(ctx, session.ID, Prompt{MessageID: "msg_D1234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: alias}, System: "SYNTHETIC_CURRENT_SYSTEM", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_LONG_PROTOCOL_FIRST_TASK"}}}, func(string) bool { return false }, func(string, string) error { return nil })
 			if err != nil || result.FinalText != "SYNTHETIC_ADAPTER_FINAL" {
 				t.Fatalf("real proxy protocol failed: %v", err)
+			}
+			second, err := server.client.Execute(ctx, session.ID, Prompt{MessageID: "msg_E1234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: alias}, System: "SYNTHETIC_FRESH_PROTOCOL_SYSTEM", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_LONG_PROTOCOL_SECOND_TASK"}}}, func(string) bool { return false }, func(string, string) error { return nil })
+			if err != nil || second.FinalText != "SYNTHETIC_ADAPTER_FINAL" || second.Compactions < 1 {
+				t.Fatal("real proxy second business turn did not use native compaction", err)
+			}
+			server.stop(t)
+			export := filepath.Join(t.TempDir(), "protocol-checkpoint.json")
+			checkpoint, err := server.server.Export(ctx, session.ID, export)
+			if err != nil {
+				t.Fatal("real proxy compacted history could not be sealed", err)
+			}
+			replacement := emptyNativeRestoreHome(t)
+			if err := restore(ctx, binary, replacement, export, session.ID, checkpoint.SHA256); err != nil {
+				t.Fatal("real proxy compacted checkpoint import failed", err)
+			}
+			replacementPlugin, err := InstallManagedToolPlugin(replacement)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config["plugin"] = []string{replacementPlugin}
+			t.Cleanup(func() { _ = os.Chmod(filepath.Join(replacement, "config", "opencode"), 0700) })
+			restored := startConfiguredNativeServerEnvironment(t, binary, replacement, config, []string{"KODEX_MODEL_TRANSPORT=" + string(spec), "KODEX_MCP_PROXY_TOKEN=" + strings.Repeat("d", 64), "KODEX_NATIVE_REVISION=" + strings.Repeat("e", 64)})
+			third, err := restored.client.Execute(ctx, session.ID, Prompt{MessageID: "msg_F1234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: alias}, System: "SYNTHETIC_RESTORED_PROTOCOL_SYSTEM", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_LONG_PROTOCOL_THIRD_TASK"}}}, func(string) bool { return false }, func(string, string) error { return nil })
+			restored.stop(t)
+			if err != nil || third.FinalText != "SYNTHETIC_ADAPTER_FINAL" || third.Compactions < 1 {
+				t.Fatal("real proxy process replacement lost native compaction continuity", err)
+			}
+			reexport := filepath.Join(t.TempDir(), "continued-protocol.json")
+			if _, err := restored.server.Export(ctx, session.ID, reexport); err != nil {
+				t.Fatal("continued protocol export failed", err)
+			}
+			raw, err := os.ReadFile(reexport)
+			if err != nil || strings.Contains(string(raw), strings.Repeat("c", 64)) {
+				t.Fatal("native history contained transport cache authority")
+			}
+			for _, marker := range []string{"SYNTHETIC_LONG_PROTOCOL_FIRST_TASK", "SYNTHETIC_LONG_PROTOCOL_SECOND_TASK", "SYNTHETIC_LONG_PROTOCOL_THIRD_TASK"} {
+				if strings.Count(string(raw), marker) != 1 {
+					t.Fatal("official protocol checkpoint lost or duplicated business input")
+				}
 			}
 			observed.mu.Lock()
 			body := observed.bodies[api]
@@ -267,7 +371,7 @@ func qualifyNativeProxyProtocols(t *testing.T, binary string, client *http.Clien
 			bodyMu.Unlock()
 			qualifyProxyNoHints(t, client, origin, path, api, captured, observed)
 			qualifyProxyFallbackFence(t, client, origin, path, captured, observed)
-			t.Logf("real LiteLLM protocol=%s upstreamCalls=%d alias/hints/cache bypass checked", api, observed.count(api))
+			t.Logf("real LiteLLM protocol=%s upstreamCalls=%d alias/hints/cache bypass checked; secondTurnCompactions=%d restoredTurnCompactions=%d nativeSessionPreserved=true", api, observed.count(api), second.Compactions, third.Compactions)
 		})
 	}
 }

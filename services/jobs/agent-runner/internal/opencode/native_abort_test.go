@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,7 +21,7 @@ import (
 // Synthetic effect принят один раз при удержанном HTTP response; Kodex не исправляет history status вручную.
 func TestNativeAbortClosesInterruptedToolBeforeExport(t *testing.T) {
 	binary := qualifiedNativeBinary(t)
-	fixture := &nativeFixture{}
+	fixture := &nativeFixture{targetTools: 1}
 	config := nativeToolConfiguration(t, fixture)
 	accepted := make(chan struct{}, 1)
 	release := make(chan struct{})
@@ -87,12 +89,47 @@ func TestNativeAbortClosesInterruptedToolBeforeExport(t *testing.T) {
 		t.Fatal("native abort was not acknowledged")
 	}
 	server.stop(t)
-	if _, err := server.server.Export(abortContext, session.ID, filepath.Join(t.TempDir(), "interrupted-native.json")); err != nil {
+	export := filepath.Join(t.TempDir(), "interrupted-native.json")
+	checkpoint, err := server.server.Export(abortContext, session.ID, export)
+	if err != nil {
 		t.Fatal("native abort retained an unconfirmed tool part", err)
 	}
 	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	if fixture.tools != 1 || fixture.modelCalls != 1 {
+	stoppedTools, stoppedCalls := fixture.tools, fixture.modelCalls
+	fixture.mu.Unlock()
+	if stoppedTools != 1 || stoppedCalls != 1 {
 		t.Fatal("native stop repeated model call or accepted effect")
 	}
+	// The owner has reconciled the accepted synthetic effect and revoked tool authority.
+	// Владелец подтвердил принятый synthetic effect и отозвал полномочия инструмента.
+	replacement := emptyNativeRestoreHome(t)
+	if err := restore(t.Context(), binary, replacement, export, session.ID, checkpoint.SHA256); err != nil {
+		t.Fatal("official import rejected the joined cancelled checkpoint", err)
+	}
+	config["permission"] = map[string]string{"*": "deny"}
+	resumed := startConfiguredNativeServer(t, binary, replacement, config)
+	resumeContext, cancelResume := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancelResume()
+	result, err := resumed.client.Execute(resumeContext, session.ID, Prompt{
+		MessageID: "msg_91234567890123456789012345", Model: Model{ProviderID: "synthetic", ModelID: "tiny"},
+		System: "SYNTHETIC_RECONCILED_READ_ONLY", Parts: []TextPart{{Type: "text", Text: "SYNTHETIC_RESUME_WITHOUT_REPEATING_EFFECT"}},
+	}, func(string) bool { return false }, func(string, string) error { return nil })
+	resumed.stop(t)
+	if err != nil || result.FinalText != "SYNTHETIC_FINAL_COUNTER_1" {
+		t.Fatal("reconciled native cancellation could not resume read-only", err)
+	}
+	reexport := filepath.Join(t.TempDir(), "resumed-native.json")
+	if _, err := resumed.server.Export(t.Context(), session.ID, reexport); err != nil {
+		t.Fatal("read-only continuation did not seal its native history", err)
+	}
+	raw, err := os.ReadFile(reexport)
+	if err != nil || strings.Count(string(raw), "SYNTHETIC_RESUME_WITHOUT_REPEATING_EFFECT") != 1 {
+		t.Fatal("native continuation lost or duplicated the new business input")
+	}
+	fixture.mu.Lock()
+	defer fixture.mu.Unlock()
+	if fixture.tools != 1 || fixture.modelCalls != 2 || !strings.Contains(string(fixture.lastWire), "SYNTHETIC_RECONCILED_READ_ONLY") {
+		t.Fatal("native replacement replayed the accepted effect or lost current read-only instructions")
+	}
+	t.Logf("accepted effect cancellation: tools=%d modelCalls=%d restoredNativeSession=true", fixture.tools, fixture.modelCalls)
 }

@@ -158,9 +158,28 @@ func TestNativeLiteLLMRedisBypass(t *testing.T) {
 	if os.WriteFile(configPath+".next", []byte(config), 0600) != nil || os.Rename(configPath+".next", configPath) != nil {
 		t.Fatal("write private synthetic proxy config")
 	}
-	// UID/GID владельца сохраняют private mode 0600 без CAP_DAC_OVERRIDE и chmod для остальных пользователей.
+	// Rootless container UID 0 maps to the daemon owner's host UID; a rootful daemon uses the host UID directly.
+	// Both paths retain private mode 0600, dropped capabilities and a read-only container root.
+	// Rootless UID 0 отображается в host UID владельца daemon; rootful использует host UID напрямую.
+	// Оба режима сохраняют private mode 0600, сброшенные capabilities и read-only container root.
 	if !podMode {
-		docker.start(proxyName, "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()), "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
+		user := fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid())
+		security, err := docker.command("info", "--format", "{{json .SecurityOptions}}")
+		var options []string
+		if err != nil || json.Unmarshal([]byte(security), &options) != nil {
+			t.Fatal("inspect local Docker user namespace")
+		}
+		rootless, remapped := false, false
+		for _, option := range options {
+			rootless = rootless || option == "name=rootless"
+			remapped = remapped || option == "name=userns"
+		}
+		if rootless {
+			user = "0:0"
+		} else if remapped {
+			t.Fatal("Docker user namespace remapping is not qualified by this harness")
+		}
+		docker.start(proxyName, "--user", user, "--network", scope, "--memory", "1536m", "--cpus", "2", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=128m",
 			"--env", "LITELLM_LOCAL_MODEL_COST_MAP=True", "--env", "LITELLM_LOG=INFO", "--env", "PYTHONUNBUFFERED=1", "--mount", "type=bind,src="+directory+",dst=/harness", "--mount", "type=bind,src="+configPath+",dst=/config/proxy.yaml,readonly", "--entrypoint", "python", nativeLiteLLMImage, "-c", nativeLiteLLMUnixRelay, "--config", "/config/proxy.yaml", "--host", "127.0.0.1", "--port", "4000", "--num_workers", "1")
 	}
 	origin := "http://litellm.example.invalid"
