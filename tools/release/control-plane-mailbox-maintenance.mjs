@@ -1,25 +1,15 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { lstatSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fingerprint } from './scoped-release.mjs';
+import { fingerprint, withPrivatePatchFile as withMailboxPatchFile } from './scoped-release.mjs';
+export { withMailboxPatchFile };
 import { inspectSource, planSourceChange } from './application-source.mjs';
 import { migrationReadback } from './control-plane-migration.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 const ensure = (ok,code) => { if (!ok) throw new Error(code); };
 const ns = 'kodex-system';
-// kubectl открывает patch-file по имени: Node pipe stdin нельзя повторно открыть
-// через /dev/stdin (Linux ENXIO). Полный spec остаётся вне argv и общих логов.
-export function withMailboxPatchFile(operations, execute) {
-  const directory=mkdtempSync(join(tmpdir(),'kodex-cp-mailbox-patch-'));
-  try {
-    const path=join(directory,'patch.json');
-    writeFileSync(path,JSON.stringify(operations),{flag:'wx',mode:0o600});
-    return execute(path);
-  } finally { rmSync(directory,{recursive:true,force:true}); }
-}
 export function mailboxKubectlFailureCode(error) {
   const stderr=String(error?.stderr??'');
   return /open \/dev\/stdin: no such device or address/.test(stderr)

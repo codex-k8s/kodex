@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.3.4
+version: 1.3.5
 updated: 2026-11-13
 ---
 
@@ -344,6 +344,32 @@ stop/join → DDL → readback → resume. Сохраняются все ста�
 старый PASS не продлевает полномочия, а открывает только отдельную свежую проверку.
 Любой STOP/PAIR_STOP, HANDOFF/PAIR_HANDOFF, RESUME либо DDL intent закрывает этот
 путь; успешная DDL не становится предшественником для повторного исполнения.
+
+## Regular patch-file для portable pair — #1977
+
+Штатные переходы CP/RC используют существующий primitive #1350 из
+`scoped-release.mjs`: JSON patch записывается в regular file0600 внутри
+нового private каталога0700. Dry-run и actual patch читают один файл; UID,
+resourceVersion и полный before-spec CAS сохраняются. Полный spec не попадает
+в argv. `finally` удаляет файл и каталог при успехе и при отказе.
+
+Причина прежнего отказа — Linux ENXIO при попытке kubectl повторно открыть
+`/dev/stdin`, полученный от Node child pipe. Это transport boundary, а не
+разрешение повторять неопределённый patch. Mailbox сохраняет прежний экспорт
+`withMailboxPatchFile`, который ссылается на тот же общий primitive.
+
+| Состояние | Следующий шаг и сохранённая граница |
+| --- | --- |
+| Dry-run отказал | Actual patch и pair intent не выполняются; plan и журнал сохраняются |
+| Actual patch дал UNKNOWN | Отдельный inspect связывает прежние UID/spec/RV; дальнейшая та же фаза проходит прежние journal/CAS guards |
+| Patch подтверждён | Файл удаляется, затем прежний observer проверяет stage и положительное завершение процессов |
+| Новый CLI читает retained plan | Application source, Job/spec, schema, ABI и plan bytes не меняются; инструмент не переписывает прежние receipts |
+
+Локальная проверка использует реальный `kubectl patch --local`: прежний stdin
+отклоняется, regular file проходит exact CAS, stale RV отклоняется. Portable
+CLI fixture проводит все пять pair-переходов через этот настоящий локальный
+patch engine; dry-run/actual failures и lost ACK проверяют cleanup и отсутствие
+слепого повтора. Кластер и внешние сервисы для этих тестов не используются.
 
 ## Serving lineage и сохранённая история Jobs — #1977
 

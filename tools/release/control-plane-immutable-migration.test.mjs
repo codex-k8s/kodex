@@ -55,7 +55,7 @@ test('native cutover требует пустые session data и точный н
 });
 import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { planControlPlaneMigration, migrationReadback } from './control-plane-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
@@ -629,14 +629,23 @@ const inventory=()=>{
  for(const pod of [s.bootstrapPod,s.checkPod,s.previousCheckPod,s.previousPod,s.pod].filter(Boolean))items.push({kind:'Pod',...pod,metadata:{name:pod.metadata.uid,...pod.metadata}});
  items.push(...(s.extraServingInventory??[]));return items;
 };
-if(a.includes('patch')&&a.includes('--patch-file=/dev/stdin')){
+if(a.includes('patch')&&a.some(v=>v.startsWith('--patch-file='))){
+ const path=a.find(v=>v.startsWith('--patch-file=')).slice(13);
+ if(path==='/dev/stdin'||!fs.lstatSync(path).isFile()||(fs.statSync(path).mode&0o777)!==0o600||(fs.statSync(require('path').dirname(path)).mode&0o777)!==0o700)fail();
+ s.patchPaths??=[];s.patchPaths.push(path);
  const name=a[a.indexOf('deployment')+1],app=name==='control-plane'?s.deployment:s.controller;
- const p=JSON.parse(fs.readFileSync(0,'utf8'));
+ const p=JSON.parse(fs.readFileSync(path,'utf8'));
+ if(s.realKubectl){
+  const local=journalDirectory+'/pair-before.json';fs.writeFileSync(local,JSON.stringify({apiVersion:'apps/v1',kind:'Deployment',...app}),{mode:0o600});
+  try {const checked=JSON.parse(require('child_process').execFileSync(s.realKubectl,['patch','--local','-f',local,'--type=json','--patch-file='+path,'-o','json'],{stdio:['ignore','pipe','pipe']}));require('assert').deepStrictEqual(checked.spec,p[3].value);}
+  catch(error){s.realPatchError=String(error.stderr??error.message);save();throw error;}
+  finally {fs.unlinkSync(local);}
+ }
  if(p[0].value!==app.metadata.uid||p[1].value!==app.metadata.resourceVersion||JSON.stringify(p[2].value)!==JSON.stringify(app.spec))fail();
- if(a.includes('--dry-run=server'))out(app);
+ if(a.includes('--dry-run=server')){if(s.mode==='pair-dry-run-fail')fail();out(app);}
  else {
   const events=fs.readFileSync(journal,'utf8').trim().split('\\n').map(JSON.parse);if(!['PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT'].includes(events.at(-1).type))fail();
-  if(s.mode==='pair-before-effect'&&events.at(-1).type==='PAIR_HANDOFF_INTENT')fail();
+  if(s.mode==='pair-actual-fail'||(s.mode==='pair-before-effect'&&events.at(-1).type==='PAIR_HANDOFF_INTENT'))fail();
   app.spec=p[3].value;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);app.metadata.generation++;
   app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(key=>[key,app.spec.replicas]))};
   if(s.mode==='pair-lost-ack'&&name==='control-plane'&&app.spec.replicas===0&&!s.lost){s.lost=true;fail();}out(app);
@@ -1938,6 +1947,20 @@ test('public portable CLI check→stop/join→043→paired handoff→resume ис
  assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,patches);
  assert.ok(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&!a.includes('-l')&&a.some(v=>v.startsWith('jsonpath='))));
  assert.equal(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&a.at(-1)==='json'),false);
+ const paths=f.read().patchPaths;assert.ok(paths.length>=10);
+ assert.ok(paths.every(path=>path!=='/dev/stdin'&&!existsSync(path)&&!existsSync(dirname(path))));
+ for(let i=0;i<paths.length;i+=2)assert.equal(paths[i],paths[i+1]);
+});
+
+test('portable pair: real kubectl --local принимает regular file во всех пяти CAS переходах',t=>{
+ const binary=execFileSync('which',['kubectl'],{encoding:'utf8'}).trim();
+ const f=cli(t,'workspace-unbound-stop','',true);f.edit(s=>{s.realKubectl=binary;});
+ pass(f,'plan','PLANNED');pass(f,'check');
+ const stopped=f.run('stop');assert.equal(stopped.status,0,f.read().realPatchError??stopped.stderr);
+ pass(f,'apply');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
+ const paths=f.read().patchPaths;assert.equal(paths.length,10);
+ assert.ok(paths.every(path=>!existsSync(path)&&!existsSync(dirname(path))));
+ assert.equal(f.read().controller.spec.replicas,2);assert.equal(f.read().deployment.spec.replicas,3);
 });
 
 test('public portable CLI запрещает handoff без DDL/postcondition и после незавершённого controller join',t=>{
@@ -1949,6 +1972,25 @@ test('public portable CLI запрещает handoff без DDL/postcondition и
  f.edit(s=>{s.controller.spec.replicas=0;s.controller.status.replicas=0;});pass(f,'apply');
  f.edit(s=>{s.postcondition={receiptGuardReady:false};});assert.notEqual(f.run('handoff').status,0);
  assert.equal(f.read().deployment.spec.template.spec.containers[0].image,f.pair.value.components[0].expectedImageRef);
+});
+
+test('portable pair освобождает patch-file после dry-run/actual error и продолжает только прежний план после inspect',t=>{
+ for(const mode of ['pair-dry-run-fail','pair-actual-fail']){
+  const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');
+  const bytes=readFileSync(f.plan);f.edit(s=>{s.mode=mode;});assert.notEqual(f.run('stop').status,0);
+  const failed=f.read();assert.equal(failed.controller.spec.replicas,2);assert.equal(failed.job,undefined);
+  assert.ok(failed.patchPaths.every(path=>!existsSync(path)&&!existsSync(dirname(path))));
+  const events=readFileSync(f.evidence,'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(events.some(e=>e.type==='PAIR_STOP_INTENT'),mode==='pair-actual-fail');
+  f.edit(s=>{s.mode='';});
+  if(mode==='pair-actual-fail'){
+   const count=f.read().patchPaths.length;assert.notEqual(f.run('stop').status,0);assert.equal(f.read().patchPaths.length,count);
+  }
+  pass(f,'inspect');pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
+  assert.deepEqual(readFileSync(f.plan),bytes);
+  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+  assert.ok(f.read().patchPaths.every(path=>!existsSync(path)&&!existsSync(dirname(path))));
+ }
 });
 
 test('public portable CLI lost handoff ACK восстанавливает observed пару без второго image patch',t=>{
