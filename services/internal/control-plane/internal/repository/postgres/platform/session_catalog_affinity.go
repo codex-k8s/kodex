@@ -75,6 +75,9 @@ func bindSessionModelCatalog(ctx context.Context, tx pgx.Tx, organizationID, ses
 	if err != nil {
 		return err
 	}
+	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, organizationID, agentRef, overlay); err != nil {
+		return err
+	}
 	selected := []entity.ProviderAccountCandidate{}
 	for _, candidate := range configuration.ProviderPolicy.AccountCandidates {
 		if candidate.AccountRef == accountRef {
@@ -215,6 +218,9 @@ func validateSessionRuntimeCatalog(ctx context.Context, tx pgx.Tx, organizationI
 	}
 	configuration, overlay, err := readRuntimeCatalogConfiguration(ctx, tx, organizationID, agentRef, "")
 	if err != nil {
+		return err
+	}
+	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, organizationID, agentRef, overlay); err != nil {
 		return err
 	}
 	_, _, err = checkedSessionModelCatalog(ctx, tx, organizationID, sessionID, accountRef, configuration, overlay)

@@ -5,8 +5,8 @@ import type {
 // Каноническая схема OpenCode от runtimecontract.OverlaySchema; синтетическая оснастка.
 export const overlaySchemaFixture: ConfigOverlaySchema = {
   revision:
-    "cos_2c42a753c49d4ef469936d1ee3809528033235d9b0f5e15d2959b03134750ede",
-  digest: "2c42a753c49d4ef469936d1ee3809528033235d9b0f5e15d2959b03134750ede",
+    "cos_366f45d30f72843ab98d0911e9ce83c1de613c53b2b5a0105e17562bedf0fa6a",
+  digest: "366f45d30f72843ab98d0911e9ce83c1de613c53b2b5a0105e17562bedf0fa6a",
   fields: [
     {
       key: "model_reasoning_effort",
@@ -36,6 +36,18 @@ export const overlaySchemaFixture: ConfigOverlaySchema = {
       description: "Штатное сокращение результатов инструментов в контексте",
       completion: "context.prune = true",
       hover: "Не удаляет исходный audit и не меняет retention сессии Kodex.",
+    },
+    {
+      key: "context.window_tokens",
+      valueType: "integer",
+      allowedValues: [],
+      defaultValue: "32768",
+      description: "Окно контекста OpenCode, токены",
+      completion: "context.window_tokens = ",
+      hover:
+        "Необязательное уменьшение окна для штатного сжатия. Больше предела вывода, не выше каталога; отсутствие наследует окно модели. Не является жёстким лимитом каждого запроса.",
+      minimum: 2049,
+      maximum: 32768,
     },
     {
       key: "cache.optimization",

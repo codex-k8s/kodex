@@ -2,7 +2,9 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"reflect"
 	"strings"
 	"sync"
@@ -32,6 +34,13 @@ import (
 // и recipe version читаются до выборочного impact; реальная сборка в registry, проверка подписи и
 // push не выполняются.
 func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+	t.Helper()
+	testRoleImagePromotionScenario(t, ctx, repository, false)
+}
+
+// testRoleImagePromotionScenario runs the common full promotion prefix, then the selected independent owner scenario.
+// testRoleImagePromotionScenario выполняет общий полный promotion prefix, затем выбранный независимый сценарий владельца.
+func testRoleImagePromotionScenario(t *testing.T, ctx context.Context, repository *Repository, contextWindow bool) {
 	t.Helper()
 	ownerInput := platformrepo.ProofPrincipalInput{
 		ExternalActorID:     "20000000-0000-4000-8000-000000000001",
@@ -69,8 +78,12 @@ func testRoleImagePromotionLifecycle(t *testing.T, ctx context.Context, reposito
 	}
 	assertManagedRoleImageBuild(t, ctx, repository, created.Recipe, *created.Build)
 	testManagedRoleImageDraftFence(t, ctx, repository, owner, resolvedOwner, created.Recipe, *created.Build)
-	artifact := seedAdmittedPromotionArtifact(t, ctx, repository, resolvedOwner,
-		created.Recipe, *created.Build)
+	var features []string
+	if contextWindow {
+		features = []string{runtimecontract.ContextWindowInputFeature}
+	}
+	artifact := seedPromotionArtifactWithFeatures(t, ctx, repository, resolvedOwner,
+		created.Recipe, *created.Build, "ACCEPTED", features)
 	admittedDetail, err := repository.Get(ctx, resolvedOwner, created.Recipe.Ref)
 	if err != nil || admittedDetail.PromotionCandidate == nil ||
 		admittedDetail.PromotionCandidate.Ref != artifact.Ref ||
@@ -323,6 +336,10 @@ SET source_sha256 = $2
 WHERE ref = $1`, revisionRef, strings.Repeat("0", 64)); err == nil {
 		t.Fatal("immutable promoted role image revision was mutable")
 	}
+	if contextWindow {
+		testContextWindowPublication(t, ctx, repository, platform, owner, projectResult.Project.Ref, *activeArtifact)
+		return
+	}
 	testRoleImageImpactLifecycle(t, ctx, repository, platform, roleImages, owner, resolvedOwner, readback, *activeArtifact, agent)
 }
 
@@ -400,6 +417,14 @@ func seedAdmittedPromotionArtifact(t *testing.T, ctx context.Context, repository
 func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Repository,
 	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild, decision string) entity.ImageArtifact {
 	t.Helper()
+	return seedPromotionArtifactWithFeatures(t, ctx, repository, principal, recipe, build, decision, nil)
+}
+
+// seedPromotionArtifactWithFeatures binds synthetic input support into admission evidence before promotion, without probing a real image.
+// seedPromotionArtifactWithFeatures связывает синтетическую поддержку входа с admission evidence до promotion без проверки реального образа.
+func seedPromotionArtifactWithFeatures(t *testing.T, ctx context.Context, repository *Repository,
+	principal value.Principal, recipe entity.RoleImageRecipe, build entity.ImageBuild, decision string, features []string) entity.ImageArtifact {
+	t.Helper()
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		t.Fatalf("resolve promotion fixture scope: %v", err)
@@ -415,6 +440,20 @@ func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Reposi
 		return inventoryArtifact
 	}
 	inventoryJSON, inventorySHA256 := imageInventoryFixture(inventoryArtifact)
+	if len(features) != 0 {
+		inventory, err := runtimecontract.DecodeImageToolInventory([]byte(inventoryJSON))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range inventory.Platforms {
+			inventory.Platforms[i].Manifest.InputFeatures = append([]string(nil), features...)
+			raw, _ := json.Marshal(inventory.Platforms[i].Manifest)
+			inventory.Platforms[i].ManifestSHA256 = runtimecontract.ImageInventorySHA256(raw)
+		}
+		raw, _ := json.Marshal(inventory)
+		inventoryJSON, inventorySHA256 = string(raw), runtimecontract.ImageInventorySHA256(raw)
+	}
+
 	if err := repository.pool.QueryRow(ctx, queryRoleImagesRecordAdmission,
 		current.organizationID, artifactID, uint64(1), decision,
 		strings.Repeat("2", 64), strings.Repeat("3", 64),

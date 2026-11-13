@@ -65,7 +65,15 @@ func runtimeOverlaySchema(ctx context.Context, tx pgx.Tx, current scope, config 
 			efforts = slices.DeleteFunc(efforts, func(effort string) bool { return !slices.Contains(available, effort) })
 		}
 	}
-	return runtimecontract.OverlaySchema(efforts, defaultEffort), nil
+	provider, err := runtimeCatalogProviderConfiguration(ctx, tx, config.Provider)
+	if err != nil {
+		return runtimecontract.ConfigOverlaySchema{}, err
+	}
+	model, found := provider.Model(config.Model)
+	if !found {
+		return runtimecontract.ConfigOverlaySchema{}, errs.ErrConflict
+	}
+	return runtimecontract.OverlaySchemaForModel(efforts, defaultEffort, model), nil
 }
 
 // populateRuntimeOverlaySchema first assigns the computed schema, then reads published/draft
@@ -127,11 +135,11 @@ func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope
 		target = view.DraftOverlay
 	}
 	schema := view.OverlaySchema
-	efforts, err := runtimeOverlayReasoningValues(schema)
+	_, err := runtimeOverlayReasoningValues(schema)
 	if err != nil {
 		return err
 	}
-	diagnostics := runtimecontract.DiagnoseConfigOverlay(target.Content, efforts)
+	diagnostics := runtimecontract.DiagnoseConfigOverlayWithSchema(target.Content, schema)
 	if diagnostics == nil {
 		diagnostics = []runtimecontract.ConfigOverlayDiagnostic{}
 	}

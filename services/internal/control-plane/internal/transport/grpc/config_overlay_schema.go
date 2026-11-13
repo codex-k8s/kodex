@@ -14,7 +14,7 @@ func castConfigOverlaySchema(value runtimecontract.ConfigOverlaySchema) *control
 	for _, field := range value.Fields {
 		result.Fields = append(result.Fields, &controlplanev1.ConfigOverlayField{Key: field.Key, ValueType: field.ValueType,
 			AllowedValues: field.AllowedValues, DefaultValue: field.DefaultValue, Description: field.Description,
-			Completion: field.Completion, Hover: field.Hover})
+			Completion: field.Completion, Hover: field.Hover, Minimum: field.Minimum, Maximum: field.Maximum})
 	}
 	return result
 }

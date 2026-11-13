@@ -12574,6 +12574,7 @@ components:
                 model_reasoning_effort,
                 context.auto_compaction,
                 context.prune,
+                context.window_tokens,
                 cache.optimization,
                 cache.reuse_scope,
                 cache.no_reuse,
@@ -12581,7 +12582,7 @@ components:
                 cache.required,
               ],
           }
-        valueType: { type: string, enum: [string, boolean] }
+        valueType: { type: string, enum: [string, boolean, integer] }
         allowedValues:
           {
             type: array,
@@ -12593,6 +12594,8 @@ components:
         description: { type: string, maxLength: 512 }
         completion: { type: string, maxLength: 256 }
         hover: { type: string, maxLength: 1024 }
+        minimum: { type: integer, format: int64, minimum: 1, maximum: 2000001 }
+        maximum: { type: integer, format: int64, minimum: 1, maximum: 2000000 }
     ConfigOverlaySchema:
       type: object
       additionalProperties: false
@@ -12604,8 +12607,8 @@ components:
         fields:
           {
             type: array,
-            minItems: 8,
-            maxItems: 8,
+            minItems: 9,
+            maxItems: 9,
             items: { $ref: "#/components/schemas/ConfigOverlayField" },
           }
     ConfigOverlayDraftInput:
@@ -15846,6 +15849,11 @@ components:
         platform: { type: string, enum: [linux/amd64, linux/arm64] }
         platformDigest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
         manifestSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        inputFeatures:
+          type: array
+          maxItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [context.window_tokens] }
         tools:
           type: array
           minItems: 50

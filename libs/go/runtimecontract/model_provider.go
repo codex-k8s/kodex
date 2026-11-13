@@ -16,6 +16,9 @@ import (
 )
 
 const (
+	// MaximumModelContextWindowTokens bounds advertised model windows without widening a catalog.
+	// MaximumModelContextWindowTokens ограничивает model windows без расширения каталога.
+	MaximumModelContextWindowTokens = 2_000_000
 	// ModelProviderConfigurationSchema identifies the closed deployment-owned provider contract.
 	// ModelProviderConfigurationSchema обозначает закрытый контракт провайдера, принадлежащий установке.
 	ModelProviderConfigurationSchema = "kodex.model-provider/v1"
@@ -118,7 +121,7 @@ func (config ModelProviderConfiguration) Validate() error {
 	models := map[string]bool{}
 	for _, model := range config.Models {
 		if !ValidModelProviderModelID(model.ID) || models[model.ID] ||
-			model.ContextWindowTokens < 1 || model.ContextWindowTokens > 2_000_000 ||
+			model.ContextWindowTokens < 1 || model.ContextWindowTokens > MaximumModelContextWindowTokens ||
 			model.MaximumOutputTokens < 1 || model.MaximumOutputTokens > model.ContextWindowTokens {
 			return ErrModelProviderConfiguration
 		}
@@ -347,6 +350,10 @@ func (config ModelProviderConfiguration) ValidateRuntimePreferences(model, overl
 	}
 	if _, found := config.Model(model); !found {
 		return ErrModelProviderConfiguration
+	}
+	selected, _ := config.Model(model)
+	if _, err := selected.ResolveRuntimeContext(overlay); err != nil {
+		return err
 	}
 	if _, err := config.ResolveRuntimeModelCache(model, overlay); err != nil {
 		return err

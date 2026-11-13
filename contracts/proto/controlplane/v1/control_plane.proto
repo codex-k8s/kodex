@@ -2400,6 +2400,8 @@ message ImagePlatformToolInventory {
   string platform_digest = 2;
   string manifest_sha256 = 3;
   repeated ImageToolObservation tools = 4;
+  // Необязательная поддержка входа фактическим trusted runner на этой платформе.
+  repeated string input_features = 5;
 }
 message ImageToolInventory {
   // VERIFIED либо UNAVAILABLE; отсутствие evidence не превращается в декларацию.
@@ -6126,6 +6128,9 @@ message ConfigOverlayField {
   string description = 5;
   string completion = 6;
   string hover = 7;
+  // Диапазон integer-поля; нули у остальных типов.
+  int64 minimum = 8;
+  int64 maximum = 9;
 }
 
 message ConfigOverlaySchema {

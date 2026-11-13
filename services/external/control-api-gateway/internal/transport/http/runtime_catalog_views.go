@@ -9,6 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -50,6 +51,8 @@ type canonicalOverlayField struct {
 	Description   string   `json:"description"`
 	Completion    string   `json:"completion"`
 	Hover         string   `json:"hover"`
+	Minimum       int64    `json:"minimum,omitempty"`
+	Maximum       int64    `json:"maximum,omitempty"`
 }
 
 // canonicalOverlaySchema forms the exact digest preimage with empty revision/digest, ordered field
@@ -67,17 +70,25 @@ type canonicalOverlaySchema struct {
 // validOverlaySchema verifies the closed native preference catalog and its owner JSON digest without inventing provider guarantees.
 // validOverlaySchema проверяет закрытый каталог native preferences и JSON digest владельца без выдуманных гарантий провайдера.
 func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
-	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 8 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
+	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 9 || !validManagedDigest(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
 		return false
 	}
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
 	seen := map[string]bool{}
 	for _, field := range schema.Fields {
-		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
+		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "context.window_tokens", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
 			return false
 		}
 		seen[field.Key] = true
-		if field.ValueType != "string" && field.ValueType != "boolean" || (strings.HasPrefix(field.Key, "context.") || slices.Contains([]string{"cache.no_reuse", "cache.no_store", "cache.required"}, field.Key)) != (field.ValueType == "boolean") {
+		integer := field.Key == "context.window_tokens"
+		if integer {
+			if field.ValueType != "integer" || len(field.AllowedValues) != 0 || field.Minimum < 1 || field.Maximum < 1 || field.Maximum > 2000000 || field.Minimum > field.Maximum+1 {
+				return false
+			}
+			if field.DefaultValue != "" && field.DefaultValue != strconv.FormatInt(field.Maximum, 10) {
+				return false
+			}
+		} else if field.Minimum != 0 || field.Maximum != 0 || field.ValueType != "string" && field.ValueType != "boolean" || (strings.HasPrefix(field.Key, "context.") || slices.Contains([]string{"cache.no_reuse", "cache.no_store", "cache.required"}, field.Key)) != (field.ValueType == "boolean") {
 			return false
 		}
 		values := map[string]bool{}
@@ -87,7 +98,7 @@ func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
 			}
 			values[value] = true
 		}
-		if field.DefaultValue != "" && !values[field.DefaultValue] {
+		if !integer && field.DefaultValue != "" && !values[field.DefaultValue] {
 			return false
 		}
 		var exact []string
@@ -102,7 +113,7 @@ func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
 		if exact != nil && (!slices.Equal(field.AllowedValues, exact) || field.DefaultValue != "") {
 			return false
 		}
-		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover})
+		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover, field.Minimum, field.Maximum})
 	}
 	raw, err := json.Marshal(canonical)
 	if err != nil {
@@ -129,7 +140,7 @@ func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 	if diagnostic == nil || diagnostic.Line < 0 || diagnostic.Line > 65537 || diagnostic.Column < 0 || diagnostic.Column > 65537 {
 		return false
 	}
-	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
+	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "context.auto_compaction", "context.prune", "context.window_tokens", "cache.optimization", "cache.reuse_scope", "cache.no_reuse", "cache.no_store", "cache.required", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
 		return false
 	}
 	switch diagnostic.Code {

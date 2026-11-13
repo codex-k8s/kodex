@@ -34,7 +34,7 @@ var runtimeOverlayGolden []byte
 // runtimeOverlayProducerDigest фиксирует неизменный дайджест эталона owner
 // runtimecontract.OverlaySchema([low, high], high), полученного из владельца, а не из прежнего
 // набора полей gateway.
-const runtimeOverlayProducerDigest = "2c42a753c49d4ef469936d1ee3809528033235d9b0f5e15d2959b03134750ede"
+const runtimeOverlayProducerDigest = "366f45d30f72843ab98d0911e9ce83c1de613c53b2b5a0105e17562bedf0fa6a"
 
 // runtimePublishFixture provides synthetic fixed-provider runtime publication input with exact
 // model catalog revision and digest pins.
@@ -134,14 +134,14 @@ func TestRuntimeOverlaySchemaAndDiagnostics(t *testing.T) {
 	}
 }
 
-// TestRuntimeOverlayNativePreferencesReadPath checks the exact owner-produced eight-field schema, native
+// TestRuntimeOverlayNativePreferencesReadPath checks the exact owner-produced nine-field schema, native
 // search modes and default through HTTP and generated OpenAPI enums.
-// TestRuntimeOverlayNativePreferencesReadPath проверяет точную схему из восьми полей от владельца, режимы
+// TestRuntimeOverlayNativePreferencesReadPath проверяет точную схему из девяти полей от владельца, режимы
 // и умолчание native search через HTTP и generated OpenAPI enum.
 func TestRuntimeOverlayNativePreferencesReadPath(t *testing.T) {
 	view := runtimeContextFixture()
-	if view.OverlaySchema.Digest != runtimeOverlayProducerDigest || view.OverlaySchema.Revision != "cos_"+runtimeOverlayProducerDigest || len(view.OverlaySchema.Fields) != 8 {
-		t.Fatal("golden does not match the current eight-field producer schema")
+	if view.OverlaySchema.Digest != runtimeOverlayProducerDigest || view.OverlaySchema.Revision != "cos_"+runtimeOverlayProducerDigest || len(view.OverlaySchema.Fields) != 9 {
+		t.Fatal("golden does not match the current nine-field producer schema")
 	}
 	var search *cp.ConfigOverlayField
 	for _, field := range view.OverlaySchema.Fields {
@@ -176,8 +176,25 @@ func TestRuntimeOverlayNativePreferencesReadPath(t *testing.T) {
 			Diagnostics []struct{ Key, Code, Message string } `json:"diagnostics"`
 		} `json:"draftOverlay"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &body) != nil || body.OverlaySchema == nil || len(body.OverlaySchema.Fields) != 8 || body.OverlaySchema.Digest != runtimeOverlayProducerDigest || len(body.DraftOverlay.Diagnostics) != 1 || body.DraftOverlay.Diagnostics[0].Key != "context.auto_compaction" {
+	if json.Unmarshal(w.Body.Bytes(), &body) != nil || body.OverlaySchema == nil || len(body.OverlaySchema.Fields) != 9 || body.OverlaySchema.Digest != runtimeOverlayProducerDigest || len(body.DraftOverlay.Diagnostics) != 1 || body.DraftOverlay.Diagnostics[0].Key != "context.auto_compaction" {
 		t.Fatal("native search schema or safe diagnostic was lost on HTTP readback")
+	}
+	var public map[string]any
+	if json.Unmarshal(w.Body.Bytes(), &public) != nil {
+		t.Fatal("invalid public schema")
+	}
+	var found bool
+	for _, item := range public["overlaySchema"].(map[string]any)["fields"].([]any) {
+		field := item.(map[string]any)
+		if field["key"] == "context.window_tokens" {
+			found = true
+			if field["minimum"] != float64(2049) || field["maximum"] != float64(32768) || field["defaultValue"] != "32768" {
+				t.Fatal("integer bounds were not public JSON numbers")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("integer field absent")
 	}
 	for _, field := range body.OverlaySchema.Fields {
 		if !generated.ConfigOverlayFieldKey(field.Key).Valid() {
@@ -199,6 +216,46 @@ func TestRuntimeOverlayNativePreferencesReadPath(t *testing.T) {
 // дайджеста.
 func TestRuntimeOverlayNativePreferencesRemainsClosed(t *testing.T) {
 	for name, mutate := range map[string]func(*cp.AgentRuntimeConfigurationView){
+		"integer no bounds": func(v *cp.AgentRuntimeConfigurationView) {
+			for _, field := range v.OverlaySchema.Fields {
+				if field.Key == "context.window_tokens" {
+					field.Minimum = 0
+				}
+			}
+			resignRuntimeOverlayFixture(t, v.OverlaySchema)
+		},
+		"integer platform overflow": func(v *cp.AgentRuntimeConfigurationView) {
+			for _, field := range v.OverlaySchema.Fields {
+				if field.Key == "context.window_tokens" {
+					field.Maximum = 2000001
+				}
+			}
+			resignRuntimeOverlayFixture(t, v.OverlaySchema)
+		},
+		"integer wrong type": func(v *cp.AgentRuntimeConfigurationView) {
+			for _, field := range v.OverlaySchema.Fields {
+				if field.Key == "context.window_tokens" {
+					field.ValueType = "string"
+				}
+			}
+			resignRuntimeOverlayFixture(t, v.OverlaySchema)
+		},
+		"integer unsafe default": func(v *cp.AgentRuntimeConfigurationView) {
+			for _, field := range v.OverlaySchema.Fields {
+				if field.Key == "context.window_tokens" {
+					field.DefaultValue = "9007199254740993"
+				}
+			}
+			resignRuntimeOverlayFixture(t, v.OverlaySchema)
+		},
+		"integer inverted range": func(v *cp.AgentRuntimeConfigurationView) {
+			for _, field := range v.OverlaySchema.Fields {
+				if field.Key == "context.window_tokens" {
+					field.Minimum = field.Maximum + 2
+				}
+			}
+			resignRuntimeOverlayFixture(t, v.OverlaySchema)
+		},
 		"unknown field with matching digest": func(v *cp.AgentRuntimeConfigurationView) {
 			v.OverlaySchema.Fields[1].Key = "context.auto_compaction_custom"
 			resignRuntimeOverlayFixture(t, v.OverlaySchema)
@@ -263,7 +320,7 @@ func resignRuntimeOverlayFixture(t *testing.T, schema *cp.ConfigOverlaySchema) {
 	t.Helper()
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
 	for _, field := range schema.Fields {
-		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover})
+		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover, field.Minimum, field.Maximum})
 	}
 	raw, err := json.Marshal(canonical)
 	if err != nil {

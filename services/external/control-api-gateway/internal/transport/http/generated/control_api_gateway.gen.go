@@ -1308,34 +1308,37 @@ func (e ConfigOverlayDiagnosticCode) Valid() bool {
 
 // Defines values for ConfigOverlayFieldKey.
 const (
-	CacheNoReuse          ConfigOverlayFieldKey = "cache.no_reuse"
-	CacheNoStore          ConfigOverlayFieldKey = "cache.no_store"
-	CacheOptimization     ConfigOverlayFieldKey = "cache.optimization"
-	CacheRequired         ConfigOverlayFieldKey = "cache.required"
-	CacheReuseScope       ConfigOverlayFieldKey = "cache.reuse_scope"
-	ContextAutoCompaction ConfigOverlayFieldKey = "context.auto_compaction"
-	ContextPrune          ConfigOverlayFieldKey = "context.prune"
-	ModelReasoningEffort  ConfigOverlayFieldKey = "model_reasoning_effort"
+	ConfigOverlayFieldKeyCacheNoReuse          ConfigOverlayFieldKey = "cache.no_reuse"
+	ConfigOverlayFieldKeyCacheNoStore          ConfigOverlayFieldKey = "cache.no_store"
+	ConfigOverlayFieldKeyCacheOptimization     ConfigOverlayFieldKey = "cache.optimization"
+	ConfigOverlayFieldKeyCacheRequired         ConfigOverlayFieldKey = "cache.required"
+	ConfigOverlayFieldKeyCacheReuseScope       ConfigOverlayFieldKey = "cache.reuse_scope"
+	ConfigOverlayFieldKeyContextAutoCompaction ConfigOverlayFieldKey = "context.auto_compaction"
+	ConfigOverlayFieldKeyContextPrune          ConfigOverlayFieldKey = "context.prune"
+	ConfigOverlayFieldKeyContextWindowTokens   ConfigOverlayFieldKey = "context.window_tokens"
+	ConfigOverlayFieldKeyModelReasoningEffort  ConfigOverlayFieldKey = "model_reasoning_effort"
 )
 
 // Valid indicates whether the value is a known member of the ConfigOverlayFieldKey enum.
 func (e ConfigOverlayFieldKey) Valid() bool {
 	switch e {
-	case CacheNoReuse:
+	case ConfigOverlayFieldKeyCacheNoReuse:
 		return true
-	case CacheNoStore:
+	case ConfigOverlayFieldKeyCacheNoStore:
 		return true
-	case CacheOptimization:
+	case ConfigOverlayFieldKeyCacheOptimization:
 		return true
-	case CacheRequired:
+	case ConfigOverlayFieldKeyCacheRequired:
 		return true
-	case CacheReuseScope:
+	case ConfigOverlayFieldKeyCacheReuseScope:
 		return true
-	case ContextAutoCompaction:
+	case ConfigOverlayFieldKeyContextAutoCompaction:
 		return true
-	case ContextPrune:
+	case ConfigOverlayFieldKeyContextPrune:
 		return true
-	case ModelReasoningEffort:
+	case ConfigOverlayFieldKeyContextWindowTokens:
+		return true
+	case ConfigOverlayFieldKeyModelReasoningEffort:
 		return true
 	default:
 		return false
@@ -1345,6 +1348,7 @@ func (e ConfigOverlayFieldKey) Valid() bool {
 // Defines values for ConfigOverlayFieldValueType.
 const (
 	Boolean ConfigOverlayFieldValueType = "boolean"
+	Integer ConfigOverlayFieldValueType = "integer"
 	String  ConfigOverlayFieldValueType = "string"
 )
 
@@ -1352,6 +1356,8 @@ const (
 func (e ConfigOverlayFieldValueType) Valid() bool {
 	switch e {
 	case Boolean:
+		return true
+	case Integer:
 		return true
 	case String:
 		return true
@@ -1984,6 +1990,21 @@ func (e ImageAdmissionRiskAction) Valid() bool {
 	case ImageAdmissionRiskActionACCEPTRISK:
 		return true
 	case ImageAdmissionRiskActionREJECTRISK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImagePlatformToolInventoryInputFeatures.
+const (
+	ImagePlatformToolInventoryInputFeaturesContextWindowTokens ImagePlatformToolInventoryInputFeatures = "context.window_tokens"
+)
+
+// Valid indicates whether the value is a known member of the ImagePlatformToolInventoryInputFeatures enum.
+func (e ImagePlatformToolInventoryInputFeatures) Valid() bool {
+	switch e {
+	case ImagePlatformToolInventoryInputFeaturesContextWindowTokens:
 		return true
 	default:
 		return false
@@ -11842,6 +11863,8 @@ type ConfigOverlayField struct {
 	Description   string                      `json:"description"`
 	Hover         string                      `json:"hover"`
 	Key           ConfigOverlayFieldKey       `json:"key"`
+	Maximum       *int64                      `json:"maximum,omitempty"`
+	Minimum       *int64                      `json:"minimum,omitempty"`
 	ValueType     ConfigOverlayFieldValueType `json:"valueType"`
 }
 
@@ -12441,11 +12464,15 @@ type ImageAdmissionRiskDecisionResponse struct {
 
 // ImagePlatformToolInventory defines model for ImagePlatformToolInventory.
 type ImagePlatformToolInventory struct {
-	ManifestSha256 string                             `json:"manifestSha256"`
-	Platform       ImagePlatformToolInventoryPlatform `json:"platform"`
-	PlatformDigest string                             `json:"platformDigest"`
-	Tools          []ImageToolObservation             `json:"tools"`
+	InputFeatures  *[]ImagePlatformToolInventoryInputFeatures `json:"inputFeatures,omitempty"`
+	ManifestSha256 string                                     `json:"manifestSha256"`
+	Platform       ImagePlatformToolInventoryPlatform         `json:"platform"`
+	PlatformDigest string                                     `json:"platformDigest"`
+	Tools          []ImageToolObservation                     `json:"tools"`
 }
+
+// ImagePlatformToolInventoryInputFeatures defines model for ImagePlatformToolInventory.InputFeatures.
+type ImagePlatformToolInventoryInputFeatures string
 
 // ImagePlatformToolInventoryPlatform defines model for ImagePlatformToolInventory.Platform.
 type ImagePlatformToolInventoryPlatform string

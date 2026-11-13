@@ -198,7 +198,7 @@ func validAssistantImageToolInventory(value *controlplanev1.ImageToolInventory, 
 		seen[platform.GetPlatform()] = true
 		// Shared validator проверяет закрытый registry/type/bounds, но не назначает authority.
 		manifest := runtimecontract.ImageToolManifest{Schema: runtimecontract.ImageInventorySchema, Platform: platform.GetPlatform(),
-			SpecSHA256: value.GetSha256(), ImmutableBuildSHA256: value.GetSha256(), RuntimeContractSHA256: value.GetSha256()}
+			SpecSHA256: value.GetSha256(), ImmutableBuildSHA256: value.GetSha256(), RuntimeContractSHA256: value.GetSha256(), InputFeatures: platform.GetInputFeatures()}
 		for _, tool := range platform.GetTools() {
 			if tool == nil {
 				return false

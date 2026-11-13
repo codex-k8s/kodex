@@ -149,6 +149,15 @@ func TestAssistantImageToolInventoryRemainsSeparateFromCapabilities(t *testing.T
 	if !validAssistantImageToolInventory(value, image) {
 		t.Fatal("truthful observed missing tools rejected")
 	}
+	value.Platforms[0].InputFeatures = []string{runtimecontract.ContextWindowInputFeature}
+	if !validAssistantImageToolInventory(value, image) {
+		t.Fatal("supported input feature lost in typed projection")
+	}
+	value.Platforms[0].InputFeatures = []string{"PRIVATE_SENTINEL"}
+	if validAssistantImageToolInventory(value, image) {
+		t.Fatal("unknown input feature accepted")
+	}
+	value.Platforms[0].InputFeatures = nil
 	value.Platforms[0].Tools[0].Status = "VERIFIED"
 	if validAssistantImageToolInventory(value, image) {
 		t.Fatal("capability or declaration faked verified binary")

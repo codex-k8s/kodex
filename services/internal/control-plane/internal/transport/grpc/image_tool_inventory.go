@@ -17,7 +17,7 @@ func castImageToolInventory(value *runtimecontract.ImageToolInventory, digest st
 	}
 	result.Status, result.Sha256, result.ImageDigest, result.ProvenanceSha256 = "VERIFIED", digest, value.ImageDigest, value.ProvenanceSHA256
 	for _, platform := range value.Platforms {
-		item := &controlplanev1.ImagePlatformToolInventory{Platform: platform.Manifest.Platform, PlatformDigest: platform.PlatformDigest, ManifestSha256: platform.ManifestSHA256}
+		item := &controlplanev1.ImagePlatformToolInventory{Platform: platform.Manifest.Platform, PlatformDigest: platform.PlatformDigest, ManifestSha256: platform.ManifestSHA256, InputFeatures: append([]string(nil), platform.Manifest.InputFeatures...)}
 		for _, tool := range platform.Manifest.Tools {
 			item.Tools = append(item.Tools, &controlplanev1.ImageToolObservation{Name: tool.Name, Status: tool.Status, Path: tool.Path, Version: tool.Version, Sha256: tool.SHA256, Required: tool.Required})
 		}

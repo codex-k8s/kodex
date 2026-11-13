@@ -74,7 +74,7 @@ func OpenCodeConfiguration(input model.Input, bridgeURL string) ([]byte, error) 
 			"npm": provider.AdapterPackage(), "name": "Kodex managed model gateway",
 			"options": map[string]any{"baseURL": provider.BaseURL, "apiKey": "{env:" + openCodeAPIKeyEnvironment + "}"},
 			"models": map[string]any{input.Model: map[string]any{"name": input.Model,
-				"limit": map[string]int{"context": selected.ContextWindowTokens, "output": selected.MaximumOutputTokens}}},
+				"limit": map[string]int{"context": contextPolicy.WindowTokens, "output": selected.MaximumOutputTokens}}},
 		}},
 		"mcp": map[string]any{"kodex": map[string]any{"type": "remote", "url": bridgeURL, "enabled": true,
 			"oauth": false, "timeout": runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds * 1000, "headers": map[string]string{"Authorization": "Bearer {env:KODEX_MCP_PROXY_TOKEN}"}}},

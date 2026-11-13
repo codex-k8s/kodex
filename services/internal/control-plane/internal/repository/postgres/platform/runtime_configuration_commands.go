@@ -431,6 +431,9 @@ func (repository *Repository) publishAgentRuntimeConfigurationWithOverlay(ctx co
 	if _, _, err := repository.runtimeProviderSelection(provider, payload.Model); err != nil {
 		return commandOutcome{}, err
 	}
+	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, overlay); err != nil {
+		return commandOutcome{}, err
+	}
 	accounts, _, err = validateRuntimeCatalogCandidates(ctx, tx, scope, provider, payload.Model, overlay, accounts, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -534,6 +537,15 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 				problems = []string{"i18n:INFERENCE_CACHE_POLICY_UNSUPPORTED"}
 			}
 		}
+		if state == "VALID" {
+			if featureErr := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, content); featureErr != nil {
+				if !errors.Is(featureErr, errContextWindowImageUnsupported) {
+					return commandOutcome{}, featureErr
+				}
+				state = "INVALID"
+				problems = []string{"i18n:CONTEXT_WINDOW_IMAGE_UNSUPPORTED"}
+			}
+		}
 		if _, err := tx.Exec(ctx, queryRuntimeConfigurationValidateOverlay, draftID, state, asJSON(problems)); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
@@ -554,6 +566,9 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 			return commandOutcome{}, err
 		}
 		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, configuration.Provider, configuration.Model, content, configuration.ProviderPolicy.AccountCandidates, false); err != nil {
+			return commandOutcome{}, err
+		}
+		if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, content); err != nil {
 			return commandOutcome{}, err
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeConfigurationSupersedePublishedOverlay, agent.id); err != nil {
@@ -602,6 +617,9 @@ func (repository *Repository) changeConfigOverlay(ctx context.Context, tx pgx.Tx
 		return commandOutcome{}, err
 	}
 	if input.Kind == command.RollbackConfigOverlay {
+		if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, view.PublishedOverlay.Content); err != nil {
+			return commandOutcome{}, err
+		}
 		if _, _, err := validateRuntimeCatalogCandidates(ctx, tx, scope, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false); err != nil {
 			return commandOutcome{}, err
 		}
@@ -876,6 +894,9 @@ func (repository *Repository) bindRuntimeEnvironment(ctx context.Context, tx pgx
 	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, payload.AgentRef)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := requireCurrentRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, payload.AgentRef, view.PublishedOverlay.Content); err != nil {
 		return commandOutcome{}, err
 	}
 	return runtimeConfigurationOutcome(view, agent, "i18n:AGENT_RUNTIME_ENVIRONMENT_BOUND"), nil
