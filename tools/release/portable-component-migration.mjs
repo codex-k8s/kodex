@@ -200,6 +200,65 @@ export function componentServingInventory(list, name, deploymentUID) {
   return {items:[...sets,...pods.filter(p => !retainedJobPod(p))]};
 }
 
+// Spec и annotations соседних workloads не входят в namespace discovery.
+// Полные Pod/Job читаются отдельно и связываются с UID/lineage первого snapshot.
+export function readComponentServingInventory(kube, name, deploymentUID) {
+  const validName=value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]{0,252}$/.test(value);
+  const projection='{range .items[*]}{.kind}{"\\t"}{.metadata.name}{"\\t"}{.metadata.uid}{"\\t"}' +
+    '{.metadata.labels.app\\.kubernetes\\.io/name}{"\\t"}{.metadata.namespace}{"\\t"}{.metadata.ownerReferences}{"\\n"}{end}';
+  const metadata=() => {
+    const text=kube(['-n','kodex-system','get','replicasets,pods,jobs','-o','jsonpath='+projection]);
+    requireValue(Buffer.byteLength(text) < 1 << 20, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
+    const lines=text.split('\n').filter(line => line !== '');
+    requireValue(lines.length <= 4096, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
+    const items=lines.map(line => {
+      const fields=line.split('\t'), [kind,resourceName,resourceUID,app,namespace,owners]=fields;
+      requireValue(fields.length === 6 && ['Pod','ReplicaSet','Job'].includes(kind) && namespace === 'kodex-system' &&
+        validName(resourceName) && resourceUID && !/\s/.test(resourceUID), 'COMPONENT_MIGRATION_METADATA_INVALID');
+      const ownerReferences=owners ? JSON.parse(owners) : [];
+      requireValue(Array.isArray(ownerReferences), 'COMPONENT_MIGRATION_METADATA_INVALID');
+      return {kind,metadata:{name:resourceName,uid:resourceUID,namespace,labels:{'app.kubernetes.io/name':app},ownerReferences}};
+    });
+    requireValue(new Set(items.map(r => r.kind+'/'+r.metadata.name)).size === items.length, 'COMPONENT_MIGRATION_METADATA_INVALID');
+    return items;
+  };
+  const scoped=items => {
+    const sets=items.filter(r => r.kind === 'ReplicaSet' && r.metadata.ownerReferences.some(o =>
+      o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID));
+    const owners=new Set(sets.map(r => r.metadata.uid));
+    const pods=items.filter(r => r.kind === 'Pod' && (r.metadata.labels['app.kubernetes.io/name'] === name ||
+      r.metadata.ownerReferences.some(o => o.kind === 'ReplicaSet' && o.controller === true && owners.has(o.uid))));
+    const jobs=new Set(pods.flatMap(p => p.metadata.ownerReferences.filter(o => o.kind === 'Job' && o.controller === true).map(o => o.name)));
+    return [...sets,...pods,...items.filter(r => r.kind === 'Job' && jobs.has(r.metadata.name))]
+      .sort((a,b) => (a.kind+'/'+a.metadata.name).localeCompare(b.kind+'/'+b.metadata.name));
+  };
+  const first=scoped(metadata()), items=first.filter(r => r.kind === 'ReplicaSet'), jobs=new Map();
+  const full=(kind,resourceName) => {
+    requireValue(['pod','job'].includes(kind) && validName(resourceName), 'COMPONENT_MIGRATION_METADATA_INVALID');
+    const text=kube(['-n','kodex-system','get',kind,resourceName,'--ignore-not-found=true','-o','jsonpath={@}']);
+    requireValue(Buffer.byteLength(text) < 1 << 20, 'COMPONENT_MIGRATION_OBJECT_BOUND_EXCEEDED');
+    return text.trim() ? JSON.parse(text) : undefined;
+  };
+  for (const pin of first.filter(r => r.kind === 'Pod')) {
+    const pod=full('pod',pin.metadata.name);
+    requireValue(pod?.kind === 'Pod' && pod.metadata?.namespace === pin.metadata.namespace && pod.metadata.name === pin.metadata.name &&
+      pod.metadata.uid === pin.metadata.uid && (pod.metadata.labels?.['app.kubernetes.io/name'] ?? '') === pin.metadata.labels['app.kubernetes.io/name'] &&
+      fingerprint(pod.metadata.ownerReferences ?? []) === fingerprint(pin.metadata.ownerReferences), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+    items.push(pod);
+    for (const owner of pod.metadata.ownerReferences ?? []) if (owner.controller === true && owner.kind === 'Job' && !jobs.has(owner.name)) {
+      const pin=first.find(r => r.kind === 'Job' && r.metadata.name === owner.name);
+      if (!pin) {jobs.set(owner.name,undefined);continue;}
+      requireValue(pin.metadata.uid === owner.uid, 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+      const job=full('job',owner.name);
+      if (job) requireValue(job.kind === 'Job' && job.metadata?.name === owner.name && job.metadata.namespace === 'kodex-system' &&
+        job.metadata.uid === owner.uid, 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+      jobs.set(owner.name,job);
+    }
+  }
+  requireValue(fingerprint(scoped(metadata())) === fingerprint(first), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+  return componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
+}
+
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
 export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
@@ -213,8 +272,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stage=['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'].find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-    const list=JSON.parse(kube(['-n',namespace,'get','replicasets,pods,jobs','-o','json']));
-    const pods=activePods(componentServingInventory(list,name,expected.uid),expected.uid);
+    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
     const ready=actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expected.replicas &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expected.replicas) && pods.length === expected.replicas &&

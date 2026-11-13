@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.3.2
+version: 1.3.3
 updated: 2026-11-13
 ---
 
@@ -335,7 +335,11 @@ stop/join → DDL → readback → resume. Сохраняются все ста�
 ## Serving lineage и сохранённая история Jobs — #1977
 
 Portable pair и основной CP observer читают namespace inventory ReplicaSets,
-Pods и Jobs. В serving scope входят Pods с app name компонента и все точные
+Pods и Jobs через компактную проекцию identity/labels/ownerReferences без spec и
+annotations соседних workloads. Полные объекты выбранных Pods и их Job owners
+читаются отдельными bounded запросами; UID/lineage сверяются с discovery и
+повторным metadata snapshot. Общий buffer Kubernetes transport не увеличивается.
+В serving scope входят Pods с app name компонента и все точные
 Deployment→ReplicaSet descendants, даже если их labels изменились. Узкий selector
 по component label не заменяет эту проверку: Service может выбирать по app name.
 
