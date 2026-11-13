@@ -366,21 +366,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if executionErr != nil {
 		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
 	}
-	if input.EnvironmentPolicy.ManagedWorkspace {
-		quiescer, ok := prepared.proxy.(interface{ QuiesceWorkspace(context.Context) error })
-		if !ok {
-			logWorkspaceQuiescenceRejection("EXECUTOR_UNAVAILABLE")
-			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
-		}
-		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		err := quiescer.QuiesceWorkspace(shutdown)
-		cancel()
-		if err != nil {
-			logWorkspaceQuiescenceRejection("EXECUTOR_JOIN")
-			return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
-		}
-	}
-	if err := publishWorkspaceQuiescence(input, result); err != nil {
+	if err := quiesceAndPublishWorkspace(ctx, input, result, prepared.proxy, publishWorkspaceQuiescence); err != nil {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -418,6 +404,28 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", completionUsage(result))
 	}
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
+}
+
+// quiesceAndPublishWorkspace orders the independent executor handshake before the fixed
+// trusted-record publisher; a failed/unknown ACK never reaches publication.
+// quiesceAndPublishWorkspace ставит независимый executor handshake перед fixed publisher
+// доверенного record; failed/unknown ACK никогда не открывает публикацию.
+func quiesceAndPublishWorkspace(ctx context.Context, input model.Input, result codex.Result, proxy turnMCPProxy, publish func(model.Input, codex.Result) error) error {
+	if input.EnvironmentPolicy.ManagedWorkspace {
+		quiescer, ok := proxy.(interface{ QuiesceWorkspace(context.Context) error })
+		if !ok {
+			logWorkspaceQuiescenceRejection("EXECUTOR_UNAVAILABLE")
+			return errors.New("runtime workspace executor is unavailable")
+		}
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Duration(runtimecontract.WorkspaceQuiescenceTimeoutSeconds)*time.Second)
+		err := quiescer.QuiesceWorkspace(shutdown)
+		cancel()
+		if err != nil {
+			logWorkspaceQuiescenceRejection("EXECUTOR_JOIN")
+			return err
+		}
+	}
+	return publish(input, result)
 }
 
 // completeExecutedTurn checks workspace after execution, handles terminal failures, validates a successful final message, optionally publishes workspace provenance and collects allowed artifacts before completion. Every later failure retains measured usage through the failure path; success payload validation precedes the callback and does not grant new artifact access.

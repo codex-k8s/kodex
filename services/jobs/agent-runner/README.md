@@ -4,8 +4,8 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 3.1.2
-updated: 2026-10-25
+version: 3.1.3
+updated: 2026-11-13
 ---
 
 # agent-runner
@@ -203,6 +203,52 @@ per-attempt NetworkPolicy/RBAC materializes runtime-controller из immutable
 environment policy. Наблюдаемость процесса использует общий Go runtime;
 готовность workload и terminal safe codes наблюдаются владельцем lifecycle —
 runtime-controller.
+
+## Квалификация executor после SIGTERM
+
+Отмена немедленно запрещает новые команды и отменяет текущую; только exact
+trusted `QUIESCE` остаётся доступным в bounded окне70 секунд. Полный ACK
+предшествует публикации workspace record, а отсутствие ACK сохраняет закрытый
+outcome владельца. Матрица и границы доказательств:
+[#2108](../../../docs/operations/opencode-native-sessions-2108.md#отмена-после-bind-и-остановка-executor).
+
+Из корня репозитория, с уже доступным локальным Unix Docker и закреплённым
+fixture image (скачивание внутри теста запрещено):
+
+```sh
+executor_fixture_dir=$(mktemp -d /tmp/kodex-executor-fixture.XXXXXX)
+trap 'rm -rf "$executor_fixture_dir"' EXIT
+CGO_ENABLED=0 GOTOOLCHAIN=go1.26.10 \
+  go -C services/jobs/agent-runner test -c \
+  -o "$executor_fixture_dir/executor.test" ./internal/managedworkspace
+chmod 0555 "$executor_fixture_dir/executor.test"
+KODEX_TEST_EXECUTOR_CONTAINERS=1 \
+KODEX_TEST_EXECUTOR_BINARY="$executor_fixture_dir/executor.test" \
+GOTOOLCHAIN=go1.26.10 go -C services/jobs/agent-runner test -count=1 \
+  -timeout=180s -run '^TestNativeExecutorSIGTERMQuiescence$' -v ./internal/opencode
+```
+
+Тест самостоятельно удаляет только помеченные собственным scope контейнеры и
+volumes. Он проверяет настоящий PID1 executorUID10002, отдельный trusted
+clientUID10001, чужие UID/binding, запрещённые после TERM команды, отмену
+активной команды, поздний ACK и ошибку при отсутствии ACK. Root процесса
+инициализации synthetic volumes получает лишь CHOWN; executor/client работают
+с cap-drop ALL, network=none и read-only root. Этот fixture не является
+допущенным RoleImage и не квалифицирует установленную среду.
+
+Отдельная проверка реального OpenCode1.19.5 требует явный локальный binary с
+SHA256 `7df4e4136301f16589b0f30bf91a61380fca5f8ef22dd36570f5ebe1d4ec802c`:
+
+```sh
+KODEX_TEST_OPENCODE_BINARY=/absolute/private/path/opencode \
+GOTOOLCHAIN=go1.26.10 go -C services/jobs/agent-runner test -race -count=1 \
+  -timeout=120s -v ./internal/opencode \
+  -run '^TestNative(AbortClosesInterruptedToolBeforeExport|LifecycleCancellationRetainsJoinedExport)$'
+```
+
+Model/MCP в этой проверке synthetic; hosted credentials и внешние WRITE не
+используются. Проверяются official export/import и отсутствие повторного effect,
+а не освобождение исторического BLOCKED writer без положительного record.
 
 ## Обновление зависимостей полного образа
 

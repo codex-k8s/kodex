@@ -36,6 +36,11 @@ func TestStopTurnPreservesCallbackAuthorityUntilDurableCleanup(t *testing.T) {
 	if err != nil || pod.Spec.TerminationGracePeriodSeconds == nil || *pod.Spec.TerminationGracePeriodSeconds != 150 {
 		t.Fatal("runtime shutdown budget was not materialized")
 	}
+	// HTTP shutdown and final descendant reaping retain their existing 5s/3s bounds.
+	// HTTP shutdown и final descendant reaping сохраняют прежние границы 5s/3s.
+	if runtimecontract.WorkspaceExecutorDrainSeconds+5+3 >= *pod.Spec.TerminationGracePeriodSeconds {
+		t.Fatal("executor drain no longer fits the unchanged Pod termination grace")
+	}
 	secret, err := client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(t.Context(), ticketName(input.LeaseRef), metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)

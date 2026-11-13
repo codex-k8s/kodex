@@ -14,6 +14,18 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestExecutorDrainCoversCancelledBrokerResult preserves time for the existing bounded
+// provider terminal delivery and the role's independent quiescence handshake.
+// TestExecutorDrainCoversCancelledBrokerResult сохраняет время для прежнего ограниченного
+// provider terminal delivery и независимого quiescence handshake роли.
+func TestExecutorDrainCoversCancelledBrokerResult(t *testing.T) {
+	drain := time.Duration(runtimecontract.WorkspaceExecutorDrainSeconds) * time.Second
+	handshake := time.Duration(runtimecontract.WorkspaceQuiescenceTimeoutSeconds) * time.Second
+	if drain-handshake < providerResultDeliveryGrace {
+		t.Fatal("executor drain can expire before cancelled broker result and role handshake")
+	}
+}
+
 // TestBrokerRejectsMalformedPartialMeasurements requires invalid failure kinds, usage, tool batches
 // and trailing JSON to return no partial result, rather than laundering measurements through a bad envelope.
 // TestBrokerRejectsMalformedPartialMeasurements требует пустого результата при неверном виде отказа,
