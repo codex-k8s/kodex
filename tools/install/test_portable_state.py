@@ -85,6 +85,35 @@ class FixtureState(State):
         return b'{}'
 
 
+class InitialEgressFenceTest(unittest.TestCase):
+    def test_initial_owner_publication_preserves_exact_policy_readback(self):
+        root = Path(__file__).resolve().parents[2]
+        path = root / 'deploy/k8s/base/egress-gateway/integration/integration-networkpolicy.json'
+        expected = json.loads(path.read_text())
+        expected['metadata']['labels']['app.kubernetes.io/part-of'] = 'kodex'
+        observed = live(expected)
+        observed['metadata']['annotations'] = {
+            'kodex.dev/integration-egress-generation': '1',
+            'kodex.dev/integration-egress-source-digest':
+                '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945',
+        }
+        observed['spec'].pop('egress')
+        verify_resource(expected, observed)
+        for mutation in ('generation', 'source', 'annotation', 'egress'):
+            changed = copy.deepcopy(observed)
+            annotations = changed['metadata']['annotations']
+            if mutation == 'generation':
+                annotations['kodex.dev/integration-egress-generation'] = '2'
+            elif mutation == 'source':
+                annotations['kodex.dev/integration-egress-source-digest'] = 'a' * 64
+            elif mutation == 'annotation':
+                annotations['untrusted.example.invalid/setting'] = 'true'
+            else:
+                changed['spec']['egress'] = [{}]
+            with self.subTest(mutation=mutation), self.assertRaises(Rejected):
+                verify_resource(expected, changed)
+
+
 class StateTest(unittest.TestCase):
     def test_owned_clusterip_selector_change_uses_fenced_patch_without_losing_allocations(self):
         for allocation in ({'clusterIP':'192.0.2.10','clusterIPs':['192.0.2.10'],'ipFamilies':['IPv4'],'ipFamilyPolicy':'SingleStack'},

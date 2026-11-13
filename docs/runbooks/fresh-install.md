@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.15
+version: 2.4.16
 updated: 2026-11-13
 ---
 
@@ -25,6 +25,12 @@ control-plane/provider, materializer и registry/BuildKit gates проверяю
 с остановкой после каждого обязательного отказа. К кластеру, сети и live credentials
 эта оснастка не обращается. PASS оснастки не заменяет fresh install, immutable
 images, bootstrap receipts и browser/runtime приёмку по #1977.
+
+Начальная deny-all политика `egress-gateway-integration-destinations` уже содержит
+поколение `1` и дайджест пустого списка origins. Первая публикация control-plane
+сохраняет эти точные metadata, поэтому итоговый readback не принимает её за drift.
+Проверка посторонних annotations, смены поколения, источника и сетевых правил
+остаётся строгой. Это исправление bootstrap render, без изменения egress-доступа.
 
 ## 1. Два поддержанных сценария
 

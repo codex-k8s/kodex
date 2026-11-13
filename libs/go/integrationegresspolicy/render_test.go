@@ -3,6 +3,9 @@ package integrationegresspolicy
 import (
 	"encoding/json"
 	"net/netip"
+	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -55,5 +58,35 @@ func TestRenderPinsAndImmutableDeploymentSwitch(t *testing.T) {
 	}
 	if string(next["integration-configmap.json"]) == string(files["integration-configmap.json"]) || string(next["integration-deployment-patch.json"]) == string(files["integration-deployment-patch.json"]) {
 		t.Fatal("generation did not switch immutable projection")
+	}
+}
+
+// TestInitialNetworkFenceMatchesArtifact keeps fresh readback stable across the first owner publication.
+// TestInitialNetworkFenceMatchesArtifact сохраняет точную сверку до и после первой owner publication.
+func TestInitialNetworkFenceMatchesArtifact(t *testing.T) {
+	document := Document{Schema: Schema, Generation: 1, SourceDigest: SourceDigest(nil), GatewayPolicyDigest: strings.Repeat("a", 64), Destinations: []Destination{}}
+	files, err := RenderFiles(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../../deploy/k8s/base/egress-gateway/integration/integration-networkpolicy.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rendered, artifact map[string]any
+	if json.Unmarshal(files["integration-networkpolicy.json"], &rendered) != nil || json.Unmarshal(raw, &artifact) != nil || !reflect.DeepEqual(rendered, artifact) {
+		t.Fatal("initial network policy artifact differs from owner projection")
+	}
+	document.Generation = 2
+	files, err = RenderFiles(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(files["integration-networkpolicy.json"], &rendered) != nil {
+		t.Fatal("invalid network policy")
+	}
+	annotations := rendered["metadata"].(map[string]any)["annotations"].(map[string]any)
+	if annotations["kodex.dev/integration-egress-generation"] != strconv.FormatInt(document.Generation, 10) || annotations["kodex.dev/integration-egress-source-digest"] != document.SourceDigest {
+		t.Fatal("network publication fence differs from document")
 	}
 }

@@ -31,7 +31,14 @@ func RenderFiles(document Document) (map[string][]byte, error) {
 	}
 	labels := map[string]string{"app.kubernetes.io/name": "egress-gateway", "app.kubernetes.io/component": "platform-egress"}
 	metadata := func(name string) map[string]any {
-		return map[string]any{"name": name, "namespace": "kodex-system", "labels": labels}
+		value := map[string]any{"name": name, "namespace": "kodex-system", "labels": labels}
+		if name == NetworkPolicyName {
+			value["annotations"] = map[string]string{
+				"kodex.dev/integration-egress-generation":    strconv.FormatInt(document.Generation, 10),
+				"kodex.dev/integration-egress-source-digest": document.SourceDigest,
+			}
+		}
+		return value
 	}
 	egress := make([]any, 0, len(document.Destinations))
 	for _, destination := range document.Destinations {
