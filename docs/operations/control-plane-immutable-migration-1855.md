@@ -4,7 +4,7 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.3.3
+version: 1.3.4
 updated: 2026-11-13
 ---
 
@@ -164,9 +164,21 @@ node tools/release/control-plane-migration.mjs check \
 `PASS` подтверждает только доступность соединения с точным DSN/TLS внутри
 доверенного CLI процесса; credentials не попадают в operator output. Ожидаемый
 stdout: `PostgreSQL connection check completed`. Иной вывод не даёт PASS.
-Check Job имеет фиксированное имя версии/attempt и сохраняется без TTL: это
-server-side fence нового plan после UNKNOWN, а не новый key/name для повтора.
-Удаление Job и parent receipts этим инструментом не выполняется.
+Новый operational plan содержит `checkIdentity:"plan-id-v1"`: имя readonly
+Check Job включает версию миграции и 12 hex от доменно-разделённого hash
+`plan.id`/profile. Оно неизменно для этого plan; Job сохраняется без TTL.
+После UNKNOWN допустим только readback того же имени/UID, без нового create.
+Retained operational plan без `checkIdentity` читается с прежним именем
+версии/attempt; инструмент не переписывает его. Неизвестное значение поля
+отклоняется. Старый инструмент, не поддерживающий поле, для нового plan
+не используется. Удаление Job и parent receipts не выполняется.
+
+Если прежний readonly CHECK доказанно terminal, CP ещё работает и нет STOP
+marker/DDL Job, новый независимый pre-STOP plan может получить свежий CHECK,
+сохранив старые Job/UID/journal. Это не новая DDL attempt: имя up Job и лимит
+`attempt1–2` неизменны; existing DDL Job либо STOP marker закрывает такой plan.
+Живой или неопределённый CHECK сначала требует разрешения его прежнего
+lifecycle. Пятиминутная свежесть PASS перед STOP не увеличивается.
 После PASS и fresh owner-preflight разрешается отдельный stop:
 
 ```bash
@@ -272,8 +284,9 @@ hash; последующее изменение parent journal блокируе�
 с теми же exact bytes: дальнейший readback исходного журнала не меняет snapshot.
 Копии — owned regular0600, без symlink/hardlink; credentials туда не входят.
 
-Child использует новые фиксированные имена `...-attempt2`, сохраняет исходные
-Jobs и receipts; его stop меняет marker только CAS `parentPlanHash→childPlanHash`.
+Child использует фиксированное DDL имя `...-attempt2` и отдельное
+plan-scoped имя CHECK, сохраняет исходные Jobs и receipts; его stop меняет
+marker только CAS `parentPlanHash→childPlanHash`.
 Child после этого проходит весь check/stop/apply/resume lifecycle заново на
 точном свежем source/image. Повторная attempt2 из attempt2 и automatic attempt3
 не поддерживаются. Новый child plan не является разрешением на живой запуск:
@@ -286,7 +299,7 @@ exact lock, PID и отсутствие работающего writer; толь�
 завершения процесса допускается удаление **этого локального lock**, без
 изменения plan/journal. PID reuse/живой процесс запрещает снятие lock. Затем
 повторяется обычный inspect и нужная фаза. Автоматического unlink lock нет.
-Утрата plan/journal или постоянное отсутствие Job после CREATE_INTENT требует
+Утрата plan/journal или постоянное отсутствие Job после DDL CREATE_INTENT требует
 отдельного owner recovery, а не нового plan/idempotency key.
 
 После PASS дополнительно проверить index definition/validity, goose version,
@@ -315,7 +328,7 @@ exact lock, PID и отсутствие работающего writer; толь�
 | --- | --- |
 | Check RUNNING или UNKNOWN | Только наблюдение прежнего plan/Job; нет новой попытки |
 | Check Failed до эффектов | CHECK_READBACK FAIL, одна CHECK_CREATE_INTENT, единый UID, точные spec/marker и отсутствие живых Pod разрешают один новый plan |
-| Check PASS до эффектов, STOP больше не принимает прежнюю freshness | Реальный inspect сохраняет CHECK_READBACK PASS; повторная сверка exact Job/Pod/spec/log разрешает только readonly check attempt2, без удаления предшественника |
+| Check PASS до эффектов, STOP больше не принимает прежнюю freshness | Новый независимый pre-STOP plan получает свой readonly CHECK при работающем CP и отсутствии STOP marker/DDL Job; старые Job/UID/receipts сохраняются. Явный CHECK predecessor attempt2 также остаётся поддержан |
 | Есть STOP/RESUME intent либо DDL Job/intent | Путь CHECK запрещён; нельзя переименовать неопределённый эффект в безвредную предварительную проверку |
 | Нет Job, чужой UID, изменённый spec или активный Pod | Закрытый отказ, без create и удаления старых ресурсов |
 | Parent journal изменился после plan2 | Новые check/stop/apply запрещены; хеш журнала привязан к child plan |

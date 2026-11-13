@@ -135,10 +135,21 @@ export function immutableMigrationImage(source, evidence, profile = 'outbox-inde
 }
 
 // Штатный render задаёт только существующую migrator boundary; executable spec строится закрыто заново.
-export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1, profile = 'outbox-index') {
+function scopedCheckName(migrationVersion, profile, id) {
+  ensure(typeof id === 'string' && /^[a-zA-Z0-9-]{1,128}$/.test(id), 'MIGRATION_CHECK_IDENTITY_INVALID');
+  return `control-plane-migration-check-${migrationVersion}-${fingerprint({purpose:'readonly-check/v1',profile,id}).slice(0,12)}`;
+}
+
+function validateCheckIdentity(plan) {
+  ensure(!Object.hasOwn(plan,'checkIdentity') || (plan.version === 2 && plan.checkIdentity === 'plan-id-v1' &&
+    plan.checkJob?.metadata.name === scopedCheckName(plan.migrationVersion,plan.profile,plan.id)), 'MIGRATION_CHECK_IDENTITY_INVALID');
+}
+
+export function planImmutableControlPlaneMigration(before, source, inspect, id, evidence, attempt = 1, profile = 'outbox-index', checkIdentity = 'plan-id-v1') {
   const configuration = immutableMigrationProfile(profile);
   const {version:migrationVersion} = configuration;
   ensure([1,2].includes(attempt), 'MIGRATION_ATTEMPT_INVALID');
+  ensure(checkIdentity === null || checkIdentity === 'plan-id-v1', 'MIGRATION_CHECK_IDENTITY_INVALID');
   ensure(before?.kind === 'Job' && before.apiVersion === 'batch/v1' && before.metadata?.name === 'control-plane-migrate' &&
     before.metadata.namespace === namespace && before.metadata.uid && before.metadata.resourceVersion &&
     before.metadata.labels?.['app.kubernetes.io/name'] === 'control-plane' &&
@@ -191,17 +202,22 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
         securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,readOnlyRootFilesystem:true,allowPrivilegeEscalation:false,capabilities:{drop:['ALL']}},
         resources:{requests:{cpu:'25m',memory:'32Mi'},limits:{cpu:'250m',memory:'128Mi'}},volumeMounts:structuredClone(mounts)}],volumes:structuredClone(volumes)}}}};
   const checkJob = structuredClone(job);
-  checkJob.metadata.name = `control-plane-migration-check-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`;
-  // Фиксированное имя без TTL сохраняет server-side fence неизвестного create между планами.
+  checkJob.metadata.name = checkIdentity === null
+    ? `control-plane-migration-check-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`
+    : scopedCheckName(migrationVersion,profile,id);
+  // Отдельная readonly identity не меняет DDL name/budget. Job без TTL сохраняет
+  // server-side fence неизвестного create внутри того же неизменного plan.
   delete checkJob.spec.ttlSecondsAfterFinished;
   checkJob.spec.template.spec.containers[0].args = ['check'];
   return {version:2,kind:'CONTROL_PLANE_MIGRATION',id,source,profile,migrationVersion,attempt,checkJob,
+    ...(checkIdentity === null ? {} : {checkIdentity}),
     beforeUID:before.metadata.uid,beforeResourceVersion:before.metadata.resourceVersion,beforeSpecSHA256:fingerprint(before.spec),
     imageEvidence:structuredClone(evidence),job};
 }
 
 // Terminal readback требует один exact Job-owned Pod и фактический imageID, не только logs/Complete.
 export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.job) {
+  validateCheckIdentity(plan);
   ensure(job.spec.backoffLimit === 0 && job.spec.activeDeadlineSeconds === 300 &&
     job.spec.ttlSecondsAfterFinished === expectedJob.spec.ttlSecondsAfterFinished && !job.spec.suspend && !job.spec.podFailurePolicy && !job.spec.successPolicy &&
     (job.spec.completionMode ?? 'NonIndexed') === 'NonIndexed' &&
@@ -439,6 +455,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const predecessor = (paths, anchor, expected, currentMarker) => {
     ensure(!existsSync(`${paths.evidencePath}.lock`), 'MIGRATION_PREDECESSOR_WRITER_ACTIVE');
     const parent = privateJSON(paths.planPath), hash = fingerprint(parent);
+    validateCheckIdentity(parent);
     ensure([1,2].includes(parent.version) && parent.kind === 'CONTROL_PLANE_MIGRATION' && parent.profile === profile &&
       (parent.attempt ?? 1) === 1 && !parent.predecessor && parent.migrationVersion === migrationVersion &&
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
@@ -494,6 +511,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
     ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
+    ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
     const previousImage = anchor.spec?.template?.spec?.containers?.find(container => container.name === 'control-plane')?.image;
     ensure(anchor.spec.replicas === anchorReplicas && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === anchorLocalProfile &&
       anchor.status?.observedGeneration >= anchor.metadata.generation &&
@@ -523,6 +541,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
+  validateCheckIdentity(plan);
   imageScope(plan.imageEvidence,plan.namespaceUID);
   const planSHA256 = fingerprint(plan);
   const revalidationRevision = options['--revalidate-postcondition-revision'];
@@ -607,7 +626,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const verifyInputs = anchor => {
       ensure(plan.version === 2, 'MIGRATION_NEW_PROTOCOL_REQUIRED');
       const render = renderedBase(plan.baseRenderPath);
-      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence,plan.attempt,profile);
+      const rebuilt = planImmutableControlPlaneMigration(before(render,anchor),plan.source,inspectSource,plan.id,plan.imageEvidence,plan.attempt,profile,
+        Object.hasOwn(plan,'checkIdentity') ? plan.checkIdentity : null);
       ensure(fingerprint(render) === plan.baseRenderSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) &&
         fingerprint(rebuilt.checkJob) === fingerprint(plan.checkJob) &&
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
