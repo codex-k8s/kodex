@@ -146,7 +146,8 @@ def current_plan(plan, baseline, current, retired=()):
     merged["links"] += [item for item in baseline["links"] if item["identity"]["uid"] not in current_uids]
     names = {item["name"] for item in current["namespaces"]}
     merged["namespaces"] += [item for item in baseline["namespaces"] if item["name"] not in names]
-    fresh = plan_inventory(merged, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]], plan["sourceSHA"], retired)
+    fresh = plan_inventory(merged, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]],
+                           plan["sourceSHA"], retired, plan.get("preservedNamespaces", ()))
     if fresh["status"] != "OWNERSHIP_CLASSIFIED":
         raise ValueError(ERROR)
     actual = {(item["uid"], item["apiVersion"]): item for item in current["objects"]}
@@ -307,7 +308,8 @@ def main():
     args = parser.parse_args()
     plan = read_private(args.plan, args.plan_sha256)
     baseline = read_private(args.inventory, args.inventory_sha256)
-    expected = plan_inventory(baseline, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]], plan["sourceSHA"])
+    expected = plan_inventory(baseline, plan["context"], plan["clusterUID"], [node["uid"] for node in plan["nodes"]],
+                              plan["sourceSHA"], preserve_namespaces=plan.get("preservedNamespaces", ()))
     if expected != plan or plan["status"] != "OWNERSHIP_CLASSIFIED" or args.context != plan["context"]:
         raise ValueError(ERROR)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

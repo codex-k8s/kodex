@@ -16,6 +16,19 @@ from installation_inventory import write_private
 from test_installation_cleanup import fixture, item, plan
 
 
+class PreservedScopeTests(unittest.TestCase):
+    def test_fresh_inventory_keeps_preserved_namespace_outside_apply(self):
+        baseline = fixture()
+        baseline["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))
+        baseline["objects"] = [item("deployments", "application", managers=["kodex-install"]),
+                               item("deployments", "infrastructure", "kodex-trust", managers=["kodex-install"])]
+        pinned = apply.plan_inventory(baseline, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                      preserve_namespaces=["kodex-trust"])
+        fresh = apply.current_plan(pinned, baseline, copy.deepcopy(baseline))
+        self.assertEqual(fresh["preservedNamespaces"], ["kodex-trust"])
+        self.assertEqual([row["identity"]["name"] for row in fresh["deleteCandidates"]], ["application"])
+
+
 class FakeClient:
     """Закрытый in-memory API: сохраняет request, не содержит credentials и не исполняет shell."""
     def __init__(self, row):

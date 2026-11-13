@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.14
+version: 2.4.15
 updated: 2026-11-13
 ---
 
@@ -320,6 +320,16 @@ symlink/hardlink, размер, полный набор и уникальнос�
 из `kube-system`, node UID и приватный каталог0700 для inventory/plan/journal.
 Публичные fixtures используют только synthetic identities; фактический inventory
 и журнал не публикуются в Issue/PR.
+
+Если инфраструктурный namespace нужно сохранить, у plan CLI есть повторяемый
+`--preserve-namespace <exact-name>`. Имя должно присутствовать в полном inventory;
+дубли, неизвестные имена и пути отклоняются. Это только сужение области удаления:
+объекты, PVC и Helm-ресурсы выбранного namespace не становятся delete candidates.
+План закрепляет отсортированный `preservedNamespaces` своим digest. Apply и
+повторная сверка потребляют именно этот список, без отдельного override.
+Полный inventory не фильтруется: сохранённые consumers продолжают блокировать
+удаление общих Secrets, Services и других зависимостей. Unknown ownership и
+чужие children не обходятся этой опцией. Без опции прежний план и digest не меняются.
 
 Inventory вызывается с явными `--kubectl`, `--kubeconfig`, `--context`,
 `--with-k3d-storage` и `--output`. Он читает metadata всех API ресурсов без
