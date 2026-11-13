@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -20,6 +21,100 @@ import (
 	workspacefs "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 	"golang.org/x/sys/unix"
 )
+
+// checkoutFailureCode identifies a fixed rejection boundary without retaining caller or OS bytes.
+// checkoutFailureCode обозначает фиксированную точку отказа без caller либо OS bytes.
+type checkoutFailureCode uint8
+
+// Closed checkout failure codes separate remote completeness, local staging and final publication.
+// Закрытые коды checkout отделяют полноту remote snapshot, локальный staging и финальную публикацию.
+const (
+	checkoutFailureUnknown checkoutFailureCode = iota
+	checkoutInputInvalid
+	checkoutAuthorityInvalid
+	checkoutCommitReadFailed
+	checkoutCommitBindingInvalid
+	checkoutTreeBudgetExceeded
+	checkoutTreeReadFailed
+	checkoutTreePageInvalid
+	checkoutTreeEntryInvalid
+	checkoutTreeEntryUnsupported
+	checkoutFileReadFailed
+	checkoutFileBindingInvalid
+	checkoutFileContentInvalid
+	checkoutStageLockDenied
+	checkoutStageQuotaDenied
+	checkoutStageCreateDenied
+	checkoutStageDirectoryDenied
+	checkoutStageModeDenied
+	checkoutStageWriteDenied
+	checkoutStageFileModeDenied
+	checkoutStageFileSyncDenied
+	checkoutInstallLockDenied
+	checkoutInstallDirectoryDenied
+	checkoutInstallCancelled
+	checkoutInstallRenameDenied
+	checkoutInstallSyncDenied
+	checkoutOwnerAfterDenied
+)
+
+// checkoutFailure retains only a closed code; its error chain preserves the original sentinel.
+// checkoutFailure хранит только закрытый код; цепочка ошибки сохраняет исходный sentinel.
+type checkoutFailure struct{ code checkoutFailureCode }
+
+// label maps unknown values to UNKNOWN and never serializes a caller-selected string.
+// label преобразует неизвестные значения в UNKNOWN и не сериализует caller-selected string.
+func (failure *checkoutFailure) label() string {
+	labels := [...]string{"UNKNOWN", "INPUT_INVALID", "AUTHORITY_INVALID", "COMMIT_READ_FAILED", "COMMIT_BINDING_INVALID", "TREE_BUDGET_EXCEEDED", "TREE_READ_FAILED", "TREE_PAGE_INVALID", "TREE_ENTRY_INVALID", "TREE_ENTRY_UNSUPPORTED", "FILE_READ_FAILED", "FILE_BINDING_INVALID", "FILE_CONTENT_INVALID", "STAGING_LOCK_DENIED", "STAGING_QUOTA_DENIED", "STAGING_CREATE_DENIED", "STAGING_DIRECTORY_DENIED", "STAGING_MODE_DENIED", "STAGING_WRITE_DENIED", "STAGING_FILE_MODE_DENIED", "STAGING_FILE_SYNC_DENIED", "INSTALL_LOCK_DENIED", "INSTALL_DIRECTORY_DENIED", "INSTALL_CANCELLED", "INSTALL_RENAME_DENIED", "INSTALL_SYNC_DENIED", "OWNER_AFTER_DENIED"}
+	if failure == nil || int(failure.code) >= len(labels) {
+		return labels[0]
+	}
+	return labels[failure.code]
+}
+
+// Error returns only the fixed diagnostic label, not a path, payload or underlying filesystem error.
+// Error возвращает фиксированный diagnostic label без пути, payload либо underlying filesystem error.
+func (failure *checkoutFailure) Error() string {
+	return "Managed workspace checkout failed: stage=" + failure.stage() + "; code=" + failure.label() + ". Do not retry an unknown outcome. Inspect current files and owner state."
+}
+
+// Unwrap preserves the existing checkout sentinel without retaining an unclassified dependency error.
+// Unwrap сохраняет исходный checkout sentinel без сохранения неклассифицированной ошибки зависимости.
+func (failure *checkoutFailure) Unwrap() error { return errCheckout }
+
+// checkoutRejected attaches one closed boundary without changing admission or retry policy.
+// checkoutRejected добавляет закрытую точку отказа без изменения admission либо retry policy.
+func checkoutRejected(code checkoutFailureCode) error { return &checkoutFailure{code: code} }
+
+// stage groups only known failure codes; unknown values remain UNKNOWN.
+// stage группирует лишь известные коды отказа; неизвестные значения остаются UNKNOWN.
+func (failure *checkoutFailure) stage() string {
+	if failure == nil {
+		return "UNKNOWN"
+	}
+	switch {
+	case failure.code >= checkoutInputInvalid && failure.code <= checkoutFileContentInvalid:
+		return "REMOTE"
+	case failure.code >= checkoutStageLockDenied && failure.code <= checkoutStageFileSyncDenied:
+		return "STAGING"
+	case failure.code >= checkoutInstallLockDenied && failure.code <= checkoutInstallSyncDenied:
+		return "INSTALL"
+	case failure.code == checkoutOwnerAfterDenied:
+		return "OWNER_AFTER"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// checkoutDiagnostic extracts only a closed typed failure, never dependency error text.
+// checkoutDiagnostic извлекает лишь закрытый типизированный отказ без текста ошибки зависимости.
+func checkoutDiagnostic(err error) *checkoutFailure {
+	var failure *checkoutFailure
+	if errors.As(err, &failure) && failure != nil {
+		return failure
+	}
+	return &checkoutFailure{}
+}
 
 // snapshotFile carries only verified Git object bytes and mode before atomic local publication.
 // snapshotFile хранит лишь проверенные Git object bytes и mode до atomic local publication.
@@ -47,21 +142,24 @@ func (handler *Handler) checkout(parent context.Context, id string, raw json.Raw
 	var request checkoutRequest
 	if internalrpcauth.DecodeStrictJSON(raw, &request) != nil || request.ProjectID < 1 || request.ProjectID > 9007199254740991 || request.ProjectPath == "" || len(request.ProjectPath) > 255 ||
 		strings.Count(request.Destination, "/") != 1 || !strings.HasPrefix(request.Destination, "work/") || request.Destination == "work/.git" || !gitObjectID(request.SHA) {
-		return nil, errCheckout
+		return nil, checkoutRejected(checkoutInputInvalid)
 	}
 	if _, ok := runtimecontract.ManagedWorkspacePath(handler.store.input, request.Destination); !ok {
-		return nil, errCheckout
+		return nil, checkoutRejected(checkoutInputInvalid)
 	}
 	grants, err := checkoutGrants(handler.store.input, request.Connection)
 	if err != nil {
-		return nil, err
+		return nil, checkoutRejected(checkoutAuthorityInvalid)
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(maximumCommandSeconds)*time.Second)
 	defer cancel()
 	common := map[string]any{"project_id": request.ProjectID, "project_path": request.ProjectPath, "ref": request.SHA}
 	commit, err := handler.repositoryRead(ctx, id+"-commit", grants["gitlab.commit.read"], common)
-	if err != nil || commit["id"] != request.SHA {
-		return nil, errCheckout
+	if err != nil {
+		return nil, checkoutRejected(checkoutCommitReadFailed)
+	}
+	if commit["id"] != request.SHA {
+		return nil, checkoutRejected(checkoutCommitBindingInvalid)
 	}
 	files, err := handler.snapshotFiles(ctx, id, grants, common)
 	if err != nil {
@@ -146,13 +244,13 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 	total := int64(0)
 	for directory := 0; directory < len(directories); directory++ {
 		if len(directories) > 128 {
-			return nil, errCheckout
+			return nil, checkoutRejected(checkoutTreeBudgetExceeded)
 		}
 		cursor := 1
 		for {
 			calls++
 			if calls > 384 || ctx.Err() != nil {
-				return nil, errCheckout
+				return nil, checkoutRejected(checkoutTreeBudgetExceeded)
 			}
 			fields := cloneFields(common)
 			if directories[directory] != "" {
@@ -162,11 +260,11 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 			fields["limit"] = 100
 			page, err := handler.repositoryRead(ctx, fmt.Sprintf("%s-tree-%d", id, calls), grants["gitlab.repository.tree.list"], fields)
 			if err != nil {
-				return nil, err
+				return nil, checkoutRejected(checkoutTreeReadFailed)
 			}
 			encoded, ok := page["items"].(string)
 			if !ok || len(encoded) > 65536 {
-				return nil, errCheckout
+				return nil, checkoutRejected(checkoutTreePageInvalid)
 			}
 			var entries []struct {
 				ID   string `json:"id"`
@@ -176,11 +274,11 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 				Mode string `json:"mode"`
 			}
 			if internalrpcauth.DecodeStrictJSON([]byte(encoded), &entries) != nil || len(entries) > 100 || numericInt(page["count"]) != int64(len(entries)) {
-				return nil, errCheckout
+				return nil, checkoutRejected(checkoutTreePageInvalid)
 			}
 			for _, entry := range entries {
 				if !safeRepositoryPath(entry.Path) || path.Dir(entry.Path) != directoryParent(directories[directory]) || path.Base(entry.Path) != entry.Name || seen[entry.Path] || !gitObjectID(entry.ID) {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutTreeEntryInvalid)
 				}
 				seen[entry.Path] = true
 				if entry.Type == "tree" && entry.Mode == "040000" {
@@ -188,29 +286,32 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 					continue
 				}
 				if entry.Type != "blob" || (entry.Mode != "100644" && entry.Mode != "100755") || len(files) >= 128 {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutTreeEntryUnsupported)
 				}
 				calls++
 				if calls > 384 {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutTreeBudgetExceeded)
 				}
 				fileInput := cloneFields(common)
 				fileInput["file_path"] = entry.Path
 				file, err := handler.repositoryRead(ctx, fmt.Sprintf("%s-file-%d", id, calls), grants["gitlab.repository.file.read"], fileInput)
-				if err != nil || file["encoding"] != "base64" || file["file_path"] != entry.Path || file["ref"] != common["ref"] || file["blob_id"] != entry.ID {
-					return nil, errCheckout
+				if err != nil {
+					return nil, checkoutRejected(checkoutFileReadFailed)
+				}
+				if file["encoding"] != "base64" || file["file_path"] != entry.Path || file["ref"] != common["ref"] || file["blob_id"] != entry.ID {
+					return nil, checkoutRejected(checkoutFileBindingInvalid)
 				}
 				content, ok := file["content"].(string)
 				if !ok || len(content) > 65536 {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutFileContentInvalid)
 				}
 				data, err := base64.StdEncoding.Strict().DecodeString(content)
 				if err != nil || !matchesBlob(entry.ID, data) {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutFileContentInvalid)
 				}
 				total += int64(len(data))
 				if total > 8<<20 {
-					return nil, errCheckout
+					return nil, checkoutRejected(checkoutTreeBudgetExceeded)
 				}
 				files = append(files, snapshotFile{Path: entry.Path, Data: data, Executable: entry.Mode == "100755"})
 			}
@@ -219,7 +320,7 @@ func (handler *Handler) snapshotFiles(ctx context.Context, id string, grants map
 				break
 			}
 			if next != int64(cursor+1) || next > 10000 {
-				return nil, errCheckout
+				return nil, checkoutRejected(checkoutTreePageInvalid)
 			}
 			cursor = int(next)
 		}
@@ -304,33 +405,37 @@ func matchesBlob(id string, data []byte) bool {
 func (store *fileStore) publishSnapshot(ctx context.Context, destination string, files []snapshotFile) (resultErr error) {
 	random := make([]byte, 16)
 	if _, err := rand.Read(random); err != nil {
-		return errCheckout
+		return checkoutRejected(checkoutStageCreateDenied)
 	}
 	stageName := ".kodex-checkout-" + hex.EncodeToString(random)
 	stage := "work/" + stageName
 	lock, work, _, err := store.lock(ctx, "work")
 	if err != nil {
-		return err
+		return checkoutRejected(checkoutStageLockDenied)
 	}
 	usageFiles, _, err := store.totalUsage(ctx, int(lock.Fd()))
 	if err == nil && usageFiles+1 <= store.input.WorkspacePolicy.MaximumFileCount {
-		err = unix.Mkdirat(int(work.Fd()), stageName, 0o2770)
+		if unix.Mkdirat(int(work.Fd()), stageName, 0o2770) != nil {
+			err = checkoutRejected(checkoutStageCreateDenied)
+		}
 	} else {
-		err = errCheckout
+		err = checkoutRejected(checkoutStageQuotaDenied)
 	}
 	if err == nil {
 		fd, e := store.openDirectory(int(work.Fd()), stageName)
 		if e != nil {
-			err = e
+			err = checkoutRejected(checkoutStageDirectoryDenied)
 		} else {
-			err = unix.Fchmod(fd, 0o2770)
+			if unix.Fchmod(fd, 0o2770) != nil {
+				err = checkoutRejected(checkoutStageModeDenied)
+			}
 			unix.Close(fd)
 		}
 	}
 	work.Close()
 	lock.Close()
 	if err != nil {
-		return errCheckout
+		return err
 	}
 	installed := false
 	defer func() {
@@ -344,44 +449,52 @@ func (store *fileStore) publishSnapshot(ctx context.Context, destination string,
 	}()
 	for _, file := range files {
 		if _, err := store.writeBytes(ctx, stage+"/"+file.Path, file.Data, "ABSENT"); err != nil {
-			return err
+			return checkoutRejected(checkoutStageWriteDenied)
 		}
 		if file.Executable {
 			lock, base, relative, e := store.lock(ctx, stage+"/"+file.Path)
 			if e != nil {
-				return e
+				return checkoutRejected(checkoutStageFileModeDenied)
 			}
 			fd, e := unix.Openat2(int(base.Fd()), relative, &unix.OpenHow{Flags: unix.O_RDONLY | unix.O_CLOEXEC, Resolve: unix.RESOLVE_BENEATH | unix.RESOLVE_NO_SYMLINKS | unix.RESOLVE_NO_XDEV})
 			if e == nil {
 				e = unix.Fchmod(fd, 0o770)
 				if e == nil {
-					e = unix.Fsync(fd)
+					if unix.Fsync(fd) != nil {
+						e = checkoutRejected(checkoutStageFileSyncDenied)
+					}
 				}
 				unix.Close(fd)
 			}
 			base.Close()
 			lock.Close()
 			if e != nil {
-				return errCheckout
+				if errors.Is(e, errCheckout) {
+					return e
+				}
+				return checkoutRejected(checkoutStageFileModeDenied)
 			}
 		}
 	}
 	lock, err = workspacefs.Lock(ctx, store.root)
 	if err != nil {
-		return errCheckout
+		return checkoutRejected(checkoutInstallLockDenied)
 	}
 	defer lock.Close()
 	work, err = store.openBaseUnderLock(int(lock.Fd()), "work")
 	if err != nil {
-		return err
+		return checkoutRejected(checkoutInstallDirectoryDenied)
 	}
 	defer work.Close()
-	if ctx.Err() != nil || unix.Renameat2(int(work.Fd()), stageName, int(work.Fd()), strings.TrimPrefix(destination, "work/"), unix.RENAME_NOREPLACE) != nil {
-		return errCheckout
+	if ctx.Err() != nil {
+		return checkoutRejected(checkoutInstallCancelled)
+	}
+	if unix.Renameat2(int(work.Fd()), stageName, int(work.Fd()), strings.TrimPrefix(destination, "work/"), unix.RENAME_NOREPLACE) != nil {
+		return checkoutRejected(checkoutInstallRenameDenied)
 	}
 	installed = true
 	if unix.Fsync(int(work.Fd())) != nil {
-		return errCheckout
+		return checkoutRejected(checkoutInstallSyncDenied)
 	}
 	return nil
 }

@@ -12,6 +12,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"mime"
 	"net"
 	"net/http"
@@ -64,13 +65,13 @@ type MCPProxy struct {
 // StartMCPProxy проверяет управляемое доказательство готовности и предел инструментов, готовит выбранный upstream-транспорт, затем создаёт защищённый группой UDS с проверкой peer и новый локальный bearer.
 // Передаёт только локальный маршрут MCP либо закреплённое чтение файлов, заменяя заголовки идентичности и привязок upstream, проверяет обязательный путь initialize и каталога до возврата.
 // Использует контекст жизненного цикла вызывающего, очищает частично созданные ресурсы при ошибке; после успеха владение передаётся MCPProxy.Close.
-func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (_ *MCPProxy, resultErr error) {
+func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string, logger *slog.Logger) (_ *MCPProxy, resultErr error) {
 	stage := mcpStageConfiguration
 	defer func() { resultErr = withMCPStage(resultErr, stage) }()
 	if err := runtimecontract.ValidateManagedMCPReadiness(input, time.Now()); err != nil {
 		return nil, err
 	}
-	if len(requiredTools) == 0 || len(requiredTools) > 256 {
+	if logger == nil || len(requiredTools) == 0 || len(requiredTools) > 256 {
 		return nil, errors.New("required MCP tool catalog is invalid")
 	}
 	upstream, err := url.Parse(input.CallbackURL)
@@ -173,7 +174,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		workspaceHandler, err = managedworkspace.NewHandler(input, workspaceOwnerCall(&http.Client{Transport: localTransport, Timeout: time.Duration(runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds+5) * time.Second}, endpoint, localToken), execute,
 			func(ctx context.Context, call runtimecontract.NativeToolCall) error {
 				return fileClient.RecordNativeToolCall(ctx, input, call)
-			})
+			}, logger)
 		if err != nil {
 			fileClient.Close()
 			listener.Close()

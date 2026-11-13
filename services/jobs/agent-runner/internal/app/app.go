@@ -201,7 +201,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	}
 	defer client.Close()
 	runtime := turnRuntime{prepare: func(ctx context.Context, input model.Input, client *callback.Client) (preparedTurn, string, error) {
-		prepared, code, err := prepareRuntimeTurn(ctx, input, client)
+		prepared, code, err := prepareRuntimeTurn(ctx, input, client, logger)
 		if code == "RUNTIME_MCP_UNAVAILABLE" && err != nil {
 			logMCPStartupFailure(ctx, logger, err)
 		}
@@ -273,7 +273,7 @@ type turnRuntime struct {
 
 // prepareRuntimeTurn validates a turn and its mounted context snapshot, binds snapshot expiry and the effective deadline, prepares workspace/input/profile, resets outbox and starts the exact MCP proxy. Failures cancel prepared contexts and return an existing safe failure code where applicable; the input remains server-owned authority.
 // prepareRuntimeTurn проверяет ход и смонтированный context snapshot, связывает snapshot expiry и действующий deadline, готовит workspace/input/profile, очищает outbox и запускает точный MCP proxy. Ошибки отменяют подготовленные контексты и по возможности возвращают прежний безопасный код; authority входа остаётся серверной.
-func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback.Client) (prepared preparedTurn, code string, resultErr error) {
+func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback.Client, logger *slog.Logger) (prepared preparedTurn, code string, resultErr error) {
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil {
 		return preparedTurn{}, "", errors.New("runtime turn input is invalid")
 	}
@@ -306,7 +306,7 @@ func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback
 	if err := resetWorkspaceDirectory(ctx, input.WorkspaceRoot, ".kodex/outbox"); err != nil {
 		return preparedTurn{}, "RUNTIME_WORKSPACE_INVALID", err
 	}
-	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token(), runtimecontract.RuntimeMCPToolNames(input))
+	mcpProxy, err := readiness.StartMCPProxy(ctx, input, client.Token(), runtimecontract.RuntimeMCPToolNames(input), logger)
 	if err != nil {
 		return preparedTurn{}, "RUNTIME_MCP_UNAVAILABLE", err
 	}
