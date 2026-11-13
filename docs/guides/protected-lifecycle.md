@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.76
+version: 1.1.77
 updated: 2026-11-13
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+При остановке Deployment serving inventory определяется одновременно selector
+компонента и точным Deployment→ReplicaSet→Pod lineage: изменение labels не
+прячет прежний writer. Сохранённый bootstrap/migration Job Pod исключается из
+replicas только по текущему Job UID, известному execution template и полному
+подтверждению остановки всех контейнеров; terminal phase, label или NodeLost
+не заменяют этот proof. Такое исключение не выдаёт migration/check PASS и не
+разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
 
 Отказ до первоначального допуска writer требует отдельного доказательства
 `STOPPED_BEFORE_BIND`: exact retained Pod/UID, исходный доступный Node/UID,

@@ -4,8 +4,8 @@ title: Адресная immutable-миграция outbox Control Plane
 type: operation-plan
 status: approved
 owner: manager
-version: 1.3.1
-updated: 2026-10-28
+version: 1.3.2
+updated: 2026-11-13
 ---
 
 # Миграция outbox — #1855
@@ -315,6 +315,7 @@ exact lock, PID и отсутствие работающего writer; толь�
 | --- | --- |
 | Check RUNNING или UNKNOWN | Только наблюдение прежнего plan/Job; нет новой попытки |
 | Check Failed до эффектов | CHECK_READBACK FAIL, одна CHECK_CREATE_INTENT, единый UID, точные spec/marker и отсутствие живых Pod разрешают один новый plan |
+| Check PASS до эффектов, STOP больше не принимает прежнюю freshness | Реальный inspect сохраняет CHECK_READBACK PASS; повторная сверка exact Job/Pod/spec/log разрешает только readonly check attempt2, без удаления предшественника |
 | Есть STOP/RESUME intent либо DDL Job/intent | Путь CHECK запрещён; нельзя переименовать неопределённый эффект в безвредную предварительную проверку |
 | Нет Job, чужой UID, изменённый spec или активный Pod | Закрытый отказ, без create и удаления старых ресурсов |
 | Parent journal изменился после plan2 | Новые check/stop/apply запрещены; хеш журнала привязан к child plan |
@@ -322,9 +323,32 @@ exact lock, PID и отсутствие работающего writer; толь�
 
 Child повторяет owner precondition и connection-check, затем обычные
 stop/join → DDL → readback → resume. Сохраняются все старые Jobs и квитанции.
-До child STOP CP остаётся на прежних двух репликах; миграция создаётся только
+До child STOP CP остаётся на прежнем числе реплик; миграция создаётся только
 после нового положительного check. Безотносительно причины отказа check
 никакой успех миграции или доступность immutable-релиза не предполагаются.
+
+Для PASS-предшественника сохраняется пятиминутное ограничение check перед STOP:
+старый PASS не продлевает полномочия, а открывает только отдельную свежую проверку.
+Любой STOP/PAIR_STOP, HANDOFF/PAIR_HANDOFF, RESUME либо DDL intent закрывает этот
+путь; успешная DDL не становится предшественником для повторного исполнения.
+
+## Serving lineage и сохранённая история Jobs — #1977
+
+Portable pair и основной CP observer читают namespace inventory ReplicaSets,
+Pods и Jobs. В serving scope входят Pods с app name компонента и все точные
+Deployment→ReplicaSet descendants, даже если их labels изменились. Узкий selector
+по component label не заменяет эту проверку: Service может выбирать по app name.
+
+| Наблюдение | Поведение |
+| --- | --- |
+| Завершённый bootstrap/migration/check CLI Pod | Исключается из serving replicas только при текущем Job UID/controller lineage, известных имени/ServiceAccount/CLI command/image, совпадении template и завершении всех main/init/ephemeral containers |
+| Неизвестный Job, foreign ReplicaSet либо изменённый execution | Закрытый отказ; label и terminal phase не назначают ownership |
+| Running/waiting container, неполные статусы, NodeLost/Unknown | Нет положительного join; сохранённая история не скрывает возможного writer |
+| Собственный Deployment Pod с изменёнными labels | Остаётся в inventory через ReplicaSet UID и препятствует ложному stopped/ready |
+
+История не удаляется, новые Job/Pod не создаются этим observer. Исключение из
+serving replicas не является миграционным PASS: фактическая migration/check
+Job по-прежнему проходит отдельный exact readback и schema postcondition.
 
 ## Локальная проверка
 

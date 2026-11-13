@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff } from './portable-component-migration.mjs';
+import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentServingInventory } from './portable-component-migration.mjs';
+import { activeDeploymentPods } from './stable-archive-transition.mjs';
 import { validWorkspaceUnboundStopMigrationPrecondition, validWorkspaceUnboundStopMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
@@ -641,7 +642,7 @@ if(a.includes('patch')&&a.includes('--patch-file=/dev/stdin')){
  if(events.at(-1).type!==(check?'CHECK_CREATE_INTENT':'CREATE_INTENT'))fail();
  job.metadata.uid=check?'check-created'+(s.retry?'-2':''):s.retry?'created-attempt2':'created';
  job.status={succeeded:1,completionTime:new Date().toISOString(),conditions:[{type:'Complete',status:'True'}]};
- const pod={metadata:{uid:'pod-'+job.metadata.uid,namespace:'kodex-system',ownerReferences:[{kind:'Job',uid:job.metadata.uid,controller:true}]},spec:job.spec.template.spec,
+ const pod={metadata:{uid:'pod-'+job.metadata.uid,namespace:'kodex-system',labels:job.spec.template.metadata.labels,ownerReferences:[{kind:'Job',name:job.metadata.name,uid:job.metadata.uid,controller:true}]},spec:job.spec.template.spec,
  status:{phase:'Succeeded',initContainerStatuses:[{name:'wait-for-postgresql',restartCount:0,state:{terminated:{exitCode:0}}}],
  containerStatuses:[{name:'migrate',restartCount:0,imageID:job.spec.template.spec.containers[0].image,state:{terminated:{exitCode:0}}}]}};
  if(s.mode===(check?'check-fail':'main-fail')){job.status={failed:1,conditions:[{type:'Failed',status:'True'}]};pod.status.phase='Failed';pod.status.containerStatuses[0].state.terminated.exitCode=1;}
@@ -658,11 +659,24 @@ else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.depende
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
 }else if(a.includes('deployment'))out(a[a.indexOf('deployment')+1]==='runtime-controller'?s.controller:a[a.indexOf('deployment')+1]==='control-api-gateway'?s.gateway:s.deployment);
-else if(a.includes('replicasets,pods')&&s.pair){
+else if(a.includes('replicasets,pods,jobs')){
+ const items=[];
+ for(const app of [s.deployment,s.controller,s.gateway].filter(Boolean)){
+  const name=app.metadata.name,rs='rs-'+name;
+  items.push({kind:'ReplicaSet',metadata:{uid:rs,ownerReferences:[{kind:'Deployment',uid:app.metadata.uid,controller:true}]}});
+  for(let i=0;i<app.spec.replicas;i++)items.push({kind:'Pod',metadata:{uid:name+'-'+i,labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rs,controller:true}]},spec:app.spec.template.spec,
+   status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}});
+ }
+ for(const job of [s.bootstrapJob,s.checkJob,s.previousCheckJob,s.previousJob,s.job].filter(Boolean))items.push({kind:'Job',...job});
+ for(const pod of [s.bootstrapPod,s.checkPod,s.previousCheckPod,s.previousPod,s.pod].filter(Boolean))items.push({kind:'Pod',...pod});
+ items.push(...(s.extraServingInventory??[]));out({items});
+}else if(a.includes('replicasets,pods')&&s.pair){
  const selector=a[a.indexOf('-l')+1],name=selector.split('=')[1].split(',')[0],app=name==='control-plane'?s.deployment:name==='runtime-controller'?s.controller:s.gateway;
  const rs='rs-'+name,items=[{kind:'ReplicaSet',metadata:{uid:rs,ownerReferences:[{kind:'Deployment',uid:app.metadata.uid,controller:true}]}}];
  for(let i=0;i<app.spec.replicas;i++)items.push({kind:'Pod',metadata:{uid:name+'-'+i,ownerReferences:[{kind:'ReplicaSet',uid:rs,controller:true}]},spec:app.spec.template.spec,
  status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}});
+ if(!selector.includes('app.kubernetes.io/component='))for(const pod of [s.bootstrapPod,s.checkPod,s.previousCheckPod,s.pod,...(s.extraServingInventory??[]).filter(r=>r.kind==='Pod')].filter(Boolean))
+  if(pod.metadata.labels?.['app.kubernetes.io/name']===name)items.push({kind:'Pod',...pod});
  out({items});
 }else if(a.includes('replicasets,pods')){
  const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:'anchor',controller:true}]}}];
@@ -685,7 +699,7 @@ else{save();process.exit(1);}
     ...(['apply','stop','resume','check','handoff'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],{encoding:'utf8',timeout:15000,env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
   return {run,componentFile,targetFile,pair,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;value.previousCheckPod=value.checkPod;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
 }
-const pass = (f,phase,status='PASS') => {const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,status);return result;};
+const pass = (f,phase,status='PASS',extra=[]) => {const result=f.run(phase,extra);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,status);return result;};
 const failed = (f,phase) => {const result=f.run(phase);assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'FAIL');return result;};
 test('public immutable CLI stop → exact migration → resume preserves old image and never repeats effects',t=>{
   const f=cli(t);f.edit(s=>s.deployment.spec.template.spec.containers[0].image=`registry.local.kodex/kodex/control-plane@sha256:${'e'.repeat(64)}`);
@@ -1573,10 +1587,10 @@ test('042 portable повторяет failed check через отдельную
 // Сохранённый bootstrap не удаляется и не повторяется; активный либо чужой Pod закрывает DDL.
 test('042 portable сохраняет завершённый bootstrap и требует positive join', t => {
  const f=cli(t,'workspace-archive-abi');pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
- f.edit(s=>{s.bootstrapJob={kind:'Job',metadata:{name:'control-plane-migrate',namespace:'kodex-system',uid:'bootstrap',labels:{'app.kubernetes.io/name':'control-plane','app.kubernetes.io/component':'migration','app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}},spec:{},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
- s.bootstrapPod={metadata:{uid:'bootstrap-pod',namespace:'kodex-system',ownerReferences:[{kind:'Job',controller:true,uid:'bootstrap'}]},spec:{containers:[{name:'migrate'}]},status:{phase:'Running',containerStatuses:[{name:'migrate',state:{running:{}}}]}};});
+ f.edit(s=>{s.bootstrapJob=structuredClone(s.checkJob);s.bootstrapJob.metadata.name='control-plane-migrate';s.bootstrapJob.metadata.uid='bootstrap';s.bootstrapJob.spec.template.spec.containers[0].args=['up'];
+ s.bootstrapPod=structuredClone(s.checkPod);s.bootstrapPod.metadata.uid='bootstrap-pod';s.bootstrapPod.metadata.ownerReferences=[{kind:'Job',name:'control-plane-migrate',controller:true,uid:'bootstrap'}];s.bootstrapPod.spec=structuredClone(s.bootstrapJob.spec.template.spec);s.bootstrapPod.status.phase='Running';s.bootstrapPod.status.containerStatuses[0].state={running:{}};});
  assert.notEqual(f.run('apply').status,0);assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
- f.edit(s=>{s.bootstrapPod.status={phase:'Succeeded',containerStatuses:[{name:'migrate',state:{terminated:{exitCode:0}}}]};s.bootstrapPod.metadata.ownerReferences[0].uid='foreign';});
+ f.edit(s=>{s.bootstrapPod.status=structuredClone(s.checkPod.status);s.bootstrapPod.metadata.ownerReferences[0].uid='foreign';});
  assert.notEqual(f.run('apply').status,0);
  f.edit(s=>s.bootstrapPod.metadata.ownerReferences[0].uid='bootstrap');pass(f,'apply');pass(f,'inspect');pass(f,'resume','RESUMED');
  assert.equal(f.read().bootstrapJob.metadata.uid,'bootstrap');assert.equal(f.read().calls.some(a=>a.includes('delete')),false);
@@ -1732,8 +1746,55 @@ test('pure portable handoff сохраняет env/volumes/replicas и связ�
  assert.throws(()=>planComponentMigrationHandoff(f.value,wrong,source));
 });
 
+function retainedCLIJobFixture(bootstrap=false) {
+ const labels={'app.kubernetes.io/name':'control-plane','app.kubernetes.io/component':bootstrap?'broker-bootstrap':'migration','app.kubernetes.io/part-of':'kodex'};
+ const name=bootstrap?'control-plane-broker-bootstrap':'control-plane-migration-check-20261113000100';
+ const main={name:bootstrap?'bootstrap':'migrate',image:'registry.example.invalid/synthetic/control-plane@sha256:'+'a'.repeat(64),
+  command:['/usr/local/bin/control-plane-cli'],args:bootstrap?['broker','bootstrap']:['check']};
+ const spec={serviceAccountName:bootstrap?'control-plane-broker-bootstrap':'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',containers:[main]};
+ const job={apiVersion:'batch/v1',kind:'Job',metadata:{name,namespace:'kodex-system',uid:'retained-job',labels},
+  spec:{template:{metadata:{labels},spec}},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
+ const pod={kind:'Pod',metadata:{uid:'retained-pod',namespace:'kodex-system',labels,ownerReferences:[{kind:'Job',controller:true,name,uid:'retained-job'}]},spec:structuredClone(spec),
+  status:{phase:'Succeeded',containerStatuses:[{name:main.name,state:{terminated:{exitCode:0}}}]}};
+ return {job,pod};
+}
+
+test('serving inventory исключает только exact завершённую CLI Job, сохраняя foreign guard',()=>{
+ for(const bootstrap of [false,true]) {
+  const {job,pod}=retainedCLIJobFixture(bootstrap),list={items:[job,pod]};
+  assert.deepEqual(activeDeploymentPods(componentServingInventory(list,'control-plane','deployment'),'deployment'),[]);
+  const mutations=[
+   p=>{p.job.metadata.uid='replaced';},p=>{p.pod.metadata.ownerReferences[0].name='foreign';},p=>{delete p.pod.metadata.ownerReferences[0].uid;},
+   p=>{p.job.metadata.name=p.pod.metadata.ownerReferences[0].name='unknown-job';},p=>{p.job.spec.template.spec.serviceAccountName='foreign';},
+   p=>{p.pod.spec.containers[0].command=['/usr/local/bin/control-plane'];},p=>{p.pod.spec.containers[0].image='registry.example.invalid/foreign@sha256:'+'b'.repeat(64);},
+   p=>{p.job.spec.template.spec.containers[0].command=['/usr/local/bin/control-plane'];},p=>{p.job.status={active:1};},
+   p=>{p.pod.status.phase='Running';p.pod.status.containerStatuses[0].state={running:{}};},
+   p=>{p.pod.spec.initContainers=[{name:'writer'}];p.pod.status.initContainerStatuses=[{name:'writer',state:{running:{}}}];},
+   p=>{p.pod.spec.ephemeralContainers=[{name:'debug'}];p.pod.status.ephemeralContainerStatuses=[{name:'debug',state:{running:{}}}];},
+   p=>{p.pod.status.reason='NodeLost';},p=>{p.pod.status.phase='Unknown';},p=>{p.pod.status.conditions=[{type:'Ready',status:'Unknown'}];},
+   p=>{delete p.pod.status.containerStatuses;},p=>{p.pod.metadata.ownerReferences=[{kind:'ReplicaSet',controller:true,uid:'foreign'}];}
+  ];
+  for(const mutate of mutations) {
+   const changed=structuredClone({job,pod});mutate(changed);
+   assert.throws(()=>activeDeploymentPods(componentServingInventory({items:[changed.job,changed.pod]},'control-plane','deployment'),'deployment'),/STABLE_FOREIGN_SERVING_POD|COMPONENT_MIGRATION_POD_STATE_UNKNOWN/);
+  }
+ }
+});
+
+test('namespace inventory не прячет Deployment descendants при дрейфе serving labels',()=>{
+ const rs={kind:'ReplicaSet',metadata:{uid:'owned-rs',ownerReferences:[{kind:'Deployment',controller:true,uid:'deployment'}]}};
+ const pod={kind:'Pod',metadata:{uid:'owned-pod',labels:{'app.kubernetes.io/name':'mutated','app.kubernetes.io/component':'migration'},ownerReferences:[{kind:'ReplicaSet',controller:true,uid:'owned-rs'}]},
+  spec:{containers:[{name:'control-plane'}]},status:{phase:'Running',containerStatuses:[{name:'control-plane',state:{running:{}}}]}};
+ assert.equal(activeDeploymentPods(componentServingInventory({items:[rs,pod]},'control-plane','deployment'),'deployment').length,1);
+ const foreign=structuredClone(pod);foreign.metadata.labels['app.kubernetes.io/name']='control-plane';foreign.metadata.ownerReferences[0].uid='foreign-rs';
+ assert.throws(()=>activeDeploymentPods(componentServingInventory({items:[rs,foreign]},'control-plane','deployment'),'deployment'),/STABLE_FOREIGN_SERVING_POD/);
+ pod.status={phase:'Failed',reason:'NodeLost',containerStatuses:[{name:'control-plane',state:{terminated:{exitCode:1}}}]};
+ assert.throws(()=>componentServingInventory({items:[rs,pod]},'control-plane','deployment'),/COMPONENT_MIGRATION_POD_STATE_UNKNOWN/);
+});
+
 test('public portable CLI check→stop/join→043→paired handoff→resume использует реальные refs и не повторяет DDL',t=>{
  const f=cli(t,'workspace-unbound-stop','',true);
+ const retained=retainedCLIJobFixture(true);f.edit(s=>{s.extraServingInventory=[retained.job,retained.pod];});
  pass(f,'plan','PLANNED');const plan=read(f.plan);
  assert.equal(plan.job.spec.template.spec.containers[0].image,JSON.parse(Buffer.from(f.pair.value.components[0].componentLockRawBase64,'base64')).image_ref);
  assert.equal(plan.imageEvidence.publicationPlan,undefined);
@@ -1747,6 +1808,7 @@ test('public portable CLI check→stop/join→043→paired handoff→resume ис
  pass(f,'resume','RESUMED');pass(f,'apply');
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);
  assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,patches);
+ assert.ok(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&!a.includes('-l')));
 });
 
 test('public portable CLI запрещает handoff без DDL/postcondition и после незавершённого controller join',t=>{
@@ -1779,4 +1841,39 @@ test('public portable CLI unknown до pair effect требует fresh inspect 
  f.edit(s=>{s.controller.spec.template.spec.containers[0].env.push({name:'FOREIGN',value:'drift'});});
  assert.notEqual(f.run('resume').status,0);
  assert.equal(f.read().controller.spec.template.spec.containers[0].env.at(-1).name,'FOREIGN');
+});
+
+test('portable просроченный PASS check разрешает лишь fresh attempt2 до STOP/DDL, сохраняя первый receipt',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');
+ f.edit(s=>s.checkJob.status.completionTime=new Date(Date.now()-600000).toISOString());
+ const expired=f.run('stop');assert.notEqual(expired.status,0);assert.match(expired.stderr+expired.stdout,/MIGRATION_CHECK_PASS_REQUIRED/);
+ assert.equal(f.read().deployment.spec.replicas,3);assert.equal(f.read().controller.spec.replicas,2);
+ pass(f,'inspect');const original=f.read().checkJob.metadata.uid,previous=f.retry();pass(f,'plan','PLANNED',previous);
+ const plan=read(f.plan);assert.equal(plan.attempt,2);assert.equal(plan.predecessor.stage,'CHECK');
+ assert.equal(plan.predecessor.jobUID,original);assert.match(plan.checkJob.metadata.name,/-attempt2$/);
+ pass(f,'check');assert.equal(f.read().previousCheckJob.metadata.uid,original);assert.notEqual(f.read().checkJob.metadata.uid,original);
+ assert.equal(f.read().job,undefined);assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
+ pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
+ const creates=f.read().calls.filter(a=>a.includes('create')).length,third=f.retry();assert.notEqual(f.run('plan',third).status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);assert.equal(f.read().calls.some(a=>a.includes('delete')),false);
+});
+
+test('PASS check predecessor не принимает UNKNOWN, изменённый execution, fake receipt и pair effects',t=>{
+ for(const scenario of ['missing-readback','wrong-log','replaced','active','terminating','running-init','NodeLost','pair-stop','pair-handoff','ddl-job']){
+  const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');
+  if(scenario==='missing-readback')writeFileSync(f.evidence,readFileSync(f.evidence,'utf8').split('\n').filter(line=>!line||JSON.parse(line).type!=='CHECK_READBACK').join('\n'),{mode:0o600});
+  else if(scenario.startsWith('pair-'))writeFileSync(f.evidence,readFileSync(f.evidence,'utf8')+JSON.stringify({type:scenario==='pair-stop'?'PAIR_STOP_INTENT':'PAIR_HANDOFF_INTENT',name:'runtime-controller'})+'\n',{mode:0o600});
+  else f.edit(s=>{
+   if(scenario==='wrong-log')s.checkLog='unconfirmed';
+   if(scenario==='replaced')s.checkJob.metadata.uid='replacement';
+   if(scenario==='active')s.checkJob.status.active=1;
+   if(scenario==='terminating')s.checkJob.status.terminating=1;
+   if(scenario==='running-init')s.checkPod.status.initContainerStatuses[0].state={running:{}};
+   if(scenario==='NodeLost')s.checkPod.status.reason='NodeLost';
+   if(scenario==='ddl-job'){s.job=structuredClone(s.checkJob);s.job.metadata.name=read(f.plan).job.metadata.name;}
+  });
+  const previous=f.retry(),creates=f.read().calls.filter(a=>a.includes('create')).length;
+  assert.notEqual(f.run('plan',previous).status,0,scenario);
+  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates,scenario);
+ }
 });
