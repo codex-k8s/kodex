@@ -1,8 +1,10 @@
 package codex
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -42,6 +44,28 @@ func TestProviderOutboxPublicationContainer(t *testing.T) {
 		}
 		if os.Chown(filepath.Join(outbox, "atomic.md"), -1, 10002) != nil {
 			t.Fatal("prepare primary-group artifact")
+		}
+		return
+	}
+	if mode == "MANAGED_PRESERVE" {
+		path := filepath.Join(outbox, "managed-report.md")
+		var before, after unix.Stat_t
+		body, err := os.ReadFile(path)
+		if err != nil || unix.Stat(path, &before) != nil || before.Uid != 10001 || before.Gid != 29000 || before.Mode&0o7777 != 0o640 {
+			t.Fatal("managed runner-owned fixture is invalid")
+		}
+		input := managedOutboxInputFixture()
+		want := Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic managed result", Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}}
+		got := publishCompletedProviderOutbox(t.Context(), input, want)
+		next, readErr := os.ReadFile(path)
+		if !reflect.DeepEqual(got, want) || unix.Stat(path, &after) != nil || before != after || readErr != nil || !bytes.Equal(body, next) {
+			t.Fatal("provider modified or rejected the role-owned managed outbox")
+		}
+		return
+	}
+	if mode == "MANAGED_FOREIGN_WRITE" {
+		if os.WriteFile(filepath.Join(outbox, "provider-owned.md"), []byte("foreign synthetic file"), 0o640) != nil {
+			t.Fatal("create foreign managed artifact")
 		}
 		return
 	}

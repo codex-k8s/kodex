@@ -1114,7 +1114,8 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 			continue
 		}
 		metadata, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || metadata.Nlink != 1 {
+		if !ok || metadata.Nlink != 1 || input.EnvironmentPolicy.ManagedWorkspace &&
+			(metadata.Uid != 10001 || metadata.Gid != 29000 || metadata.Mode&0o7777 != 0o640) {
 			file.Close()
 			return nil, denyCompletionArtifact(nil)
 		}

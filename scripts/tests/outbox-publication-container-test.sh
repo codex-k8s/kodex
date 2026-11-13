@@ -46,4 +46,14 @@ timeout 20s docker run --rm --pull=never --network none --read-only --user 10001
   --mount "type=bind,src=$fixture/workspace,dst=/workspace" "$image" \
   -ec 'printf synthetic > /workspace/.kodex/outbox/foreign.md; chmod 0640 /workspace/.kodex/outbox/foreign.md'
 fixture_test 10002 codex.test REJECT_FOREIGN TestProviderOutboxPublicationContainer
-printf 'Dual-UID private and atomic outbox publication, exact collection and foreign-owner rejection passed\n'
+timeout 20s docker run --rm --pull=never --network none --read-only --user 0:0 \
+  --cap-drop ALL --cap-add DAC_OVERRIDE --security-opt no-new-privileges --entrypoint /bin/sh \
+  --mount "type=bind,src=$fixture/workspace,dst=/workspace" "$image" \
+  -ec 'rm /workspace/.kodex/outbox/private.md /workspace/.kodex/outbox/atomic.md /workspace/.kodex/outbox/foreign.md'
+fixture_test 10001 app.test MANAGED_WRITE TestRunnerOutboxPublicationContainer
+fixture_test 10002 codex.test MANAGED_PRESERVE TestProviderOutboxPublicationContainer
+fixture_test 10001 app.test MANAGED_COLLECT TestRunnerOutboxPublicationContainer
+fixture_test 10001 app.test MANAGED_GUARDS TestRunnerOutboxPublicationContainer
+fixture_test 10002 codex.test MANAGED_FOREIGN_WRITE TestProviderOutboxPublicationContainer
+fixture_test 10001 app.test MANAGED_REJECT_FOREIGN TestRunnerOutboxPublicationContainer
+printf 'Dual-UID provider and managed outbox publication, exact collection and foreign-owner rejection passed\n'

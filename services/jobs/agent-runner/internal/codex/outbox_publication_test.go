@@ -6,10 +6,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"golang.org/x/sys/unix"
 )
 
@@ -204,4 +206,44 @@ func TestExecuteProviderTurnRejectsArtifactPublicationPreservingUsage(t *testing
 		t.Fatal("publication failure lost its closed outcome or measured usage")
 	}
 	_ = authPath
+}
+
+// managedOutboxInputFixture qualifies only the managed workspace boundary with synthetic execution pins.
+// managedOutboxInputFixture задаёт synthetic execution pins для проверки managed workspace, без live authority.
+func managedOutboxInputFixture() model.Input {
+	input := openCodeInputFixture()
+	input.Mode = runtimecontract.RunnerModeTurn
+	input.AssistantScope = runtimecontract.AssistantScopeNone
+	input.ProjectRef = "prj_fixture"
+	input.LeaseRef = "lea_fixture"
+	input.LeaseFence = "fixture-fence"
+	input.LeaseGeneration = 1
+	input.InputDigest = strings.Repeat("a", 64)
+	input.RuntimeRevisionDigest = strings.Repeat("b", 64)
+	input.WorkspaceRoot = "/workspace"
+	input.WorkspaceAccess = "workspace-write"
+	input.Capabilities = []string{runtimecontract.ArtifactCapability}
+	input.WorkspacePolicy = runtimecontract.RuntimeWorkspacePolicyV1()
+	input.EnvironmentPolicy = runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	input.EnvironmentPolicy.ManagedWorkspace = true
+	return input
+}
+
+// TestManagedOutboxStaysRoleOwnedAndUnqualifiedFlagHasNoBypass separates a qualified managed turn
+// from a raw flag: only the former omits provider-owned publication, preserving its result and usage.
+// TestManagedOutboxStaysRoleOwnedAndUnqualifiedFlagHasNoBypass отделяет qualified managed turn от
+// одного флага: лишь первый пропускает provider publication с сохранением результата и usage.
+func TestManagedOutboxStaysRoleOwnedAndUnqualifiedFlagHasNoBypass(t *testing.T) {
+	input := managedOutboxInputFixture()
+	if !runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		t.Fatal("managed fixture is not qualified")
+	}
+	want := Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic managed result", Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}}
+	if got := publishCompletedProviderOutbox(t.Context(), input, want); !reflect.DeepEqual(got, want) {
+		t.Fatal("provider changed a role-owned managed result")
+	}
+	input.LeaseRef = ""
+	if got := publishCompletedProviderOutbox(t.Context(), input, want); got.Outcome != "FAILED" || got.FailureCode != "RUNTIME_ARTIFACT_INVALID" {
+		t.Fatal("unqualified managed flag bypassed provider publication")
+	}
 }
