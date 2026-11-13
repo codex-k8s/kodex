@@ -12,6 +12,16 @@ const image = value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 const names = ['control-plane', 'runtime-controller'];
 
+// Только installation profile: его producer deployment_profile.py использует
+// sort_keys=True, separators=(",", ":"), ensure_ascii=True. Ключи допустимого
+// stock profile фиксированы в ASCII; значения URL могут содержать Unicode.
+function installationProfileFingerprint(profile) {
+  const wire=JSON.stringify(profile,(_key,value) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.keys(value).sort().map(key => [key,value[key]])) : value)
+    .replace(/[\u007f-\uffff]/g,character => `\\u${character.charCodeAt(0).toString(16).padStart(4,'0')}`);
+  return createHash('sha256').update(wire).digest('hex');
+}
+
 // Честный alternate receipt: stock component-lock bytes и выполненный CRI proof,
 // а не синтезированная stable-publication INTENT/PASS история другого publisher.
 export function componentMigrationPublication(value, source, profile = 'workspace-unbound-stop') {
@@ -103,7 +113,7 @@ export function componentMigrationTarget(target, publication, observed) {
   catch {throw Error('COMPONENT_MIGRATION_INSTALLATION_PINS_MISMATCH');}
   requireValue(fingerprint(heads) === fingerprint(publication.schemaHeadsBefore) &&
     fields(profile,['version','identity','public_tls']) && profile.version === 1 &&
-    fingerprint(profile) === pins['profile.sha256'], 'COMPONENT_MIGRATION_INSTALLATION_PINS_MISMATCH');
+    installationProfileFingerprint(profile) === pins['profile.sha256'], 'COMPONENT_MIGRATION_INSTALLATION_PINS_MISMATCH');
   requireValue(target.resources.length === 3 && ['control-plane','runtime-controller','control-api-gateway'].every(name =>
     target.resources.some(r => r.apiVersion === 'apps/v1' && r.kind === 'Deployment' && r.name === name)) &&
     observed.deployments.length === 3 && observed.deployments.every(d => scope.allows(d)) &&

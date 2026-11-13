@@ -1683,6 +1683,34 @@ test('portable target требует exact installation, три Deployment UID, 
  }
 });
 
+test('portable installation profile hash совпадает с настоящим stock Python producer для ASCII и Unicode URL',()=>{
+ const producer=new URL('../install/deployment_profile.py',import.meta.url).pathname;
+ const python=`import importlib.util,json,sys
+spec=importlib.util.spec_from_file_location('deployment_profile',sys.argv[1]);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+profile=module.validate(json.load(sys.stdin));print(module.fingerprint(profile))`;
+ for(const suffix of ['ascii','пример','astral-😀','escaped-"-\u007f','combined-é-а']) {
+  const f=componentPublicationFixture(),issuer=`https://sso.example.invalid/realm/${suffix}`;
+  const profile={version:1,identity:{mode:'external',issuer,jwks_url:issuer+'/jwks',authorization_url:issuer+'/authorize',token_url:issuer+'/token',
+   connect_host:'sso.example.invalid',endpoint_cidrs:['192.0.2.7/32'],client_id:'synthetic-client',audience:'kodex-control-api',scope:'openid profile'},public_tls:{mode:'managed'}};
+  const hash=execFileSync('python3',['-c',python,producer],{input:JSON.stringify(profile),encoding:'utf8'}).trim();
+  f.installation.data['profile.json']=JSON.stringify(profile);f.installation.data['profile.sha256']=hash;
+  f.target.installationSHA256=fingerprint(f.installation.data);
+  const observed={sourceRevision:revision,context:f.value.context,clusterUID:f.value.clusterUID,namespaceUID:f.value.namespaceUID,
+   installation:f.installation,deployments:f.deployments,nodes:f.nodes};
+  assert.ok(componentMigrationTarget(f.target,f.value,observed));
+  if(suffix==='ascii')assert.equal(hash,fingerprint(profile));else assert.notEqual(hash,fingerprint(profile));
+  f.installation.data['profile.sha256']='0'.repeat(64);f.target.installationSHA256=fingerprint(f.installation.data);
+  assert.throws(()=>componentMigrationTarget(f.target,f.value,observed));
+ }
+ for(const suffix of ['space-\u2028','backslash-\\u0430']) {
+  const issuer=`https://sso.example.invalid/realm/${suffix}`;
+  const profile={version:1,identity:{mode:'external',issuer,jwks_url:issuer+'/jwks',authorization_url:issuer+'/authorize',token_url:issuer+'/token',
+   connect_host:'sso.example.invalid',endpoint_cidrs:['192.0.2.7/32'],client_id:'synthetic-client',audience:'kodex-control-api',scope:'openid profile'},public_tls:{mode:'managed'}};
+  const result=spawnSync('python3',['-c',python,producer],{input:JSON.stringify(profile),encoding:'utf8'});
+  assert.notEqual(result.status,0);assert.match(result.stderr,/OIDC_URL_REJECTED/);
+ }
+});
+
 test('pure portable handoff сохраняет env/volumes/replicas и связывает обе новые image одним source',()=>{
  const f=componentPublicationFixture();
  for(const d of f.deployments.slice(0,2)) {
