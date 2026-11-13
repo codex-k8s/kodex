@@ -25,6 +25,7 @@ type WorkspaceQuiescenceObservation struct {
 	Input       runtimecontract.RunnerInput
 	Record      runtimecontract.WorkspaceQuiescence
 	BlockReason string
+	UnboundStop *runtimecontract.WorkspaceUnboundStop
 }
 
 // WorkspacePodAbsent reports only authoritative API NotFound for the frozen lease-derived Pod name.
@@ -125,6 +126,14 @@ func (manager *Manager) PendingWorkspaceQuiescence(ctx context.Context) ([]Works
 			value.BlockReason = "POD_UNREACHABLE"
 			result = append(result, value)
 			continue
+		}
+		if workspaceUnboundEvidence(pod) != "" {
+			if stopped, stopErr := manager.ObserveWorkspaceUnboundStop(ctx, input); stopErr == nil {
+				value.UnboundStop = &stopped
+				value.BlockReason = "WRITER_JOIN_UNCONFIRMED"
+				result = append(result, value)
+				continue
+			}
 		}
 		if !workspaceAllContainersTerminated(pod) && !workspaceStoppedBeforeMain(pod) {
 			if pod.DeletionTimestamp != nil && (pod.Status.Phase == corev1.PodFailed || pod.Status.Phase == corev1.PodSucceeded) {
@@ -315,15 +324,23 @@ func (manager *Manager) CleanupWorkspaceDependencies(ctx context.Context, value 
 	if err == nil && (string(pod.UID) != ack.Writer.PodUID || slices.Contains(pod.Finalizers, workspaceWriterFinalizer) || !manager.workspaceStoragePodMatches(value.Input, pod) || !workspaceAllContainersTerminated(pod) && !workspaceStoppedBeforeMain(pod)) {
 		return errors.New("runtime workspace cleanup is not released")
 	}
-	if err := manager.cleanupWorkspacePolicies(ctx, value.Input); err != nil {
+	return manager.cleanupReleasedWorkspaceDependencies(ctx, value.Input)
+}
+
+// cleanupReleasedWorkspaceDependencies removes exact old-attempt access objects after separate
+// bound or unbound physical-proof guards; it never touches PVCs or stored content.
+// cleanupReleasedWorkspaceDependencies удаляет exact old-attempt access objects после отдельных
+// bound либо unbound physical-proof guards; PVC и stored content не затрагивает.
+func (manager *Manager) cleanupReleasedWorkspaceDependencies(ctx context.Context, input runtimecontract.RunnerInput) error {
+	if err := manager.cleanupWorkspacePolicies(ctx, input); err != nil {
 		return err
 	}
-	projection, err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Get(ctx, runtimeProjectionName(value.Input), metav1.GetOptions{})
+	projection, err := manager.client.CoreV1().ConfigMaps(manager.config.RuntimeNamespace).Get(ctx, runtimeProjectionName(input), metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("read acknowledged runtime workspace projection")
 	}
 	if err == nil {
-		if !managedMetadataMatches(projection.ObjectMeta, metav1.ObjectMeta{Annotations: runtimeProjectionAnnotations(value.Input, runtimecontract.RuntimeTurnPodName(value.Input.LeaseRef))}) {
+		if !managedMetadataMatches(projection.ObjectMeta, metav1.ObjectMeta{Annotations: runtimeProjectionAnnotations(input, runtimecontract.RuntimeTurnPodName(input.LeaseRef))}) {
 			return errors.New("runtime workspace projection ownership changed")
 		}
 		uid := projection.UID
@@ -334,11 +351,11 @@ func (manager *Manager) CleanupWorkspaceDependencies(ctx context.Context, value 
 			return errors.New("delete acknowledged runtime workspace projection")
 		}
 	}
-	ticket, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, ticketName(value.Input.LeaseRef), metav1.GetOptions{})
+	ticket, err := manager.client.CoreV1().Secrets(manager.config.RuntimeNamespace).Get(ctx, ticketName(input.LeaseRef), metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil
 	}
-	if err != nil || !runtimeTicketMatches(ticket, runtimecontract.RuntimeTurnPodName(value.Input.LeaseRef), "turn", value.Input, "", nil, nil) || ticket.UID == "" {
+	if err != nil || !runtimeTicketMatches(ticket, runtimecontract.RuntimeTurnPodName(input.LeaseRef), "turn", input, "", nil, nil) || ticket.UID == "" {
 		return errors.New("runtime workspace ticket ownership changed")
 	}
 	uid := ticket.UID

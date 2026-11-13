@@ -4,11 +4,24 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.75
-updated: 2026-11-12
+version: 1.1.76
+updated: 2026-11-13
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Отказ до первоначального допуска writer требует отдельного доказательства
+`STOPPED_BEFORE_BIND`: exact retained Pod/UID, исходный доступный Node/UID,
+полный never-started status всех пишущих контейнеров и закреплённый первый
+initializer, который не пишет PVC до owner BIND. Одна terminal phase, отсутствие
+Pod либо истёкший credential не заменяют доказательство остановки. Owner в одной
+транзакции проверяет закрытый exact lease, отсутствие ACK/join/effects и снимает
+лишь прежний intent, сохраняя immutable receipt. Существующий verified native
+checkpoint и дерево файлов сохраняются; удалить можно только пустой начальный
+native stub без истории. Terminal run не возобновляется: новый ход получает
+свежую authority через существующую owner-команду. Потеря ответа перечитывает
+receipt, неизвестный исход удерживает ресурсы. Матрица и доставка целого unit:
+[#2108](../operations/opencode-native-sessions-2108.md#остановка-до-первого-bind).
 
 Проверка опубликованной runtime policy охватывает owner snapshot, runner preflight,
 broker и native config consumer. Дополнительная локальная проверка использует

@@ -106,6 +106,13 @@ func testWorkspaceRestoreOwner(t *testing.T, ctx context.Context, repository *Re
 		Mutation: value.Mutation{IdempotencyKey: "restore-old-bind"}, Payload: oldBind}); err == nil {
 		t.Fatal("previous generation writer rebound the restored tree")
 	}
+	var unboundProfile bool
+	if err := pool.QueryRow(ctx, "SELECT to_regclass('control_plane.workspace_unbound_stops') IS NOT NULL").Scan(&unboundProfile); err != nil {
+		t.Fatal("read stopped-before-BIND profile", err)
+	}
+	if unboundProfile {
+		claimed, run = testWorkspaceUnboundResumeOwner(t, ctx, service, pool, owner, worker, observer, claimed, run, binding, execute)
+	}
 	newBind := oldBind
 	newBind.LeaseRef, newBind.Fence = stringMap(claimed.RuntimeItems[0], "leaseRef"), stringMap(claimed.RuntimeItems[0], "fence")
 	newBind.Generation, newBind.RuntimeRevisionDigest = runtimeRevisionMapInt64(claimed.RuntimeItems[0], "generation"), stringMap(claimed.RuntimeItems[0], "revisionDigest")

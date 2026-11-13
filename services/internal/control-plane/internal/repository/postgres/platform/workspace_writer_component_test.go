@@ -155,6 +155,12 @@ func testWorkspaceWriterOwnerComponent(t *testing.T, workflowMode bool) {
 		Payload:  command.RunCommandInput{RunRef: run.Ref}}); err != nil {
 		t.Fatal("cancel workspace run", err)
 	}
+	t.Run("bound_writer_cannot_retire_as_unbound", func(t *testing.T) {
+		unbound, _ := unboundStopForClaimFixture(t, item, binding)
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ObserveWorkspace, Principal: observer, Mutation: value.Mutation{IdempotencyKey: "bound-cannot-unbind"}, Payload: unbound}); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("bound writer discarded ACK or history", err)
+		}
+	})
 	t.Run("terminal_bind_replay_rejected", func(t *testing.T) {
 		if _, err := service.Execute(ctx, command.Command{Kind: command.ObserveWorkspace, Principal: observer,
 			Mutation: value.Mutation{IdempotencyKey: "workspace-owner-bind"}, Payload: payload}); !errors.Is(err, errs.ErrForbidden) {

@@ -138,7 +138,7 @@ column_expected(table_name,column_name,type_name,required,default_expression) AS
 ), nodes(relation_id) AS (
  SELECT 'control_plane.projects'::regclass::oid UNION
  SELECT c.conrelid FROM nodes n JOIN pg_constraint c ON c.confrelid=n.relation_id
- WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace AND c.conrelid NOT IN ('control_plane.integration_personal_invocation_credentials'::regclass,'control_plane.integration_personal_invocation_admissions'::regclass,'control_plane.session_workspace_storage'::regclass,'control_plane.session_workspace_volumes'::regclass,'control_plane.session_workspace_volume_tasks'::regclass,'control_plane.session_workspace_volume_attempts'::regclass)
+ WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace AND c.conrelid<>COALESCE(to_regclass('control_plane.workspace_unbound_stops'),0::oid) AND c.conrelid NOT IN ('control_plane.integration_personal_invocation_credentials'::regclass,'control_plane.integration_personal_invocation_admissions'::regclass,'control_plane.session_workspace_storage'::regclass,'control_plane.session_workspace_volumes'::regclass,'control_plane.session_workspace_volume_tasks'::regclass,'control_plane.session_workspace_volume_attempts'::regclass)
 ), edge_rows AS (
  SELECT cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text AS pin,
  cn.nspname AS child_schema,cc.relname AS child_name,c.conname
@@ -321,7 +321,7 @@ $body$
     AND position(format('IF v_edges <> 287 OR v_edge_fingerprint <> %L THEN',(SELECT digest FROM edge_proof)) IN definition)>0 FROM purge_guard)
 ,
  'visibilitySource',EXISTS(SELECT 1 FROM legacy_function_rows WHERE oid=to_regprocedure('control_plane.runtime_file_source_visible(uuid,uuid,uuid,uuid,uuid,text,text,uuid)')
- AND md5(prosrc)=CASE WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied) IN (20261111000200,20261112000100)
+ AND md5(prosrc)=CASE WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied) IN (20261111000200,20261112000100,20261113000100)
    THEN '6e6494d533d00f1bcd35d65497dff28c' WHEN (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)>=20261110000100
    THEN '9a14fe7cf18830648738eec9b80aa709' ELSE 'be098f192205fa279eb55a502655052b' END
  AND pg_get_userbyid(proowner)='control_plane_owner' AND NOT prosecdef AND provolatile='s'
@@ -495,7 +495,7 @@ SELECT (base_proof.proof || jsonb_build_object(
 ), evidence_nodes(relation_id) AS (
  SELECT 'control_plane.projects'::regclass::oid UNION
  SELECT c.conrelid FROM evidence_nodes n JOIN pg_constraint c ON c.confrelid=n.relation_id
- WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace AND c.conrelid NOT IN ('control_plane.integration_personal_invocation_credentials'::regclass,'control_plane.integration_personal_invocation_admissions'::regclass,'control_plane.session_workspace_storage'::regclass,'control_plane.session_workspace_volumes'::regclass,'control_plane.session_workspace_volume_tasks'::regclass,'control_plane.session_workspace_volume_attempts'::regclass)
+ WHERE c.contype='f' AND c.connamespace='control_plane'::regnamespace AND c.conrelid<>COALESCE(to_regclass('control_plane.workspace_unbound_stops'),0::oid) AND c.conrelid NOT IN ('control_plane.integration_personal_invocation_credentials'::regclass,'control_plane.integration_personal_invocation_admissions'::regclass,'control_plane.session_workspace_storage'::regclass,'control_plane.session_workspace_volumes'::regclass,'control_plane.session_workspace_volume_tasks'::regclass,'control_plane.session_workspace_volume_attempts'::regclass)
 ), evidence_edges AS (
  SELECT cn.nspname||'.'||cc.relname||'|'||c.conname||'|'||pn.nspname||'.'||pc.relname||'|'||c.confdeltype::text AS pin,
  cn.nspname AS child_schema,cc.relname AS child_name,c.conname

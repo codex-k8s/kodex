@@ -11,6 +11,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// workspaceUnboundInputInvalid is the closed diagnostic for malformed unbound owner requests.
+// workspaceUnboundInputInvalid — закрытая диагностика malformed unbound owner requests.
+const workspaceUnboundInputInvalid = "runtime workspace unbound input is invalid"
+
 // reconcileWorkspaceStorage commits exact stopped writers before releasing their retained Pod finalizer.
 // The existing poll owns cancellation and one request budget; this never starts another worker or model.
 // reconcileWorkspaceStorage фиксирует exact stopped writer до снятия retained Pod finalizer.
@@ -31,6 +35,12 @@ func (runtime *runtime) reconcileWorkspaceStorage(ctx context.Context) error {
 			continue
 		}
 		if absent {
+			if retired, retireErr := runtime.observeWorkspaceUnbound(ctx, value.Input, nil); retireErr == nil {
+				if record, proofErr := unboundWorkspaceReceipt(retired, value.Input); proofErr == nil {
+					_ = runtime.manager.CleanupWorkspaceUnboundDependencies(ctx, value.Input, record)
+					continue
+				}
+			}
 			released, err := runtime.observeWorkspaceReleased(ctx, value.Input)
 			if err == nil {
 				ack, record, proofErr := releasedWorkspaceReceipt(released, value.Input)
@@ -42,6 +52,21 @@ func (runtime *runtime) reconcileWorkspaceStorage(ctx context.Context) error {
 			}
 			if status.Code(err) != codes.PermissionDenied && status.Code(err) != codes.NotFound {
 				continue
+			}
+		}
+		if value.UnboundStop != nil {
+			raw, encodeErr := runtimecontract.EncodeWorkspaceUnboundStop(*value.UnboundStop)
+			if encodeErr == nil {
+				retired, retireErr := runtime.observeWorkspaceUnbound(ctx, value.Input, raw)
+				if retireErr == nil {
+					record, proofErr := unboundWorkspaceReceipt(retired, value.Input)
+					if proofErr == nil && record == *value.UnboundStop {
+						if runtime.manager.ReleaseWorkspaceUnboundStop(ctx, value.Input, record) == nil {
+							_ = runtime.manager.CleanupWorkspaceUnboundDependencies(ctx, value.Input, record)
+						}
+						continue
+					}
+				}
 			}
 		}
 		response, err := runtime.observeWorkspaceStorage(ctx, value)
@@ -173,4 +198,43 @@ func releasedWorkspaceReceipt(response *controlplanev1.ObserveWorkspaceResponse,
 		return runtimecontract.WorkspaceWriterAcknowledgement{}, runtimecontract.WorkspaceQuiescence{}, errors.New("runtime workspace immutable release receipt is invalid")
 	}
 	return ack, record, nil
+}
+
+// observeWorkspaceUnbound submits or rejoins one exact controller-only stopped-before-BIND fact;
+// empty bytes read only a durable previous receipt, never infer a stop from API absence.
+// observeWorkspaceUnbound отправляет либо перечитывает exact controller-only stopped-before-BIND fact;
+// empty bytes читают только durable previous receipt, не выводя stop из API absence.
+func (runtime *runtime) observeWorkspaceUnbound(ctx context.Context, input runtimecontract.RunnerInput, raw []byte) (*controlplanev1.ObserveWorkspaceResponse, error) {
+	if input.WorkspaceStorage == nil || input.WorkspaceStorage.ValidateForInput(input) != nil {
+		return nil, errors.New(workspaceUnboundInputInvalid)
+	}
+	if len(raw) > 0 {
+		record, err := runtimecontract.DecodeWorkspaceUnboundStop(raw)
+		if err != nil || !record.Matches(input) {
+			return nil, errors.New(workspaceUnboundInputInvalid)
+		}
+	}
+	key := "workspace:" + runtimecontract.WorkspaceObserveUnboundStop
+	if len(raw) == 0 {
+		key += ":read"
+	}
+	return runtime.control.ObserveWorkspace(ctx, &controlplanev1.ObserveWorkspaceRequest{
+		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, key)},
+		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, RuntimeRevisionDigest: input.RuntimeRevisionDigest, ExecutionBindingDigest: input.ExecutionBindingDigest,
+		WorkspaceRef: input.WorkspaceStorage.WorkspaceRef, WorkspaceGeneration: input.WorkspaceStorage.Generation,
+		Phase: controlplanev1.RuntimeWorkspaceObservationPhase_RUNTIME_WORKSPACE_OBSERVATION_PHASE_STOPPED_BEFORE_BIND, UnboundStop: raw})
+}
+
+// unboundWorkspaceReceipt admits only the exact immutable no-BIND receipt; mixed ACK/join or
+// mutable current-state fields cannot become cleanup permission for an unadmitted intent.
+// unboundWorkspaceReceipt принимает лишь exact immutable no-BIND receipt; смешанные ACK/join и
+// mutable current-state fields не дают cleanup permission для недопущенного intent.
+func unboundWorkspaceReceipt(response *controlplanev1.ObserveWorkspaceResponse, input runtimecontract.RunnerInput) (runtimecontract.WorkspaceUnboundStop, error) {
+	record, err := runtimecontract.DecodeWorkspaceUnboundStop(response.GetUnboundStop())
+	if err != nil || !record.Matches(input) || response.GetCommittedPhase() != runtimecontract.WorkspaceObserveUnboundStop ||
+		len(response.GetWriterAcknowledgement()) != 0 || len(response.GetQuiescence()) != 0 || len(response.GetCommittedQuiescence()) != 0 ||
+		response.GetCurrentTuple() || response.GetWriterReleased() || response.GetStorageState() != "" || response.GetBlockReason() != "" {
+		return runtimecontract.WorkspaceUnboundStop{}, errors.New("runtime workspace immutable unbound receipt is invalid")
+	}
+	return record, nil
 }

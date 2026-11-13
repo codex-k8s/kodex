@@ -17,6 +17,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'workspace-unbound-stop': {
+    anchorProfile:'portable',version:'20261113000100',file:'20261113000100_workspace_unbound_stop.sql',
+    annotation:'kodex.dev/cp-workspace-unbound-stop-migration-plan',previousVersion:20261112000100,
+    emptyField:'unboundStopAbsent',preconditionFile:'workspace-unbound-stop-migration-precondition.sql',
+    postconditionFile:'workspace-unbound-stop-migration-postcondition.sql',
+    requiredMigrations:Object.freeze(['20261113000100_workspace_unbound_stop.sql']),
+  },
   'workspace-archive-abi': {
     anchorProfile:'portable',
     version:'20261112000100',file:'20261112000100_workspace_archive_runtime_abi.sql',
@@ -375,6 +382,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'workspace-unbound-stop') ensure(validWorkspaceUnboundStopMigrationPrecondition(result),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-archive-abi')
       ensure(validWorkspaceArchiveABIMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workflow-workspace')
@@ -1051,6 +1059,7 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'workspace-unbound-stop': return validWorkspaceUnboundStopMigrationPostcondition(proof);
     case 'workspace-archive-abi': return validWorkspaceArchiveABIMigrationPostcondition(proof);
     case 'opencode-native-sessions': return validOpenCodeNativeMigrationPostcondition(proof);
     case 'workflow-workspace': return validWorkflowWorkspaceMigrationPostcondition(proof);
@@ -1329,4 +1338,16 @@ export function validManagedWorkspaceMigrationPrecondition(proof) {
 export function validManagedWorkspaceMigrationPostcondition(proof) {
   return proof?.profile === 'MANAGED_WORKSPACE_V1' && proof.database === 'control_plane' &&
     proof.readOnly === 'on' && proof.gooseVersion === 20261110000200 && proof.managedWorkspaceColumnReady === true;
+}
+
+// Отдельный043 проверяет predecessor042 и отсутствие новой таблицы без изменения данных.
+export function validWorkspaceUnboundStopMigrationPrecondition(proof) {
+ return proof?.profile==='WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' &&
+  proof.gooseVersion===20261112000100 && proof.unboundStopAbsent===true && proof.workspaceGuardPredecessor===true &&
+  proof.activeRuntimeLeases===0 && proof.activeArchiveTasks===0;
+}
+// Новый guard допускает только durable no-BIND retirement; ABI5 archive guard сохраняется.
+export function validWorkspaceUnboundStopMigrationPostcondition(proof) {
+ return proof?.profile==='WORKSPACE_UNBOUND_STOP_V1' && proof.database==='control_plane' && proof.readOnly==='on' &&
+  proof.gooseVersion===20261113000100 && ['workspaceGuardReady','receiptGuardReady','receiptTableReady','receiptTriggerReady','archiveGuardPreserved'].every(key=>proof[key]===true);
 }

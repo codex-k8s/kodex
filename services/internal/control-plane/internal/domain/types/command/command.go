@@ -1657,7 +1657,7 @@ type WorkspaceObservationInput struct {
 	WorkspaceRef, Phase, PodUID, PVCUID                            string
 	BlockReason                                                    string
 	Generation, WorkspaceGeneration                                int64
-	Quiescence                                                     []byte
+	Quiescence, UnboundStop                                        []byte
 }
 
 // CompletedArtifact describes bytes or a prepared receipt produced by an execution. The owner must

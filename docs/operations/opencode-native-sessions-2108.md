@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.30
+version: 1.4.31
 updated: 2026-11-13
 ---
 
@@ -684,7 +684,7 @@ immutable worker grant → PVC/S3 snapshot → owner archive receipt → явн�
 | Cancel/terminal | Outcome run не меняется поздним checkpoint; новая работа не возникает автоматически | Существующий terminal event; storage-only completion читает session_storage |
 | Delete/dead-letter | Прежние ownership, retention и ограниченный retry budget; миграция их не меняет | Существующие task/owner read paths |
 | WAITING_OWNER/CHANGES_REQUESTED | Не создают новый writer или archive grant сами по себе | Существующий owner gate/workflow read path |
-| Отказ до Pod/BIND | WRITER_PENDING без ACK пока остаётся отдельным открытым дефектом; отсутствие Pod не подменяет quiescence | Owner workspace readback; восстановление не объявлено успешным |
+| Отказ до Pod/BIND | Отдельный `STOPPED_BEFORE_BIND` принимает только точный positive stopped witness; отсутствие Pod остаётся unknown | Immutable owner receipt и workspace/native readback; матрица ниже |
 
 Актуальный PostgreSQL baseline включает `TestWorkspaceWriterOwnerComponent` и
 `TestWorkflowWorkspaceOwnerComponent`. Их оснастка отдельно передаёт native
@@ -1567,3 +1567,92 @@ status и digest, без endpoint, namespace, prompt bodies или account ident
 Это конечный бюджетный сценарий восстановления, а не доказательство многочасовой
 стабильности или отсутствия роста RSS. Для такой приёмки нужен отдельный длительный
 прогон установленного immutable кандидата и наблюдение ресурсов.
+
+
+## Остановка до первого BIND
+
+Резервирование workspace и native writer intent предшествует запуску Pod.
+Если cold image pull переживает срок начального credential, первый initializer
+может завершиться до BIND. Прежний stopped-writer путь требует ACK, поэтому
+самостоятельно освободить `WRITER_PENDING` и `INITIALIZING` он не может.
+Увеличение TTL либо prefetch не являются восстановлением уже закрытой attempt.
+
+Контракт `STOPPED_BEFORE_BIND` — отдельная фаза существующего
+`RuntimeWorkService.ObserveWorkspace`. Actor/tenant выводятся из прежнего
+проверенного workload context; input содержит только locator, старый fence и
+immutable execution pins. Controller читает retained deleting Pod с exact UID,
+закреплённый Pod spec и исходный Node UID, созданный до Pod и всё ещё Ready.
+Требуются terminal `Failed`, полный статус каждого контейнера, restartCount=0,
+отсутствие прошлых запусков и любых начавшихся последующих init/main containers.
+Допустимы только все Waiting либо единожды неуспешно завершившийся первый
+`runtime-bind-workspace` initializer с точным image digest. `NodeLost`, unknown,
+замена Pod/Node/PVC, изменённые command/env/hooks/mounts и другой активный PVC
+consumer закрыто отклоняются. Перечитываются Pod, Node и sealed PVC.
+
+Первый initializer выполняет `VerifyPreparedVolume`, затем owner BIND и только
+после ACK вызывает `EnsureSharedWorkspaceDirectory`/`PrepareBoundGeneration`.
+Поэтому отказ до ACK не пишет PVC. Последующий initializer и main containers
+не могут начать работу по проверенному порядку init. Закрытый owner lease
+запрещает и запоздалый BIND старого kubelet после принятия stopped fact.
+
+Owner разрешает recovery только exact закрытой lease и терминального origin,
+при `WRITER_PENDING`, отсутствии ACK/join/destructive task и отсутствии nonREAD
+invocation/bundle publication этого origin. В одной транзакции сохраняются
+immutable receipt, retirement native intent и возврат workspace в прежнее
+`EMPTY` либо `RESTORED`. Для `INITIALIZING` удаляется исключительно начальная
+пустая строка без native identity/checkpoint/content/archive. Для `LIVE`
+очищаются только старые writer refs: весь проверенный checkpoint, identity,
+content generation и архивные pins сохраняются. Files/PVC не удаляются.
+Receipt не является ACK, join, native checkpoint либо новым execution grant.
+
+Сохраняется прежняя граница retention: project purge удерживает workspace в
+`EMPTY`, пока отдельный storage-owner lifecycle не достигнет `PURGED`.
+Начальный no-BIND recovery сам по себе не обещает физического удаления такого
+workspace и не создаёт разрешения на DELETE PVC. Успешный последующий writer,
+checkpoint и штатное архивирование проверяются отдельно; расширение удаления
+не входит в этот recovery.
+
+| Сценарий | Допуск и переход | Событие / чтение / consumer |
+|---|---|---|
+| Claim первой attempt | Прежний owner назначает immutable RR/lease, `WRITER_PENDING` и пустой native intent | Существующий claim response и retained ticket |
+| Отказ до BIND, lease ещё активна | Никакого retirement; controller сначала проходит обычный terminal/cancel lifecycle | Существующий terminal event и owner readback |
+| Положительный stopped witness, lease закрыта | Exact old tuple без ACK/join/effects; атомарный receipt и снятие только прежнего intent | Существующий audit; immutable ObserveWorkspace receipt |
+| Отказ resume до BIND | `RESTORED` и прежний verified native checkpoint сохраняются | Workspace/native readback; следующая owner claim читает тот же checkpoint |
+| ACK уже существует, main не запускался | Новый путь запрещён; прежние positive join/release/checkpoint обязательны | Прежний quiescence consumer и archive lifecycle |
+| ACK/main/effect/UNKNOWN_OUTCOME обнаружены | Пустая сессия не создаётся; неизвестная работа не повторяется | Прежние effect receipts и native pending-effects eligibility |
+| Потерян ответ owner | Тот же запрос возвращает прежние bytes; пустой `unbound_stop` читает только существующий receipt | Durable lease-scoped read/rejoin без новой authority |
+| Owner commit перед удалением finalizer | Controller заново сверяет exact физический proof и снимает только старый finalizer | Retained Pod; повтор следующего poll безопасен |
+| Pod уже отсутствует | Без ранее сохранённого receipt — unknown; со receipt разрешён cleanup только private dependencies старой attempt | Immutable receipt; PVC и новые attempts не затрагиваются |
+| Явный новый ход / retry | Прежняя owner-команда: AddSessionTurn сотрудника либо LaunchRun того же workflow; fresh RR/lease/fence | Существующие run events/claim; старый terminal verdict неизменен |
+| Replay старого receipt после нового claim | Только исторический fact; новый writer intent не меняется | Immutable receipt с current_tuple=false |
+| Cancel, deadline, revoke, delete, dead-letter | Старые authority/grant guards сохраняются; storage fact не возобновляет run | Существующий terminal/retention/purge lifecycle |
+| WAITING_OWNER / CHANGES_REQUESTED | Сами не разрешают BIND, retry или новое выполнение | Существующий owner gate и workflow read path |
+| Недоступен Node/API/PVC, incomplete status, source drift | Fail closed; retained ресурсы и workspace/history сохраняются | Следующий bounded controller poll, без выдуманного stop |
+
+Forward migration `20261113000100_workspace_unbound_stop.sql` создаёт immutable
+lease-scoped receipts с ограниченными SELECT/INSERT runtime grants, сохраняет
+predecessor guards и расширяет только точный no-BIND retirement predicate.
+Project purge graph получает ровно одну таблицу и две внутренние FK-грани;
+FK остаются deferrable, удаление receipt возможно лишь для exact row key
+авторизованного project purge. Archive ABI5 guard не меняется.
+
+Доставка использует профиль `workspace-unbound-stop` существующего immutable
+migration CLI: drain/точный predecessor042 → migration043 → read-only
+postcondition → новый CP и controller с тем же Proto/runtimecontract → resume.
+Readiness нового CP требует таблицу и trigger043. Частичная доставка не
+квалифицирована; отдельная доставка CP без043 не содержит это исправление.
+Никакие credentials, lease сроки, runtime ABI или runner image этим unit не
+расширяются.
+
+Локальная квалификация использует disposable PostgreSQL, настоящие owner
+commands и synthetic Kubernetes API fixtures. Проверены initial retirement,
+active checkpoint/restore preservation для сотрудника и workflow, late BIND,
+receipt replay после нового writer, predecessor drift, upgrade/repeat и fresh
+install; старые terminal/native/purge/schema counterfactual проверки сохранены.
+Команды: `scripts/tests/control-plane-postgres-test.sh
+--workspace-unbound-stop-upgrade` и отдельный
+`--workspace-unbound-stop-fresh-install`. Это не доказательство реального cold
+pull, kubelet ImageID/status semantics, PVC/S3 либо доставки на кластер:
+живой сценарий и точный readback остаются отдельной приёмкой после review.
+Kubernetes lifecycle и init semantics сверены через Context7 с официальной
+документацией [Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/).
