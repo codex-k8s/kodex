@@ -4,7 +4,7 @@ title: Чистое развертывание Kodex
 type: runbook
 status: approved
 owner: sre
-version: 2.4.13
+version: 2.4.14
 updated: 2026-11-13
 ---
 
@@ -242,6 +242,23 @@ deny-by-default policy и bucket bootstrap Job. `tools/dev/deploy-local.sh`
 создаёт immutable `kodex-external-s3` из случайных credential files и никогда
 не печатает значения. Job создаёт `kodex-artifacts` до migrations и запуска
 control-plane; повторный apply выполняет exact Secret/job/readiness readback.
+Завершённый `seaweedfs-bucket-bootstrap` сохраняется без TTL: полный readback
+установки требует его фактическое состояние, а общий receipt миграций этот
+Job не заменяет. Срок самого исполнения остаётся ограничен 900 секундами;
+завершённый Job не выполняет повторных S3-действий. Удаление Job/PVC при полной
+очистке относится к отдельному адресному lifecycle установки.
+
+Если Job прежнего render уже удалён TTL-controller, повторный readback закрыто
+отклоняется. Сначала подтвердить точные cluster/namespace/PVC и наличие всех
+четырёх Kodex-owned bucket с включённым versioning через read-only проверку;
+не создавать пустые bucket вместо потерянных данных. Затем допустимо адресно
+восстановить **только** этот bootstrap Job из текущего TLS render, сохранив
+остальные ресурсы и credentials. Его ограниченная проверка создаёт собственный
+`_kodex-bootstrap/<pod-name>-write-readback.txt`, сверяет полученную версию и
+удаляет именно её; прежние объекты, версии, native checkpoints и архивы не
+удаляются. После Complete повторный apply/readback должен сохранять Job UID
+и не запускать Pod заново. Ручное удаление завершённого Job снова лишит
+readback подтверждения; оно не является способом очистки новых сессий.
 
 Перед первым `dev.sh up` оператор передаёт утверждённый каталог OpenCode
 и приватный regular файл API key (0600, текущий владелец, без symlink/hardlink):
