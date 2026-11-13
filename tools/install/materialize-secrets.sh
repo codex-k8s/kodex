@@ -99,7 +99,7 @@ trap 'rm -rf -- "$temporary_directory"' EXIT
 umask 077
 
 for namespace_name in kodex-system kodex-runtime kodex-trust kodex-secret-drafts; do
-  python3 "$repository_root/tools/install/ensure_namespace.py" --context "$context" --namespace "$namespace_name"
+  python3 "$repository_root/tools/install/ensure_namespace.py" --context "$expected_context" --namespace "$namespace_name"
 done
 
 apply_secret_from_directory() {
