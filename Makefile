@@ -125,6 +125,7 @@ test-install-workload-startup:
 test-install-contract:
 	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_dns_address_normalization.py'
 	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_ensure_namespace.py'
+	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_materialize_secrets_context.py'
 	@timeout 30s python3 -m unittest discover -s tools/install -p 'test_local_object_storage_tls.py'
 	@./scripts/tests/install-contract-test.sh
 	@./scripts/tests/ipv6-ingress-bridge-test.sh
