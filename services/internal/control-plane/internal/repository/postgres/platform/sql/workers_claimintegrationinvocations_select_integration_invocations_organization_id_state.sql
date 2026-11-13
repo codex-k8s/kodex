@@ -24,7 +24,24 @@ WHERE i.organization_id=$1::uuid
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)
   AND (n.state='RUNNING' OR control_plane.workflow_evidence_execution_assigned(i.organization_id,n.id,i.id) OR (
-    n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
+    n.state='SUCCEEDED' AND (root.state='WAITING_HUMAN' OR (
+      root.state='RUNNING' AND n.finished_at IS NOT NULL AND EXISTS (
+        -- Отрицательное решение другого Gate уже поставило continuation в очередь.
+        -- Только exact native continuation без writer допускает завершение одобренного effect.
+        SELECT 1 FROM control_plane.run_edges continuation
+        JOIN control_plane.run_nodes queued ON queued.id=continuation.target_node_id
+          AND queued.organization_id=i.organization_id AND queued.root_run_id=root.id
+          AND queued.run_id=r.id AND queued.parent_node_id=n.id AND queued.agent_id=n.agent_id
+          AND queued.type='AGENT_EXECUTION' AND queued.state='QUEUED' AND queued.attempt=n.attempt+1
+        JOIN control_plane.session_turns turn ON turn.id=queued.turn_id
+          AND turn.session_id=r.session_id AND turn.run_id=r.id AND turn.state='QUEUED'
+        JOIN control_plane.session_storage storage ON storage.session_id=r.session_id
+          AND storage.organization_id=i.organization_id AND storage.state='LIVE'
+          AND storage.native_checkpoint IS NOT NULL AND storage.native_writer_lease_ref IS NULL
+        WHERE continuation.organization_id=i.organization_id AND continuation.root_run_id=root.id
+          AND continuation.source_node_id=n.id AND continuation.type='CONTINUES'
+      )
+    )) AND EXISTS (
       SELECT 1 FROM control_plane.owner_gates approved_gate
       WHERE approved_gate.integration_invocation_id=i.id
         AND approved_gate.organization_id=i.organization_id

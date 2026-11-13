@@ -785,6 +785,29 @@ WHERE n.organization_id = $1::uuid
       )
   )
   AND COALESCE(session_storage.state, 'LIVE') = 'LIVE'
+  -- Ожидающие native effects исключаются до LIMIT, сохраняя очередь независимых root.
+  -- Resolver под блокировкой повторяет guard против конкурентного admission.
+  AND (session_storage.native_checkpoint IS NULL OR (
+      NOT EXISTS (
+          SELECT 1 FROM control_plane.integration_invocations pending
+          JOIN control_plane.runs effect_run ON effect_run.id=pending.run_id
+            AND effect_run.organization_id=pending.organization_id
+          WHERE pending.organization_id=n.organization_id AND pending.risk<>'READ'
+            AND pending.state IN ('WAITING_APPROVAL','READY','RUNNING','UNKNOWN_OUTCOME')
+            AND EXISTS (SELECT 1 FROM control_plane.runs session_run
+                WHERE session_run.organization_id=n.organization_id AND session_run.session_id=s.id
+                  AND session_run.root_run_id=effect_run.root_run_id)
+      ) AND NOT EXISTS (
+          SELECT 1 FROM control_plane.repository_bundle_publications pending
+          JOIN control_plane.runs effect_run ON effect_run.id=pending.origin_run_id
+            AND effect_run.organization_id=pending.organization_id
+          WHERE pending.organization_id=n.organization_id
+            AND pending.state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')
+            AND EXISTS (SELECT 1 FROM control_plane.runs session_run
+                WHERE session_run.organization_id=n.organization_id AND session_run.session_id=s.id
+                  AND session_run.root_run_id=effect_run.root_run_id)
+      )
+  ))
   AND runtime_environment.role_image_artifact_id IS NOT NULL
   AND role_image.artifact_id IS NOT NULL
   AND (

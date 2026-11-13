@@ -1,12 +1,37 @@
 package platform
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// TestNativePendingEffectsWaitOnly verifies that pending effects preserve the queue while
+// checkpoint/authority conflicts, cancellation and infrastructure retain their original treatment.
+// TestNativePendingEffectsWaitOnly проверяет сохранение очереди при pending effects;
+// checkpoint/authority conflicts, отмена и infrastructure сохраняют прежнее поведение.
+func TestNativePendingEffectsWaitOnly(t *testing.T) {
+	pending := runtimeEligibilityDiagnostic(runtimeReasonSessionResume, errNativeSessionEffectsPending)
+	if !runtimeSessionEffectsPending(fmt.Errorf("producer: %w", pending)) || runtimeCandidateEligibilityFailure(pending) {
+		t.Fatal("pending external effects became terminal input failure")
+	}
+	for _, cause := range []error{errs.ErrConflict, errs.ErrForbidden, errs.ErrInvalid, errs.ErrUnavailable,
+		context.Canceled, context.DeadlineExceeded, &pgconn.PgError{Code: "40001"}} {
+		if runtimeSessionEffectsPending(cause) || runtimeSessionEffectsPending(errors.Join(pending, cause)) {
+			t.Fatal("an unrelated failure was hidden as pending effects")
+		}
+	}
+	if !runtimeCandidateEligibilityFailure(runtimeEligibilityDiagnostic(runtimeReasonSessionResume, errs.ErrConflict)) {
+		t.Fatal("native checkpoint mismatch lost terminal eligibility protection")
+	}
+}
 
 // nativeResumeSnapshot creates independent synthetic scope/provider/initiator maps without credentials.
 // nativeResumeSnapshot создаёт независимые synthetic scope/provider/initiator maps без credentials.
