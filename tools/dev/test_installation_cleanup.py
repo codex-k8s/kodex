@@ -47,6 +47,23 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual({row["identity"]["uid"] for row in result["deleteCandidates"]}, {application["uid"]})
         self.assertEqual(result["volumes"], [])
 
+    def test_preserved_volume_is_excluded_from_physical_erase_plan(self):
+        value = fixture()
+        value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))
+        retained = item("persistentvolumeclaims", "registry", "kodex-trust", managers=["kodex-install"])
+        selected = item("persistentvolumeclaims", "database", managers=["kodex-install"])
+        value["objects"] = [retained, selected]
+        value["volumes"] = [{"identity": item("persistentvolumes", name, "", uid=name),
+                             "claim": {"uid": claim["uid"], "namespace": claim["namespace"], "name": claim["name"]},
+                             "reclaimPolicy": "Delete"} for name, claim in [("keep", retained), ("erase", selected)]]
+        value["physicalStorage"] = {"schema": "kodex.k3d-local-storage/v1", "containers": {"node": "b" * 64},
+                                    "volumes": [{"volumeUID": "keep"}, {"volumeUID": "erase"}]}
+        original = copy.deepcopy(value)
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                        preserve_namespaces=["kodex-trust"])
+        self.assertEqual(result["physicalStorage"]["volumes"], [{"volumeUID": "erase"}])
+        self.assertEqual(value, original)
+
     def test_preserved_namespace_consumer_still_blocks_shared_application_secret(self):
         value = fixture()
         value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))

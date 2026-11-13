@@ -311,6 +311,11 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
              "applyStatus": "NOT_EXECUTED"}
     if preserved:
         value["preservedNamespaces"] = sorted(preserved)
+        if value["physicalStorage"] is not None:
+            selected_volumes = {item["identity"]["uid"] for item in volume_plans}
+            value["physicalStorage"] = {**value["physicalStorage"],
+                                        "volumes": [item for item in value["physicalStorage"]["volumes"]
+                                                    if item["volumeUID"] in selected_volumes]}
     value["digest"] = digest(value)
     return value
 
