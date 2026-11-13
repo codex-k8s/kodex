@@ -8,7 +8,7 @@ metadata:
 spec:
   backoffLimit: 3
   activeDeadlineSeconds: 900
-  ttlSecondsAfterFinished: 86400
+  # Завершённый Job подтверждает повторный readback; TTL удалил бы это доказательство.
   template:
     metadata:
       labels:

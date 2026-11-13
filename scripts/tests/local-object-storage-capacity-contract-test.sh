@@ -46,6 +46,9 @@ memory_limit=$(yq -r '
 [[ "$(yq -r '.spec.activeDeadlineSeconds' "$bootstrap")" == 900 ]] ||
   fail 'SeaweedFS bucket bootstrap deadline must cover bounded versioned write readback'
 
+[[ "$(yq -r '.spec | has("ttlSecondsAfterFinished")' "$bootstrap")" == false ]] ||
+  fail 'SeaweedFS completed bootstrap evidence must survive repeat install readback'
+
 for marker in 'put-object --bucket "$bucket"' 'get-object --bucket "$bucket"' \
   'delete-object --bucket "$bucket"' 'list-object-versions --bucket "$bucket"'; do
   grep -Fq "$marker" "$bootstrap" || fail "bootstrap has no required write-path check: $marker"
