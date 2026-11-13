@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.6
-updated: 2026-11-12
+version: 1.6.7
+updated: 2026-11-13
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -789,6 +789,87 @@ component image profile; произвольные комбинации не пр
 остаётся пустым, пять bootstrap Jobs проверяются, не переигрываются, schema и
 опубликованная authority history сохраняют прежние проверки. Без опции новый
 image отклоняется. `--check` у profile CLI проверяет render без его изменения.
+
+### Согласованная пара компонентов и forward migration 043
+
+Для `workspace-unbound-stop` существует отдельный opt-in контракт
+`kodex.portable-component-migration/v1` в штатном
+`tools/release/control-plane-migration.mjs`. Он допускает только CP042→043
+(`20261112000100`→`20261113000100`) и пару `control-plane`,
+`runtime-controller` из одного exact source SHA. RunnerInput v10 и ABI5
+сохраняются. Это адресная квалификация пары; полный базовый release lock и
+pins остальных images остаются прежними. Старый stable-publication путь
+миграций не меняется. Same-schema component profile выше не разрешает DDL.
+
+Publisher передаёт два настоящих `kodex.component-image/v1` lock: исходные
+байты в `componentLockRawBase64` и их SHA256, прежний `expectedImageRef`,
+source/base-lock pins, schema heads и явный проверенный cohort
+`WORKSPACE_UNBOUND_STOP_UPGRADE`. Новый image вычисляется из явных `registry`,
+`repositoryPrefix`, имени компонента и digest в lock. Нельзя подменять image
+после проверки либо создавать фиктивную stable-publication историю для другого
+publisher. Registry/context в синтетических примерах имеют вид
+`registry.example.invalid` и `portable-fixture`; фактические значения оператор
+передаёт через приватные inputs.
+
+Каждому lock соответствует `kodex.component-node-proof/v1`: exact source,
+lock hash, immutable image, cluster/namespace UID и положительный CRI
+`repoDigestVerified` для всех объявленных node UID. Это передаваемый результат
+реальной квалификации на узлах, а не команда публикации или автоматическое
+доказательство совместимости. CLI повторно проверяет UID, имена и Ready узлов.
+Подпись/authority publisher и проверка code compatibility остаются обязанностью
+оператора, который создаёт эти приватные inputs.
+
+`--portable-target` использует существующий
+`kodex.portable-runner-target/v1`: installation ConfigMap UID/data hash,
+cluster/namespace UID и exact UID трёх Deployments: CP, runtime-controller,
+control-api-gateway. Сначала нужно прочитать настоящие installation seal и
+ownership установленного target; отсутствие seal не разрешает его выдумать.
+Gateway уже должен иметь ноль replicas с положительным join всех его Pods.
+Оператор заранее закрывает admission/внешних producers, делает backup и
+выполняет предусмотренный этим target maintenance lifecycle. CLI сохраняет
+stock полный owner drain/precondition и не превращает WAITING_HUMAN в idle.
+
+Inputs/plan/evidence хранятся в отдельном приватном каталоге с mode0700,
+файлы — mode0600. Source checkout закреплён и не меняется между фазами.
+Сначала только планирование:
+
+```bash
+node tools/release/control-plane-migration.mjs plan \
+  --profile workspace-unbound-stop --context "$context" \
+  --source "$source_checkout" --revision "$source_sha" \
+  --base-render "$private_dir/base-render.yaml" \
+  --component-publication "$private_dir/component-publication.json" \
+  --portable-target "$private_dir/portable-target.json" \
+  --plan "$private_dir/migration-plan.json"
+```
+
+Для следующих фаз передаются те же `--profile`, `--context`, `--plan` и
+`--evidence "$private_dir/migration-evidence.jsonl"`; snapshots publication/target
+уже находятся внутри плана. Exact base render мигратора сохраняется неизменным.
+Изменяющие фазы требуют штатное явное
+`--confirm APPLY-STAGING-CP-MIGRATION`. Последовательность:
+
+| Фаза | Проверяемый переход / результат |
+|---|---|
+| `check` | Новый immutable CP image выполняет stock connection-check Job; source, target и CRI подтверждаются |
+| `stop` | Повторный полный drain; CP→0 и положительный Pod join, затем runtime-controller→0 и положительный join |
+| `apply` | Оба writers остановлены; stock pinned precondition, единственный forward-up Job, terminal writer join и полный 043 postcondition |
+| `inspect` | Авторитетный readback Job/Pods/schema и точного состояния обоих Deployments, запись наблюдения для UNKNOWN recovery |
+| `handoff` | Повторный postcondition/drain; оба templates получают новую пару только при нуле replicas; остальные поля spec сохраняются |
+| `resume` | Сначала новый CP, затем новый runtime-controller; прежнее число replicas, actual CRI images и положительная readiness обоих |
+
+Каждый Deployment patch использует UID/resourceVersion/spec CAS, server dry-run
+и durable intent до эффекта. После потерянного ответа сначала выполняется
+`inspect`; повтор не создаёт второй Job и не переигрывает уже наблюдённый image
+patch. Drift закрывает операцию. После успешной 043 старые binaries не
+возобновляются: failure остаётся под maintenance для исправления вперёд,
+без DB rollback. У этого opt-in пути нет автоматического abort/resume старой
+пары и до DDL: отказ check/drain либо неуспешная/неподтверждённая миграция
+требуют readback и отдельного операторского решения под maintenance.
+Gateway/admission возобновляет внешний maintenance lifecycle
+после подтверждения всей пары. `schemaPostcondition: PASS` означает только
+миграцию; итог пары подтверждают `pairReady: true`, `cpStage: UPGRADED` и
+`forwardOnly: true`. Это не полная продуктовая приёмка релиза.
 
 ### Следующий исправленный component profile
 
