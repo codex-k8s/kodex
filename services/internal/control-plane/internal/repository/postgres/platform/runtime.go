@@ -707,6 +707,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if retainedPolicy != nil {
 				candidate.providerPolicyID, candidate.providerPolicyRef, candidate.providerPolicyVersion, candidate.providerPolicyDigest = retainedPolicy.PolicyID, retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
 			}
+			if err := requireRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, candidate.roleImageArtifactRef, candidate.imageManifestDigest, candidate.configOverlay); err != nil {
+				return commandOutcome{}, err
+			}
 			overlayConfiguration, err := runtimecontract.ParseConfigOverlay(candidate.configOverlay)
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict

@@ -21,6 +21,7 @@ func TestValidateExactManifestAndBinding(t *testing.T) {
 	for _, probe := range runtimecontract.ImageToolProbes() {
 		manifest.Tools = append(manifest.Tools, runtimecontract.ImageToolObservation{Name: probe.Name, Status: "MISSING", Required: probe.Required})
 	}
+	manifest.InputFeatures = []string{runtimecontract.ContextWindowInputFeature}
 	raw, _ := json.Marshal(manifest)
 	var output bytes.Buffer
 	if err := validate([]string{"capture-manifest"}, bytes.NewReader(raw), &output); err != nil || !bytes.Equal(raw, output.Bytes()) {

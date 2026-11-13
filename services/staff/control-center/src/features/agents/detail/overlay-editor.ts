@@ -1,11 +1,32 @@
 import { parse, stringify } from "smol-toml";
-import type { ConfigOverlaySchema } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  ConfigOverlayField,
+  ConfigOverlaySchema,
+} from "@/shared/api/generated/openapi/types.gen";
 import type {
   CodeEditorCompletionContext,
   CodeEditorCompletionItem,
   CodeEditorHover,
 } from "./code-editor";
 
+function validPreference(
+  field: ConfigOverlayField,
+  value: unknown,
+): value is string | boolean | number {
+  if (field.valueType === "integer")
+    return (
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      field.minimum !== undefined &&
+      field.maximum !== undefined &&
+      value >= field.minimum &&
+      value <= field.maximum
+    );
+  return (
+    typeof value === field.valueType &&
+    field.allowedValues.includes(String(value))
+  );
+}
 function parsedOverlay(content: string, schema: ConfigOverlaySchema) {
   if (
     new TextEncoder().encode(content).length > schema.maximumBytes ||
@@ -14,6 +35,20 @@ function parsedOverlay(content: string, schema: ConfigOverlaySchema) {
   )
     throw new Error("Overlay size or encoding is invalid");
   try {
+    // The parser preserves TOML integer kinds here; floats must not become integer settings.
+    const exact = parse(content, { integersAsBigInt: true });
+    function checkNumericKind(value: unknown): void {
+      if (
+        typeof value === "number" ||
+        (typeof value === "bigint" &&
+          (value > BigInt(Number.MAX_SAFE_INTEGER) ||
+            value < BigInt(Number.MIN_SAFE_INTEGER)))
+      )
+        throw new Error("Overlay integer is invalid");
+      if (value && typeof value === "object")
+        for (const item of Object.values(value)) checkNumericKind(item);
+    }
+    checkNumericKind(exact);
     return parse(content);
   } catch {
     throw new Error("Overlay TOML syntax is invalid");
@@ -62,12 +97,7 @@ export function overlayPreference(
       value = (value as Record<string, unknown>)[part];
     }
     if (value === undefined) return "";
-    if (typeof value !== "string" && typeof value !== "boolean")
-      return undefined;
-    return typeof value === field.valueType &&
-      field.allowedValues.includes(String(value))
-      ? String(value)
-      : undefined;
+    return validPreference(field, value) ? String(value) : undefined;
   } catch {
     return undefined;
   }
@@ -79,7 +109,13 @@ export function changeOverlayPreference(
   value: string,
 ): string {
   const field = schema.fields.find((item) => item.key === key);
-  if (!field || (value && !field.allowedValues.includes(value)))
+  if (
+    !field ||
+    (value &&
+      (field.valueType === "integer"
+        ? !/^[1-9][0-9]*$/.test(value) || !validPreference(field, Number(value))
+        : !field.allowedValues.includes(value)))
+  )
     throw new Error("Overlay preference is unavailable");
   const parsed = parsedOverlay(content, schema);
   function check(value: unknown, prefix: string): void {
@@ -90,10 +126,7 @@ export function changeOverlayPreference(
       if (path === field?.key) continue;
       const descriptor = schema.fields.find((entry) => entry.key === path);
       if (descriptor) {
-        if (
-          typeof item !== descriptor.valueType ||
-          !descriptor.allowedValues.includes(String(item))
-        )
+        if (!validPreference(descriptor, item))
           throw new Error("Overlay field is invalid");
       } else if (
         schema.fields.some((entry) => entry.key.startsWith(`${path}.`))
@@ -115,7 +148,12 @@ export function changeOverlayPreference(
     target = table as typeof parsed;
   }
   if (value)
-    target[leaf] = field.valueType === "boolean" ? value === "true" : value;
+    target[leaf] =
+      field.valueType === "integer"
+        ? Number(value)
+        : field.valueType === "boolean"
+          ? value === "true"
+          : value;
   else Reflect.deleteProperty(target, leaf);
   return stringify(parsed);
 }

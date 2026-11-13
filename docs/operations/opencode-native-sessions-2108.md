@@ -1656,3 +1656,77 @@ pull, kubelet ImageID/status semantics, PVC/S3 либо доставки на к
 живой сценарий и точный readback остаются отдельной приёмкой после review.
 Kubernetes lifecycle и init semantics сверены через Context7 с официальной
 документацией [Pod lifecycle](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/).
+
+## Уменьшение окна контекста для отдельной роли (#2108)
+
+В опубликованном ConfigOverlay разрешено необязательное целое поле:
+
+```toml
+[context]
+window_tokens = 16384
+```
+
+Отсутствие поля наследует окно выбранной модели. Значение должно быть строго
+больше `maximumOutputTokens` и не больше `contextWindowTokens` каталога и
+платформенного предела 2000000. Отрицательные, нулевые, дробные, переполненные,
+неизвестные поля и увеличение каталожного окна отклоняются. Пустое поле формы
+явно возвращает наследование; неверное число не превращается в наследование.
+Owner schema сообщает границы выбранной модели, форма показывает запрошенное
+значение и ожидаемое действующее окно после проверки и публикации. Safe preview
+содержит requested `[context]` и effective/catalog/output `[Kodex.Context]`.
+
+Единственный resolver runtimecontract используется проверкой владельца,
+preview, проверкой runtime input и материализацией native config. Меняется только
+`model.limit.context`; исходный ModelProvider, каталог, route/configuration digest,
+provider account и cache authority не меняются. Это предпочтение native движка,
+а не новый hard cap запросов или дополнительный summarizer. OpenCode1.19.5 сам
+проверяет последнее assistant usage относительно `context - output`, когда
+`limit.input` отсутствует. Сумма usage нескольких turns не доказывает достижение
+порога. При каталоге32768/output2048 явное окно16384 снижает этот порог до14336.
+
+| Переход | Проверка и сохранение |
+| --- | --- |
+| Draft / validate | Авторизованный actor и OCC агента; тип/пределы из owner schema, затем поддержка выбранного образа; неподдержанный образ даёт `CONTEXT_WINDOW_IMAGE_UNSUPPORTED`, публикация не меняется |
+| Publish / rollback / смена model config | Повторная проверка модели и выбранного образа в owner transaction; rollback создаёт новую публикацию, прежняя история неизменна |
+| Смена environment binding | Явный budget требует поддержки нового точного image; отказ откатывает binding и agent version |
+| Launch / session / attachment | Текущие опубликованные overlay и environment/image сверяются до исполнения; права и grants не расширяются |
+| Claim / warm | Повторно проверяется точный image artifact/digest кандидата, а не latest recipe либо версия OpenCode |
+| Turn / continuation | Следующая immutable RuntimeRevision фиксирует точный опубликованный overlay и image pins; native checkpoint/workspace сохраняются по прежнему lifecycle |
+| Exact retry | Прежние overlay bytes/digest и RR transport binding сохраняются; изменение budget меняет RR digest и не проходит под старой binding |
+| Cancel / terminal | Никакого нового resume, grant, tool effect или очистки workspace; прежние terminal/unknown-effect ограничения сохраняются |
+
+Явное поле доступно только новым полным RoleImages с проверенным feature proof
+`inputFeatures: ["context.window_tokens"]` на **каждой** допущенной платформе.
+Это поддержка материализатора Kodex, не capability размещённой модели.
+Отсутствующее/старое evidence и platform-owned bootstrap дают unsupported,
+даже если bootstrap снабдить синтаксически корректным inventory. Overlay без поля
+сохраняет прежнее поведение и не требует нового inventory. Версия ABI5/v10,
+OpenCode version, recipe, label, prompt или дата сборки не доказывают поддержку.
+
+Feature испускает только настоящий trusted runner в `image-tool-inventory`.
+Build wrapper копирует trusted runner после owner install и запускает его с
+readonly final rootfs/no-network; затем копирует только canonical manifest.
+Admission проверяет trusted base, native SLSA/platform subject, manifest hash и
+image/provenance/spec/build/runtime/platform pins. Owner строго декодирует
+inventory и повторно сверяет raw SHA и artifact bindings. Новое optional поле
+включено в canonical manifest/digest и существующий signed admission evidence;
+отсутствие поля сохраняет прежние canonical bytes. DDL и ABI bump не нужны.
+
+Поставка требует decoder-first или согласованного cutover: control-plane,
+control-api-gateway, runtime-controller, PWA, новый agent-runner/trusted role base
+и новые admission-tools (`image-tool-inventory-validator` и
+`image-admission-bridge` из role-image-builder). Тот же shared decoder входит в
+owner role-image service и CLI validator; builder/controller и external admission
+image собираются из одного source. Старый strict decoder отвергает manifest с
+новым полем. После сохранения такого inventory откат только одного CP/admission
+binary небезопасен даже при снятом budget: hydration исторического artifact всё
+равно читает inventory. Сначала обновить consumers, затем emitting trusted base и
+собрать/допустить полный RoleImage; bootstrap остаётся в режиме наследования.
+
+Локальная проверка закреплённого native1.19.5 использует synthetic model/tool
+harness без hosted credentials. При исходном каталоге32768, overlay16384 и
+output2048 реальный native loop проходит12 managed steps и compaction; исходный
+каталог не меняется. Это не live-route qualification. Для live нужны отдельно
+ограниченные три turns, чтение/hash файла, compaction event, restart/resume и
+точный receipt источника/образа; integration WRITE и скрытое увеличение бюджетов
+для этого не требуются.

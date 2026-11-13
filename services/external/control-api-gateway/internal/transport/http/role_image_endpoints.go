@@ -433,6 +433,13 @@ func publicImageToolInventory(input *controlplanev1.ImageToolInventory) generate
 	result.Status, result.Sha256, result.ImageDigest, result.ProvenanceSha256 = generated.ImageToolInventoryStatusVERIFIED, input.GetSha256(), input.GetImageDigest(), input.GetProvenanceSha256()
 	for _, platform := range input.GetPlatforms() {
 		item := generated.ImagePlatformToolInventory{Platform: generated.ImagePlatformToolInventoryPlatform(platform.GetPlatform()), PlatformDigest: platform.GetPlatformDigest(), ManifestSha256: platform.GetManifestSha256(), Tools: []generated.ImageToolObservation{}}
+		if len(platform.GetInputFeatures()) != 0 {
+			features := make([]generated.ImagePlatformToolInventoryInputFeatures, 0, len(platform.GetInputFeatures()))
+			for _, feature := range platform.GetInputFeatures() {
+				features = append(features, generated.ImagePlatformToolInventoryInputFeatures(feature))
+			}
+			item.InputFeatures = &features
+		}
 		for _, tool := range platform.GetTools() {
 			item.Tools = append(item.Tools, generated.ImageToolObservation{Name: generated.ImageToolObservationName(tool.GetName()), Status: generated.ImageToolObservationStatus(tool.GetStatus()), Path: tool.GetPath(), Version: tool.GetVersion(), Sha256: tool.GetSha256(), Required: tool.GetRequired()})
 		}

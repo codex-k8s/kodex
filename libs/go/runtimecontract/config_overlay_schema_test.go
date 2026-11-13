@@ -40,7 +40,7 @@ func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 // TestOverlaySchemaMatchesValidatorAndModelCapabilities принимает объявленные значения, связывает изменения возможностей с дайджестом схемы и отделяет структурный разбор от допустимости степени для модели.
 func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 	schema := OverlaySchema([]string{"medium", "max"}, "medium")
-	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 8 || schema.MaximumBytes != 65536 {
+	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 9 || schema.MaximumBytes != 65536 {
 		t.Fatalf("schema = %+v", schema)
 	}
 	if other := OverlaySchema([]string{"medium"}, "medium"); other.Digest == schema.Digest {

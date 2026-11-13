@@ -2,15 +2,35 @@ package runtimecontract
 
 import "slices"
 
+// RuntimeModelContext is a derived non-authorizing view; the catalog and route remain unchanged.
+// The effective window is only native compaction metadata, not a hard request-token cap.
+// RuntimeModelContext — вычисленное представление без authority; каталог и route не меняются.
+// Effective window задаёт metadata native compaction, а не жёсткий лимит токенов запроса.
+type RuntimeModelContext struct {
+	ModelContextPolicy
+	CatalogWindowTokens int
+	WindowTokens        int
+	MaximumOutputTokens int
+}
+
 // ResolveRuntimeContext combines native defaults with one immutable owner overlay, preserving model ceilings.
 // ResolveRuntimeContext объединяет штатные defaults с immutable overlay владельца, сохраняя пределы модели.
-func (model ModelProviderModel) ResolveRuntimeContext(raw string) (ModelContextPolicy, error) {
-	result := model.EffectiveContextPolicy()
+func (model ModelProviderModel) ResolveRuntimeContext(raw string) (RuntimeModelContext, error) {
+	result := RuntimeModelContext{ModelContextPolicy: model.EffectiveContextPolicy(), CatalogWindowTokens: model.ContextWindowTokens, WindowTokens: model.ContextWindowTokens, MaximumOutputTokens: model.MaximumOutputTokens}
+	if model.ContextWindowTokens < 1 || model.ContextWindowTokens > MaximumModelContextWindowTokens || model.MaximumOutputTokens < 1 || model.MaximumOutputTokens > model.ContextWindowTokens {
+		return result, ErrModelProviderConfiguration
+	}
 	overlay, err := ParseConfigOverlay(raw)
 	if err != nil {
 		return result, err
 	}
 	if overlay.Context != nil {
+		if value := overlay.Context.WindowTokens; value != nil {
+			if *value < 1 || *value > MaximumModelContextWindowTokens || *value > int64(model.ContextWindowTokens) || *value <= int64(model.MaximumOutputTokens) || model.MaximumOutputTokens < 1 {
+				return result, ErrModelProviderConfiguration
+			}
+			result.WindowTokens = int(*value)
+		}
 		if overlay.Context.AutoCompaction != nil {
 			result.AutoCompaction = *overlay.Context.AutoCompaction
 		}

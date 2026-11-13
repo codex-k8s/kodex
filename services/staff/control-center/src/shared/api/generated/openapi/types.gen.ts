@@ -1480,13 +1480,15 @@ export type ConfigOverlayDiagnostic = {
 };
 
 export type ConfigOverlayField = {
-    key: 'model_reasoning_effort' | 'context.auto_compaction' | 'context.prune' | 'cache.optimization' | 'cache.reuse_scope' | 'cache.no_reuse' | 'cache.no_store' | 'cache.required';
-    valueType: 'string' | 'boolean';
+    key: 'model_reasoning_effort' | 'context.auto_compaction' | 'context.prune' | 'context.window_tokens' | 'cache.optimization' | 'cache.reuse_scope' | 'cache.no_reuse' | 'cache.no_store' | 'cache.required';
+    valueType: 'string' | 'boolean' | 'integer';
     allowedValues: Array<string>;
     defaultValue: string;
     description: string;
     completion: string;
     hover: string;
+    minimum?: number;
+    maximum?: number;
 };
 
 export type ConfigOverlaySchema = {
@@ -1494,6 +1496,7 @@ export type ConfigOverlaySchema = {
     digest: string;
     maximumBytes: 65536;
     fields: [
+        ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
@@ -2930,6 +2933,7 @@ export type ImagePlatformToolInventory = {
     platform: 'linux/amd64' | 'linux/arm64';
     platformDigest: string;
     manifestSha256: string;
+    inputFeatures?: Array<'context.window_tokens'>;
     tools: [
         ImageToolObservation,
         ImageToolObservation,

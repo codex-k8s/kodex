@@ -49,11 +49,12 @@ type ConfigOverlay struct {
 	ModelReasoningEffort string          `toml:"model_reasoning_effort,omitempty" json:"modelReasoningEffort,omitempty"`
 }
 
-// OverlayContext holds owner preferences for qualified native switches without changing model limits.
-// OverlayContext хранит предпочтения владельца для штатных переключателей без изменения пределов модели.
+// OverlayContext holds native switches and an optional lower-only window within the unchanged model catalog.
+// OverlayContext хранит штатные переключатели и необязательное уменьшенное окно в пределах неизменяемого каталога модели.
 type OverlayContext struct {
-	AutoCompaction *bool `toml:"auto_compaction,omitempty" json:"autoCompaction,omitempty"`
-	Prune          *bool `toml:"prune,omitempty" json:"prune,omitempty"`
+	AutoCompaction *bool  `toml:"auto_compaction,omitempty" json:"autoCompaction,omitempty"`
+	Prune          *bool  `toml:"prune,omitempty" json:"prune,omitempty"`
+	WindowTokens   *int64 `toml:"window_tokens,omitempty" json:"windowTokens,omitempty"`
 }
 
 // OverlayCache expresses intent only; route qualification, secret namespaces and mandatory policy stay server-owned.
@@ -141,7 +142,7 @@ func RenderSafeEffectiveConfig(input SafeEffectiveConfigInput) (string, error) {
 		Context              *OverlayContext `toml:"context,omitempty"`
 		Cache                *OverlayCache   `toml:"cache,omitempty"`
 		Kodex                struct {
-			Context       *ModelContextPolicy  `toml:"Context,omitempty"`
+			Context       *RuntimeModelContext `toml:"Context,omitempty"`
 			Cache         *EffectiveModelCache `toml:"Cache,omitempty"`
 			RuntimeConfig struct {
 				Ref, Digest string

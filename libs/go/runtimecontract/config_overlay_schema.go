@@ -75,6 +75,8 @@ type ConfigOverlayField struct {
 	Description   string   `json:"description"`
 	Completion    string   `json:"completion"`
 	Hover         string   `json:"hover"`
+	Minimum       int64    `json:"minimum,omitempty"`
+	Maximum       int64    `json:"maximum,omitempty"`
 }
 
 // ConfigOverlaySchema publishes the bounded editor contract with a digest-derived revision so model-capability changes invalidate stale schema pins.
@@ -89,13 +91,34 @@ type ConfigOverlaySchema struct {
 // OverlaySchema builds a digest-pinned field catalog from owner-computed model efforts and default; an empty capability set does not authorize invented effort values.
 // OverlaySchema строит закреплённый дайджестом каталог из рассчитанных владельцем степеней и default модели; пустой набор возможностей не разрешает выдумывать значения.
 func OverlaySchema(efforts []string, defaultEffort string) ConfigOverlaySchema {
-	fields := overlayFields(efforts, defaultEffort)
+	return overlaySchema(overlayFields(efforts, defaultEffort))
+}
+
+// overlaySchema hashes the exact field contract including contextual integer bounds.
+// overlaySchema хэширует точный контракт полей с contextual integer bounds.
+func overlaySchema(fields []ConfigOverlayField) ConfigOverlaySchema {
 	schema := ConfigOverlaySchema{Fields: fields, MaximumBytes: MaximumConfigOverlayBytes}
 	raw, _ := json.Marshal(schema)
 	digest := sha256.Sum256(raw)
 	schema.Digest = hex.EncodeToString(digest[:])
 	schema.Revision = "cos_" + schema.Digest
 	return schema
+}
+
+// OverlaySchemaForModel derives a lower-only window range from the actual selected catalog model.
+// An empty explicit range still permits inheritance when output equals the catalog window.
+// OverlaySchemaForModel выводит lower-only диапазон окна из фактической модели каталога.
+// Пустой explicit range сохраняет наследование, когда output равен catalog window.
+func OverlaySchemaForModel(efforts []string, defaultEffort string, model ModelProviderModel) ConfigOverlaySchema {
+	fields := overlayFields(efforts, defaultEffort)
+	for index := range fields {
+		if fields[index].Key == "context.window_tokens" {
+			fields[index].Minimum = int64(model.MaximumOutputTokens) + 1
+			fields[index].Maximum = int64(model.ContextWindowTokens)
+			fields[index].DefaultValue = strconv.Itoa(model.ContextWindowTokens)
+		}
+	}
+	return overlaySchema(fields)
 }
 
 // overlayFields returns the closed editable preference list and clones the model effort slice so editor metadata does not alias the caller's list.
@@ -108,6 +131,8 @@ func overlayFields(efforts []string, defaultEffort string) []ConfigOverlayField 
 			Description: "Штатное автоматическое сжатие OpenCode", Completion: "context.auto_compaction = true", Hover: "Если поле отсутствует, используется настройка маршрута; по умолчанию включено."},
 		{Key: "context.prune", ValueType: "boolean", AllowedValues: []string{"true", "false"},
 			Description: "Штатное сокращение результатов инструментов в контексте", Completion: "context.prune = true", Hover: "Не удаляет исходный audit и не меняет retention сессии Kodex."},
+		{Key: "context.window_tokens", ValueType: "integer", AllowedValues: []string{}, Minimum: 1, Maximum: MaximumModelContextWindowTokens,
+			Description: "Окно контекста OpenCode, токены", Completion: "context.window_tokens = ", Hover: "Необязательное уменьшение окна для штатного сжатия. Больше предела вывода, не выше каталога; отсутствие наследует окно модели. Не является жёстким лимитом каждого запроса."},
 		{Key: "cache.optimization", ValueType: "string", AllowedValues: []string{"PROVIDER_DEFAULT", "NO_HINTS", "OPTIMIZE"},
 			Description: "Намерение оптимизации inference cache", Completion: "cache.optimization = ", Hover: "NO_HINTS убирает подсказки Kodex, но не доказывает отключение кеша провайдера."},
 		{Key: "cache.reuse_scope", ValueType: "string", AllowedValues: []string{"PROJECT", "INITIATOR", "SESSION"},
@@ -134,6 +159,24 @@ func (*overlayPositionProbe) UnmarshalTOML(any) error {
 // DiagnoseConfigOverlay produces at most sixteen safe field diagnostics with TOML positions, validates optional model efforts and protected content, and never returns parser Message or LastKey values.
 // DiagnoseConfigOverlay формирует не более шестнадцати безопасных диагностик с TOML-позициями, проверяет необязательные степени модели и защищённое содержимое, не возвращая значения Message и LastKey анализатора.
 func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnostic {
+	return diagnoseConfigOverlay(raw, efforts, overlayFields(efforts, ""))
+}
+
+// DiagnoseConfigOverlayWithSchema uses owner-computed bounds; supplied editor metadata never grants authority.
+// DiagnoseConfigOverlayWithSchema применяет owner-computed bounds; metadata редактора не выдаёт authority.
+func DiagnoseConfigOverlayWithSchema(raw string, schema ConfigOverlaySchema) []ConfigOverlayDiagnostic {
+	var efforts []string
+	for _, field := range schema.Fields {
+		if field.Key == "model_reasoning_effort" {
+			efforts = append([]string{}, field.AllowedValues...)
+		}
+	}
+	return diagnoseConfigOverlay(raw, efforts, schema.Fields)
+}
+
+// diagnoseConfigOverlay shares strict TOML diagnostics across structural and selected-model validation.
+// diagnoseConfigOverlay объединяет строгую TOML-диагностику structural и selected-model validation.
+func diagnoseConfigOverlay(raw string, efforts []string, fields []ConfigOverlayField) []ConfigOverlayDiagnostic {
 	if len(raw) > MaximumConfigOverlayBytes || !utf8.ValidString(raw) || strings.ContainsRune(raw, '\x00') {
 		return []ConfigOverlayDiagnostic{{Code: OverlaySyntaxInvalid, Message: "Overlay size or encoding is invalid"}}
 	}
@@ -147,7 +190,6 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 		}
 		return []ConfigOverlayDiagnostic{diagnostic}
 	}
-	fields := overlayFields(efforts, "")
 	var diagnostics []ConfigOverlayDiagnostic
 	var visit func(map[string]toml.Primitive, string)
 	visit = func(values map[string]toml.Primitive, prefix string) {
@@ -181,7 +223,11 @@ func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnost
 				if metadata.PrimitiveDecode(primitive, &value) != nil {
 					break
 				}
-				if field.ValueType == "boolean" {
+				if field.ValueType == "integer" {
+					if number, ok := value.(int64); ok && number >= field.Minimum && number <= field.Maximum {
+						code = ""
+					}
+				} else if field.ValueType == "boolean" {
 					if boolean, ok := value.(bool); ok && slices.Contains(field.AllowedValues, strconv.FormatBool(boolean)) {
 						code = ""
 					}

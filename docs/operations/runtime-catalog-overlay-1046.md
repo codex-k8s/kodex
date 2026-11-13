@@ -120,3 +120,13 @@ account catalog, несовместимый effort, подмена default, draf
 protected/unknown field и повторная проверка fresh materialization. Runtime
 unit/PG результаты фиксируются отдельно на exact executable SHA. Live и
 deployment не входят в этот локальный вклад.
+
+## Необязательное окно контекста (#2108)
+
+`context.window_tokens` — integer preference с owner-computed `minimum`/`maximum`
+в `ConfigOverlayField`. Минимум равен output+1, максимум — окну выбранной модели;
+отсутствие наследует каталог. Верхний платформенный предел2000000 не разрешает
+увеличивать окно модели. Проверка, preview и runtime используют один resolver.
+Для явного значения нужен feature proof выбранного полного RoleImage, а не
+версия ABI либо декларация рецепта. Подробная матрица переходов и согласованная
+поставка описаны в [native sessions](opencode-native-sessions-2108.md#уменьшение-окна-контекста-для-отдельной-роли-2108).

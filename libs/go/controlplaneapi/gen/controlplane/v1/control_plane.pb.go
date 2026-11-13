@@ -20437,8 +20437,10 @@ type ImagePlatformToolInventory struct {
 	PlatformDigest string                  `protobuf:"bytes,2,opt,name=platform_digest,json=platformDigest,proto3" json:"platform_digest,omitempty"`
 	ManifestSha256 string                  `protobuf:"bytes,3,opt,name=manifest_sha256,json=manifestSha256,proto3" json:"manifest_sha256,omitempty"`
 	Tools          []*ImageToolObservation `protobuf:"bytes,4,rep,name=tools,proto3" json:"tools,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Необязательная поддержка входа фактическим trusted runner на этой платформе.
+	InputFeatures []string `protobuf:"bytes,5,rep,name=input_features,json=inputFeatures,proto3" json:"input_features,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ImagePlatformToolInventory) Reset() {
@@ -20495,6 +20497,13 @@ func (x *ImagePlatformToolInventory) GetManifestSha256() string {
 func (x *ImagePlatformToolInventory) GetTools() []*ImageToolObservation {
 	if x != nil {
 		return x.Tools
+	}
+	return nil
+}
+
+func (x *ImagePlatformToolInventory) GetInputFeatures() []string {
+	if x != nil {
+		return x.InputFeatures
 	}
 	return nil
 }
@@ -57338,6 +57347,9 @@ type ConfigOverlayField struct {
 	Description   string                 `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
 	Completion    string                 `protobuf:"bytes,6,opt,name=completion,proto3" json:"completion,omitempty"`
 	Hover         string                 `protobuf:"bytes,7,opt,name=hover,proto3" json:"hover,omitempty"`
+	// Диапазон integer-поля; нули у остальных типов.
+	Minimum       int64 `protobuf:"varint,8,opt,name=minimum,proto3" json:"minimum,omitempty"`
+	Maximum       int64 `protobuf:"varint,9,opt,name=maximum,proto3" json:"maximum,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -57419,6 +57431,20 @@ func (x *ConfigOverlayField) GetHover() string {
 		return x.Hover
 	}
 	return ""
+}
+
+func (x *ConfigOverlayField) GetMinimum() int64 {
+	if x != nil {
+		return x.Minimum
+	}
+	return 0
+}
+
+func (x *ConfigOverlayField) GetMaximum() int64 {
+	if x != nil {
+		return x.Maximum
+	}
+	return 0
 }
 
 type ConfigOverlaySchema struct {
@@ -90769,12 +90795,13 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\tR\aversion\x12\x16\n" +
 	"\x06sha256\x18\x05 \x01(\tR\x06sha256\x12\x1a\n" +
-	"\brequired\x18\x06 \x01(\bR\brequired\"\xc7\x01\n" +
+	"\brequired\x18\x06 \x01(\bR\brequired\"\xee\x01\n" +
 	"\x1aImagePlatformToolInventory\x12\x1a\n" +
 	"\bplatform\x18\x01 \x01(\tR\bplatform\x12'\n" +
 	"\x0fplatform_digest\x18\x02 \x01(\tR\x0eplatformDigest\x12'\n" +
 	"\x0fmanifest_sha256\x18\x03 \x01(\tR\x0emanifestSha256\x12;\n" +
-	"\x05tools\x18\x04 \x03(\v2%.controlplane.v1.ImageToolObservationR\x05tools\"\xdf\x01\n" +
+	"\x05tools\x18\x04 \x03(\v2%.controlplane.v1.ImageToolObservationR\x05tools\x12%\n" +
+	"\x0einput_features\x18\x05 \x03(\tR\rinputFeatures\"\xdf\x01\n" +
 	"\x12ImageToolInventory\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x16\n" +
 	"\x06sha256\x18\x02 \x01(\tR\x06sha256\x12!\n" +
@@ -93867,7 +93894,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x12\n" +
 	"\x04line\x18\x03 \x01(\x05R\x04line\x12\x16\n" +
 	"\x06column\x18\x04 \x01(\x05R\x06column\x12\x18\n" +
-	"\amessage\x18\x05 \x01(\tR\amessage\"\xe9\x01\n" +
+	"\amessage\x18\x05 \x01(\tR\amessage\"\x9d\x02\n" +
 	"\x12ConfigOverlayField\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1d\n" +
 	"\n" +
@@ -93878,7 +93905,9 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\n" +
 	"completion\x18\x06 \x01(\tR\n" +
 	"completion\x12\x14\n" +
-	"\x05hover\x18\a \x01(\tR\x05hover\"\xab\x01\n" +
+	"\x05hover\x18\a \x01(\tR\x05hover\x12\x18\n" +
+	"\aminimum\x18\b \x01(\x03R\aminimum\x12\x18\n" +
+	"\amaximum\x18\t \x01(\x03R\amaximum\"\xab\x01\n" +
 	"\x13ConfigOverlaySchema\x12\x1a\n" +
 	"\brevision\x18\x01 \x01(\tR\brevision\x12\x16\n" +
 	"\x06digest\x18\x02 \x01(\tR\x06digest\x12;\n" +

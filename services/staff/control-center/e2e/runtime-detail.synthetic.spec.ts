@@ -448,6 +448,32 @@ for (const width of [1440, 390, 2900]) {
     });
     await compaction.selectOption("true");
     await expect(editor).toContainText("auto_compaction = true");
+    const window = page.getByRole("textbox", {
+      name: "Окно контекста OpenCode, токены",
+      exact: true,
+    });
+    await expect(window).toHaveAttribute("inputmode", "numeric");
+    await window.fill("16384");
+    await window.press("Tab");
+    await expect(editor).toContainText("window_tokens = 16384");
+    for (const invalid of [
+      "NaN",
+      "Infinity",
+      "1e4",
+      "1.5",
+      "9007199254740993",
+    ]) {
+      await window.fill(invalid);
+      await window.press("Tab");
+      await expect(window).toHaveAttribute("aria-invalid", "true");
+      await expect(editor).toContainText("window_tokens = 16384");
+    }
+    await window.fill("");
+    await window.press("Tab");
+    await expect(editor).not.toContainText("window_tokens");
+    await window.fill("16384");
+    await window.press("Tab");
+    await expect(editor).toContainText("window_tokens = 16384");
     const cache = page.getByRole("combobox", {
       name: "Намерение оптимизации inference cache",
       exact: true,
@@ -465,6 +491,7 @@ for (const width of [1440, 390, 2900]) {
     await expect(editor).toHaveAttribute("contenteditable", "false");
     await expect(compaction).toBeDisabled();
     await expect(cache).toBeDisabled();
+    await expect(window).toBeDisabled();
     await expect(voice).toHaveCount(0);
     finishSave?.();
     await expect(editor).toHaveAttribute("contenteditable", "true");

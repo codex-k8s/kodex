@@ -24,13 +24,28 @@ watch(
   },
 );
 function change(key: string, event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (
+    props.schema.fields.find((field) => field.key === key)?.valueType ===
+      "integer" &&
+    input.validity.badInput
+  ) {
+    invalid.value = true;
+    return;
+  }
+  setPreference(
+    key,
+    (event.target as HTMLInputElement | HTMLSelectElement).value,
+  );
+}
+function setPreference(key: string, requested: string) {
   if (props.disabled) return;
   try {
     const value = changeOverlayPreference(
       props.content,
       props.schema,
       key,
-      (event.target as HTMLSelectElement).value,
+      requested,
     );
     invalid.value = false;
     emit("update:content", value);
@@ -54,7 +69,45 @@ function change(key: string, event: Event) {
       class="execution-preferences__field"
     >
       <label :for="`${prefix}-${field.key}`">{{ field.description }}</label>
+      <template v-if="field.valueType === 'integer'">
+        <input
+          :id="`${prefix}-${field.key}`"
+          type="text"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          :data-minimum="field.minimum"
+          :data-maximum="field.maximum"
+          :aria-invalid="invalid"
+          :placeholder="field.defaultValue"
+          :value="overlayPreference(content, schema, field.key) ?? ''"
+          :aria-describedby="`${prefix}-${field.key}-help`"
+          @change="change(field.key, $event)"
+        />
+        <button
+          type="button"
+          class="button"
+          @click="setPreference(field.key, '')"
+        >
+          {{ $t("runtimeOverlay.inheritRoute") }}
+        </button>
+        <small
+          v-if="overlayPreference(content, schema, field.key) !== undefined"
+          >{{
+            $t("runtimeOverlay.windowBudget", {
+              effective:
+                overlayPreference(content, schema, field.key) ||
+                field.defaultValue,
+              catalog: field.defaultValue,
+              minimum: field.minimum,
+            })
+          }}</small
+        >
+        <small v-else role="alert">{{
+          $t("runtimeOverlay.repairPreferences")
+        }}</small>
+      </template>
       <select
+        v-else
         :id="`${prefix}-${field.key}`"
         :value="overlayPreference(content, schema, field.key) ?? '__invalid__'"
         :aria-describedby="`${prefix}-${field.key}-help`"
@@ -97,7 +150,8 @@ function change(key: string, event: Event) {
   display: grid;
   gap: 0.35rem;
 }
-.execution-preferences select {
+.execution-preferences select,
+.execution-preferences input {
   width: 100%;
   padding: 0.5rem;
   font: inherit;

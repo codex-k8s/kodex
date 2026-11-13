@@ -129,6 +129,23 @@ func validateRuntimeCatalogCandidates(ctx context.Context, tx pgx.Tx, current sc
 	return validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, provider, model, overlay, candidates, input, true)
 }
 
+// runtimeCatalogProviderConfiguration reads only the installed owner descriptor in this transaction.
+// runtimeCatalogProviderConfiguration читает только установленный owner descriptor в текущей транзакции.
+func runtimeCatalogProviderConfiguration(ctx context.Context, tx pgx.Tx, provider string) (runtimecontract.ModelProviderConfiguration, error) {
+	var raw []byte
+	if err := tx.QueryRow(ctx, queryRuntimeCatalogProviderConfiguration, provider).Scan(&raw); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return runtimecontract.ModelProviderConfiguration{}, errs.ErrConflict
+		}
+		return runtimecontract.ModelProviderConfiguration{}, errs.ErrUnavailable
+	}
+	profile, err := runtimecontract.DecodeModelProviderConfiguration(raw)
+	if err != nil || profile.DefinitionKey() != provider {
+		return runtimecontract.ModelProviderConfiguration{}, errs.ErrConflict
+	}
+	return profile, nil
+}
+
 // validateRuntimeCatalogCandidatesSnapshot clones and sorts nonempty candidates by account ref,
 // verifies account eligibility and exact input catalog pins or persisted model-specific
 // digest/default, then validates overlay against every model and intersects reasoning efforts.
@@ -147,16 +164,9 @@ func validateRuntimeCatalogCandidatesSnapshot(ctx context.Context, tx pgx.Tx, cu
 	if strings.HasPrefix(provider, "opencode-") && runtimecontract.ValidateOpenCodeOverlay(overlay) != nil {
 		return nil, nil, errs.ErrInvalid
 	}
-	var rawProvider []byte
-	if err := tx.QueryRow(ctx, queryRuntimeCatalogProviderConfiguration, provider).Scan(&rawProvider); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil, errs.ErrConflict
-		}
-		return nil, nil, errs.ErrUnavailable
-	}
-	profile, err := runtimecontract.DecodeModelProviderConfiguration(rawProvider)
-	if err != nil || profile.DefinitionKey() != provider {
-		return nil, nil, errs.ErrConflict
+	profile, err := runtimeCatalogProviderConfiguration(ctx, tx, provider)
+	if err != nil {
+		return nil, nil, err
 	}
 	parsedOverlay, err := runtimecontract.ParseConfigOverlay(overlay)
 	if err != nil {

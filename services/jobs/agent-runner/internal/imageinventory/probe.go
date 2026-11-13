@@ -49,7 +49,8 @@ func Run(ctx context.Context, args []string) error {
 	}
 	manifest := runtimecontract.ImageToolManifest{Schema: runtimecontract.ImageInventorySchema,
 		SpecSHA256: args[2], ImmutableBuildSHA256: args[3], RuntimeContractSHA256: args[4],
-		Platform: runtime.GOOS + "/" + runtime.GOARCH, Tools: []runtimecontract.ImageToolObservation{}}
+		InputFeatures: []string{runtimecontract.ContextWindowInputFeature},
+		Platform:      runtime.GOOS + "/" + runtime.GOARCH, Tools: []runtimecontract.ImageToolObservation{}}
 	for _, probe := range runtimecontract.ImageToolProbes() {
 		manifest.Tools = append(manifest.Tools, runtimecontract.ImageToolObservation{Name: probe.Name, Status: "MISSING", Required: probe.Required})
 	}

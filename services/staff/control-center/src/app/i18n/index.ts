@@ -161,6 +161,8 @@ const ru = {
   runtimeOverlay: {
     executionPreferences: "Контекст и кеш",
     inheritRoute: "Из настройки маршрута",
+    windowBudget:
+      "Окно после проверки и публикации: {effective}; лимит модели: {catalog} токенов; допустимо от {minimum}. Пустое поле наследует лимит модели.",
     preferencesHelp:
       "Изменения входят в текущий черновик. Сохраните, проверьте и опубликуйте его. Обязательные ограничения маршрута проверяет сервер.",
     repairPreferences: "Сначала исправьте недопустимые поля TOML ниже.",
@@ -5052,6 +5054,8 @@ const en = {
   runtimeOverlay: {
     executionPreferences: "Context and cache",
     inheritRoute: "Inherit route setting",
+    windowBudget:
+      "Window after validation and publication: {effective}; model ceiling: {catalog} tokens; minimum: {minimum}. Empty inherits the model ceiling.",
     preferencesHelp:
       "Changes belong to the current draft. Save, validate and publish it. The server enforces mandatory route constraints.",
     repairPreferences: "Correct invalid TOML fields below first.",

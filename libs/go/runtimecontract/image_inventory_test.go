@@ -116,3 +116,45 @@ func TestImageToolManifestExactCanonicalBytes(t *testing.T) {
 		t.Fatal("noncanonical manifest accepted")
 	}
 }
+
+// TestImageInputFeaturesBindExactCanonicalManifest preserves legacy bytes and requires every platform's closed feature proof.
+// TestImageInputFeaturesBindExactCanonicalManifest сохраняет прежние байты и требует закрытое доказательство каждой платформы.
+func TestImageInputFeaturesBindExactCanonicalManifest(t *testing.T) {
+	legacy := inventoryFixture()
+	old, _ := json.Marshal(legacy.Platforms[0].Manifest)
+	if strings.Contains(string(old), "inputFeatures") || legacy.SupportsInputFeature(ContextWindowInputFeature) || (*ImageToolInventory)(nil).SupportsInputFeature(ContextWindowInputFeature) {
+		t.Fatal("legacy inventory became feature proof")
+	}
+	supported := inventoryFixture()
+	supported.Platforms[0].Manifest.InputFeatures = []string{ContextWindowInputFeature}
+	raw, _ := json.Marshal(supported.Platforms[0].Manifest)
+	supported.Platforms[0].ManifestSHA256 = ImageInventorySHA256(raw)
+	if supported.Platforms[0].ManifestSHA256 == legacy.Platforms[0].ManifestSHA256 || !supported.SupportsInputFeature(ContextWindowInputFeature) {
+		t.Fatal("feature was not digest-bound")
+	}
+	if _, err := DecodeImageToolManifest(raw); err != nil {
+		t.Fatal(err)
+	}
+	stale := supported
+	stale.Platforms = append([]ImagePlatformInventory(nil), supported.Platforms...)
+	stale.Platforms[0].ManifestSHA256 = legacy.Platforms[0].ManifestSHA256
+	if stale.SupportsInputFeature(ContextWindowInputFeature) {
+		t.Fatal("stale manifest hash accepted")
+	}
+	other := legacy.Platforms[0]
+	other.Manifest.Platform = "linux/arm64"
+	raw, _ = json.Marshal(other.Manifest)
+	other.ManifestSHA256 = ImageInventorySHA256(raw)
+	supported.Platforms = append(supported.Platforms, other)
+	if supported.SupportsInputFeature(ContextWindowInputFeature) {
+		t.Fatal("one platform implied support on another")
+	}
+	for _, features := range [][]string{{"PRIVATE_SENTINEL"}, {ContextWindowInputFeature, ContextWindowInputFeature}} {
+		manifest := legacy.Platforms[0].Manifest
+		manifest.InputFeatures = features
+		raw, _ := json.Marshal(manifest)
+		if _, err := DecodeImageToolManifest(raw); err == nil || strings.Contains(err.Error(), "PRIVATE_SENTINEL") {
+			t.Fatal("unknown or duplicate input feature accepted or disclosed")
+		}
+	}
+}

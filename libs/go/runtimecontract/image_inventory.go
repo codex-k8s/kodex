@@ -107,7 +107,12 @@ type ImageToolManifest struct {
 	RuntimeContractSHA256 string                 `json:"runtimeContractSHA256"`
 	Platform              string                 `json:"platform"`
 	Tools                 []ImageToolObservation `json:"tools"`
+	InputFeatures         []string               `json:"inputFeatures,omitempty"`
 }
+
+// ContextWindowInputFeature identifies the optional lower-only overlay understood by the actual runner.
+// ContextWindowInputFeature обозначает необязательный уменьшающий окно overlay, поддерживаемый фактическим runner.
+const ContextWindowInputFeature = "context.window_tokens"
 
 // ImagePlatformInventory binds a platform image digest to the exact serialized tool manifest.
 // ImagePlatformInventory связывает дайджест платформенного образа с точными байтами манифеста инструментов.
@@ -134,6 +139,9 @@ func (manifest ImageToolManifest) Validate() error {
 	if manifest.Schema != ImageInventorySchema || !lowerHexDigestPattern.MatchString(manifest.SpecSHA256) ||
 		!lowerHexDigestPattern.MatchString(manifest.ImmutableBuildSHA256) || !lowerHexDigestPattern.MatchString(manifest.RuntimeContractSHA256) ||
 		(manifest.Platform != "linux/amd64" && manifest.Platform != "linux/arm64") || len(manifest.Tools) != len(ImageToolProbes()) {
+		return errImageInventory
+	}
+	if len(manifest.InputFeatures) > 1 || len(manifest.InputFeatures) == 1 && manifest.InputFeatures[0] != ContextWindowInputFeature {
 		return errImageInventory
 	}
 	for index, probe := range ImageToolProbes() {
@@ -230,4 +238,20 @@ func decodeImageInventory(raw []byte, value any) error {
 		return errImageInventory
 	}
 	return nil
+}
+
+// SupportsInputFeature requires valid immutable inventory and support on every admitted platform.
+// Absence is historical non-support; tool versions and recipe declarations never imply support.
+// SupportsInputFeature требует корректный неизменяемый inventory и поддержку на каждой допущенной платформе.
+// Отсутствие означает историческую неподдержку; версии инструментов и декларации рецепта её не создают.
+func (inventory *ImageToolInventory) SupportsInputFeature(feature string) bool {
+	if inventory == nil || feature != ContextWindowInputFeature || inventory.Validate() != nil {
+		return false
+	}
+	for _, platform := range inventory.Platforms {
+		if len(platform.Manifest.InputFeatures) != 1 || platform.Manifest.InputFeatures[0] != feature {
+			return false
+		}
+	}
+	return true
 }

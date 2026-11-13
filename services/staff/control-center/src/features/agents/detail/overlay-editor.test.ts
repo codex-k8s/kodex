@@ -161,3 +161,51 @@ describe("Versioned overlay editor", () => {
     ).toEqual([]);
   });
 });
+
+it("целое окно уменьшает только выбранное поле; пустое значение явно наследует каталог", () => {
+  const content =
+    '[context]\nprune = false\n[cache]\noptimization = "NO_HINTS"';
+  const changed = changeOverlayPreference(
+    content,
+    schema,
+    "context.window_tokens",
+    "16384",
+  );
+  expect(parse(changed)).toEqual({
+    context: { prune: false, window_tokens: 16384 },
+    cache: { optimization: "NO_HINTS" },
+  });
+  expect(overlayPreference(changed, schema, "context.window_tokens")).toBe(
+    "16384",
+  );
+  expect(
+    parse(
+      changeOverlayPreference(changed, schema, "context.window_tokens", ""),
+    ),
+  ).toEqual(parse(content));
+  for (const raw of [
+    "NaN",
+    "Infinity",
+    "1e4",
+    "1.5",
+    "-1",
+    "0",
+    "2048",
+    "32769",
+    "9007199254740993",
+  ]) {
+    expect(() =>
+      changeOverlayPreference(content, schema, "context.window_tokens", raw),
+    ).toThrow();
+  }
+  for (const raw of [
+    'window_tokens = "16384"',
+    "window_tokens = inf",
+    "window_tokens = 1e4",
+    "window_tokens = 32769",
+  ]) {
+    expect(
+      overlayPreference("[context]\n" + raw, schema, "context.window_tokens"),
+    ).toBeUndefined();
+  }
+});

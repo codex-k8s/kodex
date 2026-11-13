@@ -286,6 +286,14 @@ func (repository *Repository) attachmentAgentDependencies(ctx context.Context, t
 		view.EnvironmentBinding, view.Environment.Ref, view.Environment.Version, view.Environment.State,
 		view.Environment.CurrentVersion.Ref, view.Environment.CurrentVersion.Digest, view.Environment.CurrentVersion.Image.ArtifactRef, view.Environment.CurrentVersion.Image.Digest)
 	ready := instructionRef != ""
+	image := view.Environment.CurrentVersion.Image
+	if err := requireRuntimeOverlayImageFeature(ctx, tx, current.organizationID, image.ArtifactRef, image.Digest, view.PublishedOverlay.Content); err != nil {
+		if continuationIneligible(err) {
+			ready = false
+		} else {
+			return nil, false, err
+		}
+	}
 	if checkCatalog {
 		if _, _, err := validateRuntimeCatalogCandidatesSnapshot(ctx, tx, current, view.Configuration.Provider, view.Configuration.Model, view.PublishedOverlay.Content, view.Configuration.ProviderPolicy.AccountCandidates, false, false); err != nil {
 			if continuationIneligible(err) {

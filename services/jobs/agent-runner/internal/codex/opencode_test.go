@@ -234,3 +234,42 @@ func TestOpenCodeConfigurationConsumesNativePreferences(t *testing.T) {
 		t.Fatal("strict unsupported preference reached native config")
 	}
 }
+
+// TestOpenCodeContextWindowMaterializationReducesOnlyNativeLimit proves the actual adapter
+// changes only the native model context field; catalog/route/cache/output stay identical.
+// TestOpenCodeContextWindowMaterializationReducesOnlyNativeLimit проверяет actual adapter:
+// меняется только native context field; catalog/route/cache/output остаются прежними.
+func TestOpenCodeContextWindowMaterializationReducesOnlyNativeLimit(t *testing.T) {
+	input := openCodeInputFixture()
+	before, _ := json.Marshal(input.ModelProvider)
+	route, _ := input.ModelProvider.Route()
+	original, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.ConfigOverlay = "[context]\nwindow_tokens = 16384"
+	lowered, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var a, b map[string]any
+	if json.Unmarshal(original, &a) != nil || json.Unmarshal(lowered, &b) != nil {
+		t.Fatal("native materialization is invalid")
+	}
+	limits := b["provider"].(map[string]any)[input.ModelProvider.ProviderID].(map[string]any)["models"].(map[string]any)[input.Model].(map[string]any)["limit"].(map[string]any)
+	if limits["context"] != float64(16384) || limits["output"] != float64(1024) {
+		t.Fatal("native effective limit changed output or ignored overlay")
+	}
+	limits["context"] = float64(32768)
+	left, _ := json.Marshal(a)
+	right, _ := json.Marshal(b)
+	after, _ := json.Marshal(input.ModelProvider)
+	currentRoute, _ := input.ModelProvider.Route()
+	if string(left) != string(right) || string(before) != string(after) || route.ConfigurationSHA256 != currentRoute.ConfigurationSHA256 {
+		t.Fatal("lower budget mutated unrelated configuration or route authority")
+	}
+	input.ConfigOverlay = "[context]\nwindow_tokens = 32769"
+	if _, err := OpenCodeConfiguration(input, "http://127.0.0.1:12345/mcp"); err == nil {
+		t.Fatal("adapter accepted an upsize")
+	}
+}

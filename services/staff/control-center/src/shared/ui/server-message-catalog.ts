@@ -698,6 +698,10 @@ export const serverTokenTranslations = {
     "Задача передана дочернему запуску",
     "Task delegated to a child run",
   ],
+  CONTEXT_WINDOW_IMAGE_UNSUPPORTED: [
+    "Выбранный образ не подтверждает поддержку бюджета контекста. Выберите новый проверенный RoleImage или наследуйте окно каталога.",
+    "The selected image has no verified context budget support. Select a new verified RoleImage or inherit the catalog window.",
+  ],
   INFERENCE_CACHE_POLICY_UNSUPPORTED: [
     "Маршрут не подтверждает запрошенную гарантию кеша либо настройка ослабляет его обязательные ограничения. Выберите совместимую политику или другой маршрут.",
     "The route cannot enforce the requested cache guarantee, or the preference weakens mandatory route constraints. Select a compatible policy or another route.",

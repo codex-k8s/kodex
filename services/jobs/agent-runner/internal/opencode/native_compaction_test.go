@@ -232,9 +232,25 @@ func (fixture *nativeFixture) model(writer http.ResponseWriter, request *http.Re
 // TestNativeCompactionContinuesManagedToolLoop exercises the real upstream loop, compactor and session DB.
 // TestNativeCompactionContinuesManagedToolLoop проверяет настоящие upstream loop, compactor и session DB.
 func TestNativeCompactionContinuesManagedToolLoop(t *testing.T) {
+	t.Run("baseline", func(t *testing.T) { testNativeContextWindowCompaction(t, false) })
+	t.Run("lower-only-overlay", func(t *testing.T) { testNativeContextWindowCompaction(t, true) })
+}
+
+// testNativeContextWindowCompaction runs the actual upstream compactor; synthetic usage is local fixture evidence only.
+// testNativeContextWindowCompaction запускает actual upstream compactor; synthetic usage относится лишь к локальной оснастке.
+func testNativeContextWindowCompaction(t *testing.T, lower bool) {
 	binary := qualifiedNativeBinary(t)
 	fixture := &nativeFixture{}
 	config := nativeToolConfiguration(t, fixture)
+	if lower {
+		catalog := runtimecontract.ModelProviderModel{ContextWindowTokens: 32768, MaximumOutputTokens: 2048}
+		resolved, err := catalog.ResolveRuntimeContext("[context]\nwindow_tokens = 16384")
+		if err != nil || catalog.ContextWindowTokens != 32768 || resolved.WindowTokens != 16384 {
+			t.Fatal("lower-only context resolution failed", err)
+		}
+		config["provider"].(map[string]any)["synthetic"].(map[string]any)["models"].(map[string]any)["tiny"].(map[string]any)["limit"] = map[string]int{"context": resolved.WindowTokens, "output": catalog.MaximumOutputTokens}
+		config["compaction"] = map[string]bool{"auto": resolved.AutoCompaction, "prune": false}
+	}
 	server := startConfiguredNativeServer(t, binary, t.TempDir(), config)
 	session, err := server.client.CreateSession(t.Context(), "Native compaction qualification")
 	if err != nil {
@@ -296,7 +312,7 @@ func nativeToolConfiguration(t *testing.T, fixture *nativeFixture) map[string]an
 	provider := config["provider"].(map[string]any)["synthetic"].(map[string]any)
 	provider["options"].(map[string]string)["baseURL"] = model.URL + "/v1"
 	provider["models"].(map[string]any)["tiny"] = map[string]any{"limit": map[string]int{"context": 16384, "output": 2048}}
-	policy, err := (runtimecontract.ModelProviderModel{}).ResolveRuntimeContext("[context]\nauto_compaction = true\nprune = false")
+	policy, err := (runtimecontract.ModelProviderModel{ContextWindowTokens: 16384, MaximumOutputTokens: 2048}).ResolveRuntimeContext("[context]\nauto_compaction = true\nprune = false")
 	if err != nil {
 		t.Fatal(err)
 	}

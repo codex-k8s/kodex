@@ -180,6 +180,9 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil || modelProvider.ValidateRuntimePreferences(model, configOverlay, effectiveEffort, reasoningMode) != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
+	if err := requireRuntimeOverlayImageFeature(ctx, tx, scope.organizationID, imageArtifactRef, imageManifestDigest, configOverlay); err != nil {
+		return entity.SystemAssistant{}, nil, false, err
+	}
 	stage = errs.WarmReconcileEnvironment
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
