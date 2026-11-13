@@ -1114,8 +1114,9 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 			continue
 		}
 		metadata, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || metadata.Nlink != 1 || input.EnvironmentPolicy.ManagedWorkspace &&
-			(metadata.Uid != 10001 || metadata.Gid != 29000 || metadata.Mode&0o7777 != 0o640) {
+		trustedProvenance := name == "workspace-write-result.json" && metadata != nil && metadata.Mode&0o7777 == 0o600
+		if !ok || metadata.Nlink != 1 || runtimecontract.RuntimeWorkspaceToolsAvailable(input) &&
+			(metadata.Uid != 10001 || metadata.Gid != 29000 || metadata.Mode&0o7777 != 0o640 && !trustedProvenance) {
 			file.Close()
 			return nil, denyCompletionArtifact(nil)
 		}

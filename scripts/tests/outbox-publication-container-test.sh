@@ -31,6 +31,7 @@ timeout 20s docker run --rm --pull=never --network none --read-only --user 0:0 \
 fixture_test() {
   local identity=$1 executable=$2 mode=$3 test_name=$4
   timeout 20s docker run --rm --pull=never --network none --read-only \
+    --tmpfs /tmp:rw,nosuid,nodev,size=16m,mode=1777 \
     --user "$identity:$identity" --group-add 29000 --cap-drop ALL --security-opt no-new-privileges \
     --mount "type=bind,src=$fixture/workspace,dst=/workspace" \
     --mount "type=bind,src=$fixture/$executable,dst=/fixture.test,readonly" \
@@ -54,6 +55,7 @@ fixture_test 10001 app.test MANAGED_WRITE TestRunnerOutboxPublicationContainer
 fixture_test 10002 codex.test MANAGED_PRESERVE TestProviderOutboxPublicationContainer
 fixture_test 10001 app.test MANAGED_COLLECT TestRunnerOutboxPublicationContainer
 fixture_test 10001 app.test MANAGED_GUARDS TestRunnerOutboxPublicationContainer
+fixture_test 10001 app.test MANAGED_COMPLETION TestRunnerOutboxPublicationContainer
 fixture_test 10002 codex.test MANAGED_FOREIGN_WRITE TestProviderOutboxPublicationContainer
 fixture_test 10001 app.test MANAGED_REJECT_FOREIGN TestRunnerOutboxPublicationContainer
 printf 'Dual-UID provider and managed outbox publication, exact collection and foreign-owner rejection passed\n'

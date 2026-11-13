@@ -1,15 +1,22 @@
 package app
 
 import (
+	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 	"golang.org/x/sys/unix"
@@ -25,7 +32,7 @@ func TestRunnerOutboxPublicationContainer(t *testing.T) {
 	if os.Geteuid() != 10001 {
 		t.Fatal("collector fixture identity is invalid")
 	}
-	if mode == "MANAGED_WRITE" || mode == "MANAGED_COLLECT" || mode == "MANAGED_REJECT_FOREIGN" || mode == "MANAGED_GUARDS" {
+	if mode == "MANAGED_WRITE" || mode == "MANAGED_COLLECT" || mode == "MANAGED_REJECT_FOREIGN" || mode == "MANAGED_GUARDS" || mode == "MANAGED_COMPLETION" {
 		testManagedOutboxCollection(t, mode)
 		return
 	}
@@ -50,7 +57,12 @@ func TestRunnerOutboxPublicationContainer(t *testing.T) {
 			}
 		}
 	}
-	artifacts, err := collectArtifacts(model.Input{WorkspaceRoot: root}, "synthetic completion")
+	legacy := managedCollectionInput(root)
+	legacy.WorkspaceAccess = "read-only"
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(legacy) {
+		t.Fatal("read-only legacy fixture qualified for managed tools")
+	}
+	artifacts, err := collectArtifacts(legacy, "synthetic completion")
 	if mode == "UNPUBLISHED" {
 		if err == nil {
 			t.Fatal("unpublished private artifacts were collected")
@@ -85,8 +97,14 @@ func testManagedOutboxCollection(t *testing.T, mode string) {
 		}
 		return
 	}
-	input := model.Input{WorkspaceRoot: root, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1()}
-	input.EnvironmentPolicy.ManagedWorkspace = true
+	input := managedCollectionInput(root)
+	if !runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		t.Fatal("managed collection fixture is not qualified")
+	}
+	if mode == "MANAGED_COMPLETION" {
+		testManagedCompletionPublication(t, input)
+		return
+	}
 	if mode == "MANAGED_GUARDS" {
 		testManagedOutboxGuards(t, input, path)
 		return
@@ -121,7 +139,7 @@ func testManagedOutboxCollection(t *testing.T, mode string) {
 func testManagedOutboxGuards(t *testing.T, input model.Input, report string) {
 	t.Helper()
 	link := filepath.Join(filepath.Dir(report), "link.md")
-	for _, kind := range []string{"symlink", "hardlink", "mode"} {
+	for _, kind := range []string{"symlink", "hardlink", "mode", "private report"} {
 		t.Run(kind, func(t *testing.T) {
 			switch kind {
 			case "symlink":
@@ -134,8 +152,12 @@ func testManagedOutboxGuards(t *testing.T, input model.Input, report string) {
 					t.Fatal("create synthetic hardlink")
 				}
 				defer os.Remove(link)
-			case "mode":
-				if err := os.Chmod(report, 0o660); err != nil {
+			case "mode", "private report":
+				mode := os.FileMode(0o660)
+				if kind == "private report" {
+					mode = 0o600
+				}
+				if err := os.Chmod(report, mode); err != nil {
 					t.Fatal("change synthetic report mode")
 				}
 				defer os.Chmod(report, 0o640)
@@ -158,5 +180,69 @@ func testManagedOutboxGuards(t *testing.T, input model.Input, report string) {
 	}
 	if err := workspacepolicy.RunCanary(t.Context(), input.WorkspaceRoot, input.WorkspacePolicy); workspacepolicy.DenialReason(err) != runtimecontract.RuntimeWorkspaceQuotaExceeded {
 		t.Fatal("managed completion accepted quota overflow")
+	}
+}
+
+// managedCollectionInput pins a synthetic managed turn without loading live credentials.
+// managedCollectionInput закрепляет синтетический managed turn без загрузки живых credentials.
+func managedCollectionInput(root string) model.Input {
+	input := model.Input{Mode: runtimecontract.RunnerModeTurn, Provider: "opencode", AssistantScope: runtimecontract.AssistantScopeNone,
+		WorkspaceRoot: root, WorkspaceAccess: "workspace-write", ProjectRef: "prj_fixture", LeaseRef: "lea_fixture", LeaseFence: "fixture-fence", LeaseGeneration: 1,
+		InputDigest: strings.Repeat("a", 64), RuntimeRevisionDigest: strings.Repeat("b", 64), ExecutionBindingDigest: strings.Repeat("c", 64),
+		RuntimeRevisionRef: "rrev_fixture", RuntimeRevisionVersion: 1, Attempt: 1,
+		Capabilities: []string{runtimecontract.ArtifactCapability}, WorkspacePolicy: runtimecontract.RuntimeWorkspacePolicyV1(),
+		ModelProvider: &runtimecontract.ModelProviderConfiguration{
+			Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40),
+			Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "test-gateway",
+			BaseURL: "https://gateway.example.invalid/v1", AddressCIDRs: []string{"192.0.2.40/32"},
+			Models: []runtimecontract.ModelProviderModel{{ID: "model-a", ContextWindowTokens: 32768, MaximumOutputTokens: 1024}},
+		}}
+	input.EnvironmentPolicy = runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	input.EnvironmentPolicy.ManagedWorkspace = true
+	return input
+}
+
+// testManagedCompletionPublication executes the real quota, provenance, collection and TLS callback
+// chain. A synthetic result lacks a private native checkpoint seal and must reach that later guard,
+// never fail artifact publication or weaken native-session validation for this filesystem fixture.
+// testManagedCompletionPublication выполняет настоящую цепочку quota, provenance, collection и TLS callback.
+// Синтетический результат без private native checkpoint seal должен дойти до этой последующей проверки,
+// не падая на artifact publication и не ослабляя native-session validation ради filesystem fixture.
+func testManagedCompletionPublication(t *testing.T, input model.Input) {
+	t.Helper()
+	calls := 0
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		var payload runtimecontract.RunnerCompletionRequest
+		if json.NewDecoder(r.Body).Decode(&payload) != nil || payload.Validate() != nil || payload.Success || payload.SafeErrorCode != "PROVIDER_RESPONSE_INVALID" || payload.ResultSummary != "i18n:RUNTIME_RESULT_INVALID" {
+			t.Errorf("completion did not reach native checkpoint boundary: success=%t code=%s", payload.Success, payload.SafeErrorCode)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	server.TLS = &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAnyClientCert}
+	server.StartTLS()
+	defer server.Close()
+	client := completionTestClient(t, &input, server)
+	result := codex.Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic completion"}
+	check := func(ctx context.Context) error {
+		return workspacepolicy.RunCanary(ctx, input.WorkspaceRoot, input.WorkspacePolicy)
+	}
+	if err := completeExecutedTurn(t.Context(), input, client, result, check, nil); err != nil || calls != 1 {
+		t.Fatal("managed completion callback was not delivered")
+	}
+	path := filepath.Join(input.WorkspaceRoot, ".kodex/outbox/workspace-write-result.json")
+	var metadata unix.Stat_t
+	if unix.Stat(path, &metadata) != nil || metadata.Uid != 10001 || metadata.Gid != 29000 || metadata.Mode&0o7777 != 0o600 {
+		t.Fatal("completion provenance lost trusted private metadata")
+	}
+	artifacts, err := completionArtifacts(input, result.FinalMessage)
+	if err != nil || len(artifacts) != 3 || artifacts[1].FileName != "workspace-write-result.json" {
+		t.Fatal("completion did not collect private trusted provenance and managed report")
+	}
+	var provenance workspacepolicy.ResultProvenance
+	provenanceArtifact := artifacts[1]
+	digest := sha256.Sum256(provenanceArtifact.Content)
+	if json.Unmarshal(provenanceArtifact.Content, &provenance) != nil || provenance.RuntimeRevisionDigest != input.RuntimeRevisionDigest || provenance.ExecutionBindingDigest != input.ExecutionBindingDigest || provenance.Attempt != input.Attempt || provenanceArtifact.SHA256 != hex.EncodeToString(digest[:]) {
+		t.Fatal("completion provenance binding or hash changed")
 	}
 }
