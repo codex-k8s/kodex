@@ -153,11 +153,16 @@ func TestNativeBundledProtocolAdapters(t *testing.T) {
 // nativeAdapterFinalStream writes documented synthetic SSE frames; only the paid model is replaced, never the upstream SDK or native session engine.
 // nativeAdapterFinalStream пишет документированные synthetic SSE frames; заменяется лишь платная модель, не upstream SDK или native session engine.
 func nativeAdapterFinalStream(w io.Writer, api string) {
+	nativeAdapterUsageStream(w, api, "SYNTHETIC_ADAPTER_FINAL", 42)
+}
+
+// nativeAdapterUsageStream supplies bounded synthetic usage to exercise the upstream compactor.
+// nativeAdapterUsageStream задаёт ограниченный synthetic usage для проверки upstream compactor.
+func nativeAdapterUsageStream(w io.Writer, api, text string, inputTokens int) {
 	emit := func(kind string, value any) {
 		raw, _ := json.Marshal(value)
 		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, raw)
 	}
-	text := "SYNTHETIC_ADAPTER_FINAL"
 	if api == "CHAT_COMPLETIONS" {
 		for _, choice := range []map[string]any{
 			{"index": 0, "delta": map[string]string{"role": "assistant", "content": text}, "finish_reason": nil},
@@ -170,7 +175,7 @@ func nativeAdapterFinalStream(w io.Writer, api string) {
 		return
 	}
 	if api == "MESSAGES" {
-		emit("message_start", map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_synthetic", "type": "message", "role": "assistant", "model": "tiny", "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": map[string]int{"input_tokens": 42, "output_tokens": 1}}})
+		emit("message_start", map[string]any{"type": "message_start", "message": map[string]any{"id": "msg_synthetic", "type": "message", "role": "assistant", "model": "tiny", "content": []any{}, "stop_reason": nil, "stop_sequence": nil, "usage": map[string]int{"input_tokens": inputTokens, "output_tokens": 1}}})
 		emit("content_block_start", map[string]any{"type": "content_block_start", "index": 0, "content_block": map[string]string{"type": "text", "text": ""}})
 		emit("content_block_delta", map[string]any{"type": "content_block_delta", "index": 0, "delta": map[string]string{"type": "text_delta", "text": text}})
 		emit("content_block_stop", map[string]any{"type": "content_block_stop", "index": 0})
@@ -187,5 +192,5 @@ func nativeAdapterFinalStream(w io.Writer, api string) {
 	item["status"] = "completed"
 	item["content"] = []any{map[string]any{"type": "output_text", "text": text, "annotations": []any{}}}
 	emit("response.output_item.done", map[string]any{"type": "response.output_item.done", "output_index": 0, "item": item})
-	emit("response.completed", map[string]any{"type": "response.completed", "response": map[string]any{"id": "resp_synthetic", "created_at": 1700000000, "model": "tiny", "object": "response", "status": "completed", "output": []any{item}, "usage": map[string]any{"input_tokens": 42, "output_tokens": 5, "total_tokens": 47, "input_tokens_details": map[string]int{"cached_tokens": 0}, "output_tokens_details": map[string]int{"reasoning_tokens": 0}}}})
+	emit("response.completed", map[string]any{"type": "response.completed", "response": map[string]any{"id": "resp_synthetic", "created_at": 1700000000, "model": "tiny", "object": "response", "status": "completed", "output": []any{item}, "usage": map[string]any{"input_tokens": inputTokens, "output_tokens": 5, "total_tokens": inputTokens + 5, "input_tokens_details": map[string]int{"cached_tokens": 0}, "output_tokens_details": map[string]int{"reasoning_tokens": 0}}}})
 }

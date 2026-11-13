@@ -1481,3 +1481,89 @@ commit/tree/file projections до атомарной локальной публ
 синтетические сценарии; установленный checkout и полный workflow требуют
 отдельной проверки immutable кандидата. Диагностика сама по себе не доказывает
 исправление причины отказа checkout.
+
+
+## Native recovery и cache policy после compaction: дополнительная квалификация
+
+Дополнение к ранее пройденной long-history/pruning матрице проверяет недостающие
+переходы на точном OpenCode1.19.5 с SHA256
+`7df4e4136301f16589b0f30bf91a61380fca5f8ef22dd36570f5ebe1d4ec802c`.
+History, compaction, pruning и import остаются штатными механизмами upstream.
+Исходные старые сессии после owner reset не восстанавливаются.
+
+| Сценарий | Проверяемая граница |
+| --- | --- |
+| Ошибка summary → stop/join → official export/import → новый ход | Четыре принятых managed outputs сохраняют native partID и точные bytes; продолжение завершает всего12 steps, без повторов; первый recovery request получает retained outputs и свежие инструкции |
+| Принятый effect с потерянным ответом → cancel/Abort/join → import → read-only ход | После owner reconciliation и отзыва tool authority остаётся ровно один принятый synthetic effect; новый процесс не повторяет его и сохраняет новый business input ровно один раз |
+| Responses и Messages через настоящий LiteLLM1.104.2/Redis | Второй business turn и третий после переноса checkpoint в пустой HOME проходят native auto-compaction; все три исходных input сохранены по одному разу |
+| Requested → effective → observed controls | Synthetic OPTIMIZE qualification привязана к точному model/API/route digest; изменённый route даёт optional NONE/UNKNOWN либо required rejection; каждый NORMAL/COMPACTION request сохраняет effective API-specific hint и proxy bypass/fallback fence |
+| Transport authority → durable history | Cache namespace отсутствует в official export; свежие plugin/revision устанавливаются вне imported native transcript |
+
+Реальный proxy проверяет cache read/write bypass на заполненном disposable Redis,
+прохождение Responses key и Messages ephemeral marker после alias resolution,
+а также прежний запрет fallback. Synthetic OBSERVED attestation в тесте нужна
+для проверки resolver/consumer boundary; она не квалифицирует внешний provider.
+`PhysicalIsolation=NOT_PROVEN` остаётся неизменным. NO_STORE, billing, реальный
+cache hit и hosted GLM/LiteLLM capability из этих тестов не следуют.
+
+Для LiteLLM fixture rootless Docker использует UID0, отображаемый в host UID
+владельца daemon. Для обычного daemon остаётся host UID/GID. Это сохраняет private0600,
+cap-drop ALL, no-new-privileges, read-only root LiteLLM и internal network; chmod для
+посторонних не применяется. Неизвестный rootful userns-remap явно отклоняется.
+
+Целевой локальный запуск (не повторяет неизменённую полную историческую матрицу):
+
+```sh
+GOTOOLCHAIN=go1.26.10 GOWORK=off GOMAXPROCS=2 \
+KODEX_TEST_OPENCODE_BINARY=/absolute/private/path/opencode \
+KODEX_TEST_LITELLM_REDIS=1 \
+go -C services/jobs/agent-runner test -race -v ./internal/opencode \
+  -run '^TestNative(BundledProtocolAdapters|AbortClosesInterruptedToolBeforeExport|FailedSummaryCheckpointResumesWithoutReplayingTools|LiteLLMRedisBypass)$' \
+  -count=1 -timeout=180s
+```
+
+Локальный целевой прогон с настоящим pinned binary и pinned LiteLLM/Redis
+прошёл с `-race`:4 верхнеуровневых теста,10 подтестов,0 SKIP,55.470секунды.
+Отдельно прошли `go vet ./internal/opencode`, `go build ./internal/opencode`
+и `git diff --check`. Failed-summary recovery:4→12 effects,3 compactions,
+12 retained outputs, maximum wire31130bytes. Для обоих proxy APIs:
+23 upstream calls,2 compactions во втором ходе и2 после восстановления.
+Это локальное evidence; live actual-route сценарий ниже остаётся NOT RUN.
+
+### Подготовленный live сценарий: только синтетические локальные effects
+
+Статус этого сценария — NOT RUN до отдельного owner-controlled запуска после
+immutable delivery. Исполнитель — штатный OpenCode через actual GLM/LiteLLM route
+установки. Owner сначала сверяет installed revision, effective context policy,
+requested/effective cache projection и exact route qualification; изменение route
+не наследует прежнюю capability. Public evidence содержит только generic counts,
+status и digest, без endpoint, namespace, prompt bodies или account identifiers.
+
+1. В новом synthetic workspace создать один run с native session и восемью
+   последовательными managed file create/read steps. Файлы содержат только
+   детерминированные synthetic numbered blocks и контрольные суммы; сеть,
+   integration WRITE, commit/push и внешние issue/page/MR не запрашиваются.
+   Размер блока выбирается по effective context budget так, чтобы штатный
+   compactor сработал до последнего шага, а запрос оставался внутри admitted limit.
+2. Ограничить сценарий одним run, тремя business turns, максимум24 managed calls,
+   120000 input tokens,6000 output tokens и шестью минутами. Достижение бюджета
+   завершает проверку как INCOMPLETE; compaction не имитируется и лимит provider
+   ради неё не превышается. До запуска owner сверяет денежный лимит actual route.
+3. Во втором ходе той же session прочитать уже созданные synthetic files и
+   вернуть их контрольные суммы с новым текущим instruction marker. Readback
+   проверяет same native session, новый input ровно один раз, минимум одну native
+   compaction, отсутствие повторных create effects и положительный writer join.
+4. После штатной остановки и durable checkpoint выполнить третий read-only ход
+   новым процессом через official import. Сравнить исходные files/checksums и
+   retained native message identities. Отдельная synthetic cancellation должна
+   закончиться Abort/join; продолжение допускается после owner reconciliation,
+   без повторного выполнения принятого effect.
+5. Сохранить только bounded measurements: NORMAL/COMPACTION counts, token usage,
+   TTFT, duration, checkpoint digest/size и requested/effective/observed cache
+   status. Отсутствие provider-level evidence означает UNKNOWN, даже при HTTP200.
+   Проверки NO_HINTS и optional OPTIMIZE — отдельные owner-owned policy revisions;
+   отсутствие qualified mechanism не считается доказательством cache isolation.
+
+Это конечный бюджетный сценарий восстановления, а не доказательство многочасовой
+стабильности или отсутствия роста RSS. Для такой приёмки нужен отдельный длительный
+прогон установленного immutable кандидата и наблюдение ресурсов.
