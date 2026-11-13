@@ -27,6 +27,63 @@ def plan(value):
 
 
 class CleanupTests(unittest.TestCase):
+    def test_preserved_namespace_retains_owned_objects_volumes_and_helm_resources(self):
+        value = fixture()
+        value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))
+        value["namespaces"].append(item("namespaces", "cert-manager", ""))
+        application = item("deployments", "application", managers=["kodex-install"])
+        service = item("services", "registry", "kodex-trust", managers=["kodex-install"])
+        claim = item("persistentvolumeclaims", "data", "kodex-trust", managers=["kodex-install"])
+        child = item("pods", "child", "kodex-trust", owners=[{"uid": service["uid"]}])
+        helm = item("clusterroles", "trust-role", "")
+        helm["helm"] = {"meta.helm.sh/release-name": "kodex-trust-manager", "meta.helm.sh/release-namespace": "cert-manager"}
+        value["objects"] = [application, service, claim, child, helm]
+        value["volumes"] = [{"claim": {"uid": claim["uid"], "namespace": "kodex-trust", "name": "data"}, "reclaimPolicy": "Delete"}]
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                        preserve_namespaces=["kodex-trust", "cert-manager"])
+        self.assertEqual(result["status"], "OWNERSHIP_CLASSIFIED")
+        self.assertEqual(result["preservedNamespaces"], ["cert-manager", "kodex-trust"])
+        self.assertEqual([row["name"] for row in result["namespaces"]], ["kodex-system"])
+        self.assertEqual({row["identity"]["uid"] for row in result["deleteCandidates"]}, {application["uid"]})
+        self.assertEqual(result["volumes"], [])
+
+    def test_preserved_namespace_consumer_still_blocks_shared_application_secret(self):
+        value = fixture()
+        value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))
+        secret = item("secrets", "shared", managers=["kodex-install"])
+        consumer = item("deployments", "consumer", "kodex-trust", managers=["kodex-install"])
+        value["objects"] = [secret, consumer]
+        value["links"] = [{"identity": consumer, "references": [{"namespace": "kodex-system", "resource": "secrets", "name": "shared", "relation": "CONSUMES"}]}]
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                        preserve_namespaces=["kodex-trust"])
+        self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+        self.assertEqual(result["shared"][0]["foreignConsumerUIDs"], [consumer["uid"]])
+
+    def test_preserved_certificate_consumer_blocks_cluster_issuer_deletion(self):
+        value = fixture()
+        value["namespaces"].append(item("namespaces", "kodex-trust", "", managers=["kodex-install"]))
+        issuer = item("clusterissuers", "installation-ca", "", managers=["kodex-install"],
+                      labels={"app.kubernetes.io/part-of": "kodex"})
+        certificate = item("certificates", "service-tls", "kodex-trust", managers=["kodex-install"])
+        value["objects"] = [issuer, certificate]
+        value["links"] = [{"identity": certificate, "references": [{"namespace": "", "resource": "clusterissuers", "name": "installation-ca", "relation": "CONSUMES"}]}]
+        result = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                        preserve_namespaces=["kodex-trust"])
+        self.assertEqual(result["status"], "OWNERSHIP_REVIEW_REQUIRED")
+        self.assertEqual(result["shared"][0]["identity"]["uid"], issuer["uid"])
+
+    def test_preserved_scope_is_exact_observed_and_digest_bound(self):
+        value = fixture()
+        for names in [["unknown"], ["kube-system", "kube-system"], ["../kube-system"], [""]]:
+            with self.subTest(names=names), self.assertRaises(ValueError):
+                cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                       preserve_namespaces=names)
+        default = plan(value)
+        self.assertNotIn("preservedNamespaces", default)
+        narrowed = cleanup.plan_inventory(value, "fixture", "cluster-uid", ["node-uid"], "a" * 40,
+                                          preserve_namespaces=["kube-system"])
+        self.assertNotEqual(default["digest"], narrowed["digest"])
+
     def test_orphaned_ingress_certificate_requires_both_recorded_deletions_and_exact_references(self):
         value = fixture()
         ingress = item("ingresses", "web", managers=["kodex-install"])

@@ -180,7 +180,7 @@ def controller_origin(item, link, owned, objects, links, consumers, retired=()):
     return None
 
 
-def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retired=()):
+def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retired=(), preserve_namespaces=()):
     """Построить проверяемый граф принадлежности; неизвестные объекты и shared consumers блокируют зависимую очистку."""
     if (snapshot.get("schema") != "kodex.installation-inventory/v1" or snapshot.get("status") != "COMPLETE"
             or snapshot.get("incomplete") or snapshot.get("context") != context or snapshot.get("clusterUID") != cluster_uid
@@ -188,8 +188,16 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
             or not snapshot.get("endpoint", "").startswith("https://") or not re.fullmatch(r"[a-f0-9]{64}", snapshot.get("caSHA256", ""))
             or not re.fullmatch(r"[a-f0-9]{40}", source_sha)):
         raise ValueError(ERROR)
-    namespaces = {item["name"]: item for item in snapshot["namespaces"] if namespace_proof(item)}
-    unknown_namespaces = [item for item in snapshot["namespaces"] if item["name"] in NAMESPACES and item["name"] not in namespaces]
+    preserved = set(preserve_namespaces)
+    observed_namespaces = {item["name"] for item in snapshot["namespaces"]}
+    if (len(preserve_namespaces) != len(preserved) or len(preserved) > 32
+            or any(not isinstance(name, str) or not re.fullmatch(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?", name)
+                   or name not in observed_namespaces for name in preserved)):
+        raise ValueError(ERROR)
+    namespaces = {item["name"]: item for item in snapshot["namespaces"]
+                  if namespace_proof(item) and item["name"] not in preserved}
+    unknown_namespaces = [item for item in snapshot["namespaces"]
+                          if item["name"] in NAMESPACES and item["name"] not in preserved and item["name"] not in namespaces]
     # Один UID может обслуживаться через два API versions (например, core/events).
     objects = {}
     for item in sorted(snapshot["objects"], key=lambda entry: (entry["apiVersion"] != "v1", entry["apiVersion"])):
@@ -200,6 +208,9 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
     by_address = {address(item): uid for uid, item in objects.items()}
     owned = {}
     for uid, item in objects.items():
+        if (item["namespace"] in preserved
+                or item["helm"].get("meta.helm.sh/release-namespace") in preserved):
+            continue
         proof = seed_proof(item, namespaces)
         if proof:
             owned[uid] = proof
@@ -212,6 +223,9 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
     while changed:
         changed = False
         for uid, item in objects.items():
+            if (item["namespace"] in preserved
+                    or item["helm"].get("meta.helm.sh/release-namespace") in preserved):
+                continue
             if uid in owned or item["resource"] in SHARED_CLUSTER_RESOURCES or item["resource"] in {"namespaces", "persistentvolumes", "customresourcedefinitions"}:
                 continue
             proof = None
@@ -264,7 +278,7 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
                                   and any(owner.get("uid") == uid for owner in other["ownerReferences"]))
         if foreign_children:
             shared.append({"identity": item, "foreignChildUIDs": foreign_children})
-        if foreign and item["resource"] in {"secrets", "configmaps", "roles", "clusterroles", "serviceaccounts", "persistentvolumeclaims", "customresourcedefinitions", "services", "issuers"}:
+        if foreign and item["resource"] in {"secrets", "configmaps", "roles", "clusterroles", "serviceaccounts", "persistentvolumeclaims", "customresourcedefinitions", "services", "issuers", "clusterissuers", "certificates", "bundles"}:
             shared.append({"identity": item, "foreignConsumerUIDs": foreign})
     unresolved = [{"identity": item, "ownedConsumerUIDs": sorted(consumers.get(address(item), set()) & owned.keys())}
                   for uid, item in objects.items() if item["namespace"] in namespaces and uid not in owned]
@@ -295,6 +309,8 @@ def plan_inventory(snapshot, context, cluster_uid, node_uids, source_sha, retire
              "unprovenNamespaces": unknown_namespaces,
              "status": "OWNERSHIP_REVIEW_REQUIRED" if unresolved or shared or unknown_namespaces else "OWNERSHIP_CLASSIFIED",
              "applyStatus": "NOT_EXECUTED"}
+    if preserved:
+        value["preservedNamespaces"] = sorted(preserved)
     value["digest"] = digest(value)
     return value
 
@@ -308,10 +324,13 @@ def main():
     parser.add_argument("--cluster-uid", required=True)
     parser.add_argument("--node-uid", required=True, action="append")
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--preserve-namespace", action="append", default=[],
+                        help="retain one observed infrastructure namespace; its consumers still constrain deletion")
     args = parser.parse_args()
     snapshot = read_private(args.inventory, args.inventory_sha256)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    result = plan_inventory(snapshot, args.context, args.cluster_uid, args.node_uid, source)
+    result = plan_inventory(snapshot, args.context, args.cluster_uid, args.node_uid, source,
+                            preserve_namespaces=args.preserve_namespace)
     write_private(args.output, result)
     print(json.dumps({"status": result["status"], "candidates": len(result["deleteCandidates"]),
                       "unresolved": len(result["unresolved"]), "shared": len(result["shared"]),
