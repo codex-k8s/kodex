@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentServingInventory, readComponentServingInventory } from './portable-component-migration.mjs';
 import { activeDeploymentPods } from './stable-archive-transition.mjs';
+import { planImmutableControlPlaneMigration } from './control-plane-immutable-migration.mjs';
 import { validWorkspaceUnboundStopMigrationPrecondition, validWorkspaceUnboundStopMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
@@ -323,7 +324,7 @@ test('backup maintenance использует отдельные имена Job 
  assert.equal(config.requiredMigrations.length,4);
  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'fixture','workspace-backup',publication());
  assert.equal(plan.job.metadata.name,'control-plane-migrate-20261028000100-backup');
- assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261028000100-backup');
+ assert.match(plan.checkJob.metadata.name,/^control-plane-migration-check-20261028000100-[a-f0-9]{12}$/);
  assert.deepEqual(plan.job.spec.template.spec.containers[0].args,['up-workspace-backup-compatible']);
  assert.deepEqual(plan.checkJob.spec.template.spec.containers[0].args,['check']);
  assert.equal(plan.job.spec.template.spec.serviceAccountName,'control-plane-migrator');
@@ -837,6 +838,64 @@ test('check is a separately fenced read-only execution before any CP stop',t=>{
   assert.equal(s.checkJob.spec.template.spec.initContainers[0].volumeMounts,undefined);
   assert.match(readFileSync(f.evidence,'utf8'),/CHECK_READBACK/);
 });
+test('readonly CHECK identity следует plan.id/profile, не меняя DDL name/spec/attempt budget',()=>{
+ const first=planImmutableControlPlaneMigration(base(),source,()=>({revision}),'plan-one',publication());
+ const same=planImmutableControlPlaneMigration(base(),source,()=>({revision}),'plan-one',publication());
+ const other=planImmutableControlPlaneMigration(base(),source,()=>({revision}),'plan-two',publication());
+ const legacy=planImmutableControlPlaneMigration(base(),source,()=>({revision}),'plan-one',publication(),1,'outbox-index',null);
+ assert.equal(first.checkIdentity,'plan-id-v1');assert.deepEqual(first,same);
+ assert.notEqual(first.checkJob.metadata.name,other.checkJob.metadata.name);assert.ok(first.checkJob.metadata.name.length<=57);
+ assert.deepEqual(first.job,other.job);assert.deepEqual(first.job,legacy.job);assert.deepEqual(first.checkJob.spec,legacy.checkJob.spec);
+ assert.equal(Object.hasOwn(legacy,'checkIdentity'),false);assert.equal(legacy.checkJob.metadata.name,'control-plane-migration-check-'+version);
+ assert.throws(()=>planImmutableControlPlaneMigration(base(),source,()=>({revision}),'plan-one',publication(),3),/ATTEMPT_INVALID/);
+});
+
+test('новый независимый pre-STOP plan сохраняет старый PASS и создаёт только свой readonly CHECK',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');
+ const original=read(f.plan),oldUID=f.read().checkJob.metadata.uid;
+ f.edit(s=>s.checkJob.status.completionTime=new Date(Date.now()-600000).toISOString());
+ assert.notEqual(f.run('stop').status,0);
+ const previous=f.retry(),oldJournal=readFileSync(previous[3],'utf8');
+ pass(f,'plan','PLANNED');const fresh=read(f.plan);
+ assert.equal(fresh.predecessor,undefined);assert.equal(fresh.attempt,1);assert.equal(fresh.checkIdentity,'plan-id-v1');
+ assert.notEqual(fresh.id,original.id);assert.notEqual(fresh.checkJob.metadata.name,original.checkJob.metadata.name);
+ assert.equal(fresh.job.metadata.name,original.job.metadata.name);assert.equal(f.read().previousCheckJob.metadata.uid,oldUID);
+ f.edit(s=>s.mode='check-lost-ack');assert.notEqual(f.run('check').status,0);
+ const creates=f.read().calls.filter(a=>a.includes('create')).length;assert.equal(creates,2);
+ pass(f,'check');pass(f,'inspect');assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);
+ f.edit(s=>s.mode='');pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,3);assert.equal(f.read().calls.some(a=>a.includes('delete')),false);
+ assert.equal(readFileSync(previous[3],'utf8'),oldJournal);assert.equal(f.read().previousCheckJob.metadata.uid,oldUID);
+});
+
+test('fresh CHECK identity не обходит существующую DDL Job либо STOP marker',t=>{
+ const completed=failedParent(t);completed.retry();const count=completed.read().calls.filter(a=>a.includes('create')).length;
+ const ddl=completed.run('plan');assert.notEqual(ddl.status,0);assert.match(ddl.stderr,/MIGRATION_JOB_ALREADY_EXISTS/);
+ assert.equal(completed.read().calls.filter(a=>a.includes('create')).length,count);
+ const stopped=cli(t);pass(stopped,'plan','PLANNED');pass(stopped,'check');pass(stopped,'stop','STOPPED');pass(stopped,'resume','RESUMED');
+ stopped.retry();const reserved=stopped.run('plan');assert.notEqual(reserved.status,0);assert.match(reserved.stderr,/MIGRATION_ANCHOR_ALREADY_RESERVED/);
+ assert.equal(stopped.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('retained operational plan без checkIdentity читается без переписывания legacy CHECK',t=>{
+ const f=cli(t);pass(f,'plan','PLANNED');const legacy=read(f.plan);
+ // Офлайн fixture старого v2 плана создаётся до Job/journal, не меняя operational history.
+ delete legacy.checkIdentity;legacy.checkJob.metadata.name='control-plane-migration-check-'+version;write(f.plan,legacy);
+ const initial=readFileSync(f.plan,'utf8');pass(f,'check');pass(f,'inspect');pass(f,'check');
+ assert.equal(readFileSync(f.plan,'utf8'),initial);assert.equal(f.read().checkJob.metadata.name,legacy.checkJob.metadata.name);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('unknown или изменённая CHECK identity закрывается до create и не наследует legacy default',t=>{
+ const f=cli(t);pass(f,'plan','PLANNED');const original=read(f.plan);
+ for(const identity of [null,'','legacy','plan-id-v2',0,{},[]]){
+  write(f.plan,{...original,checkIdentity:identity});assert.notEqual(f.run('check').status,0);
+ }
+ write(f.plan,{...original,id:'changed-plan'});assert.notEqual(f.run('check').status,0);
+ const changed=structuredClone(original);changed.checkJob.metadata.name='control-plane-migration-check-'+version;
+ write(f.plan,changed);assert.notEqual(f.run('check').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')||a.includes('patch')).length,0);
+});
 for(const mode of ['check-fail','check-running','check-lost-ack'])test(`check ${mode} never stops CP or recreates an unknown Job`,t=>{
   const f=cli(t);pass(f,'plan','PLANNED');f.edit(s=>s.mode=mode);
   const r=f.run('check');if(mode==='check-running')assert.equal(JSON.parse(r.stdout).status,'RUNNING');else assert.notEqual(r.status,0);
@@ -928,7 +987,7 @@ test('failed check successor pins parent journal and rejects an unconfirmed fail
   assert.equal(f.read().checkJob,undefined);
 });
 test('new readback supports historical v1 attempt without weakening the native init check of v2',()=>{
-  const plan=makePlan();plan.version=1;delete plan.attempt;delete plan.checkJob;delete plan.job.spec.template.spec.initContainers;
+  const plan=makePlan();plan.version=1;delete plan.checkIdentity;delete plan.attempt;delete plan.checkJob;delete plan.job.spec.template.spec.initContainers;
   const {job,pod}=execution(plan);delete pod.spec.initContainers;pod.status.initContainerStatuses=[];
   assert.equal(migrationReadback(job,plan,`goose: current version: ${version}`,[pod]).status,'PASS');
   const modern=makePlan(),exec=execution(modern);exec.pod.spec.initContainers[0].terminationMessagePath='/dev/termination-log';
@@ -942,7 +1001,7 @@ test('repository bundle closed profile uses the same canonical immutable transpo
  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'bundle-fixture','repository-bundle',publication());
  assert.equal(plan.profile,'repository-bundle');assert.equal(plan.migrationVersion,'20261025000200');
  assert.equal(plan.job.metadata.name,'control-plane-migrate-20261025000200');
- assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261025000200');
+ assert.match(plan.checkJob.metadata.name,/^control-plane-migration-check-20261025000200-[a-f0-9]{12}$/);
  assert.deepEqual(plan.job.spec.template.spec.containers,makePlan().job.spec.template.spec.containers);
  assert.deepEqual(plan.job.spec.template.spec.volumes,makePlan().job.spec.template.spec.volumes);
  assert.equal(config.previousVersion,20261025000100);
@@ -1012,7 +1071,7 @@ test('owner gate expiry profile binds exact successor schema and immutable migra
  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'expiry-fixture','owner-gate-expiry',publication());
  assert.equal(plan.profile,'owner-gate-expiry');assert.equal(plan.migrationVersion,'20261026000100');
  assert.equal(plan.job.metadata.name,'control-plane-migrate-20261026000100');
- assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261026000100');
+ assert.match(plan.checkJob.metadata.name,/^control-plane-migration-check-20261026000100-[a-f0-9]{12}$/);
  assert.deepEqual(plan.job.spec.template.spec.containers,makePlan().job.spec.template.spec.containers);
  assert.deepEqual(plan.job.spec.template.spec.volumes,makePlan().job.spec.template.spec.volumes);
  assert.equal(config.previousVersion,20261025000200);
@@ -1043,7 +1102,7 @@ test('purge authority profile pins exact migration and retains the immutable job
  const plan=planControlPlaneMigration(base(),source,()=>({revision}),'purge-acl-fixture','project-purge-authority',publication());
  assert.equal(config.previousVersion,20261026000100);assert.equal(plan.migrationVersion,'20261026000200');
  assert.equal(plan.job.metadata.name,'control-plane-migrate-20261026000200');
- assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261026000200');
+ assert.match(plan.checkJob.metadata.name,/^control-plane-migration-check-20261026000200-[a-f0-9]{12}$/);
  assert.deepEqual(plan.job.spec.template.spec,makePlan().job.spec.template.spec);
  const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
  assert.equal(migrationReadback(job,plan,'goose: current version: 20261026000200',[pod]).status,'PASS');
@@ -1089,7 +1148,7 @@ test('server workflow profile pins complete source range and retains canonical m
  assert.throws(()=>config.requiredMigrations.push('foreign.sql'));
  assert.equal(plan.migrationVersion,'20261026001000');
  assert.equal(plan.job.metadata.name,'control-plane-migrate-20261026001000');
- assert.equal(plan.checkJob.metadata.name,'control-plane-migration-check-20261026001000');
+ assert.match(plan.checkJob.metadata.name,/^control-plane-migration-check-20261026001000-[a-f0-9]{12}$/);
  assert.deepEqual(plan.job.spec.template.spec,makePlan().job.spec.template.spec);
  const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
  assert.equal(migrationReadback(job,plan,'goose: current version: 20261026001000',[pod]).status,'PASS');
@@ -1920,7 +1979,7 @@ test('portable просроченный PASS check разрешает лишь f
  assert.equal(f.read().deployment.spec.replicas,3);assert.equal(f.read().controller.spec.replicas,2);
  pass(f,'inspect');const original=f.read().checkJob.metadata.uid,previous=f.retry();pass(f,'plan','PLANNED',previous);
  const plan=read(f.plan);assert.equal(plan.attempt,2);assert.equal(plan.predecessor.stage,'CHECK');
- assert.equal(plan.predecessor.jobUID,original);assert.match(plan.checkJob.metadata.name,/-attempt2$/);
+ assert.equal(plan.predecessor.jobUID,original);assert.equal(plan.checkIdentity,'plan-id-v1');assert.match(plan.checkJob.metadata.name,/-[a-f0-9]{12}$/);
  pass(f,'check');assert.equal(f.read().previousCheckJob.metadata.uid,original);assert.notEqual(f.read().checkJob.metadata.uid,original);
  assert.equal(f.read().job,undefined);assert.equal(f.read().calls.filter(a=>a.includes('create')).length,2);
  pass(f,'stop','STOPPED');pass(f,'apply');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
