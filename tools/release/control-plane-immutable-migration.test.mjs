@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentServingInventory } from './portable-component-migration.mjs';
+import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentServingInventory, readComponentServingInventory } from './portable-component-migration.mjs';
 import { activeDeploymentPods } from './stable-archive-transition.mjs';
 import { validWorkspaceUnboundStopMigrationPrecondition, validWorkspaceUnboundStopMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
@@ -616,6 +616,18 @@ const fs=require('fs'),path=${JSON.stringify(state)},journalDirectory=${JSON.str
 const journal=journalDirectory+'/'+(s.retry?'retry-evidence.jsonl':'evidence.jsonl');
 s.calls.push(a);const save=()=>fs.writeFileSync(path,JSON.stringify(s));const out=x=>{save();process.stdout.write(JSON.stringify(x));};
 const fail=()=>{save();process.exit(1);};
+const inventory=()=>{
+ const items=[];
+ for(const app of [s.deployment,s.controller,s.gateway].filter(Boolean)){
+  const name=app.metadata.name,rs='rs-'+name;
+  items.push({kind:'ReplicaSet',metadata:{name:rs,namespace:'kodex-system',uid:rs,ownerReferences:[{kind:'Deployment',uid:app.metadata.uid,controller:true}]}});
+  for(let i=0;i<app.spec.replicas;i++)items.push({kind:'Pod',metadata:{name:name+'-'+i,namespace:'kodex-system',uid:name+'-'+i,labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rs,controller:true}]},spec:app.spec.template.spec,
+   status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}});
+ }
+ for(const job of [s.bootstrapJob,s.checkJob,s.previousCheckJob,s.previousJob,s.job].filter(Boolean))items.push({kind:'Job',...job});
+ for(const pod of [s.bootstrapPod,s.checkPod,s.previousCheckPod,s.previousPod,s.pod].filter(Boolean))items.push({kind:'Pod',...pod,metadata:{name:pod.metadata.uid,...pod.metadata}});
+ items.push(...(s.extraServingInventory??[]));return items;
+};
 if(a.includes('patch')&&a.includes('--patch-file=/dev/stdin')){
  const name=a[a.indexOf('deployment')+1],app=name==='control-plane'?s.deployment:s.controller;
  const p=JSON.parse(fs.readFileSync(0,'utf8'));
@@ -653,6 +665,14 @@ if(a.includes('patch')&&a.includes('--patch-file=/dev/stdin')){
  save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:s.clusterUID??'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
 }else if(a.includes('nodes'))out({items:s.nodes});
+else if(a.includes('replicasets,pods,jobs')&&a.some(v=>v.startsWith('jsonpath='))){
+ const rows=inventory().map(r=>[r.kind,r.metadata.name,r.metadata.uid,r.metadata.labels?.['app.kubernetes.io/name']??'',r.metadata.namespace,JSON.stringify(r.metadata.ownerReferences??[])].join('\\t'));
+ save();process.stdout.write(rows.join('\\n')+'\\n');
+}else if(a.includes('pod')&&a.some(v=>v==='jsonpath={@}')){
+ const name=a[a.indexOf('pod')+1],pod=inventory().find(r=>r.kind==='Pod'&&r.metadata.name===name);if(pod)out(pod);else{save();process.stdout.write('');}
+}else if(a.includes('job')&&a.some(v=>v==='jsonpath={@}')){
+ const name=a[a.indexOf('job')+1],job=inventory().find(r=>r.kind==='Job'&&r.metadata.name===name);if(job)out(job);else{save();process.stdout.write('');}
+}
 else if(a.includes('configmap')&&a.includes('kodex-installation-profile'))out(s.installation);
 else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
 }else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:s.schemaMigrated?20261113000100:20261112000100,unboundStopAbsent:!s.schemaMigrated,workspaceGuardPredecessor:!s.schemaMigrated,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_UNBOUND_STOP_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,workspaceGuardReady:true,receiptGuardReady:true,receiptTableReady:true,receiptTriggerReady:true,archiveGuardPreserved:true,...s.postcondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,archiveGuardPredecessor:true,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_V1',database:'control_plane',readOnly:'on',gooseVersion:20261112000100,archiveGuardReady:true,archiveTriggerReady:true,...s.postcondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1',readOnly:'on',database:'control_plane',gooseVersion:20261109000100,artifactOptionalAntivirusAbsent:true,receiptConstraintsReady:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_V1',readOnly:'on',database:'control_plane',gooseVersion:20261110000100,constraintsValidated:true,explicitNoScanReceipt:true,noForgedClean:true,realScanReceipt:true,noAbsentReceipt:true,...s.postcondition});}else if(sql.includes('INTEGRATION_RESOURCE_POLICIES_')){out({...${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup',true))},...(sql.includes('INTEGRATION_RESOURCE_POLICIES_BACKUP_PREDECESSOR_V2')||sql.includes('INTEGRATION_RESOURCE_POLICIES_PREDECESSOR_V2')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup'))}),...s.postcondition});}else if(sql.includes('AUTHORITY_PROOF_COUNTER_')){out({...${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',true))},...(sql.includes('AUTHORITY_PROOF_COUNTER_BACKUP_PREDECESSOR_V1')||sql.includes('AUTHORITY_PROOF_COUNTER_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',false))}),...s.postcondition});}else if(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_')){out({...${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',true))},...(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_PREDECESSOR_V1')||sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',false))}),...s.postcondition});}else if(sql.includes('PLATFORM_OIDC_IDENTITY_')){out({...${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',true))},...(sql.includes('PLATFORM_OIDC_IDENTITY_BACKUP_PREDECESSOR_V1')||sql.includes('PLATFORM_OIDC_IDENTITY_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',false))}),...s.postcondition});}else if(sql.includes('WORKFLOW_CONTENT_PAGE_')){out({...${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',true))},...(sql.includes('WORKFLOW_CONTENT_PAGE_BACKUP_PREDECESSOR_V1')||sql.includes('WORKFLOW_CONTENT_PAGE_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PDLC_')){out({...${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PR_COLLABORATION_')){out({...${JSON.stringify(githubPRProof(profile==='github-pr-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubPRProof(profile==='github-pr-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('GITHUB_AUTONOMOUS_PDLC_')){out({...${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('workspaceVolumeSSHAbsent')){out({...${JSON.stringify(serverWorkflowProof())},workspaceVolumeSSHAbsent:true,sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_VOLUME_SSH_V1')){out({...${JSON.stringify(workspaceVolumeSSHProof())},...s.postcondition});}else if(sql.includes('sshComposeAbsent')){out({...${JSON.stringify(serverWorkflowProof())},sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('sshComposeProfile')){out({...${JSON.stringify(sshComposeProof())},...s.postcondition});}else if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
@@ -689,7 +709,7 @@ else if(a.includes('pods')){const selector=a[a.indexOf('-l')+1],name=selector.sp
 else if(a.includes('jobs'))out({items:[s.checkJob,s.previousCheckJob,s.previousJob,s.job,...(s.otherJobs??[])].filter(Boolean)});
 else if(a.includes('logs')){save();const check=a.some(x=>x.startsWith('job/control-plane-migration-check-'));process.stdout.write(check?(s.checkLog??'PostgreSQL connection check completed')+'\\n':'goose: current version: '+(s.logVersion??'${version}')+'\\n');}
 else if(a.includes('job')){const name=a[a.indexOf('job')+1];
- const job=name==='control-plane-migrate'?s.bootstrapJob:name===s.checkJob?.metadata.name?s.checkJob:name===s.previousCheckJob?.metadata.name?s.previousCheckJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:undefined;
+ const job=name==='control-plane-migrate'?s.bootstrapJob:name===s.checkJob?.metadata.name?s.checkJob:name===s.previousCheckJob?.metadata.name?s.previousCheckJob:name===s.previousJob?.metadata.name?s.previousJob:name===s.job?.metadata.name?s.job:(s.extraServingInventory??[]).find(r=>r.kind==='Job'&&r.metadata.name===name);
  if(job)out(job);else{save();if(!a.includes('--ignore-not-found=true'))process.exit(1);}}
 else{save();process.exit(1);}
 `,{mode:0o700});
@@ -1754,10 +1774,59 @@ function retainedCLIJobFixture(bootstrap=false) {
  const spec={serviceAccountName:bootstrap?'control-plane-broker-bootstrap':'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',containers:[main]};
  const job={apiVersion:'batch/v1',kind:'Job',metadata:{name,namespace:'kodex-system',uid:'retained-job',labels},
   spec:{template:{metadata:{labels},spec}},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
- const pod={kind:'Pod',metadata:{uid:'retained-pod',namespace:'kodex-system',labels,ownerReferences:[{kind:'Job',controller:true,name,uid:'retained-job'}]},spec:structuredClone(spec),
+ const pod={kind:'Pod',metadata:{name:'retained-pod',uid:'retained-pod',namespace:'kodex-system',labels,ownerReferences:[{kind:'Job',controller:true,name,uid:'retained-job'}]},spec:structuredClone(spec),
   status:{phase:'Succeeded',containerStatuses:[{name:main.name,state:{terminated:{exitCode:0}}}]}};
  return {job,pod};
 }
+
+function servingMetadata(items) {
+ return items.filter(r=>['Pod','ReplicaSet','Job'].includes(r.kind)).map(r=>[r.kind,r.metadata.name,r.metadata.uid,
+  r.metadata.labels?.['app.kubernetes.io/name']??'',r.metadata.namespace,JSON.stringify(r.metadata.ownerReferences??[])].join('\t')).join('\n')+'\n';
+}
+
+test('metadata-first serving read не читает многомегабайтные specs/annotations соседних workloads',()=>{
+ const retained=retainedCLIJobFixture(true),large='x'.repeat(9<<20),calls=[];
+ const sets={kind:'ReplicaSet',metadata:{name:'owned-rs',namespace:'kodex-system',uid:'owned-rs',ownerReferences:[{kind:'Deployment',controller:true,uid:'deployment'}]}};
+ const pod={kind:'Pod',metadata:{name:'owned-pod',namespace:'kodex-system',uid:'owned-pod',labels:{'app.kubernetes.io/name':'mutated'},ownerReferences:[{kind:'ReplicaSet',controller:true,uid:'owned-rs'}]},spec:{containers:[{name:'control-plane'}]},status:{phase:'Running'}};
+ const irrelevant={kind:'Pod',metadata:{name:'neighbor',namespace:'kodex-system',uid:'neighbor',annotations:{large}},spec:{large}};
+ const items=[sets,pod,retained.job,retained.pod,irrelevant];assert.ok(Buffer.byteLength(JSON.stringify({items}))>8<<20);
+ const kube=args=>{
+  calls.push(args);
+  if(args.includes('replicasets,pods,jobs'))return servingMetadata(items);
+  const name=args[args.indexOf('get')+2],kind=args.includes('pod')?'Pod':'Job';
+  assert.notEqual(name,'neighbor');assert.ok(args.includes('jsonpath={@}'));
+  return JSON.stringify(items.find(r=>r.kind===kind&&r.metadata.name===name));
+ };
+ const observed=readComponentServingInventory(kube,'control-plane','deployment');
+ assert.deepEqual(activeDeploymentPods(observed,'deployment').map(p=>p.metadata.uid),['owned-pod']);
+ assert.equal(calls.filter(a=>a.includes('replicasets,pods,jobs')).length,2);
+ assert.equal(calls.filter(a=>a.includes('pod')).length,2);assert.equal(calls.filter(a=>a.includes('job')).length,1);
+ assert.equal(calls.some(a=>a.includes('-l')||a.at(-1)==='json'),false);
+});
+
+test('metadata/full-object races и bounds не скрывают UID, lineage, foreign Pod и новый writer',()=>{
+ const retained=retainedCLIJobFixture(),original=[retained.job,retained.pod];
+ for(const scenario of ['pod-replaced','owner-changed','job-replaced','job-replaced-after-read','new-writer','metadata-overflow','object-overflow','foreign-job']){
+  const items=structuredClone(original);let reads=0;
+  const kube=args=>{
+   if(args.includes('replicasets,pods,jobs')){
+    if(scenario==='metadata-overflow')return 'x'.repeat(1<<20);
+    ++reads;
+    if(reads===2&&scenario==='new-writer')items.push({kind:'Pod',metadata:{name:'new-writer',uid:'new-writer',namespace:'kodex-system',labels:{'app.kubernetes.io/name':'control-plane'}}});
+    if(reads===2&&scenario==='job-replaced-after-read')items[0].metadata.uid='replaced';
+    return servingMetadata(items);
+   }
+   const kind=args.includes('pod')?'Pod':'Job',object=structuredClone(items.find(r=>r.kind===kind));
+   if(scenario==='object-overflow')return 'x'.repeat(1<<20);
+   if(kind==='Pod'&&scenario==='pod-replaced')object.metadata.uid='replaced';
+   if(kind==='Pod'&&scenario==='owner-changed')object.metadata.ownerReferences[0].uid='replaced';
+   if(kind==='Job'&&scenario==='job-replaced')object.metadata.uid='replaced';
+   if(kind==='Job'&&scenario==='foreign-job')return '';
+   return JSON.stringify(object);
+  };
+  assert.throws(()=>activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),/COMPONENT_MIGRATION_.*(?:CHANGED|BOUND_EXCEEDED)|STABLE_FOREIGN_SERVING_POD/,scenario);
+ }
+});
 
 test('serving inventory исключает только exact завершённую CLI Job, сохраняя foreign guard',()=>{
  for(const bootstrap of [false,true]) {
@@ -1808,7 +1877,8 @@ test('public portable CLI check→stop/join→043→paired handoff→resume ис
  pass(f,'resume','RESUMED');pass(f,'apply');
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);
  assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,patches);
- assert.ok(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&!a.includes('-l')));
+ assert.ok(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&!a.includes('-l')&&a.some(v=>v.startsWith('jsonpath='))));
+ assert.equal(f.read().calls.some(a=>a.includes('replicasets,pods,jobs')&&a.at(-1)==='json'),false);
 });
 
 test('public portable CLI запрещает handoff без DDL/postcondition и после незавершённого controller join',t=>{

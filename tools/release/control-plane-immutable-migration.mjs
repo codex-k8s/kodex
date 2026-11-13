@@ -1,5 +1,5 @@
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, componentServingInventory } from './portable-component-migration.mjs';
+import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -555,8 +555,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.stagedSpec)) stage = 'STAGED';
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.resumedSpec) && resumed) stage = 'UPGRADED';
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
-      const list = JSON.parse(kube(['-n',namespace,'get','replicasets,pods,jobs','-o','json']));
-      const pods = activeDeploymentPods(componentServingInventory(list,'control-plane',plan.anchor.uid),plan.anchor.uid);
+      const pods = activeDeploymentPods(readComponentServingInventory(kube,'control-plane',plan.anchor.uid),plan.anchor.uid);
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
       const servingImage = stage === 'UPGRADED' ? cpHandoff.resumedSpec.template.spec.containers.find(c => c.name === 'control-plane').image : plan.anchor.previousImage;
       const digest = servingImage.split('@').at(-1);
