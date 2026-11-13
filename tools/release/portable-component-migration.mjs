@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { fingerprint } from './scoped-release.mjs';
 import { portableRunnerTarget } from './portable-runner-target.mjs';
+import { isProvenStoppedPod } from './stable-archive-transition.mjs';
 
 const requireValue = (ok, code) => { if (!ok) throw new Error(code); };
 const fields = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -153,6 +154,52 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
     })};
 }
 
+// Общий namespace inventory сохраняет Deployment descendants даже при дрейфе labels.
+// Чужой Pod из serving selector исключается только как подтверждённая завершённая
+// repo-owned CLI Job; labels, terminal phase или имя Job по отдельности недостаточны.
+export function componentServingInventory(list, name, deploymentUID) {
+  requireValue(Array.isArray(list?.items) && names.includes(name), 'COMPONENT_MIGRATION_POD_INVENTORY_INVALID');
+  const sets=list.items.filter(r => r.kind === 'ReplicaSet');
+  const owners=new Set(sets.filter(r => r.metadata?.ownerReferences?.some(o =>
+    o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID)).map(r => r.metadata.uid));
+  const jobs=list.items.filter(r => r.kind === 'Job');
+  const retainedJobPod = pod => {
+    if (name !== 'control-plane' || !pod.metadata?.uid || pod.metadata.namespace !== 'kodex-system' ||
+      !isProvenStoppedPod(pod) || ['NodeLost','Unknown'].includes(pod.status.reason) ||
+      pod.status.conditions?.some(c => c.status === 'Unknown')) return false;
+    const refs=(pod.metadata.ownerReferences ?? []).filter(o => o.controller === true);
+    if (refs.length !== 1 || refs[0].kind !== 'Job' || !refs[0].uid) return false;
+    const matches=jobs.filter(j => j.apiVersion === 'batch/v1' && j.metadata?.namespace === pod.metadata.namespace &&
+      j.metadata.uid === refs[0].uid && j.metadata.name === refs[0].name);
+    if (matches.length !== 1) return false;
+    const job=matches[0], labels=job.metadata.labels ?? {}, spec=job.spec?.template?.spec, main=spec?.containers?.[0];
+    const migration=labels['app.kubernetes.io/component'] === 'migration' &&
+      (job.metadata.name === 'control-plane-migrate' || /^control-plane-(?:migrate-|migration-check-)[0-9]{14}(?:-[a-z0-9-]+)?$/.test(job.metadata.name)) &&
+      spec?.serviceAccountName === 'control-plane-migrator' && main?.name === 'migrate' &&
+      main.args?.length === 1 && ['up','check'].includes(main.args[0]);
+    const bootstrap=labels['app.kubernetes.io/component'] === 'broker-bootstrap' && job.metadata.name === 'control-plane-broker-bootstrap' &&
+      spec?.serviceAccountName === 'control-plane-broker-bootstrap' && main?.name === 'bootstrap' &&
+      Array.isArray(main.args) && main.args.length === 2 && main.args[0] === 'broker' && main.args[1] === 'bootstrap';
+    return labels['app.kubernetes.io/name'] === name && labels['app.kubernetes.io/part-of'] === 'kodex' && (migration || bootstrap) &&
+      pod.metadata.labels?.['app.kubernetes.io/name'] === name && pod.metadata.labels?.['app.kubernetes.io/component'] === labels['app.kubernetes.io/component'] &&
+      !job.status?.active && !job.status?.terminating && job.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1 &&
+      !job.status.conditions.some(c => c.status === 'Unknown') && spec.containers.length === 1 && image(main.image) &&
+      main.command?.length === 1 && main.command[0] === '/usr/local/bin/control-plane-cli' && spec.restartPolicy === 'Never' && spec.automountServiceAccountToken === false &&
+      pod.spec.serviceAccountName === spec.serviceAccountName && pod.spec.restartPolicy === spec.restartPolicy && pod.spec.automountServiceAccountToken === false &&
+      !pod.spec.hostNetwork && !pod.spec.hostPID && !pod.spec.hostIPC &&
+      ['containers','initContainers','ephemeralContainers'].every(field => {
+        const expected=spec[field] ?? [], actual=pod.spec[field] ?? [];
+        return actual.length === expected.length && expected.every((container,index) => actual[index] &&
+          Object.keys(container).every(key => Object.hasOwn(actual[index],key) && fingerprint(actual[index][key]) === fingerprint(container[key])));
+      });
+  };
+  const pods=list.items.filter(r => r.kind === 'Pod' && (r.metadata?.labels?.['app.kubernetes.io/name'] === name ||
+    r.metadata?.ownerReferences?.some(o => o.kind === 'ReplicaSet' && o.controller === true && owners.has(o.uid))));
+  requireValue(pods.every(p => !['NodeLost','Unknown'].includes(p.status?.reason) && p.status?.phase !== 'Unknown' &&
+    !p.status?.conditions?.some(c => c.status === 'Unknown')), 'COMPONENT_MIGRATION_POD_STATE_UNKNOWN');
+  return {items:[...sets,...pods.filter(p => !retainedJobPod(p))]};
+}
+
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
 export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
@@ -166,8 +213,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stage=['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'].find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-    const list=JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l',`app.kubernetes.io/name=${name}`,'-o','json']));
-    const pods=activePods(list,expected.uid);
+    const list=JSON.parse(kube(['-n',namespace,'get','replicasets,pods,jobs','-o','json']));
+    const pods=activePods(componentServingInventory(list,name,expected.uid),expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
     const ready=actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expected.replicas &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expected.replicas) && pods.length === expected.replicas &&

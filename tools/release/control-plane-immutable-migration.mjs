@@ -1,5 +1,5 @@
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle } from './portable-component-migration.mjs';
+import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, componentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -427,12 +427,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(actual?.metadata?.uid === expectedUID && actual.metadata.name === expected.metadata.name && actual.metadata.namespace === namespace &&
       actual.metadata.annotations?.[annotation] === expectedHash &&
       fingerprint(io.normalizePodSpec(actual.spec?.template?.spec)) === fingerprint(io.normalizePodSpec(expected.spec.template.spec)) &&
-      !actual.status?.active && actual.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1,
+      !actual.status?.active && !actual.status?.terminating && actual.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1,
     'MIGRATION_PREDECESSOR_NOT_TERMINAL');
     const pods = JSON.parse(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${expected.metadata.name}`,'-o','json'])).items;
     ensure(pods.every(p => p.metadata?.uid && p.metadata.namespace === namespace &&
-      p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === expectedUID) && isProvenStoppedPod(p)),
+      p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === expectedUID) &&
+      !['NodeLost','Unknown'].includes(p.status?.reason) && !p.status?.conditions?.some(c => c.status === 'Unknown') && isProvenStoppedPod(p)),
     'MIGRATION_PREDECESSOR_NOT_JOINED');
+    return pods;
   };
   const predecessor = (paths, anchor, expected, currentMarker) => {
     ensure(!existsSync(`${paths.evidencePath}.lock`), 'MIGRATION_PREDECESSOR_WRITER_ACTIVE');
@@ -446,8 +448,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
     try {
-      // Failed check ещё не даёт полномочий на STOP или DDL. Его отдельная attempt2
-      // требует доказанного отсутствия этих эффектов и сохраняет прежнюю Job.
+      // Terminal check ещё не даёт полномочий на STOP или DDL. Attempt2 сохраняет
+      // прежнюю Job; успешный, но устаревший check заново подтверждается read-only.
       const checkOnly = !previous.events.some(e => e.type === 'CREATE_INTENT');
       const stage = checkOnly ? 'CHECK' : 'MIGRATION';
       const expectedJob = checkOnly ? parent.checkJob : parent.job;
@@ -455,23 +457,31 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const readback = checkOnly ? 'CHECK_READBACK' : 'READBACK';
       const receiptTypes = checkOnly ? ['CHECK_CREATE_ACK','CHECK_READBACK'] : ['CREATE_ACK','READBACK','TERMINAL_READBACK'];
       ensure(!checkOnly || (parent.version === 2 && expectedJob &&
-        !previous.events.some(e => ['STOP_INTENT','STOP_ACK','RESUME_INTENT','RESUME_ACK'].includes(e.type)) &&
+        !previous.events.some(e => ['STOP_INTENT','STOP_ACK','RESUME_INTENT','RESUME_ACK','PAIR_STOP_INTENT','PAIR_STOP_ACK',
+          'PAIR_HANDOFF_INTENT','PAIR_HANDOFF_ACK','PAIR_RESUME_INTENT','PAIR_RESUME_ACK'].includes(e.type)) &&
         !optionalJob(parent.job.metadata.name)), 'MIGRATION_PREDECESSOR_CHECK_EFFECTS_PRESENT');
       const marker = checkOnly ? undefined : hash;
       ensure([marker,...(currentMarker ? [currentMarker] : [])].includes(anchor.metadata.annotations?.[annotation]),
         'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
       const receipts = previous.events.filter(e => receiptTypes.includes(e.type) && e.jobUID);
+      const lastReadback=previous.events.findLast(e => e.type === readback);
+      const passedCheck=checkOnly && lastReadback?.status === 'PASS';
       uid = receipts[0]?.jobUID;
       ensure(uid && receipts.every(e => e.jobUID === uid) && previous.events.filter(e => e.type === intent).length === 1 &&
-        previous.events.some(e => e.type === readback && e.status === 'FAIL') &&
+        lastReadback?.status === (passedCheck ? 'PASS' : 'FAIL') &&
         (checkOnly || previous.events.some(e => e.type === 'RESUME_ACK')),
       'MIGRATION_PREDECESSOR_RECEIPT_INVALID');
       if (expected) ensure(expected.planSHA256 === hash && expected.evidenceSHA256 === previous.bytesSHA256 && expected.jobUID === uid &&
         (expected.stage ?? 'MIGRATION') === stage,
         'MIGRATION_PREDECESSOR_CHANGED');
       const actual = optionalJob(expectedJob.metadata.name);
-      terminalJob(actual,expectedJob,hash,uid);
-      ensure(actual.status.conditions.some(c => c.type === 'Failed' && c.status === 'True'), 'MIGRATION_PREDECESSOR_NOT_FAILED');
+      const pods=terminalJob(actual,expectedJob,hash,uid);
+      if (passedCheck) {
+        const logs=actual.status?.succeeded === 1 ? kube(['-n',namespace,'logs',`job/${actual.metadata.name}`,'-c','migrate','--limit-bytes=262144']) : '';
+        const observed=migrationReadback(actual,parent,logs,pods,'check');
+        ensure(observed.status === 'PASS' && ['status','jobName','jobUID','sourceRevision','operation'].every(key => lastReadback[key] === observed[key]),
+          'MIGRATION_PREDECESSOR_CHECK_PASS_UNCONFIRMED');
+      } else ensure(actual.status.conditions.some(c => c.type === 'Failed' && c.status === 'True'), 'MIGRATION_PREDECESSOR_NOT_FAILED');
       return {...paths,stage,planSHA256:hash,evidenceSHA256:previous.bytesSHA256,jobUID:uid,jobName:expectedJob.metadata.name};
     } finally { previous.close(); }
   };
@@ -545,9 +555,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.stagedSpec)) stage = 'STAGED';
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.resumedSpec) && resumed) stage = 'UPGRADED';
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
-      const list = JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l',
-        'app.kubernetes.io/name=control-plane,app.kubernetes.io/component=internal-service','-o','json']));
-      const pods = activeDeploymentPods(list,plan.anchor.uid);
+      const list = JSON.parse(kube(['-n',namespace,'get','replicasets,pods,jobs','-o','json']));
+      const pods = activeDeploymentPods(componentServingInventory(list,'control-plane',plan.anchor.uid),plan.anchor.uid);
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
       const servingImage = stage === 'UPGRADED' ? cpHandoff.resumedSpec.template.spec.containers.find(c => c.name === 'control-plane').image : plan.anchor.previousImage;
       const digest = servingImage.split('@').at(-1);
