@@ -1,4 +1,5 @@
 import { validateStableReceipt } from './stable-image-publication.mjs';
+import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -115,7 +116,9 @@ const mounts = [
 ];
 
 // Повторно связывает проверенный stable build с точным publication receipt, без registry writes.
-export function immutableMigrationImage(source, evidence) {
+export function immutableMigrationImage(source, evidence, profile = 'outbox-index') {
+  if (evidence?.schema === componentMigrationSchema)
+    return componentMigrationPublication(evidence,source,profile).components.find(c => c.component === 'control-plane').imageRef;
   const { publicationPlan: plan, publicationEvidence: records } = evidence ?? {};
   const image = validateStableReceipt(plan?.receipt);
   ensure(plan.schema === 'kodex.stable-image-publication/v2' && plan.artifactProfile === 'built' &&
@@ -170,14 +173,16 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
   ensure(fingerprint(pod.initContainers) === fingerprint([waitForPostgres]), 'MIGRATION_CANONICAL_INIT_INVALID');
   ensure(/^[a-f0-9]{40}$/.test(source?.revision ?? '') && source.revision !== '0'.repeat(40) &&
     inspect(source.path).revision === source.revision, 'SOURCE_REVISION_MISMATCH');
-  const image = immutableMigrationImage(source, evidence);
+  const image = immutableMigrationImage(source, evidence, profile);
   // Staging overlay не назначает app part-of исходному render. Новая собственная Job
   // получает фиксированную метку; actual CP/SA/Secret проверяются независимо от render.
   const labels = { ...before.metadata.labels, 'app.kubernetes.io/part-of':'kodex' };
     const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`,namespace,labels},spec:{
     backoffLimit:0,activeDeadlineSeconds:300,ttlSecondsAfterFinished:86400,
     template:{metadata:{labels,annotations:{'kodex.dev/source-revision':source.revision,
-      'kodex.dev/image-context-sha256':evidence.publicationPlan.receipt.contextSHA256}},spec:{
+      ...(evidence.schema === componentMigrationSchema
+        ? {'kodex.dev/component-lock-sha256':evidence.components.find(c => c.component === 'control-plane').componentLockSHA256}
+        : {'kodex.dev/image-context-sha256':evidence.publicationPlan.receipt.contextSHA256})}},spec:{
       serviceAccountName:'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',enableServiceLinks:false,
       securityContext:{runAsNonRoot:true,runAsUser:10001,runAsGroup:10001,fsGroup:10001,fsGroupChangePolicy:'OnRootMismatch',seccompProfile:{type:'RuntimeDefault'}},
       initContainers:[structuredClone(waitForPostgres)],
@@ -206,7 +211,9 @@ export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.
   ensure(matching.length <= 1 && matching.length === pods.length, 'MIGRATION_EXECUTION_SCOPE_CHANGED');
   if (matching.length !== 1) return false;
   const pod = matching[0], state = pod.status?.containerStatuses?.[0], expected = expectedJob.spec.template.spec;
-  const digest = plan.imageEvidence.publicationPlan.image.digest;
+  const digest = plan.imageEvidence.schema === componentMigrationSchema
+    ? componentMigrationPublication(plan.imageEvidence,plan.source,plan.profile).components.find(c => c.component === 'control-plane').digest
+    : plan.imageEvidence.publicationPlan.image.digest;
   const expectedInit = expected.initContainers ?? [], actualInit = pod.spec?.initContainers ?? [];
   ensure(pod.metadata.uid && !pod.spec?.ephemeralContainers?.length && actualInit.length === expectedInit.length &&
     actualInit.every((item,index) => Object.keys(expectedInit[index]).every(key => fingerprint(item[key]) === fingerprint(expectedInit[index][key])) &&
@@ -248,7 +255,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const anchorLocalProfile = configuration.anchorProfile === 'portable' ? undefined : 'stable';
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
-  ensure(context === 'k3d-kodex', 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
+  const retainedPlan = phase === 'plan' ? undefined : privateJSON(options['--plan']);
+  const componentPublication = phase === 'plan'
+    ? (options['--component-publication'] ? privateJSON(options['--component-publication']) : undefined)
+    : (retainedPlan.imageEvidence?.schema === componentMigrationSchema ? retainedPlan.imageEvidence : undefined);
+  const portableTarget = phase === 'plan'
+    ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
+  ensure(componentPublication ? profile === 'workspace-unbound-stop' && portableTarget && context === componentPublication.context
+    : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
+  ensure(phase !== 'handoff' || componentPublication, 'COMPONENT_MIGRATION_HANDOFF_PROFILE_REQUIRED');
   const get = (kind, name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
   const optionalJob = name => {
     const raw = kube(['-n',namespace,'get','job',name,'--ignore-not-found=true','-o','json']);
@@ -318,6 +333,17 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
   const imageScope = (evidence, nsUID) => {
+    if (evidence.schema === componentMigrationSchema) {
+      const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
+      const apps = ['control-plane','runtime-controller','control-api-gateway'].map(name => get('deployment',name));
+      const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
+        installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items});
+      const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
+      const children = JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l','app.kubernetes.io/name=control-api-gateway','-o','json']));
+      ensure(gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
+        activeDeploymentPods(children,gateway.metadata.uid).length === 0, 'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
+      return target;
+    }
     ensure(evidence.publicationPlan.context === context && evidence.publicationPlan.clusterUID === clusterUID &&
       evidence.publicationPlan.namespaceUID === nsUID, 'MIGRATION_PUBLICATION_SCOPE_MISMATCH');
   };
@@ -416,7 +442,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       parent.clusterUID === clusterUID && parent.context === context && parent.namespaceUID === namespaceUID() &&
       parent.anchor.uid === anchor.metadata.uid && [0,anchorReplicas].includes(anchor.spec.replicas) &&
       parent.anchor.specSHA256 === fingerprint({...anchor.spec,replicas:anchorReplicas}), 'MIGRATION_PREDECESSOR_SCOPE_CHANGED');
-    immutableMigrationImage(parent.source,parent.imageEvidence);
+    immutableMigrationImage(parent.source,parent.imageEvidence,parent.profile);
     const previous = privateJournal(paths.evidencePath,{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:hash},{readOnly:true});
     let uid;
     try {
@@ -452,7 +478,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   if (phase === 'plan') {
     const anchor = deployment(), render = renderedBase(options['--base-render']);
     const source = {path:options['--source'],revision:options['--revision']};
-    const imageEvidence = {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
+    const imageEvidence = componentPublication ?? {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
     const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
@@ -462,13 +488,18 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(anchor.spec.replicas === anchorReplicas && !anchor.spec.paused && anchor.metadata.labels['kodex.dev/local-profile'] === anchorLocalProfile &&
       anchor.status?.observedGeneration >= anchor.metadata.generation &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => anchor.status[key] === anchorReplicas) &&
-      /^registry\.local\.kodex\/kodex\/control-plane@sha256:[a-f0-9]{64}$/.test(previousImage ?? '') &&
+      (componentPublication ? previousImage === componentPublication.components.find(c => c.component === 'control-plane').expectedImageRef :
+        /^registry\.local\.kodex\/kodex\/control-plane@sha256:[a-f0-9]{64}$/.test(previousImage ?? '')) &&
       !previousImage.endsWith('0'.repeat(64)) && !anchor.spec.template.spec.volumes?.some(volume => volume.hostPath), 'MIGRATION_CP_IMMUTABLE_HEALTH_REQUIRED');
     ensure(previous || !anchor.metadata.annotations?.[annotation], 'MIGRATION_ANCHOR_ALREADY_RESERVED');
     Object.assign(plan,{clusterUID,context,namespaceUID:nsUID,dependencies:dependencies(),
       anchor:{kind:'Deployment',name:'control-plane',uid:anchor.metadata.uid,resourceVersion:anchor.metadata.resourceVersion,
         specSHA256:fingerprint(anchor.spec),stoppedSpecSHA256:fingerprint({...anchor.spec,replicas:0}),previousImage},
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
+    if (componentPublication) {
+      plan.portableTarget = structuredClone(portableTarget);
+      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,[anchor,get('deployment','runtime-controller')],source);
+    }
     if (previous) plan.predecessor = previous;
     plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
@@ -478,7 +509,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
     return;
   }
-  const plan = privateJSON(options['--plan']);
+  const plan = retainedPlan;
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
@@ -510,16 +541,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (hash === plan.anchor.stoppedSpecSHA256 && marker === planSHA256) stage = 'STOPPED';
       else if (hash === plan.anchor.specSHA256 && marker === previousMarker && !resumed) stage = 'BEFORE';
       else if (hash === plan.anchor.specSHA256 && marker === planSHA256 && resumed) stage = 'RESUMED';
+      const cpHandoff = plan.componentHandoff?.components.find(c => c.name === 'control-plane');
+      if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.stagedSpec)) stage = 'STAGED';
+      if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.resumedSpec) && resumed) stage = 'UPGRADED';
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
       const list = JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l',
         'app.kubernetes.io/name=control-plane,app.kubernetes.io/component=internal-service','-o','json']));
       const pods = activeDeploymentPods(list,plan.anchor.uid);
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
-      const digest = plan.anchor.previousImage.split('@').at(-1);
+      const servingImage = stage === 'UPGRADED' ? cpHandoff.resumedSpec.template.spec.containers.find(c => c.name === 'control-plane').image : plan.anchor.previousImage;
+      const digest = servingImage.split('@').at(-1);
       const ready = actual.status?.observedGeneration >= actual.metadata.generation &&
         ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key => actual.status[key] === anchorReplicas) && pods.length === anchorReplicas &&
         pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
-          p.spec.containers?.some(c => c.name === 'control-plane' && c.image === plan.anchor.previousImage) &&
+          p.spec.containers?.some(c => c.name === 'control-plane' && c.image === servingImage) &&
           p.status.containerStatuses?.some(c => c.name === 'control-plane' && c.ready && c.imageID?.endsWith(digest)));
       return {actual,stage,joined,ready};
     };
@@ -568,6 +603,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(fingerprint(render) === plan.baseRenderSHA256 && fingerprint(rebuilt.job) === fingerprint(plan.job) &&
         fingerprint(rebuilt.checkJob) === fingerprint(plan.checkJob) &&
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
+      if (plan.componentHandoff) {
+        const originals = plan.componentHandoff.components.map(c => ({apiVersion:'apps/v1',kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,
+          resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
+        ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+      }
       if (plan.predecessor) predecessor(plan.predecessor,anchor,plan.predecessor,planSHA256);
     };
     const readCheck = (fresh = false) => {
@@ -601,8 +641,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
+    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,postgresIdentity,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,validateInputs:() => {
+        ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
+        imageScope(plan.imageEvidence,plan.namespaceUID);
+      }}) : undefined;
     if (phase === 'inspect') {
       const state = observeCP();
+      const pairState = pair?.inspect();
       if(revalidationRevision) {
         // Проверка уже завершённого schema effect не даёт нового права на DDL.
         // Прежние plan/journal и applied migration остаются неизменными.
@@ -642,7 +688,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         finally {currentJournal.close();}
       }
       return output({...result,
-        cpStage:state.stage,podsGone:state.joined,cpReady:state.ready});
+        cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
+        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready),forwardOnly:true} : {})});
     }
     if (phase === 'check') {
       if (!checks.length) {
@@ -674,9 +721,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       } else ensure(journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_UNOWNED_STOP');
       state = await waitMigrationMaintenance(observeCP,s => s.stage === 'STOPPED' && s.joined,'MIGRATION_CP_STOP_TIMEOUT',io.clock);
       journal.append({type:'STOP_ACK',resourceVersion:state.actual.metadata.resourceVersion});
+      if (pair) await pair.stopController();
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
+    if (phase === 'handoff') return output(await pair.handoff());
     if (phase === 'resume') {
+      if (pair) return output(await pair.resume());
       let state = observeCP();
       if (state.stage === 'BEFORE') {
         ensure(!journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_STOP_OUTCOME_UNKNOWN');
@@ -711,6 +761,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(!journal.events.some(e => e.type === 'RESUME_INTENT'), 'MIGRATION_LIFECYCLE_CLOSED');
       const state = observeCP();
       ensure(state.stage === 'STOPPED' && state.joined && journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_STOP_JOIN_REQUIRED');
+      if (pair) pair.requireStopped();
       ensure(journal.events.some(e => e.type === 'STOP_ACK' || (e.type === 'INSPECT' && e.stage === 'STOPPED' && e.podsGone)), 'MIGRATION_STOP_READBACK_REQUIRED');
       verifyInputs(state.actual);noActiveMigrations();
       const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true);

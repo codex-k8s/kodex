@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff } from './portable-component-migration.mjs';
 import { validWorkspaceUnboundStopMigrationPrecondition, validWorkspaceUnboundStopMigrationPostcondition } from './control-plane-immutable-migration.mjs';
 import { validIntegrationResourcePoliciesMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 import { validOpenCodeNativeMigrationPrecondition, validOpenCodeNativeMigrationPostcondition } from './control-plane-immutable-migration.mjs';
@@ -571,7 +573,7 @@ function githubPRProof(backup=false,precondition=false) {
   ...(precondition?{githubPRWritePredecessor:true,database:'control_plane',oldClaimSessions:0,
    ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0]))}:{githubPRCatalog:true,githubAutonomousWrites:true})};
 }
-function cli(t, profile = 'outbox-index', sourceCase = '') {
+function cli(t, profile = 'outbox-index', sourceCase = '', componentCase = false) {
   const config=immutableMigrationProfile(profile),version=config.version,sqlFile=config.file,annotation=config.annotation;
   const dir=mkdtempSync('/tmp/cp-immutable-migration-');chmodSync(dir,0o700);t.after(()=>rmSync(dir,{recursive:true,force:true}));
   const repo=join(dir,'source'), migrations=join(repo,'services/internal/control-plane/cmd/cli/migrations');
@@ -602,14 +604,30 @@ function cli(t, profile = 'outbox-index', sourceCase = '') {
     portableBase.spec.template.spec.containers[0].env.push({name:'OTEL_SDK_DISABLED',value:'true'});write(render,portableBase);
     deployment.spec.replicas=3;for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])deployment.status[key]=3;
   }
-  const state=join(dir,'state.json');write(state,{deployment,calls:[],mode:'',dependencyVersion:'1',namespaceUID:'namespace'});
+  const pair=componentCase?componentPublicationFixture(revision):undefined;
+  const componentFile=join(dir,'component.json'),targetFile=join(dir,'target.json');
+  if(pair){write(componentFile,pair.value);write(targetFile,pair.target);Object.assign(deployment,pair.deployments[0]);}
+  const state=join(dir,'state.json');write(state,{deployment,calls:[],mode:'',dependencyVersion:'1',namespaceUID:pair?.value.namespaceUID??'namespace',
+    ...(pair?{pair:true,controller:pair.deployments[1],gateway:pair.deployments[2],installation:pair.installation,nodes:pair.nodes,clusterUID:pair.value.clusterUID}:{})});
   const executable=join(dir,'kubectl');
   writeFileSync(executable,`#!/usr/bin/env node
 const fs=require('fs'),path=${JSON.stringify(state)},journalDirectory=${JSON.stringify(dir)},s=JSON.parse(fs.readFileSync(path)),a=process.argv.slice(2);
 const journal=journalDirectory+'/'+(s.retry?'retry-evidence.jsonl':'evidence.jsonl');
 s.calls.push(a);const save=()=>fs.writeFileSync(path,JSON.stringify(s));const out=x=>{save();process.stdout.write(JSON.stringify(x));};
 const fail=()=>{save();process.exit(1);};
-if(a.includes('patch')){
+if(a.includes('patch')&&a.includes('--patch-file=/dev/stdin')){
+ const name=a[a.indexOf('deployment')+1],app=name==='control-plane'?s.deployment:s.controller;
+ const p=JSON.parse(fs.readFileSync(0,'utf8'));
+ if(p[0].value!==app.metadata.uid||p[1].value!==app.metadata.resourceVersion||JSON.stringify(p[2].value)!==JSON.stringify(app.spec))fail();
+ if(a.includes('--dry-run=server'))out(app);
+ else {
+  const events=fs.readFileSync(journal,'utf8').trim().split('\\n').map(JSON.parse);if(!['PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT'].includes(events.at(-1).type))fail();
+  if(s.mode==='pair-before-effect'&&events.at(-1).type==='PAIR_HANDOFF_INTENT')fail();
+  app.spec=p[3].value;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);app.metadata.generation++;
+  app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(key=>[key,app.spec.replicas]))};
+  if(s.mode==='pair-lost-ack'&&name==='control-plane'&&app.spec.replicas===0&&!s.lost){s.lost=true;fail();}out(app);
+ }
+}else if(a.includes('patch')){
  const events=fs.readFileSync(journal,'utf8').trim().split('\\n').map(JSON.parse);if(!['STOP_INTENT','RESUME_INTENT'].includes(events.at(-1).type))fail();
  const p=JSON.parse(a[a.indexOf('-p')+1]);if(s.mode==='cas'||p[0].value!==s.deployment.metadata.uid||p[1].value!==s.deployment.metadata.resourceVersion)fail();
  if(p[2].value!==s.deployment.spec.replicas)fail();s.deployment.spec.replicas=p[3].value;s.deployment.metadata.annotations=p[4].value;
@@ -628,17 +646,25 @@ if(a.includes('patch')){
  containerStatuses:[{name:'migrate',restartCount:0,imageID:job.spec.template.spec.containers[0].image,state:{terminated:{exitCode:0}}}]}};
  if(s.mode===(check?'check-fail':'main-fail')){job.status={failed:1,conditions:[{type:'Failed',status:'True'}]};pod.status.phase='Failed';pod.status.containerStatuses[0].state.terminated.exitCode=1;}
  if(check&&s.mode==='check-running'){job.status={active:1};pod.status.phase='Pending';pod.status.initContainerStatuses=[];pod.status.containerStatuses[0].state={waiting:{}};}
- if(check){s.checkJob=job;s.checkPod=pod;}else{s.job=job;s.pod=pod;}
+ if(check){s.checkJob=job;s.checkPod=pod;}else{s.job=job;s.pod=pod;if(s.pair&&job.status.succeeded===1)s.schemaMigrated=true;}
  if(s.mode===(check?'check-lost-ack':'lost-ack'))fail();out(job);
 }else if(a.includes('namespace')){
- save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:'cluster'}}));else process.stdout.write(s.namespaceUID);
+ save();if(a.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:s.clusterUID??'cluster'}}));else process.stdout.write(s.namespaceUID);
 }else if(a.includes('bundles.trust.cert-manager.io')){save();process.stdout.write('bundle-uid|1|'+JSON.stringify(s.bundleSpec??{sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
-}else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
-}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261112000100,unboundStopAbsent:true,workspaceGuardPredecessor:true,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_UNBOUND_STOP_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,workspaceGuardReady:true,receiptGuardReady:true,receiptTableReady:true,receiptTriggerReady:true,archiveGuardPreserved:true,...s.postcondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,archiveGuardPredecessor:true,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_V1',database:'control_plane',readOnly:'on',gooseVersion:20261112000100,archiveGuardReady:true,archiveTriggerReady:true,...s.postcondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1',readOnly:'on',database:'control_plane',gooseVersion:20261109000100,artifactOptionalAntivirusAbsent:true,receiptConstraintsReady:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_V1',readOnly:'on',database:'control_plane',gooseVersion:20261110000100,constraintsValidated:true,explicitNoScanReceipt:true,noForgedClean:true,realScanReceipt:true,noAbsentReceipt:true,...s.postcondition});}else if(sql.includes('INTEGRATION_RESOURCE_POLICIES_')){out({...${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup',true))},...(sql.includes('INTEGRATION_RESOURCE_POLICIES_BACKUP_PREDECESSOR_V2')||sql.includes('INTEGRATION_RESOURCE_POLICIES_PREDECESSOR_V2')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup'))}),...s.postcondition});}else if(sql.includes('AUTHORITY_PROOF_COUNTER_')){out({...${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',true))},...(sql.includes('AUTHORITY_PROOF_COUNTER_BACKUP_PREDECESSOR_V1')||sql.includes('AUTHORITY_PROOF_COUNTER_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',false))}),...s.postcondition});}else if(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_')){out({...${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',true))},...(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_PREDECESSOR_V1')||sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',false))}),...s.postcondition});}else if(sql.includes('PLATFORM_OIDC_IDENTITY_')){out({...${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',true))},...(sql.includes('PLATFORM_OIDC_IDENTITY_BACKUP_PREDECESSOR_V1')||sql.includes('PLATFORM_OIDC_IDENTITY_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',false))}),...s.postcondition});}else if(sql.includes('WORKFLOW_CONTENT_PAGE_')){out({...${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',true))},...(sql.includes('WORKFLOW_CONTENT_PAGE_BACKUP_PREDECESSOR_V1')||sql.includes('WORKFLOW_CONTENT_PAGE_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PDLC_')){out({...${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PR_COLLABORATION_')){out({...${JSON.stringify(githubPRProof(profile==='github-pr-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubPRProof(profile==='github-pr-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('GITHUB_AUTONOMOUS_PDLC_')){out({...${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('workspaceVolumeSSHAbsent')){out({...${JSON.stringify(serverWorkflowProof())},workspaceVolumeSSHAbsent:true,sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_VOLUME_SSH_V1')){out({...${JSON.stringify(workspaceVolumeSSHProof())},...s.postcondition});}else if(sql.includes('sshComposeAbsent')){out({...${JSON.stringify(serverWorkflowProof())},sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('sshComposeProfile')){out({...${JSON.stringify(sshComposeProof())},...s.postcondition});}else if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
+}else if(a.includes('nodes'))out({items:s.nodes});
+else if(a.includes('configmap')&&a.includes('kodex-installation-profile'))out(s.installation);
+else if(a.includes('configmap')){save();process.stdout.write('ca-uid|'+s.dependencyVersion+'|'+(s.caLabel??'control-plane-postgresql-ca')+'|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name:'control-plane-postgresql-ca',controller:true,uid:s.caOwner??'bundle-uid'}]));
+}else if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')||!sql.includes('ROLLBACK;'))fail();if(sql.includes('WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:s.schemaMigrated?20261113000100:20261112000100,unboundStopAbsent:!s.schemaMigrated,workspaceGuardPredecessor:!s.schemaMigrated,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_UNBOUND_STOP_V1')){out({profile:'WORKSPACE_UNBOUND_STOP_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,workspaceGuardReady:true,receiptGuardReady:true,receiptTableReady:true,receiptTriggerReady:true,archiveGuardPreserved:true,...s.postcondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261111000200,archiveGuardPredecessor:true,activeRuntimeLeases:0,oldClaimSessions:s.deployment.spec.replicas===0?0:3,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_ARCHIVE_ABI5_V1')){out({profile:'WORKSPACE_ARCHIVE_ABI5_V1',database:'control_plane',readOnly:'on',gooseVersion:20261112000100,archiveGuardReady:true,archiveTriggerReady:true,...s.postcondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_PREDECESSOR_V1',readOnly:'on',database:'control_plane',gooseVersion:20261109000100,artifactOptionalAntivirusAbsent:true,receiptConstraintsReady:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('ARTIFACT_OPTIONAL_ANTIVIRUS_V1')){out({profile:'ARTIFACT_OPTIONAL_ANTIVIRUS_V1',readOnly:'on',database:'control_plane',gooseVersion:20261110000100,constraintsValidated:true,explicitNoScanReceipt:true,noForgedClean:true,realScanReceipt:true,noAbsentReceipt:true,...s.postcondition});}else if(sql.includes('INTEGRATION_RESOURCE_POLICIES_')){out({...${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup',true))},...(sql.includes('INTEGRATION_RESOURCE_POLICIES_BACKUP_PREDECESSOR_V2')||sql.includes('INTEGRATION_RESOURCE_POLICIES_PREDECESSOR_V2')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(integrationResourcePoliciesProof(profile==='integration-resource-policies-backup'))}),...s.postcondition});}else if(sql.includes('AUTHORITY_PROOF_COUNTER_')){out({...${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',true))},...(sql.includes('AUTHORITY_PROOF_COUNTER_BACKUP_PREDECESSOR_V1')||sql.includes('AUTHORITY_PROOF_COUNTER_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(authorityProofCounterProof(profile==='authority-proof-counter-backup',false))}),...s.postcondition});}else if(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_')){out({...${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',true))},...(sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_BACKUP_PREDECESSOR_V1')||sql.includes('PERSONAL_INTEGRATION_CREDENTIALS_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(personalCredentialsProof(profile==='personal-credentials-backup',false))}),...s.postcondition});}else if(sql.includes('PLATFORM_OIDC_IDENTITY_')){out({...${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',true))},...(sql.includes('PLATFORM_OIDC_IDENTITY_BACKUP_PREDECESSOR_V1')||sql.includes('PLATFORM_OIDC_IDENTITY_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(platformOIDCProof(profile==='platform-oidc-identity-backup',false))}),...s.postcondition});}else if(sql.includes('WORKFLOW_CONTENT_PAGE_')){out({...${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',true))},...(sql.includes('WORKFLOW_CONTENT_PAGE_BACKUP_PREDECESSOR_V1')||sql.includes('WORKFLOW_CONTENT_PAGE_PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowContentPageProof(profile==='workflow-content-page-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PDLC_')){out({...${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(workflowPDLCProof(profile==='workflow-pdlc-backup',false))}),...s.postcondition});}else if(sql.includes('GITHUB_PR_COLLABORATION_')){out({...${JSON.stringify(githubPRProof(profile==='github-pr-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubPRProof(profile==='github-pr-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('GITHUB_AUTONOMOUS_PDLC_')){out({...${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',true))},...(sql.includes('PREDECESSOR_V1')?{oldClaimSessions:s.deployment.spec.replicas===0?0:2,...s.precondition}:${JSON.stringify(githubAutonomousProof(profile==='github-autonomous-backup',false))}),...(!sql.includes('PREDECESSOR_V1')?s.postcondition:{})});}else if(sql.includes('workspaceVolumeSSHAbsent')){out({...${JSON.stringify(serverWorkflowProof())},workspaceVolumeSSHAbsent:true,sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('WORKSPACE_VOLUME_SSH_V1')){out({...${JSON.stringify(workspaceVolumeSSHProof())},...s.postcondition});}else if(sql.includes('sshComposeAbsent')){out({...${JSON.stringify(serverWorkflowProof())},sshComposeAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('sshComposeProfile')){out({...${JSON.stringify(sshComposeProof())},...s.postcondition});}else if(sql.includes("'reviewQAEvidenceAbsent'")){out({...${JSON.stringify(reviewQAEvidenceProof())},gooseVersion:20261026001300,reviewQAEvidenceFunctionCount:4,reviewQAEvidenceAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes("'reviewQAEvidenceProfile'")){out({...${JSON.stringify(reviewQAEvidenceProof())},...s.postcondition});}else if(sql.includes('workflowUpstreamReworkAbsent')){out({...${JSON.stringify(workflowExceptionContextProof())},workflowUpstreamReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('workflowUpstreamReworkProfile')){out({...${JSON.stringify(workflowUpstreamReworkProof())},...s.postcondition});}else if(sql.includes('workflowExceptionContextAbsent')){out({...${JSON.stringify(workflowExceptionSchemaProof(20261026001100))},workflowExceptionContextAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});}else if(sql.includes('workflowExceptionContextProfile')){out({...${JSON.stringify(workflowExceptionContextProof())},...s.postcondition});}else if(sql.includes("'legacyReworkProfile'")){out({...${JSON.stringify(legacyReworkProof())},...s.postcondition});}else if(sql.includes("'legacyReworkAbsent'")){out({...${JSON.stringify(serverWorkflowProof())},legacyPurgeSource:true,legacyReworkAbsent:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].map(key=>[key,0])),...s.precondition});}else if(sql.includes('serverWorkflowProfile')){out({...${JSON.stringify(serverWorkflowProof())},...s.postcondition});}else if(sql.includes('runtimeColumnMutationDenied')&&!sql.includes('activeRuntimeRuns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000200,tables:2,runtimeRoles:2,runtimeLogins:1,tableOwners:true,runtimeRolesUnprivileged:true,runtimeRead:true,runtimeMutationDenied:true,runtimeColumnMutationDenied:true,runtimeGrantOptionDenied:true,publicPrivilegesRevoked:true,ownerWrite:true,authorizationFunction:true,contextsEmpty:true,...s.postcondition});}else if(sql.includes('expiryColumn')){out({readOnly:'on',database:'control_plane',gooseVersion:20261026000100,tableOwner:'control_plane_owner',expiryColumn:true,stateConstraint:true,resolutionConstraint:true,expiryConstraint:true,dueIndex:true,immutableGuard:true,runtimeExecute:true,publicExecuteRevoked:true,...s.postcondition});}else if(sql.includes('noBodyColumns')){out({readOnly:'on',database:'control_plane',gooseVersion:20261025000200,tableOwner:'control_plane_owner',noBodyColumns:true,foreignKeys:13,deferredForeignKeys:13,guardEnabled:true,retentionConsumer:true,purgeGraphGuard:true,purgeNodes:105,purgeEdges:283,purgeNodeFingerprint:'f51a0de25bd942a250997775617eeaee',purgeEdgeFingerprint:'be6e23d9e894687a69a19e9b5777ab09',...s.postcondition});}else out({readOnly:'on',database:'control_plane',gooseVersion:${config.previousVersion},${config.emptyField}:true,oldClaimSessions:s.deployment.spec.replicas===0?0:2,activeRuntimeRuns:0,activeRunNodes:0,activeSessionTurns:0,claimedRuntimeLeases:0,openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeArchiveTasks:0,activeModelCatalogTasks:0,activeRenewalTasks:0,...s.precondition});
 }else if(a.includes('kodex-postgresql-0')){save();process.stdout.write((s.pgUID??'pg-uid')+'|StatefulSet|kodex-postgresql|sts-uid|kodex-postgresql|Running|');
 }else if(a.some(x=>x.startsWith('jsonpath='))){save();process.stdout.write('dependency-'+a[a.indexOf('get')+1]+'|'+s.dependencyVersion+'|'+(s.applicationOwner??'kodex'));
-}else if(a.includes('deployment'))out(s.deployment);
-else if(a.includes('replicasets,pods')){
+}else if(a.includes('deployment'))out(a[a.indexOf('deployment')+1]==='runtime-controller'?s.controller:a[a.indexOf('deployment')+1]==='control-api-gateway'?s.gateway:s.deployment);
+else if(a.includes('replicasets,pods')&&s.pair){
+ const selector=a[a.indexOf('-l')+1],name=selector.split('=')[1].split(',')[0],app=name==='control-plane'?s.deployment:name==='runtime-controller'?s.controller:s.gateway;
+ const rs='rs-'+name,items=[{kind:'ReplicaSet',metadata:{uid:rs,ownerReferences:[{kind:'Deployment',uid:app.metadata.uid,controller:true}]}}];
+ for(let i=0;i<app.spec.replicas;i++)items.push({kind:'Pod',metadata:{uid:name+'-'+i,ownerReferences:[{kind:'ReplicaSet',uid:rs,controller:true}]},spec:app.spec.template.spec,
+ status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}});
+ out({items});
+}else if(a.includes('replicasets,pods')){
  const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:'anchor',controller:true}]}}];
  for(let i=0;i<s.deployment.spec.replicas;i++)items.push({kind:'Pod',metadata:{uid:'cp-'+i,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
  spec:s.deployment.spec.template.spec,status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:[{name:'control-plane',ready:true,imageID:s.deployment.spec.template.spec.containers[0].image}]}});
@@ -654,10 +680,10 @@ else if(a.includes('job')){const name=a[a.indexOf('job')+1];
 else{save();process.exit(1);}
 `,{mode:0o700});
   const run=(phase,extra=[])=>spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,phase,
-    '--context','k3d-kodex','--profile',profile,'--plan',plan,...(phase==='plan'?['--source',repo,'--revision',revision,'--base-render',render,
-      '--publication-plan',publicationPlan,'--publication-evidence',publicationEvidence]:['--evidence',evidence]),
-    ...(['apply','stop','resume','check'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],{encoding:'utf8',timeout:15000,env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
-  return {run,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;value.previousCheckPod=value.checkPod;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
+    '--context',pair?.value.context??'k3d-kodex','--profile',profile,'--plan',plan,...(phase==='plan'?['--source',repo,'--revision',revision,'--base-render',render,
+      ...(pair?['--component-publication',componentFile,'--portable-target',targetFile]:['--publication-plan',publicationPlan,'--publication-evidence',publicationEvidence])]:['--evidence',evidence]),
+    ...(['apply','stop','resume','check','handoff'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],{encoding:'utf8',timeout:15000,env:{...process.env,PATH:`${dir}:${process.env.PATH}`}});
+  return {run,componentFile,targetFile,pair,get plan(){return plan;},get evidence(){return evidence;},retry(){const previous={plan,evidence};plan=join(dir,'retry-plan.json');evidence=join(dir,'retry-evidence.jsonl');const value=read(state);value.retry=true;value.previousJob=value.job;value.previousPod=value.pod;value.previousCheckJob=value.checkJob;value.previousCheckPod=value.checkPod;delete value.job;delete value.pod;delete value.checkJob;delete value.checkPod;write(state,value);return ['--predecessor-plan',previous.plan,'--predecessor-evidence',previous.evidence];},publicationPlan,publicationEvidence,repo,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);}};
 }
 const pass = (f,phase,status='PASS') => {const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,status);return result;};
 const failed = (f,phase) => {const result=f.run(phase);assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'FAIL');return result;};
@@ -1569,4 +1595,160 @@ test('043 portable CLI сохраняет drain и повторяет тольк
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);
  assert.equal(f.read().deployment.spec.replicas,3);
  assert.equal(f.read().deployment.spec.template.spec.containers[0].image,`registry.local.kodex/kodex/control-plane@${digest}`);
+});
+
+// Публичная оснастка использует только синтетические идентичности и example.invalid.
+function componentPublicationFixture(sourceSHA = revision) {
+ const UUID=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
+ const value={schema:'kodex.portable-component-migration/v1',profile:'workspace-unbound-stop',context:'portable-fixture',clusterUID:UUID(1),namespaceUID:UUID(2),
+  baseSourceSHA:'b'.repeat(40),baseReleaseLockSHA256:'c'.repeat(64),schemaHeadsBefore:{'control-plane':20261112000100,'internal-rpc-authority':2,'email-bridge':3},
+  schemaHeadsAfter:{'control-plane':20261113000100,'internal-rpc-authority':2,'email-bridge':3},runtimeABI:5,runnerInput:'v10',registry:'registry.example.invalid',
+  repositoryPrefix:'synthetic/upgrade',nodeUIDs:[UUID(3),UUID(4)],components:[]};
+ for(const [index,component] of ['control-plane','runtime-controller'].entries()) {
+  const anchor=`services/internal/${component}/internal/synthetic.go`,changed=[anchor,anchor.replace('.go','_test.go')];
+  const lock={schema:'kodex.component-image/v1',component,source_sha:sourceSHA,base_application_source_sha:value.baseSourceSHA,
+   base_release_lock_sha256:value.baseReleaseLockSHA256,digest:'sha256:'+(index?'e':'d').repeat(64),production_file_sha256:'1'.repeat(64),schema_heads:value.schemaHeadsAfter,
+   compatibility:{changed_files:changed,production_files:[anchor],shared_libs_contracts_unchanged:false,
+    verified_cohort:{components:['control-plane','runtime-controller'],changed_files:changed,production_files:[anchor],anchor,
+     contract_change:'WORKSPACE_UNBOUND_STOP_UPGRADE',schema_change:true,runner_input_abi:'UNCHANGED'}},
+   build:{dockerfile_sha256:'2'.repeat(64),metadata_sha256:'3'.repeat(64),private_source_sha:'4'.repeat(40),platform:'linux/amd64'},qualification:'PUBLISHED_NOT_NODE_QUALIFIED_NOT_DEPLOYED'};
+  lock.image_ref=`${value.registry}/${value.repositoryPrefix}/${component}@${lock.digest}`;
+  const raw=Buffer.from(JSON.stringify(lock,null,2)+'\n'),hash=createHash('sha256').update(raw).digest('hex');
+  value.components.push({component,expectedImageRef:`registry.example.invalid/baseline/${component}@sha256:${'f'.repeat(64)}`,
+   componentLockRawBase64:raw.toString('base64'),componentLockSHA256:hash,nodeProof:{schema:'kodex.component-node-proof/v1',component,sourceSHA,componentLockSHA256:hash,
+   imageRef:lock.image_ref,clusterUID:value.clusterUID,namespaceUID:value.namespaceUID,nodes:value.nodeUIDs.map((uid,n)=>({name:`node-${n}`,uid,imageRef:lock.image_ref,repoDigestVerified:true}))}});
+ }
+ const deployments=['control-plane','runtime-controller','control-api-gateway'].map((name,index)=>({apiVersion:'apps/v1',kind:'Deployment',metadata:{name,namespace:'kodex-system',uid:UUID(10+index),resourceVersion:'1',generation:1,
+  labels:{'app.kubernetes.io/name':name,'app.kubernetes.io/part-of':'kodex','kodex.dev/profile':'web-only','kodex.dev/environment':'production'}},
+  spec:{replicas:index===0?3:index===1?2:0,template:{metadata:{annotations:{'fixture':'preserved'}},spec:{containers:[{name,image:index<2?value.components[index].expectedImageRef:'registry.example.invalid/gateway@sha256:'+'9'.repeat(64),env:[{name:'SYNTHETIC','value':'unchanged'}]}]}}},
+  status:{observedGeneration:1,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,index===0?3:index===1?2:0]))}}));
+ const profile={version:1,identity:{mode:'bundled'},public_tls:{mode:'managed'}};
+ const installation={apiVersion:'v1',kind:'ConfigMap',metadata:{name:'kodex-installation-profile',namespace:'kodex-system',uid:UUID(20),
+  labels:{'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/managed-by':'kodex-install'}},data:{'profile.json':JSON.stringify(profile),
+   'profile.sha256':fingerprint(profile),'source.sha':value.baseSourceSHA,'release-lock.sha256':value.baseReleaseLockSHA256,
+   'schema-heads.json':JSON.stringify(value.schemaHeadsBefore)}};
+ const target={schema:'kodex.portable-runner-target/v1',context:value.context,clusterUID:value.clusterUID,namespaceUID:value.namespaceUID,
+  installationUID:installation.metadata.uid,installationSHA256:fingerprint(installation.data),resources:deployments.map(d=>({apiVersion:d.apiVersion,kind:d.kind,name:d.metadata.name,uid:d.metadata.uid}))};
+ const nodes=value.nodeUIDs.map((uid,n)=>({metadata:{uid,name:`node-${n}`},status:{conditions:[{type:'Ready',status:'True'}]}}));
+ return {value,target,deployments,installation,nodes};
+}
+
+test('portable component publication проверяет raw locks, same source, обе schema и все узлы без stable receipt fabrication',()=>{
+ const f=componentPublicationFixture(),valid=componentMigrationPublication(f.value,source);
+ assert.equal(valid.components.length,2);assert.equal(valid.components[0].imageRef,JSON.parse(Buffer.from(f.value.components[0].componentLockRawBase64,'base64')).image_ref);
+ for(const change of [v=>v.extra=true,v=>v.components.pop(),v=>v.components.reverse(),v=>v.runtimeABI=4,v=>v.runnerInput='v9',
+  v=>v.schemaHeadsAfter['control-plane']=20261112000100,v=>v.schemaHeadsAfter['email-bridge']++,v=>v.components[0].componentLockSHA256='0'.repeat(64),
+  v=>v.components[0].nodeProof.sourceSHA='0'.repeat(40),v=>v.components[0].nodeProof.clusterUID=v.namespaceUID,
+  v=>v.components[0].nodeProof.nodes[0].repoDigestVerified=false,v=>v.components[0].nodeProof.nodes.pop(),
+  v=>v.components[0].nodeProof.nodes[1].uid=v.components[0].nodeProof.nodes[0].uid,v=>v.registry='https://secret@registry.example.invalid',
+  v=>v.registry=[v.registry],v=>v.repositoryPrefix=[v.repositoryPrefix],v=>v.baseSourceSHA=[v.baseSourceSHA],
+  v=>v.nodeUIDs[0]=[v.nodeUIDs[0]],v=>v.components[0].nodeProof.nodes[0].name=['node-0']]) {
+  const wrong=structuredClone(f.value);change(wrong);assert.throws(()=>componentMigrationPublication(wrong,source));
+ }
+ const wrong=structuredClone(f.value),part=wrong.components[1],lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64'));
+ lock.source_sha='b'.repeat(40);const raw=Buffer.from(JSON.stringify(lock));part.componentLockRawBase64=raw.toString('base64');part.componentLockSHA256=createHash('sha256').update(raw).digest('hex');
+ assert.throws(()=>componentMigrationPublication(wrong,source));
+ assert.throws(()=>componentMigrationPublication(f.value,source,'outbox-index'));
+ for(const change of [l=>l.build.extra=true,l=>l.compatibility.extra=true,l=>l.compatibility.verified_cohort.provider_source_sha='7'.repeat(40),
+  l=>l.compatibility.verified_cohort.runtime_reference_source_sha='7'.repeat(40),l=>l.build.private_source_sha='0'.repeat(40),
+  l=>l.compatibility.verified_cohort.anchor='services/internal/foreign/foreign.go',l=>l.compatibility.production_files.push('contracts/foreign.proto')]) {
+  const bad=structuredClone(f.value),part=bad.components[0],parsed=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64'));change(parsed);
+  const raw=Buffer.from(JSON.stringify(parsed,null,2)+'\n');part.componentLockRawBase64=raw.toString('base64');
+  part.componentLockSHA256=createHash('sha256').update(raw).digest('hex');part.nodeProof.componentLockSHA256=part.componentLockSHA256;
+  assert.throws(()=>componentMigrationPublication(bad,source));
+ }
+ const duplicate=structuredClone(f.value),dupPart=duplicate.components[0];
+ const dupRaw=Buffer.from(Buffer.from(dupPart.componentLockRawBase64,'base64').toString().replace('"component": "control-plane",','"component": "foreign",\n  "component": "control-plane",'));
+ dupPart.componentLockRawBase64=dupRaw.toString('base64');dupPart.componentLockSHA256=createHash('sha256').update(dupRaw).digest('hex');
+ dupPart.nodeProof.componentLockSHA256=dupPart.componentLockSHA256;
+ assert.throws(()=>componentMigrationPublication(duplicate,source));
+});
+
+test('portable target требует exact installation, три Deployment UID, ready nodes и maintenance gateway',()=>{
+ const f=componentPublicationFixture();
+ const observed={sourceRevision:revision,context:f.value.context,clusterUID:f.value.clusterUID,namespaceUID:f.value.namespaceUID,
+  installation:f.installation,deployments:f.deployments,nodes:f.nodes};
+ assert.ok(componentMigrationTarget(f.target,f.value,observed));
+ for(const change of [o=>o.context='foreign',o=>o.installation.data.extra='drift',o=>o.deployments[0].metadata.uid=f.nodes[0].metadata.uid,
+  o=>o.nodes.pop(),o=>o.nodes[0].status.conditions[0].status='Unknown',o=>o.deployments[2].spec.replicas=1]) {
+  const wrong=structuredClone(observed);change(wrong);assert.throws(()=>componentMigrationTarget(f.target,f.value,wrong));
+ }
+ // Даже заново закреплённый seal не превращает другую baseline в допустимую.
+ for(const change of [p=>p['source.sha']='7'.repeat(40),p=>p['release-lock.sha256']='8'.repeat(64),
+  p=>p['schema-heads.json']=JSON.stringify({...f.value.schemaHeadsBefore,'email-bridge':99}),p=>delete p['source.sha'],
+  p=>p['profile.sha256']='9'.repeat(64),p=>p.extra='foreign']) {
+  const wrong=structuredClone(observed),target=structuredClone(f.target);change(wrong.installation.data);
+  target.installationSHA256=fingerprint(wrong.installation.data);
+  assert.throws(()=>componentMigrationTarget(target,f.value,wrong));
+ }
+});
+
+test('pure portable handoff сохраняет env/volumes/replicas и связывает обе новые image одним source',()=>{
+ const f=componentPublicationFixture();
+ for(const d of f.deployments.slice(0,2)) {
+  d.spec.template.spec.volumes=[{name:'synthetic',emptyDir:{sizeLimit:'1Mi'}}];
+  d.spec.template.spec.containers.push({name:'synthetic-sidecar',image:'registry.example.invalid/sidecar@sha256:'+'8'.repeat(64)});
+ }
+ const before=structuredClone(f.deployments);
+ const plan=planComponentMigrationHandoff(f.value,f.deployments,source);
+ assert.deepEqual(f.deployments,before);assert.deepEqual(plan.components.map(c=>c.name),['control-plane','runtime-controller']);
+ for(const c of plan.components) {
+  assert.equal(c.stoppedSpec.replicas,0);assert.equal(c.stagedSpec.replicas,0);assert.equal(c.resumedSpec.replicas,c.replicas);
+  assert.deepEqual(c.beforeSpec.template.spec.containers[0].env,c.stagedSpec.template.spec.containers[0].env);
+  assert.deepEqual(c.beforeSpec.template.spec.volumes,c.stagedSpec.template.spec.volumes);
+  assert.deepEqual(c.beforeSpec.template.spec.containers[1],c.stagedSpec.template.spec.containers[1]);
+  assert.equal(c.stagedSpec.template.metadata.annotations['fixture'],'preserved');
+  assert.equal(c.stagedSpec.template.metadata.annotations['kodex.dev/component-source-sha'],revision);
+ }
+ const wrong=structuredClone(f.deployments);wrong[1].spec.template.spec.containers[0].image='registry.example.invalid/foreign@sha256:'+'a'.repeat(64);
+ assert.throws(()=>planComponentMigrationHandoff(f.value,wrong,source));
+});
+
+test('public portable CLI check→stop/join→043→paired handoff→resume использует реальные refs и не повторяет DDL',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);
+ pass(f,'plan','PLANNED');const plan=read(f.plan);
+ assert.equal(plan.job.spec.template.spec.containers[0].image,JSON.parse(Buffer.from(f.pair.value.components[0].componentLockRawBase64,'base64')).image_ref);
+ assert.equal(plan.imageEvidence.publicationPlan,undefined);
+ pass(f,'check');pass(f,'stop','STOPPED');assert.equal(f.read().controller.spec.replicas,0);
+ pass(f,'apply');pass(f,'inspect');
+ pass(f,'handoff','STAGED');assert.equal(f.read().deployment.spec.replicas,0);assert.equal(f.read().controller.spec.replicas,0);
+ const result=JSON.parse(pass(f,'resume','RESUMED').stdout);assert.equal(result.pairReady,true);assert.equal(result.forwardOnly,true);
+ const inspected=JSON.parse(pass(f,'inspect').stdout);assert.equal(inspected.pairReady,true);assert.equal(inspected.cpStage,'UPGRADED');
+ assert.equal(f.read().gateway.spec.replicas,0);
+ const creates=f.read().calls.filter(a=>a.includes('create')).length,patches=f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length;
+ pass(f,'resume','RESUMED');pass(f,'apply');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,creates);
+ assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,patches);
+});
+
+test('public portable CLI запрещает handoff без DDL/postcondition и после незавершённого controller join',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');
+ assert.notEqual(f.run('handoff').status,0);
+ assert.notEqual(f.run('resume').status,0);
+ f.edit(s=>{s.controller.spec.replicas=2;s.controller.status.replicas=2;});
+ assert.notEqual(f.run('apply').status,0);assert.equal(f.read().job,undefined);
+ f.edit(s=>{s.controller.spec.replicas=0;s.controller.status.replicas=0;});pass(f,'apply');
+ f.edit(s=>{s.postcondition={receiptGuardReady:false};});assert.notEqual(f.run('handoff').status,0);
+ assert.equal(f.read().deployment.spec.template.spec.containers[0].image,f.pair.value.components[0].expectedImageRef);
+});
+
+test('public portable CLI lost handoff ACK восстанавливает observed пару без второго image patch',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');
+ f.edit(s=>{s.mode='pair-lost-ack';});assert.notEqual(f.run('handoff').status,0);
+ const mutations=f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length;
+ pass(f,'inspect');pass(f,'handoff','STAGED');
+ assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,mutations);
+ pass(f,'resume','RESUMED');
+});
+
+test('public portable CLI unknown до pair effect требует fresh inspect перед повторным CAS',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');
+ f.edit(s=>{s.mode='pair-before-effect';});assert.notEqual(f.run('handoff').status,0);
+ const attempts=f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length;
+ f.edit(s=>{s.mode='';});assert.notEqual(f.run('handoff').status,0);
+ assert.equal(f.read().calls.filter(a=>a.includes('patch')&&!a.includes('--dry-run=server')).length,attempts);
+ pass(f,'inspect');pass(f,'handoff','STAGED');pass(f,'resume','RESUMED');
+ f.edit(s=>{s.controller.spec.template.spec.containers[0].env.push({name:'FOREIGN',value:'drift'});});
+ assert.notEqual(f.run('resume').status,0);
+ assert.equal(f.read().controller.spec.template.spec.containers[0].env.at(-1).name,'FOREIGN');
 });
