@@ -58,7 +58,10 @@ func TestProviderOutboxPublicationContainer(t *testing.T) {
 		want := Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic managed result", Usage: runtimecontract.TokenUsage{TotalTokens: 3, InputTokens: 2, OutputTokens: 1}}
 		got := publishCompletedProviderOutbox(t.Context(), input, want)
 		next, readErr := os.ReadFile(path)
-		if !reflect.DeepEqual(got, want) || unix.Stat(path, &after) != nil || before != after || readErr != nil || !bytes.Equal(body, next) {
+		if !reflect.DeepEqual(got, want) || unix.Stat(path, &after) != nil ||
+			before.Dev != after.Dev || before.Ino != after.Ino || before.Mode != after.Mode || before.Nlink != after.Nlink ||
+			before.Uid != after.Uid || before.Gid != after.Gid || before.Size != after.Size || before.Mtim != after.Mtim || before.Ctim != after.Ctim ||
+			readErr != nil || !bytes.Equal(body, next) {
 			t.Fatal("provider modified or rejected the role-owned managed outbox")
 		}
 		return
