@@ -97,7 +97,7 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 	}
 	execute(t, command.ChangeIntegrationGrant, owner, "grant", &currentConnection.Version, command.IntegrationGrantInput{ConnectionRef: connection.Ref, CapabilityKey: "github.pull_request.review.create", AgentRef: agent.Ref, Enabled: true, ApprovalPolicy: "HUMAN_EACH_EFFECT"})
 	previousInvocation := ""
-	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "EMPTY_REJECT", "TERMINAL", "APPROVE_LONG_INLINE", "APPROVE_LARGE", "APPROVE_EARLY_ALIAS", "APPROVE_NEW_INTENT", "APPROVE_UNKNOWN_ALIAS", "EXPIRED_ALIAS"} {
+	for _, decision := range []string{"APPROVE", "APPROVE_FAILED", "REJECT", "CANCEL", "CANCEL_WITH_PENDING_WRITE", "CANCEL_WITH_UNKNOWN_WRITE", "EMPTY_REJECT", "TERMINAL", "APPROVE_LONG_INLINE", "APPROVE_LARGE", "APPROVE_EARLY_ALIAS", "APPROVE_NEW_INTENT", "APPROVE_UNKNOWN_ALIAS", "EXPIRED_ALIAS"} {
 		t.Run(decision, func(t *testing.T) {
 			run := execute(t, command.LaunchRun, owner, decision+"-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Feedback effect", Task: "Preserve canonical input", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}}).Run
 			claimed := execute(t, command.ClaimExecution, worker, decision+"-origin", nil, command.LeaseInput{WorkloadInstance: "feedback-runtime", Limit: 1}).RuntimeItems
@@ -113,6 +113,16 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			}
 			if previousInvocation != "" && stringMap(invocation, "invocationRef") == previousInvocation {
 				t.Fatal("pending reuse crossed physical run/node boundaries")
+			}
+			var pendingWrite map[string]any
+			if strings.HasPrefix(decision, "CANCEL_WITH_") {
+				secondRequest, secondInput := maps.Clone(request), maps.Clone(bounded)
+				secondRequest["idempotency_key"] += "-second"
+				secondInput["body"] = "A distinct synthetic review"
+				pendingWrite, err = service.ResolveIntegrationInvocation(ctx, worker, secondRequest, secondInput)
+				if err != nil || stringMap(pendingWrite, "invocationRef") == stringMap(invocation, "invocationRef") {
+					t.Fatal("second independent owner intent was not created", err)
+				}
 			}
 			request["idempotency_key"] += "-alias"
 			aliased, err := service.ResolveIntegrationInvocation(ctx, worker, request, bounded)
@@ -192,6 +202,9 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 			}
 			comment := "Сохранить точные 624B паспорта\nи canonical input. Не повторять WRITE. 🧪 <>&"
 			actualDecision := decision
+			if strings.HasPrefix(decision, "CANCEL_WITH_") {
+				actualDecision = "CANCEL"
+			}
 			if strings.HasPrefix(decision, "APPROVE") {
 				actualDecision = "APPROVE"
 			}
@@ -241,6 +254,72 @@ func TestIntegrationGateFeedbackComponent(t *testing.T) {
 				t.Fatal("owner gate lost exact decision")
 			}
 			execute(t, command.ResolveOwnerGate, owner, decision+"-resolve", &gate.Version, payload)
+			if strings.HasPrefix(decision, "CANCEL_WITH_") {
+				secondGate, err := service.GetOwnerGate(ctx, owner, stringMap(pendingWrite, "gateRef"))
+				if err != nil {
+					t.Fatal("read second synthetic gate", err)
+				}
+				execute(t, command.ResolveOwnerGate, owner, decision+"-approve-second", &secondGate.Version, command.GateResolutionInput{GateRef: secondGate.Ref, Decision: "APPROVE"})
+				independentAgent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "feedback-independent-agent-"+decision, "Independent worker "+decision)
+				independent := execute(t, command.LaunchRun, owner, decision+"-independent", nil, command.LaunchRunInput{ProjectRef: project.Ref, Title: "Independent root", Task: "Return without external effects", Target: entity.RunTarget{Type: "AGENT", Ref: independentAgent.Ref}}).Run
+				fairClaim := execute(t, command.ClaimExecution, worker, decision+"-fair-claim", nil, command.LeaseInput{WorkloadInstance: "feedback-fairness", Limit: 1}).RuntimeItems
+				if len(fairClaim) != 1 || stringMap(fairClaim[0], "runRef") != independent.Ref {
+					t.Fatalf("pending older continuation starved an independent root: claims=%d", len(fairClaim))
+				}
+				other := fairClaim[0]
+				execute(t, command.CompleteExecution, worker, decision+"-complete-independent", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(other), LeaseRef: stringMap(other, "leaseRef"), Fence: stringMap(other, "fence"), Generation: runtimeRevisionMapInt64(other, "generation"), Success: true, ResultSummary: "Independent root completed", Usage: turnUsageFixture()})
+				assertQueued := func(key string) {
+					t.Helper()
+					waiting := execute(t, command.ClaimExecution, worker, decision+key, nil, command.LeaseInput{WorkloadInstance: "feedback-pending", Limit: 1}).RuntimeItems
+					current, graph, err := service.GetRunGraph(ctx, owner, run.Ref)
+					if err != nil || len(waiting) != 0 || current.State != "RUNNING" || current.SafeErrorCode != "" {
+						t.Fatal("temporary external effect wait aborted or claimed the root", err)
+					}
+					queued := 0
+					for _, node := range graph.Nodes {
+						if node.Type == "AGENT_EXECUTION" && node.State == "QUEUED" {
+							queued++
+						}
+					}
+					if queued != 1 {
+						t.Fatal("pending continuation was lost or duplicated")
+					}
+				}
+				assertQueued("-wait-ready")
+				work, err := service.ClaimIntegrationInvocations(ctx, gateway, "feedback-two-gate-effect", 1)
+				if err != nil || len(work) != 1 || stringMap(work[0], "invocationRef") != stringMap(pendingWrite, "invocationRef") {
+					t.Fatal("approved second effect was aborted or cancelled first effect was replayed", err)
+				}
+				assertQueued("-wait-running")
+				summary := `{"fixture":"single accepted effect"}`
+				responseDigest := sha256.Sum256([]byte(summary))
+				completion := command.IntegrationInvocationInput{InvocationRef: stringMap(work[0], "invocationRef"), LeaseRef: stringMap(work[0], "leaseRef"), Fence: stringMap(work[0], "fence"), Generation: runtimeRevisionMapInt64(work[0], "generation"), Success: true, ResultSummary: summary, EffectKey: stringMap(work[0], "effectKey"), InputDigest: stringMap(work[0], "inputDigest"), ProviderEffectRef: "synthetic-github:review:two-gate", ResponseDigest: hex.EncodeToString(responseDigest[:])}
+				if decision == "CANCEL_WITH_UNKNOWN_WRITE" {
+					completion = command.IntegrationInvocationInput{InvocationRef: completion.InvocationRef, LeaseRef: completion.LeaseRef, Fence: completion.Fence, Generation: completion.Generation, UnknownOutcome: true, SafeErrorCode: "INTEGRATION_OUTCOME_UNKNOWN"}
+				}
+				execute(t, command.CompleteIntegrationInvocation, gateway, decision+"-effect", nil, completion)
+				execute(t, command.CompleteIntegrationInvocation, gateway, decision+"-effect", nil, completion)
+				remaining, err := service.ClaimIntegrationInvocations(ctx, gateway, "feedback-two-gate-no-replay", 1)
+				if err != nil || len(remaining) != 0 {
+					t.Fatal("terminal effects were replayed", err)
+				}
+				if decision == "CANCEL_WITH_UNKNOWN_WRITE" {
+					assertQueued("-wait-unknown-outcome")
+					current, err := service.GetRun(ctx, owner, run.Ref)
+					if err != nil {
+						t.Fatal(err)
+					}
+					execute(t, command.CancelRun, owner, decision+"-close-uncertain", &current.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Keep uncertain effect blocked without replay"})
+					return
+				}
+				resumed := execute(t, command.ClaimExecution, worker, decision+"-resume", nil, command.LeaseInput{WorkloadInstance: "feedback-resume", Limit: 1}).RuntimeItems
+				if len(resumed) != 1 || stringMap(resumed[0], "runRef") != run.Ref || runtimeRevisionMapInt64(resumed[0], "attempt") != 2 {
+					t.Fatal("terminal receipt did not unblock the original queued continuation")
+				}
+				resumedLease := resumed[0]
+				execute(t, command.CompleteExecution, worker, decision+"-complete-resumed", nil, command.CompleteExecutionInput{NativeSession: nativeCheckpointForClaimFixture(resumedLease), LeaseRef: stringMap(resumedLease, "leaseRef"), Fence: stringMap(resumedLease, "fence"), Generation: runtimeRevisionMapInt64(resumedLease, "generation"), Success: true, ResultSummary: "Both decisions consumed without replay", Usage: turnUsageFixture()})
+				return
+			}
 			if err := mutate(foreign, "feedback-"+decision+"-resolve", gate.Version); !errors.Is(err, errs.ErrNotFound) {
 				t.Fatalf("receipt replay bypassed project boundary: %v", err)
 			}

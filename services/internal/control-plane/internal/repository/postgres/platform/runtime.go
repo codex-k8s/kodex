@@ -1241,7 +1241,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if err := candidateTx.Rollback(ctx); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if errors.Is(candidateErr, errManagedMCPHealthPending) {
+		if errors.Is(candidateErr, errManagedMCPHealthPending) || runtimeSessionEffectsPending(candidateErr) {
 			continue
 		}
 		var recovery *managedMCPStartupRecovery

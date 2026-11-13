@@ -48,6 +48,12 @@ var queryNativeSessionComplete string
 //go:embed sql/native_session__unresolved_effects.sql
 var queryNativeSessionUnresolvedEffects string
 
+// errNativeSessionEffectsPending preserves a queued native continuation until authoritative
+// external effects settle. It is not malformed input, a checkpoint mismatch or permission to replay.
+// errNativeSessionEffectsPending сохраняет native continuation в очереди до завершения
+// авторитетных внешних effects. Это не плохой input, checkpoint mismatch или право повтора.
+var errNativeSessionEffectsPending = errors.New("native session effects are pending")
+
 // queryNativeSessionRequiresCheckpoint derives successful-completion requirements from the immutable owner input.
 // Caller omission of metadata cannot turn a native execution into a stateless success.
 // queryNativeSessionRequiresCheckpoint выводит требования успешного completion из immutable owner input.
@@ -137,7 +143,7 @@ func nativeSessionSource(ctx context.Context, tx pgx.Tx, current scope, snapshot
 		return nil, errs.ErrUnavailable
 	}
 	if unresolved {
-		return nil, errs.ErrConflict
+		return nil, errNativeSessionEffectsPending
 	}
 	checkpoint, err := runtimecontract.DecodeNativeSessionCheckpoint(raw)
 	if err != nil {

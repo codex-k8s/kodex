@@ -200,6 +200,17 @@ func runtimeCandidateEligibilityFailure(err error) bool {
 	return runtimeEligibilityErrorClass(err) != runtimeEligibilityUnknownDiagnostic
 }
 
+// runtimeSessionEffectsPending recognizes only the private nonterminal wait, including its
+// diagnostic wrapper. Joined infrastructure or terminal eligibility failures never become waits.
+// runtimeSessionEffectsPending распознаёт только private nonterminal ожидание с diagnostic
+// wrapper. Joined infrastructure или terminal eligibility failures не превращаются в ожидание.
+func runtimeSessionEffectsPending(err error) bool {
+	var databaseError *pgconn.PgError
+	return errors.Is(err, errNativeSessionEffectsPending) && !errors.As(err, &databaseError) &&
+		!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
+		!errors.Is(err, errs.ErrUnavailable) && runtimeEligibilityErrorClass(err) == runtimeEligibilityUnknownDiagnostic
+}
+
 // runtimeEligibilityErrorClass maps the six recognized domain sentinels in fixed precedence order through errors.Is and returns a closed unknown fallback. It classifies metadata only; callers must separately exclude infrastructure errors before deciding a terminal transition.
 // runtimeEligibilityErrorClass сопоставляет шесть известных доменных sentinel в фиксированном порядке через errors.Is и возвращает закрытый unknown. Классифицирует лишь метаданные; перед итоговым переходом вызывающий отдельно исключает инфраструктурные ошибки.
 func runtimeEligibilityErrorClass(err error) string {
