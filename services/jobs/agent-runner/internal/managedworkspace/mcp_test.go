@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -22,7 +24,7 @@ func handlerFixture(t *testing.T) (*Handler, *[]runtimecontract.NativeToolCall) 
 	t.Helper()
 	store := fileStoreFixture(t)
 	calls := []runtimecontract.NativeToolCall{}
-	handler := &Handler{store: store, gate: make(chan struct{}, 1), owner: func(_ context.Context, _, name string, _ map[string]any) (map[string]any, error) {
+	handler := &Handler{logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), store: store, gate: make(chan struct{}, 1), owner: func(_ context.Context, _, name string, _ map[string]any) (map[string]any, error) {
 		if name != runtimecontract.WorkspacePolicyTool {
 			t.Fatal("unexpected owner tool", name)
 		}

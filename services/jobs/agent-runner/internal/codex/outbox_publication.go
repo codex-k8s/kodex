@@ -148,6 +148,13 @@ func publishOutboxFile(directory int, name string, providerUID, group uint32) er
 // publishCompletedProviderOutbox publishes only an eligible, joined successful turn and preserves measured usage on denial.
 // publishCompletedProviderOutbox публикует лишь допустимый завершённый ход и сохраняет измеренный usage при отказе.
 func publishCompletedProviderOutbox(ctx context.Context, input model.Input, result Result) Result {
+	// Managed tools write as the trusted role, not the provider. The role joins
+	// its executor and validates/publishes that outbox at completion.
+	// Managed tools пишут от trusted role, а не provider. Role дожидается
+	// executor и проверяет/публикует свой outbox при завершении.
+	if runtimecontract.RuntimeWorkspaceToolsAvailable(input) {
+		return result
+	}
 	if result.Outcome != "SUCCEEDED" || input.IsAssistant() || !slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
 		return result
 	}

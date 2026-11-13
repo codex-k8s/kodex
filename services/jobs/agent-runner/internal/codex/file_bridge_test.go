@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -141,7 +142,7 @@ func runFileBridgeFixture(t *testing.T) {
 	input.CallbackURL = upstream.URL
 	input.ExecutionTicketFile = filepath.Join(root, "ticket")
 	input.CallbackTLS = model.TLSBinding{ServerName: upstream.Certificate().DNSNames[0], CAFile: filepath.Join(root, "ca.pem"), CertificateFile: filepath.Join(root, "client.pem"), PrivateKeyFile: filepath.Join(root, "client.key")}
-	proxy, err := readiness.StartMCPProxy(t.Context(), input, ticket, runtimecontract.RuntimeMCPToolNames(input))
+	proxy, err := readiness.StartMCPProxy(t.Context(), input, ticket, runtimecontract.RuntimeMCPToolNames(input), slog.New(slog.NewJSONHandler(io.Discard, nil)))
 	if err != nil {
 		t.Fatal(err)
 	}

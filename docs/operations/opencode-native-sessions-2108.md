@@ -1459,3 +1459,25 @@ PostgreSQL/TLS/parse отказы, DNS/reset/timeout/неизвестный те
 Схема, runtime ABI, session checkpoints и owner approvals не меняются.
 Rollback — прежние immutable images, без goose down и удаления новых данных.
 Проверка нормального нового запуска не является многочасовой гарантией сети.
+
+## Managed checkout и завершение отчётов
+
+В managed-only workspace файловые инструменты создают отчёт от trusted role,
+а не provider UID. После положительного завершения provider и остановки executor
+runner собирает эти файлы с проверкой точного владельца, группы, mode, единственной
+ссылки, no-follow и квот. Provider publication для прежнего немодифицированного
+профиля остаётся отдельным строгим путём. Служебный workspace result сохраняет
+собственное происхождение и проверяется отдельно от пользовательского отчёта.
+Ошибки артефактов не меняют успешность внешнего эффекта и не разрешают его повтор.
+
+Checkout сохраняет проверку свежих grants до и после чтения и SHA-pinned
+commit/tree/file projections до атомарной локальной публикации. Закрытые
+`checkout_stage` и `checkout_code` различают `REMOTE`, `STAGING`, `INSTALL`,
+`OWNER_AFTER` и `UNKNOWN`; структурированный лог использует общий runtime logger.
+Путь, provider payload и OS error в диагностике не публикуются. Отказ после
+неизвестного исхода не становится автоматическим retry.
+
+Локальные unit/race/vet и offline контейнерные проверки доказывают только
+синтетические сценарии; установленный checkout и полный workflow требуют
+отдельной проверки immutable кандидата. Диагностика сама по себе не доказывает
+исправление причины отказа checkout.

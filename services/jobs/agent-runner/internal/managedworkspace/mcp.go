@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,6 +19,14 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+)
+
+// Closed checkout log fields expose no request, filesystem or provider bytes.
+// Закрытые поля checkout-лога не раскрывают запрос, filesystem либо provider bytes.
+const (
+	checkoutFailureMessage = "managed workspace checkout failed"
+	checkoutStageKey       = "checkout_stage"
+	checkoutCodeKey        = "checkout_code"
 )
 
 // errReadRange identifies a rejected read range before any filesystem access. It contains
@@ -45,6 +54,7 @@ type RecordCall func(context.Context, runtimecontract.NativeToolCall) error
 // Handler обслуживает отдельный явный local MCP catalog и сериализует допущенные filesystem
 // и command operations. Свежая owner policy проверяется до и после каждой операции.
 type Handler struct {
+	logger    *slog.Logger
 	store     *fileStore
 	owner     OwnerCall
 	execute   ExecutorCall
@@ -56,15 +66,15 @@ type Handler struct {
 	pending   map[string]context.CancelFunc
 }
 
-// NewHandler requires the trusted role UID and complete opted-in immutable turn. No directory
-// is created, credential read or command executed by this constructor.
-// NewHandler требует trusted role UID и полный opted-in immutable turn. Каталогов не создаёт,
-// credentials не читает и команд не запускает.
-func NewHandler(input runtimecontract.RunnerInput, owner OwnerCall, execute ExecutorCall, record RecordCall) (*Handler, error) {
-	if os.Geteuid() != 10001 || !runtimecontract.RuntimeWorkspaceToolsAvailable(input) || input.WorkspaceRoot != runtimecontract.RuntimeWorkspaceRoot || owner == nil || record == nil || (len(input.EnvironmentTools) > 0 && execute == nil) {
+// NewHandler requires the trusted role UID, complete opted-in immutable turn and explicit runtime
+// logger. It creates no directory, reads no credential and executes no command.
+// NewHandler требует trusted role UID, полный opted-in immutable turn и явный runtime logger.
+// Каталогов не создаёт, credentials не читает и команд не запускает.
+func NewHandler(input runtimecontract.RunnerInput, owner OwnerCall, execute ExecutorCall, record RecordCall, logger *slog.Logger) (*Handler, error) {
+	if os.Geteuid() != 10001 || !runtimecontract.RuntimeWorkspaceToolsAvailable(input) || input.WorkspaceRoot != runtimecontract.RuntimeWorkspaceRoot || owner == nil || record == nil || logger == nil || (len(input.EnvironmentTools) > 0 && execute == nil) {
 		return nil, errFiles
 	}
-	return &Handler{store: &fileStore{input: input, root: input.WorkspaceRoot, runnerUID: 10001, writerUID: 10002, group: 29000}, owner: owner, execute: execute, record: record, gate: make(chan struct{}, 1)}, nil
+	return &Handler{logger: logger, store: &fileStore{input: input, root: input.WorkspaceRoot, runnerUID: 10001, writerUID: 10002, group: 29000}, owner: owner, execute: execute, record: record, gate: make(chan struct{}, 1)}, nil
 }
 
 // authorize verifies the current own policy through the owner, including exact input binding
@@ -231,7 +241,11 @@ func (handler *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		value, callErr := handler.call(ctx, callID, params.Name, params.Arguments)
 		if callErr != nil {
 			message := "Managed workspace operation failed or was denied; do not retry an unknown command outcome. Inspect current files and owner state."
-			if errors.Is(callErr, errReadRange) {
+			if params.Name == runtimecontract.WorkspaceToolCheckout {
+				failure := checkoutDiagnostic(callErr)
+				message = failure.Error()
+				handler.logger.WarnContext(ctx, checkoutFailureMessage, checkoutStageKey, failure.stage(), checkoutCodeKey, failure.label())
+			} else if errors.Is(callErr, errReadRange) {
 				message = errReadRange.Error()
 			}
 			result = map[string]any{"isError": true, "content": []map[string]string{{"type": "text", "text": message}}}
@@ -376,6 +390,9 @@ func (handler *Handler) call(ctx context.Context, id, name string, arguments jso
 		return nil, err
 	}
 	if handler.authorize(ctx, id+"-after") != nil {
+		if name == runtimecontract.WorkspaceToolCheckout {
+			return nil, checkoutRejected(checkoutOwnerAfterDenied)
+		}
 		return nil, errFiles
 	}
 	return result, nil

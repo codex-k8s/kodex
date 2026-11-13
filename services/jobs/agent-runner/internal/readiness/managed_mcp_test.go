@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -96,7 +98,7 @@ func TestManagedMCPRequiredCatalogSchemaAndHealth(t *testing.T) {
 func TestManagedMCPMissingOwnerProofFailsBeforeNetworkOrSocket(t *testing.T) {
 	input, _ := managedMCPReadinessFixture(t)
 	input.ManagedMCPProfiles = nil
-	if _, err := StartMCPProxy(t.Context(), input, "synthetic", []string{"propose_run_metadata"}); err == nil || FailureStage(err) != "CONFIGURATION" {
+	if _, err := StartMCPProxy(t.Context(), input, "synthetic", []string{"propose_run_metadata"}, slog.New(slog.NewJSONHandler(io.Discard, nil))); err == nil || FailureStage(err) != "CONFIGURATION" {
 		t.Fatal("missing owner proof reached startup")
 	}
 }
