@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestRotationAbortArgumentsFailClosed accepts one canonical abort command and rejects six altered flag/identity/revision/digest/confirmation variants plus missing or extra arguments. It runs only parsers, not a database abort, role check or rotation-state transition.
@@ -36,6 +38,54 @@ func TestRotationAbortArgumentsFailClosed(t *testing.T) {
 	}
 	if _, err := parseCommand(append(valid, "--force")); err == nil {
 		t.Fatal("additional rotation abort argument accepted")
+	}
+}
+
+// TestRotationStatusKeepsRegistryAndSnapshotSequencesIndependent covers owner-valid first and later
+// operations and rejects malformed bounds, missing provenance and invalid lifecycle fields. It does
+// not replace the SQL owner's durable predecessor and complete-readback checks.
+// TestRotationStatusKeepsRegistryAndSnapshotSequencesIndependent проверяет допустимые owner первые
+// и последующие operations и отклоняет неверные границы, отсутствие provenance и lifecycle fields.
+// Не заменяет проверку устойчивого predecessor и полного readback у SQL owner.
+func TestRotationStatusKeepsRegistryAndSnapshotSequencesIndependent(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	for _, revisions := range [][2]int64{{2, 1}, {3, 4}, {9, 14}} {
+		registry, base, expected, actual := revisions[0], revisions[1], 16, 16
+		status := rotationStatus{ObservedAt: now, OperationID: "13900000-0000-4000-8000-000000000002",
+			Status: "RETIRED", OperationStatus: "RETIRED", Phase: "RETIRE", RegistryRevision: &registry, BaseRevision: &base,
+			RegistrySourceDigestSHA256: strings.Repeat("a", 64), BaseDigestSHA256: strings.Repeat("b", 64),
+			ExpectedReadbacks: &expected, ActualReadbacks: &actual, SwitchNotBefore: &now, PreviousNotAfter: &now, CompletedAt: &now,
+		}
+		raw, err := json.Marshal(status)
+		if err != nil {
+			t.Fatal("encode synthetic owner status")
+		}
+		decoded, err := decodeRotationStatus(raw)
+		if err != nil || decoded.RegistryRevision == nil || *decoded.RegistryRevision != registry || decoded.BaseRevision == nil || *decoded.BaseRevision != base {
+			t.Fatalf("owner-valid registry=%d snapshot-base=%d was rejected", registry, base)
+		}
+		for _, mutate := range []func(*rotationStatus){
+			func(value *rotationStatus) { value.RegistryRevision = nil },
+			func(value *rotationStatus) { value.BaseRevision = nil },
+			func(value *rotationStatus) { zero := int64(0); value.RegistryRevision = &zero },
+			func(value *rotationStatus) { huge := int64(9007199254740992); value.RegistryRevision = &huge },
+			func(value *rotationStatus) { huge := int64(9007199254740989); value.BaseRevision = &huge },
+			func(value *rotationStatus) { value.ExpectedReadbacks = nil },
+			func(value *rotationStatus) { huge := 385; value.ExpectedReadbacks = &huge },
+			func(value *rotationStatus) { value.RegistrySourceDigestSHA256 = "unknown" },
+			func(value *rotationStatus) { value.OperationStatus = "PROMOTED" },
+			func(value *rotationStatus) { value.CompletedAt = nil },
+		} {
+			candidate := status
+			mutate(&candidate)
+			raw, err := json.Marshal(candidate)
+			if err != nil {
+				t.Fatal("encode rejected owner status fixture")
+			}
+			if _, err := decodeRotationStatus(raw); err == nil {
+				t.Fatal("invalid owner result passed CLI validation")
+			}
+		}
 	}
 }
 

@@ -88,9 +88,10 @@ export function componentMigrationPublication(value, source, profile = 'workspac
       createHash('sha256').update(raw).digest('hex') === part.componentLockSHA256, 'COMPONENT_MIGRATION_LOCK_HASH_INVALID');
     let lock;
     try { lock = JSON.parse(raw.toString('utf8')); } catch { throw Error('COMPONENT_MIGRATION_LOCK_INVALID'); }
-    // Штатный publisher сохраняет json.dumps(indent=2) + LF. Все допустимые
-    // строки ASCII; roundtrip исключает duplicate keys без второго JSON parser.
-    requireValue(raw.equals(Buffer.from(JSON.stringify(lock,null,2)+'\n')), 'COMPONENT_MIGRATION_LOCK_ENCODING_INVALID');
+    // Compact и прежний pretty publisher сохраняют ровно один LF. Roundtrip
+    // отвергает duplicate keys и произвольное оформление при прежнем лимите64KiB.
+    requireValue(raw.equals(Buffer.from(JSON.stringify(lock)+'\n')) ||
+      raw.equals(Buffer.from(JSON.stringify(lock,null,2)+'\n')), 'COMPONENT_MIGRATION_LOCK_ENCODING_INVALID');
     requireValue(fields(lock,['schema','component','source_sha','base_application_source_sha','base_release_lock_sha256','image_ref','digest',
       'production_file_sha256','schema_heads','compatibility','build','qualification']) && lock.schema === 'kodex.component-image/v1' &&
       lock.component === part.component && lock.source_sha === source.revision && lock.base_application_source_sha === value.baseSourceSHA &&
@@ -197,7 +198,7 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
 // Чужой Pod из serving selector исключается только как подтверждённая завершённая
 // repo-owned CLI Job; labels, terminal phase или имя Job по отдельности недостаточны.
 export function componentServingInventory(list, name, deploymentUID) {
-  requireValue(Array.isArray(list?.items) && names.includes(name), 'COMPONENT_MIGRATION_POD_INVENTORY_INVALID');
+  requireValue(Array.isArray(list?.items) && [...names,'internal-rpc-authority-publisher'].includes(name), 'COMPONENT_MIGRATION_POD_INVENTORY_INVALID');
   const sets=list.items.filter(r => r.kind === 'ReplicaSet');
   const owners=new Set(sets.filter(r => r.metadata?.ownerReferences?.some(o =>
     o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID)).map(r => r.metadata.uid));
@@ -298,26 +299,14 @@ export function readComponentServingInventory(kube, name, deploymentUID) {
   return componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
 }
 
-// Journal принадлежит исходному migration protocol. Пара не получает ни собственного
-// DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
-  const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
-  const workers=names.filter(name=>name!=='control-plane');
-  const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
-    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
-  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
-  const part = name => plan.componentHandoff.components.find(c => c.name === name);
-  const observe = name => {
-    const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
-    requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
-    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
-    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
-    requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
-    const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
-    const ready=actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expected.replicas &&
-      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expected.replicas) && pods.length === expected.replicas &&
+// Проверяет полный состав запущенных readers/writers; counters Deployment
+// недостаточны для допуска после обновления или открытия внешнего API.
+export function componentServingReady(actual,pods,expectedReplicas) {
+  return actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expectedReplicas &&
+      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expectedReplicas) && Array.isArray(pods) && expectedReplicas > 0 && pods.length === expectedReplicas &&
       pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
+        Object.entries(actual.spec.template.spec).every(([key,value])=>Object.hasOwn(p.spec??{},key)&&fingerprint(p.spec[key])===fingerprint(value))&&
+        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key))&&
         ['containers','initContainers','ephemeralContainers'].every(field => {
           const expected=actual.spec.template.spec[field] ?? [], observed=p.spec?.[field] ?? [];
           const statusField={containers:'containerStatuses',initContainers:'initContainerStatuses',ephemeralContainers:'ephemeralContainerStatuses'}[field];
@@ -335,6 +324,26 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
                 (field === 'containers' || c.restartPolicy === 'Always' ? status.ready === true : status.state?.terminated?.exitCode === 0);
             });
         }));
+}
+
+// Journal принадлежит исходному migration protocol. Пара не получает ни собственного
+// DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock}) {
+  const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
+  const workers=names.filter(name=>name!=='control-plane');
+  const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
+    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
+  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+  const part = name => plan.componentHandoff.components.find(c => c.name === name);
+  const observe = name => {
+    const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
+    requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
+    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
+    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
+    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
+    const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
+    const ready=componentServingReady(actual,pods,expected.replicas);
     return {actual,stage,joined,ready};
   };
   const inspect = () => names.map(name => {
@@ -372,7 +381,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const sql=extended?drainSQL(plan.source):preconditionSQL(plan.source);
     requireValue(createHash('sha256').update(sql).digest('hex') === (extended?plan.componentDrainSQLSHA256:plan.preconditionSQLSHA256) &&
       fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_PRECONDITION_SOURCE_CHANGED');
-    const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+    requireValue(typeof readOwnerSQL === 'function','COMPONENT_MIGRATION_DATABASE_READER_REQUIRED');
+    const proof=readOwnerSQL(sql);
     requireValue(proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === Number(plan.migrationVersion) &&
       ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
         'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].every(k => proof[k] === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');

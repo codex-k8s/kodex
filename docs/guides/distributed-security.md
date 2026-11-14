@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.68
+version: 1.7.69
 updated: 2026-11-14
 ---
 
@@ -274,6 +274,15 @@ Expected не выводится из фактически проверяемо�
 фактическую доступность маршрута либо применение policy в кластере.
 
 ## Адресный repair служебной PostgreSQL identity
+
+UID Pod и containerID не доказывают PostgreSQL backend, к которому обращается
+клиент внутри контейнера. Служебный preimage закрепляет явные kubeconfig,
+context и cluster/namespace UID, затем точный socket либо TLS endpoint,
+port, database и user. Унаследованные `PGHOST`, `PGSERVICE`, client rc и другие
+настройки не могут перенаправить операцию. До и после копирования проверяются
+system identifier и database OID вместе с неизменной identity процесса;
+64-битный identifier передаётся десятичной строкой без округления через Number.
+Проверка оглавления dump не доказывает успешный restore или общий snapshot с S3.
 
 Backup reader и runtime имеют разные полномочия. Совместимость с backup
 не разрешает скрывать произвольный ACL при проверке схемы: до inverse projection

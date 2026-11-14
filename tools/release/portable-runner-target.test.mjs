@@ -23,6 +23,15 @@ test('scope закрывает подмену cluster, namespace, установ
   }
 });
 
+test('Service допускается только как явно закреплённый ресурс той же установки',()=>{
+  const {profile,resource,live}=fixture();resource.apiVersion='v1';resource.kind='Service';resource.metadata.name='control-api-gateway';
+  profile.resources=[{apiVersion:'v1',kind:'Service',name:'control-api-gateway',uid:resource.metadata.uid}];
+  const scope=portableRunnerTarget(profile,live);assert.equal(scope.allows(resource),true);
+  for(const edit of [r=>r.metadata.uid='22222222-2222-4222-8222-222222222222',r=>r.metadata.namespace='foreign',r=>r.kind='Secret']){
+    const bad=structuredClone(resource);edit(bad);assert.equal(scope.allows(bad),false);
+  }
+});
+
 test('публичный verifier проверяет private files и точный ресурс до публикации',async()=>{
  const {mkdtempSync,writeFileSync,rmSync}=await import('node:fs');const {tmpdir}=await import('node:os');const {join}=await import('node:path');const {spawnSync}=await import('node:child_process');const {fileURLToPath}=await import('node:url');
  const directory=mkdtempSync(join(tmpdir(),'kodex-portable-target-'));try{
