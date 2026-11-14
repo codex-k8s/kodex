@@ -1,3 +1,4 @@
+import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validatedStablePublication } from './stable-image-publication.mjs';
 import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
@@ -20,6 +21,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'sentry-observability': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
+  'sentry-observability-backup': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'github-repository-scope-backup': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-backup-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-backup-migration-precondition.sql',postconditionFile:'github-repository-scope-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'workspace-unbound-stop': {
@@ -271,7 +274,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
   // Для044 прежний CP043 не является допустимым rollback после DDL. Normal и
   // backup требуют одного полного нового cohort, но разные exact schema proofs.
-  ensure(!['github-repository-scope','github-repository-scope-backup'].includes(profile) || componentPublication,
+  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup'].includes(profile) || componentPublication,
     'COMPONENT_MIGRATION_COHORT_REQUIRED');
   ensure(componentPublication ? isComponentMigrationProfile(profile) && portableTarget && context === componentPublication.context
     : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -419,6 +422,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'sentry-observability' || profile === 'sentry-observability-backup') ensure(validSentryObservabilityMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-repository-scope' || profile === 'github-repository-scope-backup') ensure(validGitHubRepositoryScopeMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-unbound-stop') ensure(validWorkspaceUnboundStopMigrationPrecondition(result),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-archive-abi')
@@ -1140,6 +1144,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'sentry-observability': return validSentryObservabilityMigrationPostcondition(proof);
+    case 'sentry-observability-backup': return validSentryObservabilityBackupMigrationPostcondition(proof);
     case 'github-repository-scope': return validGitHubRepositoryScopeMigrationPostcondition(proof);
     case 'github-repository-scope-backup': return validGitHubRepositoryScopeBackupMigrationPostcondition(proof);
     case 'workspace-unbound-stop': return validWorkspaceUnboundStopMigrationPostcondition(proof);
@@ -1449,3 +1455,17 @@ export function validGitHubRepositoryScopeMigrationPrecondition(proof,backup=fal
 // Каноническое сравнение включает точный набор полей; extra/missing/drift закрыто отвергаются.
 function exactGitHubSchemaCatalog(actual,expected){return actual!==null && typeof actual==='object' && !Array.isArray(actual) && Object.keys(actual).length===Object.keys(expected).length && Object.entries(expected).every(([key,value])=>JSON.stringify(actual[key])===JSON.stringify(value));}
 export function validGitHubRepositoryScopeBackupMigrationPrecondition(proof){return validGitHubRepositoryScopeMigrationPrecondition(proof,true);}
+
+// Полный catalog045 включает owner/RLS/ACL/ABI, все таблицы/functions/triggers и неизменённый purge graph.
+export function validSentryObservabilityMigrationPostcondition(proof,backup=false) {
+  const expected=sentryObservabilityCatalog[backup?'backup':'normal'].after;
+  return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114130000 && exactGitHubSchemaCatalog(proof.schemaCatalog,expected);
+}
+// Backup не получает fallback к normal: весь фактический SELECT/defaultACL закреплён отдельно.
+export function validSentryObservabilityBackupMigrationPostcondition(proof){return validSentryObservabilityMigrationPostcondition(proof,true);}
+// Precondition связывает exact044 catalog с тишиной каждого затронутого worker/effect lifecycle.
+export function validSentryObservabilityMigrationPrecondition(proof,backup=false,requireStopped=true){
+ return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && proof.sentryObservabilityAbsent===true && exactGitHubSchemaCatalog(proof.schemaCatalog,sentryObservabilityCatalog[backup?'backup':'normal'].before) && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+}
+
+export function validSentryObservabilityBackupMigrationPrecondition(proof){return validSentryObservabilityMigrationPrecondition(proof,true);}

@@ -32,7 +32,7 @@ function fixture(profile='github-repository-scope'){
   return {config,evidence};
 }
 test('component locks bind actual publisher journal source target and full code manifest',()=>{
-  for(const profile of ['workspace-unbound-stop','github-repository-scope','github-repository-scope-backup']){
+  for(const profile of ['workspace-unbound-stop','github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup']){
     const f=fixture(profile),component=f.config.components[0],e=f.evidence(component),source={receipt:e.publicationPlan.receipt,
       receiptSHA256:'1'.repeat(64),dockerfileSHA256:'2'.repeat(64),productionSHA256:'3'.repeat(64),contextSHA256:sha('synthetic archive'),
       changedFiles:[component.anchor]};
@@ -114,7 +114,7 @@ function setup(profile='workspace-unbound-stop'){
   };
   return {directory,config:f.config,run,state,change,store,prepared:()=>JSON.parse(readFileSync(join(directory,'prepared.json')))};
 }
-for(const profile of ['workspace-unbound-stop','github-repository-scope'])test(`real CLI prepares locks then proves actual CRI and readback does not pull: ${profile}`,()=>{
+for(const profile of ['workspace-unbound-stop','github-repository-scope','sentry-observability'])test(`real CLI prepares locks then proves actual CRI and readback does not pull: ${profile}`,()=>{
   const f=setup(profile);
   try{
     const p=f.run('prepare','prepared.json');assert.equal(p.code,0,p.out);
