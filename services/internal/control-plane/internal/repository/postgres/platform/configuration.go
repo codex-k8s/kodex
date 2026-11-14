@@ -443,6 +443,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if payload.DefinitionKey == "github" && definition.Metadata.Version == "6.5.0" && configuration["scope_kind"] != "ALL_ACCESSIBLE" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		if payload.DefinitionKey == "ssh-compose" {
 			if err := repository.validateSSHComposeConfiguration(ctx, tx, scope, "", configuration); err != nil {
 				return commandOutcome{}, err
@@ -703,6 +706,11 @@ func (repository *Repository) updateIntegrationConnection(
 		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	if locked.definitionKey == "github" && definition.Metadata.Version == "6.5.0" {
+		if err := repository.validatePersonalGitHubScopeSelection(ctx, tx, current, payload.Ref, configuration); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if locked.state == "TESTING" {
 		return commandOutcome{}, errs.ErrConflict

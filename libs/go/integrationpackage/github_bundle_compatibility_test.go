@@ -15,7 +15,7 @@ func TestGitHubBundleRollingCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	current := definitions["github"]
-	if current.Metadata.Version != "6.4.0" {
+	if current.Metadata.Version != "6.5.0" {
 		t.Fatal("new bundle release missing from generated shipped catalog")
 	}
 	if _, found := current.Capability("github.repository.bundle.publish"); !found {
@@ -114,7 +114,7 @@ func TestGitHubSixTwoCompatibilityKeepsClosedPRAuthority(t *testing.T) {
 		if _, found := previous.Capability(operation); found {
 			t.Fatal("historical grant inherited PR authority")
 		}
-		capability, found := definitions["github"].Capability(operation)
+		capability, found := legacyPolicyPackage(t, "github", "6.4.0").Capability(operation)
 		if !found || !capability.AllowsApprovalPolicy("NONE") {
 			t.Fatal("current release lacks explicit autonomous PR capability")
 		}

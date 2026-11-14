@@ -86,7 +86,7 @@
         "capabilities": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 48,
+          "maxItems": 64,
           "items": { "$ref": "#/$defs/capability" }
         }
       }
@@ -211,6 +211,7 @@
           "enum": [
             "SYNTHETIC_JOURNAL",
             "GITHUB_REPOSITORY",
+            "GITHUB_SCOPE",
             "GITLAB_PROJECT",
             "GITLAB_SCOPE",
             "JIRA_PROJECT",

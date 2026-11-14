@@ -91,6 +91,14 @@ func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string
 // CredentialResourcePermissionProfile выбирает только зарегистрированные проверки typed consumer
 // из executable package. Identity, grants, key pins и launch policy по-прежнему разрешает owner.
 func CredentialResourcePermissionProfile(definition Package, capability Capability) string {
+	if definition.Metadata.Key == "github" && definition.Spec.Adapter == string(AdapterGitHub) && capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		contract, exists := CredentialResourcePermissionContractForProfile("github", capability.Key, CredentialResourcePermissionGitHubScopedV1)
+		if exists && capability.Operation == contract.Operation && capability.Risk == contract.Risk && capability.AllowsApprovalPolicy(capability.ApprovalPolicy) {
+			return contract.Profile
+		}
+		return ""
+	}
+
 	if definition.Metadata.Key == "gitlab" && definition.Spec.Adapter == string(AdapterGitLab) && capability.ResourceScope.Kind == "GITLAB_SCOPE" {
 		contract, exists := CredentialResourcePermissionContractForProfile("gitlab", capability.Key, CredentialResourcePermissionGitLabScopedV2)
 		if exists && capability.Operation == contract.Operation && capability.Risk == contract.Risk && (capability.ApprovalPolicy == contract.ApprovalPolicy || capability.ApprovalScope != nil && capability.AllowsApprovalPolicy(capability.ApprovalPolicy)) {

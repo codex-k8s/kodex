@@ -135,6 +135,10 @@ func (adapter *Adapter) OpenConfigurationWriteBack(ctx context.Context, work *cp
 	operations := []string{}
 	switch definition.Spec.Adapter {
 	case "GITHUB":
+		configuration, err = nativeGitHubConfiguration(configuration, p.GetRepositoryRef())
+		if err != nil {
+			return invalid()
+		}
 		if p.GetRepositoryRef() != configuration["owner"]+"/"+configuration["repository"] || !definition.HasNetworkDestination(integrationpackage.NetworkDestination{Key: "github_git", Source: "STATIC", Hostname: "github.com", Port: 443, TLS: "REQUIRED"}) {
 			return invalid()
 		}
@@ -157,7 +161,7 @@ func (adapter *Adapter) OpenConfigurationWriteBack(ctx context.Context, work *cp
 	}
 	for _, operation := range operations {
 		capability, ok := definition.Capability(operation)
-		if !ok || capability.Operation != operation || capability.Risk == "READ" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+		if !ok || capability.Operation != operation || capability.Risk == "READ" || !capability.AllowsApprovalPolicy("HUMAN_EACH_EFFECT") {
 			return invalid()
 		}
 		if selected := time.Now().Add(time.Duration(capability.Execution.TimeoutSeconds) * time.Second); selected.Before(deadline) {
@@ -177,6 +181,11 @@ func (adapter *Adapter) OpenConfigurationWriteBack(ctx context.Context, work *cp
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
+	if definition.Spec.Adapter == "GITHUB" {
+		if err := adapter.requireNativeGitHubPermission(ctx, request, definition, configuration, p.GetRepositoryRef(), "github.branch.create"); err != nil {
+			return invalid()
+		}
+	}
 	credential, err := adapter.readCredential(ctx, request.Credential)
 	if err != nil {
 		return nil, writeBackFailure(cp.ManagedConfigurationGitWriteBackFailure_MANAGED_CONFIGURATION_GIT_WRITE_BACK_FAILURE_CREDENTIAL_REJECTED)

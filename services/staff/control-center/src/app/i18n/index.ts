@@ -47,6 +47,29 @@ const ru = {
     myConnections: "Открыть «Мои подключения»",
   },
   personalConnections: {
+    githubScope: {
+      title: "Репозитории GitHub",
+      description:
+        "Используется ваш личный ключ. Выберите все доступные вам репозитории либо конкретные личные и организационные репозитории. Перед каждым вызовом доступ проверяется заново.",
+      discover: "Найти доступные репозитории",
+      loading: "Проверяем подключение и доступ к репозиториям…",
+      identity: "Подтверждённый аккаунт: {login}. Страница {page}.",
+      scope: "Область подключения",
+      all: "Все актуально доступные репозитории",
+      selected: "Только выбранные репозитории",
+      count:
+        "Выбрано {count} из 100. Выбор сохраняется при переходе между страницами.",
+      organization: "организация",
+      personal: "личный",
+      private: "закрытый",
+      archived: "архивный",
+      empty: "На этой странице нет подходящих репозиториев.",
+      next: "Следующая страница",
+      save: "Сохранить область подключения",
+      saved: "Область сохранена. Проверьте личный ключ заново перед запуском.",
+      limits:
+        "Изменение общей области требует права управления подключением. Наблюдение чтения и право на запись репозитория не подтверждают разрешение каждой операции PAT. Слияние и публикация пакета исходников требуют отдельного Human Gate.",
+    },
     preflight: {
       title: "Для запуска нужны ваши подключения",
       description:
@@ -4936,6 +4959,29 @@ const en = {
     myConnections: "Open My connections",
   },
   personalConnections: {
+    githubScope: {
+      title: "GitHub repositories",
+      description:
+        "Your personal credential is used. Choose all repositories currently accessible to you or select personal and organization repositories. Access is checked again before each call.",
+      discover: "Find accessible repositories",
+      loading: "Checking your connection and repository access…",
+      identity: "Verified account: {login}. Page {page}.",
+      scope: "Connection scope",
+      all: "All currently accessible repositories",
+      selected: "Selected repositories only",
+      count: "Selected {count} of 100. Selection is preserved across pages.",
+      organization: "organization",
+      personal: "personal",
+      private: "private",
+      archived: "archived",
+      empty: "No eligible repositories on this page.",
+      next: "Next page",
+      save: "Save connection scope",
+      saved:
+        "Scope saved. Verify your personal credential again before launch.",
+      limits:
+        "Changing the shared scope requires connection management permission. Observed read access and repository write permission do not prove that the PAT permits each operation. Merge and source bundle publication require a separate Human Gate.",
+    },
     preflight: {
       title: "Your connections are required before launch",
       description:

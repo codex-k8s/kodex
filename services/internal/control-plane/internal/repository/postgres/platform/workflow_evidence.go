@@ -305,6 +305,11 @@ func workflowEvidenceSubject(inputs []workflowResultDependency, key string) (ent
 // acceptWorkflowCommentResult проверяет native COMMENT receipt по exact accepted subject и
 // completed producing lineage. Verdict модели никогда не становится GitHub APPROVED.
 func acceptWorkflowCommentResult(requirement entity.WorkflowResultRequirement, declaration entity.WorkflowDeclaredResult, proof workflowIntegrationResult, inputs []workflowResultDependency) (entity.WorkflowAcceptedResult, string) {
+	var validScope bool
+	proof, validScope = workflowGitHubProof(proof)
+	if !validScope {
+		return entity.WorkflowAcceptedResult{}, workflowReceiptScopeMismatch
+	}
 	subject, found := workflowEvidenceSubject(inputs, requirement.SubjectStepKey)
 	var scope map[string]string
 	_, validInput := workflowResultObject(proof.Input, []string{"pull_request_number", "sha", "event", "body"}, []string{"pull_request_number", "sha", "event", "body"})
@@ -400,6 +405,11 @@ func (repository *Repository) evaluateWorkflowQAResultTx(ctx context.Context, tx
 // workflowQAIssueReceipt требует реальное создание Issue с exact stored report request;
 // URL, чужой READ, PR receipt либо выдуманный номер условие не выполняют.
 func workflowQAIssueReceipt(proof workflowIntegrationResult, report workflowservice.QAReport) bool {
+	var validScope bool
+	proof, validScope = workflowGitHubProof(proof)
+	if !validScope {
+		return false
+	}
 	var scope map[string]string
 	var input workflowservice.QAIssue
 	var output struct {

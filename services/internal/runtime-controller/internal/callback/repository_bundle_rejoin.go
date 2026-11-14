@@ -46,7 +46,7 @@ func (server *Server) repositoryBundleRejoin(ctx context.Context, input runtimec
 		!repositorybundle.ValidDigest(proof.GetSemanticDigest()) || !repositorybundle.ValidDigest(proof.GetReceiptDigest()) || !repositoryBundleRejoinReceiptRef.MatchString(proof.GetReceiptRef()) || !repositoryBundleRejoinResultKey.MatchString(proof.GetResultKey()) ||
 		proposal.GetState() != cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_SUCCEEDED || proposal.GetVersion() < 1 || proposal.GetRef() == "" || proposal.GetGateRef() == "" ||
 		!safeInvocationRef(proposal.GetInvocationRef()) || proposal.GetOriginRunRef() == "" || proposal.GetOriginRuntimeRevisionRef() == "" ||
-		proposal.GetProposalBranch() != "kodex/bundle/"+proposal.GetRef() || proposal.GetBaseCommitSha() != request.GetBaseCommitSha() || !validRepositoryBundleCommit(proposal.GetBaseCommitSha()) ||
+		proposal.GetProposalBranch() != "kodex/bundle/"+proposal.GetRef() || proposal.GetBaseCommitSha() != request.GetBaseCommitSha() || proposal.GetRepositoryId() != request.GetRepositoryId() || proposal.GetRepositoryFullName() != request.GetRepositoryFullName() || !validRepositoryBundleCommit(proposal.GetBaseCommitSha()) ||
 		!validRepositoryBundleCommit(proposal.GetCandidateCommitSha()) || !validRepositoryBundleCommit(proposal.GetCandidateTreeSha()) ||
 		!validRepositoryBundleOriginalPin(proposal.GetArchive(), repositorybundle.MaximumArchiveBytes) || !validRepositoryBundleOriginalPin(proposal.GetManifest(), repositorybundle.MaximumManifestBytes) ||
 		proposal.GetFileCount() < 1 || proposal.GetFileCount() > repositorybundle.MaximumFiles || proposal.GetTotalBytes() < 1 || proposal.GetTotalBytes() > repositorybundle.MaximumContentBytes ||

@@ -89,7 +89,7 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 	}
 	receipt, err := client.CompletePersonalIntegrationCredentialTest(ctx, &cp.CompletePersonalIntegrationCredentialTestRequest{
 		Mutation: &cp.MutationContext{IdempotencyKey: stableKey(claim.GetTestRef(), fmt.Sprintf("personal-complete:%d", lease.GetGeneration()))},
-		TestRef:  claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Result: outcome, ConfirmedCapabilityKeys: observation.ConfirmedCapabilityKeys, DeniedCapabilityKeys: observation.DeniedCapabilityKeys, ObservedPermissionProfiles: profiles, ExpiresAt: expiry})
+		TestRef:  claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), Result: outcome, ConfirmedCapabilityKeys: observation.ConfirmedCapabilityKeys, DeniedCapabilityKeys: observation.DeniedCapabilityKeys, ObservedPermissionProfiles: profiles, ExpiresAt: expiry, GithubDiscovery: personalGitHubDiscoveryProto(observation.GitHubDiscovery)})
 	if err != nil {
 		return 1, err
 	}
@@ -99,4 +99,17 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 		return 1, errors.New("personal credential completion receipt is invalid")
 	}
 	return 1, nil
+}
+
+// personalGitHubDiscoveryProto copies a validated safe page into the worker completion; no raw provider response or credential is serialized.
+// personalGitHubDiscoveryProto копирует проверенную безопасную страницу в worker completion без сериализации provider response либо credential.
+func personalGitHubDiscoveryProto(page *integrationpackage.GitHubDiscoveryPage) *cp.GitHubRepositoryDiscoveryPage {
+	if page == nil || !page.Valid() {
+		return nil
+	}
+	result := &cp.GitHubRepositoryDiscoveryPage{IdentityId: page.IdentityID, Login: page.Login, Page: int32(page.Page), NextPage: int32(page.NextPage), Items: []*cp.GitHubDiscoveredRepository{}}
+	for _, repo := range page.Items {
+		result.Items = append(result.Items, &cp.GitHubDiscoveredRepository{Id: repo.ID, FullName: repo.FullName, OwnerKind: repo.OwnerKind, Private: repo.Private, Archived: repo.Archived, CanRead: repo.CanRead, CanPush: repo.CanPush})
+	}
+	return result
 }

@@ -16,6 +16,8 @@ type RepositoryBundlePublication struct {
 	Ref, ProjectRef, OriginRunRef, OriginRuntimeRevisionRef  string
 	InvocationRef, GateRef, ConnectionRef, GrantRef          string
 	RepositoryRef, BaseCommitSHA, ProposalBranch             string
+	RepositoryID                                             int64  `json:",omitempty"`
+	RepositoryFullName                                       string `json:",omitempty"`
 	ApprovalDigest, State, CandidateCommitSHA                string
 	CandidateTreeSHA, FailureCode                            string
 	ContinuationState, ContinuationCode, ContinuationNodeRef string
@@ -49,6 +51,8 @@ type RepositoryBundleLease struct {
 // RepositoryBundlePublicationWork contains only the owner-issued execution/recovery snapshot, private credential descriptor and full bounded manifest.
 // RepositoryBundlePublicationWork содержит лишь назначенный owner execution/recovery snapshot, private credential descriptor и полный bounded manifest.
 type RepositoryBundlePublicationWork struct {
+	PersonalCredential                       bool
+	ResourceKind, ResourcePermissionProfile  string
 	ResourceScope                            map[string]string
 	ResourceScopeDigest                      string
 	Lease                                    RepositoryBundleLease

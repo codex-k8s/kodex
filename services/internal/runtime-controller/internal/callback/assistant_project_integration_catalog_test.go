@@ -137,3 +137,21 @@ func TestProjectAssistantIntegrationGrantToolClosedParameters(t *testing.T) {
 		t.Fatal("SYSTEM accepted PROJECT self grant")
 	}
 }
+
+// TestProjectAssistantScopedGitHubCatalog projects only exact successor scope metadata and rejects payload-supplied extra fields without granting resource execution.
+// TestProjectAssistantScopedGitHubCatalog проецирует только точные successor scope metadata и отклоняет лишние payload-поля без выдачи права исполнения ресурса.
+func TestProjectAssistantScopedGitHubIntegrationCatalog(t *testing.T) {
+	for _, values := range []map[string]string{{"scope_kind": "ALL_ACCESSIBLE"}, {"scope_kind": "SELECTED", "repositories": "[{\"id\":7,\"full_name\":\"owner/repo\"}]"}} {
+		raw, _ := json.Marshal(values)
+		digest := sha256.Sum256(raw)
+		item := &controlplanev1.SystemAssistantIntegrationGrantCandidate{Capability: &controlplanev1.IntegrationCapability{Key: "github.repository.read", ResourceKind: controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE}, ResourceScope: &controlplanev1.IntegrationResourceScope{Kind: controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE, Values: values, Digest: hex.EncodeToString(digest[:])}}
+		result, err := projectCatalogPublicGitHubScope(item)
+		if err != nil || result["kind"] != "GITHUB_SCOPE" {
+			t.Fatal("scoped GitHub catalog lost exact representation", err)
+		}
+		values["token"] = "synthetic"
+		if _, err := projectCatalogPublicGitHubScope(item); err == nil {
+			t.Fatal("unexpected successor scope field reached model")
+		}
+	}
+}

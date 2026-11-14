@@ -982,6 +982,9 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
 		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 	}
+	if page, ok := item["githubDiscoveryPage"].(int); ok {
+		claim.GithubDiscoveryPage = int32(page)
+	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 	keys, _ := item["personalReadProbeCapabilityKeys"].([]string)
 	claim.PersonalReadProbeCapabilityKeys = append([]string(nil), keys...)

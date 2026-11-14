@@ -21,6 +21,7 @@ type CredentialProbeResult struct {
 	ConfirmedCapabilityKeys, DeniedCapabilityKeys []string
 	ObservedPermissionProfiles                    []string
 	ExpiresAt                                     *time.Time
+	GitHubDiscovery                               *integrationpackage.GitHubDiscoveryPage
 }
 
 // VerifyPersonalCredential performs the existing health check followed by a finite registry of
@@ -119,6 +120,16 @@ func (adapter *Adapter) VerifyPersonalCredential(ctx context.Context, request Re
 		if err := adapter.observeGitLabPersonalWriteScope(ctx, request, definition, configuration, &result); err != nil {
 			return CredentialProbeResult{}, err
 		}
+	}
+	if request.GitHubDiscoveryPage != 0 {
+		if definition.Metadata.Key != "github" || definition.Spec.HealthCheck.Operation != "github.identity.read" || request.GitHubDiscoveryPage < 1 || request.GitHubDiscoveryPage > 10000 {
+			return CredentialProbeResult{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		page, err := adapter.discoverPersonalGitHubRepositories(ctx, request, definition, configuration)
+		if err != nil {
+			return CredentialProbeResult{}, err
+		}
+		result.GitHubDiscovery = page
 	}
 	return result, nil
 }

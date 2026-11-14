@@ -102,6 +102,8 @@ type repositoryBundleSnapshot struct {
 	PublicConfiguration                                map[string]any
 	Credential                                         entity.IntegrationCredentialRevision
 	InputDigest, EffectKey                             string
+	PersonalBindingRef                                 string `json:",omitempty"`
+	PersonalBindingGeneration                          int64  `json:",omitempty"`
 }
 
 // repositoryBundleReceipt preserves the exact request digest and safe owner projection for one work action across lost acknowledgements and process replacement.

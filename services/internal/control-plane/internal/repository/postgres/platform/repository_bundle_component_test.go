@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -90,6 +91,12 @@ func newRepositoryBundleFixture(t *testing.T) *repositoryBundleFixture {
 // newRepositoryBundleFixtureMode additionally creates a native delegated child with a grantless manager when requested; only the child receives the publication grant and source bindings.
 // newRepositoryBundleFixtureMode при запросе создаёт native delegated child с manager без Git grant; publication grant и source bindings получает лишь child.
 func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBundleFixture {
+	return newRepositoryBundleFixtureProfile(t, delegated, false)
+}
+
+// newRepositoryBundleFixtureProfile materializes either frozen shared6.4 protocol fixtures or the current personal scoped path through native owner commands.
+// newRepositoryBundleFixtureProfile создаёт либо frozen shared6.4 protocol fixtures, либо текущий personal scoped path через native owner commands.
+func newRepositoryBundleFixtureProfile(t *testing.T, delegated, personal bool) *repositoryBundleFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 95*time.Second)
 	t.Cleanup(cancel)
@@ -99,6 +106,16 @@ func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBun
 	}
 	t.Cleanup(pool.Close)
 	r := newConfiguredAssistantComponentRepository(t, pool, "gpt-5")
+	if personal {
+		currentGitHubComponent(t)(r)
+	}
+	if !personal {
+		previous, ok := integrationpackage.ResolveShippedRevision(r.integrationDefinitions["github"], "6.4.0", "bd6d504e4fc1d19d5c083f8585115c04ec75852b7879ad19ed54dc41cbe9a1da")
+		if !ok {
+			t.Fatal("frozen GitHub bundle fixture missing")
+		}
+		r.integrationDefinitions["github"] = previous
+	}
 	configureComponentArtifactScanner(t, r)
 	store := &bundleFixtureObjects{Store: r.objects}
 	r.objects = store
@@ -106,15 +123,21 @@ func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBun
 		t.Fatal(err)
 	}
 	seedObservedCatalogFixture(t, ctx, r)
-	service, err := serviceplatform.New(r)
+	service, err := serviceplatform.New(r, serviceplatform.WithCredentialMaterializer(&personalCredentialComponentMaterializer{}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := &repositoryBundleFixture{t: t, ctx: ctx, pool: pool, r: r, service: service, store: store}
 	f.owner = resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.command.integrations.create"}, "control-api-gateway")
 	f.worker = f.principal("runtime-controller", "platform.runtime.execution.claim")
-	f.connection = *f.execute(command.CreateConnection, "connection", nil, command.ConnectionInput{DefinitionKey: "github", Name: "Bundle fixture", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "repository"}}).Connection
-	if _, err = pool.Exec(ctx, queryIntegrationGrantPolicyCredentialFixture, f.connection.Ref); err != nil {
+	configuration := map[string]any{"owner": "fixture", "repository": "repository"}
+	if personal {
+		configuration = map[string]any{"scope_kind": "ALL_ACCESSIBLE"}
+	}
+	f.connection = *f.execute(command.CreateConnection, "connection", nil, command.ConnectionInput{DefinitionKey: "github", Name: "Bundle fixture", PublicConfiguration: configuration}).Connection
+	if personal {
+		configurePersonalRepositoryBundleFixture(t, f)
+	} else if _, err = pool.Exec(ctx, queryIntegrationGrantPolicyCredentialFixture, f.connection.Ref); err != nil {
 		t.Fatal("seed synthetic credential metadata", err)
 	}
 	f.project = f.execute(command.CreateProject, "project", nil, command.ProjectInput{Name: "Bundle fixture", Language: "en"}).Project.Ref
@@ -173,6 +196,10 @@ func newRepositoryBundleFixtureMode(t *testing.T, delegated bool) *repositoryBun
 		f.origin = result.RuntimeItems[0]
 	}
 	f.input = port.RepositoryBundlePrepare{LeaseRef: stringMap(f.origin, "leaseRef"), Fence: stringMap(f.origin, "fence"), Generation: runtimeRevisionMapInt64(f.origin, "generation"), GrantRef: f.connection.Grants[0].Ref, BaseCommitSHA: strings.Repeat("a", 40), IdempotencyKey: "bundle-prepare-exact"}
+	if personal {
+		f.input.RepositoryID = 7
+		f.input.RepositoryFullName = "fixture/repository"
+	}
 	pins := []*entity.RepositoryBundleArtifactPin{&f.input.Archive, &f.input.Manifest}
 	for i, a := range artifacts {
 		download, err := service.ReadExecutionArtifact(ctx, f.principal("runtime-controller", "platform.runtime.execution.artifact.read"), f.input.LeaseRef, f.input.Fence, f.input.Generation, a.Ref)
@@ -259,6 +286,9 @@ func (f *repositoryBundleFixture) claim() port.RepositoryBundleEffect {
 		f.t.Fatal("specialized native claim", err)
 	}
 	w := items[0]
+	if f.connection.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired && (!w.PersonalCredential || w.ResourcePermissionProfile != integrationpackage.CredentialResourcePermissionGitHubScopedV1) {
+		f.t.Fatal("personal bundle lost admission profile")
+	}
 	download, err := f.service.ReadRepositoryBundle(f.ctx, f.principal("integration-gateway", "platform.repository-bundles.work.content.read"), w.Lease)
 	if err != nil {
 		f.t.Fatal("exact private read", err)

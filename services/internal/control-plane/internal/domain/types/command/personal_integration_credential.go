@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"time"
 )
@@ -42,6 +43,7 @@ type IntegrationCredentialPolicyInput struct {
 type PersonalIntegrationCredentialInput struct {
 	ConnectionRef, MaterializationRef string
 	ExpectedConnectionVersion         int64
+	GitHubDiscoveryPage               int
 	Credential                        *entity.IntegrationCredentialRevision
 }
 
@@ -56,4 +58,5 @@ type PersonalIntegrationCredentialTestCompletion struct {
 	ConfirmedCapabilityKeys, DeniedCapabilityKeys []string
 	ObservedPermissionProfiles                    []string
 	ExpiresAt                                     *time.Time
+	GitHubDiscovery                               *integrationpackage.GitHubDiscoveryPage
 }

@@ -50,3 +50,21 @@ func TestProjectAssistantGrantCandidatePublicScope(t *testing.T) {
 		})
 	}
 }
+
+// TestProjectAssistantScopedGitHubCandidate preserves the safe typed scope representation and rejects malformed or mismatched successor values.
+// TestProjectAssistantScopedGitHubCandidate сохраняет безопасное типизированное представление области и отклоняет malformed либо несовпадающие successor values.
+func TestProjectAssistantScopedGitHubCandidate(t *testing.T) {
+	for _, values := range []map[string]string{{"scope_kind": "ALL_ACCESSIBLE"}, {"scope_kind": "SELECTED", "repositories": "[{\"id\":7,\"full_name\":\"owner/repo\"}]"}} {
+		raw, _ := json.Marshal(values)
+		digest := sha256.Sum256(raw)
+		item := entity.SystemAssistantIntegrationGrantCandidate{Reason: "READY", Capability: entity.IntegrationCapability{Key: "github.repository.read", ResourceKind: "GITHUB_SCOPE"}, ResourceScope: values, ResourceScopeDigest: hex.EncodeToString(digest[:])}
+		wire, err := castAssistantIntegrationGrantCandidate(item)
+		if err != nil || wire.GetResourceScope().GetKind() != cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE {
+			t.Fatal("scoped GitHub candidate lost typed representation", err)
+		}
+		values["token"] = "synthetic"
+		if _, err := castAssistantIntegrationGrantCandidate(item); err == nil {
+			t.Fatal("unexpected scope field was exposed")
+		}
+	}
+}

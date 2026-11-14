@@ -16,6 +16,7 @@ func TestGitHubWriteBackBoundsAndManagedNetworkNarrowing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	baseline := definitions["github"]
 	git := NetworkDestination{Key: "github_git", Source: "STATIC", Hostname: "github.com", Port: 443, TLS: "REQUIRED"}
 	if !baseline.HasNetworkDestination(git) {

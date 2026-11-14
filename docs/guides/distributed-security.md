@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.65
-updated: 2026-11-12
+version: 1.7.66
+updated: 2026-11-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -992,6 +992,16 @@ Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SS
 temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
 
 ## Наблюдение внешних возможностей с credential
+
+При расширении Git-области discovery хранит только координаты ресурса. ID,
+canonical name и успешный публичный GET не заменяют текущую принадлежность
+аутентифицированной области ключа. Каждый эффект повторяет её проверку;
+rename, ID mismatch и stale discovery закрываются. Specialized native workers
+используют ту же personal revision/root lineage, что обычный invocation, либо
+явную service identity для фоновой работы без интерактивного инициатора.
+Замена либо отзыв personal binding атомарно закрывают её pre-effect consumers;
+начатый эффект сохраняет прежний UNKNOWN/read-only reconciliation и не
+получает shared fallback. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
 
 Список возможностей SDK, встроенный fallback и успешный локальный запуск не
 доказывают доступность provider для конкретной учётной записи. Наблюдение

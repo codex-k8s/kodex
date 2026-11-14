@@ -11,7 +11,7 @@ SELECT connection.ref, connection.name, connection.definition_key, connection.ve
        COALESCE(revision.content_sha256,''), revision.created_at,
        COALESCE(verified.ref,''), COALESCE(binding.verified_definition_digest,''),
        COALESCE(binding.verified_configuration_digest,''),
-       COALESCE(binding.verified_capabilities,'{}'::text[]), COALESCE(binding.denied_capabilities,'{}'::text[]), COALESCE(binding.observed_permission_profiles,'{}'::text[]), binding.expires_at
+       COALESCE(binding.verified_capabilities,'{}'::text[]), COALESCE(binding.denied_capabilities,'{}'::text[]), COALESCE(binding.observed_permission_profiles,'{}'::text[]), binding.expires_at, COALESCE(binding.github_discovery,'null'::jsonb)
 FROM control_plane.integration_connections connection
 JOIN control_plane.subjects subject ON subject.id=@subject_id::uuid
  AND subject.organization_id=connection.organization_id AND subject.kind='USER' AND subject.active

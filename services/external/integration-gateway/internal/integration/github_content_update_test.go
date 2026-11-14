@@ -63,6 +63,10 @@ func TestGitHubContentMutationByteBoundaries(t *testing.T) {
 			adapter := testAdapter(t)
 			credential := testCredential(t, adapter, "synthetic-content-token")
 			definition := adapter.definitions["github"]
+			definition, ok := integrationpackage.ResolveShippedRevision(definition, "6.4.0", "bd6d504e4fc1d19d5c083f8585115c04ec75852b7879ad19ed54dc41cbe9a1da")
+			if !ok {
+				t.Fatal("historical content protocol unavailable")
+			}
 			if scenario.managed {
 				definition = managedDefinitionFixture(t, definition, "Ограниченный GitHub", "UI")
 				for i := range definition.Spec.Capabilities {

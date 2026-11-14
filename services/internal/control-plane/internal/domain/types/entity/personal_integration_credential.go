@@ -1,6 +1,9 @@
 package entity
 
-import "time"
+import (
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"time"
+)
 
 // IntegrationCredentialPolicy is the persisted, explicit selection mode of a Connection;
 // an unknown value never permits falling back to its shared credential.
@@ -80,6 +83,7 @@ type PersonalIntegrationCredential struct {
 	VerifiedCapabilities, DeniedCapabilities []string
 	ObservedPermissionProfiles               []string
 	ExpiresAt                                *time.Time
+	GitHubDiscovery                          *integrationpackage.GitHubDiscoveryPage
 }
 
 // PersonalIntegrationConnection contains visible Connection metadata and an optional self binding.

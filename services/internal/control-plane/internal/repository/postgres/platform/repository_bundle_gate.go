@@ -43,6 +43,9 @@ func (repository *Repository) requireRepositoryBundleAuthority(ctx context.Conte
 	if err != nil {
 		return errs.ErrUnavailable
 	}
+	if err := repository.requireRepositoryBundlePersonalCredential(ctx, tx, current, row); err != nil {
+		return err
+	}
 	initiator := current
 	initiator.actorID, initiator.actorRef = row.actorID, actorRef
 	if repository.requireAccess(ctx, tx, initiator, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: row.proposal.ConnectionRef}) != nil {

@@ -16,6 +16,7 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	definition := definitions["github"]
 	if definition.Metadata.Version != "6.4.0" {
 		t.Fatal("unexpected GitHub source budget revision")
@@ -127,6 +128,7 @@ func TestGitHubLargeSourceProtocolDoesNotExposeBlobSelectorOrExpandAuthority(t *
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	definition := definitions["github"]
 	capability, ok := definition.Capability("github.repository.content.read")
 	if !ok || capability.ResourceScope.Kind != "GITHUB_REPOSITORY" ||

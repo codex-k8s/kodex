@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"path"
 	"strings"
 	"time"
@@ -263,6 +264,13 @@ func (repository *Repository) sourceInput(ctx context.Context, tx pgx.Tx, curren
 	repositoryRef := configuration["project_path"]
 	if connection.DefinitionKey == "github" {
 		repositoryRef = configuration["owner"] + "/" + configuration["repository"]
+		if configuration["scope_kind"] != "" {
+			selected, selectErr := integrationpackage.NativeGitHubRepository(configuration, payload.RepositoryRef)
+			if selectErr != nil || configuration["service_identity"] == "" {
+				return entity.ManagedConfigurationSourceWork{}, "", "", errs.ErrForbidden
+			}
+			repositoryRef = selected.FullName
+		}
 	}
 	if payload.RepositoryRef != repositoryRef {
 		return entity.ManagedConfigurationSourceWork{}, "", "", errs.ErrForbidden

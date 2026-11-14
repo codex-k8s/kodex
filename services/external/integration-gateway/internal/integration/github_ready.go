@@ -92,5 +92,14 @@ func (adapter *Adapter) recoverGitHubReady(ctx context.Context, request Request,
 		return Result{}, err
 	}
 	defer cleanup()
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		configuration, raw, err = resolveGitHubScopedRepository(ctx, client, request, capability, configuration, raw)
+		if err != nil {
+			return Result{}, err
+		}
+		if json.Unmarshal(raw, &input) != nil {
+			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+	}
 	return executeGitHubReady(ctx, client, configuration["owner"], configuration["repository"], request, capability, input, true)
 }

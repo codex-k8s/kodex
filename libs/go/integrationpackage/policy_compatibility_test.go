@@ -53,8 +53,14 @@ func TestPolicySuccessorsPreserveHistoricalAuthority(t *testing.T) {
 			latestPrevious := previousPackages[len(previousPackages)-1]
 			for _, cap := range current.Spec.Capabilities {
 				old, exists := latestPrevious.Capability(cap.Key)
-				if exists && cap.ApprovalPolicy != old.ApprovalPolicy {
+				if key != "github" && exists && cap.ApprovalPolicy != old.ApprovalPolicy {
 					t.Fatal("default policy broadened")
+				}
+				if key == "github" {
+					if cap.ResourceScope.Kind != "GITHUB_SCOPE" || cap.Risk == "READ" && (!cap.AllowsApprovalPolicy("NONE") || cap.ApprovalPolicy != "NONE") || cap.Risk != "READ" && cap.AllowsApprovalPolicy("NONE") {
+						t.Fatal("GitHub successor widened explicit scope or policy")
+					}
+					continue
 				}
 				if cap.Key == "github.repository.bundle.publish" {
 					if cap.AllowsApprovalPolicy("NONE") {

@@ -1,6 +1,9 @@
 package entity
 
-import "time"
+import (
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"time"
+)
 
 // PersonalIntegrationCredentialTestSpec is resolved from the published definition/configuration
 // by the owner. Allowed probes must be READ/NONE capabilities; listing a key here is not authority.
@@ -9,6 +12,7 @@ import "time"
 type PersonalIntegrationCredentialTestSpec struct {
 	Ref, DefinitionDigest, ConfigurationDigest, HealthCapabilityKey string
 	ConnectionVersion                                               int64
+	GitHubDiscoveryPage                                             int
 	AllowedReadCapabilityKeys                                       []string
 	AllowedObservationProfiles, AllowedDeniedWriteCapabilityKeys    []string
 }
@@ -52,6 +56,7 @@ type PersonalIntegrationCredentialTestObservation struct {
 	ConfirmedCapabilityKeys, DeniedCapabilityKeys []string
 	ObservedPermissionProfiles                    []string
 	ExpiresAt                                     *time.Time
+	GitHubDiscovery                               *integrationpackage.GitHubDiscoveryPage
 }
 
 // PersonalIntegrationCredentialTestReceipt reports whether a fenced observation was applied or

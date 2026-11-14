@@ -841,6 +841,7 @@ enum IntegrationResourceKind {
   INTEGRATION_RESOURCE_KIND_SSH_TARGET = 9;
   // Versioned GitLab project/group/instance boundary; project operations дополнительно закрепляют exact provider project ID.
   INTEGRATION_RESOURCE_KIND_GITLAB_SCOPE = 10;
+  INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE = 11;
 }
 
 // IntegrationDefinitionOrigin фиксирует источник immutable definition revision.
@@ -4915,6 +4916,7 @@ message IntegrationConnectionTestClaim {
   // Только personal verifier: owner-pinned metadata profiles и допустимые write denials.
   repeated PersonalIntegrationCredentialObservationProfile personal_observation_profiles = 12;
   repeated string personal_denied_write_capability_keys = 13;
+  int32 github_discovery_page = 14;
 }
 message ClaimIntegrationConnectionTestsRequest {
   string workload_instance = 1;
@@ -4980,6 +4982,7 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_PROJECT_MERGE_REQUEST_CREATE_V1 = 10;
   // Fresh scoped object/token checks; health подтверждает только identity, не global WRITE.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_SCOPED_RESOURCE_V2 = 11;
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITHUB_SCOPED_RESOURCE_V1 = 12;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -9603,6 +9606,7 @@ message PersonalIntegrationCredentialView {
   repeated string verified_capability_keys = 8;
   repeated string denied_capability_keys = 9;
   int64 connection_version = 10;
+  GitHubRepositoryDiscoveryPage github_discovery = 11;
 }
 
 message GetPersonalIntegrationCredentialRequest {
@@ -9670,6 +9674,7 @@ message TestPersonalIntegrationCredentialRequest {
   MutationContext mutation = 1;
   string connection_ref = 2;
   int64 expected_connection_version = 3;
+  int32 github_discovery_page = 4;
 }
 message TestPersonalIntegrationCredentialResponse {
   PersonalIntegrationCredentialView credential = 1;
@@ -9710,6 +9715,7 @@ message CompletePersonalIntegrationCredentialTestRequest {
   repeated PersonalIntegrationCredentialObservationProfile observed_permission_profiles = 9;
   // Только фактически наблюдённый provider expiry; отсутствие не означает бессрочность.
   google.protobuf.Timestamp expires_at = 10;
+  GitHubRepositoryDiscoveryPage github_discovery = 11;
 }
 message CompletePersonalIntegrationCredentialTestResponse {
   string test_ref = 1;
@@ -9812,4 +9818,22 @@ message ModelCacheResolution {
   bool no_store = 7;
   string proxy_response_cache = 8;
   string physical_isolation = 9;
+}
+
+// Только безопасные наблюдения собственного ключа; эти поля никогда не являются источником authority.
+message GitHubDiscoveredRepository {
+ int64 id=1;
+ string full_name=2;
+ string owner_kind=3;
+ bool private=4;
+ bool archived=5;
+ bool can_read=6;
+ bool can_push=7;
+}
+message GitHubRepositoryDiscoveryPage {
+ int64 identity_id=1;
+ string login=2;
+ int32 page=3;
+ int32 next_page=4;
+ repeated GitHubDiscoveredRepository items=5;
 }

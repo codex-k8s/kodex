@@ -7,6 +7,21 @@ const CredentialResourcePermissionGitLabScopedV2 = "GITLAB_SCOPED_RESOURCE_V2"
 // CredentialResourcePermissionContractForProfile resolves a registered scoped successor or the unchanged legacy contract; an unknown profile never removes a required check.
 // CredentialResourcePermissionContractForProfile разрешает registered scoped successor либо прежний legacy contract; неизвестный profile не снимает обязательную проверку.
 func CredentialResourcePermissionContractForProfile(definitionKey, capabilityKey, profile string) (CredentialResourcePermissionContract, bool) {
+	if definitionKey == "github" && profile == CredentialResourcePermissionGitHubScopedV1 {
+		risk := gitHubScopedCapabilityRisk(capabilityKey)
+		if risk == "" {
+			return CredentialResourcePermissionContract{}, false
+		}
+		policy := "HUMAN_EACH_EFFECT"
+		if risk == "READ" {
+			policy = "NONE"
+		}
+		if risk == "WRITE" && capabilityKey != "github.repository.bundle.publish" {
+			policy = "HUMAN_SCOPED"
+		}
+		return CredentialResourcePermissionContract{Profile: profile, Operation: capabilityKey, ResourceKind: "GITHUB_SCOPE", Risk: risk, ApprovalPolicy: policy, ReadCapabilities: []string{"github.identity.read"}}, true
+	}
+
 	if definitionKey == "gitlab" && profile == CredentialResourcePermissionGitLabScopedV2 {
 		risk := gitLabScopedCapabilityRisk(capabilityKey)
 		if risk == "" {

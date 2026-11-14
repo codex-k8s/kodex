@@ -17,16 +17,20 @@ const personalCredentialInvalidRequestCode = "INVALID_REQUEST"
 // TestPersonalIntegrationCredential ставит только выбранную владельцем READ health operation в очередь
 // с независимыми binding и Connection OCC. Browser не задаёт probes, URLs либо другого пользователя.
 func (server *Server) TestPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, params generated.TestPersonalIntegrationCredentialParams) {
-	body, mutation, ok := decodeMutationBody[generated.PersonalIntegrationCredentialCreateInput](w, r, params.IdempotencyKey, params.IfMatch)
+	body, mutation, ok := decodeMutationBody[generated.PersonalIntegrationCredentialTestInput](w, r, params.IdempotencyKey, params.IfMatch)
 	if !ok {
 		return
 	}
-	if body.ExpectedConnectionVersion < 1 {
+	if body.ExpectedConnectionVersion < 1 || body.GithubDiscoveryPage != nil && (*body.GithubDiscoveryPage < 1 || *body.GithubDiscoveryPage > 10000) {
 		writeLocalProblem(w, http.StatusBadRequest, personalCredentialInvalidRequestCode, false)
 		return
 	}
+	var discoveryPage int32
+	if body.GithubDiscoveryPage != nil {
+		discoveryPage = int32(*body.GithubDiscoveryPage)
+	}
 	response, err := server.control.PersonalCredentials.TestPersonalIntegrationCredential(r.Context(), &controlplanev1.TestPersonalIntegrationCredentialRequest{
-		ConnectionRef: ref, Mutation: mutation, ExpectedConnectionVersion: body.ExpectedConnectionVersion})
+		ConnectionRef: ref, Mutation: mutation, ExpectedConnectionVersion: body.ExpectedConnectionVersion, GithubDiscoveryPage: discoveryPage})
 	writeRPCResult(w, http.StatusOK, response, err, "credential", "")
 }
 

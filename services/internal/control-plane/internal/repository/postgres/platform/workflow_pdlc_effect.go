@@ -17,6 +17,11 @@ import (
 // parseWorkflowPDLCFileWrite объединяет закрытую форму native file-write для selector,
 // semantic normalization и result evidence. Проверяет данные, не полномочия исполнения.
 func parseWorkflowPDLCFileWrite(operation string, raw []byte) (workflowPDLCFileWrite, []byte, error) {
+	var validLocator bool
+	raw, _, validLocator = workflowGitHubFileInput(raw, "")
+	if !validLocator {
+		return workflowPDLCFileWrite{}, nil, errs.ErrConflict
+	}
 	required := []string{"path", "branch", "message", "content_base64"}
 	if operation == "github.repository.content.update" {
 		required = append(required, "sha")
@@ -54,6 +59,11 @@ func workflowEffectSemanticDigestForProfile(profile, key, operation, scopeDigest
 	if profile != workflowservice.GitHubPDLCV1 || !workflowPDLCFileOperation(operation) {
 		return workflowEffectSemanticDigest(key, operation, scopeDigest, raw)
 	}
+	var valid bool
+	raw, scopeDigest, valid = workflowGitHubFileInput(raw, scopeDigest)
+	if !valid {
+		return "", errs.ErrConflict
+	}
 	input, data, err := parseWorkflowPDLCFileWrite(operation, raw)
 	if err != nil {
 		return "", err
@@ -70,6 +80,11 @@ func workflowEffectSemanticDigestForProfile(profile, key, operation, scopeDigest
 func workflowPDLCAuthorEffectSlot(step entity.WorkflowStep, operation string, rawScope, rawInput []byte) (string, bool, error) {
 	if !contains([]string{"github.repository.content.create", "github.repository.content.update", "github.pull_request.comment.create", "github.pull_request.ready"}, operation) {
 		return "", false, nil
+	}
+	var valid bool
+	rawScope, rawInput, valid = workflowGitHubScopeInput(rawScope, rawInput)
+	if !valid {
+		return "", true, errs.ErrConflict
 	}
 	_, validScope := workflowResultObject(rawScope, []string{"owner", "repository"}, []string{"owner", "repository"})
 	var resource map[string]string

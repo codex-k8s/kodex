@@ -82,18 +82,36 @@ func (adapter *Adapter) OpenRepositoryBundle(ctx context.Context, work *cp.Repos
 	}()
 
 	request := RequestFromInvocation(invocation)
+	request.PersonalCredentialAdmission = invocation.GetCredentialAdmissionRequired()
 	definition, capability, canonicalInput, configuration, err := adapter.validateInvocation(request)
 	if err != nil {
 		return nil, errRepositoryBundle
 	}
 	archivePin := repositorybundle.ArtifactPin{Ref: p.GetArchive().GetRef(), Revision: p.GetArchive().GetRevision(), Version: p.GetArchive().GetVersion(), SHA256: p.GetArchive().GetSha256(), Size: p.GetArchive().GetSizeBytes()}
 	manifestPin := repositorybundle.ArtifactPin{Ref: p.GetManifest().GetRef(), Revision: p.GetManifest().GetRevision(), Version: p.GetManifest().GetVersion(), SHA256: p.GetManifest().GetSha256(), Size: p.GetManifest().GetSizeBytes()}
-	expectedInput, marshalErr := json.Marshal(repositorybundle.InvocationInput(archivePin, manifestPin, p.GetBaseCommitSha()))
+	boundedInput := repositorybundle.InvocationInput(archivePin, manifestPin, p.GetBaseCommitSha())
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		boundedInput["repository_id"] = p.GetRepositoryId()
+		boundedInput["repository_full_name"] = p.GetRepositoryFullName()
+	}
+	expectedInput, marshalErr := json.Marshal(boundedInput)
 	expectedCanonical, canonicalErr := capability.ValidateInput(expectedInput)
 	if marshalErr != nil || canonicalErr != nil || !bytes.Equal(canonicalInput, expectedCanonical) || capability.Operation != repositorybundle.Operation || capability.Risk != "WRITE" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" || definition.Spec.Adapter != "GITHUB" || definition.Metadata.Key != "github" ||
-		p.GetRepositoryRef() != strings.ToLower(configuration["owner"]+"/"+configuration["repository"]) ||
+		p.GetRepositoryRef() != bundleRepositoryRef(configuration, p.GetRepositoryFullName()) ||
 		!definition.HasNetworkDestination(integrationpackage.NetworkDestination{Key: "github_git", Source: "STATIC", Hostname: "github.com", Port: 443, TLS: "REQUIRED"}) {
 		return nil, errRepositoryBundle
+	}
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		client, cleanup, clientErr := adapter.githubClient(ctx, request.Credential)
+		if clientErr != nil {
+			return nil, clientErr
+		}
+		var resolveErr error
+		configuration, _, resolveErr = resolveGitHubScopedRepository(ctx, client, request, capability, configuration, canonicalInput)
+		cleanup()
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
 	}
 	credential, err := adapter.readCredential(ctx, request.Credential)
 	if err != nil {
@@ -167,4 +185,13 @@ func (execution *RepositoryBundleExecution) VerifyCandidate(ctx context.Context,
 	}
 	defer reader.close()
 	return reader.verifyBundle(ctx, execution.work.GetProposal().GetProposalBranch(), execution.work.GetProposal().GetBaseCommitSha(), candidate, execution.manifest)
+}
+
+// bundleRepositoryRef binds the public proposal to its canonical selected repository while retaining exact legacy configuration semantics.
+// bundleRepositoryRef связывает публичное предложение с каноническим выбранным репозиторием и сохраняет точную legacy семантику настройки.
+func bundleRepositoryRef(configuration map[string]string, selected string) string {
+	if configuration["scope_kind"] != "" {
+		return strings.ToLower(selected)
+	}
+	return strings.ToLower(configuration["owner"] + "/" + configuration["repository"])
 }

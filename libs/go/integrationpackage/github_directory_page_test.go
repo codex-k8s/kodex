@@ -15,6 +15,7 @@ func TestGitHubDirectoryListSchemaPinsAndOffsetBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	definition := definitions["github"]
 	if definition.Metadata.Version != "6.4.0" {
 		t.Fatal("directory wire change lacks a new exact package version")

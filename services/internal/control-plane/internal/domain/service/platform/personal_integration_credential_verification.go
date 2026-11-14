@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"encoding/json"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"math"
 	"strings"
@@ -18,6 +19,9 @@ import (
 func BeginPersonalIntegrationCredentialVerification(binding entity.PersonalIntegrationCredential, initiator entity.IntegrationCredentialInitiator, expectedVersion int64, spec entity.PersonalIntegrationCredentialTestSpec) (entity.PersonalIntegrationCredential, entity.PersonalIntegrationCredentialTestSnapshot, error) {
 	if err := personalIntegrationCredentialMutationAuthority(binding, initiator, expectedVersion); err != nil {
 		return entity.PersonalIntegrationCredential{}, entity.PersonalIntegrationCredentialTestSnapshot{}, err
+	}
+	if spec.GitHubDiscoveryPage < 0 || spec.GitHubDiscoveryPage > 10000 || spec.GitHubDiscoveryPage != 0 && spec.HealthCapabilityKey != "github.identity.read" {
+		return entity.PersonalIntegrationCredential{}, entity.PersonalIntegrationCredentialTestSnapshot{}, errs.ErrInvalid
 	}
 	if binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired || binding.State == "REVOKED" || binding.State == "CHECKING" || binding.State == "NOT_CONFIGURED" ||
 		binding.Credential == nil || !validStoredIntegrationCredential(binding.Credential) {
@@ -100,6 +104,15 @@ func CompletePersonalIntegrationCredentialVerification(binding entity.PersonalIn
 				return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
 			}
 		}
+		if snapshot.GitHubDiscoveryPage != 0 {
+			if observation.GitHubDiscovery == nil || !observation.GitHubDiscovery.Valid() || observation.GitHubDiscovery.Page != snapshot.GitHubDiscoveryPage {
+				return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
+			}
+			raw, _ := json.Marshal(observation.GitHubDiscovery)
+			binding.GitHubDiscovery, _ = integrationpackage.ParseGitHubDiscoveryPage(raw)
+		} else if observation.GitHubDiscovery != nil {
+			return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
+		}
 		binding.State = "READY"
 		binding.VerifiedCredentialRef, binding.VerifiedDefinitionDigest, binding.VerifiedConfigurationDigest = snapshot.CredentialRef, snapshot.DefinitionDigest, snapshot.ConfigurationDigest
 		binding.VerifiedCapabilities = append([]string(nil), observation.ConfirmedCapabilityKeys...)
@@ -113,7 +126,7 @@ func CompletePersonalIntegrationCredentialVerification(binding entity.PersonalIn
 			binding.ExpiresAt = &copy
 		}
 	case entity.PersonalIntegrationCredentialAuthenticationRejected, entity.PersonalIntegrationCredentialVerificationUnavailable:
-		if len(observation.ConfirmedCapabilityKeys) != 0 || len(observation.DeniedCapabilityKeys) != 0 || len(observation.ObservedPermissionProfiles) != 0 || observation.ExpiresAt != nil {
+		if len(observation.ConfirmedCapabilityKeys) != 0 || len(observation.DeniedCapabilityKeys) != 0 || len(observation.ObservedPermissionProfiles) != 0 || observation.ExpiresAt != nil || observation.GitHubDiscovery != nil {
 			return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
 		}
 		binding.State = "INVALID"

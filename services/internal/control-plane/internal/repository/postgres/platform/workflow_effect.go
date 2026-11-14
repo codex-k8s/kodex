@@ -155,6 +155,11 @@ func workflowEffectSlot(step entity.WorkflowStep, dependencies []workflowResultD
 // workflowEffectSlotForProfile выводит новые review/QA slots только из явно опубликованного
 // evidence profile и принятого dependency PR; остальные операции сохраняют прежний отказ.
 func workflowEffectSlotForProfile(profile string, step entity.WorkflowStep, dependencies []workflowResultDependency, operation string, resourceScope, canonicalInput []byte) (string, error) {
+	var valid bool
+	resourceScope, canonicalInput, valid = workflowGitHubScopeInput(resourceScope, canonicalInput)
+	if !valid {
+		return "", errs.ErrConflict
+	}
 	var resource map[string]string
 	if json.Unmarshal(resourceScope, &resource) != nil || !workflowservice.ValidRequirementsForProfile(profile, step.ResultRequirements, step.DependsOn) {
 		return "", errs.ErrConflict

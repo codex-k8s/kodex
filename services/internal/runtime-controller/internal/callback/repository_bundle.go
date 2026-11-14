@@ -40,17 +40,19 @@ func repositoryBundleTool() map[string]any {
 // repositoryBundleInput carries the exact scalar package schema while keeping source bytes out of the model channel; strict decode rejects extras, fractions and overflow.
 // repositoryBundleInput переносит exact scalar package schema без source bytes в model channel; strict decode отклоняет extras, fractions и overflow.
 type repositoryBundleInput struct {
-	ArchiveRef       string `json:"archive_ref"`
-	ArchiveRevision  int64  `json:"archive_revision"`
-	ArchiveVersion   int64  `json:"archive_version"`
-	ArchiveSHA256    string `json:"archive_sha256"`
-	ArchiveSize      int64  `json:"archive_size_bytes"`
-	ManifestRef      string `json:"manifest_ref"`
-	ManifestRevision int64  `json:"manifest_revision"`
-	ManifestVersion  int64  `json:"manifest_version"`
-	ManifestSHA256   string `json:"manifest_sha256"`
-	ManifestSize     int64  `json:"manifest_size_bytes"`
-	BaseCommitSHA    string `json:"base_commit_sha"`
+	ArchiveRef         string `json:"archive_ref"`
+	ArchiveRevision    int64  `json:"archive_revision"`
+	ArchiveVersion     int64  `json:"archive_version"`
+	ArchiveSHA256      string `json:"archive_sha256"`
+	ArchiveSize        int64  `json:"archive_size_bytes"`
+	ManifestRef        string `json:"manifest_ref"`
+	ManifestRevision   int64  `json:"manifest_revision"`
+	ManifestVersion    int64  `json:"manifest_version"`
+	ManifestSHA256     string `json:"manifest_sha256"`
+	ManifestSize       int64  `json:"manifest_size_bytes"`
+	BaseCommitSHA      string `json:"base_commit_sha"`
+	RepositoryID       int64  `json:"repository_id"`
+	RepositoryFullName string `json:"repository_full_name"`
 }
 
 // repositoryBundleToolResult exposes compact pending proposal/approval pins, not a completed Git write; later native continuation reports the actual owner receipt.
@@ -95,7 +97,7 @@ func (server *Server) prepareRepositoryBundle(ctx context.Context, input runtime
 	if decoder.Decode(&pins) != nil || !errors.Is(decoder.Decode(&struct{}{}), io.EOF) {
 		return nil, status.Error(codes.InvalidArgument, "repository bundle input is invalid")
 	}
-	request := &cp.PrepareRepositoryBundlePublicationRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, GrantRef: grant.Ref, IdempotencyKey: runtimeToolMutationKey(input, callID), BaseCommitSha: pins.BaseCommitSHA,
+	request := &cp.PrepareRepositoryBundlePublicationRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, GrantRef: grant.Ref, IdempotencyKey: runtimeToolMutationKey(input, callID), BaseCommitSha: pins.BaseCommitSHA, RepositoryId: pins.RepositoryID, RepositoryFullName: pins.RepositoryFullName,
 		Archive:  &cp.RepositoryBundleArtifactPin{Ref: pins.ArchiveRef, Revision: pins.ArchiveRevision, Version: pins.ArchiveVersion, Sha256: pins.ArchiveSHA256, SizeBytes: pins.ArchiveSize},
 		Manifest: &cp.RepositoryBundleArtifactPin{Ref: pins.ManifestRef, Revision: pins.ManifestRevision, Version: pins.ManifestVersion, Sha256: pins.ManifestSHA256, SizeBytes: pins.ManifestSize}}
 	bounded, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
@@ -108,7 +110,7 @@ func (server *Server) prepareRepositoryBundle(ctx context.Context, input runtime
 		return server.repositoryBundleRejoin(bounded, input, grant, request, response)
 	}
 	proposal := response.GetProposal()
-	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || proposal == nil || !repositorybundle.ValidContinuation(proposal.GetContinuationState(), proposal.GetContinuationCode(), proposal.GetContinuationNodeRef()) || len(proposal.ProtoReflect().GetUnknown()) != 0 || proposal.GetState() < cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_WAITING_APPROVAL || proposal.GetState() > cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_FAILED || proposal.GetVersion() < 1 || proposal.GetTotalBytes() < 0 || proposal.GetTotalBytes() > repositorybundle.MaximumContentBytes || proposal.GetProposalBranch() != "kodex/bundle/"+proposal.GetRef() || proposal.GetRef() == "" || proposal.GetGateRef() == "" || !safeInvocationRef(proposal.GetInvocationRef()) || proposal.GetOriginRunRef() != input.RunRef || proposal.GetOriginRuntimeRevisionRef() != input.RuntimeRevisionRef || proposal.GetGrantRef() != grant.Ref || proposal.GetConnectionRef() != grant.ConnectionRef || proposal.GetGrantVersion() != grant.GrantVersion || !protoBundlePinsEqual(proposal.GetArchive(), request.Archive) || !protoBundlePinsEqual(proposal.GetManifest(), request.Manifest) || proposal.GetBaseCommitSha() != pins.BaseCommitSHA || proposal.GetFileCount() < 1 || proposal.GetFileCount() > repositorybundle.MaximumFiles {
+	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || proposal == nil || !repositorybundle.ValidContinuation(proposal.GetContinuationState(), proposal.GetContinuationCode(), proposal.GetContinuationNodeRef()) || len(proposal.ProtoReflect().GetUnknown()) != 0 || proposal.GetState() < cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_WAITING_APPROVAL || proposal.GetState() > cp.RepositoryBundlePublicationState_REPOSITORY_BUNDLE_PUBLICATION_STATE_FAILED || proposal.GetVersion() < 1 || proposal.GetTotalBytes() < 0 || proposal.GetTotalBytes() > repositorybundle.MaximumContentBytes || proposal.GetProposalBranch() != "kodex/bundle/"+proposal.GetRef() || proposal.GetRef() == "" || proposal.GetGateRef() == "" || !safeInvocationRef(proposal.GetInvocationRef()) || proposal.GetOriginRunRef() != input.RunRef || proposal.GetOriginRuntimeRevisionRef() != input.RuntimeRevisionRef || proposal.GetGrantRef() != grant.Ref || proposal.GetConnectionRef() != grant.ConnectionRef || proposal.GetGrantVersion() != grant.GrantVersion || !protoBundlePinsEqual(proposal.GetArchive(), request.Archive) || !protoBundlePinsEqual(proposal.GetManifest(), request.Manifest) || proposal.GetBaseCommitSha() != pins.BaseCommitSHA || proposal.GetRepositoryId() != pins.RepositoryID || proposal.GetRepositoryFullName() != pins.RepositoryFullName || proposal.GetFileCount() < 1 || proposal.GetFileCount() > repositorybundle.MaximumFiles {
 		return nil, status.Error(codes.Unavailable, "repository bundle receipt is invalid")
 	}
 	state := proposal.GetState().String()

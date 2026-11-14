@@ -136,6 +136,7 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 		claim := map[string]any{"testRef": job.ref, "connectionRef": job.connectionRef, "definitionKey": input.definition.Metadata.Key,
 			"definitionVersion": input.definition.Metadata.Version, "definitionDigest": input.definition.Digest, "definitionPackage": asJSON(input.definition),
 			"configuration": input.configuration, "leaseRef": lease, "fence": fence, "generation": int64(1), "expiresAt": expires}
+		claim["githubDiscoveryPage"] = job.snapshot.GitHubDiscoveryPage
 		claim["personalReadProbeCapabilityKeys"] = append([]string(nil), job.snapshot.AllowedReadCapabilityKeys...)
 		claim["personalObservationProfiles"] = append([]string(nil), job.snapshot.AllowedObservationProfiles...)
 		claim["personalDeniedWriteCapabilityKeys"] = append([]string(nil), job.snapshot.AllowedDeniedWriteCapabilityKeys...)
@@ -273,7 +274,7 @@ func (repository *Repository) completePersonalCredentialTest(ctx context.Context
 		}
 		return personalCredentialTestOutcome(job.ref, "CANCELLED", false), nil
 	}
-	observation := entity.PersonalIntegrationCredentialTestObservation{Outcome: payload.Outcome, ConfirmedCapabilityKeys: append([]string(nil), payload.ConfirmedCapabilityKeys...), DeniedCapabilityKeys: append([]string(nil), payload.DeniedCapabilityKeys...), ObservedPermissionProfiles: append([]string(nil), payload.ObservedPermissionProfiles...), ExpiresAt: payload.ExpiresAt}
+	observation := entity.PersonalIntegrationCredentialTestObservation{Outcome: payload.Outcome, ConfirmedCapabilityKeys: append([]string(nil), payload.ConfirmedCapabilityKeys...), DeniedCapabilityKeys: append([]string(nil), payload.DeniedCapabilityKeys...), ObservedPermissionProfiles: append([]string(nil), payload.ObservedPermissionProfiles...), ExpiresAt: payload.ExpiresAt, GitHubDiscovery: payload.GitHubDiscovery}
 	if payload.Outcome == entity.PersonalIntegrationCredentialAuthenticated && len(observation.ConfirmedCapabilityKeys) == 0 && len(observation.DeniedCapabilityKeys) == 0 {
 		// Совместимость с прежним worker: он мог подтвердить исключительно health.
 		observation.ConfirmedCapabilityKeys = []string{job.snapshot.HealthCapabilityKey}
@@ -289,6 +290,7 @@ func (repository *Repository) completePersonalCredentialTest(ctx context.Context
 	if payload.Outcome == entity.PersonalIntegrationCredentialAuthenticated {
 		state = "SUCCEEDED"
 	}
+	job.githubDiscovery = verified.GitHubDiscovery
 	if err := finishPersonalCredentialTest(ctx, tx, current.organizationID, job, state, string(payload.Outcome)); err != nil {
 		return commandOutcome{}, err
 	}
