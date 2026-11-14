@@ -15,7 +15,7 @@ import (
 
 // repositoryPolicyDigest pins the checked-in deployment policy fixture.
 // repositoryPolicyDigest закрепляет образец политики из репозитория.
-const repositoryPolicyDigest = "91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0"
+const repositoryPolicyDigest = "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218"
 
 // TestRepositoryPolicyMatchesExpectedImmutableDigest checks file, schema, and closed STT view.
 // TestRepositoryPolicyMatchesExpectedImmutableDigest проверяет файл, схему и закрытый профиль STT.

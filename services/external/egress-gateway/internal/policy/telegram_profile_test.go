@@ -11,7 +11,7 @@ import (
 // TestTelegramProfileStaysIsolatedFromCore доказывает доступ registered listener лишь к fixed Bot API и сохранение прежнего набора core destinations.
 func TestTelegramProfileStaysIsolatedFromCore(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "policy.json")
+	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "telegram-policy.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

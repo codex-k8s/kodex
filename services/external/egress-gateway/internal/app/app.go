@@ -76,7 +76,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
 			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 		}
-		if _, err := activePolicy.ForProfile(policy.TelegramProfileName); err != nil {
+		if _, err := loadTelegramProfile(config); err != nil {
 			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 		}
 	}
@@ -152,16 +152,21 @@ func runActive(
 	if err != nil {
 		return err
 	}
-	telegramPolicy, err := activePolicy.ForProfile(policy.TelegramProfileName)
+	telegramPolicy, err := loadTelegramProfile(config)
 	if err != nil {
 		return err
 	}
-	for _, listener := range []struct {
+	listeners := []struct {
 		address string
 		profile *policy.Active
-	}{
-		{config.ConnectAddress, activePolicy}, {config.STTConnectAddress, sttPolicy}, {config.TelegramConnectAddress, telegramPolicy},
-	} {
+	}{{config.ConnectAddress, activePolicy}, {config.STTConnectAddress, sttPolicy}}
+	if telegramPolicy != nil {
+		listeners = append(listeners, struct {
+			address string
+			profile *policy.Active
+		}{config.TelegramConnectAddress, telegramPolicy})
+	}
+	for _, listener := range listeners {
 		server, err := gateway.New(runContext, listener.address, listener.profile, resolver, &gateway.NetDialer{}, current.state, business)
 		if err != nil {
 			return err
@@ -300,7 +305,10 @@ func runTechnicalOnly(
 	}
 	addresses := []string{config.ConnectAddress}
 	if config.Mode != "clamav" {
-		addresses = append(addresses, config.STTConnectAddress, config.TelegramConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+		addresses = append(addresses, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+		if config.TelegramConnectAddress != "" {
+			addresses = append(addresses, config.TelegramConnectAddress)
+		}
 	}
 	if config.NativeConnectAddress != "" {
 		addresses = append(addresses, config.NativeConnectAddress)
@@ -465,4 +473,19 @@ func serveResult(name string, err error) error {
 		return fmt.Errorf("serve %s: %w", name, err)
 	}
 	return fmt.Errorf("%s server stopped unexpectedly", name)
+}
+
+// loadTelegramProfile uses an independently pinned policy only when the listener is configured.
+// It always narrows to the closed Telegram profile, preserving the base policy used by existing consumers.
+// loadTelegramProfile использует независимо закреплённую policy лишь при настроенном listener.
+// Всегда сужает её до закрытого Telegram profile, сохраняя base policy прежних consumers.
+func loadTelegramProfile(config Config) (*policy.Active, error) {
+	if config.TelegramConnectAddress == "" {
+		return nil, nil
+	}
+	active, err := policy.LoadFile(config.TelegramPolicyFile, config.ExpectedRevision, config.TelegramExpectedDigest)
+	if err != nil {
+		return nil, err
+	}
+	return active.ForProfile(policy.TelegramProfileName)
 }

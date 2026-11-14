@@ -8,7 +8,7 @@ import (
 // nativeConfigurationFixture supplies syntactically valid defaults without reading files or secrets.
 // nativeConfigurationFixture задаёт syntactically valid defaults без чтения файлов либо секретов.
 func nativeConfigurationFixture() Config {
-	return Config{PolicyFile: "/policy.json", ResolverConfig: "/resolv.conf", ExpectedRevision: "synthetic", ExpectedDigest: strings.Repeat("a", 64), ConnectAddress: ":8080", TechnicalAddress: ":9090", STTConnectAddress: ":8081", TelegramConnectAddress: ":8086", MailConnectAddress: ":8082", IntegrationConnectAddress: ":8083", RuntimeConnectAddress: ":8084", MailPolicyFile: "/mail.json", IntegrationPolicyFile: "/integration.json", MailExpectedDigest: strings.Repeat("b", 64), IntegrationExpectedDigest: strings.Repeat("c", 64), RuntimeSigningKeyFile: "/signing", RuntimeProxyCACertificate: "/ca.pem", RuntimeProxyCAPrivateKey: "/ca.key"}
+	return Config{PolicyFile: "/policy.json", ResolverConfig: "/resolv.conf", ExpectedRevision: "synthetic", ExpectedDigest: strings.Repeat("a", 64), ConnectAddress: ":8080", TechnicalAddress: ":9090", STTConnectAddress: ":8081", TelegramConnectAddress: ":8086", TelegramPolicyFile: "/telegram.json", TelegramExpectedDigest: strings.Repeat("d", 64), MailConnectAddress: ":8082", IntegrationConnectAddress: ":8083", RuntimeConnectAddress: ":8084", MailPolicyFile: "/mail.json", IntegrationPolicyFile: "/integration.json", MailExpectedDigest: strings.Repeat("b", 64), IntegrationExpectedDigest: strings.Repeat("c", 64), RuntimeSigningKeyFile: "/signing", RuntimeProxyCACertificate: "/ca.pem", RuntimeProxyCAPrivateKey: "/ca.key"}
 }
 
 // TestNativeListenerTupleIsOptionalAndBounded keeps default deployment unchanged and

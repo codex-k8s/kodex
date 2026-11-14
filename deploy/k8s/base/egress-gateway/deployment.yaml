@@ -47,10 +47,12 @@ spec:
           env:
             - {name: EGRESS_GATEWAY_POLICY_FILE, value: /var/run/config/kodex/egress-gateway/policy.json}
             - {name: EGRESS_GATEWAY_EXPECTED_POLICY_REVISION, value: 2026-09-05.1}
-            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0}
+            - {name: EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST, value: 8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218}
             - {name: EGRESS_GATEWAY_CONNECT_LISTEN, value: ":8080"}
             - {name: EGRESS_GATEWAY_STT_CONNECT_LISTEN, value: ":8081"}
             - {name: EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN, value: ":8086"}
+            - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-telegram/policy.json}
+            - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST, value: 91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0}
             - {name: EGRESS_GATEWAY_MAIL_CONNECT_LISTEN, value: ":8082"}
             - {name: EGRESS_GATEWAY_MAIL_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-mail/mail-policy.json}
             - {name: EGRESS_GATEWAY_INTEGRATION_CONNECT_LISTEN, value: ":8083"}
@@ -96,6 +98,9 @@ spec:
             capabilities:
               drop: ["ALL"]
           volumeMounts:
+            - name: telegram-policy
+              mountPath: /var/run/config/kodex/egress-gateway-telegram
+              readOnly: true
             - name: mail-policy
               mountPath: /var/run/config/kodex/egress-gateway-mail
               readOnly: true
@@ -112,6 +117,10 @@ spec:
               mountPath: /var/run/secrets/kodex/egress-gateway/runtime-proxy-ca
               readOnly: true
       volumes:
+        - name: telegram-policy
+          configMap:
+            name: egress-gateway-telegram-policy
+            defaultMode: 0444
         - name: runtime-signing
           secret: {secretName: runtime-egress-signing, defaultMode: 0440}
         - name: runtime-proxy-ca

@@ -28,51 +28,18 @@
       "writeTimeoutMilliseconds": 5000,
       "shutdownTimeoutMilliseconds": 20000
     },
-    "profiles": [
-      {
-        "name": "openai-stt",
-        "workload": "stt-tts-service",
-        "operation": "openai.transcription",
-        "destinations": [
-          {
-            "hostname": "api.openai.com",
-            "port": 443
-          }
-        ]
-      },
-      {
-        "name": "telegram-notifications",
-        "workload": "interaction-gateway",
-        "operation": "telegram.bot-api",
-        "destinations": [
-          {
-            "hostname": "api.telegram.org",
-            "port": 443
-          }
-        ]
-      }
-    ],
+    "profiles": [{
+      "name": "openai-stt",
+      "workload": "stt-tts-service",
+      "operation": "openai.transcription",
+      "destinations": [{"hostname": "api.openai.com", "port": 443}]
+    }],
     "destinations": [
-      {
-        "hostname": "api.openai.com",
-        "port": 443
-      },
-      {
-        "hostname": "auth.openai.com",
-        "port": 443
-      },
-      {
-        "hostname": "chatgpt.com",
-        "port": 443
-      },
-      {
-        "hostname": "api.github.com",
-        "port": 443
-      },
-      {
-        "hostname": "github.com",
-        "port": 443
-      }
+      {"hostname": "api.openai.com", "port": 443},
+      {"hostname": "auth.openai.com", "port": 443},
+      {"hostname": "chatgpt.com", "port": 443},
+      {"hostname": "api.github.com", "port": 443},
+      {"hostname": "github.com", "port": 443}
     ]
   }
 }

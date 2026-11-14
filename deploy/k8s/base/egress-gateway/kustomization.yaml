@@ -24,6 +24,11 @@ configMapGenerator:
       - policy.json=policy.json
     options:
       immutable: true
+  - name: egress-gateway-telegram-policy
+    files:
+      - policy.json=telegram-policy.json
+    options:
+      immutable: true
 patches:
   - path: mail/mail-deployment-patch.json
   - path: integration/integration-deployment-patch.json

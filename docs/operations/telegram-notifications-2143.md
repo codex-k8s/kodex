@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.5
+version: 1.0.6
 updated: 2026-11-14
 ---
 
@@ -114,9 +114,13 @@ Telegram использует отдельный закрытый CONNECT listen
 `api.telegram.org:443` и точным ingress только от `interaction-gateway` в
 `kodex-system`. Прежние core destinations8080 сохраняются. Runtime policy,
 Service, readiness parsing и итоговые NetworkPolicy доставляются вместе;
-caller header не выбирает профиль. Изменение общего policy digest требует
-пересборки пустых bootstrap mail/integration projections штатными producers.
-Живые owner-проекции этим bootstrap действием не заменяются.
+caller header не выбирает профиль. Listener использует отдельный immutable
+`egress-gateway-telegram-policy` с `EGRESS_GATEWAY_TELEGRAM_POLICY_FILE` и
+`EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST`; runtime всегда выбирает лишь закрытый
+Telegram profile из этого source. Базовый policy digest и ранее принятые
+mail/integration/STT projections сохраняют свои прежние inputs. Отсутствие
+optional Telegram input не препятствует прежнему egress startup; неполная пара
+listener/file/digest закрыто отклоняется.
 
 Публичный origin берётся из существующего
 `kodex-platform-endpoints.data.publicOrigin` через `INTERACTION_PUBLIC_ORIGIN`

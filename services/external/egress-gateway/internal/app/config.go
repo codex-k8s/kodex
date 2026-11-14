@@ -21,6 +21,8 @@ type Config struct {
 	ConnectAddress            string `env:"EGRESS_GATEWAY_CONNECT_LISTEN,required"`
 	STTConnectAddress         string `env:"EGRESS_GATEWAY_STT_CONNECT_LISTEN"`
 	TelegramConnectAddress    string `env:"EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN"`
+	TelegramPolicyFile        string `env:"EGRESS_GATEWAY_TELEGRAM_POLICY_FILE"`
+	TelegramExpectedDigest    string `env:"EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST"`
 	MailConnectAddress        string `env:"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN"`
 	MailPolicyFile            string `env:"EGRESS_GATEWAY_MAIL_POLICY_FILE"`
 	MailExpectedDigest        string `env:"EGRESS_GATEWAY_MAIL_POLICY_DIGEST"`
@@ -64,6 +66,12 @@ func (config Config) validate() error {
 		}
 		paths = append(paths, config.NativePolicyFile)
 	}
+	if config.TelegramConnectAddress != "" || config.TelegramPolicyFile != "" || config.TelegramExpectedDigest != "" {
+		if config.Mode != "" || config.TelegramConnectAddress == "" || config.TelegramPolicyFile == "" || config.TelegramExpectedDigest == "" {
+			return errors.New("egress gateway Telegram configuration is incomplete")
+		}
+		paths = append(paths, config.TelegramPolicyFile)
+	}
 	if config.Mode == "" {
 		paths = append(paths, config.MailPolicyFile, config.IntegrationPolicyFile, config.RuntimeSigningKeyFile,
 			config.RuntimeProxyCACertificate, config.RuntimeProxyCAPrivateKey)
@@ -77,10 +85,12 @@ func (config Config) validate() error {
 	if config.Mode == "" {
 		listeners = append(listeners,
 			struct{ address, port string }{config.STTConnectAddress, "8081"},
-			struct{ address, port string }{config.TelegramConnectAddress, "8086"},
 			struct{ address, port string }{config.MailConnectAddress, "8082"},
 			struct{ address, port string }{config.IntegrationConnectAddress, "8083"},
 			struct{ address, port string }{config.RuntimeConnectAddress, "8084"})
+	}
+	if config.TelegramConnectAddress != "" {
+		listeners = append(listeners, struct{ address, port string }{config.TelegramConnectAddress, "8086"})
 	}
 	if config.NativeConnectAddress != "" {
 		listeners = append(listeners, struct{ address, port string }{config.NativeConnectAddress, "8085"})
@@ -98,6 +108,9 @@ func (config Config) validate() error {
 		return errors.New("egress gateway deployment expectation is invalid")
 	}
 	digests := []string{config.ExpectedDigest}
+	if config.TelegramConnectAddress != "" {
+		digests = append(digests, config.TelegramExpectedDigest)
+	}
 	if config.NativeConnectAddress != "" {
 		digests = append(digests, config.NativeExpectedDigest)
 	}

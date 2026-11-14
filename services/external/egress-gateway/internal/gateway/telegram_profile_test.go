@@ -16,7 +16,7 @@ import (
 // TestTelegramListenerPinsReachabilityAndReadiness uses actual CONNECT parsing with synthetic peers; no DNS or external dial is permitted before a valid exact TLS ClientHello.
 // TestTelegramListenerPinsReachabilityAndReadiness использует настоящий CONNECT parser с synthetic peers; DNS и внешний dial запрещены до верного exact TLS ClientHello.
 func TestTelegramListenerPinsReachabilityAndReadiness(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "policy.json")
+	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "telegram-policy.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
