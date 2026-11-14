@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.6
+version: 1.0.7
 updated: 2026-11-14
 ---
 
@@ -205,7 +205,21 @@ receipts и terminal proof16 не разрешают открыть Service, и�
 созданного exact spec0 без patch: исходный creator proof должен остаться
 проверяемым перед107 CAS. Отдельный start меняет replicas0→3 только после
 DELIVER; lostACK восстанавливается по intent и полному ready inventory,
-не повторяя patch. Результат `READERS_STARTED_PENDING_RETIRE` сохраняет API0.
+не повторяя patch. Перед `activate` штатный API maintenance OPEN должен
+подтвердить exact новый spec, собственный journal и готовность всех Pods; Service
+остаётся изолированным. Результат `READERS_STARTED_PENDING_RETIRE` подтверждает
+лишь запуск readers за этой boundary, без открытия пользовательского трафика.
+
+Публичная фаза `control-plane-migration.mjs activate` принимает приватные
+`--authority-plan`, `--authority-evidence`, `--authority-status-plan`,
+`--authority-status-evidence`, `--api-open-plan`, `--api-open-evidence` только
+для046. GET/logs перечитывают исходный owner operation, свежий status Job,
+OPEN journal и Service/EndpointSlices. Чужой source/UID, незавершённый OPEN,
+неполный Pod inventory либо потерянная изоляция не дают start. Та же привязка
+передаётся в последующие inspect/resume; простые replicas3 не разрешаются.
+Normal и backup команды046 отдельно зарегистрированы в terminal inventory
+только для Job `control-plane-migrate-20261114140000` и bounded `-attempt2`.
+Это исключение не доказывает DDL PASS и не разрешает его повтор.
 
 `make test-telegram-authority-delivery` воспроизводит закрытые policy/registry
 границы107 и отдельные total/required counts, промежуточный DELIVER, creator lineage и старые106 regressions с

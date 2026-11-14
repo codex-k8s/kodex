@@ -178,7 +178,10 @@ export function componentMigrationTarget(target, publication, observed) {
     publication.components.every(c => c.nodeProof.nodes.every(n => observed.nodes.some(actual => actual.metadata.uid === n.uid && actual.metadata.name === n.name &&
       !actual.metadata.deletionTimestamp && actual.status?.conditions?.some(v => v.type === 'Ready' && v.status === 'True')))), 'COMPONENT_MIGRATION_TARGET_MISMATCH');
   const gateway = observed.deployments.find(d => d.metadata.name === 'control-api-gateway');
-  requireValue(gateway.spec.replicas === 0, 'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
+  const readers=observed.maintenanceReaders;
+  requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&readers?.state==='ISOLATED_READERS_READY'&&
+    readers.sourceSHA===observed.sourceRevision&&readers.deploymentUID===gateway.metadata.uid&&
+    fingerprint(readers.spec)===fingerprint(gateway.spec),'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
   return {...validated,targetSHA256:scope.digest};
 }
 
@@ -239,7 +242,9 @@ export function componentServingInventory(list, name, deploymentUID) {
         main.args[0] === 'up-github-repository-scope-backup-compatible' &&
         ['control-plane-migrate-20261114120000','control-plane-migrate-20261114120000-attempt2'].includes(job.metadata.name) ||
         ['up-sentry-observability','up-sentry-observability-backup-maintenance'].includes(main.args[0]) &&
-        ['control-plane-migrate-20261114130000','control-plane-migrate-20261114130000-attempt2'].includes(job.metadata.name));
+        ['control-plane-migrate-20261114130000','control-plane-migrate-20261114130000-attempt2'].includes(job.metadata.name) ||
+        ['up-telegram-notifications','up-telegram-notifications-backup-maintenance'].includes(main.args[0]) &&
+        ['control-plane-migrate-20261114140000','control-plane-migrate-20261114140000-attempt2'].includes(job.metadata.name));
     const bootstrap=labels['app.kubernetes.io/component'] === 'broker-bootstrap' && job.metadata.name === 'control-plane-broker-bootstrap' &&
       spec?.serviceAccountName === 'control-plane-broker-bootstrap' && main?.name === 'bootstrap' &&
       Array.isArray(main.args) && main.args.length === 2 && main.args[0] === 'broker' && main.args[1] === 'bootstrap';
@@ -354,7 +359,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -366,12 +371,19 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stages=expected.maintenance?['stoppedSpec','stagedSpec']:expected.introduced?['stoppedSpec','stagedSpec','resumedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
     let stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    let readers;
+    if(!stage&&expected.maintenance&&profiles[plan.imageEvidence.profile].introduced&&typeof readMaintenanceReaders==='function'){
+      readers=readMaintenanceReaders();
+      requireValue(readers?.state==='ISOLATED_READERS_READY'&&readers.sourceSHA===plan.source.revision&&
+        readers.deploymentUID===expected.uid&&fingerprint(readers.spec)===fingerprint(actual.spec),'TELEGRAM_API_READERS_REQUIRED');
+      stage='isolatedReadersSpec';
+    }
     if(expected.introduced&&stage==='stoppedSpec'&&journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'&&e.name===name))stage='stagedSpec';
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
     const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
-    const ready=componentServingReady(actual,pods,expected.replicas);
-    return {actual,stage,joined,ready};
+    const ready=componentServingReady(actual,pods,readers?actual.spec.replicas:expected.replicas);
+    return {actual,stage,joined,ready,...(readers?{readers}: {})};
   };
   const inspect = () => names.map(name => {
     const state=observe(name);
@@ -472,7 +484,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       schemaReady(true);requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
       for(const name of names.filter(name=>name!==introduced)){
         const state=observe(name);
-        requireValue(part(name).maintenance?state.stage==='stagedSpec'&&state.joined:state.stage==='resumedSpec'&&state.ready,
+        requireValue(part(name).maintenance?state.stage==='isolatedReadersSpec'&&state.ready:state.stage==='resumedSpec'&&state.ready,
           'TELEGRAM_COHORT_READERS_REQUIRED');
       }
       const current=observe(introduced);
@@ -486,13 +498,16 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
           proof.clusterUID===target?.clusterUID&&proof.namespaceUID===target.namespaceUID&&proof.installationUID===target.installationUID&&
           proof.installationSHA256===target.installationSHA256&&sha(deliverySHA256)&&deliverySHA256===fingerprint(body)&&
           observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+        const api=observe('control-api-gateway');
+        requireValue(api.stage==='isolatedReadersSpec'&&api.ready&&api.readers.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
         journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',operationID:proof.operationID,deliverySHA256,snapshotRevision:proof.snapshotRevision});
         transition(introduced,'resumedSpec','PAIR_ACTIVATE_INTENT');
-      }else requireValue(current.stage==='resumedSpec'&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===introduced),
+      }else requireValue(current.stage==='resumedSpec'&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===introduced)&&
+        journal.events.some(e=>e.type==='TELEGRAM_AUTHORITY_DELIVERY_VERIFIED'&&e.operationID===observe('control-api-gateway').readers?.operationID),
         'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
       await wait(()=>observe(introduced),s=>s.stage==='resumedSpec'&&s.ready,'COMPONENT_MIGRATION_RESUME_TIMEOUT',clock);
       journal.append({type:'PAIR_ACTIVATE_ACK',name:introduced});
-      return {status:'READERS_STARTED_PENDING_RETIRE',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:true,forwardOnly:true};
+      return {status:'READERS_STARTED_PENDING_RETIRE',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:true,apiReadersIsolated:true,forwardOnly:true};
     },
     async resume() {
       schemaReady(true);requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
@@ -502,6 +517,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
           if(part(name).introduced&&state.stage==='resumedSpec'){
             requireValue(state.ready&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');continue;
           }
+          if(part(name).maintenance&&state.stage==='isolatedReadersSpec'&&state.ready)continue;
           requireValue(state.stage === 'stagedSpec' && state.joined,'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
           continue;
         }

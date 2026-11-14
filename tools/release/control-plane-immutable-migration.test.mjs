@@ -1993,9 +1993,10 @@ test('canonical backup terminal command связывается только с e
  assert.deepEqual(activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),[]);
 });
 
-test('registered044/045 terminal commands accept only their exact factory versions and bounded attempt2',()=>{
+test('registered044/045/046 terminal commands accept only their exact factory versions and bounded attempt2',()=>{
  for(const [version,commands] of [['20261114120000',['up-github-repository-scope-backup-compatible']],
-  ['20261114130000',['up-sentry-observability','up-sentry-observability-backup-maintenance']]]){
+  ['20261114130000',['up-sentry-observability','up-sentry-observability-backup-maintenance']],
+  ['20261114140000',['up-telegram-notifications','up-telegram-notifications-backup-maintenance']]]){
   for(const command of commands)for(const suffix of ['', '-attempt2']){
    const original=retainedCLIJobFixture(false,true);
    const name=`control-plane-migrate-${version}${suffix}`;

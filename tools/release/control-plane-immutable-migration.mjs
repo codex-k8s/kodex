@@ -1,3 +1,8 @@
+import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
+import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
+import {readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
+import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
+import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
 import { telegramNotificationsCatalog } from './telegram-notifications-catalog.gen.mjs';
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
 import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
@@ -378,20 +383,55 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure((configuration.requiredMigrations??[]).every(name=>names.includes(name)),'MIGRATION_SOURCE_CHAIN_INVALID');
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
+  const activationAuthority = () => {
+    ensure(componentPublication?.introducedReceiver&&options['--authority-plan']&&options['--api-open-plan']&&options['--api-open-evidence'],
+      'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const authority=privateJSON(options['--authority-plan']);
+    ensure(authority.source===retainedPlan.source.path&&authority.revision===retainedPlan.source.revision&&
+      authority.context===context&&authority.kubeconfig===options['--kubeconfig']&&
+      fingerprint(authority.introducedReceiver)===fingerprint(componentPublication.introducedReceiver),'TELEGRAM_ACTIVATION_SOURCE_CHANGED');
+    return authority;
+  };
+  const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
+    openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence']},kube);
+  const readAuthorityDelivery = async () => {
+    const authority=activationAuthority();
+    ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
+      'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readTelegramAuthorityDelivered({plan:authority,events:events(options['--authority-evidence']),
+      freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
+      admissionProof:authority.maintenance.proof},kube);
+  };
   const imageScope = (evidence, nsUID) => {
     if (isComponentMigrationPublication(evidence)) {
       const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
       const apps = componentMigrationTargetNames(evidence.profile).map(name => get('deployment',name));
+      const readers=phase!=='plan'&&apps.find(d=>d.metadata.name==='control-api-gateway')?.spec.replicas>0&&evidence.introducedReceiver
+        ? readMaintenanceReaders():undefined;
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
+        ...(readers?{maintenanceReaders:readers}:{}),
         installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items});
       const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
       const children = readComponentServingInventory(kube,'control-api-gateway',gateway.metadata.uid);
-      ensure(gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
+      ensure(readers || gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
         activeDeploymentPods(children,gateway.metadata.uid).length === 0, 'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
       return target;
     }
     ensure(evidence.publicationPlan.context === context && evidence.publicationPlan.clusterUID === clusterUID &&
       evidence.publicationPlan.namespaceUID === nsUID, 'MIGRATION_PUBLICATION_SCOPE_MISMATCH');
+  };
+  // Fresh creator admission является обязательным до capture и каждого initial
+  // schema effect. Metadata в component publication не предоставляет authority.
+  const readIntroduction = async (evidence,source) => {
+    const receiver=evidence.introducedReceiver;
+    const publisher=get('deployment','internal-rpc-authority-publisher').spec.template.spec.containers.find(c=>c.name==='publisher');
+    const proof=await readTelegramIntroducedReceiver({planPath:receiver.planPath,evidencePath:receiver.evidencePath,
+      publicationPath:receiver.publicationPath,sourceSHA:source.revision,context,target:portableTarget,publisherImage:publisher?.image},kube,
+      ()=>decodeTelegramResourceCreateSource(kube(['kustomize',`${source.path}/deploy/k8s/profiles/web-only`]),
+        (command,args,input,maximum)=>execFileSync(command,args,{input,encoding:'utf8',timeout:10000,maxBuffer:maximum,
+          env:Object.fromEntries(['PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]])),stdio:['pipe','pipe','pipe']})));
+    verifyTelegramIntroducedReceiver(receiver,proof);return proof;
   };
   const readPublication = path => {
     path = resolve(path); const stat = lstatSync(path);
@@ -539,6 +579,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const source = {path:options['--source'],revision:options['--revision']};
     const imageEvidence = componentPublication ?? {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
+    if(componentPublication?.introducedReceiver)await readIntroduction(componentPublication,source);
     const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
@@ -691,7 +732,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
       if (plan.componentHandoff) {
         const originals = plan.componentHandoff.components.map(c => ({apiVersion:'apps/v1',kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,
-          resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
+          resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
         ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
       }
       if (plan.predecessor) predecessor(plan.predecessor,anchor,plan.predecessor,planSHA256);
@@ -729,7 +770,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,validateInputs:() => {
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,readAuthorityDelivery,readMaintenanceReaders,validateInputs:() => {
         ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         imageScope(plan.imageEvidence,plan.namespaceUID);
       }}) : undefined;
@@ -788,6 +829,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
         ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || s.maintenance === true && s.stage === 'stagedSpec' && s.joined),forwardOnly:true} : {})});
     }
+    if(componentPublication?.introducedReceiver&&['check','stop','apply'].includes(phase))await readIntroduction(plan.imageEvidence,plan.source);
     if (phase === 'check') {
       if (!checks.length) {
         const state = observeCP();ensure(state.stage === 'BEFORE' && state.ready && !attempts.length, 'MIGRATION_CHECK_BEFORE_STOP_REQUIRED');
@@ -822,6 +864,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
     if (phase === 'handoff') return output(await pair.handoff());
+    if (phase === 'activate') return output(await pair.activateIntroduced());
     if (phase === 'resume') {
       if (pair) return output(await pair.resume());
       let state = observeCP();

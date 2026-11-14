@@ -67,7 +67,7 @@ function lifecycleFixture(profile='github-repository-scope') {
   const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -113,7 +113,7 @@ function lifecycleFixture(profile='github-repository-scope') {
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},clock:{}});
   return {lifecycle,apps,events,patches,faults,plan,
@@ -194,12 +194,12 @@ test('044 ready: лишний debug/sidecar и изменённые команд
   f.faults.mutatePod=undefined;assert.equal((await f.lifecycle.resume()).status,'RESUMED');
 });
 
-test('public CLI044/045 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
+test('public CLI044/045/046 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
   const directory=mkdtempSync(join(tmpdir(),'kodex-cohort-cli-'));chmodSync(directory,0o700);
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const log=join(directory,'commands.jsonl'),binary=join(directory,'kubectl');
   writeFileSync(binary,`#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');if(args.includes('get')&&args.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:${JSON.stringify(uuid(1))}}}));else process.exit(73);\n`,{mode:0o700});
-  for(const profile of ['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup']) {
+  for(const profile of ['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup']) {
     const result=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'plan',
       '--profile',profile,'--context','portable-fixture','--kubeconfig','/synthetic/kubeconfig','--source',directory,'--revision',revision,
       '--plan',join(directory,'plan.json'),'--base-render',join(directory,'render.yaml'),
@@ -209,7 +209,7 @@ test('public CLI044/045 normal/backup запрещает прежний путь
     assert.equal(result.status,1);assert.match(result.stderr,/COMPONENT_MIGRATION_COHORT_REQUIRED/);
   }
   const calls=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
-  assert.equal(calls.length,4);
+  assert.equal(calls.length,6);
   for(const args of calls)assert.deepEqual(args,['--kubeconfig','/synthetic/kubeconfig','--context','portable-fixture','--request-timeout=30s','get','namespace','kube-system','-o','json']);
 });
 
@@ -277,7 +277,11 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
 
 test('046 activation требует fresh107 DELIVER, lostACK rejoin не повторяет start и не открывает API',async()=>{
  const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();await f.lifecycle.resume();
- const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/COHORT_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/API_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
+ f.faults.apiReaders={state:'ISOLATED_READERS_READY',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
  const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
   introducedReceiverSHA256:fingerprint(f.plan.imageEvidence.introducedReceiver),clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
   installationUID:target.installationUID,installationSHA256:target.installationSHA256,observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};
@@ -292,7 +296,7 @@ test('046 activation требует fresh107 DELIVER, lostACK rejoin не пов
  // Восстановление уже выполненного start читает exact owned spec/CRI и intent;
  // оно не выдаёт новый effect и не требует заново возвращать ротацию в DISTRIBUTE.
  f.faults.authorityDelivery=null;f.lifecycle.inspect();const result=await f.lifecycle.activateIntroduced();
- assert.equal(result.status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,started);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
+ assert.equal(result.status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,started);assert.equal(f.apps.get('control-api-gateway').spec.replicas,3);assert.equal(result.apiReadersIsolated,true);
  assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,started);
  const intent=f.events.find(e=>e.type==='PAIR_ACTIVATE_INTENT');intent.type='FOREIGN';
  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/UNOWNED_HANDOFF/);
