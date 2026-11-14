@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {uid} from './fixtures/authority-catalog-synthetic.mjs';
 import {backupMaintenanceFixture as setup} from './fixtures/backup-controller-maintenance-synthetic.mjs';
 import {fingerprint} from './scoped-release.mjs';
+import {canonicalPostgresBackupBoundarySHA256} from './backup-postgres-boundary.mjs';
 import {backupControllerMaintenanceHeader,readBackupProducerInventory,requireBackupProducerBoundary,requireStoppedBackupController,planBackupControllerMaintenance,backupControllerMaintenanceStep} from './backup-controller-maintenance.mjs';
 
 
@@ -48,8 +49,9 @@ test('чужой producer по Secret или service account запрещён, �
 });
 
 test('исключение credential initializer относится только к точным PostgreSQL UID и lineage',()=>{
- const f=setup();const server={kind:'StatefulSet',metadata:{name:'kodex-postgresql',uid:f.postgres.ownerUID,labels:{'app.kubernetes.io/name':'kodex-postgresql'}},serviceAccounts:[],secretRefs:['kodex-postgresql-runtime-credentials']};
- const pod={kind:'Pod',metadata:{name:f.postgres.pod,uid:f.postgres.uid,labels:{'app.kubernetes.io/name':'kodex-postgresql'},ownerReferences:[{kind:'StatefulSet',uid:f.postgres.ownerUID,controller:true}]},serviceAccounts:['default'],secretRefs:server.secretRefs};
+ const f=setup();const postgresBoundarySHA256=canonicalPostgresBackupBoundarySHA256();
+ const server={kind:'StatefulSet',metadata:{name:'kodex-postgresql',uid:f.postgres.ownerUID,labels:{'app.kubernetes.io/name':'kodex-postgresql'}},serviceAccounts:[],secretRefs:['kodex-postgresql-runtime-credentials'],postgresBoundarySHA256};
+ const pod={kind:'Pod',metadata:{name:f.postgres.pod,uid:f.postgres.uid,labels:{'app.kubernetes.io/name':'kodex-postgresql'},ownerReferences:[{kind:'StatefulSet',uid:f.postgres.ownerUID,controller:true}]},serviceAccounts:['default'],secretRefs:server.secretRefs,postgresBoundarySHA256};
  f.state.extra=[server,pod];assert.doesNotThrow(()=>requireBackupProducerBoundary(f.inventory(),f.deployment.metadata.uid,false,f.postgres));
  pod.metadata.uid=uid(999);assert.throws(()=>requireBackupProducerBoundary(f.inventory(),f.deployment.metadata.uid,false,f.postgres),/OTHER_PRODUCER/);
 });

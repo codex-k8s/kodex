@@ -3,6 +3,7 @@ import {fingerprint} from './scoped-release.mjs';
 import {portableRunnerTarget} from './portable-runner-target.mjs';
 import {componentServingInventory,componentServingReady} from './portable-component-migration.mjs';
 import {activeDeploymentPods} from './stable-archive-transition.mjs';
+import {postgresBackupBoundary,canonicalPostgresBackupBoundarySHA256} from './backup-postgres-boundary.mjs';
 
 const name='backup-controller',namespace='kodex-system',marker='kodex.dev/backup-controller-maintenance';
 const fail=(ok,code)=>{if(!ok)throw Error(code);};
@@ -32,6 +33,15 @@ export function readBackupProducerInventory(kube){
    serviceAccounts:names(v[6]),secretRefs:[...names(v[7]),...names(v[8]),...names(v[9]),...names(v[10])],replicas:number(v[11]),statusReplicas:number(v[12]),observedGeneration:number(v[14])};
  });
  fail(new Set(items.map(item=>item.kind+'/'+item.metadata.name)).size===items.length,'BACKUP_MAINTENANCE_INVENTORY_INVALID');
+ // Только точные PostgreSQL resources читаются подробнее: нельзя считать
+ // debug/ephemeral container частью исключения из-за сохранённого Pod UID.
+ for(const item of items.filter(item=>item.kind==='StatefulSet'&&item.metadata.name==='kodex-postgresql'||item.kind==='Pod'&&item.metadata.name==='kodex-postgresql-0')){
+  const raw=kube(['-n',namespace,'get',item.kind.toLowerCase(),item.metadata.name,'-o','json']);
+  fail(typeof raw==='string'&&Buffer.byteLength(raw)<=1<<20,'BACKUP_MAINTENANCE_INVENTORY_BOUND');
+  const full=JSON.parse(raw);
+  fail(full.kind===item.kind&&full.metadata?.uid===item.metadata.uid&&full.metadata?.namespace===namespace,'BACKUP_MAINTENANCE_POSTGRES_CHANGED');
+  item.postgresBoundarySHA256=postgresBackupBoundary(item.kind==='Pod'?full.spec:full.spec?.template?.spec,item.kind);
+ }
  return {schema:'kodex.backup-producer-inventory/v1',namespace,kinds,items};
 }
 
@@ -52,6 +62,7 @@ export function requireBackupProducerBoundary(inventory,deploymentUID,stopped=fa
   // Сервер БД штатно монтирует runtime credential initializer. Это исключение
   // связано с ранее проверенным backend UID, а не с одним именем/label ресурса.
   const database=item.metadata.labels?.['app.kubernetes.io/name']==='kodex-postgresql'&&
+   item.postgresBoundarySHA256===canonicalPostgresBackupBoundarySHA256()&&
    !item.serviceAccounts?.some(value=>registry.includes(value))&&!item.secretRefs?.includes('backup-controller-credentials')&&
    (item.kind==='StatefulSet'&&item.metadata.name==='kodex-postgresql'&&item.metadata.uid===postgres.ownerUID||
     item.kind==='Pod'&&item.metadata.name===postgres.pod&&item.metadata.uid===postgres.uid&&owned(item,'StatefulSet',postgres.ownerUID));
