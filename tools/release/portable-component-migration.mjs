@@ -216,7 +216,9 @@ export function componentServingInventory(list, name, deploymentUID) {
     const migration=labels['app.kubernetes.io/component'] === 'migration' &&
       (job.metadata.name === 'control-plane-migrate' || /^control-plane-(?:migrate-|migration-check-)[0-9]{14}(?:-[a-z0-9-]+)?$/.test(job.metadata.name)) &&
       spec?.serviceAccountName === 'control-plane-migrator' && main?.name === 'migrate' &&
-      main.args?.length === 1 && ['up','check'].includes(main.args[0]);
+      main.args?.length === 1 && (['up','check'].includes(main.args[0]) ||
+        main.args[0] === 'up-github-repository-scope-backup-compatible' &&
+        job.metadata.name === 'control-plane-migrate-20261114120000');
     const bootstrap=labels['app.kubernetes.io/component'] === 'broker-bootstrap' && job.metadata.name === 'control-plane-broker-bootstrap' &&
       spec?.serviceAccountName === 'control-plane-broker-bootstrap' && main?.name === 'bootstrap' &&
       Array.isArray(main.args) && main.args.length === 2 && main.args[0] === 'broker' && main.args[1] === 'bootstrap';

@@ -955,6 +955,12 @@ component publication закрыто отклоняется: terminal migration 
 lock, node pull proof и проверенный cohort `GITHUB_REPOSITORY_SCOPE_UPGRADE`.
 RunnerInput v10 и ABI5 не меняются. Secret broker и runner этим профилем не
 пересобираются и не заменяются.
+Завершённый Pod команды `up-github-repository-scope-backup-compatible`
+распознаётся только у exact Job `control-plane-migrate-20261114120000` после
+положительного завершения всех контейнеров и проверки Job/Pod lineage,
+service account, immutable image и spec. Это позволяет `inspect`/`handoff`
+сохранить Job как evidence; неизвестная команда или ещё работающий Pod
+по-прежнему закрыто отклоняются. Повтор DDL или удаление evidence не нужны.
 
 `baseSchemaHeads` точно совпадает с неизменяемым seal исходной полной установки
 042 либо043. `schemaHeadsBefore` отдельно требует043, `schemaHeadsAfter` —044;

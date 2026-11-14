@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.84
+version: 1.1.85
 updated: 2026-11-14
 ---
 
@@ -44,8 +44,12 @@ wire, смену A→B после export/import, отсутствие дубле
 прячет прежний writer. Сохранённый bootstrap/migration Job Pod исключается из
 replicas только по текущему Job UID, известному execution template и полному
 подтверждению остановки всех контейнеров; terminal phase, label или NodeLost
-не заменяют этот proof. Такое исключение не выдаёт migration/check PASS и не
-разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
+не заменяют этот proof. Новый зарегистрированный CLI command одновременно
+включается в exact terminal inventory consumer с привязкой к версии Job:
+проверка только producer args оставляет завершённый rollout недостижимым.
+Незнакомая команда, дополнительные args, работающий контейнер и чужой lineage
+по-прежнему закрыто отклоняются. Такое исключение не выдаёт migration/check PASS
+и не разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
 
 Открытие пользовательского API после обновления требует подтверждённой readiness
 всего serving inventory: owner lineage, полный набор containers/init/ephemeral,
