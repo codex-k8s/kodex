@@ -46,6 +46,12 @@ type CredentialResourcePermissionContract struct {
 // CredentialResourcePermissionContractFor разрешает закрытую пару definition/capability. Срезы
 // создаются заново, поэтому caller не меняет реестр операций другого consumer.
 func CredentialResourcePermissionContractFor(definitionKey, capabilityKey string) (CredentialResourcePermissionContract, bool) {
+	if contract, exists := observabilityCredentialContract(definitionKey, capabilityKey); exists {
+		return contract, true
+	}
+	if contract, exists := sentryCredentialContract(definitionKey, capabilityKey); exists {
+		return contract, true
+	}
 	if contract, exists := credentialObjectReadContract(definitionKey, capabilityKey); exists {
 		return contract, true
 	}
@@ -108,6 +114,12 @@ func CredentialResourcePermissionProfile(definition Package, capability Capabili
 	}
 	contract, exists := CredentialResourcePermissionContractFor(definition.Metadata.Key, capability.Key)
 	adapter := "CONFLUENCE"
+	if definition.Spec.Adapter == string(AdapterObservability) {
+		adapter = string(AdapterObservability)
+	}
+	if definition.Metadata.Key == "sentry" || definition.Metadata.Key == "sentry-self-hosted" || definition.Metadata.Key == "sentry-organization" || definition.Metadata.Key == "sentry-self-hosted-organization" {
+		adapter = "SENTRY"
+	}
 	if definition.Metadata.Key == "jira-server-dc" {
 		adapter = "JIRA"
 	}

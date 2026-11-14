@@ -59,11 +59,11 @@ test('044: handoff сохраняет env и maintenance API=0 вместо не
 
 // Исполняется lifecycle с настоящим discovery/join и файловым CAS primitive.
 // Только Kubernetes API и PostgreSQL transport заменены ограниченной оснасткой.
-function lifecycleFixture() {
-  const f=fixture(),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
+function lifecycleFixture(profile='github-repository-scope') {
+  const f=fixture(profile),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
   const drain=readFileSync(new URL('./portable-component-migration-drain.sql',import.meta.url));
   const postgres={pod:'kodex-postgresql-0',uid:uuid(30),ownerUID:uuid(31)};
-  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:'20261114120000',postgres,
+  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
   const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined};
@@ -85,7 +85,7 @@ function lifecycleFixture() {
   const kube=(args,input)=>{
     if(args.includes('exec')) {
       assert.ok(Buffer.from(input).equals(drain));
-      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114120000,
+      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:Number(plan.migrationVersion),
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
@@ -193,12 +193,12 @@ test('044 ready: лишний debug/sidecar и изменённые команд
   f.faults.mutatePod=undefined;assert.equal((await f.lifecycle.resume()).status,'RESUMED');
 });
 
-test('public CLI044 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
+test('public CLI044/045 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
   const directory=mkdtempSync(join(tmpdir(),'kodex-cohort-cli-'));chmodSync(directory,0o700);
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const log=join(directory,'commands.jsonl'),binary=join(directory,'kubectl');
   writeFileSync(binary,`#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');if(args.includes('get')&&args.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:${JSON.stringify(uuid(1))}}}));else process.exit(73);\n`,{mode:0o700});
-  for(const profile of ['github-repository-scope','github-repository-scope-backup']) {
+  for(const profile of ['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup']) {
     const result=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'plan',
       '--profile',profile,'--context','portable-fixture','--kubeconfig','/synthetic/kubeconfig','--source',directory,'--revision',revision,
       '--plan',join(directory,'plan.json'),'--base-render',join(directory,'render.yaml'),
@@ -208,8 +208,43 @@ test('public CLI044 normal/backup запрещает прежний путь б�
     assert.equal(result.status,1);assert.match(result.stderr,/COMPONENT_MIGRATION_COHORT_REQUIRED/);
   }
   const calls=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
-  assert.equal(calls.length,2);
+  assert.equal(calls.length,4);
   for(const args of calls)assert.deepEqual(args,['--kubeconfig','/synthetic/kubeconfig','--context','portable-fixture','--request-timeout=30s','get','namespace','kube-system','-o','json']);
+});
+
+for(const profile of ['sentry-observability','sentry-observability-backup'])test(`045 lifecycle: exact cohort, owner drain, lost ACK rejoin and maintenance API: ${profile}`,async()=>{
+ const publication=fixture(profile);
+ assert.equal(componentMigrationPublication(publication.value,{revision},profile).components.length,5);
+ assert.ok(componentMigrationTarget(publication.target,publication.value,publication.observed));
+ assert.equal(publication.value.schemaHeadsBefore['control-plane'],20261114120000);
+ assert.equal(publication.value.schemaHeadsAfter['control-plane'],20261114130000);
+ const other=profile.endsWith('-backup')?'sentry-observability':'sentry-observability-backup';
+ assert.throws(()=>componentMigrationPublication(publication.value,{revision},other));
+ const blocked=lifecycleFixture(profile);blocked.faults.blocked='integration-gateway';
+ await assert.rejects(()=>blocked.lifecycle.stopController(),/CONTROLLER_STOP_TIMEOUT/);
+ assert.throws(()=>blocked.lifecycle.requireStopped(),/CONTROLLER_JOIN_REQUIRED/);
+ const f=lifecycleFixture(profile);await f.lifecycle.stopController();f.stopCP();
+ await assert.rejects(()=>f.lifecycle.handoff(),/POSTCONDITION_REQUIRED/);
+ f.faults.schema=true;f.faults.postcondition=false;
+ await assert.rejects(()=>f.lifecycle.handoff(),/POSTCONDITION_REQUIRED/);
+ f.faults.postcondition=true;f.faults.activeEffects=1;
+ await assert.rejects(()=>f.lifecycle.handoff(),/OWNER_PRECONDITION_FAILED/);
+ f.faults.activeEffects=0;f.faults.lostACK='integration-gateway';
+ await assert.rejects(()=>f.lifecycle.handoff(),/RESPONSE_LOST/);
+ const gatewayWrites=f.patches.filter(n=>n==='integration-gateway').length;
+ f.lifecycle.inspect();await f.lifecycle.handoff();
+ assert.equal(f.patches.filter(n=>n==='integration-gateway').length,gatewayWrites);
+ f.faults.claimSessions=1;await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
+ f.faults.claimSessions=0;f.faults.lostACK='control-plane';
+ await assert.rejects(()=>f.lifecycle.resume(),/RESPONSE_LOST/);
+ const writes=f.patches.length,cpWrites=f.patches.filter(n=>n==='control-plane').length;f.lifecycle.inspect();
+ assert.equal((await f.lifecycle.resume()).gatewayMaintenance,true);
+ assert.equal(f.patches.filter(n=>n==='control-plane').length,cpWrites);
+ assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
+ const completed=f.patches.length;await f.lifecycle.resume();assert.equal(f.patches.length,completed);
+ assert.ok(completed>=writes);
+ f.plan.componentDrainSQLSHA256='0'.repeat(64);
+ await assert.rejects(()=>f.lifecycle.resume(),/PRECONDITION_SOURCE_CHANGED/);
 });
 
 // Backup-публикация сохраняет собственный discriminator; normal receipt не переименовывается при plan.

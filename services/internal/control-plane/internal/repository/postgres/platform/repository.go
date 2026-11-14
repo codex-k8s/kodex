@@ -468,20 +468,27 @@ func (repository *Repository) reconcileIntegrationDefinitions(ctx context.Contex
 }
 
 // integrationConfigurationFields copies field constraints with URL formatting or the TEXT default,
-// adding integer minimum and nonzero maximum pointers while preserving an independent
+// using optional owner-authored labels/help and adding integer bounds while preserving an independent
 // allowed-value slice.
 // integrationConfigurationFields копирует ограничения полей с URL formatting либо default TEXT,
-// добавляя integer minimum и ненулевой maximum pointers и сохраняя независимый срез allowed
+// сохраняя optional owner-authored labels/help, integer bounds и независимый срез allowed
 // values.
 func integrationConfigurationFields(fields []integrationpackage.Field) []entity.IntegrationConfigurationField {
 	result := make([]entity.IntegrationConfigurationField, 0, len(fields))
 	for _, field := range fields {
 		valueType := "TEXT"
+		if field.Type == "INTEGER" || field.Type == "BOOLEAN" {
+			valueType = field.Type
+		}
 		if field.Format == "HTTPS_ORIGIN" || field.Format == "HTTPS_URL" {
 			valueType = "URL"
 		}
+		label := field.Label
+		if label == "" {
+			label = field.Key
+		}
 		item := entity.IntegrationConfigurationField{
-			Key: field.Key, Label: field.Key, ValueType: valueType, Format: field.Format,
+			Key: field.Key, Label: label, Help: field.Help, ValueType: valueType, Format: field.Format,
 			AllowedValues: append([]string(nil), field.AllowedValues...), MaximumLength: int32(field.MaximumLength), Required: field.Required,
 		}
 		if field.Type == "INTEGER" {

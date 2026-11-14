@@ -14,12 +14,14 @@ import {privateJournal} from '../dev/role-image-acceptance.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
 import {canonicalPostgresBackupSpec} from './backup-postgres-boundary.mjs';
 import {githubRepositoryScopeCatalog} from './github-repository-scope-catalog.gen.mjs';
+import {sentryObservabilityCatalog} from './sentry-observability-catalog.gen.mjs';
+import {backupMigrationProfile} from './backup-migration-registry.mjs';
 import {backupMaintenanceFixture,backupMaintenanceKube} from './fixtures/backup-controller-maintenance-synthetic.mjs';
 import {backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance} from './backup-controller-maintenance-cli.mjs';
 
 const cli=fileURLToPath(new URL('./backup-controller-maintenance-cli.mjs',import.meta.url));
 const hash=raw=>createHash('sha256').update(raw).digest('hex');
-function setup(t){
+function setup(t,migrationProfile){
  const f=backupMaintenanceFixture(),directory=mkdtempSync(join(tmpdir(),'kodex-backup-cli-'));
  t.after(()=>rmSync(directory,{recursive:true,force:true}));mkdirSync(join(directory,'bin'));
  const state={sourceSHA:f.sourceSHA,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,
@@ -40,7 +42,7 @@ function setup(t){
  const run=(phase,extra=[])=>spawnSync(process.execPath,[cli,phase,'--context',f.target.context,'--kubeconfig','/synthetic/explicit config','--plan',join(directory,'plan.json'),...extra],
   {encoding:'utf8',timeout:20000,env:{PATH:join(directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:directory,LANG:'C.UTF-8'}});
  const read=()=>JSON.parse(readFileSync(join(directory,'state.json'))),plan=()=>JSON.parse(readFileSync(join(directory,'plan.json')));
- const prepare=()=>run('plan',['--action','stop','--target',join(directory,'target.json'),'--evidence',join(directory,'evidence.jsonl')]);
+ const prepare=()=>run('plan',['--action','stop','--target',join(directory,'target.json'),'--evidence',join(directory,'evidence.jsonl'),...(migrationProfile?['--migration-profile',migrationProfile]:[])]);
  const apply=()=>run('apply',['--evidence',join(directory,'evidence.jsonl'),'--approved-plan-sha',fingerprint(plan())]);
  const status=()=>run('status',['--evidence',join(directory,'evidence.jsonl')]);
  return {f,directory,store,read,plan,run,prepare,apply,status};
@@ -77,6 +79,35 @@ test('owner gate uses exact canonical catalog, source hash, backend and recursiv
  await assert.rejects(readCanonicalBackupOwner({kube,plan,readSQL:()=>Buffer.from('SELECT false')}),/SOURCE_CHANGED/);
 });
 
+test('explicit045 real CLI boundary uses only canonical044/045 and cannot inherit044 scope or table-only authority',async t=>{
+ const f=setup(t,'sentry-observability-backup');let result=f.prepare();assert.equal(result.status,0,result.stderr);
+ const plan=f.plan();assert.equal(plan.migrationProfile,'sentry-observability-backup');
+ const sql=file=>readFileSync(new URL(file,import.meta.url));
+ assert.equal(plan.ownerSQLSHA256.before,hash(sql('sentry-observability-backup-migration-precondition.sql')));
+ result=f.apply();assert.equal(result.status,0,result.stderr);assert.equal(f.read().effects,1);
+ result=f.status();assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).state,'STOPPED');
+ const state=f.read();state.ownerVersion=20261114120000;
+ state.ownerProof={profile:'SENTRY_OBSERVABILITY_BACKUP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114120000,
+  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,workspaceOwnerIdle:true,activeBackupSessions:0,schemaCatalog:sentryObservabilityCatalog.backup.before};
+ const read=changed=>readCanonicalBackupOwner({kube:(a,i)=>backupMaintenanceKube(changed,a,i),plan,readSQL:sql});
+ assert.equal((await read(state)).schemaVersion,20261114120000);
+ for(const mutate of [s=>s.ownerVersion=20261113000100,s=>s.ownerProof.profile='GITHUB_REPOSITORY_SCOPE_BACKUP_V1',
+  s=>{s.ownerProof.backupQualification='TABLE_ONLY_BACKUP';s.ownerProof.schemaCatalog=sentryObservabilityCatalog['table-only-backup'].before;},
+  s=>s.ownerProof.workspaceOwnerIdle=false,s=>s.backupSessions=1]){
+  const changed=structuredClone(state);mutate(changed);await assert.rejects(read(changed));
+ }
+ state.ownerVersion=20261114130000;state.ownerProof={...state.ownerProof,profile:'SENTRY_OBSERVABILITY_BACKUP_V1',gooseVersion:20261114130000,schemaCatalog:sentryObservabilityCatalog.backup.after};
+ assert.equal((await read(state)).schemaVersion,20261114130000);
+ assert.notEqual(f.run('status',['--evidence',join(f.directory,'evidence.jsonl'),'--migration-profile','github-repository-scope-backup']).status,0);
+ assert.equal(f.read().effects,1);
+});
+
+test('unknown maintenance profiles, including prototype keys and future schemas, have no fallback',t=>{
+ for(const profile of ['__proto__','constructor','sentry-observability','telegram-backup']){
+  const f=setup(t,profile),result=f.prepare();assert.notEqual(result.status,0);assert.equal(f.read().effects,0);
+ }
+});
+
 test('Job namespace join includes label drift and rejects changing projection',()=>{
  const uid='10000000-0000-4000-8000-000000000901',owner='10000000-0000-4000-8000-000000000902';
  const row=`drifted-pod|${uid}|7||[{"kind":"Job","uid":"${owner}","controller":true}]\n`;
@@ -110,24 +141,26 @@ test('common stop journal binds one executable migration and closes cross-plan r
  const replay=privateJournal(path,header,{readOnly:true});try{assert.throws(()=>requireOpenBackupBoundary(replay.events,first),/BOUNDARY_CLOSED/);}finally{replay.close();}
 });
 
-test('terminal gate composes canonical043 cancellation and fully resumed044; UNKNOWN, stale and premature cohort refuse',async t=>{
+for(const migrationProfile of ['github-repository-scope-backup','sentry-observability-backup'])test(`terminal gate retains exact cleanup, no-replay and positive join: ${migrationProfile}`,async t=>{
+ const configuration=backupMigrationProfile(migrationProfile);
  const f=backupMaintenanceFixture(),journal=f.journal(f.stop);await f.step('apply',f.stop,journal);f.converge();await f.step('status',f.stop,journal);
  const closed={plan:f.stop,events:journal.events};
  const postgresBackend={systemIdentifier:'9007199254740993',databaseOID:'16384',database:'control_plane',port:'5432',serverAddress:null,serverPort:null};
  f.stop.postgresBackend=postgresBackend;
+ if(migrationProfile==='sentry-observability-backup')f.stop.migrationProfile=migrationProfile;
  // Header is rebound only in this synthetic setup before any real journal is created.
  // Header переопределяется только в synthetic setup до создания настоящего журнала.
  closed.events[0]={type:'HEADER',...backupControllerMaintenanceHeader(f.stop)};
- const migration={profile:'github-repository-scope-backup',migrationVersion:'20261114120000',source:{revision:f.sourceSHA},portableTarget:f.target,postgres:f.postgres,postgresBackend,job:{metadata:{name:'migration-fixture'}}};
+ const migration={profile:migrationProfile,migrationVersion:String(configuration.after),source:{revision:f.sourceSHA},portableTarget:f.target,postgres:f.postgres,postgresBackend,job:{metadata:{name:'migration-fixture'}}};
  const header={type:'HEADER',planSHA256:fingerprint(migration)},now=()=>Date.parse('2026-11-14T11:00:00Z');
- const owner={schemaVersion:20261113000100,canonicalBackup:true,schemaCatalogSHA256:'a'.repeat(64),observedAt:'2026-11-14T11:00:00Z'};
+ const owner={schemaVersion:configuration.before,canonicalBackup:true,schemaCatalogSHA256:'a'.repeat(64),observedAt:'2026-11-14T11:00:00Z'};
  const state={deployment:f.deployment,rs:f.rs,pods:[],extra:[],postgres:f.postgres};
  const kube=(args,input)=>backupMaintenanceKube(state,args,input);
  const result=await readBackupCleanupTerminal({kube,closed,migration,events:[header],owner,now,inspect:async()=>({status:'CREATE_NOT_ATTEMPTED'})});
  assert.equal(result.cleanupTerminal,true);
  await assert.rejects(readBackupCleanupTerminal({kube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner,now,inspect:async()=>({status:'RUNNING'})}),/NOT_TERMINAL/);
  await assert.rejects(readBackupCleanupTerminal({kube,closed,migration,events:[header],owner:{...owner,observedAt:'2026-11-14T10:59:00Z'},now,inspect:async()=>({status:'CREATE_NOT_ATTEMPTED'})}),/STALE/);
- await assert.rejects(readBackupCleanupTerminal({kube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner:{...owner,schemaVersion:20261114120000},now,
+ await assert.rejects(readBackupCleanupTerminal({kube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner:{...owner,schemaVersion:configuration.after},now,
   inspect:async()=>({status:'PASS',jobName:'migration-fixture',jobUID:'job-uid',cpStage:'STOPPED',cpReady:false,pairReady:false,forwardOnly:true})}),/COHORT_NOT_RESUMED/);
  const jobUID='10000000-0000-4000-8000-000000000950',podUID='10000000-0000-4000-8000-000000000951';
  const job={metadata:{uid:jobUID},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
@@ -141,22 +174,26 @@ test('terminal gate composes canonical043 cancellation and fully resumed044; UNK
   return kube(args,input);
  };
  const terminal={status:'PASS',jobName:'migration-fixture',jobUID,cpStage:'UPGRADED',cpReady:true,pairReady:true,forwardOnly:true};
- assert.equal((await readBackupCleanupTerminal({kube:terminalKube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner:{...owner,schemaVersion:20261114120000},now,inspect:async()=>terminal})).cleanupTerminal,true);
+ assert.equal((await readBackupCleanupTerminal({kube:terminalKube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner:{...owner,schemaVersion:configuration.after},now,inspect:async()=>terminal})).cleanupTerminal,true);
  job.status={failed:1,conditions:[{type:'Failed',status:'True'}]};pod.status.phase='Failed';pod.status.containerStatuses[0].state.terminated.exitCode=1;
  const failed=await readBackupCleanupTerminal({kube:terminalKube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner,now,inspect:async()=>({...terminal,status:'FAIL',cpStage:'STOPPED',cpReady:false,pairReady:false})});
- assert.equal(failed.schemaVersion,20261113000100);assert.equal(failed.cpReady,undefined);
+ assert.equal(failed.schemaVersion,configuration.before);assert.equal(failed.cpReady,undefined);
  pod.status.containerStatuses=[];
  await assert.rejects(readBackupCleanupTerminal({kube:terminalKube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner,now,inspect:async()=>({...terminal,status:'FAIL'})}),/NOT_JOINED/);
  assert.throws(()=>verifyBackupMigrationScope({...migration,source:{revision:'b'.repeat(40)}},closed),/SCOPE_CHANGED/);
+ const other=backupMigrationProfile(migrationProfile==='sentry-observability-backup'?'github-repository-scope-backup':'sentry-observability-backup');
+ assert.throws(()=>verifyBackupMigrationScope({...migration,profile:other.profile,migrationVersion:String(other.after)},closed),/SCOPE_CHANGED/);
 });
 
-for(const successor of [false,true])test(`real CLI resume before DDL composes authoritative readonly inspect and permanently closes the shared migration boundary: successor=${successor}`,t=>{
- const f=setup(t),c=componentCohortFixture('github-repository-scope-backup'),state=f.read();
+for(const migrationProfile of ['github-repository-scope-backup','sentry-observability-backup'])for(const successor of [false,true])test(`real CLI resume closes its explicit migration before DDL without replay: ${migrationProfile}, successor=${successor}`,t=>{
+ const configuration=backupMigrationProfile(migrationProfile);
+ const f=setup(t,migrationProfile),c=componentCohortFixture(migrationProfile),state=f.read();
  c.value.context=state.context;c.target.context=state.context;
  state.clusterUID=c.value.clusterUID;state.namespaceUID=c.value.namespaceUID;state.installation=c.observed.installation;
  state.cohort={deployments:c.deployments,nodes:c.observed.nodes};
- state.ownerProof={profile:'GITHUB_REPOSITORY_SCOPE_BACKUP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,
-  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,workspaceOwnerIdle:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
+ state.ownerVersion=configuration.before;
+ state.ownerProof={profile:configuration.proofPrefix+'PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:configuration.before,
+  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,workspaceOwnerIdle:true,activeBackupSessions:0,schemaCatalog:configuration.catalog.backup.before};
  const target={...c.target,resources:[{apiVersion:'apps/v1',kind:'Deployment',name:'backup-controller',uid:state.deployment.metadata.uid}]};
  f.store(state);writeFileSync(join(f.directory,'target.json'),JSON.stringify(target),{mode:0o600});
  let result=f.prepare();assert.equal(result.status,0,result.stderr);result=f.apply();assert.equal(result.status,0,result.stderr);
@@ -165,7 +202,7 @@ for(const successor of [false,true])test(`real CLI resume before DDL composes au
  before.metadata={...before.metadata,uid:c.deployments[0].metadata.uid,resourceVersion:'1',namespace:'kodex-system',labels:{...before.metadata.labels,
   'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}};
  const source={path:fileURLToPath(new URL('../../',import.meta.url)),revision:state.sourceSHA};
- const migration=planImmutableControlPlaneMigration(before,source,()=>({revision:source.revision}),'10000000-0000-4000-8000-000000009001',c.value,1,'github-repository-scope-backup');
+ const migration=planImmutableControlPlaneMigration(before,source,()=>({revision:source.revision}),'10000000-0000-4000-8000-000000009001',c.value,1,migrationProfile);
  Object.assign(migration,{clusterUID:state.clusterUID,namespaceUID:state.namespaceUID,context:state.context,portableTarget:c.target,
   componentHandoff:planComponentMigrationHandoff(c.value,c.deployments,source),postgres:stop.postgres,postgresBackend:stop.postgresBackend,
   anchor:{kind:'Deployment',name:'control-plane',uid:c.deployments[0].metadata.uid,resourceVersion:'1',specSHA256:fingerprint(c.deployments[0].spec),
@@ -194,7 +231,7 @@ for(const successor of [false,true])test(`real CLI resume before DDL composes au
  assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).state,'RESUMED');assert.equal(f.read().effects,2);
  const events=readFileSync(stopEvidence,'utf8').trim().split('\n').map(JSON.parse);
  assert.equal(events.filter(e=>e.type==='BACKUP_MIGRATION_BOUND').length,1);assert.equal(events.filter(e=>e.type==='BACKUP_RESUME_INTENT').length,1);
- const late=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'apply','--profile','github-repository-scope-backup',
+ const late=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'apply','--profile',migrationProfile,
   '--context',state.context,'--kubeconfig','/synthetic/explicit config','--plan',migrationPath,'--evidence',migrationEvidence,'--confirm','APPLY-STAGING-CP-MIGRATION'],
   {encoding:'utf8',timeout:15000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
  assert.notEqual(late.status,0);assert.match(late.stderr,/BOUNDARY_CLOSED/);assert.equal(f.read().effects,2);

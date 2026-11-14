@@ -1,0 +1,203 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "loki-ruler-namespace-read",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Loki — чтение namespace правил",
+    "description": "Только чтение точного namespace, в том числе Git/file-managed правил; операторское подтверждение не даёт права записи.",
+    "category": "observability",
+    "adapter": "OBSERVABILITY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "label": "Адрес Loki API",
+        "help": "Точный HTTPS origin с обязательным broker-owned transport; redirects запрещены."
+      },
+      {
+        "key": "tenant_id",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Выбранный tenant",
+        "help": "Фиксированный X-Scope-OrgID routing; не доказательство изоляции либо authority."
+      },
+      {
+        "key": "scope_mode",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 32,
+        "label": "Область доступа",
+        "help": "Только чтение выбранного namespace, включая Git/file-managed правила; запись не разрешается.",
+        "allowedValues": [
+          "RULER_NAMESPACE_READ"
+        ]
+      },
+      {
+        "key": "rule_namespace",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Выделенный namespace правил",
+        "help": "Точный namespace для чтения; operator writer qualification не требуется и grant на запись отсутствует."
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "loki_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "loki.connection.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "loki.connection.read",
+        "name": "Проверить подключение",
+        "description": "Ограниченная typed READ операция Loki. Запрос и provider payload остаются недоверенными данными.",
+        "operation": "loki.connection.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "tenant_id",
+            "scope_mode",
+            "rule_namespace"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "loki.ruler.group.list",
+        "name": "Список групп правил",
+        "description": "Точный namespace из owner connection; при replace одна typed alert rule полностью заменяет группу, без create-only/CAS обещания.",
+        "operation": "loki.ruler.group.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "tenant_id",
+            "scope_mode",
+            "rule_namespace"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "loki.ruler.group.read",
+        "name": "Прочитать группу",
+        "description": "Точный namespace из owner connection; при replace одна typed alert rule полностью заменяет группу, без create-only/CAS обещания.",
+        "operation": "loki.ruler.group.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "tenant_id",
+            "scope_mode",
+            "rule_namespace"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "group",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Имя группы",
+            "help": "Имя группы; конечный scalar, не JSON/YAML document."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

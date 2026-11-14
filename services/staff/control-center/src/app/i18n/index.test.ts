@@ -14,6 +14,22 @@ function entries(value: unknown, prefix = ""): [string, string][] {
     entries(child, prefix ? `${prefix}.${key}` : key),
   );
 }
+const translationRoot = fileURLToPath(new URL("../../", import.meta.url));
+// Проверки синтаксиса, шаблона и AST сохраняются отдельно для каждого файла с прежним бюджетом.
+const translationSources = readdirSync(translationRoot, {
+  recursive: true,
+  withFileTypes: true,
+})
+  .filter(
+    (file) =>
+      file.isFile() &&
+      /\.(?:vue|ts)$/.test(file.name) &&
+      !/\.(?:test|d)\.ts$/.test(file.name),
+  )
+  .map((file) => resolve(file.parentPath, file.name))
+  .filter((filename) => !filename.includes("/generated/"))
+  .map((filename) => [relative(translationRoot, filename), filename] as const);
+
 describe("Control Center translations", () => {
   it("кратко объясняет подключение модели без смешения языков", () => {
     expect(
@@ -114,55 +130,48 @@ describe("Control Center translations", () => {
       expect(i18n.global.te(`states.${state}`, "en"), state).toBe(true);
     }
   });
-  it("разрешает статические ключи из Vue и TypeScript без показа идентификаторов в UI", () => {
-    const root = fileURLToPath(new URL("../../", import.meta.url));
-    const keys = new Set(
-      entries(i18n.global.getLocaleMessage("ru")).map(([key]) => key),
-    );
-    const missing = new Set<string>();
-    function check(source: string, filename: string): void {
-      const ast = ts.createSourceFile(
-        filename,
-        source,
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS,
+  it("проверяет непустой набор исходных Vue и TypeScript файлов", () => {
+    expect(translationSources.length).toBeGreaterThan(0);
+  });
+  it.each(translationSources)(
+    "разрешает статические ключи без показа идентификаторов в UI: %s",
+    (_name, filename) => {
+      const root = translationRoot;
+      const keys = new Set(
+        entries(i18n.global.getLocaleMessage("ru")).map(([key]) => key),
       );
-      function visit(node: ts.Node): void {
-        if (ts.isCallExpression(node)) {
-          const callee = node.expression;
-          const name = ts.isIdentifier(callee)
-            ? callee.text
-            : ts.isPropertyAccessExpression(callee)
-              ? callee.name.text
-              : "";
-          const arg = node.arguments[0];
-          if (
-            (name === "t" || name === "$t") &&
-            arg &&
-            ts.isStringLiteralLike(arg) &&
-            !keys.has(arg.text)
-          )
-            missing.add(`${relative(root, filename)}: ${arg.text}`);
+      const missing = new Set<string>();
+      function check(source: string, filename: string): void {
+        const ast = ts.createSourceFile(
+          filename,
+          source,
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TS,
+        );
+        function visit(node: ts.Node): void {
+          if (ts.isCallExpression(node)) {
+            const callee = node.expression;
+            const name = ts.isIdentifier(callee)
+              ? callee.text
+              : ts.isPropertyAccessExpression(callee)
+                ? callee.name.text
+                : "";
+            const arg = node.arguments[0];
+            if (
+              (name === "t" || name === "$t") &&
+              arg &&
+              ts.isStringLiteralLike(arg) &&
+              !keys.has(arg.text)
+            )
+              missing.add(`${relative(root, filename)}: ${arg.text}`);
+          }
+          ts.forEachChild(node, visit);
         }
-        ts.forEachChild(node, visit);
+        visit(ast);
       }
-      visit(ast);
-    }
-    for (const file of readdirSync(root, {
-      recursive: true,
-      withFileTypes: true,
-    })) {
-      if (
-        !file.isFile() ||
-        !/\.(?:vue|ts)$/.test(file.name) ||
-        /\.(?:test|d)\.ts$/.test(file.name)
-      )
-        continue;
-      const filename = resolve(file.parentPath, file.name);
-      if (filename.includes("/generated/")) continue;
       const source = readFileSync(filename, "utf8");
-      if (file.name.endsWith(".vue")) {
+      if (filename.endsWith(".vue")) {
         const parsed = parse(source, { filename });
         expect(parsed.errors, filename).toEqual([]);
         if (parsed.descriptor.script)
@@ -180,9 +189,9 @@ describe("Control Center translations", () => {
           check(template.code, filename);
         }
       } else check(source, filename);
-    }
-    expect([...missing].sort()).toEqual([]);
-  });
+      expect([...missing].sort()).toEqual([]);
+    },
+  );
   it("имеет явные переводы каждого русского ключа без скрытого fallback в английский интерфейс", () => {
     const ru = entries(i18n.global.getLocaleMessage("ru"));
     const en = entries(i18n.global.getLocaleMessage("en"));

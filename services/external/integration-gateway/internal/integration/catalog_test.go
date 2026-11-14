@@ -172,6 +172,22 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 			continue
 		}
+		if definition.Spec.Adapter == "OBSERVABILITY" {
+			t.Run(key, func(t *testing.T) {
+				if strings.HasPrefix(key, "grafana-") {
+					testGrafanaCapabilities(t, key)
+				} else if strings.HasPrefix(key, "loki") {
+					testLokiCapabilities(t, key)
+				} else {
+					testObservabilityCapabilities(t, key)
+				}
+			})
+			continue
+		}
+		if definition.Spec.Adapter == "SENTRY" {
+			t.Run(key, func(t *testing.T) { testSentryCapabilities(t, key) })
+			continue
+		}
 		if key == jiraServerDefinition || key == confluenceServerDefinition {
 			t.Run(key, func(t *testing.T) { testAtlassianServerCapabilities(t, key) })
 			continue

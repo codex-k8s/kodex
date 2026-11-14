@@ -15,9 +15,9 @@ JOIN control_plane.managed_configuration_revisions revision
  AND revision.organization_id=connection.organization_id AND revision.state='PUBLISHED'
  AND configuration.current_revision_id=revision.id
 WHERE connection.lifecycle_state='ACTIVE' AND connection.enabled
-  AND connection.definition_key IN ('openapi-mcp','context7')
+  AND connection.definition_key IN ('openapi-mcp','context7','sentry','sentry-organization')
 UNION ALL
--- SHIPPED Context7 исполняется без managed binding, но только с текущими
+-- SHIPPED Context7/Sentry Cloud исполняется без managed binding, но только с текущими
 -- точными pins владельца; Go сверяет их с тем же immutable shipped registry.
 SELECT connection.organization_id,connection.ref,connection.definition_key,connection.definition_version,connection.definition_digest,
        connection.public_configuration,''::text,''::text
@@ -26,7 +26,7 @@ JOIN control_plane.integration_definitions definition
   ON definition.stable_key=connection.definition_key AND definition.enabled
  AND definition.definition_version=connection.definition_version AND definition.digest=connection.definition_digest
 WHERE connection.lifecycle_state='ACTIVE' AND connection.enabled
-  AND connection.definition_key='context7'
+  AND connection.definition_key IN ('context7','sentry','sentry-organization')
   AND NOT EXISTS (
     SELECT 1 FROM control_plane.managed_configuration_bindings binding
     WHERE binding.organization_id=connection.organization_id

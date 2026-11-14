@@ -775,6 +775,8 @@ const ru = {
     expandFields: "Развернуть список",
     selectField: "Выбрать",
     packageFields: {
+      label: "Подпись поля",
+      help: "Пояснение поля",
       apiVersion: "Версия API",
       approvalScope: "Объект временного разрешения",
       requiredInputPaths: "Обязательные поля объекта",
@@ -2918,6 +2920,7 @@ const ru = {
       communications: "Коммуникации",
       data: "Данные",
       documentation: "Документация",
+      observability: "Наблюдаемость",
       knowledge: "Знания",
       "source-control": "Разработка",
       testing: "Проверка",
@@ -5627,6 +5630,8 @@ const en = {
     expandFields: "Expand list",
     selectField: "Select",
     packageFields: {
+      label: "Field label",
+      help: "Field help",
       apiVersion: "API version",
       approvalScope: "Temporary approval object",
       requiredInputPaths: "Required object fields",
@@ -7839,6 +7844,7 @@ const en = {
       communications: "Communications",
       data: "Data",
       documentation: "Documentation",
+      observability: "Observability",
       knowledge: "Knowledge",
       "source-control": "Source control",
       testing: "Testing",

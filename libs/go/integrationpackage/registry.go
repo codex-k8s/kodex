@@ -79,6 +79,14 @@ const (
 	// AdapterSSHCompose выбирает только ограниченные Compose-операции с owner permit.
 	AdapterSSHCompose AdapterKey = "SSH_COMPOSE"
 
+	// AdapterSentry selects only registered project-scoped Sentry operations.
+	// AdapterSentry выбирает только зарегистрированные операции Sentry в выбранном проекте.
+	AdapterSentry AdapterKey = "SENTRY"
+
+	// AdapterObservability selects the closed metrics/logs/dashboard command registry, never arbitrary HTTP.
+	// AdapterObservability выбирает закрытый реестр команд метрик, логов и dashboard без произвольного HTTP.
+	AdapterObservability AdapterKey = "OBSERVABILITY"
+
 	// OwnerIntegrationGateway names the deployable that owns managed integration commands.
 	// OwnerIntegrationGateway обозначает компонент-владелец управляемых команд интеграций.
 	OwnerIntegrationGateway AdapterOwner = "integration-gateway"
@@ -167,6 +175,8 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
+	AdapterObservability: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterSentry:        {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterContext7:      {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterSSHCompose:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 }

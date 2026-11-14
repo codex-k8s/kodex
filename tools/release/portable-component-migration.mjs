@@ -17,6 +17,10 @@ export const componentPublicationMaxBytes = 2 << 20;
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 export const componentMigrationCohortSchema = 'kodex.portable-component-migration/v2';
 const profiles = Object.freeze({
+  'sentry-observability': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
+    contract:'SENTRY_OBSERVABILITY_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
+  'sentry-observability-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
+    contract:'SENTRY_OBSERVABILITY_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
   'workspace-unbound-stop': Object.freeze({schema:componentMigrationSchema,before:20261112000100,after:20261113000100,
     contract:'WORKSPACE_UNBOUND_STOP_UPGRADE',components:Object.freeze(['control-plane','runtime-controller'])}),
   'github-repository-scope': Object.freeze({schema:componentMigrationCohortSchema,before:20261113000100,after:20261114120000,
@@ -223,7 +227,9 @@ export function componentServingInventory(list, name, deploymentUID) {
       spec?.serviceAccountName === 'control-plane-migrator' && main?.name === 'migrate' &&
       main.args?.length === 1 && (['up','check'].includes(main.args[0]) ||
         main.args[0] === 'up-github-repository-scope-backup-compatible' &&
-        job.metadata.name === 'control-plane-migrate-20261114120000');
+        ['control-plane-migrate-20261114120000','control-plane-migrate-20261114120000-attempt2'].includes(job.metadata.name) ||
+        ['up-sentry-observability','up-sentry-observability-backup-maintenance'].includes(main.args[0]) &&
+        ['control-plane-migrate-20261114130000','control-plane-migrate-20261114130000-attempt2'].includes(job.metadata.name));
     const bootstrap=labels['app.kubernetes.io/component'] === 'broker-bootstrap' && job.metadata.name === 'control-plane-broker-bootstrap' &&
       spec?.serviceAccountName === 'control-plane-broker-bootstrap' && main?.name === 'bootstrap' &&
       Array.isArray(main.args) && main.args.length === 2 && main.args[0] === 'broker' && main.args[1] === 'bootstrap';

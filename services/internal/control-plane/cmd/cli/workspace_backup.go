@@ -18,6 +18,12 @@ const (
 	// githubBackupUpgradeCommand selects only the exact043 backup ACL maintenance boundary before immutable044; it does not replay an applied migration.
 	// githubBackupUpgradeCommand выбирает только точную043 backup ACL maintenance boundary перед неизменной044; применённая миграция не повторяется.
 	githubBackupUpgradeCommand = "up-github-repository-scope-backup-compatible"
+	// sentryUpgradeCommand applies only045, even when later migration files are present in the same image.
+	// sentryUpgradeCommand применяет только045, даже если image содержит файлы последующих миграций.
+	sentryUpgradeCommand = "up-sentry-observability"
+	// sentryBackupUpgradeCommand requires exact canonical044/045 and independent bounded ACL cleanup without replaying an applied045.
+	// sentryBackupUpgradeCommand требует exact canonical044/045 и независимый bounded ACL cleanup без повторного применения045.
+	sentryBackupUpgradeCommand = "up-sentry-observability-backup-maintenance"
 	// workspaceBackupRestoreCommand repairs only the closed backup SELECT set after an interrupted maintenance command.
 	// workspaceBackupRestoreCommand восстанавливает только закрытый набор backup SELECT после прерванного обслуживания.
 	workspaceBackupRestoreCommand = "restore-workspace-backup-acl"
@@ -38,7 +44,7 @@ var workspaceBackupStatements embed.FS
 // validPostgresCommand замыкает dispatch на прежние diagnostic commands и зарегистрированные точные maintenance operations.
 func validPostgresCommand(command string) bool {
 	switch command {
-	case "check", "up", "status", workspaceBackupUpgradeCommand, githubBackupUpgradeCommand, workspaceBackupRestoreCommand:
+	case "check", "up", "status", workspaceBackupUpgradeCommand, githubBackupUpgradeCommand, sentryUpgradeCommand, sentryBackupUpgradeCommand, workspaceBackupRestoreCommand:
 		return true
 	default:
 		return false
@@ -78,7 +84,7 @@ func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	switch version {
-	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261113000100, 20261114120000:
+	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261113000100, 20261114120000, 20261114130000:
 		return executeWorkspaceBackupStatement(ctx, database, fmt.Sprintf("restore_%d.sql", version))
 	default:
 		return errors.New("workspace backup restore schema is not registered")
@@ -105,10 +111,10 @@ func executeWorkspaceBackupUpgrade(ctx context.Context, database *sql.DB, migrat
 	return executeBackupUpgradeWithStatement(ctx, database, "normalize.sql", migrate)
 }
 
-// executeBackupUpgradeWithStatement runs a registered normalization once and always attempts independent bounded forward ACL restoration after a confirmed normalization commit; unknown commits stop before migration.
-// executeBackupUpgradeWithStatement выполняет зарегистрированную normalization один раз и всегда пробует независимое bounded forward восстановление ACL после подтверждённого commit; неизвестный commit останавливает вход в миграцию.
+// executeBackupUpgradeWithStatement runs a registered normalization or read-only preflight once and always attempts independent bounded forward ACL restoration after its confirmed commit; unknown commits stop before migration.
+// executeBackupUpgradeWithStatement выполняет зарегистрированную normalization либо read-only preflight один раз и всегда пробует независимое bounded forward восстановление ACL после подтверждённого commit; неизвестный commit останавливает вход в миграцию.
 func executeBackupUpgradeWithStatement(ctx context.Context, database *sql.DB, normalization string, migrate func(context.Context, *sql.DB) error) error {
-	if normalization != "normalize.sql" && normalization != "normalize_20261113000100.sql" {
+	if normalization != "normalize.sql" && normalization != "normalize_20261113000100.sql" && normalization != "check_sentry_20261114120000_backup.sql" {
 		return errors.New("backup normalization is not registered")
 	}
 	if err := executeWorkspaceBackupStatement(ctx, database, normalization); err != nil {

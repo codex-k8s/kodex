@@ -21,7 +21,10 @@ describe("политика исполнения модели", () => {
     api.loadProviderDefinitions.mockImplementation(
       () => new Promise((resolve) => responses.push(resolve)),
     );
-    const props = reactive({ definitionKey: "opencode-one", model: "shared-model" });
+    const props = reactive({
+      definitionKey: "opencode-one",
+      model: "shared-model",
+    });
     type State = {
       definition: Ref<ProviderDefinition | undefined>;
       unavailable: Ref<boolean>;

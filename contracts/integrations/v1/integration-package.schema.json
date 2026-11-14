@@ -54,6 +54,7 @@
             "OPENAPI_MCP",
             "MATTERMOST_INTERACTION",
             "CONTEXT7",
+            "SENTRY", "OBSERVABILITY",
             "SSH_COMPOSE"
           ]
         },
@@ -104,6 +105,8 @@
       "required": ["key", "type", "required"],
       "properties": {
         "key": { "$ref": "#/$defs/key" },
+        "label": { "type": "string", "maxLength": 120, "pattern": "^[^\\u0000\\r\\n]*$" },
+        "help": { "type": "string", "maxLength": 500, "pattern": "^[^\\u0000\\r\\n]*$" },
         "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] },
         "format": {
           "enum": [
@@ -308,7 +311,7 @@
           "additionalProperties": false,
           "required": ["name", "requiredInputPaths"],
           "properties": {
-            "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\u0000\\r\\n]*$" },
             "allowedLifetimes": {
               "type": "array",
               "minItems": 1,

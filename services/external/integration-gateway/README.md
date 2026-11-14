@@ -301,3 +301,26 @@ effect receipt, APPROVE с одной receipt и exact retry/readback без н�
 Worker записывает один закрытый класс отказа и числовой `provider_http_status`. Ноль означает, что ошибка не несёт наблюдённого HTTP-статуса (например, локальная проверка либо transport error); это не доказательство отсутствия сетевого запроса. Прежняя auth-классификация по token metadata не выдаётся за фактический HTTP-ответ. Исходные error strings, response bodies, URL и auth headers в диагностике отсутствуют. `UNKNOWN_OUTCOME` сохраняет прежний закрытый stage; лог не разрешает повторить write. После неопределённого ответа нужен обычный exact readback.
 
 Ручная проверка: в разрешённом synthetic проекте настроить собственный обычный тип, optional fields и personal credential; проверить exact Human Gate preview, один POST и receipt. При отказе сверить закрытый класс/HTTP-статус и внешнее состояние перед новым решением. Synthetic PASS не заменяет эту живую проверку.
+
+
+Наблюдаемость #2140 использует существующий gateway и закрытый `OBSERVABILITY`
+registry. Prometheus/Thanos явно требуют whole-endpoint область и native
+transport; tenant header не доказывает изоляцию. Grafana13.2.0 разделяет
+чтение dashboard и явно выбранные whole-organization annotation/silence effects.
+Datasource queries — фиксированный GET Prometheus API через один выбранный UID,
+без generic plugin POST, произвольного URL, path либо JSON payload. Личные
+credentials, owner gates, lease/UNKNOWN и no-fallback сохраняются. Подробный
+контракт и текущие ограничения: [наблюдаемость](../../../docs/operations/observability-integrations-2140.md).
+Это описание source-кандидата; live target qualification и schema045 proof
+не подтверждаются наличием registry entries.
+
+Optional operator qualification для узких Grafana annotations, отдельного
+rule DELETE и Loki API-managed ruler namespace описана в
+[OPS-DOC-OBSERVABILITY-INTEGRATIONS-2140](../../../docs/operations/observability-integrations-2140.md).
+Пара `INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_FILE` /
+`INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_SHA256` задаётся только
+installer render/check, exact immutable file монтируется read-only.
+Missing/expired evidence закрывает соответствующее подключение до effect;
+обычные READ и organization create/update не требуют этого optional режима.
+Публичные проверки: `python3 tools/release/verify-observability-parser-profile.py`,
+`python3 -B tools/install/test_observability_qualification.py`.

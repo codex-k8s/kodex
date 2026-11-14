@@ -24,7 +24,7 @@ import (
 const localOpenAPIFixtureHostname = "integration-synthetic.kodex-system.svc.cluster.local"
 
 // queryIntegrationEgressOrigins embeds the trusted global origin inventory from active enabled
-// connections and exact current published owner bindings, plus exact SHIPPED Context7 connections
+// connections and exact current published owner bindings, plus exact SHIPPED Context7/Sentry Cloud connections
 // without managed bindings. A published draft alone does not add egress.
 // queryIntegrationEgressOrigins встраивает доверенную глобальную выборку origins активных
 // включённых подключений с точными текущими опубликованными привязками владельца и SHIPPED
@@ -87,7 +87,7 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 		definition, err := repository.integrationEgressPackage(key, version, digest, format, content)
 		if err != nil || definition.Metadata.Key != key || definition.Metadata.Version != version || definition.Digest != digest ||
 			!definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) ||
-			(definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) && definition.Spec.Adapter != string(integrationpackage.AdapterContext7)) || definition.ValidateConfiguration(configuration) != nil {
+			(definition.Spec.Adapter != string(integrationpackage.AdapterOpenAPIMCP) && definition.Spec.Adapter != string(integrationpackage.AdapterContext7) && definition.Spec.Adapter != string(integrationpackage.AdapterSentry)) || definition.ValidateConfiguration(configuration) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		if definition.Spec.Adapter == string(integrationpackage.AdapterContext7) {
@@ -117,6 +117,16 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 		if err != nil || host != parsed.Hostname() {
 			return nil, errs.ErrUnavailable
 		}
+		if definition.Spec.Adapter == string(integrationpackage.AdapterSentry) {
+			if (key != "sentry" && key != "sentry-organization") || (origin != "https://sentry.io" && origin != "https://us.sentry.io" && origin != "https://de.sentry.io") {
+				return nil, errs.ErrUnavailable
+			}
+			hosts[host] = struct{}{}
+			if len(hosts) > shared.MaximumDestinations {
+				return nil, errs.ErrUnavailable
+			}
+			continue
+		}
 		for _, capability := range definition.Spec.Capabilities {
 			if capability.OpenAPI == nil || capability.OpenAPI.ServerOrigin != origin {
 				return nil, errs.ErrUnavailable
@@ -143,18 +153,18 @@ func (repository *Repository) IntegrationEgressHostnames(ctx context.Context) ([
 	return result, nil
 }
 
-// integrationEgressPackage resolves an exact SHIPPED Context7 revision only when both managed
+// integrationEgressPackage resolves an exact SHIPPED Context7/Sentry Cloud revision only when both managed
 // format and content are absent. Any supplied managed snapshot goes through executable package
 // parsing without a shipped fallback, so incomplete or invalid managed data cannot silently select
 // another package.
-// integrationEgressPackage разрешает точную SHIPPED ревизию Context7, только если отсутствуют и
+// integrationEgressPackage разрешает точную SHIPPED ревизию Context7/Sentry Cloud, только если отсутствуют и
 // формат, и содержимое managed-снимка. Любой переданный managed-снимок проходит разбор
 // исполняемого пакета без подмены поставленным, поэтому неполные или неверные данные не
 // переключают пакет незаметно.
 func (repository *Repository) integrationEgressPackage(key, version, digest, format, content string) (integrationpackage.Package, error) {
 	if format == "" && content == "" {
 		shipped, exists := repository.integrationDefinitions[key]
-		if key != "context7" || !exists {
+		if (key != "context7" && key != "sentry" && key != "sentry-organization") || !exists {
 			return integrationpackage.Package{}, errs.ErrUnavailable
 		}
 		definition, exact := integrationpackage.ResolveShippedRevision(shipped, version, digest)

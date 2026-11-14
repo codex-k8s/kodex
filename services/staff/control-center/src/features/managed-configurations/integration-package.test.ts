@@ -27,7 +27,7 @@ describe("IntegrationPackage canonical schema", () => {
       }
     }
     visit(packageSchema);
-    expect(patterns).toHaveLength(5);
+    expect(patterns).toHaveLength(8);
     const samples = [
       "a",
       "a-b",
@@ -50,6 +50,10 @@ describe("IntegrationPackage canonical schema", () => {
       "v1.2.3",
       "",
       "я",
+      "🙂",
+      "a\u0000b",
+      "a\rb",
+      "a\nb",
     ];
     for (const pattern of patterns) {
       const previous = new RegExp(pattern.replaceAll("\\-", "-"), "u");
@@ -62,6 +66,38 @@ describe("IntegrationPackage canonical schema", () => {
         expect(htmlPattern.test(sample), `${pattern}: ${sample}`).toBe(
           previous.test(sample),
         );
+      }
+    }
+  });
+
+  it("применяет Unicode границы display metadata в реальном package validator", () => {
+    for (const character of ["Я", "🙂"]) {
+      const value = parseConfigurationDocument(
+        readFileSync(new URL("sentry.yaml", directory), "utf8"),
+        "YAML",
+      );
+      const spec = value.spec as Record<string, unknown>;
+      const fields = spec.configurationFields as Record<string, unknown>[];
+      const field = fields[0];
+      if (!field)
+        throw new Error("canonical Sentry configuration field missing");
+      for (const [key, maximum] of [
+        ["label", 120],
+        ["help", 500],
+      ] as const) {
+        const original = field[key];
+        field[key] = character.repeat(maximum);
+        expect(packageDiagnostics(value)).toEqual([]);
+        for (const invalid of [
+          character.repeat(maximum + 1),
+          "a\u0000b",
+          "a\rb",
+          "a\nb",
+        ]) {
+          field[key] = invalid;
+          expect(packageDiagnostics(value).length).toBeGreaterThan(0);
+        }
+        field[key] = original;
       }
     }
   });

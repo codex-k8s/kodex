@@ -1023,7 +1023,30 @@ Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SS
 ограничением размера и закрытой schema; запись выполняется через exclusive
 temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
 
+## Отражение credential в ответе провайдера
+
+Типизированная проекция не делает произвольный upstream body доверенным.
+Общая HTTP boundary до передачи успешного ответа adapter проверяет raw body и
+декодированные JSON strings на точное отражение выданного ей credential и
+encoded HTTP authorization payload. Эти байты не попадают в model result,
+receipt summary или diagnostic. После начатой mutation отказ сохраняет
+UNKNOWN_OUTCOME без разрешения повтора; для READ это закрытый invalid response.
+HTTP401/403 сохраняют собственную auth-классификацию, их body не проецируется.
+Проверка ограничена бюджетом body и не считается общим DLP либо защитой от
+произвольных кодирований. Credential не используется в тексте ошибки или label.
+
 ## Наблюдение внешних возможностей с credential
+
+Pre-read mutable provider object не является atomic ownership/provenance proof
+для следующего эффекта. Узкий scope требует native immutable binding/version
+либо отдельного доверенного operator-qualified backend/writer profile.
+Последний не создаётся ordinary Connection checkbox/JSON: он связан с exact
+target/version/key/resource, immutable deployment evidence, expiry и рабочим
+readiness path. Перед изменением writer/backend оператор отзывает connections,
+выполняет drain/join и только затем меняет профиль. Gateway проверяет withdrawal
+и expiry непосредственно перед effect; lost response остаётся UNKNOWN.
+Operator attestation и independently observed evidence различаются в результате.
+
 
 При расширении Git-области discovery хранит только координаты ресурса. ID,
 canonical name и успешный публичный GET не заменяют текущую принадлежность
@@ -1034,6 +1057,23 @@ rename, ID mismatch и stale discovery закрываются. Specialized nativ
 Замена либо отзыв personal binding атомарно закрывают её pre-effect consumers;
 начатый эффект сохраняет прежний UNKNOWN/read-only reconciliation и не
 получает shared fallback. Классификация personal/service и discovery boundary выводится из проверенного adapter/resource contract, а не из названия версии; managed сужение сохраняет эти ограничения. Это не заменяет обязательные exact version/digest pins. Специализированный consumer выводит selectors из owner snapshot и проверяет фактическую pinned schema. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
+
+Для metrics/logs HTTP window, число output samples и размер body ограничивают
+только соответствующую часть запроса/ответа. Они не ограничивают embedded
+lookback, offset, subquery и стоимость вычисления до ответа. Typed consumer
+использует штатный parser с закрытым AST profile либо доказанный server profile;
+ошибка parser закрывает путь до semantic use. Deadline/request cancellation
+проверяется по точной совместимой версии. Пределы CPU, memory, cardinality,
+max-samples и concurrency отдельно описываются как declared/observed; response
+cutoff не становится доказательством server cost bound.
+
+Endpoint authority выбирается явно. Tenant header — routing context, а не
+доказательство provider isolation. Успех действительного ключа и отказ свежего
+неверного ключа подтверждают только наблюдение authentication rejection.
+Изоляция остаётся UNKNOWN до отдельной positive/negative матрицы двух
+действительных ключей и двух tenant; её нельзя вывести из пары HTTP200/401.
+Любые metric/log payloads остаются недоверенными данными, а не инструкциями,
+permission metadata либо новыми grants.
 
 Список возможностей SDK, встроенный fallback и успешный локальный запуск не
 доказывают доступность provider для конкретной учётной записи. Наблюдение

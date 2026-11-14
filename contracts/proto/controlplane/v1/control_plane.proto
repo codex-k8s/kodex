@@ -4901,6 +4901,10 @@ message PreviewScheduleResponse {
 enum PersonalIntegrationCredentialObservationProfile {
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_UNSPECIFIED = 0;
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 = 1;
+  // Собственные scopes токена Sentry; не права на конкретную ошибку.
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 = 2;
+  // Текущие action/scopes личного токена Grafana; не reusable WRITE authority.
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1 = 3;
 }
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
@@ -4985,6 +4989,22 @@ enum IntegrationCredentialResourcePermissionProfile {
   // Fresh scoped object/token checks; health подтверждает только identity, не global WRITE.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_SCOPED_RESOURCE_V2 = 11;
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITHUB_SCOPED_RESOURCE_V1 = 12;
+  // Точный Sentry GET проверяет объект выбранного проекта без глобального READ proof.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_PROJECT_OBJECT_READ_V1 = 13;
+  // Текущие token scopes и принадлежность ошибки проверяются перед единственным PUT.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ISSUE_STATUS_WRITE_V1 = 14;
+  // Текущие scope и project/issue boundary перед comment/assignment mutation; не общее разрешение записи.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_PROJECT_MUTATION_V1 = 15;
+  // Чтение общей организации допускается только отдельным явным connection/grant.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_OBJECT_READ_V1 = 16;
+  // Общие release/workflow изменяются только full-organization grant и отдельным EACH решением.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_MUTATION_V1 = 17;
+  // Текущий типизированный GET в явно выбранной полной области endpoint; tenant header не даёт authority.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_OBSERVABILITY_TYPED_RESOURCE_READ_V1 = 18;
+  // Явная organization scope, свежие permissions и typed exact-object checks перед EACH effect.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GRAFANA_TYPED_WRITE_V1 = 19;
+  // Отдельный API-only namespace с operator qualification, текущим key и EACH effect.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_LOKI_RULER_MUTATION_V1 = 20;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;
@@ -9828,20 +9848,20 @@ message ModelCacheResolution {
 
 // Только безопасные наблюдения собственного ключа; эти поля никогда не являются источником authority.
 message GitHubDiscoveredRepository {
- int64 id=1;
- string full_name=2;
- string owner_kind=3;
- bool private=4;
- bool archived=5;
- bool can_read=6;
- bool can_push=7;
+  int64 id = 1;
+  string full_name = 2;
+  string owner_kind = 3;
+  bool private = 4;
+  bool archived = 5;
+  bool can_read = 6;
+  bool can_push = 7;
 }
 message GitHubRepositoryDiscoveryPage {
- int64 identity_id=1;
- string login=2;
- int32 page=3;
- int32 next_page=4;
- repeated GitHubDiscoveredRepository items=5;
+  int64 identity_id = 1;
+  string login = 2;
+  int32 page = 3;
+  int32 next_page = 4;
+  repeated GitHubDiscoveredRepository items = 5;
 }
 
 // Закреплённые provenance и статусы поиска; не являются account observation.

@@ -533,6 +533,14 @@ export const serverTokenTranslations = {
     "Конфигурация интеграции недопустима",
     "Integration configuration is invalid",
   ],
+  INTEGRATION_QUERY_PROFILE_UNSUPPORTED: [
+    "Выражение использует неподдерживаемую конструкцию запроса",
+    "The expression uses an unsupported query construct",
+  ],
+  INTEGRATION_OPERATOR_QUALIFICATION_REQUIRED: [
+    "Для этого действия нужен подтверждённый оператором профиль установки",
+    "This action requires an operator-qualified installation profile",
+  ],
   INTEGRATION_CAPABILITY_UNSUPPORTED: [
     "Действие не поддерживается интеграцией",
     "Integration capability is unsupported",

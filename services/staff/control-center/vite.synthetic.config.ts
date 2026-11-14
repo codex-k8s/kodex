@@ -10,6 +10,12 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        observabilityPackages: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/observability-packages.html",
+            import.meta.url,
+          ),
+        ),
         modelDiscovery: fileURLToPath(
           new URL("./e2e/fixtures/model-discovery.html", import.meta.url),
         ),

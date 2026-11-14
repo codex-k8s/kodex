@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
@@ -439,7 +440,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if storedVersion != definition.Metadata.Version || storedDigest != definition.Digest {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+		configuration, valid := integrationConfigurationValues(definition, payload.PublicConfiguration)
 		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -460,7 +461,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		var connectionID string
 		var config []byte
 		credentialPolicy := entity.IntegrationCredentialProjectShared
-		if githubScopedDefinition(definition) {
+		// New typed personal integrations start with the initiator key; a shared service identity requires the separate disabled/drained owner policy command.
+		// Новые typed personal integrations начинают с ключа инициатора; shared service identity требует отдельной owner policy команды после disable/drain.
+		if githubScopedDefinition(definition) || definition.Spec.Adapter == string(integrationpackage.AdapterSentry) || definition.Spec.Adapter == string(integrationpackage.AdapterObservability) {
 			credentialPolicy = entity.IntegrationCredentialInitiatorRequired
 		}
 		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState,
@@ -705,7 +708,7 @@ func (repository *Repository) updateIntegrationConnection(
 	}
 	payload.Name = strings.TrimSpace(payload.Name)
 	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
-	configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+	configuration, valid := integrationConfigurationValues(definition, payload.PublicConfiguration)
 	if payload.Name == "" || len(payload.Name) > 160 || packageErr != nil || !valid ||
 		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
