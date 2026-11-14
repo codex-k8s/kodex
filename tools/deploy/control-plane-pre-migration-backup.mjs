@@ -21,22 +21,56 @@ export function sourceDatabasePod(stateful,pods) {
  return {podName:pod.metadata.name,podUID:pod.metadata.uid,containerID:container.containerID,imageID:container.imageID,restarts:container.restartCount};
 }
 
-async function backup(context,parent) {
+export function backupOptions(args) {
+ const keys=["--context","--kubeconfig","--cluster-uid","--namespace-uid","--output-directory"],options={};
+ ensure(args.length===keys.length*2,"BACKUP_ARGUMENT_INVALID");
+ for(let i=0;i<args.length;i+=2){ensure(keys.includes(args[i])&&!Object.hasOwn(options,args[i]),"BACKUP_ARGUMENT_INVALID");options[args[i]]=args[i+1];}
+ const uid=/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+ ensure(options["--context"]==="k3d-kodex" && uid.test(options["--cluster-uid"]) && uid.test(options["--namespace-uid"]) &&
+  typeof options["--kubeconfig"]==="string" && options["--kubeconfig"].startsWith("/") && !/[\r\n\0]/.test(options["--kubeconfig"]),"BACKUP_TARGET_REQUIRED");
+ return {context:options["--context"],kubeconfig:options["--kubeconfig"],clusterUID:options["--cluster-uid"],namespaceUID:options["--namespace-uid"],parent:options["--output-directory"]};
+}
+
+async function backup({context,kubeconfig,clusterUID,namespaceUID,parent}) {
  ensure(context==="k3d-kodex" && resolve(parent)===parent && await realpath(parent)===parent,"BACKUP_LOCAL_CONTEXT_REQUIRED");
  const stat=await lstat(parent);
  ensure(stat.isDirectory() && stat.uid===process.getuid() && (stat.mode&0o077)===0,"BACKUP_PRIVATE_DIRECTORY_REQUIRED");
  const space=await statfs(parent);
  ensure(space.bavail*space.bsize>=4*1024**3,"BACKUP_INSUFFICIENT_DISK_SPACE");
- const kube=args=>{try{return execFileSync("kubectl",["--context",context,"--request-timeout=30s","-n",namespace,...args],
-  {encoding:"utf8",timeout:35000,maxBuffer:4<<20,stdio:["ignore","pipe","pipe"]});}catch{throw Error("BACKUP_KUBERNETES_READ_FAILED");}};
+ const kubeArgs=["--kubeconfig",kubeconfig,"--context",context];
+ const kube=(args,maxBuffer=4<<20)=>{try{return execFileSync("kubectl",[...kubeArgs,"--request-timeout=30s","-n",namespace,...args],
+  {encoding:"utf8",timeout:35000,maxBuffer,stdio:["ignore","pipe","pipe"]});}catch{throw Error("BACKUP_KUBERNETES_READ_FAILED");}};
+ // Полный namespace inventory нужен для проверки owner UID даже при drift labels.
+ // Для него действует отдельный bounded бюджет, как у release inventory.
+ const pods=()=>JSON.parse(kube(["get","pods","-o","json"],32<<20)).items;
+ const verifyTarget=()=>{
+  for(const [name,uid] of [["kube-system",clusterUID],[namespace,namespaceUID]]){
+   const item=JSON.parse(kube(["get","namespace",name,"-o","json"]));
+   ensure(item.kind==="Namespace" && item.metadata?.name===name && item.metadata.uid===uid && !item.metadata.deletionTimestamp,"BACKUP_TARGET_CHANGED");
+  }
+ };
+ verifyTarget();
  const workload=JSON.parse(kube(["get","statefulset","kodex-postgresql","-o","json"]));
- const before=sourceDatabasePod(workload,JSON.parse(kube(["get","pods","-o","json"])).items);
+ const before=sourceDatabasePod(workload,pods());
+ // PGHOST/PGSERVICE и .psqlrc не выбирают источник: только локальный socket
+ // канонического PostgreSQL-контейнера, без унаследованного окружения процесса.
+ const databaseArgs=["--host=/var/run/postgresql","--port=5432","--username=postgres","--dbname=control_plane","--no-password"];
+ const commandArgs=["exec",before.podName,"-c","postgresql","--","env","-i","PATH=/usr/local/bin:/usr/bin:/bin"];
+ const databaseIdentity=()=>{
+  const value=JSON.parse(kube([...commandArgs,"psql",...databaseArgs,"-X","-A","-t","-v","ON_ERROR_STOP=1","-c",
+   "SELECT pg_catalog.json_build_object('systemIdentifier',system_identifier::pg_catalog.text,'databaseOID',oid::pg_catalog.text,'database',pg_catalog.current_database(),'port',pg_catalog.current_setting('port'),'serverAddress',pg_catalog.inet_server_addr(),'serverPort',pg_catalog.inet_server_port()) FROM pg_catalog.pg_control_system(),pg_catalog.pg_database WHERE datname=pg_catalog.current_database()"]));
+  ensure(value && typeof value.systemIdentifier==="string" && /^[0-9]{1,20}$/.test(value.systemIdentifier) &&
+   typeof value.databaseOID==="string" && /^[0-9]{1,10}$/.test(value.databaseOID) &&
+   value.database==="control_plane" && value.port==="5432" && value.serverAddress===null && value.serverPort===null,"BACKUP_DATABASE_IDENTITY_INVALID");
+  return value;
+ };
+ const backendBefore=databaseIdentity();
  const directory=await mkdtemp(join(parent,"cp-pre-migration-"));
  const path=join(directory,"control-plane.dump");
  const file=await open(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o600);
  const digest=createHash("sha256");let size=0;
- const child=spawn("kubectl",["--context",context,"-n",namespace,"exec",before.podName,"-c","postgresql","--",
-  "pg_dump","--username=postgres","--dbname=control_plane","--format=custom"],{stdio:["ignore","pipe","pipe"],timeout:600000});
+ const child=spawn("kubectl",[...kubeArgs,"--request-timeout=600s","-n",namespace,...commandArgs,
+  "pg_dump",...databaseArgs,"--format=custom"],{stdio:["ignore","pipe","pipe"],timeout:600000});
  child.stderr.resume();
  const finished=new Promise(resolve=>{child.once("error",()=>resolve(false));child.once("close",(code,signal)=>resolve(code===0 && !signal));});
  let success=false;
@@ -48,15 +82,17 @@ async function backup(context,parent) {
   }
   ensure(await finished,"BACKUP_DUMP_FAILED");await file.sync();success=true;
  }finally{if(!success)child.kill("SIGKILL");await finished;await file.close();}
+ verifyTarget();
  const afterWorkload=JSON.parse(kube(["get","statefulset","kodex-postgresql","-o","json"]));
- const after=sourceDatabasePod(afterWorkload,JSON.parse(kube(["get","pods","-o","json"])).items);
+ const after=sourceDatabasePod(afterWorkload,pods());
  ensure(afterWorkload.metadata.uid===workload.metadata.uid && JSON.stringify(before)===JSON.stringify(after),"BACKUP_SOURCE_INSTANCE_CHANGED");
+ ensure(JSON.stringify(databaseIdentity())===JSON.stringify(backendBefore),"BACKUP_DATABASE_INSTANCE_CHANGED");
  let toc;
  try{toc=execFileSync("pg_restore",["--list",path],{encoding:"utf8",timeout:30000,maxBuffer:16<<20,stdio:["ignore","pipe","pipe"]});}
  catch{throw Error("BACKUP_ARCHIVE_READBACK_FAILED");}
  ensure(size>5 && /TABLE DATA control_plane runs /.test(toc) && /TABLE DATA control_plane artifact_heads /.test(toc),"BACKUP_REQUIRED_TABLES_ABSENT");
  const evidence={status:"PASS",scope:"control-plane-custom-dump-and-toc-only",restore:"NOT RUN",at:new Date().toISOString(),
-  ...before,statefulSetUID:workload.metadata.uid,bytes:size,sha256:digest.digest("hex"),path};
+  context,clusterUID,namespaceUID,...before,backend:backendBefore,statefulSetUID:workload.metadata.uid,bytes:size,sha256:digest.digest("hex"),path};
  const receipt=await open(join(directory,"receipt.json"),"wx",0o600);
  try{await receipt.writeFile(`${JSON.stringify(evidence)}\n`);await receipt.sync();}finally{await receipt.close();}
  const directoryHandle=await open(directory,constants.O_RDONLY|constants.O_DIRECTORY|constants.O_NOFOLLOW);
@@ -68,7 +104,6 @@ async function backup(context,parent) {
 
 if(process.argv[1] && pathToFileURL(process.argv[1]).href===import.meta.url){
  const args=process.argv.slice(2);
- try{ensure(args.length===4 && args[0]==="--context" && args[2]==="--output-directory","BACKUP_ARGUMENT_INVALID");
-  process.stdout.write(`${JSON.stringify(await backup(args[1],args[3]))}\n`);
+ try{process.stdout.write(`${JSON.stringify(await backup(backupOptions(args)))}\n`);
  }catch(error){process.stderr.write(`Control-plane backup failed: ${/^[A-Z_]+$/.test(error.message)?error.message:"BACKUP_FAILED"}\n`);process.exitCode=1;}
 }

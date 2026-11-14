@@ -121,7 +121,8 @@ async function prepare(config){
       config.baseSourceSHA,config.sourceSHA,'--',...paths]));
     const lock=createComponentImageLock(config,component,{publicationPlan:plan.value,publicationEvidence:journal.value},
       {receipt:receipt.value,receiptSHA256:hash(receipt.raw),contextSHA256,changedFiles,dockerfileSHA256,productionSHA256});
-    const raw=Buffer.from(JSON.stringify(lock,null,2)+'\n');
+    // Полный manifest сохраняется; компактная запись не расходует лимит на отступы.
+    const raw=Buffer.from(JSON.stringify(lock)+'\n');
     requireValue(raw.length<=65536,'COMPONENT_PUBLICATION_LOCK_TOO_LARGE');
     components.push({component:component.name,expectedImageRef:component.expectedImageRef,componentLockRawBase64:raw.toString('base64'),
       componentLockSHA256:hash(raw)});

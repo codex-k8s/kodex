@@ -86,6 +86,12 @@ test-web-only-release:
 	@python3 scripts/tests/pwa-public-assets-test.py
 	@./scripts/tests/web-only-release-test.sh
 
+.PHONY: test-model-catalog-authority-delivery
+test-model-catalog-authority-delivery: check-go-toolchain
+	@timeout 180s node --test tools/release/migration-owner-database.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/authority-publisher-image.test.mjs tools/release/authority-rotation-transition.test.mjs tools/release/authority-rotation-source-delivery-model.test.mjs tools/release/authority-rotation-source-delivery.cli.test.mjs tools/release/authority-policy-environment.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/portable-runner-target.test.mjs tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-api-maintenance-cli.test.mjs tools/deploy/control-plane-pre-migration-backup.test.mjs
+	@cd services/internal/control-plane && timeout 120s go test -count=1 -p 1 ./internal/domain/service/authorityproof -run '^TestCatalogBinaryStartsAndIssuesLegacyProofWithPolicy105$$'
+	@cd services/internal/internal-rpc-authority && timeout 120s go test -count=1 -p 1 ./cmd/cli -run '^TestRotationStatusKeepsRegistryAndSnapshotSequencesIndependent$$'
+
 .PHONY: test-service-generation-postgres
 test-service-generation-postgres: check-go-toolchain
 	@./scripts/tests/control-plane-postgres-test.sh '^(TestServiceCredentialColdStartComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent)$$'
@@ -622,3 +628,7 @@ test-runner-policy-transition:
 test-component-publication:
 	@timeout 180s node --test tools/release/component-publication.test.mjs tools/release/stable-image-publication.test.mjs
 	@bash -n tools/release/publish-stable-image-worker.sh
+
+.PHONY: test-component-api-maintenance
+test-component-api-maintenance:
+	@timeout 120s node --test tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-api-maintenance-cli.test.mjs tools/release/portable-runner-target.test.mjs

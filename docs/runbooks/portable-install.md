@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.9
+version: 1.6.10
 updated: 2026-11-14
 ---
 
@@ -1602,6 +1602,62 @@ Skills, avatars, executable bundles и структурированный workfl
 `artifact-optional-antivirus` проверяет exact037 и отсутствие активных effects, применяет только
 forward038 и читает его postcondition. Специальный backup ACL/profile для этой миграции не нужен.
 
+
+## Закрытие API при согласованном обновлении компонентов
+
+`tools/release/component-api-maintenance.mjs` выполняет `plan/apply/status`
+для exact `control-api-gateway` Deployment; `component-api-traffic.mjs` — для
+его Service. Это ограниченный период недоступности API, не zero-downtime rollout.
+Оба используют один private `kodex.portable-runner-target/v1` с точными
+cluster/namespace/installation UID, хешем installation data и явно перечисленными
+Deployment/Service UID. При обновлении authority в том же target перечислены
+control-plane, publisher и registry ConfigMap. Права и соседние ресурсы не меняются.
+
+| Переход | Предусловие | Эффект и подтверждение | Ошибка / повтор |
+| --- | --- | --- | --- |
+| API `close` | Ready Deployment, исходные UID/RV/spec | Только replicas=0 и owned annotation; `CLOSED` после observedGeneration, нулевых counters и положительного join всех API Pod/контейнеров | Оставшиеся writers удерживают `CONVERGING`; lost ACK → `status`, без слепого повторного PATCH |
+| Service `isolate` | Private close journal и свежий `CLOSED` | Только дополнительный nonce selector и annotation; `ISOLATED` после отсутствия всех EndpointSlice addresses и matching Pod | Terminating/not-ready адрес тоже блокирует; чужой UID/spec закрыто отклоняется |
+| Обновление / API `open` | Обязательный fresh Service isolation proof, новая совместимая cohort проверена | Open-plan закрепляет **текущий** spec; восстанавливаются только сохранённые replicas. `OPEN` требует полного serving inventory, точных template/volumes и ready image digests | Старые image/template не восстанавливаются; пустой inventory при Ready counters не даёт `OPEN` |
+| Service `restore` | Ready API, тот же isolation receipt; authoritative policy106 `RETIRED`, все16 readers, fresh owner status не старше30с | Возвращается исходный selector без изменения ports/IP; `RESTORED` — только spec readback | Старый completed Job не заменяет новый DB read. `RESTORED` не означает business E2E; нужен обычный live сценарий |
+
+Публичные команды требуют `--kubeconfig /absolute/path --context <exact-context>`.
+`plan --action close|open --target <private-target> --plan <private-plan>`
+создаёт план Deployment; для `open` дополнительно нужны `--closed-plan`,
+`--closed-evidence`, `--isolation-plan` и `--isolation-evidence` как при plan,
+так и apply/status. Traffic-plan использует `--action isolate|restore` и всегда
+те же `--closed-plan/--closed-evidence`; `restore` также требует
+`--isolation-plan/--isolation-evidence`. Для restore-plan/apply также обязательны
+`--authority-plan/--authority-evidence` исходной ротации и
+`--authority-status-plan/--authority-status-evidence` нового completed status Job.
+Общий `readCatalogAuthorityTerminal` повторно читает exact Job/Pod/logs/registry/
+publisher и owner `RETIRED`; helper не создаёт status Job скрыто. Если прошло30с,
+выполнить новый штатный status и подготовить новый restore-plan. `apply` принимает `--plan`,
+`--evidence` и точный `--approved-plan-sha`; `status` — plan/evidence без approval
+и не повторяет изменения. Traffic apply/status сохраняют ссылки на close receipt,
+а restore — на isolation receipt. Исходники исполнителя должны быть чистыми
+и совпадать с SHA плана. После неопределённого исхода сначала выполняется status
+того же плана; смена target/source требует нового адресного плана.
+
+Authority transition вызывает общий `requireClosedAPIAdmission` перед изменением:
+либо API действительно остановлен, либо подтверждены прежний positive join,
+текущая изоляция Service и пустые endpoints. Исторический close receipt сам
+по себе не разрешает следующую операцию. Policy revision и durable source revision
+остаются отдельными величинами; нельзя открывать пользовательский Service до
+обязательных reader receipts/retirement. Пустой EndpointSlice не завершает старые
+TCP sessions, поэтому isolate создаётся только после positive API join.
+Протокол не защищает от параллельного привилегированного оператора, сознательно
+меняющего те же объекты; такой drift закрывает дальнейшее выполнение.
+
+`make test-component-api-maintenance` проверяет настоящие CLI на synthetic
+Kubernetes transport: close/isolate/open, отказ restore без retirement, чужой target,
+stale CAS, скрытые writers, потерю ACK и сохранение нового image при открытии.
+Положительный restore с настоящим owner status проверяется вместе с authority
+delivery unit; отдельный model proof его не заменяет. Это локальная квалификация,
+не доказательство установленного rollout. Через Context7 проверены официальные
+[Service selectors](https://kubernetes.io/docs/concepts/services-networking/service/)
+и [EndpointSlice conditions](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/):
+terminating endpoints могут ещё участвовать в маршрутизации; проверять только
+`ready=false` недостаточно.
 
 ## Git в образе integration-gateway
 

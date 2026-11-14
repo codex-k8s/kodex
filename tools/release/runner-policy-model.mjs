@@ -212,12 +212,12 @@ export function planBinding(binding, role, bundle, target) {
   return { spec, rules };
 }
 
-export function planGatewayMaintenance(deployment, bundleSHA256, restore = false, target) {
+export function planGatewayMaintenance(deployment, bundleSHA256, restore = false, target, key = "kodex.dev/runner-policy-maintenance") {
   requireStaging(deployment, target);
   requireValue(deployment.kind === "Deployment" && deployment.metadata.name === "control-api-gateway" &&
     /^[a-f0-9]{64}$/.test(bundleSHA256), "EXACT_GATEWAY_REQUIRED");
   const annotations = { ...deployment.metadata.annotations };
-  const key = "kodex.dev/runner-policy-maintenance";
+  requireValue(["kodex.dev/runner-policy-maintenance", "kodex.dev/component-maintenance"].includes(key), "MAINTENANCE_KIND_INVALID");
   const spec = structuredClone(deployment.spec);
   if (restore) {
     const previous = JSON.parse(annotations[key] ?? "null");

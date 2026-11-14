@@ -7,8 +7,9 @@ function requireValue(ok, code) { if (!ok) throw new Error(code); }
 
 // План получает public OIDC config только из выбранного CP, а не из свободного
 // CLI значения. Все ссылки сохраняются для повторного readback перед CAS.
-export function readAuthorityPolicyEnvironment(deployment, configMaps) {
-  requireValue(deployment?.kind === "Deployment" && deployment.metadata?.name === "control-plane" && deployment.metadata.namespace === "kodex-system" && deployment.metadata.uid && deployment.metadata.resourceVersion && deployment.metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" && deployment.metadata.labels?.["kodex.dev/environment"] !== "production" && (deployment.metadata.labels?.["kodex.dev/environment"] === "staging" || deployment.metadata.labels?.["kodex.dev/local-profile"] === "hot-reload"),"AUTHORITY_POLICY_CP_IDENTITY_REJECTED");
+export function readAuthorityPolicyEnvironment(deployment, configMaps, portableTarget) {
+  requireValue(deployment?.kind === "Deployment" && deployment.metadata?.name === "control-plane" && deployment.metadata.namespace === "kodex-system" && deployment.metadata.uid && deployment.metadata.resourceVersion && deployment.metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
+    (portableTarget ? portableTarget.allows(deployment) : deployment.metadata.labels?.["kodex.dev/environment"] !== "production" && (deployment.metadata.labels?.["kodex.dev/environment"] === "staging" || deployment.metadata.labels?.["kodex.dev/local-profile"] === "hot-reload")),"AUTHORITY_POLICY_CP_IDENTITY_REJECTED");
   const containers = deployment.spec?.template?.spec?.containers?.filter(c=>c.name==="control-plane");
   requireValue(containers?.length === 1 && Array.isArray(configMaps),"AUTHORITY_POLICY_CP_CONFIG_REJECTED");
   const evidence = {deploymentUID:deployment.metadata.uid,resourceVersion:deployment.metadata.resourceVersion,configMaps:[]};
@@ -31,8 +32,8 @@ export function readAuthorityPolicyEnvironment(deployment, configMaps) {
   return {oidcIssuer:values.CONTROL_PLANE_OIDC_ISSUER,oidcAudience:values.CONTROL_PLANE_OIDC_AUDIENCE,evidence};
 }
 
-export function verifyAuthorityPolicyEnvironmentReadback(expected,deployment,configMaps) {
-  const actual=readAuthorityPolicyEnvironment(deployment,configMaps);
+export function verifyAuthorityPolicyEnvironmentReadback(expected,deployment,configMaps,portableTarget) {
+  const actual=readAuthorityPolicyEnvironment(deployment,configMaps,portableTarget);
   requireValue(JSON.stringify(actual)===JSON.stringify(expected),"AUTHORITY_POLICY_CP_CONFIG_DRIFT");
   return actual;
 }
