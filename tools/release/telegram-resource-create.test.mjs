@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {execFileSync} from 'node:child_process';
 import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
@@ -204,4 +205,45 @@ test('admission defaults не скрывают новый sidecar/env/volume/end
  }
  const live=f.dryRun(request);live.metadata.annotations['deployment.kubernetes.io/revision']='1';assert.deepEqual(telegramResourceCreateProjection(live).value,request);
  live.metadata.annotations['deployment.kubernetes.io/revision']='2';assert.throws(()=>telegramResourceCreateProjection(live),/REVISION_CHANGED/);
+});
+
+// 107 admission перечитывает actual objects и private create/publication lineage;
+// завершённый create остаётся PENDING_AUTHORITY до отдельного key delivery.
+test('107 introduction связывает source/publication,10actualUID и dormant0 без effects',async()=>{
+ const f=fixture(),directory=await mkdtemp(join(tmpdir(),'kodex-telegram-introduction-'));
+ try{
+  const plan=f.plan();plan.planPath=join(directory,'plan.json');plan.evidencePath=join(directory,'evidence.jsonl');
+  const journal=f.journal(plan);await f.step('apply',plan,journal);
+  const publicationPath=join(directory,'publication.json');
+  const receipt={schema:'kodex.stable-local-build/v1',component:'interaction-gateway',sourceSHA:f.target.sourceSHA,contextSHA256:'a'.repeat(64),archiveSHA256:'b'.repeat(64),imageDigest:'sha256:'+'d'.repeat(64),publication:'NOT_RUN',admission:'NOT_RUN',nodePull:'NOT_RUN'};
+  const image={component:receipt.component,sourceSHA:receipt.sourceSHA,digest:receipt.imageDigest,tag:'stable-'+receipt.sourceSHA+'-'+'d'.repeat(12)};
+  const publicationPlan={schema:'kodex.stable-image-publication/v2',artifactProfile:'built',receipt,image,archiveSHA256:receipt.archiveSHA256,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID};
+  const publication={publicationPlan,publicationEvidence:[{schema:'kodex.stable-image-publication-attempt/v1',status:'INTENT',mode:'apply',planSHA256:fingerprint(publicationPlan),component:receipt.component,digest:receipt.imageDigest},{status:'PASS',phase:'REGISTRY_PUBLICATION_ONLY',nodePull:'NOT_RUN'}]};
+  await writeFile(plan.planPath,JSON.stringify(plan)+'\n',{mode:0o600});
+  await writeFile(plan.evidencePath,journal.events.map(e=>JSON.stringify(e)+'\n').join(''),{mode:0o600});
+  await writeFile(publicationPath,JSON.stringify(publication)+'\n',{mode:0o600});
+  const input={planPath:plan.planPath,evidencePath:plan.evidencePath,publicationPath,sourceSHA:f.target.sourceSHA,context:f.target.context,target:f.target,publisherImage:f.target.authorityImage};
+  const calls=[],kube=args=>{
+   calls.push(args);assert.ok(args.includes('get'));assert.equal(args.includes('create'),false);
+   const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
+   if(kind==='namespace')return JSON.stringify(name==='kube-system'?{metadata:{uid:f.target.clusterUID}}:f.observe().namespace);
+   if(kind==='replicasets,pods')return JSON.stringify(f.inventory());
+   if(kind==='configmap'&&name==='kodex-installation-profile')return JSON.stringify(f.observe().installation);
+   if(kind==='deployment'&&name==='internal-rpc-authority-publisher')return JSON.stringify(f.observe().publisher);
+   const value=[...f.stored.values()].find(r=>r.kind.toLowerCase()===kind&&r.metadata.name===name);return value?JSON.stringify(value):'';
+  };
+  const read=(extra={},resources=f.resources)=>readTelegramIntroducedReceiver({...input,...extra},kube,()=>resources);
+  const proof=await read();assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.intendedReplicas,3);assert.equal(proof.resources.length,10);
+  assert.equal(proof.deploymentUID,f.stored.get('Deployment/interaction-gateway').metadata.uid);
+  verifyTelegramIntroducedReceiver(proof,await read());assert.equal(f.state.effects,10);assert.ok(calls.length>10);
+  await assert.rejects(read({sourceSHA:'e'.repeat(40)}),/SOURCE_OR_TARGET_CHANGED/);
+  const altered=structuredClone(f.resources);altered[0].metadata.labels.injected='foreign';
+  await assert.rejects(read({},altered),/SOURCE_OR_PUBLICATION_CHANGED/);
+  const dp=f.stored.get('Deployment/interaction-gateway'),original=structuredClone(dp);
+  dp.spec.replicas=3;await assert.rejects(read(),/FOREIGN_OR_DRIFTED_RESOURCE/);Object.assign(dp,structuredClone(original));
+  dp.metadata.uid=uid(999);await assert.rejects(read(),/UID_OR_ALLOCATION_CHANGED/);Object.assign(dp,structuredClone(original));
+  const changed=structuredClone(proof);changed.resources[0].uid=uid(999);assert.throws(()=>verifyTelegramIntroducedReceiver(proof,changed),/INTRODUCTION_CHANGED/);
+  publication.publicationPlan.namespaceUID=uid(999);await writeFile(publicationPath,JSON.stringify(publication)+'\n',{mode:0o600});
+  await assert.rejects(read());assert.equal(f.state.effects,10);
+ }finally{await rm(directory,{recursive:true,force:true});}
 });

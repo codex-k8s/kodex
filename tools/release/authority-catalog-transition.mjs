@@ -1,3 +1,4 @@
+import {telegramPolicyTransition,telegramPolicyReaders,telegramPolicySource,validateTelegramPolicy} from './authority-telegram-transition.mjs';
 import { constants, openSync, closeSync, fstatSync, readFileSync, writeFileSync, fsyncSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -30,6 +31,23 @@ export function validateCatalogPolicy(raw, role, transition) {
   const rendered = renderAuthorityPolicyEnvironment(source.raw, transition.environment);
   requireValue(raw === rendered.raw, 'CATALOG_POLICY_ENVIRONMENT_BYTES_REJECTED');
   return { revision:source.revision, sha256:rendered.renderedSHA256, sourceSHA256:source.sourceSHA256 };
+}
+
+// Закрытый registry различает две конкретные поставки. Required membership
+// выводится из выбранного профиля; payload не задаёт число readers либо revision.
+export function authorityPolicyTransitionConfiguration(profile){
+ if(profile===catalogPolicyTransition)return {profile,predecessorRevision:105,desiredRevision:106,expectedReaders:16};
+ if(profile===telegramPolicyTransition)return {profile,predecessorRevision:106,desiredRevision:107,expectedReaders:telegramPolicyReaders};
+ throw Error('CATALOG_POLICY_TRANSITION_REQUIRED');
+}
+export function isPortableAuthorityTransition(profile){return profile===catalogPolicyTransition||profile===telegramPolicyTransition;}
+export function authorityPolicySource(role,profile){
+ authorityPolicyTransitionConfiguration(profile);
+ return profile===catalogPolicyTransition?catalogPolicySource(role):telegramPolicySource(role);
+}
+export function validateAuthorityPolicy(raw,role,transition){
+ authorityPolicyTransitionConfiguration(transition?.profile);
+ return transition.profile===catalogPolicyTransition?validateCatalogPolicy(raw,role,transition):validateTelegramPolicy(raw,role,transition);
 }
 
 // Приватные operator plans читаются тем же fd после NOFOLLOW/fstat, без TOCTOU reread.
@@ -116,6 +134,8 @@ export async function readCatalogMaintenance(planPath,evidencePath,kube,{traffic
 }
 
 export function verifyCatalogAdmission(maintenance,transition) {
+  const configuration=authorityPolicyTransitionConfiguration(transition?.profile);
+  if(configuration.profile===telegramPolicyTransition)requireValue(maintenance.proof?.authorityTransition===telegramPolicyTransition,'TELEGRAM_POLICY_ADMISSION_PROFILE_REQUIRED');
   const resources=transition.targetProfile.resources;
   const api=resources.find(resource=>resource.apiVersion==='apps/v1'&&resource.kind==='Deployment'&&resource.name==='control-api-gateway');
   const service=resources.find(resource=>resource.apiVersion==='v1'&&resource.kind==='Service'&&resource.name==='control-api-gateway');
@@ -162,7 +182,8 @@ export function validateCatalogProjectionEvents(events,plan) {
 
 // portableRunnerTarget уже связывает context, cluster/ns UID и installation CM UID/data.
 // Все три существующих изменяемых ресурса дополнительно должны входить в exact allowlist.
-export function readCatalogTarget(profile, context, get) {
+export function readCatalogTarget(profile, context, get, transitionProfile=catalogPolicyTransition) {
+  authorityPolicyTransitionConfiguration(transitionProfile);
   const cluster = get('namespace', 'kube-system');
   const namespace = get('namespace', 'kodex-system');
   const installation = get('configmap', 'kodex-installation-profile');
@@ -179,7 +200,7 @@ export function readCatalogTarget(profile, context, get) {
   const configMaps = names.map(name => get('configmap', name));
   const environment = readAuthorityPolicyEnvironment(deployment, configMaps, target);
   return {target, deployment, publisher, registry, configMaps,
-    transition:{profile:catalogPolicyTransition, environment, targetProfile:profile,
+    transition:{profile:transitionProfile, environment, targetProfile:profile,
       targetSHA256:target.digest, clusterUID:cluster.metadata.uid, namespaceUID:namespace.metadata.uid,
       installationUID:installation.metadata.uid, installationSHA256:fingerprint(installation.data)},
   };

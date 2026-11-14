@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
+import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
+import {verifyCatalogAdmission} from './authority-catalog-transition.mjs';
 import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
 import {planComponentAPITraffic,componentAPITrafficStep,requireClosedAPIAdmission,requireIsolatedAPIService} from './component-api-traffic.mjs';
 
@@ -124,4 +126,24 @@ test('restore требует точный свежий terminal proof106 той 
     {targetSHA256:'f'.repeat(64)},{observedAt:new Date(Date.now()-31000).toISOString()}]){
     assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
   }
+});
+
+test('107 isolation требует terminal107 и17readers,106receipt не открывает новую Service boundary',()=>{
+ const f=fixture();f.plan=planComponentAPITraffic({...f,action:'isolate',authorityTransition:telegramPolicyTransition});
+ f.journal.events[0].planSHA256=fingerprint(f.plan);
+ assert.equal(f.step().state,'ISOLATED');
+ assert.equal(JSON.parse(f.plan.afterAnnotations['kodex.dev/component-traffic-isolation']).authorityTransition,telegramPolicyTransition);
+ const admission=requireClosedAPIAdmission(f.deployment,f.resources,f.closed,f.traffic());
+ assert.equal(admission.authorityTransition,telegramPolicyTransition);
+ assert.doesNotThrow(()=>verifyCatalogAdmission({proof:admission,trafficPlanPath:'/synthetic/traffic.json',trafficEvidencePath:'/synthetic/traffic.jsonl'},
+  {profile:telegramPolicyTransition,targetProfile:f.target,targetSHA256:fingerprint(f.target)}));
+ const {authorityTransition:removed,...oldAdmission}=admission;assert.equal(removed,telegramPolicyTransition);
+ assert.throws(()=>verifyCatalogAdmission({proof:oldAdmission},{profile:telegramPolicyTransition}),/ADMISSION_PROFILE_REQUIRED/);
+ ready(f);const previous=f.traffic();
+ for(const overrides of [{},{policyRevision:107},{policyRevision:107,expectedReadbackCount:17,actualReadbackCount:16}])
+  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
+ const proof=terminal(f,{policyRevision:107,expectedReadbackCount:17,actualReadbackCount:17,registryRevision:3,snapshotRevision:7});
+ const restored=planComponentAPITraffic({...f,action:'restore',previous,terminal:proof});
+ assert.equal(restored.authorityTransition,telegramPolicyTransition);assert.deepEqual(restored.afterSpec,f.plan.beforeSpec);
+ assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:proof,authorityTransition:'MODEL_DISCOVERY_105_106'}),/AUTHORITY_PROFILE_INVALID/);
 });

@@ -263,6 +263,13 @@ async function privateJSON(path){
  }finally{await file.close();}
 }
 
+// Один strict YAML decoder обслуживает creator и107 admission: duplicate keys
+// не превращаются в альтернативную canonical конфигурацию.
+export function decodeTelegramResourceCreateSource(raw,run){
+ const script='import json,sys,yaml\nclass Unique(yaml.SafeLoader): pass\ndef mapping(loader,node,deep=False):\n out={}\n for key,value in node.value:\n  key=loader.construct_object(key,deep=deep)\n  if key in out: raise ValueError("duplicate YAML key")\n  out[key]=loader.construct_object(value,deep=deep)\n return out\nUnique.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,mapping)\nprint(json.dumps([d for d in yaml.load_all(sys.stdin,Loader=Unique) if d is not None]))\n';
+ return JSON.parse(run('python3',['-I','-c',script],raw,32<<20));
+}
+
 async function main(args){
  const phase=args.shift(),options={};
  while(args.length){const name=args.shift();fail(['--kubeconfig','--context','--target','--publication','--plan','--evidence','--approved-plan-sha'].includes(name)&&!Object.hasOwn(options,name)&&args.length,'TELEGRAM_CREATE_ARGUMENTS_INVALID');options[name]=args.shift();}
@@ -280,8 +287,7 @@ async function main(args){
  const create=(request,dry=false)=>withPrivatePatchFile(request,path=>JSON.parse(kube(['-n',namespace,'create','--validate=strict',...(dry?['--dry-run=server']:[]),'-f',path,'-o','json'])));
  const inventory=()=>JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-o','json'],undefined,32<<20));
  const raw=kube(['kustomize','deploy/k8s/profiles/web-only'],undefined,32<<20);
- const script='import json,sys,yaml\nclass Unique(yaml.SafeLoader): pass\ndef mapping(loader,node,deep=False):\n out={}\n for key,value in node.value:\n  key=loader.construct_object(key,deep=deep)\n  if key in out: raise ValueError("duplicate YAML key")\n  out[key]=loader.construct_object(value,deep=deep)\n return out\nUnique.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,mapping)\nprint(json.dumps([d for d in yaml.load_all(sys.stdin,Loader=Unique) if d is not None]))\n';
- const resources=JSON.parse(run('python3',['-I','-c',script],raw,32<<20));
+ const resources=decodeTelegramResourceCreateSource(raw,run);
  let plan;
  if(phase==='plan'){
   fail(options['--target']&&options['--evidence']&&!options['--approved-plan-sha'],'TELEGRAM_CREATE_ARGUMENTS_INVALID');

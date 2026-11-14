@@ -1,0 +1,1057 @@
+# Рабочий registry publisher для полного issuer/verifier/resolver пути.
+version: 1
+source_revision: 8
+targets:
+  - workload_id: role-image-builder
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/role-image-builder
+    namespace: kodex-system
+    service_account: role-image-builder
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-role-image-builder-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-role-image-builder-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-role-image-builder-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_role_image_builder_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-role-image-builder-issuer-postgresql
+    restore_coordination:
+      role_credential_id: role-image-builder-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: role-image-builder-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: role-image-builder-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-role-image-builder-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-role-image-builder-issuer-restore-ack
+    readback:
+      readback_id: role-image-builder-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: role-image-builder-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: role-image-builder-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: role-image-builder-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-role-image-builder-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-role-image-builder-issuer-readback-possession
+  - workload_id: image-admission
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/image-admission
+    namespace: kodex-system
+    service_account: image-admission
+    workload_generation: 1
+    startup_readback_required: false
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-image-admission-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-image-admission-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-image-admission-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_image_admission_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-image-admission-issuer-postgresql
+    restore_coordination:
+      role_credential_id: image-admission-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: image-admission-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: kodex-image-owner-protected-exact-paths
+      role_credential_secret_name: internal-rpc-authority-image-admission-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-image-admission-issuer-restore-ack
+    readback:
+      readback_id: image-admission-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: image-admission-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: image-admission-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: kodex-image-owner-protected-exact-paths
+      credential_secret_name: internal-rpc-authority-image-admission-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-image-admission-issuer-readback-possession
+  - workload_id: image-promotion
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/image-promotion
+    namespace: kodex-system
+    service_account: image-promotion
+    workload_generation: 1
+    startup_readback_required: false
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-image-promotion-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-image-promotion-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-image-promotion-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_image_promotion_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-image-promotion-issuer-postgresql
+    restore_coordination:
+      role_credential_id: image-promotion-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: image-promotion-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: kodex-image-owner-protected-exact-paths
+      role_credential_secret_name: internal-rpc-authority-image-promotion-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-image-promotion-issuer-restore-ack
+    readback:
+      readback_id: image-promotion-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: image-promotion-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: image-promotion-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: kodex-image-owner-protected-exact-paths
+      credential_secret_name: internal-rpc-authority-image-promotion-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-image-promotion-issuer-readback-possession
+  - workload_id: automation-scheduler
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/automation-scheduler
+    namespace: kodex-system
+    service_account: automation-scheduler
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-automation-scheduler-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-automation-scheduler-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-automation-scheduler-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_automation_scheduler_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-automation-scheduler-issuer-postgresql
+    restore_coordination:
+      role_credential_id: automation-scheduler-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: automation-scheduler-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: automation-scheduler-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-automation-scheduler-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-automation-scheduler-issuer-restore-ack
+    readback:
+      readback_id: automation-scheduler-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: automation-scheduler-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: automation-scheduler-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: automation-scheduler-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-automation-scheduler-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-automation-scheduler-issuer-readback-possession
+  - workload_id: secret-broker
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/secret-broker
+    namespace: kodex-system
+    service_account: secret-broker
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-secret-broker-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-secret-broker-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-secret-broker-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_secret_broker_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-secret-broker-issuer-postgresql
+    restore_coordination:
+      role_credential_id: secret-broker-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: secret-broker-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: secret-broker-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-secret-broker-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-secret-broker-issuer-restore-ack
+    readback:
+      readback_id: secret-broker-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: secret-broker-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: secret-broker-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: secret-broker-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-secret-broker-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-secret-broker-issuer-readback-possession
+  - workload_id: secret-broker
+    role: AUTHORIZATION_VERIFIER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/secret-broker
+    namespace: kodex-system
+    service_account: secret-broker
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    manifest_trust:
+      secret_name: internal-rpc-authority-secret-broker-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    database_identity:
+      login_principal: ira_secret_broker_verifier_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-secret-broker-verifier-postgresql
+    restore_coordination:
+      role_credential_id: secret-broker-verifier-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: secret-broker-verifier-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: secret-broker-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-secret-broker-verifier-restore-credential
+      ack_key_secret_name: internal-rpc-authority-secret-broker-verifier-restore-ack
+    readback:
+      readback_id: secret-broker-verifier-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: secret-broker-verifier-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: secret-broker-verifier-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_VERIFIER
+      network_policy: secret-broker-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-secret-broker-verifier-readback-credential
+      possession_key_secret_name: internal-rpc-authority-secret-broker-verifier-readback-possession
+  - workload_id: session-archive
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/session-archive
+    namespace: kodex-system
+    service_account: session-archive
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-session-archive-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-session-archive-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-session-archive-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_session_archive_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-session-archive-issuer-postgresql
+    restore_coordination:
+      role_credential_id: session-archive-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: session-archive-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: session-archive-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-session-archive-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-session-archive-issuer-restore-ack
+    readback:
+      readback_id: session-archive-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: session-archive-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: session-archive-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: session-archive-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-session-archive-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-session-archive-issuer-readback-possession
+  - workload_id: control-api-gateway
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway
+    namespace: kodex-system
+    service_account: control-api-gateway
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-control-api-gateway-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-control-api-gateway-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-control-api-gateway-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_control_api_gateway_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-control-api-gateway-issuer-postgresql
+    restore_coordination:
+      role_credential_id: control-api-gateway-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: control-api-gateway-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: control-api-gateway-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-control-api-gateway-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-control-api-gateway-issuer-restore-ack
+    readback:
+      readback_id: control-api-gateway-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: control-api-gateway-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: control-api-gateway-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: control-api-gateway-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-control-api-gateway-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-control-api-gateway-issuer-readback-possession
+  - workload_id: control-plane
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/control-plane
+    namespace: kodex-system
+    service_account: control-plane
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-control-plane-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-control-plane-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-control-plane-resolver-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_control_plane_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-control-plane-issuer-postgresql
+    restore_coordination:
+      role_credential_id: control-plane-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: control-plane-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: control-plane-internal-rpc-authority-issuer-exact-paths
+      role_credential_secret_name: internal-rpc-authority-control-plane-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-control-plane-issuer-restore-ack
+    readback:
+      readback_id: control-plane-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: control-plane-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: control-plane-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: control-plane-internal-rpc-authority-issuer-exact-paths
+      credential_secret_name: internal-rpc-authority-control-plane-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-control-plane-issuer-readback-possession
+  - workload_id: control-plane
+    role: AUTHORIZATION_VERIFIER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/control-plane
+    namespace: kodex-system
+    service_account: control-plane
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    manifest_trust:
+      secret_name: internal-rpc-authority-control-plane-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    database_identity:
+      login_principal: ira_control_plane_verifier_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-control-plane-verifier-postgresql
+    restore_coordination:
+      role_credential_id: control-plane-verifier-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: control-plane-verifier-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: control-plane-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-control-plane-verifier-restore-credential
+      ack_key_secret_name: internal-rpc-authority-control-plane-verifier-restore-ack
+    readback:
+      readback_id: control-plane-verifier-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: control-plane-verifier-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: control-plane-verifier-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_VERIFIER
+      network_policy: control-plane-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-control-plane-verifier-readback-credential
+      possession_key_secret_name: internal-rpc-authority-control-plane-verifier-readback-possession
+  - workload_id: control-plane
+    role: AUTHORITY_PROOF_RESOLVER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/control-plane
+    namespace: kodex-system
+    service_account: control-plane
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    authority_proof_private_key:
+      secret_name: internal-rpc-authority-control-plane-resolver-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/proof-signer
+    manifest_trust:
+      secret_name: internal-rpc-authority-control-plane-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-control-plane-resolver-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_control_plane_resolver_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-control-plane-resolver-postgresql
+    restore_coordination:
+      role_credential_id: control-plane-resolver-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: control-plane-resolver-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: control-plane-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-control-plane-resolver-restore-credential
+      ack_key_secret_name: internal-rpc-authority-control-plane-resolver-restore-ack
+    readback:
+      readback_id: control-plane-resolver-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: control-plane-resolver-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: control-plane-resolver-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORITY_PROOF_RESOLVER
+      network_policy: control-plane-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-control-plane-resolver-readback-credential
+      possession_key_secret_name: internal-rpc-authority-control-plane-resolver-readback-possession
+  - workload_id: integration-gateway
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/integration-gateway
+    namespace: kodex-system
+    service_account: integration-gateway
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-integration-gateway-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-integration-gateway-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-integration-gateway-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_integration_gateway_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-integration-gateway-issuer-postgresql
+    restore_coordination:
+      role_credential_id: integration-gateway-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: integration-gateway-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: integration-gateway-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-integration-gateway-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-integration-gateway-issuer-restore-ack
+    readback:
+      readback_id: integration-gateway-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: integration-gateway-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: integration-gateway-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: integration-gateway-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-integration-gateway-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-integration-gateway-issuer-readback-possession
+  - workload_id: runtime-controller
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/runtime-controller
+    namespace: kodex-system
+    service_account: runtime-controller
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-runtime-controller-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-runtime-controller-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-runtime-controller-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_runtime_controller_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-runtime-controller-issuer-postgresql
+    restore_coordination:
+      role_credential_id: runtime-controller-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: runtime-controller-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: runtime-controller-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-runtime-controller-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-runtime-controller-issuer-restore-ack
+    readback:
+      readback_id: runtime-controller-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: runtime-controller-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: runtime-controller-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: runtime-controller-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-runtime-controller-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-runtime-controller-issuer-readback-possession
+  - workload_id: stt-tts-service
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service
+    namespace: kodex-system
+    service_account: stt-tts-service
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-stt-tts-service-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-stt-tts-service-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-stt-tts-service-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_stt_tts_service_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-stt-tts-service-issuer-postgresql
+    restore_coordination:
+      role_credential_id: stt-tts-service-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: stt-tts-service-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: stt-tts-service-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-stt-tts-service-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-stt-tts-service-issuer-restore-ack
+    readback:
+      readback_id: stt-tts-service-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: stt-tts-service-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: stt-tts-service-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: stt-tts-service-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-stt-tts-service-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-stt-tts-service-issuer-readback-possession
+  - workload_id: stt-tts-service
+    role: AUTHORIZATION_VERIFIER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/stt-tts-service
+    namespace: kodex-system
+    service_account: stt-tts-service
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    manifest_trust:
+      secret_name: internal-rpc-authority-stt-tts-service-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    database_identity:
+      login_principal: ira_stt_tts_service_verifier_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-stt-tts-service-verifier-postgresql
+    restore_coordination:
+      role_credential_id: stt-tts-service-verifier-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: stt-tts-service-verifier-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: stt-tts-service-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-stt-tts-service-verifier-restore-credential
+      ack_key_secret_name: internal-rpc-authority-stt-tts-service-verifier-restore-ack
+    readback:
+      readback_id: stt-tts-service-verifier-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: stt-tts-service-verifier-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: stt-tts-service-verifier-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_VERIFIER
+      network_policy: stt-tts-service-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-stt-tts-service-verifier-readback-credential
+      possession_key_secret_name: internal-rpc-authority-stt-tts-service-verifier-readback-possession
+  - workload_id: email-bridge
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/email-bridge
+    namespace: kodex-system
+    service_account: email-bridge
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-email-bridge-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-email-bridge-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-email-bridge-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_email_bridge_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-email-bridge-issuer-postgresql
+    restore_coordination:
+      role_credential_id: email-bridge-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: email-bridge-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: email-bridge-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-email-bridge-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-email-bridge-issuer-restore-ack
+    readback:
+      readback_id: email-bridge-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: email-bridge-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: email-bridge-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: email-bridge-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-email-bridge-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-email-bridge-issuer-readback-possession
+  - workload_id: interaction-gateway
+    role: AUTHORIZATION_ISSUER
+    spiffe_id: spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway
+    namespace: kodex-system
+    service_account: interaction-gateway
+    workload_generation: 1
+    startup_readback_required: true
+    authority_snapshot:
+      secret_name: internal-rpc-authority-snapshot
+      mount_path: /var/run/config/kodex/internal-rpc-authority/snapshot
+    auth_private_key:
+      secret_name: internal-rpc-authority-interaction-gateway-issuer-key
+      mount_path: /var/run/secrets/kodex/internal-rpc-authority/issuer
+    manifest_trust:
+      secret_name: internal-rpc-authority-interaction-gateway-manifest-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/manifest-trust
+    authority_proof_trust:
+      secret_name: internal-rpc-authority-interaction-gateway-proof-trust
+      mount_path: /var/run/config/kodex/internal-rpc-authority/authority-proof-trust
+    database_identity:
+      login_principal: ira_interaction_gateway_issuer_g1
+      dsn_mount_path: /var/run/secrets/kodex/internal-rpc-authority/postgres/dsn
+      credential_generation: 1
+      credential_secret_name: internal-rpc-authority-interaction-gateway-issuer-postgresql
+    restore_coordination:
+      role_credential_id: interaction-gateway-issuer-restore-credential
+      role_credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/credential
+      ack_key_id: interaction-gateway-issuer-restore-ack
+      ack_key_generation: 1
+      ack_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/restore/ack
+      ack_public_jwk_source: SIGNED_ROLE_CREDENTIAL
+      controller_address: internal-rpc-authority-restore-controller.kodex-system.svc:8443
+      controller_tls_server_name: internal-rpc-authority-restore-controller.kodex-system.svc
+      controller_trust_bundle_id: internal-rpc-authority-restore-controller-ca
+      controller_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/restore/controller-ca.pem
+      controller_audience: urn:kodex:internal-rpc-authority-restore-controller
+      controller_full_method: /internalrpcauthority.v1.RestoreControllerService/GetRestoreDirective
+      network_policy: interaction-gateway-internal-rpc-authority-exact-paths
+      role_credential_secret_name: internal-rpc-authority-interaction-gateway-issuer-restore-credential
+      ack_key_secret_name: internal-rpc-authority-interaction-gateway-issuer-restore-ack
+    readback:
+      readback_id: interaction-gateway-issuer-readback
+      intent_revision: 1
+      material_generation: 1
+      credential_id: interaction-gateway-issuer-readback-credential
+      credential_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/credential
+      credential_protected_type: kodex-internal-rpc-readback-credential+jws
+      credential_schema: contracts/authorization/v1/readback-credential.schema.json
+      possession_key_id: interaction-gateway-issuer-readback-key
+      possession_key_generation: 1
+      possession_key_mount_path: /var/run/secrets/kodex/internal-rpc-authority/readback/possession
+      possession_public_jwk_source: SIGNED_NORMAL_READBACK_CREDENTIAL
+      attestor_address: internal-rpc-authority-readback-attestor.kodex-system.svc:8443
+      attestor_tls_server_name: internal-rpc-authority-readback-attestor.kodex-system.svc
+      attestor_trust_bundle_id: internal-rpc-authority-readback-attestor-ca
+      attestor_ca_mount_path: /var/run/config/kodex/internal-rpc-authority/readback/attestor-ca.pem
+      attestor_audience: urn:kodex:internal-rpc-authority-readback-attestor
+      attestor_challenge_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/IssueAttestationChallenge
+      attestor_full_method: /internalrpcauthority.v1.AuthorityReadbackAttestorService/AttestServedState
+      expected_role: AUTHORIZATION_ISSUER
+      network_policy: interaction-gateway-internal-rpc-authority-exact-paths
+      credential_secret_name: internal-rpc-authority-interaction-gateway-issuer-readback-credential
+      possession_key_secret_name: internal-rpc-authority-interaction-gateway-issuer-readback-possession

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,copyFileSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {main as rotationMain,readCatalogAuthorityTerminal,verifyCatalogAuthorityJobPod} from './authority-rotation-transition.mjs';
 import {main as projectionMain} from './control-plane-policy-projection.mjs';
 import {fingerprint} from './scoped-release.mjs';
+import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
 import {catalogPolicyTransition} from './authority-catalog-transition.mjs';
 import {fixture,uid,prepareAdmission} from './fixtures/authority-catalog-synthetic.mjs';
 
@@ -93,7 +94,13 @@ function cliFixture(t,{revision='a'.repeat(40)}={}){
     if(argv[0]==='logs')return jobLogs.get(argv[1].replace('job/',''))??'';
     throw new Error('UNEXPECTED_SYNTHETIC_EFFECT');
   };
-  const source=fileURLToPath(new URL('../..',import.meta.url)).replace(/\/$/,'');
+  // Frozen106 fixture не читает current107 source: старый closed consumer
+  // воспроизводится на собственных точных policy/registry/template bytes.
+  const source=join(directory,'source106');
+  for(const relative of ['deploy/k8s/base/internal-rpc-authority-data','deploy/k8s/base/internal-rpc-authority-publisher'])mkdirSync(join(source,relative),{recursive:true});
+  copyFileSync(new URL('../../deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml'));
+  copyFileSync(new URL('./fixtures/authority-policy-revision106.json',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'));
+  copyFileSync(new URL('./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml'));
   const args=()=>['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,
     '--kubeconfig',kubeconfig,'--portable-target',profile,'--source',source,'--revision',revision,'--action','status','--output',output];
   const kube=argv=>run('kubectl',[...expectedPrefix,...argv]);
@@ -271,7 +278,7 @@ else if(patch>=0){
   const flags=['--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--closed-plan',f.admission.paths.planPath,'--closed-evidence',f.admission.paths.evidencePath,
     '--isolation-plan',f.admission.paths.trafficPlanPath,'--isolation-evidence',f.admission.paths.trafficEvidencePath,
     '--authority-plan',f.output,'--authority-evidence',f.evidence,'--authority-status-plan',f.freshOutput,'--authority-status-evidence',f.freshEvidence];
-  const run=args=>spawnSync(process.execPath,[join(f.source,'tools/release/component-api-traffic.mjs'),...args],{encoding:'utf8',timeout:30000,
+  const run=args=>spawnSync(process.execPath,[fileURLToPath(new URL('./component-api-traffic.mjs',import.meta.url)),...args],{encoding:'utf8',timeout:30000,
     env:{...process.env,PATH:bin+':'+process.env.PATH}});
   let result=run(['plan',...flags,'--target',f.profilePath,'--action','restore','--plan',restorePlan]);
   assert.equal(result.status,0,result.stderr);
@@ -285,4 +292,13 @@ else if(patch>=0){
   result=run(['status',...flags,'--plan',restorePlan,'--evidence',restoreEvidence]);assert.equal(result.status,0,result.stderr);
   result=run(['apply',...flags,'--plan',restorePlan,'--evidence',restoreEvidence,'--approved-plan-sha',fingerprint(plan)]);assert.equal(result.status,0,result.stderr);
   observed=JSON.parse(readFileSync(statePath,'utf8'));assert.equal(observed.effects,1);assert.equal(observed.calls.filter(args=>args.includes('logs')).length,priorLogs);
+});
+
+// Новый issuer не может появиться одним registry CAS без собственной dormant
+// create lineage. Ошибка возникает до server dry-run и любых mutation.
+test('107 public rotation требует introduced create/publication proof до registry CAS',async t=>{
+ const f=cliFixture(t),args=f.args();args[args.indexOf('--policy-transition')+1]=telegramPolicyTransition;
+ args[args.indexOf('--action')+1]='rotate';const admission=prepareAdmission(f);args.push(...admission.flags);
+ await assert.rejects(rotationMain(args,f.io),/TELEGRAM_INTRODUCTION_REQUIRED/);
+ assert.equal(f.effects.length,0);assert.equal(f.calls.some(argv=>['replace','patch'].includes(argv[0])),false);
 });

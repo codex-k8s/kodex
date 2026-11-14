@@ -8,7 +8,8 @@ import { fingerprint } from "./scoped-release.mjs";
 import { inspectSource } from "./application-source.mjs";
 import { validateRotationPolicy } from "./authority-rotation-transition.mjs";
 import { readAuthorityPolicyEnvironment, renderAuthorityPolicyEnvironment, verifyAuthorityPolicyEnvironmentReadback } from "./authority-policy-environment.mjs";
-import { catalogPolicyTransition, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, openCatalogProjectionJournal, validateCatalogProjectionEvents, readAuthorityPrivateText, parseAuthorityPrivateJSON, writeAuthorityPrivatePlan } from './authority-catalog-transition.mjs';
+import { telegramPolicyTransition } from './authority-telegram-transition.mjs';
+import { catalogPolicyTransition, validateCatalogPolicy, isPortableAuthorityTransition, validateAuthorityPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, openCatalogProjectionJournal, validateCatalogProjectionEvents, readAuthorityPrivateText, parseAuthorityPrivateJSON, writeAuthorityPrivatePlan } from './authority-catalog-transition.mjs';
 
 const namespace="kodex-system";
 const policyEnv="CONTROL_PLANE_AUTHORITY_POLICY_FILE";
@@ -60,15 +61,15 @@ export function projectionPatch(deployment,plan){
     {op:"add",path:`/spec/template/spec/containers/${index}/volumeMounts`,value:[...(app.volumeMounts??[]),{name:volumeName,mountPath,readOnly:true}]}];
 }
 
-// Обновление105→106 сохраняет прежнюю immutable CM; заменяется только pointer CP.
-// Registry должен уже обслуживать exact environment-rendered106 того же installation target.
+// Закрытое обновление105→106 либо106→107 сохраняет прежнюю immutable CM.
+// Registry уже обслуживает exact desired policy; меняется лишь pointer CP.
 export function planCatalogPolicyProjection(deployment,registry,configMaps,{transition,target,existingProjection}) {
   requireValue(target?.allows(deployment)&&target.allows(registry),'CATALOG_AUTHORITY_TARGET_REJECTED');
   const environment=readAuthorityPolicyEnvironment(deployment,configMaps,target);
   const candidate=structuredClone(transition);candidate.environment=environment;
   verifyCatalogTransition(transition,candidate);
   const raw=registry.data?.['authority-policy.json'];
-  const policy=validateCatalogPolicy(raw,'desired',transition);
+  const policy=validateAuthorityPolicy(raw,'desired',transition);
   const spec=deployment.spec,app=spec.template.spec.containers.find(c=>c.name==='control-plane');
   requireValue(spec.paused!==true&&Number.isSafeInteger(spec.replicas)&&spec.replicas>0&&
     spec.strategy?.type==='RollingUpdate'&&spec.strategy.rollingUpdate.maxUnavailable===0&&
@@ -89,7 +90,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
       !existingProjection.metadata.deletionTimestamp&&existingProjection.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&
       fingerprint(volumes[0])===fingerprint({name:volumeName,configMap:{name:existingProjection.metadata.name,defaultMode:292}}),
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
-    const previous=validateCatalogPolicy(existingProjection.data?.['policy.json'],'predecessor',transition);
+    const previous=validateAuthorityPolicy(existingProjection.data?.['policy.json'],'predecessor',transition);
     requireValue(Object.keys(existingProjection.data).join(',')==='policy.json'&&
       existingProjection.metadata.name===`control-plane-policy-projection-${previous.sha256.slice(0,16)}`,
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
@@ -106,7 +107,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
   }
   const projection={apiVersion:'v1',kind:'ConfigMap',metadata:{name:`control-plane-policy-projection-${policy.sha256.slice(0,16)}`,namespace,
-    labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/policy-projection-issue':'2139'}},immutable:true,data:{'policy.json':raw}};
+    labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/policy-projection-issue':transition.profile===telegramPolicyTransition?'2143':'2139'}},immutable:true,data:{'policy.json':raw}};
   const desired={
     volumes:[...(spec.template.spec.volumes??[]).filter(v=>v.name!==volumeName),{name:volumeName,configMap:{name:projection.metadata.name,defaultMode:292}}],
     env:[...(app.env??[]).filter(e=>e.name!==policyEnv),{name:policyEnv,value:`${mountPath}/policy.json`}],
@@ -142,8 +143,8 @@ export function main(argv=process.argv.slice(2),io={}){
   for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
   const saved=options['--plan']?readAuthorityPrivateJSON(options['--plan']):undefined;
   const profile=options['--policy-transition']??saved?.policyTransition?.profile;
-  requireValue(profile===undefined||profile===catalogPolicyTransition,'CATALOG_POLICY_TRANSITION_REQUIRED');
-  const catalog=profile===catalogPolicyTransition;
+  requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
+  const catalog=isPortableAuthorityTransition(profile);
   requireValue(["plan","apply","observe",...(catalog?['resume']:[])].includes(command)&&typeof options["--context"]==="string"&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options["--context"])&&(catalog||!/prod/i.test(options["--context"])),"STAGING_CONTEXT_REQUIRED");
   const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
   const source=resolve(fileURLToPath(new URL("../..",import.meta.url))),revision=(io.inspectSource??inspectSource)(source).revision;
@@ -192,7 +193,8 @@ export function main(argv=process.argv.slice(2),io={}){
 
 async function catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved}) {
   const profile=command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):saved?.policyTransition?.targetProfile;
-  const current=readCatalogTarget(profile,options['--context'],get);
+  const transitionProfile=options['--policy-transition']??saved?.policyTransition?.profile;
+  const current=readCatalogTarget(profile,options['--context'],get,transitionProfile);
   const maintenancePaths=command==='plan'?{planPath:options['--maintenance-plan'],evidencePath:options['--maintenance-evidence'],
     trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']}:saved.maintenance;
   const maintenance=command==='observe'?saved.maintenance:await readCatalogMaintenance(maintenancePaths.planPath,maintenancePaths.evidencePath,kube,maintenancePaths);
@@ -216,7 +218,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
   const plan=saved;
   requireValue(current.registry.metadata.uid===plan.registry.uid&&current.registry.metadata.resourceVersion===plan.registry.resourceVersion&&
     fingerprint(current.registry.data)===plan.registry.dataSHA256,'POLICY_PROJECTION_REGISTRY_DRIFT');
-  validateCatalogPolicy(current.registry.data['authority-policy.json'],'desired',plan.policyTransition);
+  validateAuthorityPolicy(current.registry.data['authority-policy.json'],'desired',plan.policyTransition);
   const changed=current.deployment.metadata.uid===plan.deploymentUID&&fingerprint(current.deployment.spec)===plan.afterSpecSHA256;
   if(!changed) {
     const regenerated=planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:plan.policyTransition,target:current.target,existingProjection});
@@ -244,7 +246,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
     const ack=journal.events.find(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION');
     requireValue(!ack||destination?.metadata.uid===ack.uid,'POLICY_PROJECTION_CONFIGMAP_REPLACED');
     if(!destination) {
-      const fresh=readCatalogTarget(profile,options['--context'],get);verifyCatalogTransition(plan.policyTransition,fresh.transition);
+      const fresh=readCatalogTarget(profile,options['--context'],get,transitionProfile);verifyCatalogTransition(plan.policyTransition,fresh.transition);
       requireValue(fingerprint(await readCatalogMaintenance(maintenance.planPath,maintenance.evidencePath,kube,maintenance))===fingerprint(maintenance),'POLICY_PROJECTION_MAINTENANCE_DRIFT');
       journal.append({status:'INTENT',operation:'CREATE_PROJECTION'});
       try{kube(['create','-f','-'],JSON.stringify(plan.projection));}catch{journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION'});}
@@ -253,7 +255,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
     requireValue(projectionMatches(destination,plan.projection)&&destination.metadata.uid,'POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED');
     journal.append({status:'ACK',operation:'CREATE_PROJECTION',uid:destination.metadata.uid});
     if(!changed) {
-      const fresh=readCatalogTarget(profile,options['--context'],get);verifyCatalogTransition(plan.policyTransition,fresh.transition);
+      const fresh=readCatalogTarget(profile,options['--context'],get,transitionProfile);verifyCatalogTransition(plan.policyTransition,fresh.transition);
       requireValue(fingerprint(await readCatalogMaintenance(maintenance.planPath,maintenance.evidencePath,kube,maintenance))===fingerprint(maintenance),'POLICY_PROJECTION_MAINTENANCE_DRIFT');
       requireValue(fresh.registry.metadata.resourceVersion===plan.registry.resourceVersion&&fingerprint(fresh.registry.data)===plan.registry.dataSHA256,'POLICY_PROJECTION_REGISTRY_DRIFT');
       const projectionReadback=readDestination();
