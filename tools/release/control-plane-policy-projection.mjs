@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {readTelegramStagedPolicyMigration,telegramStagedPolicyProtocol} from './telegram-cp-policy.mjs';
 import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
+import {resolveTelegramExecutorSource} from './telegram-executor-source.mjs';
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -147,7 +148,7 @@ export function withPrivatePatchFile(patch,apply){
 
 export function main(argv=process.argv.slice(2),io={}){
   const [command,...args]=argv,options={};
-  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo","--migration-plan","--migration-evidence","--authority-plan","--authority-evidence","--authority-status-plan","--authority-status-evidence"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
+  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo","--migration-plan","--migration-evidence","--authority-plan","--authority-evidence","--authority-status-plan","--authority-status-evidence","--application-source","--application-revision"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
   const saved=options['--plan']?readAuthorityPrivateJSON(options['--plan']):undefined;
   const profile=options['--policy-transition']??saved?.policyTransition?.profile;
   requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
@@ -162,11 +163,17 @@ export function main(argv=process.argv.slice(2),io={}){
 
   requireValue(["plan","apply","observe",...(catalog?['resume']:[])].includes(command)&&typeof options["--context"]==="string"&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options["--context"])&&(catalog||!/prod/i.test(options["--context"])),"STAGING_CONTEXT_REQUIRED");
   const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
-  const source=resolve(fileURLToPath(new URL("../..",import.meta.url))),revision=(io.inspectSource??inspectSource)(source).revision;
+  const executorSource=resolve(fileURLToPath(new URL("../..",import.meta.url)));
+  const selected=options['--application-source']!==undefined||options['--application-revision']!==undefined;
+  requireValue(!selected||command==='plan'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
+  requireValue(!saved?.sourceCompatibility||profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
+  const sourceCompatibility=selected||saved?.sourceCompatibility?resolveTelegramExecutorSource(executorSource,
+    saved?.sourceCompatibility?{saved:saved.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision']}):undefined;
+  const source=sourceCompatibility?.source??executorSource,revision=sourceCompatibility?.revision??(io.inspectSource??inspectSource)(source).revision;
   const kube=(args,input)=>{try{return (io.execFileSync??execFileSync)(options["--k3s-sudo"]?"sudo":"kubectl",[...(options["--k3s-sudo"]?["-n","k3s","kubectl"]:[]),...(kubeconfig?['--kubeconfig',kubeconfig]:[]),"--context",options["--context"],"--request-timeout=30s",...args],{input,encoding:"utf8",stdio:["pipe","pipe","pipe"],timeout:35000,maxBuffer:8<<20});}catch{throw new Error("KUBERNETES_OPERATION_FAILED_READBACK_REQUIRED");}};
   const get=(kind,name)=>JSON.parse(kube(["-n",namespace,"get",kind,name,"-o","json"]));
   const ns=get("namespace",namespace);
-  if(catalog)return catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved});
+  if(catalog)return catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved,sourceCompatibility});
   requireValue(ns.metadata?.uid&&ns.metadata.labels?.["kodex.dev/environment"]==="staging","STAGING_NAMESPACE_REQUIRED");
   const deployment=get("deployment","control-plane");
   const registry=get("configmap","internal-rpc-authority-publisher-target-registry");
@@ -212,7 +219,7 @@ export function main(argv=process.argv.slice(2),io={}){
   process.stdout.write(JSON.stringify({status:"APPLIED",target:"control-plane",policySHA256:plan.renderedPolicySHA256})+"\n");
 }
 
-async function catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved}) {
+async function catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved,sourceCompatibility}) {
   const profile=command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):saved?.policyTransition?.targetProfile;
   const transitionProfile=options['--policy-transition']??saved?.policyTransition?.profile;
   const current=readCatalogTarget(profile,options['--context'],get,transitionProfile);
@@ -256,7 +263,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
   if(command==='plan') {
     requireValue(options['--output']&&!options['--confirm'],'INVALID_PLAN_ARGUMENTS');
     const plan={...planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:current.transition,target:current.target,existingProjection,telegramStage}),
-      ...(telegramAuthority?{telegramAuthority}:{}),maintenance,source,revision,kubeconfig,context:options['--context'],namespaceUID:ns.metadata.uid};
+      ...(telegramAuthority?{telegramAuthority}:{}),...(sourceCompatibility?{sourceCompatibility}:{}),maintenance,source,revision,kubeconfig,context:options['--context'],namespaceUID:ns.metadata.uid};
     writeAuthorityPrivatePlan(options['--output'],plan);
     process.stdout.write(JSON.stringify({status:'PLANNED',revision,policySHA256:plan.renderedPolicySHA256,target:'control-plane'})+'\n');
     return;
@@ -268,7 +275,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
   const changed=current.deployment.metadata.uid===plan.deploymentUID&&fingerprint(current.deployment.spec)===plan.afterSpecSHA256;
   if(!changed) {
     const regenerated=planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:plan.policyTransition,target:current.target,existingProjection,telegramStage});
-    const extra=new Set(['maintenance','source','revision','kubeconfig','context','namespaceUID','telegramAuthority']);
+    const extra=new Set(['maintenance','source','revision','kubeconfig','context','namespaceUID','telegramAuthority','sourceCompatibility']);
     requireValue(fingerprint(regenerated)===fingerprint(Object.fromEntries(Object.entries(plan).filter(([key])=>!extra.has(key)))),'POLICY_PROJECTION_PLAN_DRIFT');
   }
   requireValue(options['--evidence'],'POLICY_PROJECTION_EVIDENCE_REQUIRED');

@@ -118,7 +118,9 @@ test('rotation CAS changes only registry and publisher pod template',()=>{
 });
 
 test('canonical registry advances live revision with exactly base web-only targets and policy 77',()=>{
- const canonical=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8'),live=canonical.replace('source_revision: 7','source_revision: 18');
+ const canonical=readFileSync(new URL('./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),'utf8'),live=canonical.replace('source_revision: 7','source_revision: 18');
+ const current=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8');
+ assert.throws(()=>deriveCanonicalRegistryAdvance(live,current),/EXACT_BASE_ROTATION_REGISTRY_REQUIRED/);
  const next=deriveCanonicalRegistryAdvance(live,canonical);assert.equal(next.identity.sourceRevision,19);assert.equal(canonicalRegistryMatches(next.raw,canonical),true);assert.equal(next.raw.includes('interaction-gateway'),false);
  const policy=readFileSync(rotationPolicyFixture,'utf8');assert.deepEqual(validateRotationPolicy(policy),{revision:77,sha256:'763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504'});
  const binding=JSON.parse(policy).policy.operation_bindings.filter(value=>value.operation_id==='platform.command.integration-definitions.create-draft');assert.equal(binding.length,1);assert.equal(binding[0].project_required,false);

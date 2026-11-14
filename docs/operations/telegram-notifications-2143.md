@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.15
+version: 1.0.16
 updated: 2026-11-14
 ---
 
@@ -338,6 +338,44 @@ RETIRE/status→Service restore→повторный final inspect/resume без
 ещё изолированного Service. Для последующего read/rejoin требуются exact own
 `--api-restore-plan/evidence`, terminal107 той же operation и текущий полный
 serving inventory; это не выдаёт нового права открыть Service.
+
+### Узкая API boundary и исправленный delivery executor
+
+Для107 maintenance target может содержать только Deployment и Service
+`control-api-gateway` либо прежний полный authority target из пяти ресурсов.
+Во втором случае сохраняется прежний exact hash. В первом admission отдельно
+проверяет совпадение всех installation/context/cluster/namespace seals и обеих
+API UID с полным authority target. Произвольное подмножество, дополнительный
+ресурс либо другой UID отказаны. Исходные close/isolate bytes, их hashes и
+maintenance ID не переписываются. Terminal proof содержит API `targetSHA256`
+и отдельный `authorityTargetSHA256`; final read/rejoin проверяет обе границы.
+Исторический106 не получает этот альтернативный scope.
+
+Если исправление release CLI понадобилось после остановки, не нужно менять
+source уже опубликованных images или повторять DDL. Новый проверенный executor
+должен содержать frozen application SHA как реального ancestor и не менять
+application, config, schema, SQL или закреплённые authority policy. Допустимы
+лишь release tools, документация и Makefile. Оба checkout должны быть чистыми.
+Для новых `control-plane-policy-projection.mjs plan` и
+`component-api-traffic.mjs plan --action restore --policy-transition
+TELEGRAM_NOTIFICATIONS_106_107` явно передаются `--application-source` и
+`--application-revision`. Новый immutable plan сохраняет оба source path/SHA;
+apply/resume/status снова проверяют эти pins и отсутствие drift.
+
+| Переход | Неизменная граница и результат |
+| --- | --- |
+| Уже выполненные close/isolate/DDL | Только исходные планы, журналы, UID и hashes; нет rebind, нового stop или DDL |
+| Authority rotate/status | Новый executor читает explicit frozen `--source/--revision`; API admission сопоставляется с полным authority scope |
+| CP projection | Новый план отдельно закрепляет executor; public migration inspect и fresh DELIVER обязательны до CAS; CP остаётся0 |
+| API OPEN | Исполняется CLI исходного application checkout, поэтому source OPEN совпадает с migration/image source |
+| Service restore | Новый план закрепляет executor и frozen application source; свежий RETIRE, точный API scope и ready inventory обязательны |
+| Final migration inspect/resume | Новый release CLI читает прежний migration plan и новые projection/restore receipts; прежние journals не переименовываются |
+
+`make test-telegram-frozen-delivery` имеет отдельный бюджет900s: полный CLI
+сценарий с узким API target, другим executor path/SHA и проверкой неизменных
+close/isolate файлов. `make test-telegram-deployment` сохраняет полный target
+и единый source как отдельную регрессию. Оба используют synthetic cluster/SQL
+transport; это не installed E2E и не доказательство live readiness.
 
 ## Квалификация
 
