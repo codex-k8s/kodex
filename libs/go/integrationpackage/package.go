@@ -722,7 +722,7 @@ func emailMailboxApproval(result *Package, capability Capability) bool {
 func validate(result *Package) error {
 	if result.APIVersion != APIVersion || result.Kind != Kind || !oneOf(result.Metadata.Origin, Origin, OriginUI, OriginGit) ||
 		!validKey(result.Metadata.Key) || !versionPattern.MatchString(result.Metadata.Version) || len(result.Metadata.Version) > 32 ||
-		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
+		result.Spec.Name == "" || !validDisplayText(result.Spec.Name, 120) || result.Spec.Description == "" || !validDisplayText(result.Spec.Description, 500) ||
 		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) || ValidateAdapterBinding(*result) != nil ||
 		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
 		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 64 {
@@ -774,8 +774,8 @@ func validate(result *Package) error {
 	capabilityOperations := map[string]Capability{}
 	openAPIOperationIDs := map[string]struct{}{}
 	for _, capability := range result.Spec.Capabilities {
-		if !validKey(capability.Key) || len(capability.Name) == 0 || len(capability.Name) > 120 ||
-			len(capability.Description) == 0 || len(capability.Description) > 500 || !validKey(capability.Operation) ||
+		if !validKey(capability.Key) || capability.Name == "" || !validDisplayText(capability.Name, 120) ||
+			capability.Description == "" || !validDisplayText(capability.Description, 500) || !validKey(capability.Operation) ||
 			!validRisk(capability.Risk) || !validCapabilityApprovalPolicies(result, capability) ||
 			!validResourceKind(capability.ResourceScope.Kind) ||
 			len(capability.ResourceScope.ConnectionFields) == 0 || len(capability.ResourceScope.ConnectionFields) > 8 ||
@@ -847,7 +847,7 @@ func validate(result *Package) error {
 func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
-		if !validKey(field.Key) || len(field.Label) > 120 || len(field.Help) > 500 || strings.ContainsAny(field.Label+field.Help, "\x00\r\n") || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
+		if !validKey(field.Key) || !validDisplayText(field.Label, 120) || !validDisplayText(field.Help, 500) || strings.ContainsAny(field.Label+field.Help, "\x00\r\n") || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			(field.AllowEmpty && (field.Type != "STRING" || field.Format != "PLAIN" || len(field.AllowedValues) > 0)) ||
 			field.MaximumLength < 0 || field.MaximumLength > maxFieldLength || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||
