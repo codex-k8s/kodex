@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import {canonicalAuthorityReadbackContract} from './authority-readback-targets.mjs';
 import {execFileSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {fingerprint,withPrivatePatchFile} from './scoped-release.mjs';
+import {catalogPolicyTransition,authorityPolicyTransitionConfiguration,authorityPolicyReadbackContract} from './authority-catalog-transition.mjs';
+import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
 import {readPrivateJSON} from '../../infra/public-ingress/edge-plan.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
@@ -21,7 +22,7 @@ const requireValue=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
 const header=plan=>({schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID});
 const apiHeader=plan=>({schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID});
-const marker=plan=>JSON.stringify({maintenanceID:plan.maintenanceID,closePlanSHA256:plan.closePlanSHA256});
+const marker=plan=>JSON.stringify({maintenanceID:plan.maintenanceID,closePlanSHA256:plan.closePlanSHA256,...(plan.authorityTransition?{authorityTransition:plan.authorityTransition}:{})});
 const identity=(service,plan)=>service?.apiVersion==='v1'&&service.kind==='Service'&&service.metadata?.name===name&&
   service.metadata.namespace==='kodex-system'&&service.metadata.uid===plan.serviceUID&&!service.metadata.deletionTimestamp;
 // Исторический source остаётся exact pin. Только routine observer допускает
@@ -54,8 +55,9 @@ function validateTerminal(proof,plan,now=Date.now()){
   if(plan.migrationRestoreProfile)return validateMigrationAPITerminal(proof,plan,now);
   const digest=v=>/^[a-f0-9]{64}$/.test(v??''),uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(proof&&typeof proof==='object'&&!Array.isArray(proof),'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
-  const {terminalSHA256,...body}=proof,observed=Date.parse(proof.observedAt),readers=canonicalAuthorityReadbackContract();
-  requireValue(proof.policyRevision===106&&uuid(proof.operationID)&&proof.targetSHA256===fingerprint(plan.target)&&
+  const {terminalSHA256,...body}=proof,observed=Date.parse(proof.observedAt),readers=authorityPolicyReadbackContract(plan.authorityTransition??catalogPolicyTransition);
+  const configuration=authorityPolicyTransitionConfiguration(plan.authorityTransition??catalogPolicyTransition);
+  requireValue(proof.policyRevision===configuration.desiredRevision&&uuid(proof.operationID)&&proof.targetSHA256===fingerprint(plan.target)&&
     proof.trafficPlanSHA256===plan.previousIsolationSHA256&&proof.serviceUID===plan.serviceUID&&
     Object.entries(readers).every(([key,value])=>proof[key]===value)&&Number.isSafeInteger(proof.actualReadbackCount)&&proof.actualReadbackCount>=readers.expectedReadbackCount&&proof.actualReadbackCount<=384&&
     Number.isSafeInteger(proof.registryRevision)&&proof.registryRevision>0&&Number.isSafeInteger(proof.snapshotRevision)&&proof.snapshotRevision>0&&
@@ -64,6 +66,8 @@ function validateTerminal(proof,plan,now=Date.now()){
     'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
 }
 function validate(plan){
+  requireValue(!(plan?.migrationRestore||plan?.migrationRestoreProfile)||plan.authorityTransition===undefined,'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
+  requireValue(plan?.authorityTransition===undefined||plan.authorityTransition===telegramPolicyTransition,'COMPONENT_API_TRAFFIC_AUTHORITY_PROFILE_INVALID');
   const uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(plan?.schema==='kodex.component-api-traffic-plan/v1'&&['isolate','restore'].includes(plan.action)&&
     /^[a-f0-9]{40}$/.test(plan.sourceSHA??'')&&uuid(plan.maintenanceID)&&uuid(plan.serviceUID)&&/^[a-f0-9]{64}$/.test(plan.closePlanSHA256??'')&&
@@ -119,9 +123,14 @@ export function requireClosedAPIAdmission(deployment,resources,closed,traffic){
     same(plan.target,closed.plan.target)&&deployment?.metadata?.uid===proof.deploymentUID&&deployment.metadata.name===name&&
     deployment.metadata.namespace==='kodex-system'&&!deployment.metadata.deletionTimestamp,'COMPONENT_API_TRAFFIC_SCOPE_INVALID');
   confirmedIsolation(plan,events);requireIsolatedAPIService(service,slices,pods,plan);
-  return {...proof,trafficPlanSHA256:fingerprint(plan),serviceUID:plan.serviceUID};
+  return {...proof,trafficPlanSHA256:fingerprint(plan),serviceUID:plan.serviceUID,...(plan.authorityTransition?{authorityTransition:plan.authorityTransition}:{})};
 }
-export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityExecutorSHA,authoritySourceEquivalentSHA,migrationRestore,migrationRestoreProfile,migrationSourceSHA}){
+export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityTransition,authorityExecutorSHA,authoritySourceEquivalentSHA,migrationRestore,migrationRestoreProfile,migrationSourceSHA}){
+  const profile=authorityTransition??previous?.plan?.authorityTransition??catalogPolicyTransition;
+  authorityPolicyTransitionConfiguration(profile);
+  requireValue(!(migrationRestore||migrationRestoreProfile)||profile===catalogPolicyTransition,
+    'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
+  requireValue(action!=='restore'||profile===(previous?.plan?.authorityTransition??catalogPolicyTransition),'COMPONENT_API_TRAFFIC_AUTHORITY_PROFILE_INVALID');
   const scope=portableRunnerTarget(target,observed),proof=confirmedAPIMaintenance(closed);
   requireValue(scope.allows(service)&&scope.allows(deployment)&&same(target,closed.plan.target)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&
     ['isolate','restore'].includes(action),'COMPONENT_API_TRAFFIC_SCOPE_INVALID');
@@ -135,6 +144,7 @@ export function planComponentAPITraffic({service,deployment,resources,target,obs
       'COMPONENT_API_TRAFFIC_READY_API_REQUIRED');
   }
   const plan={schema:'kodex.component-api-traffic-plan/v1',action,sourceSHA,target,maintenanceID:proof.maintenanceID,closePlanSHA256:proof.planSHA256,
+    ...(profile===telegramPolicyTransition?{authorityTransition:profile}:{}),
     serviceUID:service.metadata.uid,beforeResourceVersion:service.metadata.resourceVersion,beforeSpec:structuredClone(service.spec),afterSpec:structuredClone(service.spec),
     beforeAnnotations:{...service.metadata.annotations},afterAnnotations:{...service.metadata.annotations},
     ...(authoritySourceEquivalentSHA?{authoritySourceEquivalentSHA}:{}),
@@ -187,8 +197,7 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--authority-executor-sha','--authority-source-equivalent-sha',
-    '--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--policy-transition','--authority-executor-sha','--authority-source-equivalent-sha','--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
@@ -258,14 +267,16 @@ async function main(args){
     }
     requireValue(['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'].every(k=>options[k]),
       'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
-    const {readCatalogAuthorityTerminal}=await import('./authority-rotation-transition.mjs');
-    requireValue(typeof readCatalogAuthorityTerminal==='function','COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
+    const {readCatalogAuthorityTerminal,readTelegramAuthorityTerminal}=await import('./authority-rotation-transition.mjs');
+    const profile=previous?.plan?.authorityTransition??catalogPolicyTransition;
+    const readTerminal=profile===telegramPolicyTransition?readTelegramAuthorityTerminal:readCatalogAuthorityTerminal;
+    requireValue(typeof readTerminal==='function','COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
     const plan=readAuthorityPrivateJSON(options['--authority-plan']),freshPlan=readAuthorityPrivateJSON(options['--authority-status-plan']);
-    requireValue(plan.context===options['--context']&&plan.kubeconfig===options['--kubeconfig'],
+    requireValue(plan.policyTransition?.profile===profile&&plan.context===options['--context']&&plan.kubeconfig===options['--kubeconfig'],
       'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
     verifyAuthorityObserverSource(plan.revision,sourceSHA,authorityExecutorSHA,
       (old,current)=>run('git',['merge-base','--is-ancestor',old,current]));
-    return readCatalogAuthorityTerminal({plan,freshPlan,
+    return readTerminal({plan,freshPlan,
       events:readAuthorityPrivateText(options['--authority-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
       freshEvents:readAuthorityPrivateText(options['--authority-status-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
       // Getter сам читает актуальный admission и сверяет с исходным proof.
@@ -274,8 +285,7 @@ async function main(args){
   };
   const build=(target,action)=>{
     const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
-      target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,
-      authoritySourceEquivalentSHA,
+      target,observed,sourceSHA,action,closed,authorityTransition:options['--policy-transition'],previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,authoritySourceEquivalentSHA,
       ...(action==='isolate'?{migrationRestore:routineIsolation}:migrationProfile?{migrationRestoreProfile:migrationProfile,migrationSourceSHA}:{})});
   };
   if(phase==='plan'){
@@ -291,8 +301,8 @@ async function main(args){
     console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
   }
   requireValue(options['--evidence']&&!options['--action']&&!options['--target'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
-  const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;
-  authoritySourceEquivalentSHA=plan.authoritySourceEquivalentSHA;
+  const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;authoritySourceEquivalentSHA=plan.authoritySourceEquivalentSHA;
+  requireValue(!options['--policy-transition']||options['--policy-transition']===(plan.authorityTransition??catalogPolicyTransition),'COMPONENT_API_TRAFFIC_AUTHORITY_PROFILE_INVALID');
   migrationProfile=plan.migrationRestore?.profile??plan.migrationRestoreProfile;migrationSourceSHA=plan.migrationSourceSHA;
   routineIsolation=plan.migrationRestore;
   requireValue(migrationProfile&&plan.action==='restore'&&phase==='apply'||!['--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].some(key=>options[key]),

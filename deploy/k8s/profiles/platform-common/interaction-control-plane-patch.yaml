@@ -8,6 +8,11 @@ spec:
       containers:
         - name: control-plane
           env:
+            - name: INTERACTION_PUBLIC_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: kodex-platform-endpoints
+                  key: publicOrigin
             - name: CONTROL_PLANE_INTERACTION_GRANT_TRUST_FILE
               value: /var/run/config/kodex/control-plane/interaction-grant-trust/interaction-gateway.platform-worker.public.jwk
           volumeMounts:

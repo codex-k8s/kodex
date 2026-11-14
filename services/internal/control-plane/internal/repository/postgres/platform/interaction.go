@@ -155,6 +155,9 @@ func (repository *Repository) ListInteractionSources(ctx context.Context, princi
 // одобренную WRITE/HUMAN_EACH_EFFECT возможность пакета. Ошибка commit даёт Conflict; сообщения
 // здесь не отправляются. Limit/workload передаются без изменения, сроки и fence назначает SQL.
 func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, principal value.Principal, workloadInstance string, limit int32) ([]map[string]any, error) {
+	if principal.CallerWorkload != "interaction-gateway" || principal.Permission != "platform.interactions.deliveries.claim" {
+		return nil, errs.ErrForbidden
+	}
 	scope, tx, err := repository.beginScopedTransaction(ctx, principal, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return nil, err
@@ -229,6 +232,11 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 			return nil, err
 		}
 	}
+	telegramItems, err := repository.claimTelegramDeliveriesTx(ctx, tx, scope, workloadInstance, limit-int32(len(result)))
+	if err != nil {
+		return nil, err
+	}
+	result = append(result, telegramItems...)
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
 	}
@@ -246,6 +254,9 @@ func (repository *Repository) ClaimInteractionDeliveries(ctx context.Context, pr
 // принадлежат внешней команде.
 func (repository *Repository) completeInteractionDelivery(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.InteractionDeliveryInput)
+	if ok && (payload.InputDigest != "" || payload.TelegramReceipt != nil || payload.RetryAfterSeconds != 0) {
+		return repository.completeTelegramDeliveryTx(ctx, tx, scope, input, payload)
+	}
 	if !ok || payload.DeliveryRef == "" || payload.LeaseRef == "" || payload.Fence == "" || payload.Generation < 1 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -635,7 +646,7 @@ func (repository *Repository) enqueueGateInteractionDeliveries(ctx context.Conte
 	}); err != nil {
 		return errs.ErrUnavailable
 	}
-	return nil
+	return repository.enqueueTelegramDeliveryTx(ctx, tx, scope, projectID, rootRunID, gateID)
 }
 
 // enqueueTerminalInteractionDeliveries Skips projectless runs and otherwise delegates terminal
@@ -648,7 +659,10 @@ func (repository *Repository) enqueueTerminalInteractionDeliveries(ctx context.C
 	if projectID == "" {
 		return nil
 	}
-	return repository.enqueueApprovedTerminalInteraction(ctx, tx, scope, projectID, rootRunID)
+	if err := repository.enqueueApprovedTerminalInteraction(ctx, tx, scope, projectID, rootRunID); err != nil {
+		return err
+	}
+	return repository.enqueueTelegramDeliveryTx(ctx, tx, scope, projectID, rootRunID, "")
 }
 
 // interactionDigest Returns lowercase SHA-256 hex over connection ref, one NUL separator and

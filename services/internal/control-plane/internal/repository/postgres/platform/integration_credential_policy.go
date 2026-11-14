@@ -62,7 +62,7 @@ func (repository *Repository) setIntegrationCredentialPolicy(ctx context.Context
 	if locked.version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	effects, grants, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
+	effects, grants, err := repository.integrationConnectionDependencies(ctx, tx, locked.id, false)
 	if err != nil {
 		return commandOutcome{}, err
 	}

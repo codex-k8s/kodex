@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import {telegramPolicyTransition,advanceTelegramRegistry,validateTelegramRegistry,validateTelegramAuthorityDeliveryState} from './authority-telegram-transition.mjs';
+import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
+import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {execFileSync} from 'node:child_process';
@@ -12,7 +15,7 @@ import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {readSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
-import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
+import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, isPortableAuthorityTransition, authorityPolicySource, validateAuthorityPolicy, authorityPolicyTransitionConfiguration, authorityPolicyReadbackContract, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
 import {isProvenStoppedPod} from './stable-archive-transition.mjs';
 
@@ -52,14 +55,14 @@ export function canonicalRegistryMatches(raw,canonicalRaw){
  return fingerprint(actual)===fingerprint(canonical);
 }
 export function validateRotationPolicy(raw,transition){
- if(transition!==undefined)return validateCatalogPolicy(raw,'desired',transition);
+ if(transition!==undefined)return validateAuthorityPolicy(raw,'desired',transition);
  requireValue(createHash('sha256').update(raw).digest('hex')===policySHA256,'EXACT_ROTATION_POLICY_REQUIRED');
  const policy=JSON.parse(raw),matches=policy?.policy?.operation_bindings?.filter(binding=>binding.operation_id==='platform.command.integration-definitions.create-draft');
  requireValue(policy.v===1&&policy.policy_revision===77&&policy.policy?.authority_abi_version===2&&matches?.length===1&&matches[0].project_required===false&&
   matches[0].request_profile?.resource==='FORBIDDEN','ROTATION_POLICY_BINDING_REJECTED');return {revision:77,sha256:policySHA256};
 }
 export function validatePredecessorPolicy(raw,transition){
- if(transition!==undefined)return validateCatalogPolicy(raw,'predecessor',transition);
+ if(transition!==undefined)return validateAuthorityPolicy(raw,'predecessor',transition);
  const policy=JSON.parse(raw),matches=policy?.policy?.operation_bindings?.filter(binding=>binding.operation_id==='platform.command.integration-definitions.create-draft');
  const legacyTransition=policy.v===1&&policy.policy_revision===76&&policy.policy?.authority_abi_version===2&&matches?.length===1&&matches[0].project_required===true;
  const current=policy.policy_revision===77&&createHash('sha256').update(raw).digest('hex')===policySHA256;
@@ -112,7 +115,7 @@ export function normalizeRotationPrerequisiteSpec(policy){
 export function rotationPrerequisiteSpecSHA256(policy){return fingerprint(normalizeRotationPrerequisiteSpec(policy));}
 
 export function createRotationJob(template,plan){
- const portable=plan.policyTransition?.profile===catalogPolicyTransition;
+ const portable=isPortableAuthorityTransition(plan.policyTransition?.profile);
  validateRotationTemplate(template,portable);
  requireValue(plan.version===3&&uuid.test(plan.intentID)&&['status','abort','rotate'].includes(plan.action)&&/^[a-f0-9]{40}$/.test(plan.revision)&&
   (portable?typeof plan.source==='string'&&resolve(plan.source)===plan.source:/^\/srv\/kodex-dev\/[A-Za-z0-9._-]+$/.test(plan.source)),'INVALID_ROTATION_PLAN');
@@ -220,8 +223,9 @@ export function classifyRotationStatus(job,log){
 
 // Evidence связывает один plan/nonce с exact Job UID; resolved/старый stdout не
 // заменяют новый owner query. Старый staging77 parser остаётся без изменений.
-export function validateCatalogAuthorityEvidence(plan,events) {
- requireValue(plan?.policyTransition?.profile===catalogPolicyTransition&&Array.isArray(events)&&events.length>0&&events.length<=16384&&
+export function validateCatalogAuthorityEvidence(plan,events,profile=catalogPolicyTransition) {
+ authorityPolicyTransitionConfiguration(profile);
+ requireValue(plan?.policyTransition?.profile===profile&&Array.isArray(events)&&events.length>0&&events.length<=16384&&
   events[0].status==='INTENT'&&events[0].action===plan.action&&events[0].planSHA256===fingerprint(plan),'CATALOG_AUTHORITY_JOURNAL_REJECTED');
  const jobUIDs=new Set();
  for(const row of events) {
@@ -277,8 +281,6 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 // plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
 // SQL owner сохраняет exact membership обязательных readers из pinned registry;
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
-// Общая форма READ штатной owner-функции; ни эта проверка, ни baseline не
-// отменяют Job/admission proof существующего rotation restore.
 export function validateRetiredCatalogOwnerState(state,plan,identity,readers,now=Date.now()) {
  const ownerFields=new Set(['observedAt','operationId','operationStatus','phase','intentId','protocolVersion','sourceRevision','sourceDigestSHA256',
   'registrySourceDigestSHA256','registryRevision','baseRevision','baseDigestSHA256','switchNotBefore','previousNotAfter','completedAt',
@@ -295,17 +297,22 @@ export function validateRetiredCatalogOwnerState(state,plan,identity,readers,now
   'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
  return state;
 }
-export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io={}) {
- requireValue(plan?.action==='rotate'&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===catalogPolicyTransition&&
+export async function readCatalogAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,catalogPolicyTransition);}
+export async function readTelegramAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition);}
+export async function readTelegramAuthorityDelivered(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition,'delivered');}
+async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io,profile,purpose='terminal'){
+ const configuration=authorityPolicyTransitionConfiguration(profile);
+ if(profile===telegramPolicyTransition)requireValue(plan?.introducedReceiver?.sourceSHA===plan.revision&&plan.introducedReceiver.state==='PENDING_AUTHORITY','TELEGRAM_INTRODUCTION_REQUIRED');
+ requireValue(plan?.action==='rotate'&&plan.policyTransition?.profile===profile&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===profile&&
   freshPlan.context===plan.context&&freshPlan.kubeconfig===plan.kubeconfig&&freshPlan.source===plan.source&&freshPlan.revision===plan.revision&&
   freshPlan.cliImage===plan.cliImage&&Number.isFinite(now),'CATALOG_AUTHORITY_TERMINAL_INPUT_REJECTED');
- const original=validateCatalogAuthorityEvidence(plan,events),fresh=validateCatalogAuthorityEvidence(freshPlan,freshEvents);
+ const original=validateCatalogAuthorityEvidence(plan,events,profile),fresh=validateCatalogAuthorityEvidence(freshPlan,freshEvents,profile);
  requireValue(original.jobUID&&fresh.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
   events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART')&&
-  freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus==='RETIRED'),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
+  freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus===(purpose==='delivered'?'DISTRIBUTING':'RETIRED')),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
  requireValue((io.inspectSource??inspectSource)(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
  const get=(kind,name)=>parseAuthorityPrivateJSON(kube(['-n',namespace,'get',kind,name,'-o','json']));
- const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get);
+ const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get,profile);
  verifyCatalogTransition(plan.policyTransition,target.transition);verifyCatalogTransition(plan.policyTransition,freshPlan.policyTransition);
  const maintenance=await readCatalogMaintenance(plan.maintenance.planPath,plan.maintenance.evidencePath,kube,plan.maintenance);
  verifyCatalogAdmission(maintenance,plan.policyTransition);
@@ -316,13 +323,15 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
   registry.metadata.annotations?.['kodex.dev/rotation-intent']===plan.intentID&&registry.metadata.annotations?.['kodex.dev/rotation-operation']===plan.ownerOperationID&&
   publisher.metadata.uid===plan.publisher.uid&&fingerprint(publisher.spec)===plan.publisher.desiredSpecSHA256&&
   publisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.ownerOperationID,'CATALOG_AUTHORITY_TERMINAL_TARGET_DRIFT');
- const policy=validateCatalogPolicy(registry.data['authority-policy.json'],'desired',plan.policyTransition);
+ const policy=validateAuthorityPolicy(registry.data['authority-policy.json'],'desired',plan.policyTransition);
  const identity=deriveRegistryRotationIdentity(registry.data['key-delivery-targets.yaml']);
+ if(profile===telegramPolicyTransition)validateTelegramRegistry(registry.data['key-delivery-targets.yaml'],'desired');
  requireValue(identity.ownerOperationID===plan.ownerOperationID&&identity.sourceRevision===plan.registry.sourceRevision&&
   identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256&&canonicalRegistryMatches(registry.data['key-delivery-targets.yaml'],
    readFileSync(`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8')),
   'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
  const readers=authorityReadbackContract(registry.data['key-delivery-targets.yaml']);
+ requireValue(fingerprint(readers)===fingerprint(authorityPolicyReadbackContract(profile)),'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
  const canonical=createCanonicalRotationTemplate(freshPlan.source,freshPlan.cliImage,true),expected=createRotationJob(canonical,freshPlan);
  const job=get('job',expected.metadata.name);
  verifyRotationJobReadback(job,expected);
@@ -334,10 +343,22 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
  const rows=log.trim().split('\n').filter(Boolean);
  requireValue(rows.length===1,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const state=parseAuthorityPrivateJSON(rows[0]);
+ const ownerFields=new Set(['observedAt','operationId','operationStatus','phase','intentId','protocolVersion','sourceRevision','sourceDigestSHA256',
+  'registrySourceDigestSHA256','registryRevision','baseRevision','baseDigestSHA256','switchNotBefore','previousNotAfter','completedAt',
+  'predecessorRevision','predecessorDigestSHA256','deliveryStartedAt','deliveredAt','promotedAt','overlapUntil','retiredAt','abortedAt','status','expectedReadbackCount','actualReadbackCount']);
+ requireValue(Object.keys(state).every(key=>ownerFields.has(key)),'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const classified=classifyRotationStatus(job,JSON.stringify(state));
+ if(purpose==='delivered'){
+  requireValue(profile===telegramPolicyTransition&&classified.phase==='SUCCEEDED','TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
+  const delivery=validateTelegramAuthorityDeliveryState(state,identity,plan.ownerOperationID,now);
+  const proof={...delivery,sourceSHA:plan.revision,introducedReceiverSHA256:fingerprint(plan.introducedReceiver),
+   clusterUID:plan.policyTransition.clusterUID,namespaceUID:plan.policyTransition.namespaceUID,installationUID:plan.policyTransition.installationUID,installationSHA256:plan.policyTransition.installationSHA256,policySHA256:policy.sha256,planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),
+   targetSHA256:plan.policyTransition.targetSHA256,trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
+  return Object.freeze({...proof,deliverySHA256:fingerprint(proof)});
+ }
  requireValue(classified.phase==='SUCCEEDED','CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
  validateRetiredCatalogOwnerState(state,plan,identity,readers,now);
- const proof={policyRevision:106,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
+ const proof={policyRevision:configuration.desiredRevision,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
   ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
   planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:plan.policyTransition.targetSHA256,
@@ -356,11 +377,12 @@ export async function main(args,io={}){
  const inspect=io.inspectSource??inspectSource;
  const executeKube=io.run??((command,argv,input)=>runRaw(command,argv,input,io.execFileSync??execFileSync));
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
- while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
+ while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--introduced-plan','--introduced-evidence','--introduced-publication','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  const loadedPlan=command==='plan'?null:readAuthorityPrivateJSON(options['--plan']);
  const profile=options['--policy-transition']??loadedPlan?.policyTransition?.profile;
- requireValue(profile===undefined||profile===catalogPolicyTransition,'CATALOG_POLICY_TRANSITION_REQUIRED');
- const catalog=profile===catalogPolicyTransition;
+ requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
+ const catalog=isPortableAuthorityTransition(profile);
+ requireValue(profile===telegramPolicyTransition||!['--introduced-plan','--introduced-evidence','--introduced-publication'].some(key=>options[key]),'TELEGRAM_INTRODUCTION_PROFILE_REQUIRED');
  requireValue(typeof options['--context']==='string'&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context'])&&(catalog||!/prod/i.test(options['--context'])),'EXACT_STAGING_CONTEXT_REQUIRED');
  const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
  requireValue(catalog||!options['--portable-target'],'CATALOG_POLICY_TRANSITION_REQUIRED');
@@ -373,7 +395,7 @@ export async function main(args,io={}){
  const ns=get('namespace',namespace);
  const targetProfile=catalog?(command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):loadedPlan.policyTransition.targetProfile):undefined;
  if(catalog&&command!=='plan')requireValue(loadedPlan.kubeconfig===kubeconfig&&(!options['--portable-target']||fingerprint(readAuthorityPrivateJSON(options['--portable-target']))===fingerprint(targetProfile)),'CATALOG_AUTHORITY_TARGET_DRIFT');
- const catalogTarget=catalog?readCatalogTarget(targetProfile,options['--context'],get):undefined;
+ const catalogTarget=catalog?readCatalogTarget(targetProfile,options['--context'],get,profile):undefined;
  if(catalog&&command!=='plan')verifyCatalogTransition(loadedPlan.policyTransition,catalogTarget.transition);
  requireValue(catalog||ns.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&ns.metadata.labels?.['kodex.dev/environment']==='staging','STAGING_NAMESPACE_REQUIRED');
 	validateRotationPrerequisites(get('serviceaccount','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-postgresql-from-migrator'));
@@ -396,6 +418,11 @@ export async function main(args,io={}){
 	const source=command==='plan'?options['--source']:loadedPlan.source;
 	if(sourceProfile)requireValue(source===sourceDelivery.source&&(command!=='plan'||options['--revision']===sourceDelivery.revision),'SOURCE_DELIVERY_PLAN_DRIFT');
 	const template=sourceProfile?createSourceRotationTemplate(sourceDelivery.migration.rendered,source):createCanonicalRotationTemplate(source,publisherContainer.image,catalog);validateRotationTemplate(template,catalog);
+ const readIntroduction=proof=>readTelegramIntroducedReceiver({planPath:proof?.planPath??options['--introduced-plan'],
+  evidencePath:proof?.evidencePath??options['--introduced-evidence'],publicationPath:proof?.publicationPath??options['--introduced-publication'],
+  sourceSHA:command==='plan'?options['--revision']:loadedPlan.revision,context:options['--context'],
+  target:catalogTarget.transition,publisherImage:publisherContainer.image},argv=>kube(...argv),
+  ()=>decodeTelegramResourceCreateSource(kube('kustomize',`${source}/deploy/k8s/profiles/web-only`),executeKube));
  let plan;
  if(command==='plan'){
   requireValue(['status','abort','rotate'].includes(options['--action']),'ROTATION_ACTION_REQUIRED');
@@ -407,14 +434,19 @@ export async function main(args,io={}){
      ...(planActionNeedsAdmission(options['--action'])?{maintenance:await readCatalogMaintenance(options['--maintenance-plan'],options['--maintenance-evidence'],argv=>kube(...argv),
        {trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']})}:{})}:{})};
   if(plan.action==='rotate'){
+   if(profile===telegramPolicyTransition){
+    requireValue(options['--introduced-plan']&&options['--introduced-evidence']&&options['--introduced-publication'],'TELEGRAM_INTRODUCTION_REQUIRED');
+    plan.introducedReceiver=await readIntroduction();
+   }
    const liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    const registryFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`;
    requireValue(!options['--registry-file']||options['--registry-file']===registryFile,'EXACT_ROTATION_REGISTRY_FILE_REQUIRED');
    const policyFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,sourcePolicyRaw=readFileSync(policyFile,'utf8');
-   if(catalog)requireValue(sourcePolicyRaw===catalogPolicySource('desired').raw,'CATALOG_POLICY_SOURCE_REJECTED');
+   if(catalog)requireValue(sourcePolicyRaw===authorityPolicySource('desired',profile).raw,'CATALOG_POLICY_SOURCE_REJECTED');
    const policyRaw=catalog?renderAuthorityPolicyEnvironment(sourcePolicyRaw,plan.policyTransition.environment).raw:sourcePolicyRaw;
    const desiredPolicy=validateRotationPolicy(policyRaw,plan.policyTransition),previousPolicy=validatePredecessorPolicy(liveRegistry.data?.['authority-policy.json'],plan.policyTransition);
-   const advance=deriveCanonicalRegistryAdvance(liveRegistry.data?.['key-delivery-targets.yaml'],readFileSync(registryFile,'utf8'));
+   const registrySource=readFileSync(registryFile,'utf8');
+   const advance=profile===telegramPolicyTransition?{raw:advanceTelegramRegistry(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource),previous:deriveRegistryRotationIdentity(liveRegistry.data?.['key-delivery-targets.yaml'])}:deriveCanonicalRegistryAdvance(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource);
    const desiredData=structuredClone(liveRegistry.data);desiredData['key-delivery-targets.yaml']=advance.raw;desiredData['authority-policy.json']=policyRaw;
    requireValue(fingerprint(liveRegistry.data)!==fingerprint(desiredData),'ROTATION_REGISTRY_MUST_ADVANCE');
 	   const previousIdentity=advance.previous;
@@ -434,6 +466,8 @@ export async function main(args,io={}){
   if(plan.action==='abort')plan.rotation={intentID:options['--intent-id'],sourceRevision:Number(options['--source-revision']),sourceDigestSHA256:options['--source-digest-sha256']};
  }else plan=loadedPlan;
  if(catalog&&planActionNeedsAdmission(plan.action))verifyCatalogAdmission(plan.maintenance,plan.policyTransition);
+ if(profile===telegramPolicyTransition&&plan.action==='rotate')requireValue(plan.introducedReceiver?.schema==='kodex.telegram-introduced-receiver/v1'&&
+  plan.introducedReceiver.state==='PENDING_AUTHORITY'&&plan.introducedReceiver.sourceSHA===plan.revision,'TELEGRAM_INTRODUCTION_REQUIRED');
  requireValue(plan.context===options['--context']&&plan.namespaceUID===ns.metadata.uid&&
   plan.templateSpecSHA256===fingerprint(template.spec)&&plan.cliImage===template.spec.template.spec.containers[0].image&&
   fingerprint(plan.cliCommand)===fingerprint(template.spec.template.spec.containers[0].command),'ROTATION_PLAN_DRIFT');
@@ -441,7 +475,7 @@ export async function main(args,io={}){
 	 sha.test(plan.registry.desiredDataSHA256)&&fingerprint(plan.registry.desiredData)===plan.registry.desiredDataSHA256&&
 	 typeof plan.registry.desiredData?.['key-delivery-targets.yaml']==='string'&&
 	 typeof plan.registry.desiredData?.['authority-policy.json']==='string'&&validateRotationPolicy(plan.registry.desiredData['authority-policy.json'],plan.policyTransition).revision===plan.registry.policyRevision&&
-	 plan.registry.policySHA256===validateRotationPolicy(plan.registry.desiredData['authority-policy.json'],plan.policyTransition).sha256&&(catalog?plan.registry.previousPolicyRevision===105:[76,77].includes(plan.registry.previousPolicyRevision))&&sha.test(plan.registry.previousPolicySHA256)&&plan.registry.policySourceFile==='deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'&&
+	 plan.registry.policySHA256===validateRotationPolicy(plan.registry.desiredData['authority-policy.json'],plan.policyTransition).sha256&&(catalog?plan.registry.previousPolicyRevision===authorityPolicyTransitionConfiguration(profile).predecessorRevision:[76,77].includes(plan.registry.previousPolicyRevision))&&sha.test(plan.registry.previousPolicySHA256)&&plan.registry.policySourceFile==='deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceRevision===plan.registry.sourceRevision&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceDigestSHA256===plan.registry.sourceDigestSHA256&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).ownerOperationID===plan.ownerOperationID&&
@@ -465,13 +499,13 @@ export async function main(args,io={}){
  const requireAdmission=async()=>{
    if(!catalog)return;
    requireValue(plan.maintenance,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
-   verifyCatalogTransition(plan.policyTransition,readCatalogTarget(targetProfile,options['--context'],get).transition);
+   verifyCatalogTransition(plan.policyTransition,readCatalogTarget(targetProfile,options['--context'],get,profile).transition);
    const fresh=await readCatalogMaintenance(plan.maintenance.planPath,plan.maintenance.evidencePath,argv=>kube(...argv),plan.maintenance);
    verifyCatalogAdmission(fresh,plan.policyTransition);
    requireValue(fingerprint(fresh)===fingerprint(plan.maintenance),'CATALOG_API_ADMISSION_DRIFT');
  };
 	 if(command==='apply'){
-  requireValue(options['--confirm']===(catalog?'APPLY-PORTABLE-CATALOG-AUTHORITY':'APPLY-STAGING-AUTHORITY-ROTATION'),'STAGING_CONFIRMATION_REQUIRED');
+  requireValue(options['--confirm']===(profile===telegramPolicyTransition?'APPLY-PORTABLE-TELEGRAM-AUTHORITY':catalog?'APPLY-PORTABLE-CATALOG-AUTHORITY':'APPLY-STAGING-AUTHORITY-ROTATION'),'STAGING_CONFIRMATION_REQUIRED');
   requireValue(!kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json'),'EXISTING_OPERATION_REQUIRES_RESUME');
   if(catalog)syncAuthorityJournalDirectory(options['--evidence']);
   fd=openSync(options['--evidence'],'wx',0o600);if(catalog)syncAuthorityJournalDirectory(options['--evidence']);evidence({status:'INTENT',action:plan.action,planSHA256:fingerprint(plan)});
@@ -488,6 +522,7 @@ export async function main(args,io={}){
    let liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    if(fingerprint(liveRegistry.data)!==plan.registry.desiredDataSHA256){
     await requireAdmission();
+    if(profile===telegramPolicyTransition)verifyTelegramIntroducedReceiver(plan.introducedReceiver,await readIntroduction(plan.introducedReceiver));
     const desired=createRegistryCAS(liveRegistry,plan);evidence({status:'INTENT',operation:'REGISTRY_CAS'});
     try{replace(desired);}
     catch{evidence({status:'UNKNOWN',operation:'REGISTRY_CAS'});}

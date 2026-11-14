@@ -418,6 +418,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.rebindRuntimeSecret(ctx, tx, scope, input)
 	case command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return repository.changeInteractionIdentity(ctx, tx, scope, input)
+	case command.ConfigureTelegramSubscription:
+		return repository.configureTelegramSubscriptionTx(ctx, tx, scope, input)
 	case command.ReconcileEmailEffect:
 		return repository.reconcileEmailEffect(ctx, tx, scope, input)
 	case command.ReportEmailEffect:

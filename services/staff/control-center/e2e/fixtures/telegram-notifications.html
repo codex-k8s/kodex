@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка подписки проекта Telegram</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import { createRouter, createMemoryHistory } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import { resetOwnerRequests } from "../../src/shared/api/owner-lifetime";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import TelegramNotifications from "../../src/features/telegram-notifications/TelegramNotifications.vue";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/:pathMatch(.*)*", component: { render: () => null } },
+        ],
+      });
+      createApp({
+        setup() {
+          return () =>
+            h("main", { style: "padding:16px;max-width:1000px;margin:auto;" }, [
+              h(
+                "button",
+                { type: "button", onClick: resetOwnerRequests },
+                "Сменить synthetic owner",
+              ),
+              h(TelegramNotifications, { projectRef: "prj_fixture01" }),
+            ]);
+        },
+      })
+        .use(i18n)
+        .use(router)
+        .mount("#app");
+    </script>
+  </body>
+</html>

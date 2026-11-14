@@ -43,7 +43,7 @@ test('portable authority target pins installation bytes, cluster/ns/CP/publisher
 });
 
 test('catalog CAS advances live delivery1→2 atomically without using policy106 as source revision',()=>{
-  const f=fixture(),canonical=readFileSync(new URL('../../deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml',import.meta.url),'utf8');
+  const f=fixture(),canonical=readFileSync(new URL('./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),'utf8');
   const next=deriveCanonicalRegistryAdvance(f.registry.data['key-delivery-targets.yaml'],canonical);
   const desiredData={...f.registry.data,'key-delivery-targets.yaml':next.raw,'authority-policy.json':f.desired.raw};
   const plan={policyTransition:f.target.transition,intentID:uid(8),ownerOperationID:next.identity.ownerOperationID,registry:{

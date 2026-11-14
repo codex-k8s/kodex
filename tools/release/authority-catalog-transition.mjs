@@ -1,3 +1,5 @@
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
+import {telegramPolicyTransition,telegramPolicyTargets,telegramPolicySource,validateTelegramPolicy,telegramAuthorityReadbackContract,telegramRegistrySource} from './authority-telegram-transition.mjs';
 import { constants, openSync, closeSync, fstatSync, readFileSync, writeFileSync, fsyncSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -30,6 +32,27 @@ export function validateCatalogPolicy(raw, role, transition) {
   const rendered = renderAuthorityPolicyEnvironment(source.raw, transition.environment);
   requireValue(raw === rendered.raw, 'CATALOG_POLICY_ENVIRONMENT_BYTES_REJECTED');
   return { revision:source.revision, sha256:rendered.renderedSHA256, sourceSHA256:source.sourceSHA256 };
+}
+
+// Закрытый registry различает две конкретные поставки. Required membership
+// выводится из выбранного профиля; payload не задаёт число readers либо revision.
+export function authorityPolicyTransitionConfiguration(profile){
+ if(profile===catalogPolicyTransition)return {profile,predecessorRevision:105,desiredRevision:106,registeredReadbackCount:16};
+ if(profile===telegramPolicyTransition)return {profile,predecessorRevision:106,desiredRevision:107,registeredReadbackCount:telegramPolicyTargets};
+ throw Error('CATALOG_POLICY_TRANSITION_REQUIRED');
+}
+export function authorityPolicyReadbackContract(profile){
+ authorityPolicyTransitionConfiguration(profile);
+ return profile===catalogPolicyTransition?authorityReadbackContract(telegramRegistrySource('predecessor').raw):telegramAuthorityReadbackContract();
+}
+export function isPortableAuthorityTransition(profile){return profile===catalogPolicyTransition||profile===telegramPolicyTransition;}
+export function authorityPolicySource(role,profile){
+ authorityPolicyTransitionConfiguration(profile);
+ return profile===catalogPolicyTransition?catalogPolicySource(role):telegramPolicySource(role);
+}
+export function validateAuthorityPolicy(raw,role,transition){
+ authorityPolicyTransitionConfiguration(transition?.profile);
+ return transition.profile===catalogPolicyTransition?validateCatalogPolicy(raw,role,transition):validateTelegramPolicy(raw,role,transition);
 }
 
 // Приватные operator plans читаются тем же fd после NOFOLLOW/fstat, без TOCTOU reread.
@@ -116,6 +139,8 @@ export async function readCatalogMaintenance(planPath,evidencePath,kube,{traffic
 }
 
 export function verifyCatalogAdmission(maintenance,transition) {
+  const configuration=authorityPolicyTransitionConfiguration(transition?.profile);
+  if(configuration.profile===telegramPolicyTransition)requireValue(maintenance.proof?.authorityTransition===telegramPolicyTransition,'TELEGRAM_POLICY_ADMISSION_PROFILE_REQUIRED');
   const resources=transition.targetProfile.resources;
   const api=resources.find(resource=>resource.apiVersion==='apps/v1'&&resource.kind==='Deployment'&&resource.name==='control-api-gateway');
   const service=resources.find(resource=>resource.apiVersion==='v1'&&resource.kind==='Service'&&resource.name==='control-api-gateway');
@@ -142,18 +167,23 @@ export function openCatalogProjectionJournal(path,plan,resume=false) {
 }
 
 export function validateCatalogProjectionEvents(events,plan) {
-  const hash=fingerprint(plan),acknowledged=new Map();
+  const hash=fingerprint(plan),acknowledged=new Map(),intents=new Set();
   requireValue(events.length>0&&events.length<16384&&events[0].status==='INTENT'&&events[0].operation==='APPLY','POLICY_PROJECTION_JOURNAL_DRIFT');
   for(const event of events) {
+    requireValue(event.operation!=='CREATE_PROJECTION_ACK_REJECTED','POLICY_PROJECTION_CREATE_ACK_INVALID');
     requireValue(event.planSHA256===hash&&['INTENT','ACK','UNKNOWN'].includes(event.status)&&
-      ['APPLY','RESUME','CREATE_PROJECTION','CP_POINTER_CAS'].includes(event.operation)&&
+      ['APPLY','RESUME','CREATE_PROJECTION','CREATE_PROJECTION_ACK','CP_POINTER_CAS'].includes(event.operation)&&
       Object.keys(event).every(key=>['planSHA256','status','operation','uid','at'].includes(key))&&
       typeof event.at==='string'&&Number.isFinite(Date.parse(event.at))&&new Date(event.at).toISOString()===event.at,'POLICY_PROJECTION_JOURNAL_DRIFT');
+    if(event.status==='INTENT')intents.add(event.operation);
     if(['APPLY','RESUME'].includes(event.operation))requireValue(event.status==='INTENT'&&!Object.hasOwn(event,'uid'),'POLICY_PROJECTION_JOURNAL_DRIFT');
     else if(event.status==='ACK') {
       requireValue(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(event.uid??'')&&
         (!acknowledged.has(event.operation)||acknowledged.get(event.operation)===event.uid)&&
         (event.operation!=='CP_POINTER_CAS'||acknowledged.has('CREATE_PROJECTION')),'POLICY_PROJECTION_JOURNAL_DRIFT');
+      if(event.operation==='CREATE_PROJECTION_ACK')requireValue(intents.has('CREATE_PROJECTION'),'POLICY_PROJECTION_JOURNAL_DRIFT');
+      if(event.operation==='CREATE_PROJECTION'&&acknowledged.has('CREATE_PROJECTION_ACK'))
+        requireValue(event.uid===acknowledged.get('CREATE_PROJECTION_ACK'),'POLICY_PROJECTION_CONFIGMAP_REPLACED');
       acknowledged.set(event.operation,event.uid);
     } else requireValue(!Object.hasOwn(event,'uid'),'POLICY_PROJECTION_JOURNAL_DRIFT');
   }
@@ -162,7 +192,8 @@ export function validateCatalogProjectionEvents(events,plan) {
 
 // portableRunnerTarget уже связывает context, cluster/ns UID и installation CM UID/data.
 // Все три существующих изменяемых ресурса дополнительно должны входить в exact allowlist.
-export function readCatalogTarget(profile, context, get) {
+export function readCatalogTarget(profile, context, get, transitionProfile=catalogPolicyTransition) {
+  authorityPolicyTransitionConfiguration(transitionProfile);
   const cluster = get('namespace', 'kube-system');
   const namespace = get('namespace', 'kodex-system');
   const installation = get('configmap', 'kodex-installation-profile');
@@ -179,7 +210,7 @@ export function readCatalogTarget(profile, context, get) {
   const configMaps = names.map(name => get('configmap', name));
   const environment = readAuthorityPolicyEnvironment(deployment, configMaps, target);
   return {target, deployment, publisher, registry, configMaps,
-    transition:{profile:catalogPolicyTransition, environment, targetProfile:profile,
+    transition:{profile:transitionProfile, environment, targetProfile:profile,
       targetSHA256:target.digest, clusterUID:cluster.metadata.uid, namespaceUID:namespace.metadata.uid,
       installationUID:installation.metadata.uid, installationSHA256:fingerprint(installation.data)},
   };

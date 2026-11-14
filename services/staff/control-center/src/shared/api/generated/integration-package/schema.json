@@ -84,6 +84,7 @@
             "HTTPS_JSON_READ",
             "OPENAPI_MCP",
             "MATTERMOST_INTERACTION",
+            "TELEGRAM_INTERACTION",
             "CONTEXT7",
             "SENTRY",
             "OBSERVABILITY",

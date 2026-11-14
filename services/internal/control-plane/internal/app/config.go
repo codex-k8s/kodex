@@ -42,6 +42,7 @@ const (
 // Config объединяет настройки control-plane из окружения, метаданные учётных данных, доверенные пути и бюджеты работников.
 // Разбор полей не читает указанные учётные данные и не подтверждает готовность удалённых сервисов.
 type Config struct {
+	InteractionPublicOrigin         string        `env:"INTERACTION_PUBLIC_ORIGIN"`
 	SSHComposeSigningKeyFile        string        `env:"CONTROL_PLANE_SSH_COMPOSE_SIGNING_KEY_FILE"`
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	ArtifactAntivirusMode           string        `env:"CONTROL_PLANE_ARTIFACT_ANTIVIRUS_MODE"`

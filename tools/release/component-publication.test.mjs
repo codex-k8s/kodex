@@ -1,3 +1,4 @@
+import {telegramIntroductionFixture} from './fixtures/telegram-introduction-synthetic.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -20,6 +21,8 @@ function fixture(profile='github-repository-scope'){
     nodes:[{name:'k3d-fixture-agent-0',uid:uid(3)}],components:cfg.components.map(name=>({name,
       expectedImageRef:`registry.local.kodex/kodex/${name}@sha256:${'f'.repeat(64)}`,anchor:cfg.sources[name]+'internal/synthetic.go',
       buildReceipt:`/private/${name}/build.json`,publicationPlan:`/private/${name}/plan.json`,publicationEvidence:`/private/${name}/journal.jsonl`}))};
+  if(cfg.introduced){const component=config.components.find(c=>c.name===cfg.introduced);component.expectedImageRef=`registry.local.kodex/kodex/${component.name}@sha256:${'e'.repeat(64)}`;
+   config.introducedReceiver=telegramIntroductionFixture({sourceSHA:revision,imageRef:component.expectedImageRef});}
   const evidence=component=>{
     const receipt={schema:'kodex.stable-local-build/v1',component:component.name,sourceSHA:revision,contextSHA256:sha('synthetic archive'),
       archiveSHA256:'d'.repeat(64),imageDigest:'sha256:'+'e'.repeat(64),dockerfile:cfg.sources[component.name]+'Dockerfile',target:'',
@@ -32,7 +35,7 @@ function fixture(profile='github-repository-scope'){
   return {config,evidence};
 }
 test('component locks bind actual publisher journal source target and full code manifest',()=>{
-  for(const profile of ['workspace-unbound-stop','github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup']){
+  for(const profile of ['workspace-unbound-stop','github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup']){
     const f=fixture(profile),component=f.config.components[0],e=f.evidence(component),source={receipt:e.publicationPlan.receipt,
       receiptSHA256:'1'.repeat(64),dockerfileSHA256:'2'.repeat(64),productionSHA256:'3'.repeat(64),contextSHA256:sha('synthetic archive'),
       changedFiles:[component.anchor]};
@@ -227,4 +230,23 @@ test('target/source drift wrong digest and duplicate JSON cannot yield qualified
     const result=f.run('prepare','rejected.json');assert.notEqual(result.code,0);assert.match(result.out,/NONCANONICAL/);
     assert.equal(existsSync(join(f.directory,'trace')),false);
   }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+
+test('046 closed5 publisher сохраняет introduced0 proof и actual same published interaction image',()=>{
+ for(const profile of ['telegram-notifications','telegram-notifications-backup']){
+  const f=setup(profile);
+  try{
+   assert.equal(f.run('prepare','prepared.json').code,0);
+   const prepared=f.prepared();assert.deepEqual(prepared.publication.components.map(c=>c.component),['control-plane','control-api-gateway','staff-control-center','egress-gateway','interaction-gateway']);
+   assert.deepEqual(prepared.publication.introducedReceiver,f.config.introducedReceiver);
+   assert.equal(f.run('qualify','publication.json',['--approved-plan-sha',fingerprint(prepared)]).code,0);
+   const publication=JSON.parse(readFileSync(join(f.directory,'publication.json'))),accepted=componentMigrationPublication(publication,{revision},profile);
+   const introduced=accepted.components.at(-1);assert.equal(introduced.imageRef,introduced.expectedImageRef);assert.equal(f.state().pulls,5);
+   for(const mutate of [p=>delete p.introducedReceiver,p=>p.introducedReceiver.intendedReplicas=0,p=>p.introducedReceiver.resources.pop(),
+    p=>p.introducedReceiver.sourceSHA='f'.repeat(40),p=>p.components.at(-1).expectedImageRef='registry.local.kodex/kodex/interaction-gateway@sha256:'+'f'.repeat(64)]){
+    const altered=structuredClone(publication);mutate(altered);assert.throws(()=>componentMigrationPublication(altered,{revision},profile));
+   }
+   assert.throws(()=>componentMigrationPublication(publication,{revision},'github-repository-scope'));
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+ }
 });

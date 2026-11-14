@@ -14,15 +14,24 @@ for profile in web-only web-with-mattermost; do
     --slurpfile registry "$repository_root/tools/install/secret-projections.json" '
     map(select(.kind != null)) as $resources |
     [$resources[] | select(.kind == "Deployment" and .metadata.name == "interaction-gateway")] as $deployments |
-    if $profile == "web-only" then ($deployments | length) == 0 else
+      [$resources[] | select(.kind == "ConfigMap" and .metadata.name == "interaction-gateway-runtime")] as $runtime |
       $deployments[0].spec.template.spec as $pod |
       def container($name): $pod.containers[] | select(.name == $name);
       def env($name): [.env[]? | select(.name == $name)];
-      ($deployments | length) == 1 and
+      ($deployments | length) == 1 and ($runtime | length) == 1 and
+      $runtime[0].data.INTERACTION_GATEWAY_TELEGRAM_PROXY_URL == "http://egress-gateway.kodex-system.svc.cluster.local:8086" and
+      $runtime[0].data.INTERACTION_GATEWAY_ALLOWED_HOSTS == "" and
+      $runtime[0].data.INTERACTION_GATEWAY_OPERATION_TIMEOUT == "30s" and
+      $runtime[0].data.INTERACTION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME == "control-plane.kodex-system.svc.cluster.local" and
+      all($resources[]; .kind != "Deployment" or (.metadata.name != "mattermost" and .metadata.name != "mattermost-postgresql")) and
       $pod.serviceAccountName == "interaction-gateway" and
       $pod.automountServiceAccountToken == false and $pod.securityContext.fsGroup == 29000 and
       (container("interaction-gateway") |
         .securityContext.runAsUser == 10001 and .securityContext.readOnlyRootFilesystem == true and
+        env("INTERACTION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE")[0].value == "/var/run/secrets/kodex/interaction-gateway/workload-tls/tls.key" and
+        env("INTERACTION_PUBLIC_ORIGIN")[0].valueFrom.configMapKeyRef.name == "kodex-platform-endpoints" and
+        env("INTERACTION_PUBLIC_ORIGIN")[0].valueFrom.configMapKeyRef.key == "publicOrigin" and
+        all(.env[]; (.name | startswith("MATTERMOST_")) == false) and
         (env("INTERACTION_GATEWAY_APPLICATION_GRANT_FILE")[0].value ==
           "/var/run/secrets/kodex/interaction-gateway/application-grant/application-grant.jws") and
         any(.volumeMounts[]; .name == "application-grant" and .readOnly == true) and
@@ -42,6 +51,7 @@ for profile in web-only web-with-mattermost; do
         env("INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID")[0].value == "10001" and
         env("INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER")[0].valueFrom.secretKeyRef.name ==
           "internal-rpc-authority-interaction-gateway-issuer-postgresql") and
+      any($pod.volumes[]; .name == "integration-credentials" and .secret.secretName == "kodex-integration-credentials" and .secret.optional == true) and
       any($pod.volumes[]; .name == "application-grant" and .emptyDir.sizeLimit == "1Mi") and
       any($pod.volumes[]; .name == "platform-worker-grant-signer" and
         .secret.secretName == "interaction-gateway-platform-worker-grant-signer") and
@@ -55,8 +65,7 @@ for profile in web-only web-with-mattermost; do
           .secret.secretName == "control-plane-interaction-grant-trust")) and
       any($registry[0].secrets[]; .name == "control-plane-interaction-grant-trust" and
         .items == [{key:"interaction-gateway.platform-worker.public.jwk",source:{type:"material",ref:"kodex/platform-worker-grants/interaction-gateway",field:"public-jwk"}}])
-    end
-  ' >/dev/null || fail "optional deployment or signer-to-consumer trust path is incomplete: $profile"
+  ' >/dev/null || fail "web interaction deployment or signer-to-consumer trust path is incomplete: $profile"
 done
 
 printf 'Interaction gateway render tests passed\n'

@@ -1214,7 +1214,7 @@ AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
         .workload_id == "image-admission" or
         .workload_id == "image-promotion" or
         .workload_id == "integration-gateway" or
-        (.workload_id == "interaction-gateway" and strenv(DEPLOYMENT_PROFILE) == "web-with-mattermost") or
+        (.workload_id == "interaction-gateway") or
         .workload_id == "role-image-builder" or
         .workload_id == "secret-broker" or
         .workload_id == "stt-tts-service" or

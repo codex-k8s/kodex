@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {readTelegramStagedPolicyMigration,telegramStagedPolicyProtocol} from './telegram-cp-policy.mjs';
+import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +10,8 @@ import { fingerprint } from "./scoped-release.mjs";
 import { inspectSource } from "./application-source.mjs";
 import { validateRotationPolicy } from "./authority-rotation-transition.mjs";
 import { readAuthorityPolicyEnvironment, renderAuthorityPolicyEnvironment, verifyAuthorityPolicyEnvironmentReadback } from "./authority-policy-environment.mjs";
-import { catalogPolicyTransition, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, openCatalogProjectionJournal, validateCatalogProjectionEvents, readAuthorityPrivateText, parseAuthorityPrivateJSON, writeAuthorityPrivatePlan } from './authority-catalog-transition.mjs';
+import { telegramPolicyTransition } from './authority-telegram-transition.mjs';
+import { catalogPolicyTransition, validateCatalogPolicy, isPortableAuthorityTransition, validateAuthorityPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, openCatalogProjectionJournal, validateCatalogProjectionEvents, readAuthorityPrivateText, parseAuthorityPrivateJSON, writeAuthorityPrivatePlan } from './authority-catalog-transition.mjs';
 
 const namespace="kodex-system";
 const policyEnv="CONTROL_PLANE_AUTHORITY_POLICY_FILE";
@@ -60,17 +63,22 @@ export function projectionPatch(deployment,plan){
     {op:"add",path:`/spec/template/spec/containers/${index}/volumeMounts`,value:[...(app.volumeMounts??[]),{name:volumeName,mountPath,readOnly:true}]}];
 }
 
-// Обновление105→106 сохраняет прежнюю immutable CM; заменяется только pointer CP.
-// Registry должен уже обслуживать exact environment-rendered106 того же installation target.
-export function planCatalogPolicyProjection(deployment,registry,configMaps,{transition,target,existingProjection}) {
+// Закрытое обновление105→106 либо106→107 сохраняет прежнюю immutable CM.
+// Registry уже обслуживает exact desired policy; меняется лишь pointer CP.
+export function planCatalogPolicyProjection(deployment,registry,configMaps,{transition,target,existingProjection,telegramStage}) {
   requireValue(target?.allows(deployment)&&target.allows(registry),'CATALOG_AUTHORITY_TARGET_REJECTED');
   const environment=readAuthorityPolicyEnvironment(deployment,configMaps,target);
   const candidate=structuredClone(transition);candidate.environment=environment;
   verifyCatalogTransition(transition,candidate);
   const raw=registry.data?.['authority-policy.json'];
-  const policy=validateCatalogPolicy(raw,'desired',transition);
+  const policy=validateAuthorityPolicy(raw,'desired',transition);
   const spec=deployment.spec,app=spec.template.spec.containers.find(c=>c.name==='control-plane');
-  requireValue(spec.paused!==true&&Number.isSafeInteger(spec.replicas)&&spec.replicas>0&&
+  const staged=telegramStage!==undefined;
+  if(staged)requireValue(transition.profile===telegramPolicyTransition&&telegramStage.proof?.protocol===telegramStagedPolicyProtocol&&
+    spec.paused!==true&&spec.strategy?.type==='RollingUpdate'&&spec.strategy.rollingUpdate?.maxUnavailable===0&&
+    Number.isSafeInteger(spec.strategy.rollingUpdate.maxSurge)&&spec.strategy.rollingUpdate.maxSurge>0&&telegramStage.proof.deploymentUID===deployment.metadata.uid&&telegramStage.proof.stagedSpecSHA256===fingerprint(spec)&&spec.replicas===0&&
+    deployment.status?.observedGeneration>=deployment.metadata.generation&&!(deployment.status.replicas??0),'TELEGRAM_CP_STAGE_JOIN_REQUIRED');
+  requireValue(staged||spec.paused!==true&&Number.isSafeInteger(spec.replicas)&&spec.replicas>0&&
     spec.strategy?.type==='RollingUpdate'&&spec.strategy.rollingUpdate.maxUnavailable===0&&
     Number.isSafeInteger(spec.strategy.rollingUpdate.maxSurge)&&spec.strategy.rollingUpdate.maxSurge>0&&
     deployment.status?.observedGeneration>=deployment.metadata.generation&&deployment.status.availableReplicas>=spec.replicas&&
@@ -89,7 +97,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
       !existingProjection.metadata.deletionTimestamp&&existingProjection.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&
       fingerprint(volumes[0])===fingerprint({name:volumeName,configMap:{name:existingProjection.metadata.name,defaultMode:292}}),
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
-    const previous=validateCatalogPolicy(existingProjection.data?.['policy.json'],'predecessor',transition);
+    const previous=validateAuthorityPolicy(existingProjection.data?.['policy.json'],'predecessor',transition);
     requireValue(Object.keys(existingProjection.data).join(',')==='policy.json'&&
       existingProjection.metadata.name===`control-plane-policy-projection-${previous.sha256.slice(0,16)}`,
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
@@ -106,7 +114,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
       'POLICY_PROJECTION_PREDECESSOR_REJECTED');
   }
   const projection={apiVersion:'v1',kind:'ConfigMap',metadata:{name:`control-plane-policy-projection-${policy.sha256.slice(0,16)}`,namespace,
-    labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/policy-projection-issue':'2139'}},immutable:true,data:{'policy.json':raw}};
+    labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/policy-projection-issue':transition.profile===telegramPolicyTransition?'2143':'2139'}},immutable:true,data:{'policy.json':raw}};
   const desired={
     volumes:[...(spec.template.spec.volumes??[]).filter(v=>v.name!==volumeName),{name:volumeName,configMap:{name:projection.metadata.name,defaultMode:292}}],
     env:[...(app.env??[]).filter(e=>e.name!==policyEnv),{name:policyEnv,value:`${mountPath}/policy.json`}],
@@ -115,7 +123,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
   const after=structuredClone(spec),index=spec.template.spec.containers.findIndex(c=>c.name==='control-plane');
   after.template.spec.volumes=desired.volumes;after.template.spec.containers[index].env=desired.env;
   after.template.spec.containers[index].volumeMounts=desired.volumeMounts;
-  return {version:2,kind:'CP_CATALOG_POLICY_PROJECTION',environment,policyTransition:transition,
+  return {version:2,kind:'CP_CATALOG_POLICY_PROJECTION',environment,policyTransition:transition,...(staged?{telegramStage}:{}),
     deploymentUID:deployment.metadata.uid,resourceVersion:deployment.metadata.resourceVersion,
     beforeSpecSHA256:fingerprint(spec),afterSpecSHA256:fingerprint(after),desired,predecessor,
     registry:{uid:registry.metadata.uid,resourceVersion:registry.metadata.resourceVersion,dataSHA256:fingerprint(registry.data)},
@@ -123,7 +131,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
 }
 
 export function projectionMatches(actual,expected){
-  return actual?.kind==="ConfigMap"&&actual.metadata?.name===expected.metadata.name&&actual.metadata.namespace===namespace&&actual.immutable===true&&!actual.metadata.deletionTimestamp&&fingerprint(actual.data)===fingerprint(expected.data)&&actual.metadata.labels?.["kodex.dev/policy-projection-issue"]===expected.metadata.labels?.["kodex.dev/policy-projection-issue"];
+  return actual?.apiVersion==="v1"&&actual.kind==="ConfigMap"&&!actual.binaryData&&actual.metadata?.labels?.["app.kubernetes.io/part-of"]==="kodex"&&actual.metadata?.name===expected.metadata.name&&actual.metadata.namespace===namespace&&actual.immutable===true&&!actual.metadata.deletionTimestamp&&fingerprint(actual.data)===fingerprint(expected.data)&&actual.metadata.labels?.["kodex.dev/policy-projection-issue"]===expected.metadata.labels?.["kodex.dev/policy-projection-issue"];
 }
 
 export function withPrivatePatchFile(patch,apply){
@@ -139,11 +147,19 @@ export function withPrivatePatchFile(patch,apply){
 
 export function main(argv=process.argv.slice(2),io={}){
   const [command,...args]=argv,options={};
-  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
+  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo","--migration-plan","--migration-evidence","--authority-plan","--authority-evidence","--authority-status-plan","--authority-status-evidence"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
   const saved=options['--plan']?readAuthorityPrivateJSON(options['--plan']):undefined;
   const profile=options['--policy-transition']??saved?.policyTransition?.profile;
-  requireValue(profile===undefined||profile===catalogPolicyTransition,'CATALOG_POLICY_TRANSITION_REQUIRED');
-  const catalog=profile===catalogPolicyTransition;
+  requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
+  const catalog=isPortableAuthorityTransition(profile);
+  const stageArguments=['--migration-plan','--migration-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'];
+  requireValue(!stageArguments.some(key=>options[key])||profile===telegramPolicyTransition,'TELEGRAM_CP_STAGE_SCOPE_REJECTED');
+  for(const group of [['--migration-plan','--migration-evidence'],['--authority-plan','--authority-evidence']])
+    requireValue(!group.some(key=>options[key])||command==='plan'&&group.every(key=>options[key]),'TELEGRAM_CP_STAGE_INPUTS_REQUIRED');
+  const statusArguments=['--authority-status-plan','--authority-status-evidence'];
+  requireValue(!statusArguments.some(key=>options[key])||['apply','resume'].includes(command)&&saved?.telegramStage&&statusArguments.every(key=>options[key]),
+    'TELEGRAM_CP_STAGE_INPUTS_REQUIRED');
+
   requireValue(["plan","apply","observe",...(catalog?['resume']:[])].includes(command)&&typeof options["--context"]==="string"&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options["--context"])&&(catalog||!/prod/i.test(options["--context"])),"STAGING_CONTEXT_REQUIRED");
   const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
   const source=resolve(fileURLToPath(new URL("../..",import.meta.url))),revision=(io.inspectSource??inspectSource)(source).revision;
@@ -181,9 +197,15 @@ export function main(argv=process.argv.slice(2),io={}){
   const regenerated=planPolicyProjection(deployment,registry,configMaps);
   requireValue(fingerprint(regenerated)===fingerprint(Object.fromEntries(Object.entries(plan).filter(([k])=>!["source","revision","context","namespaceUID"].includes(k)))),"POLICY_PROJECTION_PLAN_DRIFT");
   const existing=kube(["-n",namespace,"get","configmap",plan.projection.metadata.name,"--ignore-not-found","-o","json"]);
-  if(existing.trim()) requireValue(projectionMatches(JSON.parse(existing),plan.projection),"POLICY_PROJECTION_CONFIGMAP_CONFLICT");
-  else kube(["create","-f","-"],JSON.stringify(plan.projection));
-  requireValue(projectionMatches(get("configmap",plan.projection.metadata.name),plan.projection),"POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED");
+  let assigned;
+  if(existing.trim()) {
+    assigned=JSON.parse(existing);requireValue(projectionMatches(assigned,plan.projection),"POLICY_PROJECTION_CONFIGMAP_CONFLICT");
+  } else {
+    assigned=JSON.parse(kube(["create","-f","-","-o","json"],JSON.stringify(plan.projection)));
+    requireValue(projectionMatches(assigned,plan.projection)&&assigned.metadata.uid,"POLICY_PROJECTION_CREATE_ACK_INVALID");
+  }
+  const readback=get("configmap",plan.projection.metadata.name);
+  requireValue(projectionMatches(readback,plan.projection)&&readback.metadata.uid===assigned.metadata.uid,"POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED");
   withPrivatePatchFile(projectionPatch(deployment,plan),path=>kube(["-n",namespace,"patch","deployment","control-plane","--type=json","--patch-file",path,"-o","name"]));
   const current=get("deployment","control-plane");
   requireValue(current.metadata.uid===plan.deploymentUID&&fingerprint(current.spec)===plan.afterSpecSHA256,"POLICY_PROJECTION_OUTCOME_UNKNOWN");
@@ -192,7 +214,8 @@ export function main(argv=process.argv.slice(2),io={}){
 
 async function catalogProjectionMain(command,options,{source,revision,kubeconfig,kube,get,ns,saved}) {
   const profile=command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):saved?.policyTransition?.targetProfile;
-  const current=readCatalogTarget(profile,options['--context'],get);
+  const transitionProfile=options['--policy-transition']??saved?.policyTransition?.profile;
+  const current=readCatalogTarget(profile,options['--context'],get,transitionProfile);
   const maintenancePaths=command==='plan'?{planPath:options['--maintenance-plan'],evidencePath:options['--maintenance-evidence'],
     trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']}:saved.maintenance;
   const maintenance=command==='observe'?saved.maintenance:await readCatalogMaintenance(maintenancePaths.planPath,maintenancePaths.evidencePath,kube,maintenancePaths);
@@ -203,12 +226,37 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
       fingerprint(maintenance)===fingerprint(saved.maintenance),'POLICY_PROJECTION_PLAN_IDENTITY_REJECTED');
     verifyCatalogTransition(saved.policyTransition,current.transition);
   }
+  const stagePaths=command==='plan'&&options['--migration-plan']?{planPath:options['--migration-plan'],evidencePath:options['--migration-evidence']}:saved?.telegramStage;
+  requireValue(!options['--migration-evidence']||stagePaths?.planPath,'TELEGRAM_CP_STAGE_INPUTS_REQUIRED');
+  const readStage=()=>readTelegramStagedPolicyMigration({planPath:stagePaths?.planPath,evidencePath:stagePaths?.evidencePath},
+    {source,revision,context:options['--context'],kubeconfig,transition:current.transition});
+  let telegramStage;
+  if(stagePaths){
+    requireValue(transitionProfile===telegramPolicyTransition,'TELEGRAM_CP_STAGE_SCOPE_REJECTED');
+    telegramStage=saved?saved.telegramStage:readStage();
+    if(saved)requireValue(fingerprint(telegramStage)===fingerprint(saved.telegramStage),'TELEGRAM_CP_STAGE_CHANGED');
+  }
+  if(command==='plan'&&telegramStage)requireValue(options['--authority-plan']&&options['--authority-evidence'],'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+  const telegramAuthority=command==='plan'&&telegramStage?{planPath:options['--authority-plan'],evidencePath:options['--authority-evidence'],
+    planSHA256:fingerprint(readAuthorityPrivateJSON(options['--authority-plan']))}:saved?.telegramAuthority;
+  const readDelivered=()=>{
+    requireValue(telegramAuthority?.planPath&&telegramAuthority.evidencePath&&options['--authority-status-plan']&&options['--authority-status-evidence'],
+      'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+    const authority=readAuthorityPrivateJSON(telegramAuthority.planPath);
+    requireValue(fingerprint(authority)===telegramAuthority.planSHA256&&authority.source===source&&authority.revision===revision&&authority.context===options['--context']&&authority.kubeconfig===kubeconfig&&
+      authority.policyTransition?.profile===telegramPolicyTransition&&fingerprint(authority.introducedReceiver)===telegramStage.proof.introducedReceiverSHA256,
+      'TELEGRAM_CP_PROJECTION_SCOPE_CHANGED');
+    verifyCatalogTransition(authority.policyTransition,current.transition);
+    const rows=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readTelegramAuthorityDelivered({plan:authority,events:rows(telegramAuthority.evidencePath),
+      freshPlan:readAuthorityPrivateJSON(options['--authority-status-plan']),freshEvents:rows(options['--authority-status-evidence']),admissionProof:maintenance.proof},kube);
+  };
   const oldName=current.deployment.spec.template.spec.volumes?.find(v=>v.name===volumeName)?.configMap?.name;
   const existingProjection=oldName?get('configmap',oldName):undefined;
   if(command==='plan') {
     requireValue(options['--output']&&!options['--confirm'],'INVALID_PLAN_ARGUMENTS');
-    const plan={...planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:current.transition,target:current.target,existingProjection}),
-      maintenance,source,revision,kubeconfig,context:options['--context'],namespaceUID:ns.metadata.uid};
+    const plan={...planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:current.transition,target:current.target,existingProjection,telegramStage}),
+      ...(telegramAuthority?{telegramAuthority}:{}),maintenance,source,revision,kubeconfig,context:options['--context'],namespaceUID:ns.metadata.uid};
     writeAuthorityPrivatePlan(options['--output'],plan);
     process.stdout.write(JSON.stringify({status:'PLANNED',revision,policySHA256:plan.renderedPolicySHA256,target:'control-plane'})+'\n');
     return;
@@ -216,11 +264,11 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
   const plan=saved;
   requireValue(current.registry.metadata.uid===plan.registry.uid&&current.registry.metadata.resourceVersion===plan.registry.resourceVersion&&
     fingerprint(current.registry.data)===plan.registry.dataSHA256,'POLICY_PROJECTION_REGISTRY_DRIFT');
-  validateCatalogPolicy(current.registry.data['authority-policy.json'],'desired',plan.policyTransition);
+  validateAuthorityPolicy(current.registry.data['authority-policy.json'],'desired',plan.policyTransition);
   const changed=current.deployment.metadata.uid===plan.deploymentUID&&fingerprint(current.deployment.spec)===plan.afterSpecSHA256;
   if(!changed) {
-    const regenerated=planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:plan.policyTransition,target:current.target,existingProjection});
-    const extra=new Set(['maintenance','source','revision','kubeconfig','context','namespaceUID']);
+    const regenerated=planCatalogPolicyProjection(current.deployment,current.registry,current.configMaps,{transition:plan.policyTransition,target:current.target,existingProjection,telegramStage});
+    const extra=new Set(['maintenance','source','revision','kubeconfig','context','namespaceUID','telegramAuthority']);
     requireValue(fingerprint(regenerated)===fingerprint(Object.fromEntries(Object.entries(plan).filter(([key])=>!extra.has(key)))),'POLICY_PROJECTION_PLAN_DRIFT');
   }
   requireValue(options['--evidence'],'POLICY_PROJECTION_EVIDENCE_REQUIRED');
@@ -231,7 +279,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
       acknowledged.get('CP_POINTER_CAS')===current.deployment.metadata.uid&&acknowledged.get('CREATE_PROJECTION')===projection.metadata.uid,'POLICY_PROJECTION_READBACK_MISMATCH');
     process.stdout.write(JSON.stringify({status:'APPLIED',target:'control-plane',policySHA256:plan.renderedPolicySHA256})+'\n');return;
   }
-  requireValue(command==='resume'||options['--confirm']==='APPLY-PORTABLE-CATALOG-PROJECTION','CONFIRMATION_REQUIRED');
+  requireValue(command==='resume'||options['--confirm']===(transitionProfile===telegramPolicyTransition?'APPLY-PORTABLE-TELEGRAM-PROJECTION':'APPLY-PORTABLE-CATALOG-PROJECTION'),'CONFIRMATION_REQUIRED');
   requireValue(command!=='apply'||!changed,'POLICY_PROJECTION_EXISTING_OPERATION_REQUIRES_RESUME');
   const journal=openCatalogProjectionJournal(options['--evidence'],plan,command==='resume');
   try {
@@ -242,18 +290,32 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
     };
     let destination=readDestination();
     const ack=journal.events.find(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION');
-    requireValue(!ack||destination?.metadata.uid===ack.uid,'POLICY_PROJECTION_CONFIGMAP_REPLACED');
+    const apiAck=journal.events.findLast(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION_ACK');
+    requireValue((!ack||destination?.metadata.uid===ack.uid)&&(!apiAck||destination?.metadata.uid===apiAck.uid),'POLICY_PROJECTION_CONFIGMAP_REPLACED');
     if(!destination) {
-      const fresh=readCatalogTarget(profile,options['--context'],get);verifyCatalogTransition(plan.policyTransition,fresh.transition);
+      requireValue(!journal.events.some(row=>row.status==='INTENT'&&row.operation==='CREATE_PROJECTION'),'POLICY_PROJECTION_MISSING_AFTER_CREATE_INTENT');
+      const fresh=readCatalogTarget(profile,options['--context'],get,transitionProfile);verifyCatalogTransition(plan.policyTransition,fresh.transition);
       requireValue(fingerprint(await readCatalogMaintenance(maintenance.planPath,maintenance.evidencePath,kube,maintenance))===fingerprint(maintenance),'POLICY_PROJECTION_MAINTENANCE_DRIFT');
       journal.append({status:'INTENT',operation:'CREATE_PROJECTION'});
-      try{kube(['create','-f','-'],JSON.stringify(plan.projection));}catch{journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION'});}
+      let result;
+      try{result=kube(['create','-f','-','-o','json'],JSON.stringify(plan.projection));}catch{journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION'});}
+      if(result!==undefined){
+        let created;
+        try{created=parseAuthorityPrivateJSON(result);}catch{}
+        if(!projectionMatches(created,plan.projection)||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(created?.metadata?.uid??'')){
+          journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION_ACK_REJECTED'});throw Error('POLICY_PROJECTION_CREATE_ACK_INVALID');
+        }
+        journal.append({status:'ACK',operation:'CREATE_PROJECTION_ACK',uid:created.metadata.uid});
+      }
       destination=readDestination();
+      const assigned=journal.events.findLast(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION_ACK');
+      requireValue(!assigned||destination?.metadata.uid===assigned.uid,'POLICY_PROJECTION_CONFIGMAP_REPLACED');
     }
     requireValue(projectionMatches(destination,plan.projection)&&destination.metadata.uid,'POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED');
     journal.append({status:'ACK',operation:'CREATE_PROJECTION',uid:destination.metadata.uid});
     if(!changed) {
-      const fresh=readCatalogTarget(profile,options['--context'],get);verifyCatalogTransition(plan.policyTransition,fresh.transition);
+      let delivery;
+      const fresh=readCatalogTarget(profile,options['--context'],get,transitionProfile);verifyCatalogTransition(plan.policyTransition,fresh.transition);
       requireValue(fingerprint(await readCatalogMaintenance(maintenance.planPath,maintenance.evidencePath,kube,maintenance))===fingerprint(maintenance),'POLICY_PROJECTION_MAINTENANCE_DRIFT');
       requireValue(fresh.registry.metadata.resourceVersion===plan.registry.resourceVersion&&fingerprint(fresh.registry.data)===plan.registry.dataSHA256,'POLICY_PROJECTION_REGISTRY_DRIFT');
       const projectionReadback=readDestination();
@@ -263,7 +325,13 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
         requireValue(previous.metadata.uid===plan.predecessor.uid&&previous.metadata.resourceVersion===plan.predecessor.resourceVersion&&
           fingerprint(previous.data)===plan.predecessor.dataSHA256,'POLICY_PROJECTION_PREDECESSOR_REJECTED');
       }
+      if(telegramStage){
+        requireValue(fingerprint(readStage())===fingerprint(telegramStage),'TELEGRAM_CP_STAGE_CHANGED');
+        delivery=await readDelivered();requireValue(delivery.state==='PENDING_AUTHORITY','TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+      }
       const patch=projectionPatch(fresh.deployment,plan);
+      if(delivery){const now=Date.now(),observed=Date.parse(delivery.observedAt);
+        requireValue(observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');}
       journal.append({status:'INTENT',operation:'CP_POINTER_CAS'});
       try{withPrivatePatchFile(patch,path=>kube(['-n',namespace,'patch','deployment','control-plane','--type=json','--patch-file',path,'-o','name']));}
       catch{journal.append({status:'UNKNOWN',operation:'CP_POINTER_CAS'});}

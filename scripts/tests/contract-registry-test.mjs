@@ -57,9 +57,9 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Ревизия104 добавляет личный каталог согласований и их отзыв поверх103;
-  // четыре risk bindings остаются прежними.
-  assert.equal(policy.policy_revision, 106, 'RISK_POLICY_REVISION');
+  // Ревизия107 добавляет закрытый Telegram lifecycle поверх106;
+  // четыре human-only risk bindings остаются прежними и проверяются полностью.
+  assert.equal(policy.policy_revision, 107, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');

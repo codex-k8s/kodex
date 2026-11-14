@@ -8,6 +8,7 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/telegram"
 )
 
 // invocationExecutor separates exact integration execution and connection probing from owner-managed work claims and receipts.
@@ -98,7 +99,7 @@ func processIntegrationWork(ctx context.Context, control controlplanev1.RuntimeW
 // Completion must read back the same connection; a probe error is preserved after successful completion reporting.
 // RU: Ответ завершения должен ссылаться на то же подключение; ошибка проверки сохраняется после успешной передачи результата.
 func processConnectionTest(ctx context.Context, control controlplanev1.RuntimeWorkServiceClient, adapter invocationExecutor, claim *controlplanev1.IntegrationConnectionTestClaim, config Config) error {
-	if claim.GetTestRef() == "" || claim.GetConnectionRef() == "" || claim.GetDefinitionKey() != "mattermost" {
+	if claim.GetTestRef() == "" || claim.GetConnectionRef() == "" || (claim.GetDefinitionKey() != "mattermost" && claim.GetDefinitionKey() != "telegram") {
 		return errDeliveryResponse
 	}
 	operation, cancel, err := leaseContext(ctx, claim.GetLease(), config.RequestTimeout)
@@ -108,6 +109,9 @@ func processConnectionTest(ctx context.Context, control controlplanev1.RuntimeWo
 	summary, operationErr := adapter.TestConnection(operation, claim)
 	cancel()
 	success, code, _ := mattermost.InvocationOutcome(operationErr)
+	if claim.GetDefinitionKey() == "telegram" {
+		success, code = telegram.Outcome(operationErr)
+	}
 	lease := claim.GetLease()
 	completion, cancelCompletion := context.WithTimeout(ctx, config.RequestTimeout)
 	defer cancelCompletion()

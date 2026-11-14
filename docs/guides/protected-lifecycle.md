@@ -4,11 +4,45 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.86
+version: 1.1.93
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Custom RoundTripper fixtures не заменяют проверку production HTTP/TLS transport.
+Provider path с CONNECT доказывается отдельным bounded native loop через
+настоящий gateway и TLS server: ephemeral CA, exact SNI, redirect rejection,
+credential redaction и отсутствие replay после неопределённого ответа.
+Test-only DNS/dial mapping не появляется в поставляемом binary либо API config.
+
+Наличие provider response field проверяется отдельно от его нулевого значения.
+Explicit `null` у используемых координат не превращается в отсутствие optional
+поля либо успешный receipt. Допустимые варианты ответа связываются со свежим
+provider proof: например, channel sender не подменяет bot identity обычного
+чата. Неверный ответ после dispatch сохраняет UNKNOWN без повторного effect.
+
+Бюджет отдельного provider call ограничивается внутри допустимого worker
+operation budget. Проверяется весь материализованный путь default ConfigMap →
+app configuration → adapter constructor → health/preflight → dispatch, включая
+максимальный допустимый operation budget. Успешный constructor и fixtures с
+меньшим timeout не доказывают работоспособность установленного профиля.
+
+Допуск нового workload/issuer проверяет все встроенные producers namespace,
+включая pending Deployment/StatefulSet/DaemonSet/ReplicationController/Job/CronJob
+без созданного Pod. Проверяются SA, labels и Secret refs identity полного Pod
+template, включая вложенный CronJob jobTemplate и typed inline CSI
+nodePublishSecretRef. Имя или label selector не заменяет полный scan.
+Исключаются только assigned собственный Deployment0 и его ReplicaSet0 с exact
+UID, положительным observedGeneration и без Pods. Namespace metadata projection
+не читает env/commands/Secret values и сохраняет пустые TSV columns; неизвестная
+или повреждённая строка закрывает admission. Успешный create ACK закрепляет API UID,
+полную безопасную projection и Service allocation в durable journal до первого
+GET; replacement между ACK и GET не может быть усыновлён по тому же nonce.
+Повреждённый успешный ACK не переименовывается в lost ACK и закрывает последующий
+status. При настоящем lost ACK новый create после intent по-прежнему запрещён.
+Матрица:
+[ввод Telegram receiver](../operations/telegram-notifications-2143.md#порядок-authority107).
 
 Подтверждение тишины сканирует все встроенные Kubernetes workload producers,
 включая ReplicationController без ещё созданного Pod. Нулевой status replicas
@@ -55,6 +89,27 @@ replicas только по текущему Job UID, известному execut
 Незнакомая команда, дополнительные args, работающий контейнер и чужой lineage
 по-прежнему закрыто отклоняются. Такое исключение не выдаёт migration/check PASS
 и не разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
+
+Новый reader/issuer, отсутствующий в установленном профиле, получает отдельный
+протокол ввода: assigned UID, exact spec/image и dormant replicas0 связываются с
+устойчивым create receipt до registry CAS. Schema handoff сохраняет его spec и
+не объявляет READY; требовать старта до доставки необходимых authority keys
+создаёт недостижимый цикл. Запуск требует свежего owner DELIVER той же source,
+установки и операции. Потерянный ACK восстанавливается по own start intent,
+exact spec и полному ready inventory без повторного старта; terminal required-set proof/RETIRE и
+открытие API остаются отдельным допуском. Сохранённый boolean или caller proof
+не заменяет authoritative read path. Для уже существующих cohorts их прежние
+counts, join и terminal guards сохраняются.
+
+Если новый CP image требует новую policy projection, прежний schema resume не
+запускает его со старой policy. После DDL весь cohort остаётся положительно
+joined на нуле (`STAGED_PENDING_AUTHORITY`). Отдельный pointer CAS допускается
+только полным свежим owner inspect schema/Job/Pod/join, связанным с исходным
+migration plan. Установка новой immutable projection сохраняет replicas0.
+Последующий start принимает только exact spec из ACK этого же projection journal
+и свежий owner DELIVER; положительная readiness всех Pods остаётся обязательной.
+Чужой pointer, устаревший source, дополнительный env и неподтверждённый ACK
+не являются основанием менять ожидаемый migration spec.
 
 Открытие пользовательского API после обновления требует подтверждённой readiness
 всего serving inventory: owner lineage, полный набор containers/init/ephemeral,

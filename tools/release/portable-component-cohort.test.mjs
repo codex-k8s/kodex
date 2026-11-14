@@ -1,3 +1,4 @@
+import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import test from 'node:test';
 import {componentCohortFixture as fixture,replaceComponentLock as replaceLock} from './fixtures/component-cohort-synthetic.mjs';
 import assert from 'node:assert/strict';
@@ -64,11 +65,11 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const f=fixture(profile),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
   const drain=readFileSync(new URL('./portable-component-migration-drain.sql',import.meta.url));
   const postgres={pod:'kodex-postgresql-0',uid:uuid(30),ownerUID:uuid(31)};
-  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
+  const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,
-    discoveryAfterPatch:'',discoveryReads:1,discoveryObserved:0,replaceUIDAfterPatch:'',replaceSpecAfterPatch:''};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null,activeInteractionDeliveries:0,cpProjection:null,policyReady:false,
+    discoveryAfterPatch:'',discoveryReads:1,discoveryObserved:0,discoveryAlternating:false,replaceUIDAfterPatch:'',replaceSpecAfterPatch:''};
   let previousInventory,remainingDiscovery=0,elapsed=0;
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
@@ -80,7 +81,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
     return [set,...Array.from({length:count},(_,index)=>({kind:'Pod',metadata:{name:name+'-'+index,uid:rsUID+'-'+index,namespace:'kodex-system',
       labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rsUID,name:set.metadata.name,controller:true}]},
       spec:structuredClone(app.spec.template.spec),status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],
-        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}})).map(p=>{
+        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:name!=='control-plane'||!profile.startsWith('telegram')||app.spec.template.spec.containers[0].image===f.value.components[0].expectedImageRef||faults.policyReady,imageID:c.image,state:{running:{}}}))}})).map(p=>{
           if(name==='control-plane')faults.mutatePod?.(p);
           return p;
         })];
@@ -88,18 +89,24 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const kube=(args,input)=>{
     if(args.includes('exec')) {
       assert.ok(Buffer.from(input).equals(drain));
-      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:Number(plan.migrationVersion),
+      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:f.value.schemaHeadsAfter['control-plane'],
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
-        activeIntegrationInvocations:faults.activeEffects,oldClaimSessions:faults.claimSessions});
+        activeInteractionDeliveries:faults.activeInteractionDeliveries,activeIntegrationInvocations:faults.activeEffects,oldClaimSessions:faults.claimSessions});
     }
     if(args.includes('patch')) {
       const name=args[args.indexOf('deployment')+1],app=apps.get(name);
       const patch=JSON.parse(readFileSync(args.find(a=>a.startsWith('--patch-file=')).slice('--patch-file='.length)));
+      if(args.includes('--dry-run=server'))faults.beforePatch?.(name);
       assert.equal(patch[0].value,app.metadata.uid);assert.equal(patch[1].value,app.metadata.resourceVersion);assert.deepEqual(patch[2].value,app.spec);
       if(!args.includes('--dry-run=server')) {
-        if(faults.discoveryAfterPatch===name){previousInventory=structuredClone(inventory());remainingDiscovery=faults.discoveryReads;faults.discoveryAfterPatch='';}
+        if(faults.discoveryAfterPatch===name){
+          previousInventory=structuredClone(inventory());remainingDiscovery=faults.discoveryReads;faults.discoveryAfterPatch='';
+          // При replicas0 rollout всё равно меняет RS inventory. Первый stale
+          // LIST и второй current LIST должны дать настоящий metadata mismatch.
+          if(faults.discoveryAlternating)for(const row of previousInventory)if(row.kind==='ReplicaSet'&&row.metadata.labels['app.kubernetes.io/name']===name)row.metadata.uid+='-previous';
+        }
         app.spec=structuredClone(patch[3].value);status(app);patches.push(name);
         if(faults.replaceUIDAfterPatch===name)app.metadata.uid=uuid(999);
         if(faults.replaceSpecAfterPatch===name)app.spec.paused=true;
@@ -110,7 +117,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
     if(args.includes('deployment'))return JSON.stringify(apps.get(args[args.indexOf('deployment')+1]));
     if(args.includes('replicasets,pods,jobs')){
       let rows=inventory();
-      if(remainingDiscovery>0){remainingDiscovery--;faults.discoveryObserved++;rows=previousInventory;}
+      if(remainingDiscovery>0){remainingDiscovery--;faults.discoveryObserved++;rows=faults.discoveryAlternating&&faults.discoveryObserved%2===0?inventory():previousInventory;}
       return rows.map(r=>[r.kind,r.metadata.name,r.metadata.uid,r.metadata.labels['app.kubernetes.io/name'],
         r.metadata.namespace,JSON.stringify(r.metadata.ownerReferences)].join('\t')).join('\n');
     }
@@ -122,11 +129,18 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},
     clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}});
-  return {lifecycle,apps,events,patches,faults,plan,
+  return {lifecycle,apps,events,patches,faults,plan,projectCP:()=>{
+      const part=handoff.components[0];faults.cpProjection={stagedSpec:structuredClone(part.stagedSpec),resumedSpec:structuredClone(part.resumedSpec)};
+      for(const spec of [faults.cpProjection.stagedSpec,faults.cpProjection.resumedSpec])spec.template.spec.containers[0].env.push({name:'POLICY_REVISION',value:'107'});
+      apps.get('control-plane').spec=structuredClone(faults.cpProjection.stagedSpec);status(apps.get('control-plane'));faults.policyReady=true;
+      const body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
+       introducedReceiverSHA256:fingerprint(plan.imageEvidence.introducedReceiver),...Object.fromEntries(['clusterUID','namespaceUID','installationUID','installationSHA256'].map(key=>[key,plan.portableTarget[key]])),
+       observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};
+    },
     stopCP:()=>{apps.get('control-plane').spec=structuredClone(handoff.components[0].stoppedSpec);status(apps.get('control-plane'));events.push({type:'STOP_ACK'});}};
 }
 
@@ -253,12 +267,12 @@ test('044 ready: лишний debug/sidecar и изменённые команд
   f.faults.mutatePod=undefined;assert.equal((await f.lifecycle.resume()).status,'RESUMED');
 });
 
-test('public CLI044/045 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
+test('public CLI044/045/046 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
   const directory=mkdtempSync(join(tmpdir(),'kodex-cohort-cli-'));chmodSync(directory,0o700);
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const log=join(directory,'commands.jsonl'),binary=join(directory,'kubectl');
   writeFileSync(binary,`#!${process.execPath}\nconst fs=require('node:fs');const args=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');if(args.includes('get')&&args.includes('kube-system'))process.stdout.write(JSON.stringify({metadata:{uid:${JSON.stringify(uuid(1))}}}));else process.exit(73);\n`,{mode:0o700});
-  for(const profile of ['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup']) {
+  for(const profile of ['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup']) {
     const result=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'plan',
       '--profile',profile,'--context','portable-fixture','--kubeconfig','/synthetic/kubeconfig','--source',directory,'--revision',revision,
       '--plan',join(directory,'plan.json'),'--base-render',join(directory,'render.yaml'),
@@ -268,7 +282,7 @@ test('public CLI044/045 normal/backup запрещает прежний путь
     assert.equal(result.status,1);assert.match(result.stderr,/COMPONENT_MIGRATION_COHORT_REQUIRED/);
   }
   const calls=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
-  assert.equal(calls.length,4);
+  assert.equal(calls.length,6);
   for(const args of calls)assert.deepEqual(args,['--kubeconfig','/synthetic/kubeconfig','--context','portable-fixture','--request-timeout=30s','get','namespace','kube-system','-o','json']);
 });
 
@@ -314,4 +328,117 @@ test('044 backup: producer profile, полный cohort и handoff имеют о
  assert.ok(componentMigrationTarget(f.target,f.value,f.observed));
  assert.throws(()=>componentMigrationPublication(f.value,{revision},'github-repository-scope'));
  const normal=fixture();assert.throws(()=>componentMigrationPublication(normal.value,{revision},'github-repository-scope-backup'));
+});
+
+test('046 handoff сохраняет назначенный UID/spec dormant0, schema resume не запускает нового issuer',async()=>{
+ for(const profile of ['telegram-notifications','telegram-notifications-backup']){
+  const f=lifecycleFixture(profile);await f.lifecycle.stopController();f.lifecycle.requireStopped();f.stopCP();f.faults.schema=true;
+  const introduced=f.plan.componentHandoff.components.find(c=>c.name==='interaction-gateway');
+  assert.equal(introduced.introduced,true);assert.equal(introduced.replicas,3);assert.equal(introduced.beforeSpec.replicas,0);
+  await f.lifecycle.handoff();assert.deepEqual(f.apps.get('interaction-gateway').spec,introduced.beforeSpec);
+  assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,0);
+  const result=await f.lifecycle.resume();assert.equal(result.status,'STAGED_PENDING_AUTHORITY');assert.equal(result.pairReady,false);
+  assert.equal(f.apps.get('interaction-gateway').spec.replicas,0);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
+  assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.apps.get('egress-gateway').spec.replicas,0);
+  const writes=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'STAGED_PENDING_AUTHORITY');assert.equal(f.patches.length,writes);
+  f.projectCP();await f.lifecycle.resume();assert.equal(f.apps.get('control-plane').spec.replicas,3);assert.equal(f.apps.get('egress-gateway').spec.replicas,2);
+ }
+ const f=fixture('telegram-notifications');f.deployments.at(-1).metadata.uid=uuid(999);
+ assert.throws(()=>planComponentMigrationHandoff(f.value,f.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
+ const g=fixture('telegram-notifications');g.deployments.at(-1).spec.template.spec.containers[0].env.push({name:'FOREIGN',value:'changed'});
+ assert.throws(()=>planComponentMigrationHandoff(g.value,g.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
+});
+
+test('046 activation требует fresh107 DELIVER, lostACK rejoin не повторяет start и не открывает API',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();await f.lifecycle.resume();f.faults.authorityDelivery=null;
+ const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/COHORT_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/API_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
+ f.faults.apiReaders={state:'ISOLATED_READERS_READY',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ f.faults.activeInteractionDeliveries=1;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/OWNER_PRECONDITION_FAILED/);assert.equal(f.patches.length,writes);f.faults.activeInteractionDeliveries=0;
+ const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
+  introducedReceiverSHA256:fingerprint(f.plan.imageEvidence.introducedReceiver),clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
+  installationUID:target.installationUID,installationSHA256:target.installationSHA256,observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};
+ const sign=value=>({...value,deliverySHA256:fingerprint(value)});
+ for(const mutate of [p=>p.policyRevision=106,p=>p.expectedReadbackCount=16,p=>p.sourceSHA='f'.repeat(40),p=>p.introducedReceiverSHA256='f'.repeat(64),
+  p=>p.installationUID=uuid(999),p=>p.observedAt=new Date(Date.now()-30001).toISOString()]){
+  const altered=structuredClone(body);mutate(altered);f.faults.authorityDelivery=sign(altered);
+  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ }
+ f.faults.authorityDelivery=sign(body);f.faults.lostACK='interaction-gateway';await assert.rejects(()=>f.lifecycle.activateIntroduced(),/RESPONSE_LOST/);
+ const started=f.patches.length;assert.equal(started,writes+1);assert.equal(f.apps.get('interaction-gateway').spec.replicas,3);
+ // Восстановление уже выполненного start читает exact owned spec/CRI и intent;
+ // оно не выдаёт новый effect и не требует заново возвращать ротацию в DISTRIBUTE.
+ f.faults.authorityDelivery=null;f.lifecycle.inspect();const result=await f.lifecycle.activateIntroduced();
+ assert.equal(result.status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,started);assert.equal(f.apps.get('control-api-gateway').spec.replicas,3);assert.equal(result.apiReadersIsolated,true);
+ assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,started);
+ f.faults.apiReaders.state='RESTORED_READERS_READY';f.faults.activeEffects=1;f.faults.activeInteractionDeliveries=1;
+ const terminal=await f.lifecycle.resume();assert.equal(terminal.status,'RESUMED');assert.equal(terminal.serviceRestored,true);assert.equal(f.patches.length,started);
+ f.faults.apiReaders.state='ISOLATED_READERS_READY';f.faults.activeEffects=0;f.faults.activeInteractionDeliveries=0;
+ const intent=f.events.find(e=>e.type==='PAIR_ACTIVATE_INTENT');intent.type='FOREIGN';
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/UNOWNED_HANDOFF/);
+});
+
+test('046 CP не запускается со106projection; full Pod readiness остаётся обязательной после107pointer',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();
+ const initial=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'STAGED_PENDING_AUTHORITY');assert.equal(f.patches.length,initial);
+ f.projectCP();const valid=f.faults.authorityDelivery;f.faults.authorityDelivery={...valid,sourceSHA:'f'.repeat(40)};
+ await assert.rejects(()=>f.lifecycle.resume(),/AUTHORITY_DELIVERY_REQUIRED/);assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.patches.length,initial);
+ f.faults.authorityDelivery=valid;f.faults.policyReady=false;
+ await assert.rejects(()=>f.lifecycle.resume(),/RESUME_TIMEOUT/);assert.equal(f.apps.get('control-plane').spec.replicas,3);
+ assert.equal(f.apps.get('staff-control-center').spec.replicas,0);assert.equal(f.apps.get('egress-gateway').spec.replicas,0);
+ const started=f.patches.length;f.faults.policyReady=true;f.lifecycle.inspect();assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,2);assert.equal(f.patches.length,started+2);
+});
+
+
+test('046 DELIVER TTL проверяется после dry-run прямо перед start intent; expiry не оставляет writer intent',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const now=Date.now,before=f.patches.length;f.faults.beforePatch=name=>{if(name==='control-plane')Date.now=()=>now()+40000;};
+ try{await assert.rejects(()=>f.lifecycle.resume(),/AUTHORITY_DELIVERY_REQUIRED/);}finally{Date.now=now;}
+ assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.patches.length,before);
+ assert.equal(f.events.some(row=>row.type==='RESUME_INTENT'),false);
+ f.faults.beforePatch=undefined;assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+});
+
+test('046: postPATCH discovery handoff ждёт подтверждения до CP stage и rejoin не повторяет effect',async()=>{
+ const f=lifecycleFixture('telegram-notifications',{boundedReadback:true});
+ await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+ f.faults.discoveryAfterPatch='egress-gateway';f.faults.discoveryReads=8;f.faults.discoveryAlternating=true;
+ await assert.rejects(()=>f.lifecycle.handoff(),/POD_DISCOVERY_CHANGED/);
+ assert.equal(f.patches.filter(name=>name==='egress-gateway').length,2);
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,0);
+ assert.equal(f.events.some(row=>row.type==='PAIR_HANDOFF_ACK'),false);
+ f.lifecycle.inspect();await f.lifecycle.handoff();
+ assert.equal(f.patches.filter(name=>name==='egress-gateway').length,2);
+ assert.equal(f.events.some(row=>row.type==='PAIR_HANDOFF_ACK'),true);
+});
+
+test('046: postPATCH discovery CP107 resume не запускает readers до подтверждения и не повторяет CP start',async()=>{
+ const f=lifecycleFixture('telegram-notifications',{boundedReadback:true});
+ await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const before=f.patches.filter(name=>name==='control-plane').length;
+ f.faults.discoveryAfterPatch='control-plane';f.faults.discoveryReads=8;f.faults.discoveryAlternating=true;
+ await assert.rejects(()=>f.lifecycle.resume(),/POD_DISCOVERY_CHANGED/);
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,before+1);
+ assert.equal(f.events.some(row=>row.type==='RESUME_ACK'),false);
+ assert.equal(f.apps.get('staff-control-center').spec.replicas,0);
+ assert.equal(f.apps.get('egress-gateway').spec.replicas,0);
+ f.lifecycle.inspect();assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,before+1);
+});
+
+test('046: postPATCH discovery нового issuer не выдаёт activation ACK; read-only rejoin сохраняет один start',async()=>{
+ const f=lifecycleFixture('telegram-notifications',{boundedReadback:true});
+ await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();await f.lifecycle.resume();
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
+ f.faults.apiReaders={state:'ISOLATED_READERS_READY',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ f.faults.discoveryAfterPatch='interaction-gateway';f.faults.discoveryReads=8;f.faults.discoveryAlternating=true;
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/POD_DISCOVERY_CHANGED/);
+ assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,1);
+ assert.equal(f.events.some(row=>row.type==='PAIR_ACTIVATE_ACK'),false);
+ f.lifecycle.inspect();assert.equal((await f.lifecycle.activateIntroduced()).status,'READERS_STARTED_PENDING_RETIRE');
+ assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,1);
 });

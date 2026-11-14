@@ -38,7 +38,7 @@ export function fixture(){
   const target=readCatalogTarget(profile,profile.context,get);
   const previous=renderAuthorityPolicyEnvironment(catalogPolicySource('predecessor').raw,target.transition.environment);
   const desired=renderAuthorityPolicyEnvironment(catalogPolicySource('desired').raw,target.transition.environment);
-  registry.data={'authority-policy.json':previous.raw,'key-delivery-targets.yaml':readFileSync(new URL('../../../deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml',import.meta.url),'utf8').replace('source_revision: 7','source_revision: 1'),'unrelated':'unchanged'};
+  registry.data={'authority-policy.json':previous.raw,'key-delivery-targets.yaml':readFileSync(new URL('./authority106-key-delivery-targets.yaml',import.meta.url),'utf8').replace('source_revision: 7','source_revision: 1'),'unrelated':'unchanged'};
   return {deployment,registry,publisher,api,service,installation,oidc,profile,get,resources,target,previous,desired};
 }
 
@@ -50,7 +50,7 @@ export function prepareAdmission(f){
     {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:f.api.metadata.uid,maintenanceID:closePlan.maintenanceID}]};
   f.api.spec=structuredClone(closePlan.afterSpec);f.api.metadata.annotations=structuredClone(closePlan.afterAnnotations);
   f.api.status={observedGeneration:1,replicas:0,updatedReplicas:0,readyReplicas:0,availableReplicas:0};
-  const trafficPlan=planComponentAPITraffic({service:f.service,deployment:f.api,resources:{items:[]},target:f.profile,observed,sourceSHA:f.revision,action:'isolate',closed});
+  const trafficPlan=planComponentAPITraffic({service:f.service,deployment:f.api,resources:{items:[]},target:f.profile,observed,sourceSHA:f.revision,action:'isolate',closed,authorityTransition:f.authorityTransition});
   const trafficEvents=[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(trafficPlan),maintenanceID:trafficPlan.maintenanceID},
     {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'ISOLATED',serviceUID:f.service.metadata.uid,maintenanceID:closePlan.maintenanceID}];
   f.service.spec=structuredClone(trafficPlan.afterSpec);f.service.metadata.annotations=structuredClone(trafficPlan.afterAnnotations);

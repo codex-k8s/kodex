@@ -12,6 +12,7 @@ WITH expired AS (
         updated_at = clock_timestamp()
     WHERE organization_id = @organization_id::uuid
       AND state = 'CLAIMED'
+      AND capability_key <> 'telegram.notifications'
       AND lease_expires_at <= clock_timestamp()
     RETURNING id
 ), candidates AS (
@@ -25,6 +26,7 @@ WITH expired AS (
     LEFT JOIN control_plane.owner_gates approval ON approval.id = d.approval_gate_id
     WHERE d.organization_id = @organization_id::uuid
       AND d.state IN ('DUE', 'FAILED')
+      AND d.capability_key <> 'telegram.notifications'
       AND d.attempt < d.execution_max_attempts
       AND d.available_at <= clock_timestamp()
       AND c.enabled

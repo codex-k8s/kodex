@@ -3,7 +3,6 @@ module github.com/codex-k8s/kodex/services/external/control-api-gateway
 go 1.26.10
 
 require (
-	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/coder/websocket v1.8.14
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
@@ -13,6 +12,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/i18n v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/oidcverifier v0.0.0
 	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
@@ -35,11 +35,23 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
+	github.com/goccy/go-json v0.10.6 // indirect
+	github.com/gowebpki/jcs v1.0.1 // indirect
+	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
+	github.com/lestrrat-go/dsig v1.3.0 // indirect
+	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
+	github.com/lestrrat-go/httpcc v1.0.1 // indirect
+	github.com/lestrrat-go/httprc/v3 v3.0.6 // indirect
+	github.com/lestrrat-go/jwx/v3 v3.2.0 // indirect
+	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	github.com/segmentio/asm v1.2.1 // indirect
+	github.com/valyala/fastjson v1.6.10 // indirect
 )
 
 require (

@@ -65,7 +65,7 @@ func (repository *Repository) bindIntegrationPackage(ctx context.Context, tx pgx
 	if !valid || definition.ValidateConfiguration(configuration) != nil {
 		return errs.ErrInvalid
 	}
-	effects, _, err := repository.integrationConnectionDependencies(ctx, tx, connection.id)
+	effects, _, err := repository.integrationConnectionDependencies(ctx, tx, connection.id, false)
 	if err != nil {
 		return err
 	}

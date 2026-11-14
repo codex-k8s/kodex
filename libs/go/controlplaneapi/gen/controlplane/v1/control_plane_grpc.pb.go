@@ -85,6 +85,8 @@ const (
 	PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/GetSystemAssistantIntegrationGrantCandidates"
 	PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/GetProjectAssistantIntegrationGrantCandidates"
 	PlatformQueryService_GetIntegrationConnection_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetTelegramSubscription_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetTelegramSubscription"
+	PlatformQueryService_ListInteractionDeliveries_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListInteractionDeliveries"
 	PlatformQueryService_GetAdministration_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetAdministration"
 	PlatformQueryService_ListAuditEvents_FullMethodName                               = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
 	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName                  = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
@@ -197,6 +199,8 @@ type PlatformQueryServiceClient interface {
 	GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, in *GetSystemAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error)
 	GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, in *GetProjectAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error)
 	GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error)
+	GetTelegramSubscription(ctx context.Context, in *GetTelegramSubscriptionRequest, opts ...grpc.CallOption) (*GetTelegramSubscriptionResponse, error)
+	ListInteractionDeliveries(ctx context.Context, in *ListInteractionDeliveriesRequest, opts ...grpc.CallOption) (*ListInteractionDeliveriesResponse, error)
 	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(ctx context.Context, in *GetAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*GetAgentRuntimeConfigurationResponse, error)
@@ -904,6 +908,26 @@ func (c *platformQueryServiceClient) GetIntegrationConnection(ctx context.Contex
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetTelegramSubscription(ctx context.Context, in *GetTelegramSubscriptionRequest, opts ...grpc.CallOption) (*GetTelegramSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTelegramSubscriptionResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetTelegramSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListInteractionDeliveries(ctx context.Context, in *ListInteractionDeliveriesRequest, opts ...grpc.CallOption) (*ListInteractionDeliveriesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListInteractionDeliveriesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListInteractionDeliveries_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAdministrationResponse)
@@ -1338,6 +1362,8 @@ type PlatformQueryServiceServer interface {
 	GetSystemAssistantIntegrationGrantCandidates(context.Context, *GetSystemAssistantIntegrationGrantCandidatesRequest) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error)
 	GetProjectAssistantIntegrationGrantCandidates(context.Context, *GetProjectAssistantIntegrationGrantCandidatesRequest) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error)
 	GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error)
+	GetTelegramSubscription(context.Context, *GetTelegramSubscriptionRequest) (*GetTelegramSubscriptionResponse, error)
+	ListInteractionDeliveries(context.Context, *ListInteractionDeliveriesRequest) (*ListInteractionDeliveriesResponse, error)
 	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
 	GetAgentRuntimeConfiguration(context.Context, *GetAgentRuntimeConfigurationRequest) (*GetAgentRuntimeConfigurationResponse, error)
@@ -1582,6 +1608,12 @@ func (UnimplementedPlatformQueryServiceServer) GetProjectAssistantIntegrationGra
 }
 func (UnimplementedPlatformQueryServiceServer) GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIntegrationConnection not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetTelegramSubscription(context.Context, *GetTelegramSubscriptionRequest) (*GetTelegramSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTelegramSubscription not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListInteractionDeliveries(context.Context, *ListInteractionDeliveriesRequest) (*ListInteractionDeliveriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListInteractionDeliveries not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAdministration not implemented")
@@ -2900,6 +2932,42 @@ func _PlatformQueryService_GetIntegrationConnection_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetTelegramSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTelegramSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetTelegramSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetTelegramSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetTelegramSubscription(ctx, req.(*GetTelegramSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListInteractionDeliveries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListInteractionDeliveriesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListInteractionDeliveries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListInteractionDeliveries_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListInteractionDeliveries(ctx, req.(*ListInteractionDeliveriesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetAdministration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetAdministrationRequest)
 	if err := dec(in); err != nil {
@@ -3820,6 +3888,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetIntegrationConnection_Handler,
 		},
 		{
+			MethodName: "GetTelegramSubscription",
+			Handler:    _PlatformQueryService_GetTelegramSubscription_Handler,
+		},
+		{
+			MethodName: "ListInteractionDeliveries",
+			Handler:    _PlatformQueryService_ListInteractionDeliveries_Handler,
+		},
+		{
 			MethodName: "GetAdministration",
 			Handler:    _PlatformQueryService_GetAdministration_Handler,
 		},
@@ -4088,6 +4164,7 @@ const (
 	PlatformCommandService_SetProviderAccountConcurrency_FullMethodName             = "/controlplane.v1.PlatformCommandService/SetProviderAccountConcurrency"
 	PlatformCommandService_CreateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/CreateIntegrationConnection"
 	PlatformCommandService_UpdateIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/UpdateIntegrationConnection"
+	PlatformCommandService_ConfigureTelegramSubscription_FullMethodName             = "/controlplane.v1.PlatformCommandService/ConfigureTelegramSubscription"
 	PlatformCommandService_DeleteIntegrationConnection_FullMethodName               = "/controlplane.v1.PlatformCommandService/DeleteIntegrationConnection"
 	PlatformCommandService_ConfigureIntegrationConnectionCredential_FullMethodName  = "/controlplane.v1.PlatformCommandService/ConfigureIntegrationConnectionCredential"
 	PlatformCommandService_TestIntegrationConnection_FullMethodName                 = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
@@ -4276,6 +4353,7 @@ type PlatformCommandServiceClient interface {
 	SetProviderAccountConcurrency(ctx context.Context, in *SetProviderAccountConcurrencyRequest, opts ...grpc.CallOption) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(ctx context.Context, in *CreateIntegrationConnectionRequest, opts ...grpc.CallOption) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(ctx context.Context, in *UpdateIntegrationConnectionRequest, opts ...grpc.CallOption) (*UpdateIntegrationConnectionResponse, error)
+	ConfigureTelegramSubscription(ctx context.Context, in *ConfigureTelegramSubscriptionRequest, opts ...grpc.CallOption) (*ConfigureTelegramSubscriptionResponse, error)
 	DeleteIntegrationConnection(ctx context.Context, in *DeleteIntegrationConnectionRequest, opts ...grpc.CallOption) (*DeleteIntegrationConnectionResponse, error)
 	ConfigureIntegrationConnectionCredential(ctx context.Context, in *ConfigureIntegrationConnectionCredentialRequest, opts ...grpc.CallOption) (*ConfigureIntegrationConnectionCredentialResponse, error)
 	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
@@ -5561,6 +5639,16 @@ func (c *platformCommandServiceClient) UpdateIntegrationConnection(ctx context.C
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) ConfigureTelegramSubscription(ctx context.Context, in *ConfigureTelegramSubscriptionRequest, opts ...grpc.CallOption) (*ConfigureTelegramSubscriptionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigureTelegramSubscriptionResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ConfigureTelegramSubscription_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) DeleteIntegrationConnection(ctx context.Context, in *DeleteIntegrationConnectionRequest, opts ...grpc.CallOption) (*DeleteIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteIntegrationConnectionResponse)
@@ -6260,6 +6348,7 @@ type PlatformCommandServiceServer interface {
 	SetProviderAccountConcurrency(context.Context, *SetProviderAccountConcurrencyRequest) (*SetProviderAccountConcurrencyResponse, error)
 	CreateIntegrationConnection(context.Context, *CreateIntegrationConnectionRequest) (*CreateIntegrationConnectionResponse, error)
 	UpdateIntegrationConnection(context.Context, *UpdateIntegrationConnectionRequest) (*UpdateIntegrationConnectionResponse, error)
+	ConfigureTelegramSubscription(context.Context, *ConfigureTelegramSubscriptionRequest) (*ConfigureTelegramSubscriptionResponse, error)
 	DeleteIntegrationConnection(context.Context, *DeleteIntegrationConnectionRequest) (*DeleteIntegrationConnectionResponse, error)
 	ConfigureIntegrationConnectionCredential(context.Context, *ConfigureIntegrationConnectionCredentialRequest) (*ConfigureIntegrationConnectionCredentialResponse, error)
 	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
@@ -6684,6 +6773,9 @@ func (UnimplementedPlatformCommandServiceServer) CreateIntegrationConnection(con
 }
 func (UnimplementedPlatformCommandServiceServer) UpdateIntegrationConnection(context.Context, *UpdateIntegrationConnectionRequest) (*UpdateIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method UpdateIntegrationConnection not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ConfigureTelegramSubscription(context.Context, *ConfigureTelegramSubscriptionRequest) (*ConfigureTelegramSubscriptionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfigureTelegramSubscription not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) DeleteIntegrationConnection(context.Context, *DeleteIntegrationConnectionRequest) (*DeleteIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteIntegrationConnection not implemented")
@@ -8973,6 +9065,24 @@ func _PlatformCommandService_UpdateIntegrationConnection_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_ConfigureTelegramSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureTelegramSubscriptionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ConfigureTelegramSubscription(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ConfigureTelegramSubscription_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ConfigureTelegramSubscription(ctx, req.(*ConfigureTelegramSubscriptionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_DeleteIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -10461,6 +10571,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateIntegrationConnection",
 			Handler:    _PlatformCommandService_UpdateIntegrationConnection_Handler,
+		},
+		{
+			MethodName: "ConfigureTelegramSubscription",
+			Handler:    _PlatformCommandService_ConfigureTelegramSubscription_Handler,
 		},
 		{
 			MethodName: "DeleteIntegrationConnection",
@@ -14960,6 +15074,7 @@ const (
 	InteractionWorkService_ListInteractionSources_FullMethodName      = "/controlplane.v1.InteractionWorkService/ListInteractionSources"
 	InteractionWorkService_ClaimInteractionDeliveries_FullMethodName  = "/controlplane.v1.InteractionWorkService/ClaimInteractionDeliveries"
 	InteractionWorkService_CompleteInteractionDelivery_FullMethodName = "/controlplane.v1.InteractionWorkService/CompleteInteractionDelivery"
+	InteractionWorkService_BeginInteractionDelivery_FullMethodName    = "/controlplane.v1.InteractionWorkService/BeginInteractionDelivery"
 	InteractionWorkService_AcceptInteractionMessage_FullMethodName    = "/controlplane.v1.InteractionWorkService/AcceptInteractionMessage"
 )
 
@@ -14974,6 +15089,7 @@ type InteractionWorkServiceClient interface {
 	ListInteractionSources(ctx context.Context, in *ListInteractionSourcesRequest, opts ...grpc.CallOption) (*ListInteractionSourcesResponse, error)
 	ClaimInteractionDeliveries(ctx context.Context, in *ClaimInteractionDeliveriesRequest, opts ...grpc.CallOption) (*ClaimInteractionDeliveriesResponse, error)
 	CompleteInteractionDelivery(ctx context.Context, in *CompleteInteractionDeliveryRequest, opts ...grpc.CallOption) (*CompleteInteractionDeliveryResponse, error)
+	BeginInteractionDelivery(ctx context.Context, in *BeginInteractionDeliveryRequest, opts ...grpc.CallOption) (*BeginInteractionDeliveryResponse, error)
 	AcceptInteractionMessage(ctx context.Context, in *AcceptInteractionMessageRequest, opts ...grpc.CallOption) (*AcceptInteractionMessageResponse, error)
 }
 
@@ -15015,6 +15131,16 @@ func (c *interactionWorkServiceClient) CompleteInteractionDelivery(ctx context.C
 	return out, nil
 }
 
+func (c *interactionWorkServiceClient) BeginInteractionDelivery(ctx context.Context, in *BeginInteractionDeliveryRequest, opts ...grpc.CallOption) (*BeginInteractionDeliveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginInteractionDeliveryResponse)
+	err := c.cc.Invoke(ctx, InteractionWorkService_BeginInteractionDelivery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *interactionWorkServiceClient) AcceptInteractionMessage(ctx context.Context, in *AcceptInteractionMessageRequest, opts ...grpc.CallOption) (*AcceptInteractionMessageResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AcceptInteractionMessageResponse)
@@ -15036,6 +15162,7 @@ type InteractionWorkServiceServer interface {
 	ListInteractionSources(context.Context, *ListInteractionSourcesRequest) (*ListInteractionSourcesResponse, error)
 	ClaimInteractionDeliveries(context.Context, *ClaimInteractionDeliveriesRequest) (*ClaimInteractionDeliveriesResponse, error)
 	CompleteInteractionDelivery(context.Context, *CompleteInteractionDeliveryRequest) (*CompleteInteractionDeliveryResponse, error)
+	BeginInteractionDelivery(context.Context, *BeginInteractionDeliveryRequest) (*BeginInteractionDeliveryResponse, error)
 	AcceptInteractionMessage(context.Context, *AcceptInteractionMessageRequest) (*AcceptInteractionMessageResponse, error)
 	mustEmbedUnimplementedInteractionWorkServiceServer()
 }
@@ -15055,6 +15182,9 @@ func (UnimplementedInteractionWorkServiceServer) ClaimInteractionDeliveries(cont
 }
 func (UnimplementedInteractionWorkServiceServer) CompleteInteractionDelivery(context.Context, *CompleteInteractionDeliveryRequest) (*CompleteInteractionDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteInteractionDelivery not implemented")
+}
+func (UnimplementedInteractionWorkServiceServer) BeginInteractionDelivery(context.Context, *BeginInteractionDeliveryRequest) (*BeginInteractionDeliveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BeginInteractionDelivery not implemented")
 }
 func (UnimplementedInteractionWorkServiceServer) AcceptInteractionMessage(context.Context, *AcceptInteractionMessageRequest) (*AcceptInteractionMessageResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcceptInteractionMessage not implemented")
@@ -15135,6 +15265,24 @@ func _InteractionWorkService_CompleteInteractionDelivery_Handler(srv interface{}
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InteractionWorkService_BeginInteractionDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginInteractionDeliveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InteractionWorkServiceServer).BeginInteractionDelivery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InteractionWorkService_BeginInteractionDelivery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InteractionWorkServiceServer).BeginInteractionDelivery(ctx, req.(*BeginInteractionDeliveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InteractionWorkService_AcceptInteractionMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AcceptInteractionMessageRequest)
 	if err := dec(in); err != nil {
@@ -15171,6 +15319,10 @@ var InteractionWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteInteractionDelivery",
 			Handler:    _InteractionWorkService_CompleteInteractionDelivery_Handler,
+		},
+		{
+			MethodName: "BeginInteractionDelivery",
+			Handler:    _InteractionWorkService_BeginInteractionDelivery_Handler,
 		},
 		{
 			MethodName: "AcceptInteractionMessage",

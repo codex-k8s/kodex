@@ -4,6 +4,66 @@ export type ClientOptions = {
     baseUrl: 'https://kodex.example.com' | (string & {});
 };
 
+export type TelegramSubscriptionReadback = {
+    subscription?: TelegramSubscription;
+    canManage: boolean;
+};
+
+export type InteractionDeliveryPage = {
+    items: Array<InteractionDeliveryView>;
+    nextPageToken?: string;
+};
+
+export type TelegramSubscriptionInput = TelegramSubscriptionEnableInput | TelegramSubscriptionDisableInput;
+
+export type TelegramSubscriptionEnableInput = {
+    enabled: true;
+    connectionRef: OpaqueRef;
+    eventTypes: Array<'FINISHED' | 'FAILED' | 'HUMAN_GATE'>;
+    durationSeconds: number;
+    maxEffects: number;
+};
+
+export type TelegramSubscriptionDisableInput = {
+    enabled: false;
+};
+
+export type TelegramSubscription = {
+    ref: OpaqueRef;
+    projectRef: OpaqueRef;
+    connectionRef: OpaqueRef;
+    version: number;
+    enabled: boolean;
+    state: 'ACTIVE' | 'DISABLED' | 'EXPIRED' | 'EXHAUSTED' | 'SCOPE_REVOKED';
+    eventTypes: Array<'FINISHED' | 'FAILED' | 'HUMAN_GATE'>;
+    scopeDigest: string;
+    botId: number;
+    chatDisplay: string;
+    topicDisplay: string;
+    expiresAt: Timestamp;
+    maxEffects: number;
+    usedEffects: number;
+    updatedAt: Timestamp;
+    canManage: boolean;
+};
+
+export type InteractionDeliveryView = {
+    ref: OpaqueRef;
+    version: number;
+    connectionRef: OpaqueRef;
+    runRef: OpaqueRef;
+    gateRef: string;
+    eventType: '' | 'FINISHED' | 'FAILED' | 'HUMAN_GATE';
+    state: 'WAITING_APPROVAL' | 'DUE' | 'CLAIMED' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'UNKNOWN_OUTCOME';
+    attempt: number;
+    retryable: boolean;
+    safeErrorCode: string;
+    createdAt: Timestamp;
+    availableAt: Timestamp;
+    completedAt?: Timestamp;
+    receiptRef: string;
+};
+
 export type OpaqueRef = string;
 
 export type OwnerAuthorizationInput = {
@@ -4594,7 +4654,7 @@ export type IntegrationDefinition = {
     definitionVersion: string;
     origin: 'SHIPPED';
     digest: string;
-    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY';
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'TELEGRAM_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY';
     adapterOwner: 'integration-gateway' | 'interaction-gateway';
     executionRoute: 'MANAGED_MCP' | 'INTERACTION';
     adapterReadiness: 'READY' | 'NOT_READY';
@@ -16434,3 +16494,92 @@ export type GetSystemSttConfigurationResponses = {
 };
 
 export type GetSystemSttConfigurationResponse = GetSystemSttConfigurationResponses[keyof GetSystemSttConfigurationResponses];
+
+export type GetTelegramSubscriptionData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/telegram-subscription';
+};
+
+export type GetTelegramSubscriptionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetTelegramSubscriptionError = GetTelegramSubscriptionErrors[keyof GetTelegramSubscriptionErrors];
+
+export type GetTelegramSubscriptionResponses = {
+    /**
+     * Текущая авторитетная подписка либо отсутствие настройки; токен и private descriptor не выдаются
+     */
+    200: TelegramSubscriptionReadback;
+};
+
+export type GetTelegramSubscriptionResponse = GetTelegramSubscriptionResponses[keyof GetTelegramSubscriptionResponses];
+
+export type ConfigureTelegramSubscriptionData = {
+    body: TelegramSubscriptionInput;
+    headers: {
+        'Idempotency-Key': string;
+        'If-Match'?: string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/telegram-subscription';
+};
+
+export type ConfigureTelegramSubscriptionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ConfigureTelegramSubscriptionError = ConfigureTelegramSubscriptionErrors[keyof ConfigureTelegramSubscriptionErrors];
+
+export type ConfigureTelegramSubscriptionResponses = {
+    /**
+     * Квитанция явной настройки с серверными сроком, версией и лимитом
+     */
+    200: TelegramSubscription;
+};
+
+export type ConfigureTelegramSubscriptionResponse = ConfigureTelegramSubscriptionResponses[keyof ConfigureTelegramSubscriptionResponses];
+
+export type ListInteractionDeliveriesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/interaction-deliveries';
+};
+
+export type ListInteractionDeliveriesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListInteractionDeliveriesError = ListInteractionDeliveriesErrors[keyof ListInteractionDeliveriesErrors];
+
+export type ListInteractionDeliveriesResponses = {
+    /**
+     * Страница статусов после актуальной проверки project, connection и Run eligibility
+     */
+    200: InteractionDeliveryPage;
+};
+
+export type ListInteractionDeliveriesResponse = ListInteractionDeliveriesResponses[keyof ListInteractionDeliveriesResponses];

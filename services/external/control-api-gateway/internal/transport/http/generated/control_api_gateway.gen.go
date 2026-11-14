@@ -2845,6 +2845,7 @@ const (
 	IntegrationDefinitionAdapterSENTRY                IntegrationDefinitionAdapter = "SENTRY"
 	IntegrationDefinitionAdapterSSHCOMPOSE            IntegrationDefinitionAdapter = "SSH_COMPOSE"
 	IntegrationDefinitionAdapterSYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
+	IntegrationDefinitionAdapterTELEGRAMINTERACTION   IntegrationDefinitionAdapter = "TELEGRAM_INTERACTION"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationDefinitionAdapter enum.
@@ -2875,6 +2876,8 @@ func (e IntegrationDefinitionAdapter) Valid() bool {
 	case IntegrationDefinitionAdapterSSHCOMPOSE:
 		return true
 	case IntegrationDefinitionAdapterSYNTHETICHTTP:
+		return true
+	case IntegrationDefinitionAdapterTELEGRAMINTERACTION:
 		return true
 	default:
 		return false
@@ -3172,6 +3175,63 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindSSHTARGET:
 		return true
 	case IntegrationResourceScopeKindSYNTHETICJOURNAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteractionDeliveryViewEventType.
+const (
+	InteractionDeliveryViewEventTypeEmpty     InteractionDeliveryViewEventType = ""
+	InteractionDeliveryViewEventTypeFAILED    InteractionDeliveryViewEventType = "FAILED"
+	InteractionDeliveryViewEventTypeFINISHED  InteractionDeliveryViewEventType = "FINISHED"
+	InteractionDeliveryViewEventTypeHUMANGATE InteractionDeliveryViewEventType = "HUMAN_GATE"
+)
+
+// Valid indicates whether the value is a known member of the InteractionDeliveryViewEventType enum.
+func (e InteractionDeliveryViewEventType) Valid() bool {
+	switch e {
+	case InteractionDeliveryViewEventTypeEmpty:
+		return true
+	case InteractionDeliveryViewEventTypeFAILED:
+		return true
+	case InteractionDeliveryViewEventTypeFINISHED:
+		return true
+	case InteractionDeliveryViewEventTypeHUMANGATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InteractionDeliveryViewState.
+const (
+	InteractionDeliveryViewStateCANCELLED       InteractionDeliveryViewState = "CANCELLED"
+	InteractionDeliveryViewStateCLAIMED         InteractionDeliveryViewState = "CLAIMED"
+	InteractionDeliveryViewStateDUE             InteractionDeliveryViewState = "DUE"
+	InteractionDeliveryViewStateFAILED          InteractionDeliveryViewState = "FAILED"
+	InteractionDeliveryViewStateSUCCEEDED       InteractionDeliveryViewState = "SUCCEEDED"
+	InteractionDeliveryViewStateUNKNOWNOUTCOME  InteractionDeliveryViewState = "UNKNOWN_OUTCOME"
+	InteractionDeliveryViewStateWAITINGAPPROVAL InteractionDeliveryViewState = "WAITING_APPROVAL"
+)
+
+// Valid indicates whether the value is a known member of the InteractionDeliveryViewState enum.
+func (e InteractionDeliveryViewState) Valid() bool {
+	switch e {
+	case InteractionDeliveryViewStateCANCELLED:
+		return true
+	case InteractionDeliveryViewStateCLAIMED:
+		return true
+	case InteractionDeliveryViewStateDUE:
+		return true
+	case InteractionDeliveryViewStateFAILED:
+		return true
+	case InteractionDeliveryViewStateSUCCEEDED:
+		return true
+	case InteractionDeliveryViewStateUNKNOWNOUTCOME:
+		return true
+	case InteractionDeliveryViewStateWAITINGAPPROVAL:
 		return true
 	default:
 		return false
@@ -9198,13 +9258,13 @@ func (e SystemSTTParametersChunkingStrategy) Valid() bool {
 
 // Defines values for SystemSTTParametersStream.
 const (
-	False SystemSTTParametersStream = false
+	SystemSTTParametersStreamFalse SystemSTTParametersStream = false
 )
 
 // Valid indicates whether the value is a known member of the SystemSTTParametersStream enum.
 func (e SystemSTTParametersStream) Valid() bool {
 	switch e {
-	case False:
+	case SystemSTTParametersStreamFalse:
 		return true
 	default:
 		return false
@@ -9220,6 +9280,105 @@ const (
 func (e SystemSTTSpecificationPermissionKey) Valid() bool {
 	switch e {
 	case SystemSTTSpecificationPermissionKeyPlatformSttUse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelegramSubscriptionEventTypes.
+const (
+	TelegramSubscriptionEventTypesFAILED    TelegramSubscriptionEventTypes = "FAILED"
+	TelegramSubscriptionEventTypesFINISHED  TelegramSubscriptionEventTypes = "FINISHED"
+	TelegramSubscriptionEventTypesHUMANGATE TelegramSubscriptionEventTypes = "HUMAN_GATE"
+)
+
+// Valid indicates whether the value is a known member of the TelegramSubscriptionEventTypes enum.
+func (e TelegramSubscriptionEventTypes) Valid() bool {
+	switch e {
+	case TelegramSubscriptionEventTypesFAILED:
+		return true
+	case TelegramSubscriptionEventTypesFINISHED:
+		return true
+	case TelegramSubscriptionEventTypesHUMANGATE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelegramSubscriptionState.
+const (
+	TelegramSubscriptionStateACTIVE       TelegramSubscriptionState = "ACTIVE"
+	TelegramSubscriptionStateDISABLED     TelegramSubscriptionState = "DISABLED"
+	TelegramSubscriptionStateEXHAUSTED    TelegramSubscriptionState = "EXHAUSTED"
+	TelegramSubscriptionStateEXPIRED      TelegramSubscriptionState = "EXPIRED"
+	TelegramSubscriptionStateSCOPEREVOKED TelegramSubscriptionState = "SCOPE_REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the TelegramSubscriptionState enum.
+func (e TelegramSubscriptionState) Valid() bool {
+	switch e {
+	case TelegramSubscriptionStateACTIVE:
+		return true
+	case TelegramSubscriptionStateDISABLED:
+		return true
+	case TelegramSubscriptionStateEXHAUSTED:
+		return true
+	case TelegramSubscriptionStateEXPIRED:
+		return true
+	case TelegramSubscriptionStateSCOPEREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelegramSubscriptionDisableInputEnabled.
+const (
+	TelegramSubscriptionDisableInputEnabledFalse TelegramSubscriptionDisableInputEnabled = false
+)
+
+// Valid indicates whether the value is a known member of the TelegramSubscriptionDisableInputEnabled enum.
+func (e TelegramSubscriptionDisableInputEnabled) Valid() bool {
+	switch e {
+	case TelegramSubscriptionDisableInputEnabledFalse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelegramSubscriptionEnableInputEnabled.
+const (
+	True TelegramSubscriptionEnableInputEnabled = true
+)
+
+// Valid indicates whether the value is a known member of the TelegramSubscriptionEnableInputEnabled enum.
+func (e TelegramSubscriptionEnableInputEnabled) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TelegramSubscriptionEnableInputEventTypes.
+const (
+	TelegramSubscriptionEnableInputEventTypesFAILED    TelegramSubscriptionEnableInputEventTypes = "FAILED"
+	TelegramSubscriptionEnableInputEventTypesFINISHED  TelegramSubscriptionEnableInputEventTypes = "FINISHED"
+	TelegramSubscriptionEnableInputEventTypesHUMANGATE TelegramSubscriptionEnableInputEventTypes = "HUMAN_GATE"
+)
+
+// Valid indicates whether the value is a known member of the TelegramSubscriptionEnableInputEventTypes enum.
+func (e TelegramSubscriptionEnableInputEventTypes) Valid() bool {
+	switch e {
+	case TelegramSubscriptionEnableInputEventTypesFAILED:
+		return true
+	case TelegramSubscriptionEnableInputEventTypesFINISHED:
+		return true
+	case TelegramSubscriptionEnableInputEventTypesHUMANGATE:
 		return true
 	default:
 		return false
@@ -11361,31 +11520,31 @@ func (e ListRunsParamsTargetType) Valid() bool {
 
 // Defines values for ListRunsParamsStates.
 const (
-	ListRunsParamsStatesCANCELLED    ListRunsParamsStates = "CANCELLED"
-	ListRunsParamsStatesCANCELLING   ListRunsParamsStates = "CANCELLING"
-	ListRunsParamsStatesFAILED       ListRunsParamsStates = "FAILED"
-	ListRunsParamsStatesQUEUED       ListRunsParamsStates = "QUEUED"
-	ListRunsParamsStatesRUNNING      ListRunsParamsStates = "RUNNING"
-	ListRunsParamsStatesSUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
-	ListRunsParamsStatesWAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
+	CANCELLED    ListRunsParamsStates = "CANCELLED"
+	CANCELLING   ListRunsParamsStates = "CANCELLING"
+	FAILED       ListRunsParamsStates = "FAILED"
+	QUEUED       ListRunsParamsStates = "QUEUED"
+	RUNNING      ListRunsParamsStates = "RUNNING"
+	SUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
+	WAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsStates enum.
 func (e ListRunsParamsStates) Valid() bool {
 	switch e {
-	case ListRunsParamsStatesCANCELLED:
+	case CANCELLED:
 		return true
-	case ListRunsParamsStatesCANCELLING:
+	case CANCELLING:
 		return true
-	case ListRunsParamsStatesFAILED:
+	case FAILED:
 		return true
-	case ListRunsParamsStatesQUEUED:
+	case QUEUED:
 		return true
-	case ListRunsParamsStatesRUNNING:
+	case RUNNING:
 		return true
-	case ListRunsParamsStatesSUCCEEDED:
+	case SUCCEEDED:
 		return true
-	case ListRunsParamsStatesWAITINGHUMAN:
+	case WAITINGHUMAN:
 		return true
 	default:
 		return false
@@ -13650,6 +13809,36 @@ type IntegrationResourceScope struct {
 
 // IntegrationResourceScopeKind defines model for IntegrationResourceScope.Kind.
 type IntegrationResourceScopeKind string
+
+// InteractionDeliveryPage defines model for InteractionDeliveryPage.
+type InteractionDeliveryPage struct {
+	Items         []InteractionDeliveryView `json:"items"`
+	NextPageToken *string                   `json:"nextPageToken,omitempty"`
+}
+
+// InteractionDeliveryView defines model for InteractionDeliveryView.
+type InteractionDeliveryView struct {
+	Attempt       int                              `json:"attempt"`
+	AvailableAt   Timestamp                        `json:"availableAt"`
+	CompletedAt   *Timestamp                       `json:"completedAt,omitempty"`
+	ConnectionRef OpaqueRef                        `json:"connectionRef"`
+	CreatedAt     Timestamp                        `json:"createdAt"`
+	EventType     InteractionDeliveryViewEventType `json:"eventType"`
+	GateRef       string                           `json:"gateRef"`
+	ReceiptRef    string                           `json:"receiptRef"`
+	Ref           OpaqueRef                        `json:"ref"`
+	Retryable     bool                             `json:"retryable"`
+	RunRef        OpaqueRef                        `json:"runRef"`
+	SafeErrorCode string                           `json:"safeErrorCode"`
+	State         InteractionDeliveryViewState     `json:"state"`
+	Version       int64                            `json:"version"`
+}
+
+// InteractionDeliveryViewEventType defines model for InteractionDeliveryView.EventType.
+type InteractionDeliveryViewEventType string
+
+// InteractionDeliveryViewState defines model for InteractionDeliveryView.State.
+type InteractionDeliveryViewState string
 
 // InteractionIdentity defines model for InteractionIdentity.
 type InteractionIdentity struct {
@@ -17467,6 +17656,66 @@ type SystemSTTSpecification struct {
 // SystemSTTSpecificationPermissionKey defines model for SystemSTTSpecification.PermissionKey.
 type SystemSTTSpecificationPermissionKey string
 
+// TelegramSubscription defines model for TelegramSubscription.
+type TelegramSubscription struct {
+	BotId         int64                            `json:"botId"`
+	CanManage     bool                             `json:"canManage"`
+	ChatDisplay   string                           `json:"chatDisplay"`
+	ConnectionRef OpaqueRef                        `json:"connectionRef"`
+	Enabled       bool                             `json:"enabled"`
+	EventTypes    []TelegramSubscriptionEventTypes `json:"eventTypes"`
+	ExpiresAt     Timestamp                        `json:"expiresAt"`
+	MaxEffects    int                              `json:"maxEffects"`
+	ProjectRef    OpaqueRef                        `json:"projectRef"`
+	Ref           OpaqueRef                        `json:"ref"`
+	ScopeDigest   string                           `json:"scopeDigest"`
+	State         TelegramSubscriptionState        `json:"state"`
+	TopicDisplay  string                           `json:"topicDisplay"`
+	UpdatedAt     Timestamp                        `json:"updatedAt"`
+	UsedEffects   int                              `json:"usedEffects"`
+	Version       int64                            `json:"version"`
+}
+
+// TelegramSubscriptionEventTypes defines model for TelegramSubscription.EventTypes.
+type TelegramSubscriptionEventTypes string
+
+// TelegramSubscriptionState defines model for TelegramSubscription.State.
+type TelegramSubscriptionState string
+
+// TelegramSubscriptionDisableInput defines model for TelegramSubscriptionDisableInput.
+type TelegramSubscriptionDisableInput struct {
+	Enabled TelegramSubscriptionDisableInputEnabled `json:"enabled"`
+}
+
+// TelegramSubscriptionDisableInputEnabled defines model for TelegramSubscriptionDisableInput.Enabled.
+type TelegramSubscriptionDisableInputEnabled bool
+
+// TelegramSubscriptionEnableInput defines model for TelegramSubscriptionEnableInput.
+type TelegramSubscriptionEnableInput struct {
+	ConnectionRef   OpaqueRef                                   `json:"connectionRef"`
+	DurationSeconds int                                         `json:"durationSeconds"`
+	Enabled         TelegramSubscriptionEnableInputEnabled      `json:"enabled"`
+	EventTypes      []TelegramSubscriptionEnableInputEventTypes `json:"eventTypes"`
+	MaxEffects      int                                         `json:"maxEffects"`
+}
+
+// TelegramSubscriptionEnableInputEnabled defines model for TelegramSubscriptionEnableInput.Enabled.
+type TelegramSubscriptionEnableInputEnabled bool
+
+// TelegramSubscriptionEnableInputEventTypes defines model for TelegramSubscriptionEnableInput.EventTypes.
+type TelegramSubscriptionEnableInputEventTypes string
+
+// TelegramSubscriptionInput defines model for TelegramSubscriptionInput.
+type TelegramSubscriptionInput struct {
+	union json.RawMessage
+}
+
+// TelegramSubscriptionReadback defines model for TelegramSubscriptionReadback.
+type TelegramSubscriptionReadback struct {
+	CanManage    bool                  `json:"canManage"`
+	Subscription *TelegramSubscription `json:"subscription,omitempty"`
+}
+
 // TemplateVariable defines model for TemplateVariable.
 type TemplateVariable struct {
 	Available     bool                               `json:"available"`
@@ -19515,6 +19764,12 @@ type CreateAttachmentSetDraftParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListInteractionDeliveriesParams defines parameters for ListInteractionDeliveries.
+type ListInteractionDeliveriesParams struct {
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // ListProjectMembershipsParams defines parameters for ListProjectMemberships.
 type ListProjectMembershipsParams struct {
 	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
@@ -19720,6 +19975,13 @@ type TranscribeSpeechParams struct {
 
 	// XAudioSize Точный размер audio part; gateway и STT сверяют его до provider RPC.
 	XAudioSize int64 `json:"X-Audio-Size"`
+}
+
+// ConfigureTelegramSubscriptionParams defines parameters for ConfigureTelegramSubscription.
+type ConfigureTelegramSubscriptionParams struct {
+	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
+	IfMatch        *IfMatchOptional `json:"If-Match,omitempty"`
+	XCSRFToken     CsrfToken        `json:"X-CSRF-Token"`
 }
 
 // ListTemplateVariablesParams defines parameters for ListTemplateVariables.
@@ -20882,6 +21144,9 @@ type CreateSkillBundleDraftJSONRequestBody = SkillBundleDraftCreateInput
 // TranscribeSpeechMultipartRequestBody defines body for TranscribeSpeech for multipart/form-data ContentType.
 type TranscribeSpeechMultipartRequestBody TranscribeSpeechMultipartBody
 
+// ConfigureTelegramSubscriptionJSONRequestBody defines body for ConfigureTelegramSubscription for application/json ContentType.
+type ConfigureTelegramSubscriptionJSONRequestBody = TelegramSubscriptionInput
+
 // CreateWorkflowJSONRequestBody defines body for CreateWorkflow for application/json ContentType.
 type CreateWorkflowJSONRequestBody = WorkflowInput
 
@@ -22037,6 +22302,68 @@ func (t *Run) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsTelegramSubscriptionEnableInput returns the union data inside the TelegramSubscriptionInput as a TelegramSubscriptionEnableInput
+func (t TelegramSubscriptionInput) AsTelegramSubscriptionEnableInput() (TelegramSubscriptionEnableInput, error) {
+	var body TelegramSubscriptionEnableInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTelegramSubscriptionEnableInput overwrites any union data inside the TelegramSubscriptionInput as the provided TelegramSubscriptionEnableInput
+func (t *TelegramSubscriptionInput) FromTelegramSubscriptionEnableInput(v TelegramSubscriptionEnableInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTelegramSubscriptionEnableInput performs a merge with any union data inside the TelegramSubscriptionInput, using the provided TelegramSubscriptionEnableInput
+func (t *TelegramSubscriptionInput) MergeTelegramSubscriptionEnableInput(v TelegramSubscriptionEnableInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsTelegramSubscriptionDisableInput returns the union data inside the TelegramSubscriptionInput as a TelegramSubscriptionDisableInput
+func (t TelegramSubscriptionInput) AsTelegramSubscriptionDisableInput() (TelegramSubscriptionDisableInput, error) {
+	var body TelegramSubscriptionDisableInput
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTelegramSubscriptionDisableInput overwrites any union data inside the TelegramSubscriptionInput as the provided TelegramSubscriptionDisableInput
+func (t *TelegramSubscriptionInput) FromTelegramSubscriptionDisableInput(v TelegramSubscriptionDisableInput) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeTelegramSubscriptionDisableInput performs a merge with any union data inside the TelegramSubscriptionInput, using the provided TelegramSubscriptionDisableInput
+func (t *TelegramSubscriptionInput) MergeTelegramSubscriptionDisableInput(v TelegramSubscriptionDisableInput) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t TelegramSubscriptionInput) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *TelegramSubscriptionInput) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsAgent returns the union data inside the CommandAgentInstructions200JSONResponseBody as a Agent
 func (t CommandAgentInstructions200JSONResponseBody) AsAgent() (Agent, error) {
 	var body Agent
@@ -22659,6 +22986,9 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/attachment-sets)
 	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
+	// Прочитать безопасную историю доступных доставок проекта
+	// (GET /api/v1/projects/{projectRef}/interaction-deliveries)
+	ListInteractionDeliveries(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListInteractionDeliveriesParams)
 
 	// (GET /api/v1/projects/{projectRef}/members)
 	ListProjectMemberships(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListProjectMembershipsParams)
@@ -22749,6 +23079,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/speech/transcriptions)
 	TranscribeSpeech(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params TranscribeSpeechParams)
+	// Прочитать ограниченную подписку Telegram выбранного проекта
+	// (GET /api/v1/projects/{projectRef}/telegram-subscription)
+	GetTelegramSubscription(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+	// Явно включить, заменить либо отключить ограниченную подписку проекта
+	// (PUT /api/v1/projects/{projectRef}/telegram-subscription)
+	ConfigureTelegramSubscription(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ConfigureTelegramSubscriptionParams)
 
 	// (GET /api/v1/projects/{projectRef}/template-variables)
 	ListTemplateVariables(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ListTemplateVariablesParams)
@@ -39509,6 +39845,67 @@ func (siw *ServerInterfaceWrapper) CreateAttachmentSetDraft(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// ListInteractionDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListInteractionDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListInteractionDeliveriesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInteractionDeliveries(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListProjectMemberships operation middleware
 func (siw *ServerInterfaceWrapper) ListProjectMemberships(w http.ResponseWriter, r *http.Request) {
 
@@ -42197,6 +42594,140 @@ func (siw *ServerInterfaceWrapper) TranscribeSpeech(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TranscribeSpeech(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTelegramSubscription operation middleware
+func (siw *ServerInterfaceWrapper) GetTelegramSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTelegramSubscription(w, r, projectRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigureTelegramSubscription operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureTelegramSubscription(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureTelegramSubscriptionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchOptional
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureTelegramSubscription(w, r, projectRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -54074,6 +54605,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.CreateProjectAssistant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant/integration-grant-candidates", wrapper.GetProjectAssistantIntegrationGrantCandidates)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/interaction-deliveries", wrapper.ListInteractionDeliveries)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members/{membershipRef}", wrapper.RemoveProjectMembership)
@@ -54104,6 +54636,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/schedules", wrapper.CreateSchedule)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/skill-bundle-drafts", wrapper.CreateSkillBundleDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/speech/transcriptions", wrapper.TranscribeSpeech)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/telegram-subscription", wrapper.GetTelegramSubscription)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/projects/{projectRef}/telegram-subscription", wrapper.ConfigureTelegramSubscription)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/template-variables", wrapper.ListTemplateVariables)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.ListWorkflows)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/workflows", wrapper.CreateWorkflow)

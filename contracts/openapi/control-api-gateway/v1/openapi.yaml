@@ -8630,6 +8630,64 @@ paths:
             }
         default: { $ref: "#/components/responses/Problem" }
 
+  /api/v1/projects/{projectRef}/telegram-subscription:
+    get:
+      tags: [Integrations]
+      operationId: getTelegramSubscription
+      summary: Прочитать ограниченную подписку Telegram выбранного проекта
+      parameters:
+        - { $ref: "#/components/parameters/ProjectRef" }
+      responses:
+        "200":
+          description: Текущая авторитетная подписка либо отсутствие настройки; токен и private descriptor не выдаются
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/TelegramSubscriptionReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [Integrations]
+      operationId: configureTelegramSubscription
+      summary: Явно включить, заменить либо отключить ограниченную подписку проекта
+      description: Первый enable не принимает If-Match. Изменение существующей подписки требует её точной версии. Срок не продлевается повтором Idempotency-Key. Actor, scope digest, bot/chat/topic и grant назначает владелец по текущему подключению.
+      parameters:
+        - { $ref: "#/components/parameters/ProjectRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatchOptional" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TelegramSubscriptionInput" }
+      responses:
+        "200":
+          description: Квитанция явной настройки с серверными сроком, версией и лимитом
+          headers:
+            ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/TelegramSubscription" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/projects/{projectRef}/interaction-deliveries:
+    get:
+      tags: [Integrations]
+      operationId: listInteractionDeliveries
+      summary: Прочитать безопасную историю доступных доставок проекта
+      parameters:
+        - { $ref: "#/components/parameters/ProjectRef" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: Страница статусов после актуальной проверки project, connection и Run eligibility
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/InteractionDeliveryPage" }
+        default: { $ref: "#/components/responses/Problem" }
+
 components:
   securitySchemes:
     oidcBearer:
@@ -9077,6 +9135,85 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
   schemas:
+    TelegramSubscriptionReadback:
+      type: object
+      additionalProperties: false
+      required: [canManage]
+      properties:
+        subscription: { $ref: "#/components/schemas/TelegramSubscription" }
+        canManage: { type: boolean }
+    InteractionDeliveryPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/InteractionDeliveryView" } }
+        nextPageToken: { type: string, maxLength: 512 }
+    TelegramSubscriptionInput:
+      oneOf:
+        - { $ref: "#/components/schemas/TelegramSubscriptionEnableInput" }
+        - { $ref: "#/components/schemas/TelegramSubscriptionDisableInput" }
+    TelegramSubscriptionEnableInput:
+      type: object
+      additionalProperties: false
+      required: [enabled, connectionRef, eventTypes, durationSeconds, maxEffects]
+      properties:
+        enabled: { type: boolean, enum: [true] }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        eventTypes:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items: { type: string, enum: [FINISHED, FAILED, HUMAN_GATE] }
+        durationSeconds: { type: integer, minimum: 60, maximum: 604800 }
+        maxEffects: { type: integer, minimum: 1, maximum: 10000 }
+    TelegramSubscriptionDisableInput:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: { type: boolean, enum: [false] }
+    TelegramSubscription:
+      type: object
+      additionalProperties: false
+      required: [ref, projectRef, connectionRef, version, enabled, state, eventTypes, scopeDigest, botId, chatDisplay, topicDisplay, expiresAt, maxEffects, usedEffects, updatedAt, canManage]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        enabled: { type: boolean }
+        state: { type: string, enum: [ACTIVE, DISABLED, EXPIRED, EXHAUSTED, SCOPE_REVOKED] }
+        eventTypes: { type: array, minItems: 1, maxItems: 3, uniqueItems: true, items: { type: string, enum: [FINISHED, FAILED, HUMAN_GATE] } }
+        scopeDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        botId: { type: integer, format: int64, minimum: 1, maximum: 4503599627370495 }
+        chatDisplay: { type: string, minLength: 1, maxLength: 24 }
+        topicDisplay: { type: string, minLength: 1, maxLength: 10 }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
+        maxEffects: { type: integer, minimum: 1, maximum: 10000 }
+        usedEffects: { type: integer, minimum: 0, maximum: 10000 }
+        updatedAt: { $ref: "#/components/schemas/Timestamp" }
+        canManage: { type: boolean }
+    InteractionDeliveryView:
+      type: object
+      additionalProperties: false
+      required: [ref, version, connectionRef, runRef, gateRef, eventType, state, attempt, retryable, safeErrorCode, createdAt, availableAt, receiptRef]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        gateRef: { type: string, maxLength: 96 }
+        eventType: { type: string, enum: ["", FINISHED, FAILED, HUMAN_GATE] }
+        state: { type: string, enum: [WAITING_APPROVAL, DUE, CLAIMED, SUCCEEDED, FAILED, CANCELLED, UNKNOWN_OUTCOME] }
+        attempt: { type: integer, minimum: 0, maximum: 10 }
+        retryable: { type: boolean }
+        safeErrorCode: { type: string, maxLength: 96, pattern: "^[A-Z0-9_]*$" }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        availableAt: { $ref: "#/components/schemas/Timestamp" }
+        completedAt: { $ref: "#/components/schemas/Timestamp" }
+        receiptRef: { type: string, maxLength: 96 }
     OpaqueRef:
       type: string
       minLength: 8
@@ -19638,6 +19775,7 @@ components:
                 CONFLUENCE,
                 EMAIL_HTTPS,
                 MATTERMOST_INTERACTION,
+                TELEGRAM_INTERACTION,
                 HTTPS_JSON_READ,
                 OPENAPI_MCP,
                 CONTEXT7,

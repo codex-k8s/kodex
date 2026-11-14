@@ -71,7 +71,7 @@ class Tests(unittest.TestCase):
             with self.subTest(change=change),self.assertRaises(Rejected):profile.transform(bad,configuration,digest)
 
     def test_gateway_profiles_preserve_sidecars_configuration_and_other_images(self):
-        for component in ('integration-gateway', 'control-api-gateway'):
+        for component in ('integration-gateway', 'interaction-gateway', 'control-api-gateway'):
             resources, original, _, lock_raw, _ = fixture()
             lock = json.loads(lock_raw)
             base = f'images.example.invalid/base/{component}@sha256:' + 'c'*64

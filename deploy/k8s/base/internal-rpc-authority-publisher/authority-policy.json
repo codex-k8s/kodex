@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "policy_revision": 106,
+  "policy_revision": 107,
   "policy": {
     "authority_abi_version": 2,
     "trust_domain": "kodex.local",
@@ -272,6 +272,7 @@
         "allowed_operation_ids": [
           "platform.interactions.connection-tests.claim",
           "platform.interactions.connection-tests.complete",
+          "platform.interactions.deliveries.begin",
           "platform.interactions.deliveries.claim",
           "platform.interactions.deliveries.complete",
           "platform.interactions.invocations.claim",
@@ -523,6 +524,7 @@
           "platform.command.system-stt.rebind",
           "platform.command.system-stt.save-draft",
           "platform.command.system-stt.validate",
+          "platform.command.telegram-subscription.configure",
           "platform.command.workflows.archive",
           "platform.command.workflows.create",
           "platform.command.workflows.publish",
@@ -579,6 +581,7 @@
           "platform.query.integration-grant-candidates.connections.list",
           "platform.query.integration-grant-candidates.projects.list",
           "platform.query.integration-grant-candidates.recipients.list",
+          "platform.query.interaction-deliveries.list",
           "platform.query.interaction-identities.list",
           "platform.query.managed-configurations.history.list",
           "platform.query.managed-configurations.impact.get",
@@ -642,6 +645,7 @@
           "platform.query.skill-bundles.list",
           "platform.query.system-assistant.integration-grant-candidates.get",
           "platform.query.system-stt.get",
+          "platform.query.telegram-subscription.get",
           "platform.query.template-variables.list",
           "platform.query.vfs.list",
           "platform.query.vfs.search",
@@ -8510,6 +8514,42 @@
         }
       },
       {
+        "operation_id": "platform.command.telegram-subscription.configure",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformCommandService/ConfigureTelegramSubscription",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.command.telegram-subscription.configure",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "REQUIRED"
+        }
+      },
+      {
         "operation_id": "platform.command.workflows.archive",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -9495,6 +9535,41 @@
           "version": "FORBIDDEN",
           "attempt": "REQUIRED",
           "idempotency": "REQUIRED"
+        }
+      },
+      {
+        "operation_id": "platform.interactions.deliveries.begin",
+        "caller_workload_id": "interaction-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/interaction-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.InteractionWorkService/BeginInteractionDelivery",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.interactions.deliveries.begin",
+        "authority_proof_producer_id": "control-plane.interaction-gateway",
+        "authority_sources": [
+          "DOMAIN_STATE"
+        ],
+        "project_required": false,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
         }
       },
       {
@@ -11996,6 +12071,42 @@
         }
       },
       {
+        "operation_id": "platform.query.interaction-deliveries.list",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/ListInteractionDeliveries",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.interaction-deliveries.list",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
         "operation_id": "platform.query.interaction-identities.list",
         "caller_workload_id": "control-api-gateway",
         "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
@@ -14258,6 +14369,42 @@
         "request_profile": {
           "mode": "UNARY_PROTO_SHA256",
           "resource": "REQUIRED",
+          "version": "FORBIDDEN",
+          "attempt": "FORBIDDEN",
+          "idempotency": "FORBIDDEN"
+        }
+      },
+      {
+        "operation_id": "platform.query.telegram-subscription.get",
+        "caller_workload_id": "control-api-gateway",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "issuer": "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+        "target_workload_id": "control-plane",
+        "target_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
+        "audience": "urn:kodex:internal-rpc:control-plane",
+        "full_method": "/controlplane.v1.PlatformQueryService/GetTelegramSubscription",
+        "target_tls_server_name": "control-plane.kodex-system.svc.cluster.local",
+        "target_trust_bundle_id": "kodex-internal-ca-g1",
+        "permission": "platform.query.telegram-subscription.get",
+        "authority_proof_producer_id": "control-plane.oidc",
+        "authority_sources": [
+          "OIDC_SESSION",
+          "DOMAIN_STATE"
+        ],
+        "project_required": true,
+        "local_caller": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "local_target": {
+          "uid": 10001,
+          "primary_gid": 10001,
+          "shared_fs_gid": 29000
+        },
+        "request_profile": {
+          "mode": "UNARY_PROTO_SHA256",
+          "resource": "FORBIDDEN",
           "version": "FORBIDDEN",
           "attempt": "FORBIDDEN",
           "idempotency": "FORBIDDEN"

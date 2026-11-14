@@ -1813,6 +1813,9 @@ type IntegrationConnectionTestInput struct {
 // или подтверждённое отсутствие эффекта. Структура не обеспечивает взаимоисключение признаков;
 // владелец классифицирует свидетельства перед решением о безопасности новой попытки.
 type InteractionDeliveryInput struct {
+	TelegramReceipt                                                                 *entity.TelegramDeliveryReceipt `json:",omitempty"`
+	InputDigest                                                                     string                          `json:",omitempty"`
+	RetryAfterSeconds                                                               int32                           `json:",omitempty"`
 	ExternalTeamRef, ExternalChannelRef                                             string
 	DeliveryRef, LeaseRef, Fence, ExternalPostRef, ExternalThreadRef, SafeErrorCode string
 	Generation                                                                      int64
@@ -1888,6 +1891,7 @@ type EmailMailboxInput struct {
 // транспортный ответ: каждая граница выбирает типизированное представление, а Duplicate не разрешает
 // повторить эффект.
 type Result struct {
+	TelegramSubscription              *entity.TelegramSubscription
 	IntegrationApprovalConsent        *entity.IntegrationApprovalConsent `json:"integrationApprovalConsent,omitempty"`
 	PersonalIntegrationCredentialTest *entity.PersonalIntegrationCredentialTestReceipt
 	PersonalIntegrationCredential     *entity.PersonalIntegrationCredential

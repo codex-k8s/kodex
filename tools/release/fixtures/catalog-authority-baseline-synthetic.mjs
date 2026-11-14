@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdtempSync,rmSync,chmodSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from '../scoped-release.mjs';
 import {fixture,uid} from './authority-catalog-synthetic.mjs';
@@ -9,10 +12,28 @@ import {deriveCanonicalRegistryAdvance} from '../authority-rotation-transition.m
 import {authorityReadbackContract} from '../authority-readback-targets.mjs';
 import {catalogAuthorityBaselineSQL,readCatalogAuthorityBaseline} from '../catalog-authority-baseline.mjs';
 
+const historicalSources=new WeakMap();
+export const catalog106SourceSHA='fc0aa41f670f82ed2a79c139cd2ad7fc7318c2ed';
+export const catalog106PredecessorSHA='fbd27e47ea7fad9c779458f8a52aac9ff114e9a8';
+
+// Исторические045/106 воспроизводятся на собственном опубликованном source,
+// без подмены текущих046/107, fake git либо ослабления closed16 registry guard.
+export function historicalCatalog106Source(t,revision=catalog106SourceSHA){
+ let selected=historicalSources.get(t);if(!selected){selected=new Map();historicalSources.set(t,selected);}
+ if(selected.has(revision))return selected.get(revision);
+ assert.ok([catalog106SourceSHA,catalog106PredecessorSHA].includes(revision));
+ const root=fileURLToPath(new URL('../../../',import.meta.url)).replace(/\/$/,''),directory=mkdtempSync(join(tmpdir(),'kodex-catalog106-source-'));
+ chmodSync(directory,0o700);const path=join(directory,'source');
+ const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',timeout:30000,stdio:['ignore','pipe','pipe']});
+ git('worktree','add','--detach',path,revision);
+ t.after(()=>{git('worktree','remove','--force',path);rmSync(directory,{recursive:true,force:true});});
+ const source={path,revision};selected.set(revision,source);return source;
+}
+
 // Только Kubernetes/SQL transport заменены оснасткой; исполняются настоящие
 // pinned source/template, owner-shape, namespace, canonical registry и DB readers.
-export function baselineFixture(){
- const f=fixture(),source=fileURLToPath(new URL('../../../',import.meta.url)).replace(/\/$/,'');
+export function baselineFixture(t,{revision=catalog106SourceSHA}={}){
+ const f=fixture(),source=historicalCatalog106Source(t,revision).path;
  const canonical=readFileSync(`${source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8');
  const advance=deriveCanonicalRegistryAdvance(f.registry.data['key-delivery-targets.yaml'],canonical);
  f.registry.data['key-delivery-targets.yaml']=advance.raw;f.registry.data['authority-policy.json']=f.desired.raw;
@@ -22,7 +43,7 @@ export function baselineFixture(){
  f.publisher.spec.template.metadata.annotations={'kodex.dev/authority-rotation-operation':operationID};
  f.publisher.status={observedGeneration:1,replicas:1,updatedReplicas:1,readyReplicas:1,availableReplicas:1};
  const transition=f.target.transition;
- const plan={action:'rotate',intentID,ownerOperationID:operationID,source,revision:'a'.repeat(40),context:f.profile.context,
+ const plan={action:'rotate',intentID,ownerOperationID:operationID,source,revision,context:f.profile.context,
   policyTransition:transition,registry:{uid:f.registry.metadata.uid,desiredData:structuredClone(f.registry.data),desiredDataSHA256:fingerprint(f.registry.data),
    sourceRevision:advance.identity.sourceRevision,sourceDigestSHA256:advance.identity.sourceDigestSHA256},
   publisher:{uid:f.publisher.metadata.uid,desiredSpecSHA256:fingerprint(f.publisher.spec)}};

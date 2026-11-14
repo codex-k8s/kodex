@@ -24,6 +24,11 @@ spec:
             - configMapRef:
                 name: interaction-gateway-runtime
           env:
+            - name: INTERACTION_PUBLIC_ORIGIN
+              valueFrom:
+                configMapKeyRef:
+                  name: kodex-platform-endpoints
+                  key: publicOrigin
             - name: DEPLOYMENT_ENVIRONMENT
               valueFrom:
                 fieldRef:

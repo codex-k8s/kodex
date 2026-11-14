@@ -1,3 +1,11 @@
+import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
+import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
+import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
+import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
+import {readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
+import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
+import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
+import { telegramNotificationsCatalog } from './telegram-notifications-catalog.gen.mjs';
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
 import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
@@ -25,6 +33,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'telegram-notifications': {anchorProfile:'portable',executionCommand:'up-telegram-notifications',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-migration-precondition.sql',postconditionFile:'telegram-notifications-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
+  'telegram-notifications-backup': {anchorProfile:'portable',executionCommand:'up-telegram-notifications-backup-maintenance',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-backup-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-backup-migration-precondition.sql',postconditionFile:'telegram-notifications-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
   'sentry-observability': {anchorProfile:'portable',executionCommand:'up-sentry-observability',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'sentry-observability-backup': {anchorProfile:'portable',executionCommand:'up-sentry-observability-backup-maintenance',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
@@ -299,7 +309,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
   // Для044 прежний CP043 не является допустимым rollback после DDL. Normal и
   // backup требуют одного полного нового cohort, но разные exact schema proofs.
-  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup'].includes(profile) || componentPublication,
+  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup'].includes(profile) || componentPublication,
     'COMPONENT_MIGRATION_COHORT_REQUIRED');
   ensure(componentPublication ? isComponentMigrationProfile(profile) && portableTarget && context === componentPublication.context
     : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -385,22 +395,58 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure((configuration.requiredMigrations??[]).every(name=>names.includes(name)),'MIGRATION_SOURCE_CHAIN_INVALID');
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
+  const activationAuthority = () => {
+    ensure(componentPublication?.introducedReceiver&&options['--authority-plan'],
+      'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const authority=privateJSON(options['--authority-plan']);
+    ensure(authority.source===retainedPlan.source.path&&authority.revision===retainedPlan.source.revision&&
+      authority.context===context&&authority.kubeconfig===options['--kubeconfig']&&
+      fingerprint(authority.introducedReceiver)===fingerprint(componentPublication.introducedReceiver),'TELEGRAM_ACTIVATION_SOURCE_CHANGED');
+    return authority;
+  };
+  const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
+    openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
+    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence']},kube);
+  const readAuthorityDelivery = async () => {
+    const authority=activationAuthority();
+    ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
+      'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readTelegramAuthorityDelivered({plan:authority,events:events(options['--authority-evidence']),
+      freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
+      admissionProof:authority.maintenance.proof},kube);
+  };
   const imageScope = (evidence, nsUID) => {
     if (isComponentMigrationPublication(evidence)) {
       const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
       const apps = componentMigrationTargetNames(evidence.profile).map(name => get('deployment',name));
+      const readers=phase!=='plan'&&apps.find(d=>d.metadata.name==='control-api-gateway')?.spec.replicas>0&&evidence.introducedReceiver
+        ? readMaintenanceReaders():undefined;
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
+        ...(readers?{maintenanceReaders:readers}:{}),
         installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items,apiRestoration});
       const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
       const children = readComponentServingInventory(kube,'control-api-gateway',gateway.metadata.uid);
-      if(apiRestoration)ensure(componentServingReady(gateway,activeDeploymentPods(children,gateway.metadata.uid),apiRestoration.replicas),
-        'COMPONENT_MIGRATION_API_RESTORATION_NOT_READY');
-      else ensure(gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
+      if(apiRestoration)ensure(componentServingReady(gateway,activeDeploymentPods(children,gateway.metadata.uid),apiRestoration.replicas),'COMPONENT_MIGRATION_API_RESTORATION_NOT_READY');
+      else ensure(readers || gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
         activeDeploymentPods(children,gateway.metadata.uid).length === 0, 'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
       return target;
     }
     ensure(evidence.publicationPlan.context === context && evidence.publicationPlan.clusterUID === clusterUID &&
       evidence.publicationPlan.namespaceUID === nsUID, 'MIGRATION_PUBLICATION_SCOPE_MISMATCH');
+  };
+  // Fresh creator admission является обязательным до capture и каждого initial
+  // schema effect. Metadata в component publication не предоставляет authority.
+  const readRuntimeSource = source => decodeTelegramResourceCreateSource(kube(['kustomize',`${source.path}/deploy/k8s/profiles/web-only`]),
+    (command,args,input,maximum)=>execFileSync(command,args,{input,encoding:'utf8',timeout:10000,maxBuffer:maximum,
+      env:Object.fromEntries(['PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]])),stdio:['pipe','pipe','pipe']}));
+  const readIntroduction = async (evidence,source) => {
+    const receiver=evidence.introducedReceiver;
+    const publisher=get('deployment','internal-rpc-authority-publisher').spec.template.spec.containers.find(c=>c.name==='publisher');
+    const proof=await readTelegramIntroducedReceiver({planPath:receiver.planPath,evidencePath:receiver.evidencePath,
+      publicationPath:receiver.publicationPath,sourceSHA:source.revision,context,target:portableTarget,publisherImage:publisher?.image},kube,
+      ()=>readRuntimeSource(source));
+    verifyTelegramIntroducedReceiver(receiver,proof);return proof;
   };
   const readPublication = path => {
     path = resolve(path); const stat = lstatSync(path);
@@ -462,6 +508,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'telegram-notifications' || profile === 'telegram-notifications-backup') ensure(validTelegramNotificationsMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'sentry-observability' || profile === 'sentry-observability-backup') ensure(validSentryObservabilityMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-repository-scope' || profile === 'github-repository-scope-backup') ensure(validGitHubRepositoryScopeMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-unbound-stop') ensure(validWorkspaceUnboundStopMigrationPrecondition(result),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
@@ -547,6 +594,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const source = {path:options['--source'],revision:options['--revision']};
     const imageEvidence = componentPublication ?? {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
+    if(componentPublication?.introducedReceiver)await readIntroduction(componentPublication,source);
     const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
@@ -566,7 +614,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
     if (componentPublication) {
       plan.portableTarget = structuredClone(portableTarget);
-      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,componentMigrationNames(profile).map(name=>name==='control-plane'?anchor:get('deployment',name)),source);
+      if(componentPublication.introducedReceiver){
+        plan.kubeconfig=resolve(options['--kubeconfig']);
+        plan.telegramInputs=planTelegramRuntimeInputs({resources:readRuntimeSource(source),
+          get:(kind,name)=>{const raw=kube(['-n',namespace,'get',kind.toLowerCase(),name,'--ignore-not-found=true','-o','json']);return raw.trim()?JSON.parse(raw):null;},
+          installation:get('configmap','kodex-installation-profile'),sourceSHA:source.revision,migrationID:plan.id});
+        plan.telegramTrustDependency=metadata('secret','control-plane-interaction-grant-trust');
+      }
+      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,componentMigrationNames(profile).map(name=>name==='control-plane'?anchor:get('deployment',name)),source,plan.telegramInputs);
       if(componentPublication.schema === componentMigrationCohortSchema)
         plan.componentDrainSQLSHA256=createHash('sha256').update(drainSQL(source)).digest('hex');
     }
@@ -592,6 +647,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return;
   }
   const plan = retainedPlan;
+  const readCPProjection=(required=true)=>{
+    if(!options['--cp-projection-plan']&&!required)return undefined;
+    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence']},kube);
+  };
+  if(componentPublication?.introducedReceiver)ensure(plan.kubeconfig===resolve(options['--kubeconfig']),'MIGRATION_KUBECONFIG_CHANGED');
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
@@ -644,6 +704,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const cpHandoff = plan.componentHandoff?.components.find(c => c.name === 'control-plane');
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.stagedSpec)) stage = 'STAGED';
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.resumedSpec) && resumed) stage = 'UPGRADED';
+      if(!stage&&cpHandoff&&componentPublication?.introducedReceiver&&marker===planSHA256){
+        const admitted=readCPProjection();
+        if(hash===fingerprint(admitted.stagedSpec))stage='STAGED';
+        if(hash===fingerprint(admitted.resumedSpec)&&resumed)stage='UPGRADED';
+      }
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
       const pods = activeDeploymentPods(readComponentServingInventory(kube,'control-plane',plan.anchor.uid),plan.anchor.uid);
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
@@ -697,6 +762,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const jobs = JSON.parse(kube(['-n',namespace,'get','jobs','-l','app.kubernetes.io/name=control-plane,app.kubernetes.io/component=migration','-o','json'])).items;
       ensure(jobs.every(job => job.status?.conditions?.some(c => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
     };
+    const verifyRuntimeInputs = (staged=false) => {
+      if(!plan.imageEvidence.introducedReceiver)return;
+      ensure(plan.telegramInputs?.sourceSHA===plan.source.revision&&plan.telegramInputs.migrationID===plan.id&&
+        fingerprint(metadata('secret','control-plane-interaction-grant-trust'))===fingerprint(plan.telegramTrustDependency),
+        'TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
+      verifyTelegramRuntimeInputs(plan.telegramInputs,readRuntimeSource(plan.source),get('configmap','kodex-installation-profile'),get('configmap','kodex-platform-endpoints'));
+      if(staged)applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,readOnly:true,
+        gate:()=>{throw Error('TELEGRAM_RUNTIME_INPUTS_READ_ONLY_REQUIRED');}});
+    };
     const verifyInputs = anchor => {
       ensure(plan.version === 2, 'MIGRATION_NEW_PROTOCOL_REQUIRED');
       const render = renderedBase(plan.baseRenderPath);
@@ -707,9 +781,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         sourceDigest(plan.source) === plan.migrationFileSHA256 && fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_PLAN_DRIFT');
       if (plan.componentHandoff) {
         const originals = plan.componentHandoff.components.map(c => ({apiVersion:'apps/v1',kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,
-          resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
-        ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+          resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
+        ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
       }
+      verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
       if (plan.predecessor) predecessor(plan.predecessor,anchor,plan.predecessor,planSHA256);
     };
     const readCheck = (fresh = false) => {
@@ -745,11 +820,23 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,validateInputs:() => {
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
+      prepareRuntimeInputs:()=>applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,gate:()=>{
+        ensure(sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
+        verifyRuntimeInputs();imageScope(plan.imageEvidence,plan.namespaceUID);
+        const state=observeCP();ensure(['STOPPED','STAGED'].includes(state.stage)&&state.joined,'MIGRATION_STOP_JOIN_REQUIRED');
+        ensure(pair.inspect().every(part=>part.joined&&['stoppedSpec','stagedSpec'].includes(part.stage)),
+          'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+      }}),validateInputs:() => {
         ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         imageScope(plan.imageEvidence,plan.namespaceUID);
+        verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
       }}) : undefined;
     if (phase === 'inspect') {
+      verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
+      if(plan.telegramInputs&&!journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK')&&journal.events.some(e=>e.type==='TELEGRAM_INPUT_CREATE_INTENT'))
+        applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,readOnly:true,requireStaged:false,
+          gate:()=>{throw Error('TELEGRAM_RUNTIME_INPUTS_READ_ONLY_REQUIRED');}});
       // Running exact Job ещё может писать schema/ACL. Возвращается лишь RUNNING;
       // serving inventory и terminal exclusion не используются до его terminal proof.
       if(!revalidationRevision&&(attempts.length||checks.length)){
@@ -802,10 +889,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       }
       return output({...result,
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
-        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || s.maintenance === true &&
-          (s.stage === 'stagedSpec' && s.joined || restoration && s.stage === 'apiOpenedSpec' && s.ready)),forwardOnly:true} : {}),
-        ...(apiRestoration?{apiRestoration:apiRestoration.proof,sourceCompatibility:restorationExecutor}: {})});
+        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || ['isolatedReadersSpec','restoredReadersSpec'].includes(s.stage)&&s.ready || s.maintenance === true && (s.stage === 'stagedSpec' && s.joined || restoration && s.stage === 'apiOpenedSpec' && s.ready)),forwardOnly:true} : {}),
+        ...(apiRestoration?{apiRestoration:apiRestoration.proof,sourceCompatibility:restorationExecutor}:{})});
     }
+    if(componentPublication?.introducedReceiver&&['check','stop','apply'].includes(phase))await readIntroduction(plan.imageEvidence,plan.source);
     if (phase === 'check') {
       if (!checks.length) {
         const state = observeCP();ensure(state.stage === 'BEFORE' && state.ready && !attempts.length, 'MIGRATION_CHECK_BEFORE_STOP_REQUIRED');
@@ -840,6 +927,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
     if (phase === 'handoff') return output(await pair.handoff());
+    if (phase === 'activate') return output(await pair.activateIntroduced());
     if (phase === 'resume') {
       if (pair) return output(await pair.resume());
       let state = observeCP();
@@ -1225,6 +1313,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'telegram-notifications': return validTelegramNotificationsMigrationPostcondition(proof);
+    case 'telegram-notifications-backup': return validTelegramNotificationsBackupMigrationPostcondition(proof);
     case 'sentry-observability': return validSentryObservabilityMigrationPostcondition(proof);
     case 'sentry-observability-backup': return validSentryObservabilityBackupMigrationPostcondition(proof);
     case 'github-repository-scope': return validGitHubRepositoryScopeMigrationPostcondition(proof);
@@ -1559,3 +1649,24 @@ function qualifiedSentrySchemaCatalog(proof,backup,phase){
 }
 
 export function validSentryObservabilityBackupMigrationPrecondition(proof){return validSentryObservabilityMigrationPrecondition(proof,true);}
+
+// Schema046 имеет собственный полный catalog и только известные qualification modes.
+// Декларация Telegram либо caller schema number не заменяют closed predecessor045.
+export function validTelegramNotificationsMigrationPostcondition(proof,backup=false){
+ return proof?.profile==='TELEGRAM_NOTIFICATIONS_'+(backup?'BACKUP_':'')+'V1'&&proof.database==='control_plane'&&proof.readOnly==='on'&&
+  proof.gooseVersion===20261114140000&&proof.publicSequenceSafe===true&&qualifiedTelegramSchemaCatalog(proof,backup,'after');
+}
+export function validTelegramNotificationsBackupMigrationPostcondition(proof){return validTelegramNotificationsMigrationPostcondition(proof,true);}
+export function validTelegramNotificationsMigrationPrecondition(proof,backup=false,requireStopped=true){
+ return proof?.profile==='TELEGRAM_NOTIFICATIONS_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1'&&proof.database==='control_plane'&&proof.readOnly==='on'&&
+  proof.gooseVersion===20261114130000&&proof.telegramNotificationsAbsent===true&&proof.workspaceOwnerIdle===true&&proof.publicSequenceSafe===true&&
+  qualifiedTelegramSchemaCatalog(proof,backup,'before')&&proof.activeBackupSessions===0&&Number.isSafeInteger(proof.oldClaimSessions)&&proof.oldClaimSessions>=0&&
+  (!requireStopped||proof.oldClaimSessions===0)&&['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds',
+  'pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests',
+  'activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks','activeInteractionDeliveries'].every(key=>proof[key]===0);
+}
+export function validTelegramNotificationsBackupMigrationPrecondition(proof){return validTelegramNotificationsMigrationPrecondition(proof,true);}
+function qualifiedTelegramSchemaCatalog(proof,backup,phase){
+ const modes=backup?[['backup','CANONICAL_BACKUP'],['table-only-backup','TABLE_ONLY_BACKUP']]:[['normal','NONE']];
+ return modes.some(([mode,qualification])=>proof.backupQualification===qualification&&exactGitHubSchemaCatalog(proof.schemaCatalog,telegramNotificationsCatalog[mode][phase]));
+}

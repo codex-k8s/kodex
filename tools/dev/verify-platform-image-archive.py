@@ -32,7 +32,7 @@ try:
                 'archiveSHA256', 'dockerfile', 'target', 'admission', 'publication', 'nodePull'})
         component, expected = receipt['component'], receipt['imageDigest']
         require(component in ('control-plane', 'internal-rpc-authority', 'secret-broker', 'email-bridge', 'runtime-controller',
-                'integration-gateway', 'integration-synthetic', 'control-api-gateway', 'staff-control-center',
+                'integration-gateway', 'interaction-gateway', 'integration-synthetic', 'control-api-gateway', 'staff-control-center',
                 'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive', 'backup-controller', 'registry-pull-authorizer',
                 'image-admission-controller'))
         require(receipt['schema'] == 'kodex.stable-local-build/v1'

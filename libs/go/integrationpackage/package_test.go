@@ -50,8 +50,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 26 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 26", len(definitions))
+	if len(definitions) != 27 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 27", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "6.5.0" || github.Spec.Credential.SecretKey != "token" {
@@ -86,10 +86,10 @@ func TestLoadShippedDefinitions(t *testing.T) {
 			}
 			continue
 		}
-		if key == "mattermost" {
+		if key == "mattermost" || key == "telegram" {
 			if executable || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) ||
 				definition.Spec.ExecutionRoute != string(RouteInteraction) || !definition.ExecutableBy(OwnerInteractionGateway, RouteInteraction) {
-				t.Fatalf("Mattermost executable routing is invalid: %#v", definition.Spec)
+				t.Fatalf("interaction executable routing is invalid: %#v", definition.Spec)
 			}
 			continue
 		}

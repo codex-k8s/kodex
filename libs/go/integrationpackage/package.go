@@ -327,6 +327,14 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return errors.New("integration configuration required field is missing")
 		}
 	}
+	if definition.Spec.Adapter == string(AdapterTelegram) {
+		if err := validateTelegramDefinition(definition); err != nil {
+			return err
+		}
+		if _, err := ParseTelegramConfiguration(configuration); err != nil {
+			return err
+		}
+	}
 	if definition.Spec.Adapter == string(AdapterObservability) {
 		if err := validateObservabilityConfiguration(definition, configuration); err != nil {
 			return err
@@ -825,6 +833,11 @@ func validate(result *Package) error {
 			return errors.New("integration package operation is duplicated")
 		}
 		capabilityOperations[capability.Operation] = capability
+	}
+	if result.Spec.Adapter == string(AdapterTelegram) {
+		if err := validateTelegramDefinition(*result); err != nil {
+			return err
+		}
 	}
 	healthCapability, exists := capabilityOperations[result.Spec.HealthCheck.Operation]
 	if !exists || healthCapability.Risk != "READ" || result.Spec.HealthCheck.TimeoutSeconds < 1 ||

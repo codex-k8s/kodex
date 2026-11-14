@@ -1,7 +1,9 @@
-import {authorityReadbackContract,canonicalAuthorityReadbackContract} from './authority-readback-targets.mjs';
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
+import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
+import {verifyCatalogAdmission,authorityPolicyReadbackContract,catalogPolicyTransition} from './authority-catalog-transition.mjs';
 import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
 import {verifyAuthorityObserverSource,planComponentAPITraffic,componentAPITrafficStep,requireClosedAPIAdmission,requireIsolatedAPIService} from './component-api-traffic.mjs';
 import {syntheticMigrationBaseline,syntheticMigrationTerminal} from './fixtures/migration-api-terminal-synthetic.mjs';
@@ -47,7 +49,7 @@ function ready(f){
 }
 function terminal(f,overrides={}){
   const proof={policyRevision:106,policySHA256:'a'.repeat(64),operationID:uid,registryRevision:2,registrySHA256:'b'.repeat(64),
-    snapshotRevision:4,snapshotSHA256:'c'.repeat(64),...canonicalAuthorityReadbackContract(),actualReadbackCount:16,observedAt:new Date().toISOString(),
+    snapshotRevision:4,snapshotSHA256:'c'.repeat(64),...authorityPolicyReadbackContract(catalogPolicyTransition),actualReadbackCount:16,observedAt:new Date().toISOString(),
     planSHA256:'d'.repeat(64),freshPlanSHA256:'e'.repeat(64),targetSHA256:fingerprint(f.target),trafficPlanSHA256:fingerprint(f.plan),serviceUID,
     ...overrides};return {...proof,terminalSHA256:fingerprint(proof)};
 }
@@ -151,12 +153,31 @@ test('restore не доверяет counters при неполном или чу
 test('restore требует точный свежий terminal proof106 той же изоляции',()=>{
   const f=fixture();f.step();ready(f);const previous=f.traffic();
   assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous}),/AUTHORITY_TERMINAL_REQUIRED/);
-  for(const overrides of [{policyRevision:105},{actualReadbackCount:canonicalAuthorityReadbackContract().expectedReadbackCount-1},{serviceUID:uid},{trafficPlanSHA256:'f'.repeat(64)},
+  for(const overrides of [{policyRevision:105},{actualReadbackCount:authorityPolicyReadbackContract(catalogPolicyTransition).expectedReadbackCount-1},{serviceUID:uid},{trafficPlanSHA256:'f'.repeat(64)},
     {targetSHA256:'f'.repeat(64)},{observedAt:new Date(Date.now()-31000).toISOString()}]){
     assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
   }
 });
 
+test('107 isolation требует terminal107 и exact source required subset для17targets,106receipt не открывает новую Service boundary',()=>{
+ const f=fixture();f.plan=planComponentAPITraffic({...f,action:'isolate',authorityTransition:telegramPolicyTransition});
+ f.journal.events[0].planSHA256=fingerprint(f.plan);
+ assert.equal(f.step().state,'ISOLATED');
+ assert.equal(JSON.parse(f.plan.afterAnnotations['kodex.dev/component-traffic-isolation']).authorityTransition,telegramPolicyTransition);
+ const admission=requireClosedAPIAdmission(f.deployment,f.resources,f.closed,f.traffic());
+ assert.equal(admission.authorityTransition,telegramPolicyTransition);
+ assert.doesNotThrow(()=>verifyCatalogAdmission({proof:admission,trafficPlanPath:'/synthetic/traffic.json',trafficEvidencePath:'/synthetic/traffic.jsonl'},
+  {profile:telegramPolicyTransition,targetProfile:f.target,targetSHA256:fingerprint(f.target)}));
+ const {authorityTransition:removed,...oldAdmission}=admission;assert.equal(removed,telegramPolicyTransition);
+ assert.throws(()=>verifyCatalogAdmission({proof:oldAdmission},{profile:telegramPolicyTransition}),/ADMISSION_PROFILE_REQUIRED/);
+ ready(f);const previous=f.traffic();
+ for(const overrides of [{},{policyRevision:107},{policyRevision:107,...authorityPolicyReadbackContract(telegramPolicyTransition),actualReadbackCount:authorityPolicyReadbackContract(telegramPolicyTransition).expectedReadbackCount-1}])
+  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
+ const proof=terminal(f,{policyRevision:107,...authorityPolicyReadbackContract(telegramPolicyTransition),actualReadbackCount:17,registryRevision:3,snapshotRevision:7});
+ const restored=planComponentAPITraffic({...f,action:'restore',previous,terminal:proof});
+ assert.equal(restored.authorityTransition,telegramPolicyTransition);assert.deepEqual(restored.afterSpec,f.plan.beforeSpec);
+ assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:proof,authorityTransition:'MODEL_DISCOVERY_105_106'}),/AUTHORITY_PROFILE_INVALID/);
+});
 
 test('обязательные bindings выводятся из registry, optional receipts не меняют контракт',()=>{
   const target=(workload,required)=>({workload_id:workload,role:'AUTHORIZATION_ISSUER',workload_generation:1,startup_readback_required:required});
@@ -175,7 +196,7 @@ test('обязательные bindings выводятся из registry, option
 });
 
 test('restore связывает required subset hash и total с source, а не с числом receipts',()=>{
-  const f=fixture();f.step();ready(f);const previous=f.traffic(),readers=canonicalAuthorityReadbackContract();
+  const f=fixture();f.step();ready(f);const previous=f.traffic(),readers=authorityPolicyReadbackContract(catalogPolicyTransition);
   assert.doesNotThrow(()=>planComponentAPITraffic({...f,action:'restore',previous,
     terminal:terminal(f,{actualReadbackCount:readers.expectedReadbackCount})}));
   for(const changed of [{expectedReadbackCount:readers.registeredReadbackCount},
@@ -207,7 +228,7 @@ test('новый status Job подтверждает прежний plan пер�
   const plan=planComponentAPITraffic({...f,action:'restore',previous:f.traffic(),terminal:terminal(f)});
   plan.authority=planned;
   const fresh=terminal(f,{freshPlanSHA256:'f'.repeat(64),jobUID:uid,podUID:serviceUID,
-    actualReadbackCount:canonicalAuthorityReadbackContract().expectedReadbackCount});
+    actualReadbackCount:authorityPolicyReadbackContract(catalogPolicyTransition).expectedReadbackCount});
   const journal={events:[{type:'HEADER'}],append(event){this.events.push(event);}};let writes=0;
   const result=componentAPITrafficStep({phase:'apply',plan,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,gate:()=>fresh,
     patch:(operations,dryRun)=>{if(dryRun)return;writes++;f.service.spec=structuredClone(plan.afterSpec);f.service.metadata.annotations=structuredClone(plan.afterAnnotations);}});

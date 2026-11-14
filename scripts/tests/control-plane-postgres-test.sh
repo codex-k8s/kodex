@@ -19,8 +19,19 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestSentryObservabilityP
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_timeout=180s
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --telegram-notifications-capture ]]; then
+  upgrade_timeout=600s
+  [[ -n ${KODEX_TELEGRAM_NOTIFICATIONS_SCHEMA_CAPTURE_DIRECTORY:-} ]] || fail 'Telegram schema capture requires a private capture directory'
+  upgrade_test='^TestTelegramNotificationsCatalogCapture$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --telegram-notifications-upgrade || "$test_pattern" == --telegram-notifications-backup-upgrade ]]; then
+  upgrade_timeout=600s
+  if [[ "$test_pattern" == --telegram-notifications-backup-upgrade ]]; then upgrade_test='^TestTelegramNotificationsBackupUpgrade$'; else upgrade_test='^TestTelegramNotificationsUpgrade$'; fi
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --sentry-observability-upgrade ]]; then
-	upgrade_timeout=600s
+  upgrade_timeout=600s
   upgrade_test='^TestSentryObservabilityUpgrade$'
   if [[ -n ${KODEX_SENTRY_OBSERVABILITY_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestSentryObservabilityCatalogCapture$'; fi
   test_pattern=--review-qa-upgrade
@@ -121,6 +132,12 @@ if [[ "$test_pattern" == --integration-resource-policies-owner ]]; then
 fi
 if [[ "$upgrade_test" != '^TestIntegrationResourcePolicyOwnerRegressionSeed$' ]]; then
   owner_test='^TestWorkspaceWriterOwnerComponent$'
+fi
+if [[ "$test_pattern" == --telegram-notifications-owner ]]; then
+  volume_owner=true
+  upgrade_test='^TestTelegramNotificationsOwnerSeed$'
+  owner_test='^TestTelegramSubscriptionOwnerComponent$'
+  test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --authority-proof-counter-owner-regression ]]; then
   volume_owner=true

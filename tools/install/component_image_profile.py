@@ -18,6 +18,7 @@ COMPONENTS = {'egress-gateway': ('egress-gateway', 'egress-gateway'),
               'secret-broker': ('secret-broker', 'secret-broker'),
               'runtime-controller': ('runtime-controller', 'runtime-controller'),
               'integration-gateway': ('integration-gateway', 'integration-gateway'),
+              'interaction-gateway': ('interaction-gateway', 'interaction-gateway'),
               'control-api-gateway': ('control-api-gateway', 'control-api-gateway'),
               'role-image-builder': ('role-image-builder', 'role-image-builder'),
               'staff-control-center': ('staff-control-center', 'staff-control-center')}

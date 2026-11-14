@@ -665,20 +665,17 @@ func (repository *Repository) lockIntegrationConnection(
 	return item, nil
 }
 
-// integrationConnectionDependencies counts active tests/invocations/deliveries and enabled grants
-// for an already resolved connection ID. Query failure returns zero counts with Unavailable; zero
-// counts are not themselves authorization.
-// integrationConnectionDependencies считает активные tests/invocations/deliveries и enabled grants
-// уже разрешённого connection ID. Ошибка запроса возвращает нулевые счётчики с Unavailable;
-// нулевые счётчики сами не являются authorization.
+// integrationConnectionDependencies counts ongoing work and grants for a resolved connection. Only explicit Telegram metadata update may retain terminal unknown history with every lease field closed; this never proves a remote effect stopped or permits a resend. Policy, package and deletion callers retain the original unknown-outcome guard. Query failures return Unavailable.
+// integrationConnectionDependencies считает ongoing work и grants разрешённого подключения. Лишь явный Telegram metadata update сохраняет terminal unknown history со всеми закрытыми lease fields; это не доказывает остановку remote effect и не разрешает повтор. Policy, package и deletion callers сохраняют прежний unknown-outcome guard. Ошибка запроса возвращает Unavailable.
 func (repository *Repository) integrationConnectionDependencies(
 	ctx context.Context,
 	tx pgx.Tx,
 	connectionID string,
+	allowTerminalTelegramUnknown bool,
 ) (int64, int64, error) {
 	var effects, grants int64
 	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionCountActiveDependencies,
-		pgx.StrictNamedArgs{"connection_id": connectionID}).Scan(&effects, &grants); err != nil {
+		pgx.StrictNamedArgs{"connection_id": connectionID, "allow_terminal_telegram_unknown": allowTerminalTelegramUnknown}).Scan(&effects, &grants); err != nil {
 		return 0, 0, errs.ErrUnavailable
 	}
 	return effects, grants, nil
@@ -727,7 +724,8 @@ func (repository *Repository) updateIntegrationConnection(
 			return commandOutcome{}, err
 		}
 	}
-	activeEffects, _, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
+	activeEffects, _, err := repository.integrationConnectionDependencies(ctx, tx, locked.id,
+		locked.definitionKey == "telegram" && definition.Spec.Adapter == "TELEGRAM_INTERACTION")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -789,7 +787,7 @@ func (repository *Repository) deleteIntegrationConnection(
 	if locked.enabled || locked.state != "DISABLED" {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	activeEffects, activeGrants, err := repository.integrationConnectionDependencies(ctx, tx, locked.id)
+	activeEffects, activeGrants, err := repository.integrationConnectionDependencies(ctx, tx, locked.id, false)
 	if err != nil {
 		return commandOutcome{}, err
 	}

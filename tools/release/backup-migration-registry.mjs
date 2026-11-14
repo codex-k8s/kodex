@@ -1,7 +1,11 @@
+import {telegramNotificationsCatalog} from './telegram-notifications-catalog.gen.mjs';
 import {githubRepositoryScopeCatalog} from './github-repository-scope-catalog.gen.mjs';
 import {sentryObservabilityCatalog} from './sentry-observability-catalog.gen.mjs';
 
 const profiles=Object.freeze({
+ 'telegram-notifications-backup':Object.freeze({profile:'telegram-notifications-backup',before:20261114130000,after:20261114140000,
+  receipt:'Telegram notifications backup migration completed at version 20261114140000',proofPrefix:'TELEGRAM_NOTIFICATIONS_BACKUP_',catalog:telegramNotificationsCatalog,
+  files:Object.freeze({before:'telegram-notifications-backup-migration-precondition.sql',after:'telegram-notifications-backup-migration-postcondition.sql'})}),
  'github-repository-scope-backup':Object.freeze({profile:'github-repository-scope-backup',before:20261113000100,after:20261114120000,
   receipt:'GitHub repository scope backup migration completed at version 20261114120000',
   proofPrefix:'GITHUB_REPOSITORY_SCOPE_BACKUP_',catalog:githubRepositoryScopeCatalog,

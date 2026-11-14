@@ -14,6 +14,7 @@ resources:
 - ../../base/runtime-workloads
 - ../../base/runtime-secret-drafts
 - ../../overlays/production/integration-gateway
+- ../../overlays/production/interaction-gateway
 - ../../overlays/production/automation-scheduler
 - ../../overlays/production/secret-broker
 - ../../overlays/production/stt-tts-service
@@ -23,3 +24,71 @@ resources:
 - ../../overlays/production/backup-controller
 - ../../overlays/production/control-api-gateway
 - ../../overlays/production/staff-control-center
+patches:
+  - path: interaction-control-plane-patch.yaml
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: platform-postgresql-exact-clients
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: control-plane-exact-runtime-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/-
+        value:
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: internal-rpc-authority-readback-attestor-exact-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: networking.k8s.io
+      version: v1
+      kind: NetworkPolicy
+      name: internal-rpc-authority-restore-controller-exact-paths
+    patch: |-
+      - op: add
+        path: /spec/ingress/0/from/0/podSelector/matchExpressions/0/values/-
+        value: interaction-gateway
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: Role
+      name: internal-rpc-authority-publisher
+    patch: |-
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-readback-credential
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-readback-possession
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-restore-credential
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-restore-ack
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-issuer-key
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-manifest-trust
+      - op: add
+        path: /rules/0/resourceNames/-
+        value: internal-rpc-authority-interaction-gateway-proof-trust

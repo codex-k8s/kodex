@@ -537,8 +537,16 @@ test-scoped-backup-reader:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
 
 .PHONY: test-control-plane-migration
+.PHONY: test-telegram-resource-create test-telegram-notifications-owner test-telegram-authority-delivery
+
+test-telegram-resource-create:
+	@timeout 180s node --test tools/release/telegram-resource-create.test.mjs
+
+test-telegram-notifications-owner:
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-owner
+
 test-control-plane-migration:
-	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/github-repository-scope-proof.test.mjs tools/release/sentry-observability-proof.test.mjs
+	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/github-repository-scope-proof.test.mjs tools/release/sentry-observability-proof.test.mjs tools/release/telegram-notifications-proof.test.mjs
 
 .PHONY: test-control-api-nats-startup
 test-control-api-nats-startup:
@@ -659,3 +667,22 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
 	@timeout 180s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+
+# Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
+test-telegram-authority-delivery:
+	@timeout 180s node --test tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs tools/release/telegram-api-readers.test.mjs tools/release/telegram-cp-policy.test.mjs tools/release/telegram-runtime-inputs.test.mjs tools/release/telegram-introduction-inventory.test.mjs
+
+.PHONY: test-telegram-notifications-upgrade-postgres test-telegram-notifications-backup-upgrade-postgres
+test-telegram-notifications-upgrade-postgres: check-go-toolchain
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-upgrade
+
+test-telegram-notifications-backup-upgrade-postgres: check-go-toolchain
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-backup-upgrade
+
+.PHONY: test-telegram-deployment
+test-telegram-deployment:
+	@timeout 900s node --test tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-native-egress
+test-telegram-native-egress: check-go-toolchain
+	@timeout 360s bash scripts/tests/telegram-native-egress-test.sh

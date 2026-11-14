@@ -18,6 +18,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	internalobservability "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/observability"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
 // TestActiveStartupWithUnavailableOptionalProjections exercises all six listeners
@@ -48,13 +49,19 @@ func TestActiveStartupWithUnavailableOptionalProjections(t *testing.T) {
 		}
 		return path
 	}
-	config := Config{TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0", STTConnectAddress: "127.0.0.1:0",
+	config := Config{TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0", STTConnectAddress: "127.0.0.1:0", TelegramConnectAddress: "127.0.0.1:0",
 		MailConnectAddress: "127.0.0.1:0", IntegrationConnectAddress: "127.0.0.1:0", RuntimeConnectAddress: "127.0.0.1:0",
 		MailPolicyFile: filepath.Join(directory, "missing-mail.json"), IntegrationPolicyFile: filepath.Join(directory, "missing-integration.json"),
 		NativeConnectAddress: "127.0.0.1:0", NativePolicyFile: filepath.Join(directory, "missing-native.json"),
 		RuntimeSigningKeyFile:     write("signing", []byte("synthetic-runtime-signing-material-0123456789")),
 		RuntimeProxyCACertificate: write("ca.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})),
 		RuntimeProxyCAPrivateKey:  write("ca.key", pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: private}))}
+	config.TelegramPolicyFile = filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "telegram-policy.json")
+	config.TelegramExpectedDigest, err = policy.DigestFile(config.TelegramPolicyFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.ExpectedRevision = "2026-09-05.1"
 	active := loadRepositoryPolicy(t)
 	if active.Limits().MaximumConnections != 256 {
 		t.Fatal("fixture lost the canonical capacity")

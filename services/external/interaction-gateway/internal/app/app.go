@@ -14,6 +14,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/mattermost"
+	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/telegram"
 	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/usertext"
 	"github.com/google/uuid"
 )
@@ -73,6 +74,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
+	telegramAdapter, err := telegram.New(telegram.Config{CredentialDirectory: config.CredentialDirectory, ProxyURL: config.TelegramProxyURL,
+		PublicOrigin: config.PublicOrigin, Timeout: config.OperationTimeout})
+	if err != nil {
+		return err
+	}
+	executor := interactionExecutor{mattermost: adapter, telegram: telegramAdapter}
+	if err := checkInteractionOwner(startup, control.CheckLocalAuthority, control.Interaction); err != nil {
+		return err
+	}
 	technical, err := httpserver.New(httpserver.StandardProcessConfig(config.TechnicalListen), readiness, metrics.PrometheusHandler())
 	if err != nil {
 		return err
@@ -85,8 +95,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	sources := newSourceManager(control.Interaction, adapter, logger, config)
 	workers := serviceruntime.StartWorkers(lifecycle,
 		technical.Worker(),
-		runDeliveryLoop(control, adapter, logger, config),
-		runInvocationLoop(control.Runtime, adapter, logger, config),
+		runInteractionReadiness(control, readiness, metrics, config),
+		runDeliveryLoop(control, adapter, logger, config, telegramAdapter),
+		runInvocationLoop(control.Runtime, executor, logger, config),
 		runSourceRefresh(sources, control, logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
@@ -103,14 +114,14 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 
 // runDeliveryLoop polls sequential delivery work within an operation deadline and logs only transitions into or out of degradation.
 // RU: runDeliveryLoop опрашивает последовательную доставку в пределах срока операции и журналирует только переходы деградации и восстановления.
-func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Adapter, logger *slog.Logger, config Config) serviceruntime.Worker {
+func runDeliveryLoop(control *controlplaneclient.Client, adapter *mattermost.Adapter, logger *slog.Logger, config Config, telegramAdapters ...telegramDeliverySender) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.PollInterval)
 		defer ticker.Stop()
 		degraded := false
 		for {
 			cycle, cancel := context.WithTimeout(ctx, config.OperationTimeout)
-			err := processDeliveries(cycle, control.Interaction, adapter, config)
+			err := processDeliveries(cycle, control.Interaction, adapter, config, telegramAdapters...)
 			cancel()
 			if err != nil && !degraded {
 				degraded = true
