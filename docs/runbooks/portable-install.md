@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.7
-updated: 2026-11-13
+version: 1.6.8
+updated: 2026-11-14
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -893,9 +893,10 @@ fallback к normal. Исходные source/lock/installation pins не пере
 видом нового полного релиза: новый cohort хранится в publication и journal.
 
 Target закрепляет UID всех пяти Deployment. До планирования API уже должен
-быть в maintenance с нулём replicas и положительным join. `stop` последовательно
-останавливает остальные consumers, проверяет Pod descendants и лишь затем
-останавливает CP. После DDL `handoff` требует terminal writer join, полный
+быть в maintenance с нулём replicas и положительным join. `stop` сначала
+останавливает CP, затем остальные consumers и проверяет Pod descendants
+каждого компонента. Перед DDL обязательны join всех writers и новый полный
+owner drain. После DDL `handoff` требует terminal writer join, полный
 postcondition044 и новый read-only owner drain; predecessor043 SQL повторно
 не используется как postcondition. Drain SQL закреплён хешем accepted source и
 включает integration effects, credential tests, repository bundles и config work.
@@ -908,11 +909,19 @@ spec CAS и сохранённый journal предотвращают слепо
 переходом после проверки нового cohort и сохранённого preimage. Число replicas
 API не угадывается. Во все фазы CLI можно передать явные `--kubeconfig` и
 `--context`; пример выше сохраняет остальные exact inputs.
+При повторном `resume` после запуска нового CP его outbox claim sessions
+допускаются лишь при сохранённом resume intent, exact новом image и readiness
+всех CP Pods. Первый запуск и `handoff` требуют нуля claims; остальные проверки
+активной работы не ослабляются. Потерянный ACK запуска CP не вызывает второй patch.
 
 Публичная проверка — `make test-control-plane-migration`: closed pins/cohort,
 сохранение maintenance, full postcondition/drain, positive join, потерянный ACK,
 подмена UID/source и регрессия043. Локальная оснастка не заменяет установленный
 readback настоящих images, schema и пользовательского сценария.
+Общий бюджет полного исторического набора CLI ограничен 1500 секундами; прежние
+600 секунд исчерпывались до portable-проверок при продолжающемся последовательном
+исполнении исторических профилей. Лимиты отдельных CLI-вызовов и production
+maintenance не изменяются; таймаут набора по-прежнему означает неуспешную проверку.
 
 ### Следующий исправленный component profile
 

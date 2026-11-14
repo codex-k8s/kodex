@@ -346,7 +346,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     });
     requireValue(observe(name).stage === stage,'COMPONENT_MIGRATION_HANDOFF_UNCONFIRMED');
   };
-  const schemaReady = () => {
+  const schemaReady = (resuming = false) => {
     readJob(true); // Полный terminal Job/Pod writer join перед schema postcondition.
     const result=readJob();
     requireValue(result.status === 'PASS' && result.schemaPostcondition === 'PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
@@ -359,8 +359,17 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === Number(plan.migrationVersion) &&
       ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
         'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].every(k => proof[k] === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
+    // После подтверждённого запуска нового CP его обычный outbox loop снова
+    // открывает claim sessions. Это не старый writer: exact staged image,
+    // положительная readiness всех Pods и наш durable resume intent обязательны.
+    // Handoff и первый resume по-прежнему требуют отсутствия любых claims.
+    const resumedCP = resuming && extended ? observe('control-plane') : undefined;
+    const currentClaims = resumedCP?.stage === 'resumedSpec' && resumedCP.ready &&
+      journal.events.some(e => e.type === 'RESUME_INTENT' && e.name === 'control-plane');
     if(extended) requireValue(proof.profile === 'PORTABLE_COMPONENT_DRAIN_V1' &&
-      ['activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests',
+      Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions >= 0 &&
+      (currentClaims || proof.oldClaimSessions === 0) &&
+      ['activeRuntimeLeases','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests',
         'activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(k=>proof[k]===0),'MIGRATION_OWNER_PRECONDITION_FAILED');
     requireValue(fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     validateInputs();
@@ -395,7 +404,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};
     },
     async resume() {
-      schemaReady();requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      schemaReady(true);requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
       for (const name of names) {
         if(part(name).maintenance) {
           const state=observe(name);

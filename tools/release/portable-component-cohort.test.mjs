@@ -85,6 +85,8 @@ test('044: exact пять компонентов и прежний seal042 не 
   assert.throws(()=>componentMigrationTarget(f.target,f.value,wrong));
   const incomplete=structuredClone(f.target);incomplete.resources.pop();
   assert.throws(()=>componentMigrationTarget(incomplete,f.value,f.observed));
+  const duplicate=structuredClone(f.observed);duplicate.deployments[4]=structuredClone(duplicate.deployments[3]);
+  assert.throws(()=>componentMigrationTarget(f.target,f.value,duplicate));
 });
 
 test('044: неизвестные cohort, foreign source, изменённый ABI и смешанный source отклоняются',()=>{
@@ -120,7 +122,7 @@ function lifecycleFixture() {
   const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:'20261114120000',postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -140,7 +142,7 @@ function lifecycleFixture() {
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
-        activeIntegrationInvocations:faults.activeEffects});
+        activeIntegrationInvocations:faults.activeEffects,oldClaimSessions:faults.claimSessions});
     }
     if(args.includes('patch')) {
       const name=args[args.indexOf('deployment')+1],app=apps.get(name);
@@ -197,6 +199,29 @@ test('044 lifecycle: оставшийся Pod, потерянный ACK, drift �
   f.lifecycle.inspect();await f.lifecycle.handoff();assert.equal(f.patches.filter(n=>n==='integration-gateway').length,writes);
   f.plan.componentDrainSQLSHA256='0'.repeat(64);await assert.rejects(()=>f.lifecycle.resume(),/PRECONDITION_SOURCE_CHANGED/);
   f.apps.get('runtime-controller').metadata.uid=uuid(99);assert.throws(()=>f.lifecycle.inspect(),/UID_CHANGED/);
+});
+
+test('044 resume: новые CP claims переживают потерянный ACK без повторного patch, старые claims закрыты',async()=>{
+  const f=lifecycleFixture();await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+  f.faults.claimSessions=7;
+  await assert.rejects(()=>f.lifecycle.handoff(),/OWNER_PRECONDITION_FAILED/);
+  f.faults.claimSessions=0;await f.lifecycle.handoff();
+  f.faults.claimSessions=7;
+  await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
+  f.faults.claimSessions=0;f.faults.lostACK='control-plane';
+  await assert.rejects(()=>f.lifecycle.resume(),/RESPONSE_LOST/);
+  const writes=f.patches.filter(n=>n==='control-plane').length;
+  f.faults.claimSessions=7;f.lifecycle.inspect();
+  // Spec/image без readiness и durable intent не разрешают живые claims.
+  const cp=f.apps.get('control-plane');cp.status.readyReplicas=0;
+  await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
+  cp.status.readyReplicas=3;
+  const intent=f.events.find(e=>e.type==='RESUME_INTENT'&&e.name==='control-plane');
+  intent.type='UNCONFIRMED';await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);intent.type='RESUME_INTENT';
+  assert.equal((await f.lifecycle.resume()).status,'RESUMED');
+  assert.equal(f.patches.filter(n=>n==='control-plane').length,writes);
+  const allWrites=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'RESUMED');assert.equal(f.patches.length,allWrites);
+  f.faults.activeEffects=1;await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
 });
 
 test('public CLI044 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{
