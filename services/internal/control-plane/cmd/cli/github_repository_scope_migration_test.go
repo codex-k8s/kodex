@@ -282,3 +282,33 @@ func canonicalGitHubBackupInitializer(t *testing.T) string {
 	}
 	return block
 }
+
+// TestGitHubRepositoryScopePublicSequenceRestore proves that canonical backup restoration cannot grant authority to a foreign public sequence and preserves the registered Goose identity sequence.
+// TestGitHubRepositoryScopePublicSequenceRestore доказывает, что canonical backup restore не выдаёт права посторонней public sequence и сохраняет зарегистрированную identity sequence Goose.
+func TestGitHubRepositoryScopePublicSequenceRestore(t *testing.T) {
+	ctx, database, observer := newWorkflowUpgradeDatabase(t)
+	if err := goose.UpToContext(ctx, database, "migrations", 20261114120000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := observer.Exec(ctx, "SET ROLE control_plane_owner;CREATE SEQUENCE public.synthetic_foreign_backup_sequence;RESET ROLE"); err != nil {
+		t.Fatal(err)
+	}
+	restoreErr := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand)
+	var granted bool
+	if err := observer.QueryRow(ctx, "SELECT has_sequence_privilege('kodex_backup_reader','public.synthetic_foreign_backup_sequence','SELECT') OR has_sequence_privilege('kodex_backup_reader','public.synthetic_foreign_backup_sequence','USAGE')").Scan(&granted); err != nil {
+		t.Fatal(err)
+	}
+	if restoreErr == nil || granted {
+		t.Fatalf("foreign public sequence passed restore; granted=%t", granted)
+	}
+	if _, err := observer.Exec(ctx, "DROP SEQUENCE public.synthetic_foreign_backup_sequence"); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err != nil {
+		t.Fatal("restore registered public identity sequence", err)
+	}
+	var canonical bool
+	if err := observer.QueryRow(ctx, "SELECT has_sequence_privilege('kodex_backup_reader','public.goose_db_version_id_seq','SELECT') AND has_sequence_privilege('kodex_backup_reader','public.goose_db_version_id_seq','USAGE') AND NOT has_sequence_privilege('kodex_backup_reader','public.goose_db_version_id_seq','UPDATE')").Scan(&canonical); err != nil || !canonical {
+		t.Fatal("canonical Goose sequence authority changed", err)
+	}
+}

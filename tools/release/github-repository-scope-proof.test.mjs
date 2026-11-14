@@ -8,7 +8,7 @@ import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.
 import { immutableMigrationProfile, validGitHubRepositoryScopeMigrationPostcondition, validGitHubRepositoryScopeMigrationPrecondition } from './control-plane-immutable-migration.mjs';
 
 const activity=['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks','oldClaimSessions','activeBackupSessions'];
-const proof=(backup=false,before=false)=>({profile:'GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+(before?'PREDECESSOR_':'')+'V1',database:'control_plane',readOnly:'on',backupQualification:backup?'CANONICAL_BACKUP':'NONE',gooseVersion:before?20261113000100:20261114120000,schemaCatalog:structuredClone(githubRepositoryScopeCatalog[backup?'backup':'normal'][before?'before':'after']),...(before?{githubRepositoryScopeAbsent:true,...Object.fromEntries(activity.map(key=>[key,0]))}:{})});
+const proof=(backup=false,before=false)=>({profile:'GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+(before?'PREDECESSOR_':'')+'V1',database:'control_plane',readOnly:'on',publicSequenceSafe:true,backupQualification:backup?'CANONICAL_BACKUP':'NONE',gooseVersion:before?20261113000100:20261114120000,schemaCatalog:structuredClone(githubRepositoryScopeCatalog[backup?'backup':'normal'][before?'before':'after']),...(before?{githubRepositoryScopeAbsent:true,...Object.fromEntries(activity.map(key=>[key,0]))}:{})});
 
 test('schema044 закрывает весь catalog, а backup имеет собственный профиль',()=>{
  for(const backup of [false,true]){
@@ -46,7 +46,7 @@ test('schema044 generator связывает proofs с exact SQL initializer; и
  const directory=mkdtempSync(join(tmpdir(),'kodex-044-proof-'));
  t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const files=['tools/release/generate-github-repository-scope-proof.py',
- 'tools/release/github-repository-scope-schema-manifest.json','tools/release/github-repository-scope-catalog.sql',
+ 'tools/release/github-repository-scope-schema-manifest.json','tools/release/github-repository-scope-catalog.sql','tools/release/github-repository-scope-public-sequence.sql',
  'tools/release/github-repository-scope-restore-catalog.sql','tools/release/workspace-unbound-stop-migration-precondition.sql',
  'tools/release/github-repository-scope-catalog.gen.mjs',
  ...['github-repository-scope','github-repository-scope-backup'].flatMap(p=>['precondition','postcondition'].map(k=>'tools/release/'+p+'-migration-'+k+'.sql')),

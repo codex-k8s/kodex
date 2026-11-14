@@ -1,44 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fixture,metadata,uid} from './fixtures/authority-catalog-synthetic.mjs';
+import {uid} from './fixtures/authority-catalog-synthetic.mjs';
+import {backupMaintenanceFixture as setup} from './fixtures/backup-controller-maintenance-synthetic.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {backupControllerMaintenanceHeader,readBackupProducerInventory,requireBackupProducerBoundary,requireStoppedBackupController,planBackupControllerMaintenance,backupControllerMaintenanceStep} from './backup-controller-maintenance.mjs';
 
-function setup(){
- const base=fixture(),sourceSHA='a'.repeat(40),deployment=structuredClone(base.api);
- deployment.metadata={...metadata('backup-controller',300),generation:1,labels:{...deployment.metadata.labels,'app.kubernetes.io/name':'backup-controller'}};
- deployment.spec.replicas=1;deployment.spec.selector.matchLabels={'app.kubernetes.io/name':'backup-controller'};
- deployment.spec.template.spec.containers[0].name='backup-controller';deployment.spec.template.spec.serviceAccountName='backup-controller';
- deployment.spec.template.spec.volumes=[{name:'credentials',secret:{secretName:'backup-controller-credentials'}}];
- deployment.status={observedGeneration:1,replicas:1,updatedReplicas:1,readyReplicas:1,availableReplicas:1};
- const target={...base.profile,resources:[{apiVersion:'apps/v1',kind:'Deployment',name:'backup-controller',uid:deployment.metadata.uid}]};
- const postgres={pod:'kodex-postgresql-0',uid:uid(310),ownerUID:uid(311)};
- const observed={context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,installation:base.installation,postgres,resources:{items:[]}};
- const rs={kind:'ReplicaSet',metadata:{...metadata('backup-controller-rs',301),generation:1,ownerReferences:[{kind:'Deployment',uid:deployment.metadata.uid,controller:true}]},spec:{replicas:1},status:{replicas:1,observedGeneration:1}};
- let serial=320;
- const pod=()=>({kind:'Pod',metadata:{...metadata('backup-controller-pod',serial++),ownerReferences:[{kind:'ReplicaSet',uid:rs.metadata.uid,controller:true}]},
-  spec:{...structuredClone(deployment.spec.template.spec),nodeName:'synthetic-node',enableServiceLinks:true},status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:deployment.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}});
- const state={pods:[pod()],extra:[],effects:0,loseACK:false,gateValid:true};
- const projected=item=>({kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:item.kind==='Deployment'||item.kind==='Pod'?['backup-controller']:[],secretRefs:[],replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration});
- const inventory=()=>({schema:'kodex.backup-producer-inventory/v1',namespace:'kodex-system',kinds:['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','Pod'],items:[deployment,rs,...state.pods].map(projected).concat(state.extra)});
- const resources=()=>({items:[rs,...state.pods]});
- const stop=planBackupControllerMaintenance(deployment,target,observed,sourceSHA,'stop',undefined,inventory());
- const journal=plan=>({events:[{type:'HEADER',...backupControllerMaintenanceHeader(plan)}],append(value){this.events.push(value);}});
- const patch=(operations,dryRun)=>{
-  for(const op of operations.filter(v=>v.op==='test')){let current=deployment;for(const key of op.path.slice(1).split('/'))current=current[key];assert.deepEqual(current,op.value);}
-  if(dryRun)return;
-  for(const op of operations.filter(v=>v.op==='add'||v.op==='replace')){const keys=op.path.slice(1).split('/');let current=deployment;for(const key of keys.slice(0,-1))current=current[key];current[keys.at(-1)]=structuredClone(op.value);}
-  deployment.metadata.resourceVersion=String(Number(deployment.metadata.resourceVersion)+1);deployment.metadata.generation++;state.effects++;
-  if(state.loseACK)throw Error('LOST_ACK');
- };
- const gate=plan=>({targetSHA256:fingerprint(target),deploymentUID:deployment.metadata.uid,sourceSHA,planSHA256:plan.stopPlanSHA256,canonicalBackup:state.gateValid,cleanupTerminal:state.gateValid});
- const step=(phase,plan,journal,extra={})=>backupControllerMaintenanceStep({phase,plan,journal,get:()=>structuredClone(deployment),resources,producerInventory:inventory,patch,gate:async()=>gate(plan),...extra});
- const converge=()=>{
-  const n=deployment.spec.replicas;deployment.status={observedGeneration:deployment.metadata.generation,replicas:n,updatedReplicas:n,readyReplicas:n,availableReplicas:n};
-  rs.spec.replicas=n;rs.status.replicas=n;state.pods=n?[pod()]:[];observed.resources=resources();
- };
- return {deployment,target,postgres,observed,sourceSHA,rs,state,inventory,resources,stop,journal,step,converge};
-}
 
 test('stop/resume сохраняет template, scoped journal и точный positive join',async()=>{
  const f=setup(),before=structuredClone(f.deployment.spec),journal=f.journal(f.stop);

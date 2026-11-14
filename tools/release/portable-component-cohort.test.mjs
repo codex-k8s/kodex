@@ -258,7 +258,8 @@ test('public CLI044 normal/backup запрещает прежний путь б�
     const result=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'plan',
       '--profile',profile,'--context','portable-fixture','--kubeconfig','/synthetic/kubeconfig','--source',directory,'--revision',revision,
       '--plan',join(directory,'plan.json'),'--base-render',join(directory,'render.yaml'),
-      '--publication-plan',join(directory,'legacy.json'),'--publication-evidence',join(directory,'legacy.jsonl')],
+      '--publication-plan',join(directory,'legacy.json'),'--publication-evidence',join(directory,'legacy.jsonl'),
+      ...(profile.endsWith('-backup')?['--backup-maintenance-plan',join(directory,'backup.json'),'--backup-maintenance-evidence',join(directory,'backup.jsonl')]:[])],
     {encoding:'utf8',timeout:10000,env:{PATH:directory+':'+dirname(process.execPath),HOME:directory}});
     assert.equal(result.status,1);assert.match(result.stderr,/COMPONENT_MIGRATION_COHORT_REQUIRED/);
   }

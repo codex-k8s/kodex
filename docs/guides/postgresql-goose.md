@@ -352,6 +352,10 @@ Schema capture использует тот же утверждённый SQL ini
 sequence ACL либо sequence default privileges. Полная schema qualification
 не удаляет эти sections ради совпадения hash; известные варианты сравниваются
 целиком, а восстановление переводит только известный каталог в canonical.
+Grant ON ALL SEQUENCES требует закрытого реестра public sequences и точных
+ownership/dependency/ACL, даже если основной schema catalog ограничен
+собственной схемой. Неизвестный объект не получает права до обнаружения
+расхождения итогового hash.
 Split maintenance требует stopped producer proof и независимый bounded cleanup;
 отсутствие текущих PostgreSQL sessions не запрещает новую попытку worker.
 Матрица: [backup044](../operations/github-repository-scope-2033.md#точные-backup-acl-и-неизменная-миграция044).

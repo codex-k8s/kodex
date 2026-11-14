@@ -644,3 +644,9 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 	@timeout 60s node --test tools/release/github-repository-scope-proof.test.mjs
 	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-upgrade
 	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-backup-upgrade
+
+	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-public-sequence-negative
+
+.PHONY: test-backup-controller-maintenance
+test-backup-controller-maintenance:
+	@timeout 90s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs

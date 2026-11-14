@@ -149,10 +149,49 @@ UPDATE, grant option, чужой grantor и неизвестный объект 
 нормализацией. Восстановление направлено только вперёд, не возвращает table-only
 состояние и не редактирует business rows либо историю goose.
 
+Backup-controller останавливается только `backup-controller-maintenance-cli.mjs`
+с отдельным portable target, содержащим его exact Deployment UID и общие
+cluster/namespace/installation seals. CLI требует явные `--kubeconfig` и
+`--context`; фазы `plan --action stop|resume`, `apply --approved-plan-sha` и
+`status` сохраняют отдельные owned0600 plans/journals. Resume передаёт
+`--stopped-plan`, `--stopped-evidence`, `--migration-plan`, `--migration-evidence`.
+Новый migration plan профиля `github-repository-scope-backup` получает
+`--backup-maintenance-plan` и `--backup-maintenance-evidence`; эти пути и stop
+plan hash неизменно входят в migration plan. Resource sets backup и cohort
+различаются, поэтому сравниваются общие installation seals, не общий target hash.
+
+Первая mutating фаза связывает stop maintenanceID с единственным exact migration
+plan через `BACKUP_MIGRATION_BOUND`. Общий stop journal блокируется раньше
+migration journal. Backup resume удерживает оба locks и перед PATCH записывает
+`BACKUP_RESUME_INTENT` в оба журнала: даже поздний/неизвестный PATCH закрывает
+повторное использование boundary любым планом. Подготовленный read-only plan
+не даёт права обойти binding. Повторная попытка после resume требует новой
+фактической остановки и нового maintenanceID. Locks не снимаются автоматически
+после SIGKILL; read-only status/inspect остаются доступны, recovery не повторяет
+effects по отсутствию ответа.
+
+Успешный порядок044: stop backup → migration check/stop/apply → handoff/resume
+всего нового cohort → свежий canonical owner/terminal readback → backup resume.
+После `BACKUP_RESUME_INTENT` mutating фазы прежнего migration plan недоступны;
+поэтому backup не возобновляется между DDL и handoff/resume CP. Если044 не
+применена, bounded cleanup возвращает canonical043; это разрешает только
+явно проверенный backup resume. Обратное восстановление CP/cohort043 данным
+helper не реализовано и не объявляется готовым: API остаётся закрытым, дальнейшая
+доставка требует отдельного проверенного recovery path. Статус canonical ACL
+не является утверждением доступности CP либо пользовательского API.
+
+Public sequence guard отдельно закрепляет единственную штатную
+`public.goose_db_version_id_seq`: integer identity shape, dependency на
+`goose_db_version.id`, owner/migrator rUw и backup none/rU, без посторонних
+principals/grant options. Неизвестная public sequence отклоняется до первого
+GRANT. Native regression проверяет прежний failure и отсутствие нового grant
+после исправления. Применённая044 и её schema history при этом неизменны.
+
 Безопасная локальная проверка:
 
 ```sh
 make test-github-repository-scope-upgrade-postgres
+make test-backup-controller-maintenance
 make test-component-publication
 make test-control-plane-migration
 ```

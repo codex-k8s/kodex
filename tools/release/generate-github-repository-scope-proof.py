@@ -36,6 +36,8 @@ if args.capture_directory:
 manifest = json.loads(MANIFEST.read_text())
 query = (RELEASE / 'github-repository-scope-catalog.sql').read_text().strip().rstrip(';')
 restore = (RELEASE / 'github-repository-scope-restore-catalog.sql').read_text().strip().rstrip(';')
+public_sequence = (RELEASE / 'github-repository-scope-public-sequence.sql').read_text().strip().rstrip(';')
+public_guard = 'IF ('+public_sequence+") IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub public sequence boundary changed';END IF;\n"
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'))
 def schema(mode, phase):
@@ -56,11 +58,12 @@ for mode in ['normal','backup']:
             fields += ", 'backupQualification',CASE WHEN EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a WHERE n.oid='control_plane'::regnamespace AND a.grantee='kodex_backup_reader'::regrole AND a.privilege_type='USAGE') THEN 'CANONICAL_BACKUP' ELSE 'TABLE_ONLY_BACKUP' END"
         else:
             fields += ", 'backupQualification','NONE'"
+        fields += ", 'publicSequenceSafe',true"
         if phase=='before':
             fields += ",'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped),"+activity
         allowed = [schema(mode,phase)] + ([schema('table-only-backup',phase)] if mode == 'backup' else [])
         mismatch = ' AND '.join('actual IS DISTINCT FROM $expected'+str(i)+'$'+canonical(v)+'$expected'+str(i)+'$::jsonb' for i,v in enumerate(allowed))
-        guard="DO $catalog_guard$ DECLARE actual jsonb;BEGIN SELECT ("+query+") INTO actual;IF "+mismatch+" THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;\n"
+        guard="DO $catalog_guard$ DECLARE actual jsonb;BEGIN "+public_guard+"SELECT ("+query+") INTO actual;IF "+mismatch+" THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;\n"
         outputs[RELEASE/(prefix+'-migration-'+kind+'.sql')] = "-- Generated: generate-github-repository-scope-proof.py; полный закрытый schema catalog.\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSET LOCAL statement_timeout='15s';SET LOCAL lock_timeout='500ms';SET LOCAL search_path=pg_catalog;\n"+guard+"SELECT jsonb_build_object("+fields+")::text;\nROLLBACK;\n"
 # Historical044 остаётся byte-identical; новый maintenance path не переписывает её DDL.
 if manifest.get('backupInitializer') != {'path': str(INITIALIZER.relative_to(ROOT)), 'sqlSHA256': initializer_sha256}:
@@ -77,7 +80,8 @@ for phase, version in [('before',20261113000100),('after',20261114120000)]:
  DO $restore044$
  DECLARE actual jsonb;
  BEGIN
-  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>"""+str(version)+""" THEN RAISE EXCEPTION 'GitHub backup restore boundary changed';END IF;
+  """+public_guard+"""
+ IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>"""+str(version)+""" THEN RAISE EXCEPTION 'GitHub backup restore boundary changed';END IF;
   IF EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED'))
   OR EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING'))
   OR EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
@@ -102,6 +106,7 @@ SELECT pg_advisory_xact_lock(hashtextextended('kodex.workspace.backup-acl-mainte
 DO $normalize043$
 DECLARE actual jsonb; activity jsonb;
 BEGIN
+ """+public_guard+"""
  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>20261113000100 THEN RAISE EXCEPTION 'GitHub backup normalize boundary changed'; END IF;
  SELECT ("""+query+""") INTO actual;
  IF actual IS DISTINCT FROM $canonical$"""+canonical(schema('backup','before'))+"""$canonical$::jsonb AND actual IS DISTINCT FROM $table_only$"""+canonical(schema('table-only-backup','before'))+"""$table_only$::jsonb THEN RAISE EXCEPTION 'GitHub backup normalize catalog changed';END IF;
