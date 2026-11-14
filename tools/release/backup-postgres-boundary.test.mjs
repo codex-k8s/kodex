@@ -9,6 +9,8 @@ const podSpec=()=>{
 };
 test('PostgreSQL exception привязано к canonical Git container, mounts и API defaults',()=>{
  const spec=podSpec();spec.containers[0].terminationMessagePath='/dev/termination-log';
+ assert.equal(spec.volumes.find(v=>v.name==='runtime-credentials').secret.defaultMode,0o400);
+ assert.equal(spec.volumes.find(v=>v.name==='init').configMap.items.find(v=>v.path==='20-bootstrap-passwords.sh').mode,0o550);
  spec.containers[0].startupProbe.successThreshold=1;spec.containers[0].startupProbe.timeoutSeconds=1;
  assert.equal(postgresBackupBoundary(spec,'Pod'),canonicalPostgresBackupBoundarySHA256());
  spec.containers[0].env.push({name:'OTEL_SDK_DISABLED',value:'true'});
