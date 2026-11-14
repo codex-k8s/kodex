@@ -41,6 +41,10 @@ const authorityNormalRotationOperationMigration = "migrations/20260909000200_aut
 // authoritySnapshotPredecessorMigration указывает прямой SQL-эталон происхождения предшественника для проверки точных междоменных привязок.
 const authoritySnapshotPredecessorMigration = "migrations/20260909000300_authority_snapshot_predecessor.sql"
 
+// authorityDistributeStatusMigration locates the additive delivered-snapshot status contract; its exact bytes are pinned independently of every published predecessor.
+// authorityDistributeStatusMigration указывает additive delivered-snapshot status contract; exact bytes закрепляются независимо от каждого опубликованного predecessor.
+const authorityDistributeStatusMigration = "migrations/20261115000100_authority_distribute_delivery_status.sql"
+
 // TestParseCommandAcceptsFreshOnlyCommands accepts the forward up action and rejects four retired or unsupported command forms without loading configuration or opening a database.
 // TestParseCommandAcceptsFreshOnlyCommands принимает прямое действие up и отклоняет четыре устаревшие или неподдерживаемые формы команды без загрузки конфигурации и открытия БД.
 func TestParseCommandAcceptsFreshOnlyCommands(t *testing.T) {
@@ -167,8 +171,8 @@ func TestSnapshotPromotionUsesExactRequiredReadbackTargets(t *testing.T) {
 	}
 }
 
-// TestAuthorityMigrationHistoryPreservesPublishedBaseline requires the exact nine-file ordered forward history and the fixed SHA-256 of the published baseline. It catches byte drift without applying, rolling back or editing migrations.
-// TestAuthorityMigrationHistoryPreservesPublishedBaseline требует точную упорядоченную историю девяти прямых файлов и фиксированный SHA-256 опубликованной исходной миграции. Изменение байтов обнаруживается без применения, отката или редактирования миграций.
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline requires the exact ten-file ordered forward history and the fixed SHA-256 of the published baseline and additive delivered-status successor. It catches byte drift without applying, rolling back or editing migrations.
+// TestAuthorityMigrationHistoryPreservesPublishedBaseline требует точную упорядоченную историю десяти прямых файлов и фиксированный SHA-256 опубликованной исходной миграции и additive delivered-status successor. Изменение байтов обнаруживается без применения, отката или редактирования миграций.
 func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	t.Parallel()
 
@@ -176,7 +180,7 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list migrations: %v", err)
 	}
-	if len(entries) != 9 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" || entries[8] != "migrations/20260912000200_authority_legacy_proof_budget.sql" {
+	if len(entries) != 10 || entries[0] != baselineMigration || entries[1] != workloadBoundaryMigration || entries[2] != snapshotWorkloadSignerMigration || entries[3] != "migrations/20260908000100_authority_bounded_freshness.sql" || entries[4] != authorityRotationLifecycleMigration || entries[5] != authorityNormalRotationOperationMigration || entries[6] != authoritySnapshotPredecessorMigration || entries[7] != "migrations/20260912000100_authority_legacy_registry_provenance.sql" || entries[8] != "migrations/20260912000200_authority_legacy_proof_budget.sql" || entries[9] != authorityDistributeStatusMigration {
 		t.Fatalf("unexpected forward migration set: %v", entries)
 	}
 	content, err := os.ReadFile(baselineMigration)
@@ -185,6 +189,13 @@ func TestAuthorityMigrationHistoryPreservesPublishedBaseline(t *testing.T) {
 	}
 	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "d4c9ed792ae0e157247fd3e1b58d15f7bbff43bf38f202bf72e9201398be4e0a" {
 		t.Fatal("published authority baseline bytes changed")
+	}
+	content, err = os.ReadFile(authorityDistributeStatusMigration)
+	if err != nil {
+		t.Fatal("read distribute status migration")
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(content)); got != "89ae531747933fd0e3c05c79e5111a83a3f88984ab8ee1bae53b7eaea2278224" {
+		t.Fatal("authority distribute status migration bytes changed")
 	}
 }
 

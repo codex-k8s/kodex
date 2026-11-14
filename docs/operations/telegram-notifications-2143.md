@@ -533,3 +533,97 @@ wire contract. Overlay/source pins, RAM filesystem и exact container join
 проверяются; source Go и SQL не изменяются. Это representation qualification,
 а не live107 delivery или новый authority grant. WholeCLI repair сценарии
 добавляют реальную35s задержку до late read, сохраняя старые Job logs.
+
+## Owner status до первых107 readbacks
+
+`authority_rotation_status()` ранее читала snapshot coordinates только из
+`authority_rotation_operation_publications`. Publisher создаёт эту строку
+после `PROMOTED`, когда обязательные readers уже подтвердили snapshot. Во время
+`DISTRIBUTING` snapshot уже записан в `authority_snapshot_history`, intent имеет
+protocol2/`DELIVERED`, но status ещё не выдавал `sourceRevision` и
+`sourceDigestSHA256`. Допуск projection требовал эти сведения для запуска CP,
+а подтверждения CP требовались для `PROMOTED`: возникал цикл запуска.
+
+Forward-only owner migration `20261115000100` сохраняет прежнюю функцию,
+OID/signature/owner/ACL и исправляет только этот read path. При отсутствии
+завершённой phase publication fallback допускается исключительно для
+`DISTRIBUTING` + `DISTRIBUTE` + protocol2 `DELIVERED`. Полностью совпадают
+operation, registry digest, phase intent, publication input digest, source,
+predecessor и expected reader count. Snapshot publication предшествует
+`deliveredAt`; отсутствуют promoted/retired/aborted markers. Coordinates
+берутся из фактической immutable history; registry digest не используется
+вместо snapshot digest. Функция считает фактические snapshot readbacks,
+включая законный0, и не объявляет `PROMOTED` либо `RETIRED`.
+
+Прежние SQL миграции не меняются. Delivery precondition принимает только canonical predecessor
+Goose `20260912000200` и точную прежнюю функцию с owner/migrator EXECUTE ACL.
+Изменённая function definition либо дополнительные EXECUTE grants закрыто
+отклоняются. Новый schema head — `20261115000100`; создаётся только один Goose
+record. Данные operation/phase/intent/history/readbacks не изменяются.
+Существующие RETIRE и legacy ветви сохраняют прежний результат.
+
+Доставка является отдельной migration-only операцией с immutable built CLI
+image и прежней canonical migrator identity/TLS boundary. Она проверяет точные
+PG Pod/StatefulSet UID, system identifier/database OID, старый function hash,
+полную provenance уже доставленного107, исходный046 Job, API isolation и
+остановленный cohort. Publisher deployment/image и старые rotation, migration,
+projection plans/journals сохраняются. После DDL postcondition сверяет новую
+функцию, прежние OID/attributes/ACL, Goose predecessor hash и неизменную ledger.
+Потерянный Job create ACK допускает только exact read-only rejoin, не второй Job.
+
+После успешного owner upgrade создаётся **новый** status Job через прежний
+frozen application/executor. Ранее записанные status Job logs не переписываются.
+Новый SQL результат проходит прежние Go DTO и DELIVER validators; исходный
+projection plan с существующим ConfigMap ACK продолжается через `resume`.
+Новая source compatibility либо ослабление30s TTL для этого не нужны. Далее
+сохраняется обычная последовательность CP/readers, activate, RETIRE, Service
+restore и backup resume. Откат owner migration запрещён; исправление возможных
+ошибок — только новым квалифицированным forward successor.
+
+`make test-authority-distribute-status-native` воспроизводит настоящий old
+owner state с `DELIVERED` history до любых readbacks/завершённых publications,
+применяет новую миграцию при активной operation и проверяет SQL raw/Go DTO
+существующим107 validator. Тот же fixed observer SQL delivery CLI выполняется
+до и после; проверяются same OID/owner/ACL/full ledger, repeat, отказ Down,
+predecessor ACL/body drift и22 нарушенные provenance bindings с rollback.
+`make test-telegram-authority-owner-native` отдельно сохраняет полный fresh/
+repeat/RETIRE/legacy/workload/freshness native regression. Оба используют только
+pinned disposable PostgreSQL18.3 в RAM и synthetic loopback credentials;
+installed migration/rotation этими проверками не объявляются выполненными.
+
+
+Для уже остановленного107 действует отдельный исполняемый оператор
+`tools/release/authority-distribute-status-migration.mjs`:
+
+1. Собрать `internal-rpc-authority` из проверенного immutable source штатным
+   `build-stable-local.sh`, опубликовать через `stable-image-publication.mjs`.
+   Новый image используется только Job миграции; image publisher не меняется.
+2. Выполнить `plan --kubeconfig <absolute-path> --context <context>
+   --projection-plan <private-plan> --projection-evidence <private-journal>
+   --publication-plan <private-plan> --publication-evidence <private-journal>
+   --plan <new-private-plan>`. Команда проверяет canonical stopped046 через
+   прежний frozen executor, неизменные maintenance/isolation/107 plans,
+   exact registry/publisher/cluster и PostgreSQL instance, предыдущие девять SQL,
+   published image provenance, полный preimage функции и owner ledger.
+3. Выполнить `apply --kubeconfig <absolute-path> --context <context>
+   --plan <private-plan> --evidence <new-private-journal>
+   --confirm APPLY-AUTHORITY-DISTRIBUTE-STATUS`. Единственный effect — создание
+   Job `authority-status-20261115000100` с CLI `up`, `backoffLimit=0`, deadline300s.
+   Durable intent записывается до create. Job не удаляется автоматически.
+4. `observe` с теми же kubeconfig/context/plan/evidence не создаёт ресурсов.
+   Потерянный ответ разрешается только exact Job UID/spec readback; отсутствие
+   Job не разрешает повторный create. PASS требует exact succeeded Pod и
+   init/app imageID, exit0 без restart, положительный join и поздний owner SQL
+   с неизменными OID/ACL/атрибутами, history и ledger. Изменяются только definition
+   функции и одна Goose row. Ошибка оставляет стенд в обслуживании.
+5. После PASS создать новый107 status Job и продолжить прежние
+   projection/resume/activate/restore/backup journals их frozen executor.
+   Прежние plans и строки status Jobs не переписываются. Повторный запуск046,
+   новая rotation107 и Goose Down не входят в этот путь.
+
+`make test-authority-distribute-status-migration` проверяет создание, потерю
+ACK, продолжение после перезапуска оператора, запрет повторного create,
+подмену Job/Pod/image, незавершённый writer и несовпадение postcondition.
+`make test-authority-distribute-status-native` отдельно доказывает настоящую
+PostgreSQL миграцию и SQL→Go→защищённый107 consumer. Локальные проверки не
+объявляются живой приёмкой или успешным CI.
