@@ -55,18 +55,26 @@ func TestAuthorityBaselineGooseComponent(t *testing.T) {
 	}
 	testSnapshotGenerationUpgradeRejection(t, port)
 	seedLegacyRegistryProvenance(t, port)
+	if os.Getenv("KODEX_AUTHORITY_DISTRIBUTE_UPGRADE_TEST") == "1" {
+		if err := goose.UpToContext(ctx, database, "migrations", 20260912000200); err != nil {
+			t.Fatal("apply distribute status predecessor", err)
+		}
+		testAuthorityRotationLifecycle(t, port)
+		testAuthorityDistributeStatusUpgrade(t, port, database)
+		return
+	}
 	for attempt := range 2 {
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			t.Fatalf("apply authority migration attempt %d: %v", attempt+1, err)
 		}
 		version, err := goose.GetDBVersionContext(ctx, database)
-		if err != nil || version != 20260912000200 {
+		if err != nil || version != 20261115000100 {
 			t.Fatal("authority migration version readback failed")
 		}
 		var rows, maximumID int64
 		if err := database.QueryRowContext(ctx,
 			"SELECT count(*), max(id) FROM public.goose_db_version",
-		).Scan(&rows, &maximumID); err != nil || rows != 10 {
+		).Scan(&rows, &maximumID); err != nil || rows != 11 {
 			t.Fatal("authority migration history readback failed")
 		}
 		if attempt == 0 {

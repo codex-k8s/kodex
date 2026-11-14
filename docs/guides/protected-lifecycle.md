@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.95
+version: 1.1.96
 updated: 2026-11-15
 ---
 
@@ -19,6 +19,16 @@ config и plan hashes, допустимую точную дельту и fresh t
 только штатное чтение исхода. Успешный YAML render не доказывает допустимость
 Kubernetes spec: имена ContainerPort и строкового Service.targetPort проверяются
 по IANA port-name boundary до нового migration plan и DDL.
+
+Authoritative status разделяет подтверждённую доставку snapshot и завершение
+фазы после readbacks. Consumer, который должен впервые запуститься для такого
+readback, не зависит от ещё отсутствующего completion receipt. Его admission
+может читать уже устойчивую DELIVERED history только по полной owner/phase/
+intent/registry/input/predecessor binding; наличие объекта само по себе не
+заменяет эту связь. Добавление такого read path не продвигает owner phase и не
+выдаёт искусственные readbacks. Исправление опубликованной SQL-функции идёт
+новой forward-only миграцией с сохранением OID/owner/ACL и ledger; прежние
+snapshots, plans и журналы не переписываются.
 
 Custom RoundTripper fixtures не заменяют проверку production HTTP/TLS transport.
 Provider path с CONNECT доказывается отдельным bounded native loop через
