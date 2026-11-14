@@ -81,6 +81,19 @@ export function verifyMigrationAPIAdmission(migration,current){
  return current;
 }
 
+// Deployment controller меняет только собственный revision после template rollout.
+// Между старым CLOSE и новым OPEN допустимо его монотонное продвижение; marker
+// и все остальные annotations остаются exact. Сам OPEN и live metadata ниже
+// по-прежнему сравниваются целиком, поэтому это не допуск последующего drift.
+function migrationAPIAnnotationsMatch(before,after){
+ const key='deployment.kubernetes.io/revision',left={...before},right={...after};
+ const previous=left[key],current=right[key];delete left[key];delete right[key];
+ if(!same(left,right))return false;
+ if(previous===current)return true;
+ const valid=value=>typeof value==='string'&&/^[1-9][0-9]{0,18}$/.test(value);
+ return valid(current)&&(previous===undefined||valid(previous)&&BigInt(current)>=BigInt(previous));
+}
+
 // Открытый API является отдельной terminal READ stage. Он не изменяет
 // stopped/staged/resumed specs исходного migration plan или mutation methods.
 export function readOpenedMigrationAPI(migration,{openPlanPath,openEvidencePath},kube){
@@ -89,7 +102,7 @@ export function readOpenedMigrationAPI(migration,{openPlanPath,openEvidencePath}
  const opened={plan:readAuthorityPrivateJSON(openPlanPath),events:readMigrationAPIEvents(openEvidencePath)};
  const api=migration.componentHandoff?.components.filter(part=>part.name==='control-api-gateway');
  ensure(api?.length===1&&api[0].maintenance===true&&api[0].uid===current.proof.deploymentUID&&
-  same(opened.plan.beforeSpec,api[0].stagedSpec)&&same(opened.plan.beforeAnnotations,current.closed.plan.afterAnnotations),
+  same(opened.plan.beforeSpec,api[0].stagedSpec)&&migrationAPIAnnotationsMatch(current.closed.plan.afterAnnotations,opened.plan.beforeAnnotations),
   'COMPONENT_MIGRATION_API_OPEN_STAGE_CHANGED');
  const proof=requireOpenedAPIMaintenance(current.deployment,current.resources,current.closed,opened,current.isolation);
  return {uid:api[0].uid,spec:opened.plan.afterSpec,replicas:proof.replicas,proof,current,opened};

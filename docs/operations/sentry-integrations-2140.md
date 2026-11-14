@@ -423,3 +423,12 @@ redirect fallback.
 [exception API context](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/interfaces/exception.py#L309),
 [project received stats](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/core/endpoints/project_stats.py#L129),
 [issue search limit](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/api/helpers/group_index/index.py#L87).
+
+
+После handoff Deployment controller может увеличить свою аннотацию
+`deployment.kubernetes.io/revision`. При сопоставлении исторического CLOSE с
+новым OPEN routine045 принимает только корректное монотонное увеличение этой
+аннотации; marker и остальные аннотации сравниваются полностью. Новый OPEN
+сохраняет актуальную revision в собственном неизменном plan. Текущие UID, spec,
+все аннотации и readiness сравниваются с этим OPEN без исключений. Исторические
+journals не переписываются; уменьшение revision и посторонняя аннотация дают отказ.
