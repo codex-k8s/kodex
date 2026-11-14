@@ -1,3 +1,4 @@
+import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import { createHash } from 'node:crypto';
 import { fingerprint, withPrivatePatchFile } from './scoped-release.mjs';
 import { portableRunnerTarget } from './portable-runner-target.mjs';
@@ -13,6 +14,10 @@ const image = value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 export const componentMigrationCohortSchema = 'kodex.portable-component-migration/v2';
 const profiles = Object.freeze({
+  'telegram-notifications': Object.freeze({schema:componentMigrationCohortSchema,before:20261114130000,after:20261114140000,
+    contract:'TELEGRAM_NOTIFICATIONS_UPGRADE',introduced:'interaction-gateway',components:Object.freeze(['control-plane','control-api-gateway','staff-control-center','egress-gateway','interaction-gateway'])}),
+  'telegram-notifications-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114130000,after:20261114140000,
+    contract:'TELEGRAM_NOTIFICATIONS_UPGRADE',introduced:'interaction-gateway',components:Object.freeze(['control-plane','control-api-gateway','staff-control-center','egress-gateway','interaction-gateway'])}),
   'sentry-observability': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
     contract:'SENTRY_OBSERVABILITY_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
   'sentry-observability-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
@@ -25,6 +30,7 @@ const profiles = Object.freeze({
     contract:'GITHUB_REPOSITORY_SCOPE_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
 });
 const componentSources = Object.freeze({'control-plane':'services/internal/control-plane/',
+  'egress-gateway':'services/external/egress-gateway/','interaction-gateway':'services/external/interaction-gateway/',
   'runtime-controller':'services/internal/runtime-controller/','integration-gateway':'services/external/integration-gateway/',
   'control-api-gateway':'services/external/control-api-gateway/','staff-control-center':'services/staff/control-center/'});
 const names = Object.keys(componentSources);
@@ -62,13 +68,14 @@ export function componentMigrationPublication(value, source, profile = 'workspac
   const configuration=profiles[profile], componentsNames=configuration.components;
   const extended=configuration.schema === componentMigrationCohortSchema;
   requireValue(fields(value, ['schema','profile','context','clusterUID','namespaceUID','baseSourceSHA','baseReleaseLockSHA256',
-    'schemaHeadsBefore','schemaHeadsAfter','runtimeABI','runnerInput','registry','repositoryPrefix','nodeUIDs','components',...(extended?['baseSchemaHeads']:[])]) &&
+    'schemaHeadsBefore','schemaHeadsAfter','runtimeABI','runnerInput','registry','repositoryPrefix','nodeUIDs','components',...(extended?['baseSchemaHeads']:[]),...(configuration.introduced?['introducedReceiver']:[])]) &&
     value.schema === configuration.schema && value.profile === profile &&
     typeof value.context === 'string' && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(value.context) && uid(value.clusterUID) && uid(value.namespaceUID) &&
     revision(source?.revision) && revision(value.baseSourceSHA) && sha(value.baseReleaseLockSHA256) &&
     value.runtimeABI === 5 && value.runnerInput === 'v10' &&
     typeof value.registry === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?$/.test(value.registry) &&
     typeof value.repositoryPrefix === 'string' && /^[a-z0-9][a-z0-9._/-]*$/.test(value.repositoryPrefix) && !value.repositoryPrefix.includes('..'), 'COMPONENT_MIGRATION_PUBLICATION_INVALID');
+  if(configuration.introduced)validateTelegramIntroducedReceiverProof(value.introducedReceiver,source.revision);
   const schemaKeys = ['control-plane','internal-rpc-authority','email-bridge'];
   requireValue(fields(value.schemaHeadsBefore,schemaKeys) && fields(value.schemaHeadsAfter,schemaKeys) &&
     schemaKeys.every(k => Number.isSafeInteger(value.schemaHeadsBefore[k]) && value.schemaHeadsBefore[k] > 0) &&
@@ -102,7 +109,7 @@ export function componentMigrationPublication(value, source, profile = 'workspac
       lock.base_release_lock_sha256 === value.baseReleaseLockSHA256 && fingerprint(lock.schema_heads) === fingerprint(value.schemaHeadsAfter) &&
       typeof lock.digest === 'string' && /^sha256:[a-f0-9]{64}$/.test(lock.digest) && lock.digest !== 'sha256:'+'0'.repeat(64) &&
       lock.image_ref === `${value.registry}/${value.repositoryPrefix}/${part.component}@${lock.digest}` && image(lock.image_ref) &&
-      lock.image_ref !== part.expectedImageRef && lock.qualification === 'PUBLISHED_NOT_NODE_QUALIFIED_NOT_DEPLOYED' &&
+      (configuration.introduced===part.component ? lock.image_ref===part.expectedImageRef&&lock.image_ref===value.introducedReceiver.imageRef : lock.image_ref !== part.expectedImageRef) && lock.qualification === 'PUBLISHED_NOT_NODE_QUALIFIED_NOT_DEPLOYED' &&
       sha(lock.production_file_sha256) && fields(lock.build,['dockerfile_sha256','metadata_sha256','private_source_sha','platform']) &&
       sha(lock.build?.dockerfile_sha256) && sha(lock.build?.metadata_sha256) &&
       revision(lock.build?.private_source_sha) && lock.build.platform === 'linux/amd64', 'COMPONENT_MIGRATION_LOCK_PROVENANCE_INVALID');
@@ -179,10 +186,12 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
       requireValue(matches.length === 1,'COMPONENT_MIGRATION_HANDOFF_SCOPE_INVALID');
       const before = matches[0], count = before.spec?.replicas;
       const maintenance=publication.schema === componentMigrationCohortSchema && part.component === 'control-api-gateway';
+      const introduced=profiles[publication.profile].introduced===part.component, proof=publication.introducedReceiver;
       requireValue(uid(before.metadata.uid) && /^\d+$/.test(before.metadata.resourceVersion ?? '') &&
-        Number.isSafeInteger(count) && (maintenance ? count === 0 : count > 0 && count <= 8) && (part.component !== 'control-plane' || count === 3) && !before.spec.paused &&
+        Number.isSafeInteger(count) && (maintenance||introduced ? count === 0 : count > 0 && count <= 8) && (part.component !== 'control-plane' || count === 3) && !before.spec.paused &&
         before.status?.observedGeneration >= before.metadata.generation &&
-        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => (before.status[k] ?? (maintenance?0:undefined)) === count), 'COMPONENT_MIGRATION_HANDOFF_HEALTH_REQUIRED');
+        ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => (before.status[k] ?? (maintenance||introduced?0:undefined)) === count), 'COMPONENT_MIGRATION_HANDOFF_HEALTH_REQUIRED');
+      if(introduced)requireValue(before.metadata.uid===proof.deploymentUID&&fingerprint(before.spec)===proof.specSHA256,'TELEGRAM_INTRODUCTION_HANDOFF_CHANGED');
       const stopped = structuredClone(before.spec);stopped.replicas=0;
       const staged = structuredClone(stopped);
       const mains = staged.template.spec.containers.filter(c => c.name === part.component);
@@ -193,8 +202,8 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
       delete values['kodex.dev/component-image-profile-sha256'];
       Object.assign(values,{'kodex.dev/component-source-sha':source.revision,'kodex.dev/component-base-lock-sha256':publication.baseReleaseLockSHA256,
         'kodex.dev/component-upgrade-sha256':validated.digest});
-      const resumed=structuredClone(staged);resumed.replicas=count;
-      return {name:part.component,uid:before.metadata.uid,replicas:count,...(maintenance?{maintenance:true}:{}),beforeSpec:structuredClone(before.spec),stoppedSpec:stopped,stagedSpec:staged,resumedSpec:resumed};
+      const resumed=structuredClone(staged);resumed.replicas=introduced?proof.intendedReplicas:count;
+      return {name:part.component,uid:before.metadata.uid,replicas:introduced?proof.intendedReplicas:count,...(maintenance?{maintenance:true}:{}),...(introduced?{introduced:true}:{}),beforeSpec:structuredClone(before.spec),stoppedSpec:stopped,stagedSpec:staged,resumedSpec:resumed};
     })};
 }
 
@@ -341,13 +350,13 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
-    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
+    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
   requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
   const part = name => plan.componentHandoff.components.find(c => c.name === name);
   const observe = name => {
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
-    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
+    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:expected.introduced?['stoppedSpec','stagedSpec','resumedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
     const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
     const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
@@ -422,7 +431,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       for(const name of workers) {
         // Внешний API уже закрыт проверенным maintenance target. Его нулевые
         // replicas сохраняются; ACK подтверждает join, не выдуманный patch.
-        if(!part(name).maintenance) transition(name,'stoppedSpec','PAIR_STOP_INTENT');
+        if(!part(name).maintenance&&!part(name).introduced) transition(name,'stoppedSpec','PAIR_STOP_INTENT');
         await wait(() => observe(name),s => s.stage === 'stoppedSpec' && s.joined,'COMPONENT_MIGRATION_CONTROLLER_STOP_TIMEOUT',clock);
         journal.append({type:'PAIR_STOP_ACK',name});
       }
@@ -442,7 +451,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     async resume() {
       schemaReady(true);requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
       for (const name of names) {
-        if(part(name).maintenance) {
+        if(part(name).maintenance||part(name).introduced) {
           const state=observe(name);
           requireValue(state.stage === 'stagedSpec' && state.joined,'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
           continue;
@@ -451,7 +460,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
         await wait(() => observe(name),s => s.stage === 'resumedSpec' && s.ready,'COMPONENT_MIGRATION_RESUME_TIMEOUT',clock);
         journal.append({type:name === 'control-plane' ? 'RESUME_ACK' : 'PAIR_RESUME_ACK',name});
       }
-      return {status:'RESUMED',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,forwardOnly:true,
+      const pending=names.some(name=>part(name).introduced);
+      return {status:pending?'PENDING_AUTHORITY':'RESUMED',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:!pending,forwardOnly:true,
         ...(names.some(name=>part(name).maintenance)?{gatewayMaintenance:true}:{})};
     },
   };

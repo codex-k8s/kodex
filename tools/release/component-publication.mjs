@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {constants} from 'node:fs';
@@ -41,13 +42,15 @@ async function privateDocument(path,lines=false){
 }
 
 export function validateComponentPublicationConfiguration(config){
+  const profile=componentMigrationConfiguration(config?.profile);
   requireValue(exact(config,['schema','profile','sourceSHA','context','clusterUID','namespaceUID','baseSourceSHA','baseReleaseLockSHA256',
-    'baseReleaseLock','sourceCheckout','baseSchemaHeads','schemaHeadsBefore','schemaHeadsAfter','nodes','components'])&&
+    'baseReleaseLock','sourceCheckout','baseSchemaHeads','schemaHeadsBefore','schemaHeadsAfter','nodes','components',...(profile.introduced?['introducedReceiver']:[])])&&
     config.schema==='kodex.component-publication-config/v1'&&/^[a-f0-9]{40}$/.test(config.sourceSHA??'')&&
     config.sourceSHA!=='0'.repeat(40)&&/^[a-f0-9]{40}$/.test(config.baseSourceSHA??'')&&
     /^[a-f0-9]{64}$/.test(config.baseReleaseLockSHA256??'')&&/^k3d-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(config.context??''),
     'COMPONENT_PUBLICATION_CONFIGURATION_INVALID');
-  const profile=componentMigrationConfiguration(config.profile),uid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
+  if(profile.introduced)validateTelegramIntroducedReceiverProof(config.introducedReceiver,config.sourceSHA);
+  const uid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(uid(config.clusterUID)&&uid(config.namespaceUID)&&Array.isArray(config.nodes)&&config.nodes.length>0&&config.nodes.length<=8&&
     config.nodes.every(n=>exact(n,['name','uid'])&&uid(n.uid)&&/^[a-z0-9][a-z0-9.-]{0,252}$/.test(n.name??''))&&
     new Set(config.nodes.map(n=>n.name)).size===config.nodes.length&&new Set(config.nodes.map(n=>n.uid)).size===config.nodes.length,
@@ -78,7 +81,8 @@ export function createComponentImageLock(config,component,evidence,sourceEvidenc
   const plan=evidence.publicationPlan,imageRef=validatedStablePublication(config.sourceSHA,evidence,component.name);
   requireValue(plan.context===config.context&&plan.clusterUID===config.clusterUID&&plan.namespaceUID===config.namespaceUID&&
     plan.source===config.sourceSHA&&same(plan.receipt,sourceEvidence.receipt)&&
-    plan.receipt.contextSHA256===sourceEvidence.contextSHA256&&imageRef!==component.expectedImageRef,
+    plan.receipt.contextSHA256===sourceEvidence.contextSHA256&&
+    (profile.introduced===component.name?imageRef===component.expectedImageRef&&imageRef===config.introducedReceiver.imageRef:imageRef!==component.expectedImageRef),
     'COMPONENT_PUBLICATION_SOURCE_MISMATCH');
   const changed=sourceEvidence.changedFiles;
   requireValue(Array.isArray(changed)&&changed.length>0&&changed.length<=4096&&same(changed,[...new Set(changed)].sort())&&
@@ -129,7 +133,7 @@ async function prepare(config){
   }
   const publication={schema:profile.schema,profile:config.profile,context:config.context,clusterUID:config.clusterUID,namespaceUID:config.namespaceUID,
     baseSourceSHA:config.baseSourceSHA,baseReleaseLockSHA256:config.baseReleaseLockSHA256,
-    ...(profile.schema.endsWith('/v2')?{baseSchemaHeads:config.baseSchemaHeads}:{}),schemaHeadsBefore:config.schemaHeadsBefore,
+    ...(profile.schema.endsWith('/v2')?{baseSchemaHeads:config.baseSchemaHeads}:{}),...(profile.introduced?{introducedReceiver:config.introducedReceiver}:{}),schemaHeadsBefore:config.schemaHeadsBefore,
     schemaHeadsAfter:config.schemaHeadsAfter,runtimeABI:5,runnerInput:'v10',registry:'registry.local.kodex',repositoryPrefix:'kodex',
     nodeUIDs:config.nodes.map(n=>n.uid),components};
   return {schema:'kodex.component-publication-prepared/v1',sourceSHA:config.sourceSHA,configuration:config,publication};

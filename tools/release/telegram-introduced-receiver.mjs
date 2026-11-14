@@ -1,3 +1,4 @@
+import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import {resolve} from 'node:path';
 import {validatedStablePublication} from './stable-image-publication.mjs';
 import {fingerprint} from './scoped-release.mjs';
@@ -38,15 +39,18 @@ export async function readTelegramIntroducedReceiver({planPath,evidencePath,publ
  fail(result.state==='CREATED_DORMANT'&&result.qualification==='NOT_ACTIVATED_NOT_INSTALLED','TELEGRAM_INTRODUCTION_DORMANT_REQUIRED');
  const request=plan.objects.find(part=>part.request.kind==='Deployment'),receipt=result.resources.find(row=>row.resource==='apps/v1|Deployment|interaction-gateway');
  fail(request&&receipt&&request.expected.spec?.replicas===0&&plan.intendedReplicas===3,'TELEGRAM_INTRODUCTION_DORMANT_REQUIRED');
- return Object.freeze({schema:'kodex.telegram-introduced-receiver/v1',state:'PENDING_AUTHORITY',sourceSHA,
+ const proof={schema:'kodex.telegram-introduced-receiver/v1',state:'PENDING_AUTHORITY',sourceSHA,
   planPath:resolve(planPath),evidencePath:resolve(evidencePath),publicationPath:resolve(publicationPath),publicationSHA256:fingerprint(publication),createPlanSHA256:fingerprint(plan),createID:plan.createID,
   targetSHA256:fingerprint(plan.target),deploymentUID:receipt.uid,specSHA256:fingerprint(request.expected.spec),
-  imageRef:plan.interactionImage,intendedReplicas:plan.intendedReplicas,resources:result.resources});
+  imageRef:plan.interactionImage,intendedReplicas:plan.intendedReplicas,resources:result.resources};
+ validateTelegramIntroducedReceiverProof(proof,sourceSHA);return Object.freeze(proof);
 }
 
 // После capture сравнивается весь новый proof: UID/spec/image и прочие objects
 // не могут смениться во время подготовки либо до первого registry CAS.
 export function verifyTelegramIntroducedReceiver(expected,actual){
- fail(expected?.schema==='kodex.telegram-introduced-receiver/v1'&&expected.state==='PENDING_AUTHORITY'&&same(expected,actual),
+ validateTelegramIntroducedReceiverProof(expected,expected?.sourceSHA);
+ validateTelegramIntroducedReceiverProof(actual,expected.sourceSHA);
+ fail(same(expected,actual),
   'TELEGRAM_INTRODUCTION_CHANGED');
 }

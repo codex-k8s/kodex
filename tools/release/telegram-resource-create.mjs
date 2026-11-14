@@ -9,6 +9,8 @@ import {isIP} from 'node:net';
 import {fingerprint,withPrivatePatchFile} from './scoped-release.mjs';
 import {validatedStablePublication} from './stable-image-publication.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
+import {telegramResourceCreateKeys} from './telegram-introduction-contract.mjs';
+export {telegramResourceCreateKeys} from './telegram-introduction-contract.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),namespace='kodex-system';
@@ -20,15 +22,7 @@ const sha=value=>/^[a-f0-9]{64}$/.test(value??'')&&value!=='0'.repeat(64);
 const source=value=>/^[a-f0-9]{40}$/.test(value??'')&&value!=='0'.repeat(40);
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&same(Object.keys(value).sort(),[...keys].sort());
 const key=value=>`${value.apiVersion}|${value.kind}|${value.metadata?.name}`;
-export const telegramResourceCreateKeys=Object.freeze([
- 'v1|ServiceAccount|interaction-gateway','v1|ConfigMap|interaction-gateway-runtime',
- 'networking.k8s.io/v1|NetworkPolicy|interaction-gateway-default-deny',
- 'networking.k8s.io/v1|NetworkPolicy|interaction-gateway-exact-runtime-paths',
- 'networking.k8s.io/v1|NetworkPolicy|interaction-gateway-internal-rpc-authority-exact-paths',
- 'v1|Service|interaction-gateway','policy/v1|PodDisruptionBudget|interaction-gateway',
- 'monitoring.coreos.com/v1|ServiceMonitor|interaction-gateway','monitoring.coreos.com/v1|PrometheusRule|interaction-gateway',
- 'apps/v1|Deployment|interaction-gateway',
-]);
+
 export const telegramResourceCreateHeader=plan=>({schema:'kodex.telegram-resource-create-evidence/v1',planSHA256:fingerprint(plan),createID:plan.createID});
 
 // Новый target закрепляет существующую установку и publisher, не присваивая

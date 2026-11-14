@@ -59,11 +59,11 @@ test('044: handoff сохраняет env и maintenance API=0 вместо не
 
 // Исполняется lifecycle с настоящим discovery/join и файловым CAS primitive.
 // Только Kubernetes API и PostgreSQL transport заменены ограниченной оснасткой.
-function lifecycleFixture() {
-  const f=fixture(),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
+function lifecycleFixture(profile='github-repository-scope') {
+  const f=fixture(profile),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
   const drain=readFileSync(new URL('./portable-component-migration-drain.sql',import.meta.url));
   const postgres={pod:'kodex-postgresql-0',uid:uuid(30),ownerUID:uuid(31)};
-  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:'20261114120000',postgres,
+  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
   const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined};
@@ -85,7 +85,7 @@ function lifecycleFixture() {
   const kube=(args,input)=>{
     if(args.includes('exec')) {
       assert.ok(Buffer.from(input).equals(drain));
-      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114120000,
+      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:f.value.schemaHeadsAfter['control-plane'],
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
@@ -219,4 +219,20 @@ test('044 backup: producer profile, полный cohort и handoff имеют о
  assert.ok(componentMigrationTarget(f.target,f.value,f.observed));
  assert.throws(()=>componentMigrationPublication(f.value,{revision},'github-repository-scope'));
  const normal=fixture();assert.throws(()=>componentMigrationPublication(normal.value,{revision},'github-repository-scope-backup'));
+});
+
+test('046 handoff сохраняет назначенный UID/spec dormant0, schema resume не запускает нового issuer',async()=>{
+ for(const profile of ['telegram-notifications','telegram-notifications-backup']){
+  const f=lifecycleFixture(profile);await f.lifecycle.stopController();f.lifecycle.requireStopped();f.stopCP();f.faults.schema=true;
+  const introduced=f.plan.componentHandoff.components.find(c=>c.name==='interaction-gateway');
+  assert.equal(introduced.introduced,true);assert.equal(introduced.replicas,3);assert.equal(introduced.beforeSpec.replicas,0);
+  await f.lifecycle.handoff();const result=await f.lifecycle.resume();assert.equal(result.status,'PENDING_AUTHORITY');assert.equal(result.pairReady,false);
+  assert.equal(f.apps.get('interaction-gateway').spec.replicas,0);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
+  assert.equal(f.apps.get('control-plane').spec.replicas,3);assert.equal(f.apps.get('egress-gateway').spec.replicas,2);
+  const writes=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,writes);
+ }
+ const f=fixture('telegram-notifications');f.deployments.at(-1).metadata.uid=uuid(999);
+ assert.throws(()=>planComponentMigrationHandoff(f.value,f.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
+ const g=fixture('telegram-notifications');g.deployments.at(-1).spec.template.spec.containers[0].env.push({name:'FOREIGN',value:'changed'});
+ assert.throws(()=>planComponentMigrationHandoff(g.value,g.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
 });
