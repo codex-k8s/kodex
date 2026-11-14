@@ -24,15 +24,24 @@ const apiHeader=plan=>({schema:'kodex.component-api-maintenance-evidence/v1',pla
 const marker=plan=>JSON.stringify({maintenanceID:plan.maintenanceID,closePlanSHA256:plan.closePlanSHA256});
 const identity=(service,plan)=>service?.apiVersion==='v1'&&service.kind==='Service'&&service.metadata?.name===name&&
   service.metadata.namespace==='kodex-system'&&service.metadata.uid===plan.serviceUID&&!service.metadata.deletionTimestamp;
-// Новый restore executor явно принимает только точный ancestor прежней ротации.
-// Сама ротация и status Job остаются на исходных source/image/plan bytes.
-export function verifyAuthorityObserverSource(original,current,predecessor,ancestor){
+// Исторический source остаётся exact pin. Только routine observer допускает
+// отдельно выбранный ancestor с полностью тем же Git tree после squash merge.
+// Старые rotation/status Job и их source/image/plan bytes не меняются.
+export function verifyAuthorityObserverSource(original,current,predecessor,ancestor,equivalence){
   requireValue(/^[a-f0-9]{40}$/.test(original??'')&&/^[a-f0-9]{40}$/.test(current??'')&&
     original===(predecessor??current),'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
   if(predecessor!==undefined){
     requireValue(predecessor!==current,'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
-    ancestor(predecessor,current);
-  }
+    if(equivalence!==undefined){
+      requireValue(/^[a-f0-9]{40}$/.test(equivalence.revision??'')&&equivalence.revision!==original&&typeof equivalence.tree==='function',
+        'COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_INVALID');
+      try{ancestor(equivalence.revision,current);}catch{throw Error('COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_UNRELATED');}
+      let originalTree,equivalentTree;
+      try{originalTree=equivalence.tree(original);equivalentTree=equivalence.tree(equivalence.revision);}catch{throw Error('COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_UNREADABLE');}
+      requireValue(/^[a-f0-9]{40}$/.test(originalTree??'')&&originalTree===equivalentTree,
+        'COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_TREE_CHANGED');
+    }else ancestor(predecessor,current);
+  }else requireValue(equivalence===undefined,'COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_INVALID');
 }
 // Новый status Job может подтвердить тот же неизменный owner outcome перед effect.
 // Различаются только provenance наблюдения и его время, не authority/target pins.
@@ -76,6 +85,9 @@ function validate(plan){
   requireValue(plan.migrationRestoreProfile===undefined||!isolate&&isRoutineMigrationAPIRestoreProfile(plan.migrationRestoreProfile)&&
     /^[a-f0-9]{40}$/.test(plan.migrationSourceSHA??'')&&!plan.migrationRestore,'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
   requireValue(plan.authorityExecutorSHA===undefined||(!isolate||!!plan.migrationRestore)&&/^[a-f0-9]{40}$/.test(plan.authorityExecutorSHA)&&plan.authorityExecutorSHA!==plan.sourceSHA,'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
+  requireValue(plan.authoritySourceEquivalentSHA===undefined||!!(plan.migrationRestore||plan.migrationRestoreProfile)&&
+    /^[a-f0-9]{40}$/.test(plan.authoritySourceEquivalentSHA)&&!!plan.authorityExecutorSHA&&plan.authoritySourceEquivalentSHA!==plan.authorityExecutorSHA,
+    'COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_INVALID');
   if(!isolate)validateTerminal(plan.authority,plan,Date.parse(plan.authority?.observedAt));
   else requireValue(!Object.hasOwn(plan,'authority'),'COMPONENT_API_TRAFFIC_PLAN_INVALID');
 }
@@ -109,7 +121,7 @@ export function requireClosedAPIAdmission(deployment,resources,closed,traffic){
   confirmedIsolation(plan,events);requireIsolatedAPIService(service,slices,pods,plan);
   return {...proof,trafficPlanSHA256:fingerprint(plan),serviceUID:plan.serviceUID};
 }
-export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityExecutorSHA,migrationRestore,migrationRestoreProfile,migrationSourceSHA}){
+export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityExecutorSHA,authoritySourceEquivalentSHA,migrationRestore,migrationRestoreProfile,migrationSourceSHA}){
   const scope=portableRunnerTarget(target,observed),proof=confirmedAPIMaintenance(closed);
   requireValue(scope.allows(service)&&scope.allows(deployment)&&same(target,closed.plan.target)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&
     ['isolate','restore'].includes(action),'COMPONENT_API_TRAFFIC_SCOPE_INVALID');
@@ -125,6 +137,7 @@ export function planComponentAPITraffic({service,deployment,resources,target,obs
   const plan={schema:'kodex.component-api-traffic-plan/v1',action,sourceSHA,target,maintenanceID:proof.maintenanceID,closePlanSHA256:proof.planSHA256,
     serviceUID:service.metadata.uid,beforeResourceVersion:service.metadata.resourceVersion,beforeSpec:structuredClone(service.spec),afterSpec:structuredClone(service.spec),
     beforeAnnotations:{...service.metadata.annotations},afterAnnotations:{...service.metadata.annotations},
+    ...(authoritySourceEquivalentSHA?{authoritySourceEquivalentSHA}:{}),
     ...(action==='restore'?{previousIsolationSHA256:fingerprint(previous.plan),authority:terminal,
       ...(migrationRestoreProfile?{migrationRestoreProfile,migrationSourceSHA}:{}),...(authorityExecutorSHA?{authorityExecutorSHA}:{})}:
       migrationRestore?{migrationRestore,...(authorityExecutorSHA?{authorityExecutorSHA}:{})}:{})};
@@ -174,7 +187,7 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--authority-executor-sha',
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--authority-executor-sha','--authority-source-equivalent-sha',
     '--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
@@ -184,9 +197,13 @@ async function main(args){
     'COMPONENT_API_TRAFFIC_READBACK_SUCCESSOR_INVALID');
   requireValue(options['--authority-executor-sha']===undefined||phase==='plan'&&(options['--action']==='restore'||options['--action']==='isolate'&&isRoutineMigrationAPIRestoreProfile(options['--migration-profile']))&&/^[a-f0-9]{40}$/.test(options['--authority-executor-sha']),'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
   let authorityExecutorSHA=options['--authority-executor-sha'];
+  let authoritySourceEquivalentSHA=options['--authority-source-equivalent-sha'];
   let migrationProfile=options['--migration-profile'],migrationSourceSHA=options['--migration-source-sha'],routineIsolation;
   requireValue(migrationProfile===undefined||phase==='plan'&&isRoutineMigrationAPIRestoreProfile(migrationProfile),
     'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
+  requireValue(authoritySourceEquivalentSHA===undefined||phase==='plan'&&isRoutineMigrationAPIRestoreProfile(migrationProfile)&&
+    /^[a-f0-9]{40}$/.test(authoritySourceEquivalentSHA)&&!!authorityExecutorSHA,
+    'COMPONENT_API_TRAFFIC_AUTHORITY_EQUIVALENT_INVALID');
   requireValue(migrationSourceSHA===undefined||phase==='plan'&&options['--action']==='restore'&&migrationProfile&&/^[a-f0-9]{40}$/.test(migrationSourceSHA),
     'COMPONENT_API_TRAFFIC_MIGRATION_SOURCE_INVALID');
   const env=Object.fromEntries(['HOME','PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
@@ -216,7 +233,9 @@ async function main(args){
     const plan=readAuthorityPrivateJSON(options['--authority-plan']);
     requireValue(plan.context===options['--context']&&plan.kubeconfig===options['--kubeconfig'],'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
     verifyAuthorityObserverSource(plan.revision,sourceSHA,authorityExecutorSHA,
-      (old,current)=>run('git',['merge-base','--is-ancestor',old,current]));
+      (old,current)=>run('git',['merge-base','--is-ancestor',old,current]),
+      authoritySourceEquivalentSHA===undefined?undefined:{revision:authoritySourceEquivalentSHA,
+        tree:revision=>run('git',['rev-parse',`${revision}^{tree}`]).trim()});
     return readCatalogAuthorityBaseline({plan,events:readAuthorityPrivateText(options['--authority-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),expected},kube);
   };
   const readTerminal=async()=>{
@@ -256,6 +275,7 @@ async function main(args){
   const build=(target,action)=>{
     const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
       target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,
+      authoritySourceEquivalentSHA,
       ...(action==='isolate'?{migrationRestore:routineIsolation}:migrationProfile?{migrationRestoreProfile:migrationProfile,migrationSourceSHA}:{})});
   };
   if(phase==='plan'){
@@ -272,6 +292,7 @@ async function main(args){
   }
   requireValue(options['--evidence']&&!options['--action']&&!options['--target'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
   const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;
+  authoritySourceEquivalentSHA=plan.authoritySourceEquivalentSHA;
   migrationProfile=plan.migrationRestore?.profile??plan.migrationRestoreProfile;migrationSourceSHA=plan.migrationSourceSHA;
   routineIsolation=plan.migrationRestore;
   requireValue(migrationProfile&&plan.action==='restore'&&phase==='apply'||!['--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].some(key=>options[key]),

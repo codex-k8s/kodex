@@ -196,6 +196,8 @@ test('successor observer требует explicit exact ancestor без изме�
   const f=fixture();f.step();ready(f);
   const plan=planComponentAPITraffic({...f,sourceSHA:current,authorityExecutorSHA:old,action:'restore',previous:f.traffic(),terminal:terminal(f)});
   assert.equal(plan.sourceSHA,current);assert.equal(plan.authorityExecutorSHA,old);
+  assert.throws(()=>planComponentAPITraffic({...f,sourceSHA:current,authorityExecutorSHA:old,authoritySourceEquivalentSHA:'c'.repeat(40),
+    action:'restore',previous:f.traffic(),terminal:terminal(f)}),/AUTHORITY_EQUIVALENT_INVALID/);
 });
 
 
