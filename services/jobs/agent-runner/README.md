@@ -4,11 +4,19 @@ title: agent-runner
 type: service
 status: approved
 owner: developer
-version: 3.1.3
-updated: 2026-11-13
+version: 3.1.4
+updated: 2026-11-14
 ---
 
 # agent-runner
+
+Текущие owner instructions передаются OpenCode штатным `config.instructions`
+через новый read-only файл в private provider HOME каждого turn. Файл не берётся
+из native history либо workspace; прежний `Prompt.System` не используется для
+этой authority. Поэтому NORMAL model requests сохраняют текущие инструкции после
+auto-compaction. Пользовательская задача остаётся USER input. Отдельный native
+summary request использует штатный upstream prompt и не получает обещания owner
+authority. Матрица и real-binary regression: [#2136](../../../docs/operations/opencode-native-sessions-2108.md#текущие-owner-instructions-после-auto-compaction--2136).
 
 Потоковый file consumer описан в
 [`runner-file-transfer-1026.md`](../../../docs/operations/runner-file-transfer-1026.md):

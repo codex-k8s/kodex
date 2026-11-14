@@ -152,10 +152,16 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if err != nil {
 		return Result{}, errOpenCodeProvider
 	}
+	preparing := true
+	defer cleanupOpenCodePreparation(home, &preparing)
 	for _, directory := range []string{"config", "cache", "data", "state"} {
 		if os.Mkdir(filepath.Join(home, directory), 0o700) != nil {
 			return Result{}, errOpenCodeProvider
 		}
+	}
+	currentInstructions, err := native.InstallCurrentInstructions(home, input.Instructions)
+	if err != nil {
+		return Result{}, err
 	}
 	plugin, err := native.InstallManagedToolPlugin(home)
 	if err != nil {
@@ -165,6 +171,17 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 	if json.Unmarshal(config, &nativeConfig) != nil {
 		return Result{}, ErrRuntimeProfile
 	}
+	var instructionFiles []any
+	if configured, present := nativeConfig["instructions"]; present {
+		var valid bool
+		instructionFiles, valid = configured.([]any)
+		if !valid {
+			return Result{}, ErrRuntimeProfile
+		}
+	}
+	// Native synthetic continuation messages do not inherit Prompt.System after compaction.
+	// Native synthetic continuation не наследует Prompt.System после compaction.
+	nativeConfig["instructions"] = append([]any{currentInstructions}, instructionFiles...)
 	nativeConfig["plugin"] = []string{plugin}
 	config, err = json.Marshal(nativeConfig)
 	if err != nil {
@@ -220,10 +237,12 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 			return Result{}, atProviderStage(providerStageContext, errOpenCodeProvider)
 		}
 		source := filepath.Join(input.WorkspaceRoot, filepath.FromSlash(input.NativeSession.RelativePath))
+		preparing = false
 		if err := native.Restore(ctx, home, source, input.NativeSession.SessionID, input.NativeSession.SHA256); err != nil {
 			return Result{}, atProviderStage(providerStageArchiveRestore, err)
 		}
 	}
+	preparing = false
 	server, err := native.Start(ctx, home, environment)
 	if err != nil {
 		// Unconfirmed startup cleanup retains its HOME rather than erasing a possible live writer.
@@ -308,7 +327,7 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		}
 		return text
 	}
-	turn, err := server.Client.Execute(ctx, sessionID, native.Prompt{MessageID: "msg_" + identity, Model: native.Model{ProviderID: input.ModelProvider.ProviderID, ModelID: input.Model}, System: input.Instructions, Parts: parts},
+	turn, err := server.Client.Execute(ctx, sessionID, native.Prompt{MessageID: "msg_" + identity, Model: native.Model{ProviderID: input.ModelProvider.ProviderID, ModelID: input.Model}, Parts: parts},
 		func(name string) bool { return allowedOpenCodeTool(input, name) }, func(id, text string) error {
 			message := runtimecontract.RuntimeAgentMessage{ItemID: "opencode-" + id, Phase: runtimecontract.RuntimeMessageCommentary, Revision: 1, Text: redact(text)}
 			return activity(runtimecontract.RuntimeActivity{Message: &message})
@@ -332,6 +351,16 @@ func executeOpenCodeTurn(ctx context.Context, input model.Input, prompt []byte, 
 		return result, errOpenCodeProvider
 	}
 	return result, nil
+}
+
+// cleanupOpenCodePreparation removes current text only before any native process may have started.
+// Restore/start uncertainty transfers cleanup back to the existing positive writer-join lifecycle.
+// cleanupOpenCodePreparation удаляет current text только до возможного старта native process.
+// Неопределённый restore/start сохраняет прежний cleanup lifecycle с положительным writer join.
+func cleanupOpenCodePreparation(home string, preparing *bool) {
+	if *preparing {
+		_ = native.RemoveManagedHome(home)
+	}
 }
 
 // finishOpenCodeProcess seals storage provenance only after the owned leader and pipe readers have joined and its process group is absent.

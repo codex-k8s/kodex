@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.78
-updated: 2026-11-13
+version: 1.1.79
+updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Native compaction и история сессии не являются источником текущих полномочий.
+Каждый business request OpenCode получает актуальные owner instructions через
+штатный `config.instructions` из нового private read-only файла текущего turn;
+restore не переносит этот файл, а task остаётся USER input. Native summary
+сохраняет отдельный upstream prompt. Проверка включает post-compaction model
+wire, смену A→B после export/import, отсутствие дублей и replay effects:
+[#2136](../operations/opencode-native-sessions-2108.md#текущие-owner-instructions-после-auto-compaction--2136).
 
 При остановке Deployment serving inventory определяется одновременно selector
 компонента и точным Deployment→ReplicaSet→Pod lineage: изменение labels не
