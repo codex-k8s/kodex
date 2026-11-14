@@ -44,7 +44,7 @@ func projectGitHubScopedRepository(repo *github.Repository) (githubScopedReposit
 	if kind != "User" && kind != "Organization" {
 		return githubScopedRepository{}, false
 	}
-	return githubScopedRepository{repo.GetID(), repo.GetFullName(), kind, repo.GetPrivate(), repo.GetArchived(), true, repo.GetPermissions()["push"]}, true
+	return githubScopedRepository{ID: repo.GetID(), FullName: repo.GetFullName(), OwnerKind: kind, Private: repo.GetPrivate(), Archived: repo.GetArchived(), CanRead: true, CanPush: repo.GetPermissions()["push"]}, true
 }
 
 // listGitHubAuthenticatedRepositories uses only the fixed authenticated listing and numeric pagination; provider Link URLs are never followed.
