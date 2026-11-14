@@ -4,7 +4,7 @@ title: Управляемая интеграция Sentry Cloud и Self-hosted
 type: operations
 status: approved
 owner: backend
-version: 1.0.0
+version: 1.1.0
 updated: 2026-11-14
 ---
 
@@ -35,6 +35,38 @@ list/read. Запись общих releases либо workflows из project conn
 `UNSUPPORTED_CROSS_PROJECT_RELEASE_MUTATION` и
 `UNSUPPORTED_PROJECT_ALERT_ATOMIC_SCOPE`. Эти причины описывают отсутствующие
 capabilities, а не новый исполняемый HTTP interface.
+
+`event.read` выдаёт только processed exception/stacktrace: до трёх последних
+exceptions, 32 frames суммарно и 4096 UTF-8 bytes diagnostic text. Frame содержит
+только filename/function/module, native lineNo/colNo как line/column и inApp;
+nullable coordinates остаются неизвестными, а не превращаются в ноль.
+Сохраняются ближайшие к ошибке frames и их исходный порядок. Local/upstream
+сокращение отмечает `truncated`; `diagnostics_state=NO_SUPPORTED_DIAGNOSTICS`
+не утверждает отсутствие всех ошибок. Vars, request, cookies, breadcrumbs,
+source context/snippets, registers и rawStacktrace не выдаются. Payload помечен
+`untrusted_content`; это не универсальная DLP-проверка. Отражение точного
+выбранного credential закрывается до projection, включая исключённые поля.
+
+Явный optional `include_error_counts=true` у `sentry.project.read` добавляет
+только native `project_total_received`: 24 завершённых UTC часа, часовые
+непересекающиеся buckets. Сервер назначает `since=start`,
+`until=end_exclusive-1s`, `resolution=1h`, `stat=received` на точном project
+endpoint. Ответ содержит фактические start/end_exclusive/interval_seconds,
+24 подтверждённых integer buckets и их total со `state=VALIDATED`.
+Это received events по native TSDB semantics, не unique issues и не error rate.
+Пустой, неполный, неоднозначный либо чужой window не становится нулём;
+неподтверждённая сводка завершается отказом, её значения остаются UNKNOWN.
+Отсутствующий native endpoint закрывается как UNSUPPORTED. Default read и
+health не запрашивают stats. Ad-hoc Discover/event search, group-by и
+пользовательские aggregation expressions не поддерживаются и не заявлены READY.
+
+| Диагностический сценарий | Точный рабочий набор |
+| --- | --- |
+| Поиск issues | Bounded issue query и cursor внутри выбранного проекта |
+| Events и stack traces | Event/list плюс ограниченная processed exception/frame projection |
+| Агрегация | Только явно включённая почасовая 24h received сводка выбранного проекта |
+| Ad-hoc аналитика | UNSUPPORTED, отдельной исполняемой capability нет |
+| Живые Cloud/self-hosted | NOT RUN, endpoint/credentials не выбраны |
 
 Организационная цепочка: organization health, project discovery, общие
 releases list/read/create/update metadata, monitors list/read и alerts
@@ -216,3 +248,8 @@ Cloud compatibility с ними не объявляется наблюдённо
 Legacy project `/rules/` в26.10.1 отсутствует; новые alerts используют
 organization workflows. Эти различия не обходятся угадыванием API либо
 redirect fallback.
+
+Дополнительные pinned26.10.1 источники: [frame API context](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/interfaces/stacktrace.py#L214),
+[exception API context](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/interfaces/exception.py#L309),
+[project received stats](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/core/endpoints/project_stats.py#L129),
+[issue search limit](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/api/helpers/group_index/index.py#L87).

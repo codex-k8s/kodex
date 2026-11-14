@@ -66,7 +66,7 @@ func sentryObservabilityComponentInput(capability integrationpackage.Capability)
 	for _, field := range capability.InputFields {
 		switch field.Type {
 		case "BOOLEAN":
-			input[field.Key] = false
+			input[field.Key] = field.Key == "include_error_counts"
 		case "INTEGER":
 			input[field.Key] = field.Minimum
 		case "STRING":

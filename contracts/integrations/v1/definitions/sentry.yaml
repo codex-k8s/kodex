@@ -70,7 +70,7 @@
       {
         "key": "sentry.project.read",
         "name": "Прочитать проект",
-        "description": "Прочитать проект только в выбранном проекте Sentry.",
+        "description": "Прочитать метаданные проекта; явно выбранная сводка received содержит 24 завершённых UTC часа и не является произвольной аналитикой.",
         "operation": "sentry.project.read",
         "risk": "READ",
         "approvalPolicy": "NONE",
@@ -85,7 +85,15 @@
             "project_slug"
           ]
         },
-        "inputFields": [],
+        "inputFields": [
+          {
+            "key": "include_error_counts",
+            "type": "BOOLEAN",
+            "required": false,
+            "label": "Включить почасовую сводку received",
+            "help": "По умолчанию выключено, включая health. Только native project_total_received за 24 завершённых UTC часа; это не число уникальных ошибок и не error rate."
+          }
+        ],
         "outputFields": [
           {
             "key": "text",
@@ -219,7 +227,7 @@
       {
         "key": "sentry.event.read",
         "name": "Прочитать событие",
-        "description": "Прочитать событие только в выбранном проекте Sentry.",
+        "description": "Прочитать bounded exception/stacktrace: до трёх exceptions, 32 frames и 4096 UTF-8 bytes diagnostic text; без vars, request, cookies, breadcrumbs и source snippets. Сокращение отмечается явно.",
         "operation": "sentry.event.read",
         "risk": "READ",
         "approvalPolicy": "NONE",

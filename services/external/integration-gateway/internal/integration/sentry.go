@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
@@ -241,7 +242,15 @@ func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capa
 	providerRef := "sentry-project:" + project.ID
 	switch request.Operation {
 	case "sentry.project.read":
-		projection = map[string]string{"id": project.ID, "slug": project.Slug, "name": project.Name, "organization_slug": project.Organization.Slug}
+		metadata := map[string]any{"id": project.ID, "slug": project.Slug, "name": project.Name, "organization_slug": project.Organization.Slug}
+		if include, _ := request.Input["include_error_counts"].(bool); include {
+			counts, err := adapter.sentryProjectCounts(ctx, request, capability, configuration, time.Now())
+			if err != nil {
+				return Result{}, err
+			}
+			metadata["received_counts"] = counts
+		}
+		projection = metadata
 	case "sentry.issue.list":
 		path := "/api/0/projects/" + configuration["organization_slug"] + "/" + configuration["project_slug"] + "/issues/"
 		limit := 20
@@ -338,16 +347,23 @@ func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capa
 			return Result{}, err
 		}
 		var event struct {
-			EventID   string `json:"eventID"`
-			ProjectID string `json:"projectID"`
-			Title     string `json:"title"`
-			Platform  string `json:"platform"`
+			EventID   string             `json:"eventID"`
+			ProjectID string             `json:"projectID"`
+			Title     string             `json:"title"`
+			Platform  string             `json:"platform"`
+			Entries   []sentryEventEntry `json:"entries"`
 		}
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &event) != nil || event.EventID != eventID || event.ProjectID != project.ID || event.Title == "" || len(event.Title) > 2000 || len(event.Platform) > 100 {
 			return Result{}, &SafeError{Code: providerResponseInvalidCode}
 		}
 		providerRef = "sentry-event:" + event.EventID
-		projection = map[string]string{"event_id": event.EventID, "project_id": event.ProjectID, "title": event.Title, "platform": event.Platform}
+		diagnostics, err := sentryEventDiagnostics(event.Entries)
+		if err != nil {
+			return Result{}, err
+		}
+		diagnostics["event_id"], diagnostics["project_id"] = event.EventID, event.ProjectID
+		diagnostics["title"], diagnostics["platform"] = event.Title, event.Platform
+		projection = diagnostics
 	default:
 		projection, providerRef, err = adapter.sentryProjectResource(ctx, request, capability, configuration, project)
 		if err != nil {
