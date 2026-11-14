@@ -83,3 +83,18 @@ for(const narrow of [false,true])test(`107 final inspect принимает own 
   const broken=same(f);mutate(broken);assert.throws(()=>verifyTelegramAPIReaders(broken));
  }
 });
+
+test('107 pending API proof существует только для explicit bootstrap, без READY и без ослабления isolation',()=>{
+ const pending=()=>{const f=fixture(true);f.openEvents[2].state='CONVERGING';f.deployment.status.readyReplicas=0;f.deployment.status.availableReplicas=0;
+  for(const pod of f.resources.items.filter(r=>r.kind==='Pod')){pod.status.conditions=[{type:'Ready',status:'False'}];pod.status.containerStatuses[0].ready=false;}
+  return f;};
+ const f=pending();assert.throws(()=>verifyTelegramAPIReaders(f),/OPEN_UNCONFIRMED/);
+ const proof=verifyTelegramAPIReaders({...f,allowPending:true});assert.equal(proof.state,'ISOLATED_READERS_STARTING');
+ for(const change of [f=>f.openEvents.splice(1,1),f=>f.openEvents[2].state='BEFORE',f=>f.deployment.spec.replicas=2,
+  f=>f.deployment.metadata.uid=uid(99),f=>f.deployment.spec.template.spec.containers[0].image='registry.example.invalid/foreign@sha256:'+'f'.repeat(64),
+  f=>f.resources.items[1].spec.containers[0].command=['/foreign-writer'],
+  f=>delete f.traffic.service.spec.selector['kodex.dev/component-traffic-isolation'],
+  f=>f.traffic.slices.items.push({kind:'EndpointSlice',apiVersion:'discovery.k8s.io/v1',metadata:{namespace:'kodex-system'},endpoints:[{addresses:['192.0.2.5']}]})]){
+  const broken=pending();change(broken);assert.throws(()=>verifyTelegramAPIReaders({...broken,allowPending:true}));
+ }
+});

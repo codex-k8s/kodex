@@ -406,7 +406,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       fingerprint(authority.introducedReceiver)===fingerprint(componentPublication.introducedReceiver),'TELEGRAM_ACTIVATION_SOURCE_CHANGED');
     return authority;
   };
-  const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
+  const readMaintenanceReaders = () => readTelegramAPIReaders({allowPending:phase==='start-readers',migration:retainedPlan,authority:activationAuthority(),
     openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
     restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
   const readAuthorityDelivery = async () => {
@@ -946,6 +946,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
     if (phase === 'handoff') return output(await pair.handoff());
+    if (phase === 'start-readers') return output(await pair.startReaders());
     if (phase === 'activate') return output(await pair.activateIntroduced());
     if (phase === 'resume') {
       if (pair) return output(await pair.resume());

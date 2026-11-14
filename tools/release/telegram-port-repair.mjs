@@ -106,7 +106,7 @@ export function readTelegramPortRepair(path,{migration,executorSource=root,execu
  fail(repair.schema==='kodex.telegram-port-repair/v1'&&repair.migrationPlanSHA256===fingerprint(original)&&
   same(repair.application,original.source)&&repair.migrationID===original.id&&repair.targetSHA256===fingerprint(original.portableTarget)&&
   repair.postgresSHA256===fingerprint(original.postgres)&&repair.postconditionSQLSHA256===original.postconditionSQLSHA256);
- fail(!phase||['handoff','resume','inspect','activate'].includes(phase),telegramPortRepairCodes.phaseRejected);
+ fail(!phase||['handoff','resume','inspect','activate','start-readers'].includes(phase),telegramPortRepairCodes.phaseRejected);
  fail(same(telegramPortRepairConfiguration(repair.configuration.source,original.source),repair.configuration),telegramPortRepairCodes.sourceRejected);
  const executor=telegramPortRepairExecutor(repair.configuration,resolve(executorSource),executorRevision);
  const evidence=readAuthorityPrivateText(repair.migrationEvidencePath),bytes=Buffer.from(evidence);

@@ -442,3 +442,38 @@ test('046: postPATCH discovery нового issuer не выдаёт activation 
  f.lifecycle.inspect();assert.equal((await f.lifecycle.activateIntroduced()).status,'READERS_STARTED_PENDING_RETIRE');
  assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,1);
 });
+
+// Counterfactual: PROMOTED недоступен, пока обязательные API/receiver остановлены.
+// Старый последовательный resume обязан timeout, start-readers не выдумывает READY.
+test('046 authority bootstrap запускает весь cohort до readiness и сохраняет owned rejoin',async()=>{
+ const f=lifecycleFixture('telegram-notifications-backup');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+ await f.lifecycle.handoff();f.projectCP();f.faults.policyReady=false;
+ await assert.rejects(()=>f.lifecycle.resume(),/RESUME_TIMEOUT/);
+ const cpWrites=f.patches.filter(name=>name==='control-plane').length;
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:0,availableReplicas:0};
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ const result=await f.lifecycle.startReaders();assert.equal(result.status,'READERS_STARTED_PENDING_READINESS');assert.equal(result.pairReady,false);
+ for(const name of ['control-plane','egress-gateway','staff-control-center','interaction-gateway'])assert.ok(f.apps.get(name).spec.replicas>0);
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,cpWrites);
+ assert.equal(f.events.some(e=>['RESUME_ACK','PAIR_RESUME_ACK','PAIR_ACTIVATE_ACK'].includes(e.type)),false);
+ const writes=f.patches.length;await f.lifecycle.startReaders();assert.equal(f.patches.length,writes);
+ f.faults.policyReady=true;f.faults.apiReaders.state='ISOLATED_READERS_READY';
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
+ assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+ assert.equal((await f.lifecycle.activateIntroduced()).status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,writes);
+});
+
+test('046 bootstrap pending API не разрешает смену operation, active effects или чужой start',async()=>{
+ for(const fault of ['operation','active','unowned','expired']){
+  const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+  const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+  f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+  if(fault==='operation')f.faults.apiReaders.operationID=uuid(201);
+  if(fault==='active')f.faults.activeInteractionDeliveries=1;
+  if(fault==='unowned')f.apps.get('interaction-gateway').spec.replicas=3;
+  if(fault==='expired'){const {deliverySHA256,...body}=f.faults.authorityDelivery;body.observedAt=new Date(Date.now()-31000).toISOString();f.faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};}
+  await assert.rejects(()=>f.lifecycle.startReaders(),/READERS_REQUIRED|OWNER_PRECONDITION_FAILED|UNOWNED_HANDOFF|DELIVERY_REQUIRED/);
+  assert.equal(f.events.some(e=>e.type==='PAIR_ACTIVATE_ACK'),false);
+ }
+});
