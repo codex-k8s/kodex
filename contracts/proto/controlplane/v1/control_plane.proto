@@ -4903,6 +4903,8 @@ enum PersonalIntegrationCredentialObservationProfile {
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 = 1;
   // Собственные scopes токена Sentry; не права на конкретную ошибку.
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 = 2;
+  // Текущие action/scopes личного токена Grafana; не reusable WRITE authority.
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1 = 3;
 }
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
@@ -4999,6 +5001,8 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_MUTATION_V1 = 17;
   // Текущий типизированный GET в явно выбранной полной области endpoint; tenant header не даёт authority.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_OBSERVABILITY_TYPED_RESOURCE_READ_V1 = 18;
+  // Явная organization scope, свежие permissions и typed exact-object checks перед EACH effect.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GRAFANA_TYPED_WRITE_V1 = 19;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;

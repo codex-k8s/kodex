@@ -89,7 +89,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 	}
 	defer clear(credential)
 	if call.invalidCredentialProbe {
-		if call.Method != http.MethodGet || call.Capability.Risk != "READ" || call.Capability.OpenAPI != nil || call.AuthScheme != "BEARER" || (call.Path != "/api/v1/status/buildinfo" && call.Path != "/loki/api/v1/labels") {
+		if call.Method != http.MethodGet || call.Capability.Risk != "READ" || call.Capability.OpenAPI != nil || call.AuthScheme != "BEARER" || (call.Path != "/api/v1/status/buildinfo" && call.Path != "/loki/api/v1/labels" && call.Path != "/api/user") {
 			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		clear(credential)

@@ -103,6 +103,10 @@ func (server *Server) CompletePersonalIntegrationCredentialTest(ctx context.Cont
 	}
 	profiles := make([]string, 0, len(request.GetObservedPermissionProfiles()))
 	for _, profile := range request.GetObservedPermissionProfiles() {
+		if profile == cp.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1 {
+			profiles = append(profiles, integrationpackage.CredentialObservationGrafanaPermissionsV1)
+			continue
+		}
 		if profile == cp.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 {
 			profiles = append(profiles, integrationpackage.CredentialObservationSentryScopesV1)
 			continue

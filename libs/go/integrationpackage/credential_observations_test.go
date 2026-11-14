@@ -19,6 +19,12 @@ func TestCredentialObservationRequests(t *testing.T) {
 			definition = legacyGitLabPackage(t)
 		}
 		profiles, keys := CredentialObservationRequests(definition)
+		if key == "grafana-organization" {
+			if !slices.Equal(profiles, []string{CredentialObservationGrafanaPermissionsV1}) || !slices.Equal(keys, []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete", "grafana.silence.create", "grafana.silence.update", "grafana.silence.delete"}) {
+				t.Fatal("Grafana metadata request changed")
+			}
+			continue
+		}
 		if key == "sentry" || key == "sentry-self-hosted" {
 			if !slices.Equal(profiles, []string{CredentialObservationSentryScopesV1}) || !slices.Equal(keys, []string{"sentry.issue.status.update", "sentry.issue.comment.create", "sentry.issue.assignment.update"}) {
 				t.Fatal("Sentry metadata request changed")

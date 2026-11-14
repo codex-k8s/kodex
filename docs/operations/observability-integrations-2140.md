@@ -14,9 +14,10 @@ updated: 2026-11-14
 [#1830](https://github.com/codex-k8s/kodex/issues/1830), `ARCH-MC-005`,
 `GUIDE-DOC-003`, `GUIDE-DOC-006`, `GOV-DOC-003`.
 
-Текущий срез содержит настоящие consumers Prometheus и Thanos. Grafana и Loki
-остаются следующими срезами того же unit; наличие реестра не означает их готовность.
-Declared compatibility: Prometheus3.14.0 и Thanos0.42.5. Точная версия Prometheus
+Текущий срез содержит настоящие consumers Prometheus, Thanos и два явных
+профиля Grafana. Qualified narrow annotation/rule writes и Loki остаются
+следующими срезами того же unit; наличие реестра не означает их готовность.
+Declared compatibility: Grafana13.2.0, Prometheus3.14.0 и Thanos0.42.5. Точная версия Prometheus
 выбрана по сообщённому оператором установленному профилю; это не live-проверка
 данного кандидата. Живые endpoint и credentials не заданы, live — `NOT RUN`.
 
@@ -114,6 +115,79 @@ Health всегда возвращает `tenant_isolation=UNKNOWN`: успеш�
 другого ключа не доказывают межtenant изоляцию. Для её наблюдения необходима
 отдельная матрица двух действительных ключей и двух tenant с positive/negative
 requests. Данный worker её не имитирует.
+
+## Текущий контракт Grafana13.2.0
+
+`grafana-dashboard` имеет6 READ/NONE операций: authenticated health, metadata
+точного dashboard, metadata одного datasource Prometheus, bounded PromQL через
+него и annotation list/detail выбранного dashboard. `grafana-organization`
+имеет15 операций: health/datasource/query, annotation CRUD, rules list/detail
+и silence list/detail/create/update/expire. Для организации пользователь
+явно выбирает `WHOLE_ORGANIZATION`; прежний dashboard scope не расширяется.
+
+Health использует exact13.2.0 `GET /api/health`, текущую signed identity/org из
+`GET /api/user` и invalid-key rejection на том же authenticated path. User
+email/login/identity не попадают в результат. Query использует только fixed
+`GET /api/datasources/proxy/uid/{selectedUID}/api/v1/query_range`: ни URL,
+ни HTTP path, datasource config либо plugin method из input не принимаются.
+Generic `POST /api/ds/query` не используется: exact source выбирает plugin
+по текущему datasource, а pre-read type не является atomic type lock.
+Применяются общий PromQL AST profile, timeout5s/lookback5m, partial_response=false,
+dedup=true и typed sample/histogram budgets. Чужие datasource URL, credentials,
+JSON settings и secure fields из metadata не выдаются.
+
+Dashboard GET выдаёт только UID/title/version без templates, links и targets.
+Annotation GET/list выдаёт только id/dashboardUID/time/timeEnd/text без автора,
+email и embedded data. Перед mutation owner whole-org grant остаётся
+обязательным; текущие provider action/scope metadata загружаются с
+`reloadcache=true`, annotation разрешается в current organization. POST/PATCH
+принимают только server-built text/time/timeEnd/dashboardUID, затем требуют
+точный readback. Время не округляется скрыто: принимается точность до
+миллисекунд и период≤24h. DELETE возвращает `deletion_requested`.
+
+Silence API всегда выбран встроенный Alertmanager текущей организации, без
+caller datasource URL. Для effect разрешён один literal equality matcher;
+regex и arbitrary JSON отсутствуют. Current general-silence permissions —
+`alert.instances:create|write` вместе с read, scoped rule-only permission не
+выдаётся за authority подавлять произвольный matcher. List использует один
+server-built exact filter. Create/update202 подтверждаются typed readback;
+DELETE в этом API означает истечение и даёт `expiration_requested`, не
+физическое удаление. Creator identity не выдаётся.
+
+Все6 Grafana mutations имеют EACH, delete — DESTRUCTIVE. Consumer не повторяет
+POST/PATCH/DELETE, UNKNOWN сохраняется после lost transport/5xx/malformed success
+или неудачного readback, включая403. Recover не переотправляет effect. Личный
+ключ требует profile19 `GRAFANA_TYPED_WRITE_V1` и current metadata observation3
+`GRAFANA_CURRENT_PERMISSIONS_V1`; observation не подтверждает глобальный WRITE.
+Known read-only блокирует launch, unknown metadata оставляет WRITE unconfirmed.
+READ использует profile18 с inputless health prerequisite и прежними owner pins.
+
+Узкая mutation scope требует доказательства immutable ownership, которого
+нельзя получить одним pre-read. В exact13.2.0 legacy SQL store update не меняет
+`dashboard_uid`; новый annotation API также запрещает изменение dashboardUID
+одного resource. Однако новый store сохраняет caller-selected legacyID,
+`GetByLegacyID` выбирает newest live resource, а migration time edit создаёт
+новую запись с тем же legacyID. Поэтому numeric legacyID между pre-read и
+последующим legacy mutation способен разрешиться в другой dashboard. Это
+не утверждение о поле DashboardUID в PATCH DTO: такого поля DTO не принимает.
+Отдельный operator-qualified `LEGACY_SQL_ONLY` вариант даст узкие mutations;
+он остаётся следующим срезом, обычный checkbox эту границу не откроет.
+
+Rules READ выдаёт только identity/state/provenance без executable query models,
+annotations и notification config. File/Git rule reads не означают WRITE.
+Single-rule legacy DELETE читает provenance до транзакции и затем удаляет
+по org+UID без version precondition; GET provenance не является atomic guard.
+Поддержка writes потребует отдельного operator-qualified API-managed group,
+исключающего file/Git writers. `X-Disable-Provenance` не отправляется.
+
+Проверены exact official source13.2.0: `pkg/api/{api,user,annotations,datasources}.go`,
+`pkg/services/accesscontrol/{api/api,accesscontrol,models}.go`,
+`pkg/services/query/query.go`, `pkg/services/ngalert/{api,accesscontrol}`,
+`pkg/services/annotations/{annotationsapi,annotationsimpl}` и
+`pkg/registry/apps/annotation/{k8s_adapter,config}.go`.
+Независимый provider subset: `contracts/integrations/providers/grafana/v1/openapi.yaml`.
+Context7 обслужил ближайший13.2.4 вместо запрошенного13.2.0; это не выдаётся
+за доказательство установленной версии, использован exact tagged source.
 
 ## Документы и воспроизводимая проверка
 

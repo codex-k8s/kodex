@@ -19,10 +19,10 @@ BEGIN
    '''SSH_COMPOSE''::text', '''SSH_COMPOSE''::text, ''SENTRY''::text, ''OBSERVABILITY''::text'),
   ('control_plane.integration_personal_invocation_credentials'::regclass,'resource_permission_profile',
    '''GITLAB_SCOPED_RESOURCE_V2''::text',
-   '''GITLAB_SCOPED_RESOURCE_V2''::text, ''SENTRY_PROJECT_OBJECT_READ_V1''::text, ''SENTRY_ISSUE_STATUS_WRITE_V1''::text, ''SENTRY_PROJECT_MUTATION_V1''::text, ''SENTRY_ORGANIZATION_OBJECT_READ_V1''::text, ''SENTRY_ORGANIZATION_MUTATION_V1''::text, ''OBSERVABILITY_TYPED_RESOURCE_READ_V1''::text'),
+   '''GITLAB_SCOPED_RESOURCE_V2''::text, ''SENTRY_PROJECT_OBJECT_READ_V1''::text, ''SENTRY_ISSUE_STATUS_WRITE_V1''::text, ''SENTRY_PROJECT_MUTATION_V1''::text, ''SENTRY_ORGANIZATION_OBJECT_READ_V1''::text, ''SENTRY_ORGANIZATION_MUTATION_V1''::text, ''OBSERVABILITY_TYPED_RESOURCE_READ_V1''::text, ''GRAFANA_TYPED_WRITE_V1''::text'),
   ('control_plane.integration_personal_credentials'::regclass,'observed_permission_profiles',
    '''GITLAB_PROJECT_WRITE_SCOPE_V1''::text',
-   '''GITLAB_PROJECT_WRITE_SCOPE_V1''::text, ''SENTRY_TOKEN_SCOPES_V1''::text')
+   '''GITLAB_PROJECT_WRITE_SCOPE_V1''::text, ''SENTRY_TOKEN_SCOPES_V1''::text, ''GRAFANA_CURRENT_PERMISSIONS_V1''::text')
  LOOP
   matches:=0;
   FOR item IN SELECT constraint_row.conname,pg_get_constraintdef(constraint_row.oid) AS definition
@@ -92,9 +92,28 @@ DECLARE
               connection.definition_key||'.series.list',connection.definition_key||'.rules.list',connection.definition_key||'.alerts.list')
              AND binding.verified_capabilities @> ARRAY[connection.definition_key||'.connection.read']::text[]
              AND NOT binding.denied_capabilities && ARRAY[connection.definition_key||'.connection.read']::text[])
+            OR (connection.definition_key IN ('grafana-dashboard','grafana-organization')
+             AND invocation.resource_kind='HTTPS_RESOURCE' AND invocation.operation=invocation.capability_key
+             AND binding.verified_capabilities @> ARRAY['grafana.connection.read']::text[]
+             AND NOT binding.denied_capabilities && ARRAY['grafana.connection.read']::text[]
+             AND (
+              (NEW.resource_permission_profile='OBSERVABILITY_TYPED_RESOURCE_READ_V1'
+               AND invocation.risk='READ' AND invocation.approval_policy='NONE'
+               AND (invocation.capability_key IN ('grafana.connection.read','grafana.datasource.read','grafana.datasource.query',
+                 'grafana.annotation.list','grafana.annotation.read')
+                OR (connection.definition_key='grafana-dashboard' AND invocation.capability_key='grafana.dashboard.read')
+                OR (connection.definition_key='grafana-organization' AND invocation.capability_key IN (
+                 'grafana.rule.list','grafana.rule.read','grafana.silence.list','grafana.silence.read'))))
+              OR (NEW.resource_permission_profile='GRAFANA_TYPED_WRITE_V1' AND connection.definition_key='grafana-organization'
+               AND invocation.approval_policy='HUMAN_EACH_EFFECT'
+               AND binding.observed_permission_profiles @> ARRAY['GRAFANA_CURRENT_PERMISSIONS_V1']::text[]
+               AND ((invocation.risk='WRITE' AND invocation.capability_key IN ('grafana.annotation.create','grafana.annotation.update',
+                 'grafana.silence.create','grafana.silence.update'))
+                OR (invocation.risk='DESTRUCTIVE' AND invocation.capability_key IN ('grafana.annotation.delete','grafana.silence.delete'))))
+             ))
             OR (NEW.resource_permission_profile='GITLAB_SCOPED_RESOURCE_V2'$after$;
  empty_marker text := $empty$(NEW.resource_permission_profile=''$empty$;
- empty_replacement text := $empty$(NEW.resource_permission_profile='' AND connection.definition_key NOT IN ('sentry','sentry-self-hosted','sentry-organization','sentry-self-hosted-organization','prometheus','thanos')$empty$;
+ empty_replacement text := $empty$(NEW.resource_permission_profile='' AND connection.definition_key NOT IN ('sentry','sentry-self-hosted','sentry-organization','sentry-self-hosted-organization','prometheus','thanos','grafana-dashboard','grafana-organization')$empty$;
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid='control_plane.guard_personal_invocation_credential()'::regprocedure
   AND pg_get_userbyid(proowner)='control_plane_owner' AND NOT prosecdef)

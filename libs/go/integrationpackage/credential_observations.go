@@ -29,6 +29,10 @@ func CredentialObservationRequests(definition Package) (profiles, deniedWriteKey
 // CredentialObservationMayDeny принимает только закрытый profile/capability contract; owner
 // отдельно ограничивает пару immutable запрошенным подмножеством package.
 func CredentialObservationMayDeny(profile, key string) bool {
+	if profile == CredentialObservationGrafanaPermissionsV1 {
+		contract, exists := grafanaCredentialContract("grafana-organization", key)
+		return exists && contract.RequiredObservationProfile == profile
+	}
 	if profile == CredentialObservationSentryScopesV1 {
 		contract, exists := sentryCredentialContract("sentry", key)
 		if !exists {

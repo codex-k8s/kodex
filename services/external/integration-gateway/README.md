@@ -301,3 +301,15 @@ effect receipt, APPROVE с одной receipt и exact retry/readback без н�
 Worker записывает один закрытый класс отказа и числовой `provider_http_status`. Ноль означает, что ошибка не несёт наблюдённого HTTP-статуса (например, локальная проверка либо transport error); это не доказательство отсутствия сетевого запроса. Прежняя auth-классификация по token metadata не выдаётся за фактический HTTP-ответ. Исходные error strings, response bodies, URL и auth headers в диагностике отсутствуют. `UNKNOWN_OUTCOME` сохраняет прежний закрытый stage; лог не разрешает повторить write. После неопределённого ответа нужен обычный exact readback.
 
 Ручная проверка: в разрешённом synthetic проекте настроить собственный обычный тип, optional fields и personal credential; проверить exact Human Gate preview, один POST и receipt. При отказе сверить закрытый класс/HTTP-статус и внешнее состояние перед новым решением. Synthetic PASS не заменяет эту живую проверку.
+
+
+Наблюдаемость #2140 использует существующий gateway и закрытый `OBSERVABILITY`
+registry. Prometheus/Thanos явно требуют whole-endpoint область и native
+transport; tenant header не доказывает изоляцию. Grafana13.2.0 разделяет
+чтение dashboard и явно выбранные whole-organization annotation/silence effects.
+Datasource queries — фиксированный GET Prometheus API через один выбранный UID,
+без generic plugin POST, произвольного URL, path либо JSON payload. Личные
+credentials, owner gates, lease/UNKNOWN и no-fallback сохраняются. Подробный
+контракт и текущие ограничения: [наблюдаемость](../../../docs/operations/observability-integrations-2140.md).
+Это описание source-кандидата; live target qualification и schema045 proof
+не подтверждаются наличием registry entries.

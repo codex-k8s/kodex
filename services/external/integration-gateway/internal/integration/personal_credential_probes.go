@@ -118,6 +118,9 @@ func (adapter *Adapter) VerifyPersonalCredential(ctx context.Context, request Re
 	}
 	if len(request.PersonalObservationProfiles) != 0 && ctx.Err() == nil {
 		observe := adapter.observeGitLabPersonalWriteScope
+		if definition.Spec.Adapter == "OBSERVABILITY" {
+			observe = adapter.observeGrafanaPersonalPermissions
+		}
 		if definition.Spec.Adapter == "SENTRY" {
 			observe = adapter.observeSentryPersonalScopes
 		}

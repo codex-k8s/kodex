@@ -181,7 +181,7 @@ func validPersonalCredentialObservationSpec(spec entity.PersonalIntegrationCrede
 	if len(spec.AllowedObservationProfiles) == 0 {
 		return len(spec.AllowedDeniedWriteCapabilityKeys) == 0
 	}
-	if len(spec.AllowedObservationProfiles) != 1 || (spec.AllowedObservationProfiles[0] != integrationpackage.CredentialObservationGitLabProjectWriteScopeV1 && spec.AllowedObservationProfiles[0] != integrationpackage.CredentialObservationSentryScopesV1) ||
+	if len(spec.AllowedObservationProfiles) != 1 || (spec.AllowedObservationProfiles[0] != integrationpackage.CredentialObservationGitLabProjectWriteScopeV1 && spec.AllowedObservationProfiles[0] != integrationpackage.CredentialObservationSentryScopesV1 && spec.AllowedObservationProfiles[0] != integrationpackage.CredentialObservationGrafanaPermissionsV1) ||
 		!validPersonalCredentialTestCapabilities(spec.AllowedDeniedWriteCapabilityKeys) {
 		return false
 	}

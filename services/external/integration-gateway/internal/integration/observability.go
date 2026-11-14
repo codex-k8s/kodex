@@ -221,6 +221,9 @@ func observabilityLabels(labels map[string]string) bool {
 // executeObservability consumes one closed endpoint-scoped metrics operation with exact personal profile and bounded projections; no provider URL or raw config enters the dispatcher.
 // executeObservability исполняет одну закрытую endpoint-scoped metrics operation с точным personal profile и ограниченной проекцией; provider URL и raw config в dispatcher не поступают.
 func (adapter *Adapter) executeObservability(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (Result, error) {
+	if strings.HasPrefix(request.DefinitionKey, "grafana-") {
+		return adapter.executeGrafana(ctx, request, capability, configuration)
+	}
 	contract, exists := integrationpackage.CredentialResourcePermissionContractFor(request.DefinitionKey, request.CapabilityKey)
 	if !exists || contract.Operation != request.Operation || request.Risk != "READ" || request.ApprovalPolicy != "NONE" || configuration["scope_mode"] != "WHOLE_ENDPOINT" || request.PersonalCredentialAdmission && request.ResourcePermissionProfile != contract.Profile {
 		return Result{}, &SafeError{Code: providerCapabilityUnsupportedCode}

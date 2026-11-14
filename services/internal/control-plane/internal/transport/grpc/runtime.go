@@ -996,6 +996,9 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		if profile == "GITLAB_PROJECT_WRITE_SCOPE_V1" {
 			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1
 		}
+		if profile == integrationpackage.CredentialObservationGrafanaPermissionsV1 {
+			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1
+		}
 		if profile == integrationpackage.CredentialObservationSentryScopesV1 {
 			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1
 		}

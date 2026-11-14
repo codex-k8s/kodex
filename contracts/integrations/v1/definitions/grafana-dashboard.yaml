@@ -1,0 +1,388 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "grafana-dashboard",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Grafana — чтение dashboard",
+    "description": "Чтение точного dashboard и выбранного источника Prometheus. Для изменения аннотаций выберите отдельное явно настроенное подключение; область dashboard не расширяется автоматически.",
+    "category": "observability",
+    "adapter": "OBSERVABILITY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "label": "Адрес Grafana API",
+        "help": "Точный HTTPS origin; обязательны operator-pinned native transport и TLS."
+      },
+      {
+        "key": "organization_id",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 20,
+        "label": "Организация Grafana",
+        "help": "Положительный numeric ID текущей организации токена; проверяется сервером."
+      },
+      {
+        "key": "datasource_uid",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Источник Prometheus",
+        "help": "Точный UID одного источника; URL, plugin config и credentials не выдаются."
+      },
+      {
+        "key": "scope_mode",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 32,
+        "label": "Область доступа",
+        "help": "Чтение dashboard не даёт authority на изменяемые shared objects.",
+        "allowedValues": [
+          "DASHBOARD_READ"
+        ]
+      },
+      {
+        "key": "dashboard_uid",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Dashboard",
+        "help": "Точный UID выбранного dashboard."
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "grafana_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "grafana.connection.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "grafana.connection.read",
+        "name": "Проверить подключение",
+        "description": "Проверить подключение в точной области чтения dashboard.",
+        "operation": "grafana.connection.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.dashboard.read",
+        "name": "Прочитать dashboard",
+        "description": "Прочитать dashboard в точной области чтения dashboard.",
+        "operation": "grafana.dashboard.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.datasource.read",
+        "name": "Прочитать источник метрик",
+        "description": "Прочитать источник метрик в точной области чтения dashboard.",
+        "operation": "grafana.datasource.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.datasource.query",
+        "name": "Запросить метрики",
+        "description": "Запросить метрики в точной области чтения dashboard.",
+        "operation": "grafana.datasource.query",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 4096,
+            "label": "PromQL",
+            "help": "Выражение в выбранной области endpoint; URL и HTTP параметры не принимаются."
+          },
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "step_seconds",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 3600,
+            "label": "Шаг, секунды",
+            "help": "Не более 1000 шагов на запрос."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.list",
+        "name": "Перечислить аннотации",
+        "description": "Перечислить аннотации в точной области чтения dashboard.",
+        "operation": "grafana.annotation.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.read",
+        "name": "Прочитать аннотацию",
+        "description": "Прочитать аннотацию в точной области чтения dashboard.",
+        "operation": "grafana.annotation.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode",
+            "dashboard_uid"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "annotation_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 20,
+            "label": "Аннотация",
+            "help": "Точный положительный numeric ID; ownership выводится из текущего provider state."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

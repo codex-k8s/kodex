@@ -447,7 +447,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" || definition.Spec.Adapter == "OBSERVABILITY" {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -1091,6 +1091,9 @@ func personalObservationProfilesFromProto(profiles []controlplanev1.PersonalInte
 		value := "UNSUPPORTED"
 		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 {
 			value = integrationpackage.CredentialObservationGitLabProjectWriteScopeV1
+		}
+		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1 {
+			value = integrationpackage.CredentialObservationGrafanaPermissionsV1
 		}
 		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 {
 			value = integrationpackage.CredentialObservationSentryScopesV1

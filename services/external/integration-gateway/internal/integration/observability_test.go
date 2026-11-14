@@ -30,6 +30,14 @@ func observabilityInvocation(t *testing.T, adapter *Adapter, key, operation stri
 	if key == "thanos" {
 		configuration["tenant_id"] = "fixture-tenant"
 	}
+	if strings.HasPrefix(key, "grafana-") {
+		configuration = map[string]string{"base_url": "https://grafana.example.invalid", "organization_id": "1", "datasource_uid": "fixture-prometheus", "scope_mode": "WHOLE_ORGANIZATION"}
+		if key == "grafana-dashboard" {
+			configuration["scope_mode"] = "DASHBOARD_READ"
+			configuration["dashboard_uid"] = "fixture-dashboard"
+		}
+	}
+
 	request.DefinitionPackage, _ = json.Marshal(definition)
 	request.DefinitionKey, request.DefinitionVersion, request.DefinitionDigest = key, definition.Metadata.Version, definition.Digest
 	request.CapabilityKey, request.Operation, request.Risk, request.ApprovalPolicy = operation, operation, capability.Risk, capability.ApprovalPolicy
@@ -129,8 +137,14 @@ func observabilityFixtureResponse(t *testing.T, key, operation string, r *http.R
 // observabilityValidateWire checks real consumer requests and provider responses against a separate pinned-version OpenAPI subset; fixture parameter assertions remain independently stricter.
 // observabilityValidateWire проверяет реальные consumer requests и provider responses по отдельному pinned-version OpenAPI subset; независимые fixture assertions дополнительно ограничивают параметры.
 func observabilityValidateWire(t *testing.T, r *http.Request, status int, body string) {
+	validateDocumentedMetricsWire(t, "prometheus-compatible", r, status, body)
+}
+
+// validateDocumentedMetricsWire checks only repository-owned finite provider documents with references disabled.
+// validateDocumentedMetricsWire проверяет только repo-owned finite provider documents с отключёнными внешними references.
+func validateDocumentedMetricsWire(t *testing.T, key string, r *http.Request, status int, body string) {
 	t.Helper()
-	_, document := documentedProviderContract(t, "prometheus-compatible")
+	_, document := documentedProviderContract(t, key)
 	document.Servers = openapi3.Servers{{URL: r.URL.Scheme + "://" + r.URL.Host}}
 	router, err := legacy.NewRouter(document)
 	if err != nil {

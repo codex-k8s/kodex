@@ -1,0 +1,949 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "grafana-organization",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Grafana — вся организация",
+    "description": "Явный доступ к организации Grafana: типизированные аннотации и подавления под EACH Gate, чтение alert rules. Dashboard-only grant автоматически не расширяется.",
+    "category": "observability",
+    "adapter": "OBSERVABILITY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "label": "Адрес Grafana API",
+        "help": "Точный HTTPS origin; обязательны operator-pinned native transport и TLS."
+      },
+      {
+        "key": "organization_id",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 20,
+        "label": "Организация Grafana",
+        "help": "Положительный numeric ID текущей организации токена; проверяется сервером."
+      },
+      {
+        "key": "datasource_uid",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Источник Prometheus",
+        "help": "Точный UID одного источника; URL, plugin config и credentials не выдаются."
+      },
+      {
+        "key": "scope_mode",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 32,
+        "label": "Область доступа",
+        "help": "Grant охватывает всю выбранную организацию, включая annotation/silence effects.",
+        "allowedValues": [
+          "WHOLE_ORGANIZATION"
+        ]
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "grafana_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "grafana.connection.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "grafana.connection.read",
+        "name": "Проверить подключение",
+        "description": "Проверить подключение в явно выбранной организации.",
+        "operation": "grafana.connection.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.datasource.read",
+        "name": "Прочитать источник метрик",
+        "description": "Прочитать источник метрик в явно выбранной организации.",
+        "operation": "grafana.datasource.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.datasource.query",
+        "name": "Запросить метрики",
+        "description": "Запросить метрики в явно выбранной организации.",
+        "operation": "grafana.datasource.query",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 4096,
+            "label": "PromQL",
+            "help": "Выражение в выбранной области endpoint; URL и HTTP параметры не принимаются."
+          },
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "step_seconds",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 3600,
+            "label": "Шаг, секунды",
+            "help": "Не более 1000 шагов на запрос."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.list",
+        "name": "Перечислить аннотации",
+        "description": "Перечислить аннотации в явно выбранной организации.",
+        "operation": "grafana.annotation.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.read",
+        "name": "Прочитать аннотацию",
+        "description": "Прочитать аннотацию в явно выбранной организации.",
+        "operation": "grafana.annotation.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "annotation_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 20,
+            "label": "Аннотация",
+            "help": "Точный положительный numeric ID; ownership выводится из текущего provider state."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.create",
+        "name": "Создать аннотацию",
+        "description": "Создать аннотацию в явно выбранной организации.",
+        "operation": "grafana.annotation.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2000,
+            "label": "Текст аннотации",
+            "help": "Точное содержимое записи; scope и HTTP payload строит сервер."
+          },
+          {
+            "key": "time",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало аннотации",
+            "help": "UTC RFC3339 timestamp с точностью до миллисекунд."
+          },
+          {
+            "key": "time_end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец аннотации",
+            "help": "UTC RFC3339 timestamp с точностью до миллисекунд, не позже24часов после начала."
+          },
+          {
+            "key": "dashboard_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Dashboard назначения",
+            "help": "Сервер проверяет dashboard внутри текущей организации; это не источник authority."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.update",
+        "name": "Изменить аннотацию",
+        "description": "Изменить аннотацию в явно выбранной организации.",
+        "operation": "grafana.annotation.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "annotation_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 20,
+            "label": "Аннотация",
+            "help": "Точный положительный numeric ID; ownership выводится из текущего provider state."
+          },
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2000,
+            "label": "Текст аннотации",
+            "help": "Точное содержимое записи; scope и HTTP payload строит сервер."
+          },
+          {
+            "key": "time",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало аннотации",
+            "help": "UTC RFC3339 timestamp с точностью до миллисекунд."
+          },
+          {
+            "key": "time_end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец аннотации",
+            "help": "UTC RFC3339 timestamp с точностью до миллисекунд, не позже24часов после начала."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.annotation.delete",
+        "name": "Удалить аннотацию",
+        "description": "Удалить аннотацию в явно выбранной организации.",
+        "operation": "grafana.annotation.delete",
+        "risk": "DESTRUCTIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "annotation_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 20,
+            "label": "Аннотация",
+            "help": "Точный положительный numeric ID; ownership выводится из текущего provider state."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.rule.list",
+        "name": "Перечислить alert rules",
+        "description": "Перечислить alert rules в явно выбранной организации.",
+        "operation": "grafana.rule.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.rule.read",
+        "name": "Прочитать alert rule",
+        "description": "Прочитать alert rule в явно выбранной организации.",
+        "operation": "grafana.rule.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "rule_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Alert rule",
+            "help": "Буквальный UID без path/query."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.silence.list",
+        "name": "Перечислить подавления",
+        "description": "Перечислить подавления в явно выбранной организации.",
+        "operation": "grafana.silence.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "matcher_name",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Имя метки",
+            "help": "Одно буквальное имя для фильтра списка."
+          },
+          {
+            "key": "matcher_value",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+            "label": "Значение метки",
+            "help": "Точный matcher без regex."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.silence.read",
+        "name": "Прочитать подавление",
+        "description": "Прочитать подавление в явно выбранной организации.",
+        "operation": "grafana.silence.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "silence_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 36,
+            "label": "Подавление",
+            "help": "Точный UUID внутри выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.silence.create",
+        "name": "Создать подавление",
+        "description": "Создать подавление в явно выбранной организации.",
+        "operation": "grafana.silence.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "matcher_name",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Имя метки",
+            "help": "Одно буквальное имя; regex matchers не принимаются."
+          },
+          {
+            "key": "matcher_value",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+            "label": "Значение метки",
+            "help": "Один точный matcher; не регулярное выражение."
+          },
+          {
+            "key": "comment",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 1000,
+            "label": "Комментарий",
+            "help": "Точный комментарий подавления."
+          },
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.silence.update",
+        "name": "Изменить подавление",
+        "description": "Изменить подавление в явно выбранной организации.",
+        "operation": "grafana.silence.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "silence_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 36,
+            "label": "Подавление",
+            "help": "Точный UUID внутри выбранной организации."
+          },
+          {
+            "key": "matcher_name",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Имя метки",
+            "help": "Одно буквальное имя; regex matchers не принимаются."
+          },
+          {
+            "key": "matcher_value",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 256,
+            "label": "Значение метки",
+            "help": "Один точный matcher; не регулярное выражение."
+          },
+          {
+            "key": "comment",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 1000,
+            "label": "Комментарий",
+            "help": "Точный комментарий подавления."
+          },
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "Явный UTC RFC3339 timestamp; окно не более24часов."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.silence.delete",
+        "name": "Удалить подавление",
+        "description": "Удалить подавление в явно выбранной организации.",
+        "operation": "grafana.silence.delete",
+        "risk": "DESTRUCTIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "silence_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 36,
+            "label": "Подавление",
+            "help": "Точный UUID внутри выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

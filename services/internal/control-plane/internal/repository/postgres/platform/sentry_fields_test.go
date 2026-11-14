@@ -14,7 +14,7 @@ func TestIntegrationFieldsMatchToolSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization", "prometheus", "thanos"} {
+	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization", "prometheus", "thanos", "grafana-dashboard", "grafana-organization"} {
 		definition := definitions[key]
 		for _, capability := range definition.Spec.Capabilities {
 			raw, err := capability.InputSchema()
