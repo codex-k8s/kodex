@@ -66,6 +66,6 @@ test('foreign UID, изменённый template или чужой journal не 
 test('namespace discovery читает только metadata/refs и закрыто отвергает повреждённую projection',()=>{
  const row=['Deployment','backup-controller',uid(300),'kodex-system','backup-controller','[]','backup-controller','backup-controller-credentials','','','','1','1','1','1'].join('\t')+'\n';
  const calls=[];const value=readBackupProducerInventory(args=>{calls.push(args);return row;});assert.equal(value.items.length,1);
- assert.equal(calls[0].includes('-l'),false);assert.match(calls[0].at(-1),/secretKeyRef\.name/);assert.doesNotMatch(calls[0].at(-1),/\.env\}|\.data\}|\.value\}/);
+ assert.equal(calls[0].includes('-l'),false);assert.ok(calls[0].includes('deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods'));assert.ok(value.kinds.includes('ReplicationController'));assert.match(calls[0].at(-1),/secretKeyRef\.name/);assert.doesNotMatch(calls[0].at(-1),/\.env\}|\.data\}|\.value\}/);
  for(const bad of [row.replace(uid(300),'unknown'),row.replace('kodex-system','foreign'),row+'bad\n',row+row])assert.throws(()=>readBackupProducerInventory(()=>bad));
 });

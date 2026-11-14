@@ -9,19 +9,21 @@ const name='backup-controller',namespace='kodex-system',marker='kodex.dev/backup
 const fail=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
 const uuid=value=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value??'');
-const kinds=['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','Pod'];
+const kinds=['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','ReplicationController','Pod'];
 const registry=['backup-controller','kodex-postgresql-runtime-credentials'];
 const secretRegistry=['backup-controller-credentials','kodex-postgresql-runtime-credentials'];
 export const backupControllerMaintenanceHeader=plan=>({schema:'kodex.backup-controller-maintenance-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID});
 
-// Namespace discovery не использует selector: label не может скрыть прежнего
-// producer. В процесс попадают только identity, owner edges и имена refs, не env values.
+// Namespace discovery включает все встроенные workload producers, включая
+// legacy ReplicationController без ещё созданного Pod. Selector не используется:
+// label не может скрыть прежнего producer. В процесс попадают только identity,
+// owner edges и имена refs, не env values.
 export function readBackupProducerInventory(kube){
  const fields=['.kind','.metadata.name','.metadata.uid','.metadata.namespace','.metadata.labels.app\\.kubernetes\\.io/name','.metadata.ownerReferences',
   '.spec..serviceAccountName','.spec..secretName','.spec..secretKeyRef.name','.spec..secretRef.name','.spec..secret.name',
   '.spec.replicas','.status.replicas','.metadata.generation','.status.observedGeneration'];
  const projection='{range .items[*]}'+fields.map(field=>'{'+field+'}').join('{"\\t"}')+'{"\\n"}{end}';
- const raw=kube(['-n',namespace,'get','deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,pods','-o','jsonpath='+projection]);
+ const raw=kube(['-n',namespace,'get','deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods','-o','jsonpath='+projection]);
  fail(typeof raw==='string'&&Buffer.byteLength(raw)<=1<<20,'BACKUP_MAINTENANCE_INVENTORY_BOUND');
  const lines=raw.split('\n').filter(Boolean);fail(lines.length<=4096,'BACKUP_MAINTENANCE_INVENTORY_BOUND');
  const names=text=>text?text.split(' ').map(value=>{fail(/^[a-z0-9][a-z0-9.-]{0,252}$/.test(value),'BACKUP_MAINTENANCE_INVENTORY_INVALID');return value;}):[];

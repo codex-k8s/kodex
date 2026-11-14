@@ -4,11 +4,18 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.83
+version: 1.1.84
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Подтверждение тишины сканирует все встроенные Kubernetes workload producers,
+включая ReplicationController без ещё созданного Pod. Нулевой status replicas
+не закрывает его template authority; service account и Secret refs проверяются
+до допуска. Список запрошенных API kinds и parser registry совпадают, а synthetic
+backend возвращает только запрошенные kinds, чтобы тест не скрыл пробел
+настоящего scan.
 
 Положительный stopped readback не является вечным правом повторного использования.
 Split maintenance связывает одну остановку с единственным исполняемым планом;

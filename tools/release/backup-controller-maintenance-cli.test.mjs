@@ -195,3 +195,22 @@ test('real CLI refuses a copied stop journal as a second maintenance boundary',t
   '--stopped-plan',join(f.directory,'plan.json'),'--stopped-evidence',copied,'--migration-plan',join(f.directory,'migration.json'),'--migration-evidence',join(f.directory,'migration.jsonl')]);
  assert.notEqual(result.status,0);assert.match(result.stderr,/JOURNAL_PATH_CHANGED/);assert.equal(f.read().effects,1);
 });
+
+
+test('real CLI rejects ReplicationController awaiting its first Pod by exact template Secret or service account',t=>{
+ for(const template of [
+  {serviceAccountName:'default',volumes:[{name:'credential',secret:{secretName:'backup-controller-credentials'}}]},
+  {serviceAccountName:'default',volumes:[{name:'credential',secret:{secretName:'kodex-postgresql-runtime-credentials'}}]},
+  {serviceAccountName:'backup-controller'},
+  {serviceAccountName:'kodex-postgresql-runtime-credentials'},
+ ]){
+  const f=setup(t);assert.equal(f.prepare().status,0);
+  const state=f.read();state.foreignControllers=[{apiVersion:'v1',kind:'ReplicationController',metadata:{name:'foreign-awaiting-pod',uid:'10000000-0000-4000-8000-000000009701',generation:1},
+   spec:{replicas:1,template:{spec:template}},status:{replicas:0,observedGeneration:1}}];f.store(state);
+  const result=f.apply();assert.notEqual(result.status,0,'unscanned RC admitted a backup stop');
+  assert.match(result.stderr,/BACKUP_MAINTENANCE_OTHER_PRODUCER_PRESENT/);
+  assert.equal(f.read().effects,0);assert.equal(f.read().pods.length,1,'fixture unexpectedly created an RC Pod');
+  const planned=f.run('plan',['--action','stop','--target',join(f.directory,'target.json'),'--evidence',join(f.directory,'evidence.jsonl')]);
+  assert.notEqual(planned.status,0,'existing RC was omitted from plan discovery');
+ }
+});

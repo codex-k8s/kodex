@@ -4,7 +4,7 @@ title: Личные репозитории GitHub и проверяемая об
 type: operations
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-11-14
 ---
 
@@ -148,6 +148,19 @@ Restore сохраняет sequence ACL и schema/default S в нормализ�
 UPDATE, grant option, чужой grantor и неизвестный объект не скрываются этой
 нормализацией. Восстановление направлено только вперёд, не возвращает table-only
 состояние и не редактирует business rows либо историю goose.
+
+Полный namespace discovery встроенных producers включает Deployment,
+StatefulSet, DaemonSet, CronJob, Job, ReplicaSet, ReplicationController и Pod.
+Отсутствие Pod у ReplicationController не означает тишину: его `spec.template`
+уже содержит service account/Secret refs и позволяет создать writer. Чужой
+controller с backup identity либо credential закрыто отклоняется до stop/DDL,
+даже если текущий `status.replicas=0`. Исключение PostgreSQL и positive join
+собственного Deployment при этом не расширяются. CRD discovery не добавляется.
+
+Через Context7 `/websites/kubernetes_io` проверены
+[ReplicationController API](https://kubernetes.io/docs/reference/kubernetes-api/core/replication-controller-v1/)
+и [controller lifecycle](https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/):
+`spec.template` имеет тип PodTemplateSpec, controller создаёт недостающие replicas.
 
 Backup-controller останавливается только `backup-controller-maintenance-cli.mjs`
 с отдельным portable target, содержащим его exact Deployment UID и общие

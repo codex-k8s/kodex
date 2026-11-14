@@ -19,7 +19,7 @@ export function backupMaintenanceFixture(){
   spec:{...structuredClone(deployment.spec.template.spec),nodeName:'synthetic-node',enableServiceLinks:true},status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:deployment.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}});
  const state={pods:[pod()],extra:[],effects:0,loseACK:false,gateValid:true};
  const projected=item=>{const spec=item.kind==='Pod'?item.spec:item.spec?.template?.spec;return {kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:spec?.serviceAccountName?[spec.serviceAccountName]:[],secretRefs:(spec?.volumes??[]).filter(v=>v.secret).map(v=>v.secret.secretName),replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration};};
- const inventory=()=>({schema:'kodex.backup-producer-inventory/v1',namespace:'kodex-system',kinds:['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','Pod'],items:[deployment,rs,...state.pods].map(projected).concat(state.extra)});
+ const inventory=()=>({schema:'kodex.backup-producer-inventory/v1',namespace:'kodex-system',kinds:['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','ReplicationController','Pod'],items:[deployment,rs,...state.pods].map(projected).concat(state.extra)});
  const resources=()=>({items:[rs,...state.pods]});
  const stop=planBackupControllerMaintenance(deployment,target,observed,sourceSHA,'stop',undefined,inventory());
  const journal=plan=>({events:[{type:'HEADER',...backupControllerMaintenanceHeader(plan)}],append(value){this.events.push(value);}});
@@ -76,8 +76,12 @@ export function backupMaintenanceKube(state,args,input){
  if(kind==='pod'&&name==='kodex-postgresql-0')return `${state.postgres.uid}|StatefulSet|kodex-postgresql|${state.postgres.ownerUID}|kodex-postgresql|Running|`;
  if(kind==='pod')return out(state.pods.find(p=>p.metadata.name===name));
  if(kind==='replicasets,pods,jobs')return resources.map(item=>[item.kind,item.metadata.name,item.metadata.uid,item.metadata.labels?.['app.kubernetes.io/name']??'',namespace,JSON.stringify(item.metadata.ownerReferences??[])].join('\t')).join('\n')+'\n';
- if(kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,pods'){
-  const items=[state.deployment,...resources,...(state.pgPod?[state.pgStatefulSet,state.pgPod]:[])].map(projected).concat(state.extra);
+ if(kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,pods'||kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods'){
+  const resourceKinds={deployments:'Deployment',statefulsets:'StatefulSet',daemonsets:'DaemonSet',cronjobs:'CronJob',jobs:'Job',replicasets:'ReplicaSet',replicationcontrollers:'ReplicationController',pods:'Pod'};
+  const requested=new Set(kind.split(',').map(resource=>resourceKinds[resource]));
+  // Как Kubernetes API, synthetic scan возвращает только запрошенные kinds:
+  // прежний неполный scan не должен случайно увидеть RC через готовый fixture.
+  const items=[state.deployment,...resources,...(state.pgPod?[state.pgStatefulSet,state.pgPod]:[]),...(state.foreignControllers??[])].map(projected).concat(state.extra).filter(item=>requested.has(item.kind));
   return items.map(item=>[item.kind,item.metadata.name,item.metadata.uid,namespace,item.metadata.labels?.['app.kubernetes.io/name']??'',JSON.stringify(item.metadata.ownerReferences??[]),item.serviceAccounts?.join(' ')??'',item.secretRefs?.join(' ')??'','','','',item.replicas??'',item.statusReplicas??'',item.metadata.generation??'',item.observedGeneration??''].join('\t')).join('\n')+'\n';
  }
  throw Error('UNREGISTERED_SYNTHETIC_COMMAND');
