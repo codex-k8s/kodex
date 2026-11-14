@@ -214,7 +214,19 @@ func runProbeReadiness(ctx context.Context, path string, args []string) ([]byte,
 	}
 	command := exec.CommandContext(call, runner, append([]string{SandboxExecMode, path}, args...)...)
 	command.Dir = "/"
-	command.Env = []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent", "LANG=C", "LC_ALL=C", "NO_COLOR=1", "COREPACK_ENABLE_NETWORK=0", "GOTOOLCHAIN=local", "GOROOT=/usr/local/go", "GOENV=off"}
+	home := "/nonexistent"
+	if probeNeedsHome(path) {
+		preparedHome, cleanup, err := prepareProbeHome()
+		if err != nil {
+			return nil, false
+		}
+		defer cleanup()
+		home = preparedHome
+	}
+	command.Env = []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=" + home, "LANG=C", "LC_ALL=C", "NO_COLOR=1", "COREPACK_ENABLE_NETWORK=0", "GOTOOLCHAIN=local", "GOROOT=/usr/local/go", "GOENV=off"}
+	if probeNeedsHome(path) {
+		command.Env = append(command.Env, "TMPDIR="+home+"/tmp")
+	}
 	command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: 10001, Gid: 10001}, Setpgid: true}
 	command.Cancel = func() error { return syscall.Kill(-command.Process.Pid, syscall.SIGKILL) }
 	command.WaitDelay = 100 * time.Millisecond

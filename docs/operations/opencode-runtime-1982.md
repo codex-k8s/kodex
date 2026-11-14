@@ -4,8 +4,8 @@ title: OpenCode runtime и доставка профиля
 type: operation
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-11-12
+version: 1.0.1
+updated: 2026-11-14
 ---
 
 # OpenCode runtime и доставка профиля
@@ -22,6 +22,20 @@ checkpoint/export/import, context/cache и сквозные lifecycle matrices �
 [Чистая установка](../runbooks/fresh-install.md) определяет inventory,
 ownership plan/apply и защиту соседних ресурсов. Старые данные в новую
 установку не переносятся; новая история сохраняется по native checkpoint policy.
+
+## Проверка версии в inventory
+
+OpenCode1.19.5 создаёт XDG-каталоги даже до обработки `--version`.
+Поэтому inventory-parent заранее создаёт отдельный пустой HOME вне `/image`,
+включая private tmp, и делает все каталоги доступными только для чтения.
+Дочерняя проба принимает только ограниченное дерево root-owned каталогов без
+файлов, ссылок и права записи. После завершения или отказа parent удаляет HOME.
+
+Существующие UID/GID10001, пустые capabilities/groups, Landlock/seccomp,
+закрытый реестр аргументов, двухсекундный deadline и ограниченный вывод
+сохраняются. Остальные инструменты используют прежний `HOME=/nonexistent`.
+Это проверка версии исполняемого файла, а не доказательство настройки модели,
+наличия credentials, допуска образа или успешного агентного turn.
 
 ## Совместимость MCP-каталога
 
