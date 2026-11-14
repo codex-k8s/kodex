@@ -8,7 +8,7 @@ import {resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {fingerprint} from './stable-inventory.mjs';
 import {validatedStablePublication,sourceArchiveHash} from './stable-image-publication.mjs';
-import {componentMigrationConfiguration,componentMigrationPublication} from './portable-component-migration.mjs';
+import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockMaxBytes,componentPublicationMaxBytes} from './portable-component-migration.mjs';
 import {validateNodeContainer} from './stable-node-registry-model.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 
@@ -23,12 +23,12 @@ async function run(program,args,timeout=30000,cwd=root){
   catch{throw Error('COMPONENT_PUBLICATION_OPERATION_FAILED_OR_UNKNOWN');}
 }
 // Private bytes читаются один раз; только canonical JSON/JSONL, без duplicate keys.
-async function privateDocument(path,lines=false){
+async function privateDocument(path,lines=false,maximum=1<<20){
   const file=await open(resolve(path),constants.O_RDONLY|constants.O_NOFOLLOW);
   try{
     const before=await file.stat();
     requireValue(before.isFile()&&before.uid===process.getuid()&&before.nlink===1&&(before.mode&0o777)===0o600&&
-      before.size>0&&before.size<=1<<20,'COMPONENT_PUBLICATION_PRIVATE_FILE_REQUIRED');
+      before.size>0&&before.size<=maximum,'COMPONENT_PUBLICATION_PRIVATE_FILE_REQUIRED');
     const raw=await file.readFile(),after=await file.stat();
     requireValue(before.size===raw.length&&before.ino===after.ino&&before.size===after.size&&before.mtimeMs===after.mtimeMs&&
       before.ctimeMs===after.ctimeMs,'COMPONENT_PUBLICATION_INPUT_CHANGED');
@@ -123,7 +123,7 @@ async function prepare(config){
       {receipt:receipt.value,receiptSHA256:hash(receipt.raw),contextSHA256,changedFiles,dockerfileSHA256,productionSHA256});
     // Полный manifest сохраняется; компактная запись не расходует лимит на отступы.
     const raw=Buffer.from(JSON.stringify(lock)+'\n');
-    requireValue(raw.length<=65536,'COMPONENT_PUBLICATION_LOCK_TOO_LARGE');
+    requireValue(raw.length<=componentImageLockMaxBytes,'COMPONENT_PUBLICATION_LOCK_TOO_LARGE');
     components.push({component:component.name,expectedImageRef:component.expectedImageRef,componentLockRawBase64:raw.toString('base64'),
       componentLockSHA256:hash(raw)});
   }
@@ -143,12 +143,14 @@ async function main(args){
   if(mode==='prepare'){
     requireValue(options['--configuration']&&Object.keys(options).length===2,'COMPONENT_PUBLICATION_ARGUMENTS_INVALID');
     const prepared=await prepare((await privateDocument(options['--configuration'])).value);
+    requireValue(Buffer.byteLength(JSON.stringify(prepared,null,2)+'\n')<=componentPublicationMaxBytes,'COMPONENT_PUBLICATION_PREPARED_TOO_LARGE');
     createPrivatePrettyJSONSync(resolve(options['--output']),prepared);
     console.log(JSON.stringify({status:'PASS',phase:'PREPARED_NOT_NODE_QUALIFIED',planSHA256:fingerprint(prepared)}));return;
   }
   requireValue(options['--prepared']&&options['--context']&&options['--kubeconfig']?.startsWith('/')&&!options['--configuration']&&
     !/[\r\n\0]/.test(options['--kubeconfig']),'COMPONENT_PUBLICATION_ARGUMENTS_INVALID');
-  const prepared=(await privateDocument(options['--prepared'])).value;
+  // Base64 всех locks и configuration имеют отдельный конечный aggregate budget.
+  const prepared=(await privateDocument(options['--prepared'],false,componentPublicationMaxBytes)).value;
   requireValue(exact(prepared,['schema','sourceSHA','configuration','publication'])&&prepared.schema==='kodex.component-publication-prepared/v1'&&
     prepared.configuration.context===options['--context']&&prepared.sourceSHA===prepared.configuration.sourceSHA,
     'COMPONENT_PUBLICATION_PREPARED_INVALID');
