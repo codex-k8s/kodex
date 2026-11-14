@@ -968,6 +968,16 @@ service account, immutable image и spec. Это позволяет `inspect`/`h
 сохранить Job как evidence; неизвестная команда или ещё работающий Pod
 по-прежнему закрыто отклоняются. Повтор DDL или удаление evidence не нужны.
 
+Если stop выполнялся прежним executor, исправленный `backup-controller-maintenance-cli.mjs`
+создаёт resume plan только при явном `--stopped-source-sha <SHA исходного stop>`.
+`sourceSHA` остаётся исходным и связывает stop с миграцией; отдельный `executorSHA`
+закрепляет чистый исправленный checkout для apply/status. Before/after owner SQL
+hashes должны побайтово совпасть с исходными pins. Иной selector, изменённый SQL,
+другой checkout при apply, чужой target/DB или отсутствие terminal cohort proof
+закрыто отклоняются. Selector допустим только при создании resume plan; его
+содержимое входит в exact approved plan hash. Старые планы и журналы не правятся.
+
+
 `baseSchemaHeads` точно совпадает с неизменяемым seal исходной полной установки
 042 либо043. `schemaHeadsBefore` отдельно требует043, `schemaHeadsAfter` —044;
 их контрольные версии CP равны `20261113000100` и `20261114120000`.

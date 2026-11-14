@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.85
+version: 1.1.86
 updated: 2026-11-14
 ---
 
@@ -24,6 +24,11 @@ resume удерживает общий journal lock и до внешнего PAT
 плана с тем же stopped proof. UNKNOWN/поздний PATCH сохраняет запрет reuse;
 новая попытка требует новой фактической остановки и maintenance identity.
 Матрица: [backup044](../operations/github-repository-scope-2033.md#точные-backup-acl-и-неизменная-миграция044).
+Исправление executor после stop не переписывает source операции: successor
+назначается явно в новом immutable resume plan отдельным executor SHA, сохраняя
+исходные source/target/backend и owner SQL pins. Apply/status проверяют текущий
+executor; terminal readback и общий одноразовый журнал остаются обязательными.
+Без явной привязки смена checkout закрыто отклоняется.
 
 Отказ workspace join может оставить закрытый диагностический этап в пустом
 termination file до completion callback. Отдельная failure schema не является
