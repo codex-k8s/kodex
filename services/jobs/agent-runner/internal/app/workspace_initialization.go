@@ -52,6 +52,12 @@ func publishInitializationFailure(input runtimecontract.RunnerInput, cause error
 // writeInitializationTermination пишет bounded record через no-follow regular descriptor.
 // Пути и modes не меняются; fallback к raw logs либо workspace storage отсутствует.
 func writeInitializationTermination(path string, raw []byte) error {
+	return writeTerminationRecord(path, raw, false)
+}
+
+// writeTerminationRecord shares the fixed-file guards; diagnostics may only fill an empty file.
+// writeTerminationRecord переиспользует guards fixed file; диагностика заполняет лишь пустой файл.
+func writeTerminationRecord(path string, raw []byte, emptyOnly bool) error {
 	if len(raw) == 0 || len(raw) > runtimecontract.MaximumInitializationFailureBytes {
 		return io.ErrShortBuffer
 	}
@@ -68,6 +74,9 @@ func writeInitializationTermination(path string, raw []byte) error {
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	if !ok || stat.Nlink != 1 {
 		return io.ErrUnexpectedEOF
+	}
+	if emptyOnly && info.Size() != 0 {
+		return os.ErrExist
 	}
 	if err := file.Truncate(0); err != nil {
 		return err

@@ -206,7 +206,8 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 			logMCPStartupFailure(ctx, logger, err)
 		}
 		return prepared, code, err
-	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess, logger: logger}
+	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess,
+		workspaceFailure: recordWorkspaceQuiescenceFailure, logger: logger}
 	if mode == "runtime-session" {
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) }, runtime)
 		return resultErr
@@ -262,13 +263,14 @@ type preparedTurn struct {
 	cancel context.CancelFunc
 }
 
-// turnRuntime injects preparation, broker execution, workspace probing and a runtime logger into turn orchestration; tests can substitute these seams without spawning an actual provider.
-// turnRuntime передаёт preparation, broker execution, workspace probing и runtime logger в orchestration хода; тесты могут заменить эти зависимости без настоящего провайдера.
+// turnRuntime injects preparation, broker execution, workspace probing, failure recording and logging. Tests substitute these seams without spawning an actual provider.
+// turnRuntime передаёт подготовку, broker, workspace probe, запись отказа и logging. Тесты заменяют эти зависимости без настоящего провайдера.
 type turnRuntime struct {
-	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
-	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
-	checkWorkspace func(context.Context) error
-	logger         *slog.Logger
+	prepare          func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
+	execute          func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
+	checkWorkspace   func(context.Context) error
+	workspaceFailure func(error) error
+	logger           *slog.Logger
 }
 
 // prepareRuntimeTurn validates a turn and its mounted context snapshot, binds snapshot expiry and the effective deadline, prepares workspace/input/profile, resets outbox and starts the exact MCP proxy. Failures cancel prepared contexts and return an existing safe failure code where applicable; the input remains server-owned authority.
@@ -367,6 +369,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
 	}
 	if err := quiesceAndPublishWorkspace(ctx, input, result, prepared.proxy, publishWorkspaceQuiescence); err != nil {
+		if runtime.workspaceFailure != nil {
+			_ = runtime.workspaceFailure(err)
+		}
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -414,15 +419,13 @@ func quiesceAndPublishWorkspace(ctx context.Context, input model.Input, result c
 	if input.EnvironmentPolicy.ManagedWorkspace {
 		quiescer, ok := proxy.(interface{ QuiesceWorkspace(context.Context) error })
 		if !ok {
-			logWorkspaceQuiescenceRejection("EXECUTOR_UNAVAILABLE")
-			return errors.New("runtime workspace executor is unavailable")
+			return rejectedWorkspaceQuiescence("EXECUTOR_UNAVAILABLE", nil)
 		}
 		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Duration(runtimecontract.WorkspaceQuiescenceTimeoutSeconds)*time.Second)
 		err := quiescer.QuiesceWorkspace(shutdown)
 		cancel()
 		if err != nil {
-			logWorkspaceQuiescenceRejection("EXECUTOR_JOIN")
-			return err
+			return rejectedWorkspaceQuiescence("EXECUTOR_JOIN", err)
 		}
 	}
 	return publish(input, result)
