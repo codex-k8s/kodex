@@ -4,11 +4,17 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.91
+version: 1.1.92
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Наличие provider response field проверяется отдельно от его нулевого значения.
+Explicit `null` у используемых координат не превращается в отсутствие optional
+поля либо успешный receipt. Допустимые варианты ответа связываются со свежим
+provider proof: например, channel sender не подменяет bot identity обычного
+чата. Неверный ответ после dispatch сохраняет UNKNOWN без повторного effect.
 
 Бюджет отдельного provider call ограничивается внутри допустимого worker
 operation budget. Проверяется весь материализованный путь default ConfigMap →

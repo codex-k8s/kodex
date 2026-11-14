@@ -96,7 +96,7 @@ func telegramProviderFixture(t *testing.T, calls *[]string, sendStatus int) http
 			if sendStatus != 200 {
 				return &http.Response{StatusCode: sendStatus, Body: io.NopCloser(strings.NewReader(`{"ok":false,"error_code":429,"parameters":{"retry_after":30}}`))}, nil
 			}
-			result = map[string]any{"message_id": 123, "message_thread_id": 77, "chat": map[string]any{"id": -1001234}, "from": map[string]any{"id": 123456, "is_bot": true}, "text": input["text"]}
+			result = map[string]any{"message_id": 123, "message_thread_id": 77, "chat": map[string]any{"id": -1001234, "type": "supergroup"}, "from": map[string]any{"id": 123456, "is_bot": true}, "text": input["text"]}
 		default:
 			t.Fatal("unexpected synthetic provider operation")
 		}

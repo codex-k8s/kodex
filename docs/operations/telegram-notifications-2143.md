@@ -4,11 +4,20 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.12
+version: 1.0.13
 updated: 2026-11-14
 ---
 
 # Уведомления проекта через Telegram
+
+Ответ `sendMessage` связывается со свежими bot/chat observations и точными
+chat/type/text/topic. В channel допустим отсутствующий `from`, только когда
+`sender_chat` обозначает тот же configured channel; любой присутствующий
+`from` проверяется по exact bot. Для остальных чатов `from` обязателен.
+При topicNONE допускается отсутствие `message_thread_id`, но explicit
+`null`/0 и неверные consumed scalar fields дают UNKNOWN без retry.
+Эта форма проверена по официальному
+[Message](https://core.telegram.org/bots/api#message), включая Context7.
 
 Общий `INTERACTION_GATEWAY_OPERATION_TIMEOUT` сохраняет default30s и допустимый
 диапазон1s–2m для worker/Mattermost. Telegram ограничивает каждый HTTP call

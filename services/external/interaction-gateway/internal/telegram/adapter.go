@@ -3,7 +3,6 @@ package telegram
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"time"
@@ -203,7 +202,8 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *cp.InteractionDelive
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.currentScope(ctx, configuration); err != nil {
+	proof, err := client.currentScope(ctx, configuration)
+	if err != nil {
 		return nil, err
 	}
 	admitted, err := begin(ctx, &cp.BeginInteractionDeliveryRequest{DeliveryRef: claim.GetDeliveryRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), InputDigest: claim.GetTelegram().GetInputDigest()})
@@ -224,16 +224,9 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *cp.InteractionDelive
 	if err != nil {
 		return nil, err
 	}
-	var observed struct {
-		MessageID       int64       `json:"message_id"`
-		MessageThreadID int64       `json:"message_thread_id"`
-		Chat            scopedChat  `json:"chat"`
-		From            botIdentity `json:"from"`
-		Text            string      `json:"text"`
+	messageID, err := verifiedSentMessage(raw, proof, configuration, text)
+	if err != nil {
+		return nil, err
 	}
-	if json.Unmarshal(raw, &observed) != nil || observed.MessageID < 1 || observed.MessageID > maximumIdentifier || observed.MessageThreadID != configuration.TopicID ||
-		observed.Chat.ID != configuration.ChatID || observed.From.ID != configuration.BotID || !observed.From.IsBot || observed.Text != text {
-		return nil, &SafeError{Code: errorUnknown}
-	}
-	return &cp.TelegramDeliveryReceipt{BotId: configuration.BotID, ChatId: configuration.ChatID, TopicId: configuration.TopicID, MessageId: observed.MessageID}, nil
+	return &cp.TelegramDeliveryReceipt{BotId: configuration.BotID, ChatId: configuration.ChatID, TopicId: configuration.TopicID, MessageId: messageID}, nil
 }
