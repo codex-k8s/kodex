@@ -327,6 +327,14 @@ API template не является допуском. Между объектам
 snapshot: внешний drift приводит к закрытому отказу/readback, а не к заявлению
 непрерывной готовности всех компонентов.
 
+После принятого Deployment PATCH подтверждение stop/handoff/resume использует
+тот же ограниченный цикл полного READ inventory, что и ожидание готовности.
+Естественное исчезновение или появление Pod между discovery и точным чтением
+допускает не более трёх повторов чтения в конечном бюджете. Сам PATCH не
+повторяется. Смена Deployment UID/spec закрыто отказывает сразу; исчерпание
+повторов не создаёт ACK и требует отдельного `inspect` перед продолжением
+того же журнала. Потерянный ответ PATCH сохраняет прежний UNKNOWN/readback путь.
+
 Возвращается только selector/annotation своей изоляции. Потерянный PATCH ACK
 даёт UNKNOWN и требует `traffic status`; подтверждённый RESTORED допускает
 повторный apply без второго PATCH. Смена Job/API/Service UID, source/SQL,
@@ -415,3 +423,12 @@ redirect fallback.
 [exception API context](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/interfaces/exception.py#L309),
 [project received stats](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/core/endpoints/project_stats.py#L129),
 [issue search limit](https://github.com/getsentry/sentry/blob/26.10.1/src/sentry/api/helpers/group_index/index.py#L87).
+
+
+После handoff Deployment controller может увеличить свою аннотацию
+`deployment.kubernetes.io/revision`. При сопоставлении исторического CLOSE с
+новым OPEN routine045 принимает только корректное монотонное увеличение этой
+аннотации; marker и остальные аннотации сравниваются полностью. Новый OPEN
+сохраняет актуальную revision в собственном неизменном plan. Текущие UID, spec,
+все аннотации и readiness сравниваются с этим OPEN без исключений. Исторические
+journals не переписываются; уменьшение revision и посторонняя аннотация дают отказ.
