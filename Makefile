@@ -86,6 +86,11 @@ test-web-only-release:
 	@python3 scripts/tests/pwa-public-assets-test.py
 	@./scripts/tests/web-only-release-test.sh
 
+.PHONY: test-model-catalog-authority-delivery
+test-model-catalog-authority-delivery: check-go-toolchain
+	@timeout 180s node --test tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/authority-rotation-transition.test.mjs tools/release/authority-rotation-source-delivery-model.test.mjs tools/release/authority-rotation-source-delivery.cli.test.mjs tools/release/authority-policy-environment.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/portable-runner-target.test.mjs
+	@cd services/internal/control-plane && timeout 120s go test -count=1 -p 1 ./internal/domain/service/authorityproof -run '^TestCatalogBinaryStartsAndIssuesLegacyProofWithPolicy105$$'
+
 .PHONY: test-service-generation-postgres
 test-service-generation-postgres: check-go-toolchain
 	@./scripts/tests/control-plane-postgres-test.sh '^(TestServiceCredentialColdStartComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent)$$'
