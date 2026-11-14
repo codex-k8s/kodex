@@ -18,6 +18,11 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounte
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --sentry-observability-upgrade ]]; then
+  upgrade_test='^TestSentryObservabilityUpgrade$'
+  if [[ -n ${KODEX_SENTRY_OBSERVABILITY_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestSentryObservabilityCatalogCapture$'; fi
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-repository-scope-upgrade ]]; then
   upgrade_test='^TestGitHubRepositoryScopeUpgrade$'
   if [[ -n ${KODEX_GITHUB_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestGitHubRepositoryScopeCatalogCapture$'; fi
@@ -400,6 +405,7 @@ fi
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
   case "$schema_version" in
+    20261114130000) schema_proof=sentry-observability-migration-postcondition.sql; schema_verifier=validSentryObservabilityMigrationPostcondition ;;
     20261114120000) schema_proof=github-repository-scope-migration-postcondition.sql; schema_verifier=validGitHubRepositoryScopeMigrationPostcondition ;;
     20261113000100) schema_proof=workspace-unbound-stop-migration-postcondition.sql; schema_verifier=validWorkspaceUnboundStopMigrationPostcondition ;;
     20261112000100) schema_proof=workspace-archive-abi-migration-postcondition.sql; schema_verifier=validWorkspaceArchiveABIMigrationPostcondition ;;

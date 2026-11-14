@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "sentry-observability":
+		verifier = "validSentryObservabilityMigration"
+	case "sentry-observability-backup":
+		verifier = "validSentryObservabilityBackupMigration"
 	case "github-repository-scope":
 		verifier = "validGitHubRepositoryScopeMigration"
 	case "github-repository-scope-backup":

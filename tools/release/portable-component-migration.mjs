@@ -13,6 +13,10 @@ const image = value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 export const componentMigrationCohortSchema = 'kodex.portable-component-migration/v2';
 const profiles = Object.freeze({
+  'sentry-observability': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
+    contract:'SENTRY_OBSERVABILITY_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
+  'sentry-observability-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114120000,after:20261114130000,
+    contract:'SENTRY_OBSERVABILITY_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
   'workspace-unbound-stop': Object.freeze({schema:componentMigrationSchema,before:20261112000100,after:20261113000100,
     contract:'WORKSPACE_UNBOUND_STOP_UPGRADE',components:Object.freeze(['control-plane','runtime-controller'])}),
   'github-repository-scope': Object.freeze({schema:componentMigrationCohortSchema,before:20261113000100,after:20261114120000,
