@@ -118,7 +118,7 @@ export function routineMigrationAPIFixture(t){
   migration,job,jobPod,postcondition:{profile:'SENTRY_OBSERVABILITY_BACKUP_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114130000,
    backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,schemaCatalog:sentryObservabilityCatalog.backup.after},effects:[],calls:[]};
  save('state.json',state);
- const fake=`#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path'),base=path.join(__dirname,'..'),file=path.join(base,'state.json'),state=JSON.parse(fs.readFileSync(file));\nconst run=require(${JSON.stringify(fileURLToPath(new URL('./routine-migration-kubectl.cjs',import.meta.url)))}).run;\ntry{const result=run(state,process.argv.slice(2),fs.readFileSync(0,'utf8'));fs.writeFileSync(file,JSON.stringify(state));if(result?.lost){console.error('private synthetic remote diagnostic');process.exit(9);}process.stdout.write(result);}catch{fs.writeFileSync(file,JSON.stringify(state));process.stderr.write('Synthetic transport refused\\n');process.exit(7);}\n`;
+ const fake=`#!${process.execPath}\nconst fs=require('node:fs'),path=require('node:path'),base=path.join(__dirname,'..'),file=path.join(base,'state.json'),state=JSON.parse(fs.readFileSync(file));\nconst run=require(${JSON.stringify(fileURLToPath(new URL('./routine-migration-kubectl.cjs',import.meta.url)))}).run;\ntry{const result=run(state,process.argv.slice(2),fs.readFileSync(0,'utf8'));fs.writeFileSync(file,JSON.stringify(state));if(result?.lost){console.error('private synthetic remote diagnostic');process.exit(9);}process.stdout.write(result);}catch(error){state.diagnostic=String(error.stack).slice(0,4000);fs.writeFileSync(file,JSON.stringify(state));process.stderr.write('Synthetic transport refused\\n');process.exit(7);}\n`;
  writeFileSync(join(bin,'kubectl'),fake,{mode:0o700});
  const read=name=>JSON.parse(readFileSync(join(directory,name),'utf8'));
  const edit=fn=>{const value=read('state.json');fn(value);save('state.json',value);};
@@ -132,7 +132,7 @@ export function routineMigrationAPIFixture(t){
    '--migration-profile',profile,'--migration-source-sha',sourceSHA,...inputs]:['--evidence',join(directory,'restore.jsonl'),
    ...(phase==='apply'?['--approved-plan-sha',fingerprint(read('restore.json')),...inputs]:[])]),...extra],
   {encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});
- const pass=phase=>{const result=run(phase);assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);};
+ const pass=phase=>{const result=run(phase);assert.equal(result.status,0,result.stderr+"\n"+(read('state.json').diagnostic??''));return JSON.parse(result.stdout);};
  return {directory,root,sourceSHA,state:()=>read('state.json'),read,edit,run,pass,save,journal,migration,closed,isolation,openPlan,openEvents,
   kube:(args,input='')=>transport.run(state,['--kubeconfig',kubeconfig,'--context',cohort.target.context,...args],String(input))};
 }
