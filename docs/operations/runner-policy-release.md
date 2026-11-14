@@ -26,7 +26,9 @@ scan, SBOM, provenance, admission, promotion, публикация и выбра
 bundle и плане. `prepare` также закрепляет UID PostgreSQL Pod/StatefulSet,
 system identifier и OID базы; каждый owner read сверяет их до и после SQL.
 Используется только контейнер `postgresql`, локальный socket, порт5432,
-очищенное окружение и `psql -X --no-password`. Старый bundle без этих pins
+очищенное окружение и `psql -X --no-password`. Для portable публикации OCI `seed-local-image-supply-chain.sh` также требует
+`--kubeconfig`; выбранный context может отличаться от `current-context` файла.
+Старый bundle без этих pins
 нужно заново подготовить чтением; он не допускается к apply.
 
 ## Границы и жизненный цикл
@@ -144,7 +146,7 @@ authority, builder, tools и registry images эта команда не заме
 `agent-runner-image` и exact OCI archive.
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
+tools/dev/seed-local-image-supply-chain.sh --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --evidence "$NEW_PUBLICATION_EVIDENCE"
 ```
@@ -161,7 +163,7 @@ control-plane helper, frontend или role-input и не требует ново
 При UNKNOWN сначала выполняется точный readback без import:
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
+tools/dev/seed-local-image-supply-chain.sh --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --readback-only --evidence "$NEW_READBACK_EVIDENCE"
 ```
