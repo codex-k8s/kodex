@@ -20,7 +20,7 @@ export function portableRunnerTarget(profile, { context, clusterUID, namespaceUI
   const allowed = new Map();
   for (const item of profile.resources) {
     requireValue(item && Object.keys(item).sort().join(',') === 'apiVersion,kind,name,uid' &&
-      ['v1|ConfigMap', 'apps/v1|Deployment', 'rbac.authorization.k8s.io/v1|Role', 'supplychain.kodex.dev/v1alpha1|ImageAdmissionPolicyParameters'].includes(item.apiVersion + '|' + item.kind) &&
+      ['v1|ConfigMap', 'v1|Service', 'apps/v1|Deployment', 'rbac.authorization.k8s.io/v1|Role', 'supplychain.kodex.dev/v1alpha1|ImageAdmissionPolicyParameters'].includes(item.apiVersion + '|' + item.kind) &&
       /^[a-z0-9][a-z0-9.-]{0,252}$/.test(item.name) && validUUID(item.uid));
     const identity = [item.apiVersion, item.kind, 'kodex-system', item.name].join('|');
     requireValue(!allowed.has(identity)); allowed.set(identity, item.uid);

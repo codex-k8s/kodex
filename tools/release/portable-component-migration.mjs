@@ -298,26 +298,14 @@ export function readComponentServingInventory(kube, name, deploymentUID) {
   return componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
 }
 
-// Journal принадлежит исходному migration protocol. Пара не получает ни собственного
-// DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
-  const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
-  const workers=names.filter(name=>name!=='control-plane');
-  const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
-    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
-  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
-  const part = name => plan.componentHandoff.components.find(c => c.name === name);
-  const observe = name => {
-    const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
-    requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
-    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
-    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
-    requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
-    const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
-    const ready=actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expected.replicas &&
-      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expected.replicas) && pods.length === expected.replicas &&
+// Проверяет полный состав запущенных readers/writers; counters Deployment
+// недостаточны для допуска после обновления или открытия внешнего API.
+export function componentServingReady(actual,pods,expectedReplicas) {
+  return actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expectedReplicas &&
+      ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expectedReplicas) && Array.isArray(pods) && expectedReplicas > 0 && pods.length === expectedReplicas &&
       pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
+        Object.entries(actual.spec.template.spec).every(([key,value])=>Object.hasOwn(p.spec??{},key)&&fingerprint(p.spec[key])===fingerprint(value))&&
+        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key))&&
         ['containers','initContainers','ephemeralContainers'].every(field => {
           const expected=actual.spec.template.spec[field] ?? [], observed=p.spec?.[field] ?? [];
           const statusField={containers:'containerStatuses',initContainers:'initContainerStatuses',ephemeralContainers:'ephemeralContainerStatuses'}[field];
@@ -335,6 +323,26 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
                 (field === 'containers' || c.restartPolicy === 'Always' ? status.ready === true : status.state?.terminated?.exitCode === 0);
             });
         }));
+}
+
+// Journal принадлежит исходному migration protocol. Пара не получает ни собственного
+// DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
+  const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
+  const workers=names.filter(name=>name!=='control-plane');
+  const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
+    spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.replicas,updatedReplicas:c.replicas,readyReplicas:c.replicas,availableReplicas:c.replicas}}));
+  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+  const part = name => plan.componentHandoff.components.find(c => c.name === name);
+  const observe = name => {
+    const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
+    requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
+    const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
+    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
+    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
+    const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
+    const ready=componentServingReady(actual,pods,expected.replicas);
     return {actual,stage,joined,ready};
   };
   const inspect = () => names.map(name => {
