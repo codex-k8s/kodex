@@ -302,6 +302,10 @@ SCHEDULE_OCCURRENCE_MATERIALIZED:
   other: Запуск по расписанию создан
 SCHEDULE_OCCURRENCE_COMPLETED:
   other: Запуск по расписанию завершён
+TELEGRAM_SUBSCRIPTION_CONFIGURED:
+  other: Подписка Telegram настроена
+TELEGRAM_DELIVERY_UPDATED:
+  other: Состояние доставки Telegram обновлено
 INTEGRATION_CONNECTION_CREATED:
   other: Подключение интеграции создано
 INTEGRATION_CONNECTION_UPDATED:

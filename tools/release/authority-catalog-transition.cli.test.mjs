@@ -456,3 +456,44 @@ test('107 registry CAS fresh-check закрывает replaced UID, ранний
   assert.equal(f.effects.length,0);assert.equal(fingerprint(f.registry.data),before);
  }
 });
+
+test('CP policy projection API ACK UID запрещает replacement между ACK и первым GET',async t=>{
+ const f=cliFixture(t),admission=prepareAdmission(f);f.registry.data['authority-policy.json']=f.desired.raw;
+ const output=join(f.directory,'ack-projection-plan.json'),evidence=join(f.directory,'ack-projection.jsonl');
+ await projectionMain(['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,'--kubeconfig',f.kubeconfig,
+  '--portable-target',f.profilePath,...admission.flags,'--output',output],f.io);
+ let acknowledgementUID;
+ const io={...f.io,execFileSync:(command,args,options)=>{
+  const result=f.io.execFileSync(command,args,options);
+  if(args.includes('create')){const request=JSON.parse(options.input);if(request.kind==='ConfigMap'){
+   acknowledgementUID=JSON.parse(result).metadata.uid;f.resources.get('configmap/'+request.metadata.name).metadata.uid=uid(990);
+  }}return result;
+ }};
+ const flags=['--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',output,'--evidence',evidence];
+ await assert.rejects(()=>projectionMain(['apply',...flags,'--confirm','APPLY-PORTABLE-CATALOG-PROJECTION'],io),/CONFIGMAP_REPLACED/);
+ assert.equal(f.effects.filter(key=>key==='patch/control-plane').length,0);
+ const rows=readFileSync(evidence,'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(rows.find(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION_ACK').uid,acknowledgementUID);
+ await assert.rejects(()=>projectionMain(['resume',...flags],f.io),/CONFIGMAP_REPLACED/);
+ assert.equal(f.effects.length,1);
+});
+
+test('CP projection invalid successful ACK и missing after intent не дают нового create при resume',async t=>{
+ for(const mode of ['invalid-ack','lost-and-missing']){
+  const f=cliFixture(t),admission=prepareAdmission(f);f.registry.data['authority-policy.json']=f.desired.raw;
+  const output=join(f.directory,'invalid-ack-plan.json'),evidence=join(f.directory,'invalid-ack.jsonl');
+  await projectionMain(['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,'--kubeconfig',f.kubeconfig,
+   '--portable-target',f.profilePath,...admission.flags,'--output',output],f.io);
+  const io={...f.io,execFileSync:(command,args,options)=>{
+   const result=f.io.execFileSync(command,args,options);
+   if(args.includes('create')){const body=JSON.parse(options.input);if(body.kind==='ConfigMap'){
+    if(mode==='invalid-ack')return JSON.stringify({apiVersion:'v1',kind:'ConfigMap'});
+    f.resources.delete('configmap/'+body.metadata.name);throw Error('SYNTHETIC_RESPONSE_LOST');
+   }}return result;
+  }};
+  const flags=['--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',output,'--evidence',evidence];
+  await assert.rejects(()=>projectionMain(['apply',...flags,'--confirm','APPLY-PORTABLE-CATALOG-PROJECTION'],io),mode==='invalid-ack'?/CREATE_ACK_INVALID/:/CONFIGMAP_READBACK_FAILED/);
+  await assert.rejects(()=>projectionMain(['resume',...flags],f.io),mode==='invalid-ack'?/CREATE_ACK_INVALID/:/MISSING_AFTER_CREATE_INTENT/);
+  assert.equal(f.effects.length,1);assert.equal(f.effects[0].startsWith('configmap/'),true);
+ }
+});

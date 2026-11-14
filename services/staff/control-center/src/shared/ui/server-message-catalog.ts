@@ -789,6 +789,14 @@ export const serverTokenTranslations = {
     "Результат действия интеграции неизвестен",
     "Integration action outcome is unknown",
   ],
+  TELEGRAM_SUBSCRIPTION_CONFIGURED: [
+    "Подписка Telegram настроена",
+    "Telegram subscription configured",
+  ],
+  TELEGRAM_DELIVERY_UPDATED: [
+    "Состояние доставки Telegram обновлено",
+    "Telegram delivery state updated",
+  ],
   INTEGRATION_CONNECTION_CREATED: ["Подключение создано", "Connection created"],
   INTEGRATION_CONNECTION_DELETED: ["Подключение удалено", "Connection deleted"],
   INTEGRATION_CONNECTION_TEST_COMPLETED: [

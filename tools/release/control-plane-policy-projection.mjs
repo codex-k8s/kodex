@@ -124,7 +124,7 @@ export function planCatalogPolicyProjection(deployment,registry,configMaps,{tran
 }
 
 export function projectionMatches(actual,expected){
-  return actual?.kind==="ConfigMap"&&actual.metadata?.name===expected.metadata.name&&actual.metadata.namespace===namespace&&actual.immutable===true&&!actual.metadata.deletionTimestamp&&fingerprint(actual.data)===fingerprint(expected.data)&&actual.metadata.labels?.["kodex.dev/policy-projection-issue"]===expected.metadata.labels?.["kodex.dev/policy-projection-issue"];
+  return actual?.apiVersion==="v1"&&actual.kind==="ConfigMap"&&!actual.binaryData&&actual.metadata?.labels?.["app.kubernetes.io/part-of"]==="kodex"&&actual.metadata?.name===expected.metadata.name&&actual.metadata.namespace===namespace&&actual.immutable===true&&!actual.metadata.deletionTimestamp&&fingerprint(actual.data)===fingerprint(expected.data)&&actual.metadata.labels?.["kodex.dev/policy-projection-issue"]===expected.metadata.labels?.["kodex.dev/policy-projection-issue"];
 }
 
 export function withPrivatePatchFile(patch,apply){
@@ -182,9 +182,15 @@ export function main(argv=process.argv.slice(2),io={}){
   const regenerated=planPolicyProjection(deployment,registry,configMaps);
   requireValue(fingerprint(regenerated)===fingerprint(Object.fromEntries(Object.entries(plan).filter(([k])=>!["source","revision","context","namespaceUID"].includes(k)))),"POLICY_PROJECTION_PLAN_DRIFT");
   const existing=kube(["-n",namespace,"get","configmap",plan.projection.metadata.name,"--ignore-not-found","-o","json"]);
-  if(existing.trim()) requireValue(projectionMatches(JSON.parse(existing),plan.projection),"POLICY_PROJECTION_CONFIGMAP_CONFLICT");
-  else kube(["create","-f","-"],JSON.stringify(plan.projection));
-  requireValue(projectionMatches(get("configmap",plan.projection.metadata.name),plan.projection),"POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED");
+  let assigned;
+  if(existing.trim()) {
+    assigned=JSON.parse(existing);requireValue(projectionMatches(assigned,plan.projection),"POLICY_PROJECTION_CONFIGMAP_CONFLICT");
+  } else {
+    assigned=JSON.parse(kube(["create","-f","-","-o","json"],JSON.stringify(plan.projection)));
+    requireValue(projectionMatches(assigned,plan.projection)&&assigned.metadata.uid,"POLICY_PROJECTION_CREATE_ACK_INVALID");
+  }
+  const readback=get("configmap",plan.projection.metadata.name);
+  requireValue(projectionMatches(readback,plan.projection)&&readback.metadata.uid===assigned.metadata.uid,"POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED");
   withPrivatePatchFile(projectionPatch(deployment,plan),path=>kube(["-n",namespace,"patch","deployment","control-plane","--type=json","--patch-file",path,"-o","name"]));
   const current=get("deployment","control-plane");
   requireValue(current.metadata.uid===plan.deploymentUID&&fingerprint(current.spec)===plan.afterSpecSHA256,"POLICY_PROJECTION_OUTCOME_UNKNOWN");
@@ -244,13 +250,26 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
     };
     let destination=readDestination();
     const ack=journal.events.find(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION');
-    requireValue(!ack||destination?.metadata.uid===ack.uid,'POLICY_PROJECTION_CONFIGMAP_REPLACED');
+    const apiAck=journal.events.findLast(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION_ACK');
+    requireValue((!ack||destination?.metadata.uid===ack.uid)&&(!apiAck||destination?.metadata.uid===apiAck.uid),'POLICY_PROJECTION_CONFIGMAP_REPLACED');
     if(!destination) {
+      requireValue(!journal.events.some(row=>row.status==='INTENT'&&row.operation==='CREATE_PROJECTION'),'POLICY_PROJECTION_MISSING_AFTER_CREATE_INTENT');
       const fresh=readCatalogTarget(profile,options['--context'],get,transitionProfile);verifyCatalogTransition(plan.policyTransition,fresh.transition);
       requireValue(fingerprint(await readCatalogMaintenance(maintenance.planPath,maintenance.evidencePath,kube,maintenance))===fingerprint(maintenance),'POLICY_PROJECTION_MAINTENANCE_DRIFT');
       journal.append({status:'INTENT',operation:'CREATE_PROJECTION'});
-      try{kube(['create','-f','-'],JSON.stringify(plan.projection));}catch{journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION'});}
+      let result;
+      try{result=kube(['create','-f','-','-o','json'],JSON.stringify(plan.projection));}catch{journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION'});}
+      if(result!==undefined){
+        let created;
+        try{created=parseAuthorityPrivateJSON(result);}catch{}
+        if(!projectionMatches(created,plan.projection)||!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(created?.metadata?.uid??'')){
+          journal.append({status:'UNKNOWN',operation:'CREATE_PROJECTION_ACK_REJECTED'});throw Error('POLICY_PROJECTION_CREATE_ACK_INVALID');
+        }
+        journal.append({status:'ACK',operation:'CREATE_PROJECTION_ACK',uid:created.metadata.uid});
+      }
       destination=readDestination();
+      const assigned=journal.events.findLast(row=>row.status==='ACK'&&row.operation==='CREATE_PROJECTION_ACK');
+      requireValue(!assigned||destination?.metadata.uid===assigned.uid,'POLICY_PROJECTION_CONFIGMAP_REPLACED');
     }
     requireValue(projectionMatches(destination,plan.projection)&&destination.metadata.uid,'POLICY_PROJECTION_CONFIGMAP_READBACK_FAILED');
     journal.append({status:'ACK',operation:'CREATE_PROJECTION',uid:destination.metadata.uid});

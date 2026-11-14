@@ -167,18 +167,23 @@ export function openCatalogProjectionJournal(path,plan,resume=false) {
 }
 
 export function validateCatalogProjectionEvents(events,plan) {
-  const hash=fingerprint(plan),acknowledged=new Map();
+  const hash=fingerprint(plan),acknowledged=new Map(),intents=new Set();
   requireValue(events.length>0&&events.length<16384&&events[0].status==='INTENT'&&events[0].operation==='APPLY','POLICY_PROJECTION_JOURNAL_DRIFT');
   for(const event of events) {
+    requireValue(event.operation!=='CREATE_PROJECTION_ACK_REJECTED','POLICY_PROJECTION_CREATE_ACK_INVALID');
     requireValue(event.planSHA256===hash&&['INTENT','ACK','UNKNOWN'].includes(event.status)&&
-      ['APPLY','RESUME','CREATE_PROJECTION','CP_POINTER_CAS'].includes(event.operation)&&
+      ['APPLY','RESUME','CREATE_PROJECTION','CREATE_PROJECTION_ACK','CP_POINTER_CAS'].includes(event.operation)&&
       Object.keys(event).every(key=>['planSHA256','status','operation','uid','at'].includes(key))&&
       typeof event.at==='string'&&Number.isFinite(Date.parse(event.at))&&new Date(event.at).toISOString()===event.at,'POLICY_PROJECTION_JOURNAL_DRIFT');
+    if(event.status==='INTENT')intents.add(event.operation);
     if(['APPLY','RESUME'].includes(event.operation))requireValue(event.status==='INTENT'&&!Object.hasOwn(event,'uid'),'POLICY_PROJECTION_JOURNAL_DRIFT');
     else if(event.status==='ACK') {
       requireValue(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(event.uid??'')&&
         (!acknowledged.has(event.operation)||acknowledged.get(event.operation)===event.uid)&&
         (event.operation!=='CP_POINTER_CAS'||acknowledged.has('CREATE_PROJECTION')),'POLICY_PROJECTION_JOURNAL_DRIFT');
+      if(event.operation==='CREATE_PROJECTION_ACK')requireValue(intents.has('CREATE_PROJECTION'),'POLICY_PROJECTION_JOURNAL_DRIFT');
+      if(event.operation==='CREATE_PROJECTION'&&acknowledged.has('CREATE_PROJECTION_ACK'))
+        requireValue(event.uid===acknowledged.get('CREATE_PROJECTION_ACK'),'POLICY_PROJECTION_CONFIGMAP_REPLACED');
       acknowledged.set(event.operation,event.uid);
     } else requireValue(!Object.hasOwn(event,'uid'),'POLICY_PROJECTION_JOURNAL_DRIFT');
   }

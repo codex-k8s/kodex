@@ -302,6 +302,10 @@ SCHEDULE_OCCURRENCE_MATERIALIZED:
   other: Scheduled run created
 SCHEDULE_OCCURRENCE_COMPLETED:
   other: Scheduled run completed
+TELEGRAM_SUBSCRIPTION_CONFIGURED:
+  other: Telegram subscription configured
+TELEGRAM_DELIVERY_UPDATED:
+  other: Telegram delivery state updated
 INTEGRATION_CONNECTION_CREATED:
   other: Integration connection created
 INTEGRATION_CONNECTION_UPDATED:
