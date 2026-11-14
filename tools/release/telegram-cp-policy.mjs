@@ -40,9 +40,9 @@ export function readTelegramStagedPolicyMigration(paths,scope,{inspect}={}){
  const migration=readAuthorityPrivateJSON(paths.planPath);
  const inspection=(inspect??(()=>parseAuthorityPrivateJSON(execFileSync(process.execPath,
   [fileURLToPath(new URL('./control-plane-migration.mjs',import.meta.url)),'inspect','--context',scope.context,'--kubeconfig',scope.kubeconfig,
-   '--profile',migration.profile,'--plan',paths.planPath,'--evidence',paths.evidencePath,...(paths.repairPlanPath?['--telegram-port-repair-plan',paths.repairPlanPath]:[])],
+   '--profile',migration.profile,'--plan',paths.planPath,'--evidence',paths.evidencePath,...(paths.repairPlanPath?['--telegram-port-repair-plan',paths.repairPlanPath,...(paths.repairExecutorRevision?['--telegram-port-repair-executor-sha',paths.repairExecutorRevision]:[])]:[])],
   {encoding:'utf8',timeout:180000,maxBuffer:8<<20,stdio:['ignore','pipe','pipe']}))))();
- const repair=paths.repairPlanPath?readTelegramPortRepair(paths.repairPlanPath,{migration}):undefined;
+ const repair=paths.repairPlanPath?readTelegramPortRepair(paths.repairPlanPath,{migration,executorRevision:paths.repairExecutorRevision}):undefined;
  fail(inspection.telegramPortRepairSHA256===(repair?.sha256),telegramPortRepairCodes.pinRequired);
  return {...paths,proof:telegramStagedPolicyProof(migration,events(paths.evidencePath),inspection,scope)};
 }
@@ -56,11 +56,11 @@ export function telegramProjectedCPSpec(before,projection){
 
 // Только ACK собственного projection journal и текущий API object разрешают
 // новый CP spec. Реплики меняет исключительно исходный migration lifecycle.
-export function readTelegramCPProjection({migration,planPath,evidencePath,repairPlanPath},kube){
+export function readTelegramCPProjection({migration,planPath,evidencePath,repairPlanPath,repairExecutorRevision},kube){
  fail(planPath&&evidencePath,'TELEGRAM_CP_PROJECTION_REQUIRED');
  const projection=readAuthorityPrivateJSON(planPath),rows=events(evidencePath),cp=migration.componentHandoff.components.find(c=>c.name==='control-plane');
  const proof=projection.telegramStage?.proof;
- const repair=repairPlanPath?readTelegramPortRepair(repairPlanPath,{migration}):undefined;
+ const repair=repairPlanPath?readTelegramPortRepair(repairPlanPath,{migration,executorRevision:repairExecutorRevision}):undefined;
  fail(proof?.telegramPortRepairSHA256===repair?.sha256&&(!repair||projection.sourceCompatibility?.telegramPortRepair?.planSHA256===repair.sha256),telegramPortRepairCodes.pinRequired);
  fail(migration.componentHandoff.introducedReadiness===telegramStagedPolicyProtocol&&projection.version===2&&projection.kind==='CP_CATALOG_POLICY_PROJECTION'&&
   projection.policyTransition?.profile===telegramPolicyTransition&&projection.source===migration.source.path&&projection.revision===migration.source.revision&&

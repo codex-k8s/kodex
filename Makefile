@@ -700,3 +700,11 @@ test-telegram-port-repair:
 .PHONY: test-telegram-native-egress
 test-telegram-native-egress: check-go-toolchain
 	@timeout 360s bash scripts/tests/telegram-native-egress-test.sh
+
+.PHONY: test-telegram-authority-owner-native
+test-telegram-authority-owner-native:
+	@timeout 360s node tools/release/telegram-authority-owner.native.mjs
+
+.PHONY: test-telegram-authority-owner
+test-telegram-authority-owner:
+	@timeout 150s node --test tools/release/telegram-authority-owner.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/telegram-port-repair.test.mjs tools/release/telegram-executor-source.test.mjs
