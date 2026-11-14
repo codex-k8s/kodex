@@ -8,9 +8,9 @@ var __commonJS = (cb, mod) => function __require() {
   }
 };
 
-// ../../../../../kodex/services/staff/control-center/node_modules/ajv/dist/runtime/ucs2length.js
+// node_modules/ajv/dist/runtime/ucs2length.js
 var require_ucs2length = __commonJS({
-  "../../../../../kodex/services/staff/control-center/node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
+  "node_modules/ajv/dist/runtime/ucs2length.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function ucs2length(str) {
@@ -34,9 +34,9 @@ var require_ucs2length = __commonJS({
   }
 });
 
-// ../../../../../kodex/services/staff/control-center/node_modules/fast-deep-equal/index.js
+// node_modules/fast-deep-equal/index.js
 var require_fast_deep_equal = __commonJS({
-  "../../../../../kodex/services/staff/control-center/node_modules/fast-deep-equal/index.js"(exports, module) {
+  "node_modules/fast-deep-equal/index.js"(exports, module) {
     "use strict";
     module.exports = function equal(a, b) {
       if (a === b) return true;
@@ -69,9 +69,9 @@ var require_fast_deep_equal = __commonJS({
   }
 });
 
-// ../../../../../kodex/services/staff/control-center/node_modules/ajv/dist/runtime/equal.js
+// node_modules/ajv/dist/runtime/equal.js
 var require_equal = __commonJS({
-  "../../../../../kodex/services/staff/control-center/node_modules/ajv/dist/runtime/equal.js"(exports) {
+  "node_modules/ajv/dist/runtime/equal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var equal = require_fast_deep_equal();
@@ -80,9 +80,9 @@ var require_equal = __commonJS({
   }
 });
 
-// ../../../../../kodex/services/staff/control-center/node_modules/ajv-formats/dist/formats.js
+// node_modules/ajv-formats/dist/formats.js
 var require_formats = __commonJS({
-  "../../../../../kodex/services/staff/control-center/node_modules/ajv-formats/dist/formats.js"(exports) {
+  "node_modules/ajv-formats/dist/formats.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.formatNames = exports.fastFormats = exports.fullFormats = void 0;
@@ -250,7 +250,7 @@ var require_formats = __commonJS({
 // integration-package.js
 var validate = validate20;
 var integration_package_default = validate20;
-var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "enum": ["SHIPPED", "UI", "GIT"] } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "HTTPS_JSON_READ", "OPENAPI_MCP", "MATTERMOST_INTERACTION", "CONTEXT7", "SSH_COMPOSE"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field", "type": "object", "properties": { "allowEmpty": { "const": false } } } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "HTTPS_PATH", "EMAIL", "HOST", "IDENTIFIER", "PUBLIC_IP"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE", "SSH_PINNED"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITHUB_SCOPE", "GITLAB_PROJECT", "GITLAB_SCOPE", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL", "HTTPS_RESOURCE", "SSH_TARGET"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "allOf": [{ "if": { "required": ["leaseProfile"] }, "then": { "properties": { "maxAttempts": { "const": 1 }, "idempotency": { "const": "EFFECT_KEY" } } }, "else": { "properties": { "timeoutSeconds": { "type": "integer", "maximum": 120 } } } }], "properties": { "leaseProfile": { "const": "SSH_COMPOSE_V1" }, "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE", "ONE_ATTEMPT"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 600 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "allowedApprovalPolicies", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"] }, "allowedApprovalPolicies": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"] } }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "approvalScope": { "type": "object", "additionalProperties": false, "required": ["name", "requiredInputPaths"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 128 }, "allowedLifetimes": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "enum": ["ROOT_RUN", "INITIATOR_RESOURCE"] } }, "requiredInputPaths": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "minLength": 2, "maxLength": 256, "pattern": "^/" } }, "limits": { "type": "object", "additionalProperties": false, "required": ["durationSeconds", "maxEffects"], "properties": { "durationSeconds": { "type": "integer", "minimum": 1, "maximum": 604800 }, "maxEffects": { "type": "integer", "minimum": 1, "maximum": 1e4 } } } } }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" }, "openapi": { "type": "object", "additionalProperties": false, "required": ["operationId", "method", "path", "authScheme", "inputSchema"], "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 128 }, "sourceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "serverOrigin": { "type": "string", "format": "uri", "maxLength": 2048 }, "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] }, "path": { "type": "string", "minLength": 1, "maxLength": 512 }, "authScheme": { "enum": ["NONE", "BEARER", "API_KEY_HEADER"] }, "authHeader": { "type": "string", "maxLength": 64 }, "idempotencyHeader": { "type": "string", "maxLength": 64 }, "inputSchema": { "type": "object", "additionalProperties": true } } } } } } };
+var schema31 = { "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "https://kodex.dev/contracts/integrations/v1/integration-package.schema.json", "title": "Kodex Integration Package v1", "type": "object", "additionalProperties": false, "required": ["apiVersion", "kind", "metadata", "spec"], "properties": { "apiVersion": { "const": "integrations.kodex.io/v1" }, "kind": { "const": "IntegrationPackage" }, "metadata": { "type": "object", "additionalProperties": false, "required": ["key", "version", "origin"], "properties": { "key": { "$ref": "#/$defs/key" }, "version": { "type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$", "maxLength": 32 }, "origin": { "enum": ["SHIPPED", "UI", "GIT"] } } }, "spec": { "type": "object", "additionalProperties": false, "required": ["name", "description", "category", "adapter", "adapterOwner", "executionRoute", "readiness", "configurationFields", "networkDestinations", "healthCheck", "capabilities"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "category": { "$ref": "#/$defs/key" }, "adapter": { "enum": ["SYNTHETIC_HTTP", "GITHUB", "GITLAB", "JIRA", "CONFLUENCE", "EMAIL_HTTPS", "HTTPS_JSON_READ", "OPENAPI_MCP", "MATTERMOST_INTERACTION", "CONTEXT7", "SENTRY", "OBSERVABILITY", "SSH_COMPOSE"] }, "adapterOwner": { "enum": ["integration-gateway", "interaction-gateway"] }, "executionRoute": { "enum": ["MANAGED_MCP", "INTERACTION"] }, "readiness": { "enum": ["READY", "NOT_READY"] }, "credential": { "$ref": "#/$defs/credential" }, "configurationFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field", "type": "object", "properties": { "allowEmpty": { "const": false } } } }, "networkDestinations": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/networkDestination" } }, "healthCheck": { "$ref": "#/$defs/healthCheck" }, "capabilities": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/capability" } } } } }, "$defs": { "key": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$", "maxLength": 120 }, "field": { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "label": { "type": "string", "maxLength": 120 }, "help": { "type": "string", "maxLength": 500 }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "HTTPS_PATH", "EMAIL", "HOST", "IDENTIFIER", "PUBLIC_IP"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] }, "credential": { "type": "object", "additionalProperties": false, "required": ["secretKey", "kind"], "properties": { "secretKey": { "$ref": "#/$defs/key" }, "kind": { "enum": ["TOKEN", "PASSWORD"] } } }, "networkDestination": { "type": "object", "additionalProperties": false, "required": ["key", "source", "port", "tls"], "properties": { "key": { "$ref": "#/$defs/key" }, "source": { "enum": ["STATIC", "CONFIGURATION"] }, "hostname": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9.\\-]{0,251}[a-z0-9])?$", "maxLength": 253 }, "configurationField": { "$ref": "#/$defs/key" }, "port": { "type": "integer", "minimum": 1, "maximum": 65535 }, "tls": { "enum": ["REQUIRED", "NONE", "SSH_PINNED"] } }, "allOf": [{ "if": { "properties": { "source": { "const": "STATIC" } } }, "then": { "required": ["hostname"], "not": { "required": ["configurationField"] } } }, { "if": { "properties": { "source": { "const": "CONFIGURATION" } } }, "then": { "required": ["configurationField"], "not": { "required": ["hostname"] } } }] }, "healthCheck": { "type": "object", "additionalProperties": false, "required": ["operation", "timeoutSeconds", "maxAttempts"], "properties": { "operation": { "$ref": "#/$defs/key" }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 60 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 3 } } }, "resourceScope": { "type": "object", "additionalProperties": false, "required": ["kind", "connectionFields"], "properties": { "kind": { "enum": ["SYNTHETIC_JOURNAL", "GITHUB_REPOSITORY", "GITHUB_SCOPE", "GITLAB_PROJECT", "GITLAB_SCOPE", "JIRA_PROJECT", "CONFLUENCE_SPACE", "EMAIL_SENDER", "MATTERMOST_CHANNEL", "HTTPS_RESOURCE", "SSH_TARGET"] }, "connectionFields": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/key" } } } }, "execution": { "type": "object", "additionalProperties": false, "required": ["idempotency", "timeoutSeconds", "maxAttempts", "retryBackoffMilliseconds"], "allOf": [{ "if": { "required": ["leaseProfile"] }, "then": { "properties": { "maxAttempts": { "const": 1 }, "idempotency": { "const": "EFFECT_KEY" } } }, "else": { "properties": { "timeoutSeconds": { "type": "integer", "maximum": 120 } } } }], "properties": { "leaseProfile": { "const": "SSH_COMPOSE_V1" }, "idempotency": { "enum": ["READ_ONLY", "EFFECT_KEY", "PROVIDER_NATIVE", "ONE_ATTEMPT"] }, "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 600 }, "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 4 }, "retryBackoffMilliseconds": { "type": "integer", "minimum": 50, "maximum": 5e3 } } }, "capability": { "type": "object", "additionalProperties": false, "required": ["key", "name", "description", "operation", "risk", "approvalPolicy", "allowedApprovalPolicies", "resourceScope", "inputFields", "outputFields", "execution"], "properties": { "key": { "$ref": "#/$defs/key" }, "name": { "type": "string", "minLength": 1, "maxLength": 120 }, "description": { "type": "string", "minLength": 1, "maxLength": 500 }, "operation": { "$ref": "#/$defs/key" }, "risk": { "enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"] }, "approvalPolicy": { "enum": ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"] }, "allowedApprovalPolicies": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"] } }, "resourceScope": { "$ref": "#/$defs/resourceScope" }, "approvalScope": { "type": "object", "additionalProperties": false, "required": ["name", "requiredInputPaths"], "properties": { "name": { "type": "string", "minLength": 1, "maxLength": 128 }, "allowedLifetimes": { "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": { "enum": ["ROOT_RUN", "INITIATOR_RESOURCE"] } }, "requiredInputPaths": { "type": "array", "maxItems": 16, "uniqueItems": true, "items": { "type": "string", "minLength": 2, "maxLength": 256, "pattern": "^/" } }, "limits": { "type": "object", "additionalProperties": false, "required": ["durationSeconds", "maxEffects"], "properties": { "durationSeconds": { "type": "integer", "minimum": 1, "maximum": 604800 }, "maxEffects": { "type": "integer", "minimum": 1, "maximum": 1e4 } } } } }, "inputFields": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "outputFields": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/field" } }, "execution": { "$ref": "#/$defs/execution" }, "openapi": { "type": "object", "additionalProperties": false, "required": ["operationId", "method", "path", "authScheme", "inputSchema"], "properties": { "operationId": { "type": "string", "minLength": 1, "maxLength": 128 }, "sourceDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "serverOrigin": { "type": "string", "format": "uri", "maxLength": 2048 }, "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] }, "path": { "type": "string", "minLength": 1, "maxLength": 512 }, "authScheme": { "enum": ["NONE", "BEARER", "API_KEY_HEADER"] }, "authHeader": { "type": "string", "maxLength": 64 }, "idempotencyHeader": { "type": "string", "maxLength": 64 }, "inputSchema": { "type": "object", "additionalProperties": true } } } } } } };
 var func1 = require_ucs2length().default;
 var func3 = Object.prototype.hasOwnProperty;
 var pattern4 = new RegExp("^[a-z][a-z0-9]*(?:[._\\-][a-z0-9]+)*$", "u");
@@ -352,7 +352,7 @@ function validate21(data, { instancePath = "", parentData, parentDataProperty, r
   return errors === 0;
 }
 validate21.evaluated = { "props": true, "dynamicProps": false, "dynamicItems": false };
-var schema36 = { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "HTTPS_PATH", "EMAIL", "HOST", "IDENTIFIER", "PUBLIC_IP"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] };
+var schema36 = { "type": "object", "additionalProperties": false, "required": ["key", "type", "required"], "properties": { "key": { "$ref": "#/$defs/key" }, "label": { "type": "string", "maxLength": 120 }, "help": { "type": "string", "maxLength": 500 }, "type": { "enum": ["STRING", "INTEGER", "BOOLEAN"] }, "format": { "enum": ["PLAIN", "HTTPS_ORIGIN", "HTTPS_URL", "HTTPS_PATH", "EMAIL", "HOST", "IDENTIFIER", "PUBLIC_IP"] }, "required": { "type": "boolean" }, "maximumLength": { "type": "integer", "minimum": 1, "maximum": 349528 }, "allowEmpty": { "type": "boolean", "description": "\u041F\u0443\u0441\u0442\u0430\u044F \u0441\u0442\u0440\u043E\u043A\u0430 \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0432 PLAIN input/output, \u043D\u0435 \u0432 \u043A\u043E\u043D\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438 \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u044F." }, "minimum": { "type": "integer", "minimum": 0 }, "maximum": { "type": "integer", "minimum": 0 }, "allowedValues": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 120 } } }, "allOf": [{ "if": { "properties": { "allowEmpty": { "const": true } }, "required": ["allowEmpty"] }, "then": { "properties": { "type": { "const": "STRING" }, "format": { "const": "PLAIN" } }, "required": ["format"], "not": { "required": ["allowedValues"] } } }] };
 function validate23(data, { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {}) {
   let vErrors = null;
   let errors = 0;
@@ -555,22 +555,20 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.type !== void 0) {
-      let data4 = data.type;
-      if (!(data4 === "STRING" || data4 === "INTEGER" || data4 === "BOOLEAN")) {
-        const err15 = { instancePath: instancePath + "/type", schemaPath: "#/properties/type/enum", keyword: "enum", params: { allowedValues: schema36.properties.type.enum }, message: "must be equal to one of the allowed values" };
-        if (vErrors === null) {
-          vErrors = [err15];
-        } else {
-          vErrors.push(err15);
+    if (data.label !== void 0) {
+      let data4 = data.label;
+      if (typeof data4 === "string") {
+        if (func1(data4) > 120) {
+          const err15 = { instancePath: instancePath + "/label", schemaPath: "#/properties/label/maxLength", keyword: "maxLength", params: { limit: 120 }, message: "must NOT have more than 120 characters" };
+          if (vErrors === null) {
+            vErrors = [err15];
+          } else {
+            vErrors.push(err15);
+          }
+          errors++;
         }
-        errors++;
-      }
-    }
-    if (data.format !== void 0) {
-      let data5 = data.format;
-      if (!(data5 === "PLAIN" || data5 === "HTTPS_ORIGIN" || data5 === "HTTPS_URL" || data5 === "HTTPS_PATH" || data5 === "EMAIL" || data5 === "HOST" || data5 === "IDENTIFIER" || data5 === "PUBLIC_IP")) {
-        const err16 = { instancePath: instancePath + "/format", schemaPath: "#/properties/format/enum", keyword: "enum", params: { allowedValues: schema36.properties.format.enum }, message: "must be equal to one of the allowed values" };
+      } else {
+        const err16 = { instancePath: instancePath + "/label", schemaPath: "#/properties/label/type", keyword: "type", params: { type: "string" }, message: "must be string" };
         if (vErrors === null) {
           vErrors = [err16];
         } else {
@@ -579,21 +577,20 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.required !== void 0) {
-      if (typeof data.required !== "boolean") {
-        const err17 = { instancePath: instancePath + "/required", schemaPath: "#/properties/required/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
-        if (vErrors === null) {
-          vErrors = [err17];
-        } else {
-          vErrors.push(err17);
+    if (data.help !== void 0) {
+      let data5 = data.help;
+      if (typeof data5 === "string") {
+        if (func1(data5) > 500) {
+          const err17 = { instancePath: instancePath + "/help", schemaPath: "#/properties/help/maxLength", keyword: "maxLength", params: { limit: 500 }, message: "must NOT have more than 500 characters" };
+          if (vErrors === null) {
+            vErrors = [err17];
+          } else {
+            vErrors.push(err17);
+          }
+          errors++;
         }
-        errors++;
-      }
-    }
-    if (data.maximumLength !== void 0) {
-      let data7 = data.maximumLength;
-      if (!(typeof data7 == "number" && (!(data7 % 1) && !isNaN(data7)) && isFinite(data7))) {
-        const err18 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+      } else {
+        const err18 = { instancePath: instancePath + "/help", schemaPath: "#/properties/help/type", keyword: "type", params: { type: "string" }, message: "must be string" };
         if (vErrors === null) {
           vErrors = [err18];
         } else {
@@ -601,30 +598,34 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         }
         errors++;
       }
-      if (typeof data7 == "number" && isFinite(data7)) {
-        if (data7 > 349528 || isNaN(data7)) {
-          const err19 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/maximum", keyword: "maximum", params: { comparison: "<=", limit: 349528 }, message: "must be <= 349528" };
-          if (vErrors === null) {
-            vErrors = [err19];
-          } else {
-            vErrors.push(err19);
-          }
-          errors++;
+    }
+    if (data.type !== void 0) {
+      let data6 = data.type;
+      if (!(data6 === "STRING" || data6 === "INTEGER" || data6 === "BOOLEAN")) {
+        const err19 = { instancePath: instancePath + "/type", schemaPath: "#/properties/type/enum", keyword: "enum", params: { allowedValues: schema36.properties.type.enum }, message: "must be equal to one of the allowed values" };
+        if (vErrors === null) {
+          vErrors = [err19];
+        } else {
+          vErrors.push(err19);
         }
-        if (data7 < 1 || isNaN(data7)) {
-          const err20 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
-          if (vErrors === null) {
-            vErrors = [err20];
-          } else {
-            vErrors.push(err20);
-          }
-          errors++;
-        }
+        errors++;
       }
     }
-    if (data.allowEmpty !== void 0) {
-      if (typeof data.allowEmpty !== "boolean") {
-        const err21 = { instancePath: instancePath + "/allowEmpty", schemaPath: "#/properties/allowEmpty/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
+    if (data.format !== void 0) {
+      let data7 = data.format;
+      if (!(data7 === "PLAIN" || data7 === "HTTPS_ORIGIN" || data7 === "HTTPS_URL" || data7 === "HTTPS_PATH" || data7 === "EMAIL" || data7 === "HOST" || data7 === "IDENTIFIER" || data7 === "PUBLIC_IP")) {
+        const err20 = { instancePath: instancePath + "/format", schemaPath: "#/properties/format/enum", keyword: "enum", params: { allowedValues: schema36.properties.format.enum }, message: "must be equal to one of the allowed values" };
+        if (vErrors === null) {
+          vErrors = [err20];
+        } else {
+          vErrors.push(err20);
+        }
+        errors++;
+      }
+    }
+    if (data.required !== void 0) {
+      if (typeof data.required !== "boolean") {
+        const err21 = { instancePath: instancePath + "/required", schemaPath: "#/properties/required/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
         if (vErrors === null) {
           vErrors = [err21];
         } else {
@@ -633,10 +634,10 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
     }
-    if (data.minimum !== void 0) {
-      let data9 = data.minimum;
+    if (data.maximumLength !== void 0) {
+      let data9 = data.maximumLength;
       if (!(typeof data9 == "number" && (!(data9 % 1) && !isNaN(data9)) && isFinite(data9))) {
-        const err22 = { instancePath: instancePath + "/minimum", schemaPath: "#/properties/minimum/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+        const err22 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
         if (vErrors === null) {
           vErrors = [err22];
         } else {
@@ -645,8 +646,8 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
         errors++;
       }
       if (typeof data9 == "number" && isFinite(data9)) {
-        if (data9 < 0 || isNaN(data9)) {
-          const err23 = { instancePath: instancePath + "/minimum", schemaPath: "#/properties/minimum/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+        if (data9 > 349528 || isNaN(data9)) {
+          const err23 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/maximum", keyword: "maximum", params: { comparison: "<=", limit: 349528 }, message: "must be <= 349528" };
           if (vErrors === null) {
             vErrors = [err23];
           } else {
@@ -654,45 +655,42 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           }
           errors++;
         }
+        if (data9 < 1 || isNaN(data9)) {
+          const err24 = { instancePath: instancePath + "/maximumLength", schemaPath: "#/properties/maximumLength/minimum", keyword: "minimum", params: { comparison: ">=", limit: 1 }, message: "must be >= 1" };
+          if (vErrors === null) {
+            vErrors = [err24];
+          } else {
+            vErrors.push(err24);
+          }
+          errors++;
+        }
       }
     }
-    if (data.maximum !== void 0) {
-      let data10 = data.maximum;
-      if (!(typeof data10 == "number" && (!(data10 % 1) && !isNaN(data10)) && isFinite(data10))) {
-        const err24 = { instancePath: instancePath + "/maximum", schemaPath: "#/properties/maximum/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+    if (data.allowEmpty !== void 0) {
+      if (typeof data.allowEmpty !== "boolean") {
+        const err25 = { instancePath: instancePath + "/allowEmpty", schemaPath: "#/properties/allowEmpty/type", keyword: "type", params: { type: "boolean" }, message: "must be boolean" };
         if (vErrors === null) {
-          vErrors = [err24];
+          vErrors = [err25];
         } else {
-          vErrors.push(err24);
+          vErrors.push(err25);
         }
         errors++;
       }
-      if (typeof data10 == "number" && isFinite(data10)) {
-        if (data10 < 0 || isNaN(data10)) {
-          const err25 = { instancePath: instancePath + "/maximum", schemaPath: "#/properties/maximum/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
-          if (vErrors === null) {
-            vErrors = [err25];
-          } else {
-            vErrors.push(err25);
-          }
-          errors++;
-        }
-      }
     }
-    if (data.allowedValues !== void 0) {
-      let data11 = data.allowedValues;
-      if (Array.isArray(data11)) {
-        if (data11.length > 32) {
-          const err26 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/maxItems", keyword: "maxItems", params: { limit: 32 }, message: "must NOT have more than 32 items" };
-          if (vErrors === null) {
-            vErrors = [err26];
-          } else {
-            vErrors.push(err26);
-          }
-          errors++;
+    if (data.minimum !== void 0) {
+      let data11 = data.minimum;
+      if (!(typeof data11 == "number" && (!(data11 % 1) && !isNaN(data11)) && isFinite(data11))) {
+        const err26 = { instancePath: instancePath + "/minimum", schemaPath: "#/properties/minimum/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+        if (vErrors === null) {
+          vErrors = [err26];
+        } else {
+          vErrors.push(err26);
         }
-        if (data11.length < 1) {
-          const err27 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+        errors++;
+      }
+      if (typeof data11 == "number" && isFinite(data11)) {
+        if (data11 < 0 || isNaN(data11)) {
+          const err27 = { instancePath: instancePath + "/minimum", schemaPath: "#/properties/minimum/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
           if (vErrors === null) {
             vErrors = [err27];
           } else {
@@ -700,54 +698,100 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           }
           errors++;
         }
-        const len0 = data11.length;
+      }
+    }
+    if (data.maximum !== void 0) {
+      let data12 = data.maximum;
+      if (!(typeof data12 == "number" && (!(data12 % 1) && !isNaN(data12)) && isFinite(data12))) {
+        const err28 = { instancePath: instancePath + "/maximum", schemaPath: "#/properties/maximum/type", keyword: "type", params: { type: "integer" }, message: "must be integer" };
+        if (vErrors === null) {
+          vErrors = [err28];
+        } else {
+          vErrors.push(err28);
+        }
+        errors++;
+      }
+      if (typeof data12 == "number" && isFinite(data12)) {
+        if (data12 < 0 || isNaN(data12)) {
+          const err29 = { instancePath: instancePath + "/maximum", schemaPath: "#/properties/maximum/minimum", keyword: "minimum", params: { comparison: ">=", limit: 0 }, message: "must be >= 0" };
+          if (vErrors === null) {
+            vErrors = [err29];
+          } else {
+            vErrors.push(err29);
+          }
+          errors++;
+        }
+      }
+    }
+    if (data.allowedValues !== void 0) {
+      let data13 = data.allowedValues;
+      if (Array.isArray(data13)) {
+        if (data13.length > 32) {
+          const err30 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/maxItems", keyword: "maxItems", params: { limit: 32 }, message: "must NOT have more than 32 items" };
+          if (vErrors === null) {
+            vErrors = [err30];
+          } else {
+            vErrors.push(err30);
+          }
+          errors++;
+        }
+        if (data13.length < 1) {
+          const err31 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/minItems", keyword: "minItems", params: { limit: 1 }, message: "must NOT have fewer than 1 items" };
+          if (vErrors === null) {
+            vErrors = [err31];
+          } else {
+            vErrors.push(err31);
+          }
+          errors++;
+        }
+        const len0 = data13.length;
         for (let i0 = 0; i0 < len0; i0++) {
-          let data12 = data11[i0];
-          if (typeof data12 === "string") {
-            if (func1(data12) > 120) {
-              const err28 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/maxLength", keyword: "maxLength", params: { limit: 120 }, message: "must NOT have more than 120 characters" };
+          let data14 = data13[i0];
+          if (typeof data14 === "string") {
+            if (func1(data14) > 120) {
+              const err32 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/maxLength", keyword: "maxLength", params: { limit: 120 }, message: "must NOT have more than 120 characters" };
               if (vErrors === null) {
-                vErrors = [err28];
+                vErrors = [err32];
               } else {
-                vErrors.push(err28);
+                vErrors.push(err32);
               }
               errors++;
             }
-            if (func1(data12) < 1) {
-              const err29 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
+            if (func1(data14) < 1) {
+              const err33 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/minLength", keyword: "minLength", params: { limit: 1 }, message: "must NOT have fewer than 1 characters" };
               if (vErrors === null) {
-                vErrors = [err29];
+                vErrors = [err33];
               } else {
-                vErrors.push(err29);
+                vErrors.push(err33);
               }
               errors++;
             }
           } else {
-            const err30 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
+            const err34 = { instancePath: instancePath + "/allowedValues/" + i0, schemaPath: "#/properties/allowedValues/items/type", keyword: "type", params: { type: "string" }, message: "must be string" };
             if (vErrors === null) {
-              vErrors = [err30];
+              vErrors = [err34];
             } else {
-              vErrors.push(err30);
+              vErrors.push(err34);
             }
             errors++;
           }
         }
-        let i1 = data11.length;
+        let i1 = data13.length;
         let j0;
         if (i1 > 1) {
           const indices0 = {};
           for (; i1--; ) {
-            let item0 = data11[i1];
+            let item0 = data13[i1];
             if (typeof item0 !== "string") {
               continue;
             }
             if (typeof indices0[item0] == "number") {
               j0 = indices0[item0];
-              const err31 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/uniqueItems", keyword: "uniqueItems", params: { i: i1, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i1 + " are identical)" };
+              const err35 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/uniqueItems", keyword: "uniqueItems", params: { i: i1, j: j0 }, message: "must NOT have duplicate items (items ## " + j0 + " and " + i1 + " are identical)" };
               if (vErrors === null) {
-                vErrors = [err31];
+                vErrors = [err35];
               } else {
-                vErrors.push(err31);
+                vErrors.push(err35);
               }
               errors++;
               break;
@@ -756,21 +800,21 @@ function validate23(data, { instancePath = "", parentData, parentDataProperty, r
           }
         }
       } else {
-        const err32 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/type", keyword: "type", params: { type: "array" }, message: "must be array" };
+        const err36 = { instancePath: instancePath + "/allowedValues", schemaPath: "#/properties/allowedValues/type", keyword: "type", params: { type: "array" }, message: "must be array" };
         if (vErrors === null) {
-          vErrors = [err32];
+          vErrors = [err36];
         } else {
-          vErrors.push(err32);
+          vErrors.push(err36);
         }
         errors++;
       }
     }
   } else {
-    const err33 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
+    const err37 = { instancePath, schemaPath: "#/type", keyword: "type", params: { type: "object" }, message: "must be object" };
     if (vErrors === null) {
-      vErrors = [err33];
+      vErrors = [err37];
     } else {
-      vErrors.push(err33);
+      vErrors.push(err37);
     }
     errors++;
   }
@@ -3183,7 +3227,7 @@ function validate20(data, { instancePath = "", parentData, parentDataProperty, r
         }
         if (data6.adapter !== void 0) {
           let data10 = data6.adapter;
-          if (!(data10 === "SYNTHETIC_HTTP" || data10 === "GITHUB" || data10 === "GITLAB" || data10 === "JIRA" || data10 === "CONFLUENCE" || data10 === "EMAIL_HTTPS" || data10 === "HTTPS_JSON_READ" || data10 === "OPENAPI_MCP" || data10 === "MATTERMOST_INTERACTION" || data10 === "CONTEXT7" || data10 === "SSH_COMPOSE")) {
+          if (!(data10 === "SYNTHETIC_HTTP" || data10 === "GITHUB" || data10 === "GITLAB" || data10 === "JIRA" || data10 === "CONFLUENCE" || data10 === "EMAIL_HTTPS" || data10 === "HTTPS_JSON_READ" || data10 === "OPENAPI_MCP" || data10 === "MATTERMOST_INTERACTION" || data10 === "CONTEXT7" || data10 === "SENTRY" || data10 === "OBSERVABILITY" || data10 === "SSH_COMPOSE")) {
             const err40 = { instancePath: instancePath + "/spec/adapter", schemaPath: "#/properties/spec/properties/adapter/enum", keyword: "enum", params: { allowedValues: schema31.properties.spec.properties.adapter.enum }, message: "must be equal to one of the allowed values" };
             if (vErrors === null) {
               vErrors = [err40];

@@ -262,15 +262,16 @@ operation/method/path/EACH tuple; generic transport/input её не получа
 ## Совместимый официальный parser stack
 
 PromQL0.314.0 сохранён. Loki parser library3.6.17 выбран вместо широкого MVS
-обновления от runtime-module3.6.21/3.7.10. Все15 production syntax source files
-library3.6.17 byte-identical3.6.21; runtime HTTP/ruler qualification закреплена
+обновления от runtime-module3.6.21/3.7.10. Все15 production syntax source files и все126 production Go files
+18 фактически импортированных Loki packages library3.6.17 byte-identical3.6.21; runtime HTTP/ruler qualification закреплена
 отдельно на3.6.21. Официальный Grafana memberlist replacement повторяет
 upstream go.mod; своего fork/vendor/parser нет. Обязательны исходный source
 hash verifier и whole-affected Go baseline; версия библиотеки сама по себе не
 объявляет PASS либо полный API compatibility.
 
 Проверка без сети и effects: `python3 tools/release/verify-observability-parser-profile.py`.
-Она сверяет полный15-file набор и SHA обеих immutable module source версий,
+Она сверяет полный15-file syntax набор,126 production Go files фактического
+18-package import closure и SHA обеих immutable module source версий,
 а также PromQL pin; отсутствие уже загруженного module cache является отказом.
 При первоначальном сравнении workspace3.6.17 менял13 existing indirect
 versions,3.6.21 —160; grpc/otel/client-go/crypto/net/protobuf существующего
@@ -347,3 +348,13 @@ owner claim pins, personal profile, credential loader, native transport,
 Live и итоговая browser/component квалификация отражаются отдельно; локальный consumer PASS не заменяет эти результаты.
 Rollback отключает connections/capabilities; owner migration forward-only,
 старые pins и существующие connections автоматически не расширяются.
+
+Новые SENTRY/OBSERVABILITY Connection по умолчанию используют
+`INITIATOR_REQUIRED`. Служебный ключ доступен после отдельного явного выбора
+владельцем `PROJECT_SHARED` при отключённом и освобождённом подключении.
+Публичный OpenAPI enum adapter сверяется с фактическим реестром shipped packages
+и generated Go/TypeScript consumers; неизвестный adapter закрывается.
+Браузерная оснастка использует13 настоящих Definition документов и штатные
+каталог, package parser и typed configuration controls. Для Vue проверены
+Context7 `/vuejs/core/v3.5.43` (индексированная версия); результат относится
+к фактически установленной по lockfile Vue3.5.41, а не к версии индекса.

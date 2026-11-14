@@ -10,6 +10,7 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -96,7 +97,8 @@ func TestSentryObservabilityPersonalProfilesComponent(t *testing.T) {
 			defer pool.Close()
 			repository := newSyntheticRuntimeComponentRepository(t, ctx, pool)
 			seedObservedCatalogFixture(t, ctx, repository)
-			service, err := platformservice.New(repository, platformservice.WithCredentialMaterializer(&personalCredentialComponentMaterializer{}))
+			materializer := &personalCredentialComponentMaterializer{}
+			service, err := platformservice.New(repository, platformservice.WithCredentialMaterializer(materializer))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -104,6 +106,14 @@ func TestSentryObservabilityPersonalProfilesComponent(t *testing.T) {
 			execute := newComponentCommandExecutor(t, ctx, service, "obs-profile-")
 			definition := repository.integrationDefinitions[key]
 			connection := execute(command.CreateConnection, owner, "connection", nil, command.ConnectionInput{DefinitionKey: key, Name: "Synthetic scoped provider " + key, PublicConfiguration: sentryObservabilityComponentConfiguration(definition)}).Connection
+			if connection.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
+				t.Fatal("typed personal provider defaulted to shared service credential")
+			}
+			sharedOwner := owner
+			sharedOwner.Permission = "platform.command.integrations.configure-credential"
+			if _, err := service.ConfigureIntegrationCredential(ctx, sharedOwner, value.Mutation{IdempotencyKey: "obs-profile-no-shared-default", ExpectedVersion: &connection.Version}, connection.Ref, []byte("synthetic-rejected-shared-key")); !errors.Is(err, errs.ErrConflict) || materializer.calls != 0 {
+				t.Fatal("personal default accepted an implicit shared credential", err)
+			}
 			connection = execute(command.SetConnectionEnabled, owner, "disable", &connection.Version, command.ConnectionInput{Ref: connection.Ref, Enabled: false}).Connection
 			owner.Permission = "platform.integrations.credential-policy.set"
 			connection = execute(command.SetIntegrationCredentialPolicy, owner, "policy", &connection.Version, command.IntegrationCredentialPolicyInput{ConnectionRef: connection.Ref, Policy: entity.IntegrationCredentialInitiatorRequired}).Connection
@@ -203,6 +213,22 @@ FROM control_plane.integration_personal_invocation_credentials pin JOIN control_
 				t.Fatal(err)
 			}
 			execute(command.CancelRun, owner, "cancel", &fresh.Version, command.RunCommandInput{RunRef: run.Ref, Reason: "Close synthetic typed provider profile case"})
+			if key == "prometheus" {
+				shared := execute(command.CreateConnection, owner, "explicit-service-connection", nil, command.ConnectionInput{DefinitionKey: key, Name: "Synthetic explicit service identity", PublicConfiguration: sentryObservabilityComponentConfiguration(definition)}).Connection
+				if shared.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
+					t.Fatal("service identity was implicitly enabled")
+				}
+				shared = execute(command.SetConnectionEnabled, owner, "explicit-service-disable", &shared.Version, command.ConnectionInput{Ref: shared.Ref, Enabled: false}).Connection
+				owner.Permission = "platform.integrations.credential-policy.set"
+				shared = execute(command.SetIntegrationCredentialPolicy, owner, "explicit-service-policy", &shared.Version, command.IntegrationCredentialPolicyInput{ConnectionRef: shared.Ref, Policy: entity.IntegrationCredentialProjectShared}).Connection
+				owner.Permission = "platform.command.integrations.configure-credential"
+				calls := materializer.calls
+				configured, err := service.ConfigureIntegrationCredential(ctx, owner, value.Mutation{IdempotencyKey: "explicit-service-key", ExpectedVersion: &shared.Version}, shared.Ref, []byte("synthetic-explicit-service-key"))
+				if err != nil || configured.Ref != shared.Ref || materializer.calls != calls+1 {
+					t.Fatal("explicit owner service identity option is unavailable", err)
+				}
+			}
+
 		})
 	}
 }

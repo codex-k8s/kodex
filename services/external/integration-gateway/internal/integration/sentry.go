@@ -75,7 +75,7 @@ func (adapter *Adapter) sentryReadProject(ctx context.Context, request Request, 
 		return sentryProject{}, err
 	}
 	var project sentryProject
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &project) != nil || !sentryDecimal(project.ID) || !sentryDecimal(project.Organization.ID) || project.Slug != configuration["project_slug"] || project.Organization.Slug != configuration["organization_slug"] || project.Name == "" || len(project.Name) > 1000 {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &project) != nil || !sentryDecimal(project.ID) || !sentryDecimal(project.Organization.ID) || project.Slug != configuration["project_slug"] || project.Organization.Slug != configuration["organization_slug"] || project.Name == "" || len(project.Name) > 1000 {
 		return sentryProject{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return project, nil
@@ -95,7 +95,7 @@ func (adapter *Adapter) sentryReadIssue(ctx context.Context, request Request, ca
 		return sentryIssue{}, err
 	}
 	var issue sentryIssue
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, issueID) {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, issueID) {
 		return sentryIssue{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return issue, nil
@@ -130,7 +130,7 @@ func (adapter *Adapter) sentryToken(ctx context.Context, request Request, capabi
 			ID string `json:"id"`
 		} `json:"user"`
 	}
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &metadata) != nil || metadata.Auth == nil || metadata.Auth.Scopes == nil || len(*metadata.Auth.Scopes) > 64 {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &metadata) != nil || metadata.Auth == nil || metadata.Auth.Scopes == nil || len(*metadata.Auth.Scopes) > 64 {
 		return sentryTokenMetadata{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	result := sentryTokenMetadata{Scopes: map[string]bool{}}
@@ -274,7 +274,7 @@ func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capa
 			return Result{}, err
 		}
 		var issues []sentryIssue
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &issues) != nil || issues == nil || len(issues) > limit {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &issues) != nil || issues == nil || len(issues) > limit {
 			return Result{}, &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := make([]map[string]string, 0, len(issues))
@@ -317,7 +317,7 @@ func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capa
 				return Result{}, err
 			}
 			issue = sentryIssue{}
-			if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, issueID) || issue.Status != status {
+			if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, issueID) || issue.Status != status {
 				return Result{}, &UnknownOutcomeError{stage: "response_body"}
 			}
 		}
@@ -343,7 +343,7 @@ func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capa
 			Title     string `json:"title"`
 			Platform  string `json:"platform"`
 		}
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &event) != nil || event.EventID != eventID || event.ProjectID != project.ID || event.Title == "" || len(event.Title) > 2000 || len(event.Platform) > 100 {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &event) != nil || event.EventID != eventID || event.ProjectID != project.ID || event.Title == "" || len(event.Title) > 2000 || len(event.Platform) > 100 {
 			return Result{}, &SafeError{Code: providerResponseInvalidCode}
 		}
 		providerRef = "sentry-event:" + event.EventID

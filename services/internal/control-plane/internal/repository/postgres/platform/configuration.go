@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
@@ -460,7 +461,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		var connectionID string
 		var config []byte
 		credentialPolicy := entity.IntegrationCredentialProjectShared
-		if githubScopedDefinition(definition) {
+		// New typed personal integrations start with the initiator key; a shared service identity requires the separate disabled/drained owner policy command.
+		// Новые typed personal integrations начинают с ключа инициатора; shared service identity требует отдельной owner policy команды после disable/drain.
+		if githubScopedDefinition(definition) || definition.Spec.Adapter == string(integrationpackage.AdapterSentry) || definition.Spec.Adapter == string(integrationpackage.AdapterObservability) {
 			credentialPolicy = entity.IntegrationCredentialInitiatorRequired
 		}
 		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState,

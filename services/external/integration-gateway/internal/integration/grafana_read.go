@@ -29,7 +29,7 @@ func (adapter *Adapter) grafanaDashboard(ctx context.Context, request Request, c
 	var data struct {
 		Dashboard grafanaDashboardIdentity `json:"dashboard"`
 	}
-	if grafanaDecode(response.Body, &data) != nil || data.Dashboard.UID != uid || data.Dashboard.Title == "" || len(data.Dashboard.Title) > 1000 || data.Dashboard.Version < 1 {
+	if decodeTypedProviderJSON(response.Body, &data) != nil || data.Dashboard.UID != uid || data.Dashboard.Title == "" || len(data.Dashboard.Title) > 1000 || data.Dashboard.Version < 1 {
 		return grafanaDashboardIdentity{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return data.Dashboard, nil
@@ -52,7 +52,7 @@ func (adapter *Adapter) grafanaDatasource(ctx context.Context, request Request, 
 		return grafanaDatasourceIdentity{}, err
 	}
 	var source grafanaDatasourceIdentity
-	if grafanaDecode(response.Body, &source) != nil || source.UID != configuration["datasource_uid"] || strconv.FormatInt(source.OrgID, 10) != configuration["organization_id"] || source.Type != "prometheus" || source.Name == "" || len(source.Name) > 500 {
+	if decodeTypedProviderJSON(response.Body, &source) != nil || source.UID != configuration["datasource_uid"] || strconv.FormatInt(source.OrgID, 10) != configuration["organization_id"] || source.Type != "prometheus" || source.Name == "" || len(source.Name) > 500 {
 		return grafanaDatasourceIdentity{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return source, nil
@@ -115,11 +115,11 @@ func (adapter *Adapter) grafanaRulesRead(ctx context.Context, request Request, c
 	rules := []grafanaRuleReadProjection{}
 	if uid != "" {
 		var rule grafanaRuleReadProjection
-		if grafanaDecode(response.Body, &rule) != nil {
+		if decodeTypedProviderJSON(response.Body, &rule) != nil {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		rules = append(rules, rule)
-	} else if grafanaDecode(response.Body, &rules) != nil || rules == nil || len(rules) > 50 {
+	} else if decodeTypedProviderJSON(response.Body, &rules) != nil || rules == nil || len(rules) > 50 {
 		return nil, "", &SafeError{Code: providerResponseInvalidCode}
 	}
 	seen := map[string]bool{}
@@ -160,7 +160,7 @@ func (adapter *Adapter) grafanaAnnotationRead(ctx context.Context, request Reque
 	if request.DefinitionKey == "grafana-dashboard" || request.DefinitionKey == "grafana-dashboard-annotations" {
 		dashboard = configuration["dashboard_uid"]
 	}
-	if grafanaDecode(response.Body, &item) != nil || !grafanaAnnotationValid(item, dashboard, id) {
+	if decodeTypedProviderJSON(response.Body, &item) != nil || !grafanaAnnotationValid(item, dashboard, id) {
 		return grafanaAnnotation{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return item, nil

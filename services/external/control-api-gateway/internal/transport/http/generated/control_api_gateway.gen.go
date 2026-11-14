@@ -2832,31 +2832,49 @@ func (e IntegrationCredentialPreflightIssueProblem) Valid() bool {
 
 // Defines values for IntegrationDefinitionAdapter.
 const (
-	CONFLUENCE            IntegrationDefinitionAdapter = "CONFLUENCE"
-	EMAILHTTPS            IntegrationDefinitionAdapter = "EMAIL_HTTPS"
-	GITHUB                IntegrationDefinitionAdapter = "GITHUB"
-	GITLAB                IntegrationDefinitionAdapter = "GITLAB"
-	JIRA                  IntegrationDefinitionAdapter = "JIRA"
-	MATTERMOSTINTERACTION IntegrationDefinitionAdapter = "MATTERMOST_INTERACTION"
-	SYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
+	IntegrationDefinitionAdapterCONFLUENCE            IntegrationDefinitionAdapter = "CONFLUENCE"
+	IntegrationDefinitionAdapterCONTEXT7              IntegrationDefinitionAdapter = "CONTEXT7"
+	IntegrationDefinitionAdapterEMAILHTTPS            IntegrationDefinitionAdapter = "EMAIL_HTTPS"
+	IntegrationDefinitionAdapterGITHUB                IntegrationDefinitionAdapter = "GITHUB"
+	IntegrationDefinitionAdapterGITLAB                IntegrationDefinitionAdapter = "GITLAB"
+	IntegrationDefinitionAdapterHTTPSJSONREAD         IntegrationDefinitionAdapter = "HTTPS_JSON_READ"
+	IntegrationDefinitionAdapterJIRA                  IntegrationDefinitionAdapter = "JIRA"
+	IntegrationDefinitionAdapterMATTERMOSTINTERACTION IntegrationDefinitionAdapter = "MATTERMOST_INTERACTION"
+	IntegrationDefinitionAdapterOBSERVABILITY         IntegrationDefinitionAdapter = "OBSERVABILITY"
+	IntegrationDefinitionAdapterOPENAPIMCP            IntegrationDefinitionAdapter = "OPENAPI_MCP"
+	IntegrationDefinitionAdapterSENTRY                IntegrationDefinitionAdapter = "SENTRY"
+	IntegrationDefinitionAdapterSSHCOMPOSE            IntegrationDefinitionAdapter = "SSH_COMPOSE"
+	IntegrationDefinitionAdapterSYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationDefinitionAdapter enum.
 func (e IntegrationDefinitionAdapter) Valid() bool {
 	switch e {
-	case CONFLUENCE:
+	case IntegrationDefinitionAdapterCONFLUENCE:
 		return true
-	case EMAILHTTPS:
+	case IntegrationDefinitionAdapterCONTEXT7:
 		return true
-	case GITHUB:
+	case IntegrationDefinitionAdapterEMAILHTTPS:
 		return true
-	case GITLAB:
+	case IntegrationDefinitionAdapterGITHUB:
 		return true
-	case JIRA:
+	case IntegrationDefinitionAdapterGITLAB:
 		return true
-	case MATTERMOSTINTERACTION:
+	case IntegrationDefinitionAdapterHTTPSJSONREAD:
 		return true
-	case SYNTHETICHTTP:
+	case IntegrationDefinitionAdapterJIRA:
+		return true
+	case IntegrationDefinitionAdapterMATTERMOSTINTERACTION:
+		return true
+	case IntegrationDefinitionAdapterOBSERVABILITY:
+		return true
+	case IntegrationDefinitionAdapterOPENAPIMCP:
+		return true
+	case IntegrationDefinitionAdapterSENTRY:
+		return true
+	case IntegrationDefinitionAdapterSSHCOMPOSE:
+		return true
+	case IntegrationDefinitionAdapterSYNTHETICHTTP:
 		return true
 	default:
 		return false
@@ -7920,16 +7938,16 @@ func (e RuntimeSecretDraftImpactPlanState) Valid() bool {
 
 // Defines values for RuntimeSecretPurpose.
 const (
-	APPLICATION RuntimeSecretPurpose = "APPLICATION"
-	SSHCOMPOSE  RuntimeSecretPurpose = "SSH_COMPOSE"
+	RuntimeSecretPurposeAPPLICATION RuntimeSecretPurpose = "APPLICATION"
+	RuntimeSecretPurposeSSHCOMPOSE  RuntimeSecretPurpose = "SSH_COMPOSE"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeSecretPurpose enum.
 func (e RuntimeSecretPurpose) Valid() bool {
 	switch e {
-	case APPLICATION:
+	case RuntimeSecretPurposeAPPLICATION:
 		return true
-	case SSHCOMPOSE:
+	case RuntimeSecretPurposeSSHCOMPOSE:
 		return true
 	default:
 		return false

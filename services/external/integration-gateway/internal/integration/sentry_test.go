@@ -474,3 +474,43 @@ func TestSentryWrongScopeAndProfileCloseBeforeHTTP(t *testing.T) {
 		})
 	}
 }
+
+// TestSentryNoncanonicalProviderFieldsFailClosed rejects a single case alias before scope use and preserves UNKNOWN after an accepted mutation with a noncanonical receipt; existing duplicate-key rejection remains independently exercised.
+// TestSentryNoncanonicalProviderFieldsFailClosed отклоняет single case alias до использования scope и сохраняет UNKNOWN после accepted mutation с noncanonical receipt; duplicate-key rejection проверяется отдельно.
+func TestSentryNoncanonicalProviderFieldsFailClosed(t *testing.T) {
+	for _, scenario := range []string{"project-alias", "issue-alias", "effect-receipt-alias"} {
+		t.Run(scenario, func(t *testing.T) {
+			adapter := testAdapter(t)
+			request := sentryInvocation(t, adapter, "sentry", "sentry.issue.status.update", sentryInput(t, "sentry.issue.status.update"))
+			effects := 0
+			adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(wire *http.Request) (*http.Response, error) {
+				if wire.Method == http.MethodPut {
+					effects++
+				}
+				response := sentryWireFixture(t, wire)
+				raw, _ := io.ReadAll(response.Body)
+				_ = response.Body.Close()
+				if scenario == "project-alias" && strings.HasPrefix(wire.URL.Path, "/api/0/projects/") {
+					raw = bytes.Replace(raw, []byte(`"slug"`), []byte(`"Slug"`), 1)
+				}
+				if scenario == "issue-alias" && wire.Method == http.MethodGet && strings.Contains(wire.URL.Path, "/issues/") {
+					raw = bytes.Replace(raw, []byte(`"project"`), []byte(`"Project"`), 1)
+				}
+				if scenario == "effect-receipt-alias" && wire.Method == http.MethodPut {
+					raw = bytes.Replace(raw, []byte(`"status"`), []byte(`"Status"`), 1)
+				}
+				response.Body = io.NopCloser(bytes.NewReader(raw))
+				return response, nil
+			})}
+			_, err := adapter.Execute(t.Context(), request)
+			unknown := scenario == "effect-receipt-alias"
+			wanted := 0
+			if unknown {
+				wanted = 1
+			}
+			if err == nil || IsUnknownOutcome(err) != unknown || effects != wanted {
+				t.Fatal("Sentry accepted noncanonical ownership/receipt fields", err, effects)
+			}
+		})
+	}
+}

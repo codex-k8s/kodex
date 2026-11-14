@@ -68,7 +68,7 @@ func (adapter *Adapter) sentryReadOrganization(ctx context.Context, request Requ
 		return sentryOrganization{}, err
 	}
 	var organization sentryOrganization
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &organization) != nil || !sentryDecimal(organization.ID) || organization.Slug != configuration["organization_slug"] || organization.Name == "" || len(organization.Name) > 1000 {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &organization) != nil || !sentryDecimal(organization.ID) || organization.Slug != configuration["organization_slug"] || organization.Name == "" || len(organization.Name) > 1000 {
 		return sentryOrganization{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return organization, nil
@@ -85,7 +85,7 @@ func (adapter *Adapter) sentryWorkflowScope(ctx context.Context, request Request
 		ProjectIDs *[]string `json:"projectIds"`
 		All        *bool     `json:"includesAllProjects"`
 	}
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.All == nil || len(*scope.ProjectIDs) > 100 || *scope.All && len(*scope.ProjectIDs) != 0 {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.All == nil || len(*scope.ProjectIDs) > 100 || *scope.All && len(*scope.ProjectIDs) != 0 {
 		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	seen := map[string]bool{}
@@ -239,7 +239,7 @@ func (adapter *Adapter) sentryOrganizationResource(ctx context.Context, request 
 			Slug string `json:"slug"`
 			Name string `json:"name"`
 		}
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &projects) != nil || projects == nil || len(projects) > limit {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &projects) != nil || projects == nil || len(projects) > limit {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]string{}
@@ -308,7 +308,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 				return nil, "", err
 			}
 			var existing sentryRelease
-			if integrationpackage.ValidateCredentialPermissionJSON(before.Body) != nil || decodeProviderJSON(before.Body, &existing) != nil {
+			if integrationpackage.ValidateCredentialPermissionJSON(before.Body) != nil || decodeTypedProviderJSON(before.Body, &existing) != nil {
 				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			if _, err := sentryOrganizationReleaseProjection(existing, version); err != nil {
@@ -333,12 +333,12 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 	}
 	releases := []sentryRelease{}
 	if request.Operation == "sentry.organization.release.list" {
-		if decodeProviderJSON(response.Body, &releases) != nil || releases == nil || len(releases) > limit {
+		if decodeTypedProviderJSON(response.Body, &releases) != nil || releases == nil || len(releases) > limit {
 			return invalid()
 		}
 	} else {
 		var release sentryRelease
-		if decodeProviderJSON(response.Body, &release) != nil {
+		if decodeTypedProviderJSON(response.Body, &release) != nil {
 			return invalid()
 		}
 		releases = append(releases, release)
@@ -385,7 +385,7 @@ func (adapter *Adapter) sentryReadDetector(ctx context.Context, request Request,
 		return sentryDetector{}, err
 	}
 	var detector sentryDetector
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &detector) != nil || detector.ID != id || detector.Name == "" || len(detector.Name) > 2000 || detector.Type == "" || len(detector.Type) > 100 || detector.ProjectID != nil && !sentryDecimal(*detector.ProjectID) {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &detector) != nil || detector.ID != id || detector.Name == "" || len(detector.Name) > 2000 || detector.Type == "" || len(detector.Type) > 100 || detector.ProjectID != nil && !sentryDecimal(*detector.ProjectID) {
 		return sentryDetector{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return detector, nil
@@ -415,7 +415,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 			return nil, "", err
 		}
 		var detectors []sentryDetector
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &detectors) != nil || detectors == nil || len(detectors) > limit {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &detectors) != nil || detectors == nil || len(detectors) > limit {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}
@@ -441,7 +441,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 			return nil, "", err
 		}
 		var workflows []sentryAlert
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &workflows) != nil || workflows == nil || len(workflows) > limit {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &workflows) != nil || workflows == nil || len(workflows) > limit {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}
@@ -472,7 +472,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 			return nil, "", err
 		}
 		var workflow sentryAlert
-		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &workflow) != nil || workflow.ID != id || workflow.OrganizationID != organization.ID || workflow.Name == "" || len(workflow.Name) > 2000 || workflow.Enabled == nil {
+		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &workflow) != nil || workflow.ID != id || workflow.OrganizationID != organization.ID || workflow.Name == "" || len(workflow.Name) > 2000 || workflow.Enabled == nil {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		beforeScope, err = adapter.sentryWorkflowScope(ctx, request, capability, configuration, id)
@@ -512,7 +512,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 		return nil, "", err
 	}
 	var workflow sentryWorkflow
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &workflow) != nil || !sentryWorkflowMatches(workflow, request.Input, organization, id) {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &workflow) != nil || !sentryWorkflowMatches(workflow, request.Input, organization, id) {
 		return nil, "", &UnknownOutcomeError{stage: "response_body"}
 	}
 	scope, err := adapter.sentryWorkflowScope(ctx, request, capability, configuration, workflow.ID)

@@ -50,7 +50,7 @@ func (adapter *Adapter) grafanaReadWritableRule(ctx context.Context, request Req
 		return grafanaWritableRule{}, err
 	}
 	var rule grafanaWritableRule
-	if grafanaDecode(response.Body, &rule) != nil || !grafanaRuleValid(rule.projection(), configuration["organization_id"], uid) {
+	if decodeTypedProviderJSON(response.Body, &rule) != nil || !grafanaRuleValid(rule.projection(), configuration["organization_id"], uid) {
 		return grafanaWritableRule{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	if rule.Provenance != "api" {
@@ -95,7 +95,7 @@ func grafanaRulePayload(request Request, configuration map[string]string) (map[s
 func grafanaRuleReceipt(rule grafanaWritableRule, wanted map[string]any) bool {
 	encoded, _ := json.Marshal(wanted)
 	var expected grafanaWritableRule
-	if grafanaDecode(encoded, &expected) != nil {
+	if decodeTypedProviderJSON(encoded, &expected) != nil {
 		return false
 	}
 	if rule.UID != expected.UID || rule.OrgID != expected.OrgID || rule.FolderUID != expected.FolderUID || rule.Title != expected.Title || rule.RuleGroup != expected.RuleGroup || rule.Condition != "B" || rule.NoDataState != "NoData" || rule.ExecErrState != "Error" || rule.Paused == nil || expected.Paused == nil || *rule.Paused != *expected.Paused || len(rule.Data) != 2 {
@@ -171,7 +171,7 @@ func (adapter *Adapter) grafanaRuleMutation(ctx context.Context, request Request
 		return nil, "", err
 	}
 	var receipt grafanaWritableRule
-	if grafanaDecode(response.Body, &receipt) != nil || !grafanaRuleReceipt(receipt, body) {
+	if decodeTypedProviderJSON(response.Body, &receipt) != nil || !grafanaRuleReceipt(receipt, body) {
 		return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 	}
 	uid = body["uid"].(string)

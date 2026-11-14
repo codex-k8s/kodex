@@ -73,7 +73,7 @@ func (adapter *Adapter) grafanaSilenceRead(ctx context.Context, request Request,
 		return grafanaSilence{}, err
 	}
 	var item grafanaSilence
-	if grafanaDecode(response.Body, &item) != nil || !grafanaSilenceValid(item, id) {
+	if decodeTypedProviderJSON(response.Body, &item) != nil || !grafanaSilenceValid(item, id) {
 		return grafanaSilence{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return item, nil
@@ -102,7 +102,7 @@ func (adapter *Adapter) grafanaSilences(ctx context.Context, request Request, ca
 			return nil, "", err
 		}
 		var items []grafanaSilence
-		if grafanaDecode(response.Body, &items) != nil || items == nil || len(items) > 50 {
+		if decodeTypedProviderJSON(response.Body, &items) != nil || items == nil || len(items) > 50 {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		seen := map[string]bool{}
@@ -138,7 +138,7 @@ func (adapter *Adapter) grafanaSilences(ctx context.Context, request Request, ca
 		var receipt struct {
 			Message string `json:"message"`
 		}
-		if grafanaDecode(response.Body, &receipt) != nil || receipt.Message != "silence deleted" {
+		if decodeTypedProviderJSON(response.Body, &receipt) != nil || receipt.Message != "silence deleted" {
 			return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return map[string]string{"id": id, "status": "expiration_requested"}, reference + ":" + id, nil
@@ -169,7 +169,7 @@ func (adapter *Adapter) grafanaSilences(ctx context.Context, request Request, ca
 	var receipt struct {
 		SilenceID string `json:"silenceID"`
 	}
-	if response.StatusCode != http.StatusAccepted || grafanaDecode(response.Body, &receipt) != nil || !grafanaSilenceID(receipt.SilenceID) {
+	if response.StatusCode != http.StatusAccepted || decodeTypedProviderJSON(response.Body, &receipt) != nil || !grafanaSilenceID(receipt.SilenceID) {
 		return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 	}
 	confirmed, err := adapter.grafanaSilenceRead(ctx, request, capability, configuration, receipt.SilenceID)

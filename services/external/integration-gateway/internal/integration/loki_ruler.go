@@ -151,7 +151,7 @@ func (adapter *Adapter) lokiRuler(ctx context.Context, request Request, capabili
 	var receipt struct {
 		Status string `json:"status"`
 	}
-	if response.StatusCode != http.StatusAccepted || grafanaDecode(response.Body, &receipt) != nil || receipt.Status != "success" {
+	if response.StatusCode != http.StatusAccepted || decodeTypedProviderJSON(response.Body, &receipt) != nil || receipt.Status != "success" {
 		return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 	}
 	status := "deletion_requested"

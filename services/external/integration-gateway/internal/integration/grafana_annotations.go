@@ -36,7 +36,7 @@ func (adapter *Adapter) grafanaAnnotations(ctx context.Context, request Request,
 			return nil, "", err
 		}
 		var items []grafanaAnnotation
-		if grafanaDecode(response.Body, &items) != nil || items == nil || len(items) > 50 {
+		if decodeTypedProviderJSON(response.Body, &items) != nil || items == nil || len(items) > 50 {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		seen := map[int64]bool{}
@@ -85,7 +85,7 @@ func (adapter *Adapter) grafanaAnnotations(ctx context.Context, request Request,
 		var receipt struct {
 			Message string `json:"message"`
 		}
-		if grafanaDecode(response.Body, &receipt) != nil || receipt.Message != "Annotation deleted" {
+		if decodeTypedProviderJSON(response.Body, &receipt) != nil || receipt.Message != "Annotation deleted" {
 			return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 		}
 		return map[string]string{"id": idText, "status": "deletion_requested"}, reference + ":" + idText, nil
@@ -119,7 +119,7 @@ func (adapter *Adapter) grafanaAnnotations(ctx context.Context, request Request,
 		ID      int64  `json:"id"`
 		Message string `json:"message"`
 	}
-	if grafanaDecode(response.Body, &receipt) != nil {
+	if decodeTypedProviderJSON(response.Body, &receipt) != nil {
 		return nil, "", &UnknownOutcomeError{stage: "response_validation"}
 	}
 	if method == http.MethodPost {

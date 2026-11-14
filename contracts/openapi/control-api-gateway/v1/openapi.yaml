@@ -19638,6 +19638,12 @@ components:
                 CONFLUENCE,
                 EMAIL_HTTPS,
                 MATTERMOST_INTERACTION,
+                HTTPS_JSON_READ,
+                OPENAPI_MCP,
+                CONTEXT7,
+                SSH_COMPOSE,
+                SENTRY,
+                OBSERVABILITY,
               ],
           }
         adapterOwner:

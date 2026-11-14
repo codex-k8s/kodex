@@ -46,7 +46,7 @@ func (adapter *Adapter) lokiHealth(ctx context.Context, request Request, configu
 	var version struct {
 		Version string `json:"version"`
 	}
-	if grafanaDecode(response.Body, &version) != nil {
+	if decodeTypedProviderJSON(response.Body, &version) != nil {
 		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	if version.Version != "3.6.21" {

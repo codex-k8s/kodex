@@ -155,7 +155,7 @@ func (adapter *Adapter) sentryAlertProjectEligible(ctx context.Context, request 
 		ProjectIDs  *[]string `json:"projectIds"`
 		IncludesAll *bool     `json:"includesAllProjects"`
 	}
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.IncludesAll == nil || len(*scope.ProjectIDs) > 100 {
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.IncludesAll == nil || len(*scope.ProjectIDs) > 100 {
 		return false, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return !*scope.IncludesAll && len(*scope.ProjectIDs) == 1 && (*scope.ProjectIDs)[0] == project.ID, nil
@@ -204,7 +204,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 					return nil, "", err
 				}
 				issue = sentryIssue{}
-				if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, id) || actorID == "" && issue.AssignedTo != nil || actorID != "" && (issue.AssignedTo == nil || issue.AssignedTo.ID != actorID || issue.AssignedTo.Type != kind) {
+				if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &issue) != nil || !sentryIssueMatches(issue, project, id) || actorID == "" && issue.AssignedTo != nil || actorID != "" && (issue.AssignedTo == nil || issue.AssignedTo.ID != actorID || issue.AssignedTo.Type != kind) {
 					return nil, "", &UnknownOutcomeError{stage: "response_body"}
 				}
 				return map[string]string{"id": id, "assignee": assignee}, providerRef, nil
@@ -215,7 +215,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 				return nil, "", err
 			}
 			var comment sentryComment
-			if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &comment) != nil || !sentryDecimal(comment.ID) || comment.Data.Text != text || comment.User == nil || comment.User.ID != metadata.UserID {
+			if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeTypedProviderJSON(response.Body, &comment) != nil || !sentryDecimal(comment.ID) || comment.Data.Text != text || comment.User == nil || comment.User.ID != metadata.UserID {
 				return nil, "", &UnknownOutcomeError{stage: "response_body"}
 			}
 			return map[string]string{"id": comment.ID, "text": comment.Data.Text}, "sentry-comment:" + comment.ID, nil
@@ -244,7 +244,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 				ProjectID string `json:"projectID"`
 				Title     string `json:"title"`
 			}
-			if decodeProviderJSON(response.Body, &events) != nil || events == nil || len(events) > limit {
+			if decodeTypedProviderJSON(response.Body, &events) != nil || events == nil || len(events) > limit {
 				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			for _, event := range events {
@@ -256,7 +256,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 			}
 		} else {
 			var comments []sentryComment
-			if decodeProviderJSON(response.Body, &comments) != nil || comments == nil || len(comments) > limit {
+			if decodeTypedProviderJSON(response.Body, &comments) != nil || comments == nil || len(comments) > limit {
 				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			for _, comment := range comments {
@@ -294,11 +294,11 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		releases := []sentryRelease{}
 		if version != "" {
 			var release sentryRelease
-			if decodeProviderJSON(response.Body, &release) != nil {
+			if decodeTypedProviderJSON(response.Body, &release) != nil {
 				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			releases = append(releases, release)
-		} else if decodeProviderJSON(response.Body, &releases) != nil || releases == nil || len(releases) > limit {
+		} else if decodeTypedProviderJSON(response.Body, &releases) != nil || releases == nil || len(releases) > limit {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]string{}
@@ -352,11 +352,11 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		alerts := []sentryAlert{}
 		if id != "" {
 			var alert sentryAlert
-			if decodeProviderJSON(response.Body, &alert) != nil || alert.ID != id {
+			if decodeTypedProviderJSON(response.Body, &alert) != nil || alert.ID != id {
 				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			alerts = append(alerts, alert)
-		} else if decodeProviderJSON(response.Body, &alerts) != nil || alerts == nil || len(alerts) > limit {
+		} else if decodeTypedProviderJSON(response.Body, &alerts) != nil || alerts == nil || len(alerts) > limit {
 			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}

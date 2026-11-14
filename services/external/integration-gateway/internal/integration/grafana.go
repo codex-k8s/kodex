@@ -32,15 +32,6 @@ func (adapter *Adapter) grafanaJSON(ctx context.Context, request Request, capabi
 	return adapter.callProviderResponse(ctx, providerCall{BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient, permissionEffect: request.permissionEffect, invalidCredentialProbe: probe})
 }
 
-// grafanaDecode checks duplicate JSON ambiguity and exact typed field names before exposing any provider data; provider additions are discarded by typed projection.
-// grafanaDecode проверяет duplicate JSON ambiguity и exact typed field names до выдачи provider data; additions отбрасывает typed projection.
-func grafanaDecode(raw []byte, target any) error {
-	if integrationpackage.ValidateProviderJSON(raw) != nil {
-		return &SafeError{Code: providerResponseInvalidCode}
-	}
-	return observabilityDecode(raw, target)
-}
-
 // grafanaHealth checks the exact supported build, current token's organization and signed identity, and invalid-key rejection on the same authenticated path without projecting user data.
 // grafanaHealth проверяет exact supported build, organization и signed identity текущего токена и invalid-key rejection на том же authenticated path без выдачи user data.
 func (adapter *Adapter) grafanaHealth(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (map[string]string, error) {
@@ -59,7 +50,7 @@ func (adapter *Adapter) grafanaHealth(ctx context.Context, request Request, capa
 		Version  string `json:"version"`
 		Database string `json:"database"`
 	}
-	if grafanaDecode(response.Body, &health) != nil {
+	if decodeTypedProviderJSON(response.Body, &health) != nil {
 		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	if health.Version != "13.2.0" {
@@ -76,7 +67,7 @@ func (adapter *Adapter) grafanaHealth(ctx context.Context, request Request, capa
 		OrgID int64  `json:"orgId"`
 		UID   string `json:"uid"`
 	}
-	if grafanaDecode(response.Body, &identity) != nil || strconv.FormatInt(identity.OrgID, 10) != configuration["organization_id"] || identity.UID == "" || identity.UID == "0" || len(identity.UID) > 200 || strings.Contains(strings.ToLower(identity.UID), "anonymous") || strings.ContainsAny(identity.UID, "\r\n\x00") {
+	if decodeTypedProviderJSON(response.Body, &identity) != nil || strconv.FormatInt(identity.OrgID, 10) != configuration["organization_id"] || identity.UID == "" || identity.UID == "0" || len(identity.UID) > 200 || strings.Contains(strings.ToLower(identity.UID), "anonymous") || strings.ContainsAny(identity.UID, "\r\n\x00") {
 		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	_, err = adapter.grafanaJSON(ctx, request, capability, configuration, http.MethodGet, "/api/user", nil, nil, true)
