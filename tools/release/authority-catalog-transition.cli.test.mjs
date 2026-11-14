@@ -1,3 +1,4 @@
+import {canonicalAuthorityReadbackContract} from './authority-readback-targets.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync} from 'node:fs';
@@ -202,7 +203,7 @@ async function terminalFixture(t,options){
   const plan=JSON.parse(readFileSync(f.output,'utf8')),now=Date.now();
   const ownerStatus={observedAt:new Date(now).toISOString(),operationId:plan.ownerOperationID,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',
     registryRevision:plan.registry.sourceRevision,registrySourceDigestSHA256:plan.registry.sourceDigestSHA256,baseRevision:1,baseDigestSHA256:'c'.repeat(64),
-    sourceRevision:4,sourceDigestSHA256:'d'.repeat(64),intentId:uid(90),protocolVersion:2,expectedReadbackCount:16,actualReadbackCount:16,
+    sourceRevision:4,sourceDigestSHA256:'d'.repeat(64),intentId:uid(90),protocolVersion:2,expectedReadbackCount:canonicalAuthorityReadbackContract().expectedReadbackCount,actualReadbackCount:16,
     switchNotBefore:new Date(now-90000).toISOString(),previousNotAfter:new Date(now-5000).toISOString(),completedAt:new Date(now-1000).toISOString()};
   f.state.ownerStatus=ownerStatus;f.state.completeStatus=true;
   const freshOutput=join(f.directory,'fresh-plan.json'),freshEvidence=join(f.directory,'fresh.jsonl'),freshArgs=f.args();freshArgs[freshArgs.indexOf('--output')+1]=freshOutput;
@@ -218,16 +219,31 @@ async function terminalFixture(t,options){
 test('fresh terminal getter reads exact canonical status Job and owner RETIRED without effects',async t=>{
   const f=await terminalFixture(t),before=f.effects.length,proof=await f.read();
   assert.equal(proof.policyRevision,106);assert.equal(proof.operationID,f.input.plan.ownerOperationID);
-  assert.equal(proof.expectedReadbackCount,16);assert.equal(proof.actualReadbackCount,16);
+  assert.equal(proof.expectedReadbackCount,canonicalAuthorityReadbackContract().expectedReadbackCount);assert.equal(proof.actualReadbackCount,16);
   assert.equal(proof.registryRevision,2);assert.equal(proof.snapshotRevision,4);
   assert.equal(proof.trafficPlanSHA256,f.admission.proof.trafficPlanSHA256);
   assert.equal(f.effects.length,before);assert.equal(Object.isFrozen(proof),true);
 });
 
+test('timeout watcher не отменяет owner: fresh RETIRED той же операции допускается без нового rotate',async t=>{
+  const f=await terminalFixture(t),before=f.effects.length;
+  const watcher=[...f.jobs.values()].find(job=>job.spec.template.spec.containers[0].args[0]==='rotation-watch');
+  watcher.status={failed:1,conditions:[{type:'Failed',status:'True',reason:'DeadlineExceeded'}]};
+  f.input.events.push({...f.input.events.at(-1),status:'FAILED'});
+  const proof=await f.read();
+  assert.equal(proof.operationID,f.input.plan.ownerOperationID);
+  assert.equal(proof.expectedReadbackCount,canonicalAuthorityReadbackContract().expectedReadbackCount);
+  assert.equal(f.effects.length,before);
+  f.ownerStatus.operationId=uid(98);
+  f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(f.ownerStatus)+'\n');
+  await assert.rejects(f.read(),/TERMINAL_OWNER_REJECTED/);
+  assert.equal(f.effects.length,before);
+});
+
 test('fresh terminal owner rejects stale/foreign/incomplete operation and duplicate log fields',async t=>{
   const f=await terminalFixture(t),name=f.freshJob.metadata.name,before=f.effects.length;
   for(const mutate of [value=>value.observedAt=new Date(f.input.now-30001).toISOString(),value=>value.operationId=uid(99),
-    value=>value.status=value.operationStatus='WAITING_RETIRE',value=>value.expectedReadbackCount=15,value=>value.actualReadbackCount=15,
+    value=>value.status=value.operationStatus='WAITING_RETIRE',value=>value.expectedReadbackCount=15,value=>value.actualReadbackCount=canonicalAuthorityReadbackContract().expectedReadbackCount-1,
     value=>value.registryRevision=106,value=>value.registrySourceDigestSHA256='f'.repeat(64),value=>value.sourceRevision=2,
     value=>value.extra='forbidden']){
     const changed=structuredClone(f.ownerStatus);mutate(changed);f.jobLogs.set(name,JSON.stringify(changed)+'\n');
