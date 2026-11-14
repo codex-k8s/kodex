@@ -1852,11 +1852,11 @@ test('pure portable handoff сохраняет env/volumes/replicas и связ�
  assert.throws(()=>planComponentMigrationHandoff(f.value,wrong,source));
 });
 
-function retainedCLIJobFixture(bootstrap=false) {
+function retainedCLIJobFixture(bootstrap=false,canonicalBackup=false) {
  const labels={'app.kubernetes.io/name':'control-plane','app.kubernetes.io/component':bootstrap?'broker-bootstrap':'migration','app.kubernetes.io/part-of':'kodex'};
- const name=bootstrap?'control-plane-broker-bootstrap':'control-plane-migration-check-20261113000100';
+ const name=bootstrap?'control-plane-broker-bootstrap':canonicalBackup?'control-plane-migrate-20261114120000':'control-plane-migration-check-20261113000100';
  const main={name:bootstrap?'bootstrap':'migrate',image:'registry.example.invalid/synthetic/control-plane@sha256:'+'a'.repeat(64),
-  command:['/usr/local/bin/control-plane-cli'],args:bootstrap?['broker','bootstrap']:['check']};
+  command:['/usr/local/bin/control-plane-cli'],args:bootstrap?['broker','bootstrap']:canonicalBackup?['up-github-repository-scope-backup-compatible']:['check']};
  const spec={serviceAccountName:bootstrap?'control-plane-broker-bootstrap':'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',containers:[main]};
  const job={apiVersion:'batch/v1',kind:'Job',metadata:{name,namespace:'kodex-system',uid:'retained-job',labels},
   spec:{template:{metadata:{labels},spec}},status:{succeeded:1,conditions:[{type:'Complete',status:'True'}]}};
@@ -1915,12 +1915,14 @@ test('metadata/full-object races и bounds не скрывают UID, lineage, f
 });
 
 test('serving inventory исключает только exact завершённую CLI Job, сохраняя foreign guard',()=>{
- for(const bootstrap of [false,true]) {
-  const {job,pod}=retainedCLIJobFixture(bootstrap),list={items:[job,pod]};
+ for(const [bootstrap,canonicalBackup] of [[false,false],[true,false],[false,true]]) {
+  const {job,pod}=retainedCLIJobFixture(bootstrap,canonicalBackup),list={items:[job,pod]};
   assert.deepEqual(activeDeploymentPods(componentServingInventory(list,'control-plane','deployment'),'deployment'),[]);
   const mutations=[
    p=>{p.job.metadata.uid='replaced';},p=>{p.pod.metadata.ownerReferences[0].name='foreign';},p=>{delete p.pod.metadata.ownerReferences[0].uid;},
    p=>{p.job.metadata.name=p.pod.metadata.ownerReferences[0].name='unknown-job';},p=>{p.job.spec.template.spec.serviceAccountName='foreign';},
+   p=>{p.job.spec.template.spec.containers[0].args=p.pod.spec.containers[0].args=['unregistered-command'];},
+   p=>{p.job.spec.template.spec.containers[0].args.push('--foreign');p.pod.spec.containers[0].args.push('--foreign');},
    p=>{p.pod.spec.containers[0].command=['/usr/local/bin/control-plane'];},p=>{p.pod.spec.containers[0].image='registry.example.invalid/foreign@sha256:'+'b'.repeat(64);},
    p=>{p.job.spec.template.spec.containers[0].command=['/usr/local/bin/control-plane'];},p=>{p.job.status={active:1};},
    p=>{p.pod.status.phase='Running';p.pod.status.containerStatuses[0].state={running:{}};},
@@ -1934,6 +1936,17 @@ test('serving inventory исключает только exact завершённ
    assert.throws(()=>activeDeploymentPods(componentServingInventory({items:[changed.job,changed.pod]},'control-plane','deployment'),'deployment'),/STABLE_FOREIGN_SERVING_POD|COMPONENT_MIGRATION_POD_STATE_UNKNOWN/);
   }
  }
+});
+
+test('canonical backup terminal command связывается только с exact migration044 Job',()=>{
+ const original=retainedCLIJobFixture(false,true);
+ for(const name of ['control-plane-migrate-20261113000100','control-plane-migration-check-20261114120000','control-plane-migrate-20261114120000-retry']) {
+  const {job,pod}=structuredClone(original);job.metadata.name=name;pod.metadata.ownerReferences[0].name=name;
+  assert.throws(()=>activeDeploymentPods(componentServingInventory({items:[job,pod]},'control-plane','deployment'),'deployment'),/STABLE_FOREIGN_SERVING_POD/);
+ }
+ const items=[original.job,original.pod];
+ const kube=args=>args.includes('replicasets,pods,jobs')?servingMetadata(items):JSON.stringify(items.find(r=>r.kind===(args.includes('pod')?'Pod':'Job')));
+ assert.deepEqual(activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),[]);
 });
 
 test('namespace inventory не прячет Deployment descendants при дрейфе serving labels',()=>{
