@@ -122,7 +122,7 @@ function lifecycleFixture() {
   const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:'20261114120000',postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -133,7 +133,10 @@ function lifecycleFixture() {
     return [set,...Array.from({length:count},(_,index)=>({kind:'Pod',metadata:{name:name+'-'+index,uid:rsUID+'-'+index,namespace:'kodex-system',
       labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rsUID,name:set.metadata.name,controller:true}]},
       spec:structuredClone(app.spec.template.spec),status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],
-        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}}))];
+        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}})).map(p=>{
+          if(name==='control-plane')faults.mutatePod?.(p);
+          return p;
+        })];
   });
   const kube=(args,input)=>{
     if(args.includes('exec')) {
@@ -222,6 +225,27 @@ test('044 resume: новые CP claims переживают потерянный
   assert.equal(f.patches.filter(n=>n==='control-plane').length,writes);
   const allWrites=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'RESUMED');assert.equal(f.patches.length,allWrites);
   f.faults.activeEffects=1;await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
+});
+
+test('044 ready: лишний debug/sidecar и изменённые команды Pod не подтверждают нового writer',async()=>{
+  const f=lifecycleFixture();await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();
+  f.faults.lostACK='control-plane';await assert.rejects(()=>f.lifecycle.resume(),/RESPONSE_LOST/);
+  f.faults.claimSessions=7;
+  const oldImage=f.plan.componentHandoff.components[0].beforeSpec.template.spec.containers[0].image;
+  const extra={name:'unapproved-writer',image:oldImage};
+  for(const mutate of [
+    p=>{p.spec.ephemeralContainers=[extra];p.status.ephemeralContainerStatuses=[{name:extra.name,imageID:oldImage,ready:true,state:{running:{}}}];},
+    p=>{p.spec.containers.push(extra);p.status.containerStatuses.push({name:extra.name,imageID:oldImage,ready:true,state:{running:{}}});},
+    p=>{p.spec.initContainers=[{...extra,restartPolicy:'Always'}];p.status.initContainerStatuses=[{name:extra.name,imageID:oldImage,ready:true,state:{running:{}}}];},
+    p=>{p.spec.containers[0].command=['/unapproved-writer'];},
+    p=>{p.status.containerStatuses.push(structuredClone(p.status.containerStatuses[0]));},
+    p=>{p.status.containerStatuses[0].imageID='unapproved-prefix'+p.status.containerStatuses[0].imageID.split('@')[1];},
+  ]) {
+    f.faults.mutatePod=mutate;
+    assert.equal(f.lifecycle.inspect().find(s=>s.name==='control-plane').ready,false);
+    await assert.rejects(()=>f.lifecycle.resume(),/OWNER_PRECONDITION_FAILED/);
+  }
+  f.faults.mutatePod=undefined;assert.equal((await f.lifecycle.resume()).status,'RESUMED');
 });
 
 test('public CLI044 normal/backup запрещает прежний путь без полного cohort до любой mutation',t=>{

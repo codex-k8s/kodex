@@ -313,11 +313,23 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const ready=actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expected.replicas &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expected.replicas) && pods.length === expected.replicas &&
       pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
-        ['containers','initContainers'].every(field => (actual.spec.template.spec[field] ?? []).every(c => {
-          const status=(p.status[field === 'containers' ? 'containerStatuses' : 'initContainerStatuses'] ?? []).find(v => v.name === c.name);
-          return image(c.image) && status?.imageID?.endsWith(c.image.split('@').at(-1)) &&
-            (field === 'containers' || c.restartPolicy === 'Always' ? status.ready === true : status.state?.terminated?.exitCode === 0);
-        })));
+        ['containers','initContainers','ephemeralContainers'].every(field => {
+          const expected=actual.spec.template.spec[field] ?? [], observed=p.spec?.[field] ?? [];
+          const statusField={containers:'containerStatuses',initContainers:'initContainerStatuses',ephemeralContainers:'ephemeralContainerStatuses'}[field];
+          const statuses=p.status[statusField] ?? [];
+          // Deployment template — полный согласованный состав. Admission/debug
+          // не вправе незаметно добавить writer, заменить command/env или создать
+          // второй status с тем же именем. Ephemeral writers не входят в профиль.
+          return Array.isArray(expected) && Array.isArray(observed) && Array.isArray(statuses) &&
+            (field !== 'ephemeralContainers' || expected.length === 0) &&
+            fingerprint(observed) === fingerprint(expected) && statuses.length === expected.length &&
+            expected.every(c => {
+              const matches=statuses.filter(v => v.name === c.name), status=matches[0], digest=c.image?.split('@').at(-1);
+              return image(c.image) && matches.length === 1 && typeof status.imageID === 'string' &&
+                (status.imageID === digest || status.imageID === 'containerd://'+digest || status.imageID.endsWith('@'+digest)) &&
+                (field === 'containers' || c.restartPolicy === 'Always' ? status.ready === true : status.state?.terminated?.exitCode === 0);
+            });
+        }));
     return {actual,stage,joined,ready};
   };
   const inspect = () => names.map(name => {

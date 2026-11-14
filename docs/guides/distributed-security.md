@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.66
+version: 1.7.68
 updated: 2026-11-14
 ---
 
@@ -2193,6 +2193,16 @@ UID/spec/resourceVersion/OCC, immutable опубликованные image/polic
 grants и внешних effects. Неизвестное состояние, неполное чтение или изменение
 pins закрыто останавливают обслуживание; history/receipts не удаляются для
 получения искусственного idle.
+
+Готовность нового writer после обслуживания подтверждается полным согласованным
+набором ordinary/init containers и их фактических CRI image IDs, а не только
+наличием ожидаемого основного контейнера. Фактические container specs совпадают
+с закреплённым Deployment template; дополнительные sidecars, изменённые
+commands/env, лишние либо дублированные statuses и ephemeral debug containers
+не дают доказательства готовности. Исключение из запрета старых claim sessions
+после запуска новой версии допустимо лишь при таком readback, положительной
+готовности всех owned Pods и durable resume intent именно этого компонента.
+Первый запуск и schema handoff требуют полного отсутствия прежних claims.
 
 Счётчик ожидающих публикаций образов отличает исторический snapshot от
 достижимой работы только по строгому read-only доказательству владельца.
