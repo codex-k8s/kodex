@@ -72,7 +72,8 @@ AV не доказывает отсутствие prompt injection. Семант
 1. Убедиться в отсутствии активных runtime executions и неподтверждённых
    отправок; сохранить текущие UID/source/image receipts и резервную копию.
    `tools/deploy/control-plane-pre-migration-backup.mjs --context k3d-kodex
-   --output-directory <private-directory>` сохраняет read-only custom dump
+   --kubeconfig <absolute-kubeconfig-path> --cluster-uid <kube-system-uid>
+   --namespace-uid <kodex-system-uid> --output-directory <private-directory>` сохраняет read-only custom dump
    Control Plane с SHA-256, exact PostgreSQL instance и проверкой TOC.
    Это не резервная копия всей платформы и не доказательство restore:
    S3 и другие домены не копируются; restore остаётся отдельным этапом плана.
