@@ -111,8 +111,10 @@ Required readers включают `control-api-gateway/AUTHORIZATION_ISSUER`.
 
 Private target использует существующий
 `kodex.portable-runner-target/v1`; allowlist включает exact существующие
-`control-plane`, `internal-rpc-authority-publisher` и
-`internal-rpc-authority-publisher-target-registry`. Файлы plan/evidence/profile
+`control-plane`, `internal-rpc-authority-publisher`,
+`internal-rpc-authority-publisher-target-registry`, Deployment и Service
+`control-api-gateway`. Общий fingerprint всех5 ресурсов совпадает с maintenance
+и traffic isolation proof. Файлы plan/evidence/profile
 принадлежат оператору, regular, без hardlink/symlink и group/other permissions.
 Все kubectl calls получают явные kubeconfig/context и request timeout.
 Проверки Secret prerequisites читают только имена объектов.
@@ -131,6 +133,8 @@ node tools/release/authority-rotation-transition.mjs plan \
   --portable-target /private/target.json \
   --maintenance-plan /private/api-admission-plan.json \
   --maintenance-evidence /private/api-admission.jsonl \
+  --traffic-plan /private/api-isolation-plan.json \
+  --traffic-evidence /private/api-isolation.jsonl \
   --source /exact/clean/source --revision EXACT_SHA \
   --action rotate --output /private/authority106-plan.json
 
@@ -145,6 +149,8 @@ node tools/release/control-plane-policy-projection.mjs plan \
   --portable-target /private/target.json \
   --maintenance-plan /private/api-admission-plan.json \
   --maintenance-evidence /private/api-admission.jsonl \
+  --traffic-plan /private/api-isolation-plan.json \
+  --traffic-evidence /private/api-isolation.jsonl \
   --output /private/cp106-plan.json
 
 node tools/release/control-plane-policy-projection.mjs apply \
@@ -153,11 +159,83 @@ node tools/release/control-plane-policy-projection.mjs apply \
   --confirm APPLY-PORTABLE-CATALOG-PROJECTION
 ```
 
-Оба helper поддерживают `resume` и `observe` того же plan/evidence. Projection
+Оба helper поддерживают `resume` и `observe` того же plan/evidence; `observe`
+получает также `--evidence`. Projection
 после потерянного ACK сначала проверяет immutable CM UID и exact CP spec;
 второй неизвестный ACK не разрешает новую CM с другим UID или иной template.
 `APPLIED` projection означает pointer CAS/readback, а не завершённый Pod rollout,
 успешный OIDC login или завершённую authority rotation.
+
+Перед возвратом исходного Service selector выполняется отдельный fresh
+`--action status` plan/apply с тем же source/context/kubeconfig. Его canonical
+read-only CLI Job должен завершиться, а owner `observedAt` быть не старше30секунд.
+`readCatalogAuthorityTerminal` проверяет exact operation UUID, registry/policy
+hashes, все16 required readbacks, `RETIRED`, phase deadlines и source snapshot.
+Job/Pоd связываются по UID, полным container/init/ephemeral arrays и CRI digests.
+Старый успешный watch Job не считается свежим DB query. Getter сам только
+читает; создание status Job остаётся явной операторской операцией.
+
+# Обновление immutable publisher image
+
+Старый CLI ошибочно требовал `registryRevision = baseRevision + 1` для каждой
+operation. Это верно при первой normal rotation, но последующие registry и
+snapshot sequences растут независимо. Исправленный CLI оставляет durable
+predecessor checks SQL owner и собственные bounded identity/state checks.
+Первая105→106 может использовать квалифицированный старый publisher только при
+подтверждённом owner state; следующая107 требует image с исправленным CLI.
+
+`tools/release/authority-publisher-image.mjs` меняет только main publisher image
+через UID/RV/full-spec CAS. Он сохраняет sidecars, volumes, policy/credential
+pins и replica count. `READY` требует полного owned Pod inventory, approved
+template/status/CRI digest и scheduling на квалифицированный Node.
+
+Принимаются фактические `stable-image-publication/v2` plan и ровно
+`INTENT/PASS` evidence вместе с canonical `build.json`. Перед plan/apply заново
+проверяются public source archive и actual NodeUID/containerUID/CRI repoDigest.
+Readonly `nodes` не выполняет pull; root/operator отдельно квалифицирует image.
+CLI image не выбирается свободным override: последующие authority Jobs
+используют exact image обслуживаемого publisher.
+
+Build source и executor tools — отдельные pins. Для этого исправления build
+source `5a516d6e1b15f560288605538e6e1f976e2545d3` сохранён в публичном
+`work/authority-catalog-build-2139`. Это исторический build candidate с известной
+лишней пустой строкой в synthetic fixture, без заявления deployment qualification.
+Image plan дополнительно сохраняет actual clean executor path/SHA и отклоняет
+apply/status другой версией tools. Смена executor не переписывает build provenance.
+
+```bash
+node tools/release/authority-publisher-image.mjs nodes \
+  --source /exact/clean/build-source --revision BUILD_SHA \
+  --publication-plan /private/authority-publication/plan.json \
+  --publication-evidence /private/authority-publication/apply.jsonl \
+  --build /private/authority-build/build.json --target /private/target.json \
+  --kubeconfig /private/operator-kubeconfig --context EXACT_CONTEXT \
+  --output /private/authority-node-proof.json
+
+node tools/release/authority-publisher-image.mjs plan \
+  --source /exact/clean/build-source --revision BUILD_SHA \
+  --publication-plan /private/authority-publication/plan.json \
+  --publication-evidence /private/authority-publication/apply.jsonl \
+  --build /private/authority-build/build.json --target /private/target.json \
+  --node-proof /private/authority-node-proof.json \
+  --maintenance-plan /private/api-admission-plan.json \
+  --maintenance-evidence /private/api-admission.jsonl \
+  --traffic-plan /private/api-isolation-plan.json \
+  --traffic-evidence /private/api-isolation.jsonl \
+  --kubeconfig /private/operator-kubeconfig --context EXACT_CONTEXT \
+  --plan /private/authority-image-plan.json
+
+node tools/release/authority-publisher-image.mjs apply \
+  --kubeconfig /private/operator-kubeconfig --context EXACT_CONTEXT \
+  --plan /private/authority-image-plan.json --evidence /private/authority-image.jsonl \
+  --approved-plan-sha EXACT_IMAGE_PLAN_SHA256
+```
+
+После `UNKNOWN` сначала выполнить `status` того же image plan/evidence.
+Повтор apply допускается по подтверждённому BEFORE readback либо уже
+подтверждённому after state; чужой UID/spec не принимается. Deployment revision
+annotation принадлежит Kubernetes controller; только этот числовой annotation
+не превращается в ложный drift после смены image. Остальные annotations точные.
 
 # Проверка и восстановление
 
@@ -175,10 +253,12 @@ predecessor и восстановление журналов после двух
 `DELIVERING`, partial fan-out, `UNKNOWN`, `PROMOTED` и `RETIRED` не откатываются
 обычным application rollback. Миграции043/044 и их journals остаются forward-only.
 
-Дополнительные images для этого authority перехода не требуются, если уже
+Дополнительные images для первой105→106 не требуются, если уже
 обслуживаемый stable publisher/sidecars совместимы с ABI2 и обычным rotation
 protocol. Publisher image/digest берутся из exact selected Deployment, а не
 из свободного аргумента. Для продукта каталога обязательны новые application
 images `control-plane`, `control-api-gateway`, `control-center`; прочие images
-большего cohort принадлежат своим изменениям. Пересборка authority без причины
+большего cohort принадлежат своим изменениям. Исправление CLI для последующих
+rotations требует отдельно описанного нового `internal-rpc-authority` image;
+sidecar ABI2 и DB schema от этого не меняются. Пересборка authority без причины
 не подменяет source publication,16 receipts или фактическую готовность RPC.

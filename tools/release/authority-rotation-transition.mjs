@@ -119,6 +119,9 @@ export function createRotationJob(template,plan){
  const spec=structuredClone(template.spec);delete spec.selector;delete spec.ttlSecondsAfterFinished;
  spec.backoffLimit=0;spec.activeDeadlineSeconds=300;
  materializeAuthorityJobDefaults(spec);
+ // EnableServiceLinks default применяется к Pod, но не к Job template. Только
+ // новый portable plan фиксирует прежнее true заранее; исторические77plans не меняются.
+ if(portable&&!Object.hasOwn(spec.template.spec,'enableServiceLinks'))spec.template.spec.enableServiceLinks=true;
  for(const key of ['controller-uid','job-name','batch.kubernetes.io/controller-uid','batch.kubernetes.io/job-name'])delete spec.template.metadata?.labels?.[key];
  const sourceProfile=spec.template.spec.containers[0].command?.[0]==='/workspace/tools/dev/run-go-command.sh';
  const args=[...(sourceProfile?['services/internal/internal-rpc-authority','./cmd/cli']:[]),plan.action==='abort'?'rotation-abort':plan.action==='rotate'?'rotation-watch':'rotation-status'];
@@ -244,7 +247,10 @@ export function verifyCatalogAuthorityJobPod(job,list) {
   pod.status?.phase==='Succeeded'&&isProvenStoppedPod(pod)&&!['Unknown','NodeLost'].includes(pod.status.reason)&&
   !pod.status.conditions?.some(condition=>condition.status==='Unknown')&&
   wanted.automountServiceAccountToken===false&&pod.spec.automountServiceAccountToken===false&&
-  pod.spec.serviceAccountName===wanted.serviceAccountName&&!pod.spec.hostNetwork&&!pod.spec.hostPID&&!pod.spec.hostIPC,
+  pod.spec.serviceAccountName===wanted.serviceAccountName&&!pod.spec.hostNetwork&&!pod.spec.hostPID&&!pod.spec.hostIPC&&
+  Object.keys(pod.spec).every(field=>Object.hasOwn(wanted,field)||['nodeName','preemptionPolicy','priority','tolerations'].includes(field))&&
+  ['runtimeClassName','shareProcessNamespace','hostUsers','ephemeralContainers'].every(field=>
+   Object.hasOwn(wanted,field)||pod.spec[field]===undefined||(field==='ephemeralContainers'&&Array.isArray(pod.spec[field])&&pod.spec[field].length===0)),
   'CATALOG_AUTHORITY_JOB_POD_REJECTED');
  for(const [field,expected] of Object.entries(wanted)) {
   requireValue(fingerprint(pod.spec[field])===fingerprint(expected),'CATALOG_AUTHORITY_JOB_POD_REJECTED');
@@ -268,7 +274,7 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 // plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
 // SQL owner сохраняет exact membership всех16 readers на трёх promotion phases;
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
-export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube) {
+export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io={}) {
  requireValue(plan?.action==='rotate'&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===catalogPolicyTransition&&
   freshPlan.context===plan.context&&freshPlan.kubeconfig===plan.kubeconfig&&freshPlan.source===plan.source&&freshPlan.revision===plan.revision&&
   freshPlan.cliImage===plan.cliImage&&Number.isFinite(now),'CATALOG_AUTHORITY_TERMINAL_INPUT_REJECTED');
@@ -276,7 +282,7 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
  requireValue(original.jobUID&&fresh.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
   events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART')&&
   freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus==='RETIRED'),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
- requireValue(inspectSource(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
+ requireValue((io.inspectSource??inspectSource)(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
  const get=(kind,name)=>parseAuthorityPrivateJSON(kube(['-n',namespace,'get',kind,name,'-o','json']));
  const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get);
  verifyCatalogTransition(plan.policyTransition,target.transition);verifyCatalogTransition(plan.policyTransition,freshPlan.policyTransition);
@@ -306,6 +312,10 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
  const rows=log.trim().split('\n').filter(Boolean);
  requireValue(rows.length===1,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const state=parseAuthorityPrivateJSON(rows[0]);
+ const ownerFields=new Set(['observedAt','operationId','operationStatus','phase','intentId','protocolVersion','sourceRevision','sourceDigestSHA256',
+  'registrySourceDigestSHA256','registryRevision','baseRevision','baseDigestSHA256','switchNotBefore','previousNotAfter','completedAt',
+  'predecessorRevision','predecessorDigestSHA256','deliveryStartedAt','deliveredAt','promotedAt','overlapUntil','retiredAt','abortedAt','status','expectedReadbackCount','actualReadbackCount']);
+ requireValue(Object.keys(state).every(key=>ownerFields.has(key)),'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const classified=classifyRotationStatus(job,JSON.stringify(state));
  const observed=Date.parse(state.observedAt),completed=Date.parse(state.completedAt),previous=Date.parse(state.previousNotAfter),switched=Date.parse(state.switchNotBefore);
  requireValue(classified.phase==='SUCCEEDED'&&state.status==='RETIRED'&&state.operationStatus==='RETIRED'&&state.operationId===plan.ownerOperationID&&
@@ -330,6 +340,7 @@ function sourcePublisherExecutable(deployment,get,kube,k3sSudo){
 }
 
 export async function main(args,io={}){
+ args=[...args];
  const execute=io.run??run,inspect=io.inspectSource??inspectSource;
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
  while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
@@ -344,7 +355,7 @@ export async function main(args,io={}){
  const kubeInput=(input,...argv)=>options['--k3s-sudo']?execute('sudo',['-n','k3s','kubectl',...kubeArgs,...argv],input):execute('kubectl',[...kubeArgs,...argv],input);
  const kube=(...argv)=>kubeInput(undefined,...argv);
  const replace=value=>kubeInput(JSON.stringify(value),'replace','-f','-');
- requireValue(kube('config','current-context')===options['--context'],'CONTEXT_MISMATCH');
+ if(!catalog)requireValue(kube('config','current-context')===options['--context'],'CONTEXT_MISMATCH');
  const get=(kind,name)=>JSON.parse(kube('get',kind,...(name?[name]:[]),'-n',namespace,'-o','json'));
  const ns=get('namespace',namespace);
  const targetProfile=catalog?(command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):loadedPlan.policyTransition.targetProfile):undefined;

@@ -350,8 +350,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
         installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items});
       const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
-      const children = JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-l','app.kubernetes.io/name=control-api-gateway','-o','json']));
-      ensure(gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
+      const children = readComponentServingInventory(kube,'control-api-gateway',gateway.metadata.uid);
+      ensure(gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
         activeDeploymentPods(children,gateway.metadata.uid).length === 0, 'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
       return target;
     }

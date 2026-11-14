@@ -1952,6 +1952,29 @@ test('public portable CLI check→stop/join→043→paired handoff→resume ис
  for(let i=0;i<paths.length;i+=2)assert.equal(paths[i],paths[i+1]);
 });
 
+test('pre-DDL API gate отвергает desired replicas>0 при устаревшем нулевом status',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);
+ f.edit(s=>{s.gateway.spec.replicas=1;s.gateway.status.replicas=0;});
+ const result=f.run('plan');
+ assert.notEqual(result.status,0,'desired API replica was hidden by zero status');
+ assert.match(result.stderr,/COMPONENT_MIGRATION_MAINTENANCE_(?:JOIN_)?REQUIRED/);
+ assert.equal(f.read().calls.filter(args=>args.includes('create')&&!args.includes('--dry-run=server')).length,0);
+});
+
+test('pre-DDL API gate сохраняет label-drift descendants через namespace inventory',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);
+ f.edit(s=>{s.extraServingInventory=[
+  {kind:'ReplicaSet',metadata:{name:'api-drift-rs',uid:'api-drift-rs',namespace:'kodex-system',ownerReferences:[{kind:'Deployment',uid:s.gateway.metadata.uid,controller:true}]}},
+  {apiVersion:'v1',kind:'Pod',metadata:{name:'api-drift-pod',uid:'api-drift-pod',namespace:'kodex-system',labels:{'app.kubernetes.io/name':'changed'},
+    ownerReferences:[{kind:'ReplicaSet',name:'api-drift-rs',uid:'api-drift-rs',controller:true}]},spec:{containers:[{name:'api'}]},
+    status:{phase:'Running',containerStatuses:[{name:'api',state:{running:{}}}]}}
+ ];});
+ const result=f.run('plan');
+ assert.notEqual(result.status,0,'label drift hid a live API descendant');
+ assert.match(result.stderr,/COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED/);
+ assert.equal(f.read().calls.filter(args=>args.includes('create')&&!args.includes('--dry-run=server')).length,0);
+});
+
 test('portable pair: real kubectl --local принимает regular file во всех пяти CAS переходах',t=>{
  const binary=execFileSync('which',['kubectl'],{encoding:'utf8'}).trim();
  const f=cli(t,'workspace-unbound-stop','',true);f.edit(s=>{s.realKubectl=binary;});
