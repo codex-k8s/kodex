@@ -161,7 +161,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 	invocation := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.project.metadata.read", map[string]any{}, credential)
 	invocation.Configuration["base_url"] = "https://gitlab.example.invalid"
 	capability, _ := adapter.definitions["gitlab"].Capability(invocation.CapabilityKey)
-	invocation.ResourceScope, err = capability.ResourceScopeValues(map[string]string{"base_url": "https://gitlab.example.invalid", "project_path": "group/project"})
+	invocation.ResourceScope, err = capability.ResourceScopeValues(map[string]string{"base_url": "https://gitlab.example.invalid", "scope_kind": "PROJECT", "project_path": "group/project"})
 	if err != nil {
 		t.Fatal(err)
 	}

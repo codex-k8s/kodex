@@ -12,6 +12,7 @@ import (
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
@@ -30,10 +31,20 @@ import (
 func testConfigurationSourceLifecycle(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner value.Principal) {
 	t.Helper()
 	created, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "cfg-source-connection"},
-		Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Git source", PublicConfiguration: map[string]any{"owner": "example", "repository": "configuration"}}})
+		Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Git source", PublicConfiguration: map[string]any{"scope_kind": "SELECTED", "repositories": `[{"id":42,"full_name":"example/configuration"}]`, "service_identity": "configuration-bot"}}})
 	if err != nil || created.Connection == nil {
 		t.Fatalf("source connection: %v", err)
 	}
+	// The source worker uses an explicitly selected service identity; selecting repositories alone does not enable a shared credential.
+	// Source worker использует явно выбранную service identity; выбор repositories сам по себе не включает shared credential.
+	execute := newComponentCommandExecutor(t, ctx, service, "cfg-source-explicit-service-")
+	policyOwner := owner
+	policyOwner.Permission = "platform.command.integrations.enable"
+	disabled := execute(command.SetConnectionEnabled, policyOwner, "disable", &created.Connection.Version, command.ConnectionInput{Ref: created.Connection.Ref, Enabled: false}).Connection
+	policyOwner.Permission = "platform.integrations.credential-policy.set"
+	selected := execute(command.SetIntegrationCredentialPolicy, policyOwner, "policy", &disabled.Version, command.IntegrationCredentialPolicyInput{ConnectionRef: disabled.Ref, Policy: entity.IntegrationCredentialProjectShared}).Connection
+	policyOwner.Permission = "platform.command.integrations.enable"
+	execute(command.SetConnectionEnabled, policyOwner, "enable", &selected.Version, command.ConnectionInput{Ref: selected.Ref, Enabled: true})
 	resolvedOwner, err := repository.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatalf("source owner principal: %v", err)
