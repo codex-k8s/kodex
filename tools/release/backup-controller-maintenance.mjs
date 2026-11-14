@@ -78,6 +78,7 @@ const active=(deployment,resources)=>activeDeploymentPods(componentServingInvent
 const stopped=(deployment,resources)=>deployment.spec.replicas===0&&deployment.status?.observedGeneration>=deployment.metadata.generation&&
  ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key=>(deployment.status[key]??0)===0)&&active(deployment,resources).length===0;
 function validate(plan){
+ fail(plan?.executorSHA===undefined||plan.action==='resume'&&/^[a-f0-9]{40}$/.test(plan.executorSHA)&&plan.executorSHA!==plan.sourceSHA,'BACKUP_MAINTENANCE_EXECUTOR_INVALID');
  fail(plan?.schema==='kodex.backup-controller-maintenance-plan/v1'&&['stop','resume'].includes(plan.action)&&uuid(plan.maintenanceID)&&uuid(plan.deploymentUID)&&
   /^[a-f0-9]{40}$/.test(plan.sourceSHA??'')&&/^\d+$/.test(plan.beforeResourceVersion??'')&&Number.isSafeInteger(plan.replicas)&&plan.replicas>0&&plan.replicas<=8&&
   plan.target?.resources?.some(item=>item.kind==='Deployment'&&item.name===name&&item.uid===plan.deploymentUID)&&
@@ -98,19 +99,20 @@ export function requireStoppedBackupController(deployment,resources,{plan,events
  fail(intent>0&&events.some((event,index)=>index>intent&&event.type==='OBSERVED'&&event.state==='STOPPED'&&event.deploymentUID===plan.deploymentUID&&event.maintenanceID===plan.maintenanceID),'BACKUP_MAINTENANCE_STOP_UNCONFIRMED');
  return {planSHA256:fingerprint(plan),targetSHA256:fingerprint(plan.target),deploymentUID:plan.deploymentUID,sourceSHA:plan.sourceSHA};
 }
-export function planBackupControllerMaintenance(deployment,target,observed,sourceSHA,action,previous,producerInventory){
+export function planBackupControllerMaintenance(deployment,target,observed,sourceSHA,action,previous,producerInventory,stoppedSourceSHA){
  const scope=portableRunnerTarget(target,observed);
+ fail(stoppedSourceSHA===undefined||action==='resume'&&stoppedSourceSHA===previous?.plan?.sourceSHA&&sourceSHA!==stoppedSourceSHA,'BACKUP_MAINTENANCE_EXECUTOR_INVALID');
  fail(scope.allows(deployment)&&deployment.kind==='Deployment'&&deployment.metadata.name===name&&['stop','resume'].includes(action)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&
   !deployment.spec.paused&&deployment.status?.observedGeneration>=deployment.metadata.generation,'BACKUP_MAINTENANCE_SCOPE_INVALID');
  requireBackupProducerBoundary(producerInventory,deployment.metadata.uid,action==='resume',observed.postgres);
  if(action==='resume'){
   requireStoppedBackupController(deployment,observed.resources,previous,producerInventory);
-  fail(same(target,previous.plan.target)&&sourceSHA===previous.plan.sourceSHA&&same(observed.postgres,previous.plan.postgres),'BACKUP_MAINTENANCE_SCOPE_INVALID');
+  fail(same(target,previous.plan.target)&&(sourceSHA===previous.plan.sourceSHA||stoppedSourceSHA===previous.plan.sourceSHA)&&same(observed.postgres,previous.plan.postgres),'BACKUP_MAINTENANCE_SCOPE_INVALID');
  }
  const maintenanceID=action==='stop'?randomUUID():previous.plan.maintenanceID,replicas=action==='stop'?deployment.spec.replicas:previous.plan.replicas;
  const afterSpec={...structuredClone(deployment.spec),replicas:action==='stop'?0:replicas},afterAnnotations={...deployment.metadata.annotations};
  if(action==='stop')afterAnnotations[marker]=JSON.stringify({maintenanceID,targetSHA256:scope.digest,replicas});else delete afterAnnotations[marker];
- const plan={schema:'kodex.backup-controller-maintenance-plan/v1',sourceSHA,action,target,postgres:structuredClone(observed.postgres),maintenanceID,replicas,deploymentUID:deployment.metadata.uid,
+ const plan={schema:'kodex.backup-controller-maintenance-plan/v1',sourceSHA:stoppedSourceSHA??sourceSHA,...(stoppedSourceSHA?{executorSHA:sourceSHA}:{}),action,target,postgres:structuredClone(observed.postgres),maintenanceID,replicas,deploymentUID:deployment.metadata.uid,
   beforeResourceVersion:deployment.metadata.resourceVersion,beforeSpec:structuredClone(deployment.spec),afterSpec,beforeAnnotations:{...deployment.metadata.annotations},afterAnnotations,
   ...(action==='resume'?{stopPlanSHA256:fingerprint(previous.plan)}:{})};validate(plan);return plan;
 }
