@@ -1,0 +1,63 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: telegram
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Telegram
+  description: Исходящие безопасные уведомления выбранного проекта от явно настроенного служебного бота; без входящих команд и произвольных сообщений.
+  category: communications
+  adapter: TELEGRAM_INTERACTION
+  adapterOwner: interaction-gateway
+  executionRoute: INTERACTION
+  readiness: READY
+  credential:
+    secretKey: bot_token
+    kind: TOKEN
+  configurationFields:
+    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 256, allowedValues: ["https://api.telegram.org"]}
+    - {key: bot_id, type: INTEGER, required: true, minimum: 1, maximum: 4503599627370495}
+    - {key: chat_id, type: STRING, format: PLAIN, required: true, maximumLength: 17}
+    - {key: topic, type: STRING, format: PLAIN, required: true, maximumLength: 10}
+    - {key: quiet_enabled, type: BOOLEAN, required: false}
+    - {key: quiet_start, type: STRING, format: PLAIN, required: false, maximumLength: 5}
+    - {key: quiet_end, type: STRING, format: PLAIN, required: false, maximumLength: 5}
+    - {key: quiet_timezone, type: STRING, format: PLAIN, required: false, maximumLength: 80}
+    - {key: queue_limit, type: INTEGER, required: false, minimum: 1, maximum: 1000}
+    - {key: rate_per_minute, type: INTEGER, required: false, minimum: 1, maximum: 20}
+    - {key: delivery_ttl_seconds, type: INTEGER, required: false, minimum: 60, maximum: 86400}
+  networkDestinations:
+    - {key: telegram_bot_api, source: STATIC, hostname: api.telegram.org, port: 443, tls: REQUIRED}
+  healthCheck:
+    operation: telegram.connection.read
+    timeoutSeconds: 15
+    maxAttempts: 1
+  capabilities:
+    - key: telegram.connection.read
+      name: Проверить служебного бота и chat
+      description: Читает текущую identity бота и точный настроенный chat без отправки сообщения.
+      operation: telegram.connection.read
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url, bot_id, chat_id, topic]}
+      inputFields: []
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32, allowedValues: [VERIFIED]}
+      execution: {idempotency: READ_ONLY, timeoutSeconds: 15, maxAttempts: 1, retryBackoffMilliseconds: 1000}
+    - key: telegram.notifications
+      name: Уведомлять о событиях проекта
+      description: Отправляет только безопасный серверный шаблон по действующей ограниченной подписке проекта; не является инструментом агента.
+      operation: telegram.notifications
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: [HUMAN_SCOPED]
+      resourceScope: {kind: HTTPS_RESOURCE, connectionFields: [base_url, bot_id, chat_id, topic]}
+      inputFields:
+        - {key: project_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 96}
+        - {key: event_type, type: STRING, format: IDENTIFIER, required: true, maximumLength: 16, allowedValues: [FINISHED, FAILED, HUMAN_GATE]}
+        - {key: template_key, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40, allowedValues: [TELEGRAM_FINISHED_V1, TELEGRAM_FAILED_V1, TELEGRAM_HUMAN_GATE_V1]}
+      outputFields:
+        - {key: status, type: STRING, format: IDENTIFIER, required: true, maximumLength: 32, allowedValues: [DELIVERED]}
+      execution: {idempotency: EFFECT_KEY, timeoutSeconds: 20, maxAttempts: 3, retryBackoffMilliseconds: 1000}

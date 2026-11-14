@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -77,6 +78,9 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 			ExternalTeamRef: mapString(item, "externalTeamRef"), ExternalChannelRef: mapString(item, "externalChannelRef"),
 			ExternalRootPostRef: mapString(item, "externalRootPostRef"), AcceptanceReceiptRef: mapString(item, "acceptanceReceiptRef"),
 		})
+		if snapshot, ok := item["telegram"].(integrationpackage.TelegramDeliverySnapshot); ok {
+			response.Claims[len(response.Claims)-1].Telegram = castTelegramDeliveryPin(snapshot, mapString(item, "inputDigest"))
+		}
 	}
 	return response, nil
 }
@@ -87,11 +91,16 @@ func (server *Server) ClaimInteractionDeliveries(ctx context.Context, request *c
 // команде завершения и возвращает состояние доставки с CoreRunAffected=false.
 func (server *Server) CompleteInteractionDelivery(ctx context.Context, request *controlplanev1.CompleteInteractionDeliveryRequest) (*controlplanev1.CompleteInteractionDeliveryResponse, error) {
 	payload := command.InteractionDeliveryInput{
+		InputDigest: request.GetInputDigest(), RetryAfterSeconds: request.GetRetryAfterSeconds(),
 		DeliveryRef: request.GetDeliveryRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(),
 		Generation: request.GetGeneration(), Success: request.GetSuccess(), ExternalPostRef: request.GetExternalPostRef(),
 		ExternalThreadRef: request.GetExternalThreadRef(), SafeErrorCode: request.GetSafeErrorCode(),
 		UnknownOutcome: request.GetUnknownOutcome(), ConfirmedNoEffect: request.GetConfirmedNoEffect(),
 		ExternalTeamRef: request.GetExternalTeamRef(), ExternalChannelRef: request.GetExternalChannelRef(),
+	}
+	if receipt := request.GetTelegramReceipt(); receipt != nil {
+		payload.TelegramReceipt = &entity.TelegramDeliveryReceipt{
+			BotID: receipt.GetBotId(), ChatID: receipt.GetChatId(), TopicID: receipt.GetTopicId(), MessageID: receipt.GetMessageId()}
 	}
 	return executeResponse(ctx, server.service, controlplanev1.InteractionWorkService_CompleteInteractionDelivery_FullMethodName, command.CompleteInteractionDelivery, request.GetMutation(), payload, func(result command.Result) *controlplanev1.CompleteInteractionDeliveryResponse {
 		return &controlplanev1.CompleteInteractionDeliveryResponse{DeliveryRef: mapString(result.Runtime, "deliveryRef"), State: mapString(result.Runtime, "state"), CoreRunAffected: false}

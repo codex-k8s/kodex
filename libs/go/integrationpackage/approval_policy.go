@@ -86,7 +86,7 @@ func validCapabilityApprovalPolicies(definition *Package, capability Capability)
 			return false
 		}
 		if policy == string(ApprovalHumanScoped) && definition.Spec.Adapter != string(AdapterOpenAPIMCP) &&
-			!definition.CollaborativeWrite(capability) {
+			!definition.CollaborativeWrite(capability) && !telegramSubscriptionApproval(definition, capability) {
 			return false
 		}
 	}
@@ -95,6 +95,15 @@ func validCapabilityApprovalPolicies(definition *Package, capability Capability)
 			(capability.Operation == "context7.library.resolve" || capability.Operation == "context7.docs.query")
 	}
 	return true
+}
+
+// telegramSubscriptionApproval confines project subscription consent to the fixed system-only Telegram notification operation; it never enables generic agent grants.
+// telegramSubscriptionApproval ограничивает согласие проектной подписки фиксированной системной операцией Telegram; generic agent grants не разрешаются.
+func telegramSubscriptionApproval(definition *Package, capability Capability) bool {
+	return definition.Metadata.Key == "telegram" && definition.Spec.Adapter == string(AdapterTelegram) &&
+		capability.Operation == "telegram.notifications" && capability.Risk == string(RiskWrite) &&
+		capability.ApprovalPolicy == string(ApprovalHumanScoped) && len(capability.AllowedApprovalPolicies) == 1 &&
+		capability.AllowedApprovalPolicies[0] == string(ApprovalHumanScoped)
 }
 
 // narrowApprovalPolicies accepts only a nonempty duplicate-free subset of an existing approved policy set.

@@ -16,6 +16,7 @@ JOIN control_plane.runs run ON run.id = d.root_run_id
 WHERE d.organization_id = @organization_id::uuid
   AND d.ref = @delivery_ref
   AND d.state = 'CLAIMED'
+  AND d.capability_key <> 'telegram.notifications'
   AND d.lease_ref = @lease_ref
   AND d.fence_digest = encode(digest(@fence, 'sha256'), 'hex')
   AND d.generation = @generation

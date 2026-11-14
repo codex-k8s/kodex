@@ -18,6 +18,11 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounte
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --telegram-notifications-capture ]]; then
+  [[ -n ${KODEX_TELEGRAM_NOTIFICATIONS_SCHEMA_CAPTURE_DIRECTORY:-} ]] || fail 'Telegram schema capture requires a private capture directory'
+  upgrade_test='^TestTelegramNotificationsCatalogCapture$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --sentry-observability-upgrade ]]; then
   upgrade_test='^TestSentryObservabilityUpgrade$'
   if [[ -n ${KODEX_SENTRY_OBSERVABILITY_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestSentryObservabilityCatalogCapture$'; fi

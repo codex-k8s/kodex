@@ -90,6 +90,8 @@ service PlatformQueryService {
   rpc GetSystemAssistantIntegrationGrantCandidates(GetSystemAssistantIntegrationGrantCandidatesRequest) returns (GetSystemAssistantIntegrationGrantCandidatesResponse);
   rpc GetProjectAssistantIntegrationGrantCandidates(GetProjectAssistantIntegrationGrantCandidatesRequest) returns (GetProjectAssistantIntegrationGrantCandidatesResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
+  rpc GetTelegramSubscription(GetTelegramSubscriptionRequest) returns (GetTelegramSubscriptionResponse);
+  rpc ListInteractionDeliveries(ListInteractionDeliveriesRequest) returns (ListInteractionDeliveriesResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
   rpc GetAgentRuntimeConfiguration(GetAgentRuntimeConfigurationRequest) returns (GetAgentRuntimeConfigurationResponse);
@@ -255,6 +257,7 @@ service PlatformCommandService {
   rpc SetProviderAccountConcurrency(SetProviderAccountConcurrencyRequest) returns (SetProviderAccountConcurrencyResponse);
   rpc CreateIntegrationConnection(CreateIntegrationConnectionRequest) returns (CreateIntegrationConnectionResponse);
   rpc UpdateIntegrationConnection(UpdateIntegrationConnectionRequest) returns (UpdateIntegrationConnectionResponse);
+  rpc ConfigureTelegramSubscription(ConfigureTelegramSubscriptionRequest) returns (ConfigureTelegramSubscriptionResponse);
   rpc DeleteIntegrationConnection(DeleteIntegrationConnectionRequest) returns (DeleteIntegrationConnectionResponse);
   rpc ConfigureIntegrationConnectionCredential(ConfigureIntegrationConnectionCredentialRequest) returns (ConfigureIntegrationConnectionCredentialResponse);
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
@@ -469,6 +472,7 @@ service InteractionWorkService {
   rpc ListInteractionSources(ListInteractionSourcesRequest) returns (ListInteractionSourcesResponse);
   rpc ClaimInteractionDeliveries(ClaimInteractionDeliveriesRequest) returns (ClaimInteractionDeliveriesResponse);
   rpc CompleteInteractionDelivery(CompleteInteractionDeliveryRequest) returns (CompleteInteractionDeliveryResponse);
+  rpc BeginInteractionDelivery(BeginInteractionDeliveryRequest) returns (BeginInteractionDeliveryResponse);
   rpc AcceptInteractionMessage(AcceptInteractionMessageRequest) returns (AcceptInteractionMessageResponse);
 }
 
@@ -5129,6 +5133,7 @@ message InteractionDeliveryClaim {
   string approval_gate_ref = 25;
   int64 approval_gate_version = 26;
   string source_capability_key = 27;
+  TelegramDeliveryPin telegram = 28;
 }
 message ClaimInteractionDeliveriesRequest {
   string workload_instance = 1;
@@ -5151,6 +5156,9 @@ message CompleteInteractionDeliveryRequest {
   bool confirmed_no_effect = 11;
   string external_team_ref = 12;
   string external_channel_ref = 13;
+  TelegramDeliveryReceipt telegram_receipt = 14;
+  int32 retry_after_seconds = 15;
+  string input_digest = 16;
 }
 message CompleteInteractionDeliveryResponse {
   string delivery_ref = 1;
@@ -9828,20 +9836,20 @@ message ModelCacheResolution {
 
 // Только безопасные наблюдения собственного ключа; эти поля никогда не являются источником authority.
 message GitHubDiscoveredRepository {
- int64 id=1;
- string full_name=2;
- string owner_kind=3;
- bool private=4;
- bool archived=5;
- bool can_read=6;
- bool can_push=7;
+  int64 id = 1;
+  string full_name = 2;
+  string owner_kind = 3;
+  bool private = 4;
+  bool archived = 5;
+  bool can_read = 6;
+  bool can_push = 7;
 }
 message GitHubRepositoryDiscoveryPage {
- int64 identity_id=1;
- string login=2;
- int32 page=3;
- int32 next_page=4;
- repeated GitHubDiscoveredRepository items=5;
+  int64 identity_id = 1;
+  string login = 2;
+  int32 page = 3;
+  int32 next_page = 4;
+  repeated GitHubDiscoveredRepository items = 5;
 }
 
 // Закреплённые provenance и статусы поиска; не являются account observation.
@@ -9909,4 +9917,105 @@ message ListModelDiscoveryResponse {
   ModelDiscoverySource source = 3;
   int64 total = 4;
   string group_by = 5;
+}
+
+// Настройка принадлежит проекту; scope и authority назначаются owner command.
+message TelegramSubscription {
+  string ref = 1;
+  string project_ref = 2;
+  string connection_ref = 3;
+  int64 version = 4;
+  bool enabled = 5;
+  string state = 6;
+  repeated string event_types = 7;
+  string scope_digest = 8;
+  int64 bot_id = 9;
+  string chat_display = 10;
+  string topic_display = 11;
+  google.protobuf.Timestamp expires_at = 12;
+  int32 max_effects = 13;
+  int32 used_effects = 14;
+  google.protobuf.Timestamp updated_at = 15;
+  bool can_manage = 16;
+}
+message ConfigureTelegramSubscriptionRequest {
+  MutationContext mutation = 1;
+  string project_ref = 2;
+  string connection_ref = 3;
+  bool enabled = 4;
+  repeated string event_types = 5;
+  int32 duration_seconds = 6;
+  int32 max_effects = 7;
+}
+message ConfigureTelegramSubscriptionResponse {
+  TelegramSubscription subscription = 1;
+}
+message GetTelegramSubscriptionRequest {
+  string project_ref = 1;
+}
+message GetTelegramSubscriptionResponse {
+  TelegramSubscription subscription = 1;
+  bool can_manage = 2;
+}
+// Безопасное чтение статуса; private chat, credentials и template body отсутствуют.
+message InteractionDeliveryView {
+  string ref = 1;
+  int64 version = 2;
+  string connection_ref = 3;
+  string run_ref = 4;
+  string gate_ref = 5;
+  string event_type = 6;
+  string state = 7;
+  int32 attempt = 8;
+  bool retryable = 9;
+  string safe_error_code = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp available_at = 12;
+  google.protobuf.Timestamp completed_at = 13;
+  string receipt_ref = 14;
+}
+message ListInteractionDeliveriesRequest {
+  string project_ref = 1;
+  PageRequest page = 2;
+}
+message ListInteractionDeliveriesResponse {
+  repeated InteractionDeliveryView items = 1;
+  PageInfo page = 2;
+}
+// Приватный неизменяемый snapshot владельца, не browser DTO и не grant из payload.
+message TelegramDeliveryPin {
+  string subscription_ref = 1;
+  int64 subscription_version = 2;
+  string scope_digest = 3;
+  int64 bot_id = 4;
+  int64 chat_id = 5;
+  int64 topic_id = 6;
+  string event_type = 7;
+  string template_key = 8;
+  string input_digest = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  string project_ref = 11;
+  string public_origin = 12;
+  map<string, string> configuration = 13;
+}
+message TelegramDeliveryReceipt {
+  int64 bot_id = 1;
+  int64 chat_id = 2;
+  int64 topic_id = 3;
+  int64 message_id = 4;
+}
+message BeginInteractionDeliveryRequest {
+  string delivery_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string input_digest = 5;
+}
+message BeginInteractionDeliveryResponse {
+  string delivery_ref = 1;
+  bool allowed = 2;
+  bool already_started = 3;
+  string input_digest = 4;
+  string safe_error_code = 5;
+  int32 retry_after_seconds = 6;
 }

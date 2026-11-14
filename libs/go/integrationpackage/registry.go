@@ -1,6 +1,9 @@
 package integrationpackage
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // AdapterKey selects one registered executable adapter without allowing a caller-defined implementation.
 // AdapterKey выбирает зарегистрированный исполняемый адаптер без реализации, заданной вызывающим кодом.
@@ -167,6 +170,7 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterHTTPSJSONRead: {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterOpenAPIMCP:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterMattermost:    {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
+	AdapterTelegram:      {Owner: OwnerInteractionGateway, Route: RouteInteraction, Readiness: ReadinessReady},
 	AdapterContext7:      {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterSSHCompose:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 }
@@ -206,7 +210,7 @@ func (definition Package) ExecutableBy(owner AdapterOwner, route ExecutionRoute)
 // CallableByAgent отделяет пользовательскую команду MCP от подписки,
 // которая принимает события и решения реального внешнего пользователя.
 func (capability Capability) CallableByAgent() bool {
-	return validKey(capability.Operation) && capability.Operation != "mattermost.inbound" && capability.Operation != "mattermost.gate_decisions"
+	return validKey(capability.Operation) && !strings.HasPrefix(capability.Operation, "telegram.") && capability.Operation != "mattermost.inbound" && capability.Operation != "mattermost.gate_decisions"
 }
 
 var (

@@ -316,13 +316,21 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 	}
 	for key, raw := range configuration {
 		field, exists := fields[key]
-		if !exists || validateStringValue(field, raw, false) != nil {
+		if !exists || validateConfigurationValue(field, raw) != nil {
 			return errors.New("integration configuration is invalid")
 		}
 	}
 	for _, field := range definition.Spec.ConfigurationFields {
 		if _, exists := configuration[field.Key]; field.Required && !exists {
 			return errors.New("integration configuration required field is missing")
+		}
+	}
+	if definition.Spec.Adapter == string(AdapterTelegram) {
+		if err := validateTelegramDefinition(definition); err != nil {
+			return err
+		}
+		if _, err := ParseTelegramConfiguration(configuration); err != nil {
+			return err
 		}
 	}
 	if definition.Metadata.Key == "jira-server-dc" {
@@ -813,6 +821,11 @@ func validate(result *Package) error {
 			return errors.New("integration package operation is duplicated")
 		}
 		capabilityOperations[capability.Operation] = capability
+	}
+	if result.Spec.Adapter == string(AdapterTelegram) {
+		if err := validateTelegramDefinition(*result); err != nil {
+			return err
+		}
 	}
 	healthCapability, exists := capabilityOperations[result.Spec.HealthCheck.Operation]
 	if !exists || healthCapability.Risk != "READ" || result.Spec.HealthCheck.TimeoutSeconds < 1 ||

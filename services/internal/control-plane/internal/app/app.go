@@ -100,6 +100,9 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err != nil {
 		return startupFailure(stageConstructPlatformRepository, err)
 	}
+	if err := repository.ConfigureInteractionPublicOrigin(config.InteractionPublicOrigin); err != nil {
+		return err
+	}
 	metrics := observability.NewMetrics("control_plane", version, nil)
 	modelMetrics, err := modelmeasurement.New(metrics.Register)
 	if err != nil {

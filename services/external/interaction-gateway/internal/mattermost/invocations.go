@@ -1,19 +1,17 @@
 package mattermost
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"maps"
-	"strings"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
-	"github.com/google/uuid"
+	"github.com/codex-k8s/kodex/services/external/interaction-gateway/internal/projectedcredential"
 	"github.com/mattermost/mattermost/server/public/model"
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -24,7 +22,7 @@ const maximumInvocationOutput = 64 << 10
 
 // credentialSecretPrefix confines descriptors to the configured shared credential Secret; ReadKey independently validates the selected key path.
 // RU: credentialSecretPrefix ограничивает descriptor заданным общим Secret реквизитов; ReadKey независимо проверяет путь выбранного ключа.
-const credentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
+const credentialSecretPrefix = projectedcredential.SecretPrefix
 
 // errInvocation rejects a capability, bounded input or scope inconsistent with the selected executable package.
 // RU: errInvocation отклоняет capability, ограниченный ввод или область, несовместимые с выбранным исполняемым пакетом.
@@ -249,34 +247,9 @@ func (adapter *Adapter) invocationClient(ctx context.Context, configuration map[
 // UID/resource-version fields are shape-checked here, not resolved by a Kubernetes API lookup.
 // RU: Поля UID/resource-version здесь проверяются по форме, а не разрешаются запросом Kubernetes API.
 func (adapter *Adapter) readInvocationCredential(ctx context.Context, credential *controlplanev1.IntegrationCredentialRevision) ([]byte, error) {
-	if credential == nil || credential.GetRef() == "" || credential.GetRevision() < 1 || uuid.Validate(credential.GetSecretUid()) != nil || credential.GetSecretResourceVersion() == "" || len(credential.GetSecretResourceVersion()) > 128 || len(credential.GetContentSha256()) != 64 || !strings.HasPrefix(credential.GetSecretRef(), credentialSecretPrefix) {
+	value, err := projectedcredential.Read(ctx, adapter.credentials, credential, adapter.timeout)
+	if err != nil {
 		return nil, errCredential
 	}
-	ctx, cancel := context.WithTimeout(ctx, adapter.timeout)
-	defer cancel()
-	key := strings.TrimPrefix(credential.GetSecretRef(), credentialSecretPrefix)
-	for {
-		if ctx.Err() != nil {
-			return nil, errCredential
-		}
-		value, err := adapter.credentials.ReadKey(key)
-		if err == nil {
-			trimmed := bytes.TrimSpace(value)
-			digest := sha256.Sum256(trimmed)
-			if len(trimmed) == 0 || len(trimmed) > 16<<10 || bytes.ContainsAny(trimmed, "\r\n") || hex.EncodeToString(digest[:]) != credential.GetContentSha256() {
-				clear(value)
-				return nil, errCredential
-			}
-			result := bytes.Clone(trimmed)
-			clear(value)
-			return result, nil
-		}
-		timer := time.NewTimer(250 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, errCredential
-		case <-timer.C:
-		}
-	}
+	return value, nil
 }
