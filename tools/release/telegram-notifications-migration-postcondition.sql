@@ -1,7 +1,35 @@
 -- Generated: generate-telegram-notifications-proof.py; полный закрытый schema catalog.
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SET LOCAL statement_timeout='15s';SET LOCAL lock_timeout='500ms';SET LOCAL search_path=pg_catalog;
-DO $catalog_guard$ DECLARE actual jsonb;BEGIN SELECT (-- name: github_repository_scope_catalog :one
+DO $catalog_guard$ DECLARE actual jsonb;BEGIN IF (-- Закрытая identity sequence канонического bootstrap. Public foreign sequences
+-- не получают backup grants при GRANT ON ALL SEQUENCES. Table-only и canonical
+-- допускают только отсутствие backup ACL либо точные SELECT+USAGE.
+WITH registered AS (
+ SELECT c.oid,c.relowner,c.relacl
+ FROM pg_catalog.pg_class c
+ JOIN pg_catalog.pg_sequence s ON s.seqrelid=c.oid
+ WHERE c.relnamespace='public'::regnamespace AND c.relname='goose_db_version_id_seq'
+ AND c.relkind='S' AND c.relowner='control_plane_owner'::regrole
+ AND c.relpersistence='p' AND c.reloptions IS NULL
+ AND s.seqtypid='integer'::regtype AND s.seqstart=1 AND s.seqincrement=1
+ AND s.seqmin=1 AND s.seqmax=2147483647 AND s.seqcache=1 AND NOT s.seqcycle
+ AND EXISTS(SELECT 1 FROM pg_catalog.pg_depend d JOIN pg_catalog.pg_attribute a
+  ON a.attrelid=d.refobjid AND a.attnum=d.refobjsubid
+  WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.objsubid=0
+   AND d.refclassid='pg_class'::regclass AND d.refobjid='public.goose_db_version'::regclass
+   AND d.deptype='i' AND a.attname='id' AND a.atttypid='integer'::regtype AND a.attidentity='d' AND NOT a.attisdropped)
+), acl AS (
+ SELECT a.* FROM registered r CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(r.relacl,pg_catalog.acldefault('S',r.relowner))) a
+)
+SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::regnamespace AND relkind='S')=1
+ AND (SELECT count(*) FROM registered)=1
+ AND NOT EXISTS(SELECT 1 FROM acl WHERE grantor<>'control_plane_owner'::regrole OR is_grantable
+  OR grantee NOT IN('control_plane_owner'::regrole,'control_plane_migrator'::regrole,'kodex_backup_reader'::regrole)
+  OR grantee='kodex_backup_reader'::regrole AND privilege_type NOT IN('SELECT','USAGE'))
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'Telegram notifications public sequence boundary changed';END IF;
+SELECT (-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
 WITH RECURSIVE relations AS (
@@ -115,7 +143,7 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected${"authorityDigest":"48e658fe0cec5baa0c09f63d38f3b6d1057104cc1726a0f9c8b74be6497957a7","catalogDigest":"b64bb492a0dcce294dce320876a320613bb8b28f6557e9ad8b7650091c7a824f","functionCount":232,"functionsDigest":"33c4cdf8412f89a3d24b76c8e5bb9cce635cdcb506b77ed0844ef7408e49327d","purgeEdgeCount":320,"purgeEdgeFingerprint":"1cb01973881ffe170e65ca49f48a6289","purgeGraphDigest":"eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb","purgeNodeCount":114,"purgeNodeFingerprint":"7e9c4f53e840517ede4723bab15cbbd5","tableCount":169,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner}"],"tablesDigest":"f5f2e9b961fd2cd40188cd6928b021ddfaf40972b47c72812c601c9607f8c3eb","triggerCount":187,"triggersDigest":"68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"}$expected$::jsonb THEN RAISE EXCEPTION 'Telegram notifications schema catalog changed';END IF;END $catalog_guard$;
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected0${"authorityDigest":"48e658fe0cec5baa0c09f63d38f3b6d1057104cc1726a0f9c8b74be6497957a7","catalogDigest":"ad3495f152515b4d7d4dbdad522143c28bc25aa2d72ca83fbcaa820929611bfb","functionCount":233,"functionsDigest":"199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2","purgeEdgeCount":320,"purgeEdgeFingerprint":"1cb01973881ffe170e65ca49f48a6289","purgeGraphDigest":"eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb","purgeNodeCount":114,"purgeNodeFingerprint":"7e9c4f53e840517ede4723bab15cbbd5","tableCount":169,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner}"],"tablesDigest":"f5f2e9b961fd2cd40188cd6928b021ddfaf40972b47c72812c601c9607f8c3eb","triggerCount":187,"triggersDigest":"68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"}$expected0$::jsonb THEN RAISE EXCEPTION 'Telegram notifications schema catalog changed';END IF;END $catalog_guard$;
 SELECT jsonb_build_object('profile', 'TELEGRAM_NOTIFICATIONS_V1', 'database',current_database(),'readOnly',current_setting('transaction_read_only'),'gooseVersion',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schemaCatalog',(-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -230,5 +258,5 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog))::text;
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog), 'backupQualification','NONE', 'publicSequenceSafe',true)::text;
 ROLLBACK;

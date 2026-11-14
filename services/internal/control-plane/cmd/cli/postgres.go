@@ -27,6 +27,9 @@ const (
 	// sentryBackupUpgradeCompleted confirms exact045 and successful canonical ACL cleanup, including a read-only rejoin after a lost acknowledgement.
 	// sentryBackupUpgradeCompleted подтверждает exact045 и успешный canonical ACL cleanup, включая read-only rejoin после потерянного acknowledgement.
 	sentryBackupUpgradeCompleted = "Sentry observability backup migration completed at version 20261114130000"
+	// telegramBackupUpgradeCompleted confirms exact046 and independent canonical backup cleanup without replaying Goose.
+	// telegramBackupUpgradeCompleted подтверждает exact046 и независимый canonical backup cleanup без повторного Goose.
+	telegramBackupUpgradeCompleted = "Telegram notifications backup migration completed at version 20261114140000"
 )
 
 // postgresCLIDependencies separates database construction and Goose entry for offline lifecycle tests.
@@ -101,6 +104,11 @@ func runPostgres(ctx context.Context, command string, output io.Writer, dependen
 			return cliFailure(stageOutput, err)
 		}
 	}
+	if command == telegramBackupUpgradeCommand {
+		if _, err := fmt.Fprintln(output, telegramBackupUpgradeCompleted); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
 	return nil
 }
 
@@ -131,6 +139,12 @@ func applyPostgresMigrations(ctx context.Context, database *sql.DB, command stri
 	}
 	if command == sentryBackupUpgradeCommand {
 		return upgradeSentryWithCanonicalBackup(ctx, database)
+	}
+	if command == telegramBackupUpgradeCommand {
+		return upgradeTelegramWithCanonicalBackup(ctx, database)
+	}
+	if command == telegramUpgradeCommand {
+		return goose.UpToContext(ctx, database, "migrations", 20261114140000)
 	}
 	if command == sentryUpgradeCommand {
 		return goose.UpToContext(ctx, database, "migrations", 20261114130000)

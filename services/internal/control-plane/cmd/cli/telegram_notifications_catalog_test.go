@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -29,17 +31,22 @@ func TestTelegramNotificationsCatalogCapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, backup := range []bool{os.Getenv("KODEX_TELEGRAM_NOTIFICATIONS_SCHEMA_CAPTURE_MODE") == "backup"} {
-		name := "normal"
-		if backup {
-			name = "backup"
-		}
+	name := os.Getenv("KODEX_TELEGRAM_NOTIFICATIONS_SCHEMA_CAPTURE_MODE")
+	if name != "normal" && name != "backup" && name != "table-only-backup" {
+		t.Fatal("schema capture mode is invalid")
+	}
+	for _, name := range []string{name} {
 		t.Run(name, func(t *testing.T) {
 			ctx, database, observer := newWorkflowUpgradeDatabase(t)
 			if err := goose.UpToContext(ctx, database, "migrations", 20261114130000); err != nil {
 				t.Fatal(err)
 			}
-			if backup {
+			if name == "backup" {
+				if _, err := observer.Exec(ctx, canonicalGitHubBackupInitializer(t)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if name == "table-only-backup" {
 				if _, err := observer.Exec(ctx, "SET ROLE control_plane_owner; GRANT SELECT ON ALL TABLES IN SCHEMA control_plane,public TO kodex_backup_reader; ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GRANT SELECT ON TABLES TO kodex_backup_reader; RESET ROLE"); err != nil {
 					t.Fatal(err)
 				}
@@ -79,6 +86,8 @@ func TestTelegramNotificationsCatalogCapture(t *testing.T) {
 					t.Fatal("schema capture is invalid")
 				}
 				value["restoreCatalogDigest"] = mapNormalized["catalogDigest"]
+				initializerDigest := sha256.Sum256([]byte(canonicalGitHubBackupInitializer(t)))
+				value["backupInitializerSHA256"] = hex.EncodeToString(initializerDigest[:])
 				raw, err = json.Marshal(value)
 				if err != nil {
 					t.Fatal(err)

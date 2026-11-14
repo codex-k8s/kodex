@@ -544,7 +544,7 @@ test-telegram-notifications-owner:
 	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-owner
 
 test-control-plane-migration:
-	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/github-repository-scope-proof.test.mjs tools/release/sentry-observability-proof.test.mjs
+	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/github-repository-scope-proof.test.mjs tools/release/sentry-observability-proof.test.mjs tools/release/telegram-notifications-proof.test.mjs
 
 .PHONY: test-control-api-nats-startup
 test-control-api-nats-startup:
@@ -663,3 +663,10 @@ test-backup-controller-maintenance:
 # Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
 test-telegram-authority-delivery:
 	@timeout 180s node --test tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs
+
+.PHONY: test-telegram-notifications-upgrade-postgres test-telegram-notifications-backup-upgrade-postgres
+test-telegram-notifications-upgrade-postgres: check-go-toolchain
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-upgrade
+
+test-telegram-notifications-backup-upgrade-postgres: check-go-toolchain
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-backup-upgrade

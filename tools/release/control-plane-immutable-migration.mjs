@@ -1,3 +1,4 @@
+import { telegramNotificationsCatalog } from './telegram-notifications-catalog.gen.mjs';
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
 import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
@@ -24,6 +25,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'telegram-notifications': {anchorProfile:'portable',executionCommand:'up-telegram-notifications',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-migration-precondition.sql',postconditionFile:'telegram-notifications-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
+  'telegram-notifications-backup': {anchorProfile:'portable',executionCommand:'up-telegram-notifications-backup-maintenance',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-backup-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-backup-migration-precondition.sql',postconditionFile:'telegram-notifications-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
   'sentry-observability': {anchorProfile:'portable',executionCommand:'up-sentry-observability',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'sentry-observability-backup': {anchorProfile:'portable',executionCommand:'up-sentry-observability-backup-maintenance',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
@@ -289,7 +292,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
   // Для044 прежний CP043 не является допустимым rollback после DDL. Normal и
   // backup требуют одного полного нового cohort, но разные exact schema proofs.
-  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup'].includes(profile) || componentPublication,
+  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup'].includes(profile) || componentPublication,
     'COMPONENT_MIGRATION_COHORT_REQUIRED');
   ensure(componentPublication ? isComponentMigrationProfile(profile) && portableTarget && context === componentPublication.context
     : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -450,6 +453,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'telegram-notifications' || profile === 'telegram-notifications-backup') ensure(validTelegramNotificationsMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'sentry-observability' || profile === 'sentry-observability-backup') ensure(validSentryObservabilityMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-repository-scope' || profile === 'github-repository-scope-backup') ensure(validGitHubRepositoryScopeMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-unbound-stop') ensure(validWorkspaceUnboundStopMigrationPrecondition(result),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
@@ -1203,6 +1207,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'telegram-notifications': return validTelegramNotificationsMigrationPostcondition(proof);
+    case 'telegram-notifications-backup': return validTelegramNotificationsBackupMigrationPostcondition(proof);
     case 'sentry-observability': return validSentryObservabilityMigrationPostcondition(proof);
     case 'sentry-observability-backup': return validSentryObservabilityBackupMigrationPostcondition(proof);
     case 'github-repository-scope': return validGitHubRepositoryScopeMigrationPostcondition(proof);
@@ -1537,3 +1543,24 @@ function qualifiedSentrySchemaCatalog(proof,backup,phase){
 }
 
 export function validSentryObservabilityBackupMigrationPrecondition(proof){return validSentryObservabilityMigrationPrecondition(proof,true);}
+
+// Schema046 имеет собственный полный catalog и только известные qualification modes.
+// Декларация Telegram либо caller schema number не заменяют closed predecessor045.
+export function validTelegramNotificationsMigrationPostcondition(proof,backup=false){
+ return proof?.profile==='TELEGRAM_NOTIFICATIONS_'+(backup?'BACKUP_':'')+'V1'&&proof.database==='control_plane'&&proof.readOnly==='on'&&
+  proof.gooseVersion===20261114140000&&proof.publicSequenceSafe===true&&qualifiedTelegramSchemaCatalog(proof,backup,'after');
+}
+export function validTelegramNotificationsBackupMigrationPostcondition(proof){return validTelegramNotificationsMigrationPostcondition(proof,true);}
+export function validTelegramNotificationsMigrationPrecondition(proof,backup=false,requireStopped=true){
+ return proof?.profile==='TELEGRAM_NOTIFICATIONS_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1'&&proof.database==='control_plane'&&proof.readOnly==='on'&&
+  proof.gooseVersion===20261114130000&&proof.telegramNotificationsAbsent===true&&proof.workspaceOwnerIdle===true&&proof.publicSequenceSafe===true&&
+  qualifiedTelegramSchemaCatalog(proof,backup,'before')&&proof.activeBackupSessions===0&&Number.isSafeInteger(proof.oldClaimSessions)&&proof.oldClaimSessions>=0&&
+  (!requireStopped||proof.oldClaimSessions===0)&&['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds',
+  'pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests',
+  'activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks','activeInteractionDeliveries'].every(key=>proof[key]===0);
+}
+export function validTelegramNotificationsBackupMigrationPrecondition(proof){return validTelegramNotificationsMigrationPrecondition(proof,true);}
+function qualifiedTelegramSchemaCatalog(proof,backup,phase){
+ const modes=backup?[['backup','CANONICAL_BACKUP'],['table-only-backup','TABLE_ONLY_BACKUP']]:[['normal','NONE']];
+ return modes.some(([mode,qualification])=>proof.backupQualification===qualification&&exactGitHubSchemaCatalog(proof.schemaCatalog,telegramNotificationsCatalog[mode][phase]));
+}

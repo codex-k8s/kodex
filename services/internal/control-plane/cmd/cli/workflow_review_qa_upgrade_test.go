@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "telegram-notifications":
+		verifier = "validTelegramNotificationsMigration"
+	case "telegram-notifications-backup":
+		verifier = "validTelegramNotificationsBackupMigration"
 	case "sentry-observability":
 		verifier = "validSentryObservabilityMigration"
 	case "sentry-observability-backup":

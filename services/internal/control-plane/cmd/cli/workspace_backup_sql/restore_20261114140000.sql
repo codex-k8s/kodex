@@ -1,20 +1,54 @@
--- Generated: generate-telegram-notifications-proof.py; exact046 normal/backup restore.
+-- Generated: generate-telegram-notifications-proof.py; exact046 ACL-only restore.
 SET LOCAL search_path=pg_catalog;SET LOCAL ROLE control_plane_owner;
 SET LOCAL lock_timeout='8s';SET LOCAL statement_timeout='30s';
 SELECT pg_advisory_xact_lock(hashtextextended('kodex.workspace.backup-acl-maintenance.v1',0));
 DO $restore046$
-DECLARE actual jsonb;
+DECLARE actual jsonb; activity jsonb;
 BEGIN
+ IF (-- Закрытая identity sequence канонического bootstrap. Public foreign sequences
+-- не получают backup grants при GRANT ON ALL SEQUENCES. Table-only и canonical
+-- допускают только отсутствие backup ACL либо точные SELECT+USAGE.
+WITH registered AS (
+ SELECT c.oid,c.relowner,c.relacl
+ FROM pg_catalog.pg_class c
+ JOIN pg_catalog.pg_sequence s ON s.seqrelid=c.oid
+ WHERE c.relnamespace='public'::regnamespace AND c.relname='goose_db_version_id_seq'
+ AND c.relkind='S' AND c.relowner='control_plane_owner'::regrole
+ AND c.relpersistence='p' AND c.reloptions IS NULL
+ AND s.seqtypid='integer'::regtype AND s.seqstart=1 AND s.seqincrement=1
+ AND s.seqmin=1 AND s.seqmax=2147483647 AND s.seqcache=1 AND NOT s.seqcycle
+ AND EXISTS(SELECT 1 FROM pg_catalog.pg_depend d JOIN pg_catalog.pg_attribute a
+  ON a.attrelid=d.refobjid AND a.attnum=d.refobjsubid
+  WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.objsubid=0
+   AND d.refclassid='pg_class'::regclass AND d.refobjid='public.goose_db_version'::regclass
+   AND d.deptype='i' AND a.attname='id' AND a.atttypid='integer'::regtype AND a.attidentity='d' AND NOT a.attisdropped)
+), acl AS (
+ SELECT a.* FROM registered r CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(r.relacl,pg_catalog.acldefault('S',r.relowner))) a
+)
+SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::regnamespace AND relkind='S')=1
+ AND (SELECT count(*) FROM registered)=1
+ AND NOT EXISTS(SELECT 1 FROM acl WHERE grantor<>'control_plane_owner'::regrole OR is_grantable
+  OR grantee NOT IN('control_plane_owner'::regrole,'control_plane_migrator'::regrole,'kodex_backup_reader'::regrole)
+  OR grantee='kodex_backup_reader'::regrole AND privilege_type NOT IN('SELECT','USAGE'))
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'Telegram notifications public sequence boundary changed';END IF;
+IF (-- ACL-only maintenance не меняет workspace rows, filesystem, writer custody
+-- или quiescence. Historical BLOCKED/PENDING records сохраняются без трактовки
+-- как released. Закрывается только реально активный owner work/grant graph.
+SELECT NOT EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN('SUCCEEDED','FAILED','CANCELLED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN('QUEUED','RUNNING','WAITING'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_tasks WHERE state IN('READY','CLAIMED'))
+ -- Даже expired ACTIVE grant не считается CLOSED по времени.
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_attempts WHERE grant_state='ACTIVE')) IS DISTINCT FROM true THEN RAISE EXCEPTION 'Telegram notifications workspace owner is not idle';END IF;
+
  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>20261114140000 THEN RAISE EXCEPTION 'Telegram notifications backup restore boundary changed';END IF;
- IF EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED'))
- OR EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING'))
- OR EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
- OR EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
- OR EXISTS(SELECT 1 FROM control_plane.session_workspace_storage)
- OR EXISTS(SELECT 1 FROM control_plane.interaction_deliveries WHERE state IN ('WAITING_APPROVAL','DUE','CLAIMED') OR (state='FAILED' AND completed_at IS NULL))
- OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
- OR EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE (c.relnamespace='control_plane'::regnamespace OR c.oid='public.goose_db_version'::regclass) AND a.grantee='kodex_backup_reader'::regrole AND (a.privilege_type<>'SELECT' OR a.is_grantable OR a.grantor<>'control_plane_owner'::regrole)) THEN RAISE EXCEPTION 'Telegram notifications backup restore is not idle or safe';END IF;
- SELECT (-- Тот же полный каталог; только separately validated backup SELECT/default row нормализованы.
+ IF EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
+ OR EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a WHERE (c.relnamespace='control_plane'::regnamespace OR c.oid='public.goose_db_version'::regclass) AND a.grantee='kodex_backup_reader'::regrole AND ((a.privilege_type<>'SELECT' AND NOT(c.relkind='S' AND a.privilege_type='USAGE')) OR a.is_grantable OR a.grantor<>'control_plane_owner'::regrole)) THEN RAISE EXCEPTION 'Telegram notifications backup restore is not idle or safe';END IF;
+ SELECT (-- Полный каталог; отдельно проверенные table SELECT/default row нормализованы.
+-- Schema USAGE, sequence ACL и sequence default ACL сохраняются без нормализации.
 -- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -95,7 +129,7 @@ SELECT jsonb_build_object(
  'memberships',(SELECT jsonb_agg(jsonb_build_array(pg_get_userbyid(roleid),pg_get_userbyid(member),pg_get_userbyid(grantor),admin_option,inherit_option,set_option) ORDER BY pg_get_userbyid(roleid),pg_get_userbyid(member),pg_get_userbyid(grantor)) FROM pg_auth_members WHERE pg_get_userbyid(roleid) IN('control_plane_owner','control_plane_runtime','control_plane_migrator','kodex_backup_reader') OR pg_get_userbyid(member) IN('control_plane_owner','control_plane_runtime','control_plane_migrator','kodex_backup_reader')),
  'schema',(SELECT jsonb_build_array(pg_get_userbyid(nspowner),nspacl::text) FROM pg_namespace WHERE nspname='control_plane'),
  'defaultACL',(SELECT jsonb_agg(jsonb_build_array(pg_get_userbyid(defaclrole),CASE WHEN defaclnamespace=0 THEN '' ELSE defaclnamespace::regnamespace::text END,defaclobjtype,defaclacl::text) ORDER BY pg_get_userbyid(defaclrole),defaclnamespace::regnamespace::text,defaclobjtype) FROM pg_default_acl WHERE (defaclrole='control_plane_owner'::regrole OR defaclnamespace='control_plane'::regnamespace) AND NOT(defaclrole='control_plane_owner'::regrole AND defaclnamespace='control_plane'::regnamespace AND defaclobjtype='r')),
- 'otherRelations',(SELECT jsonb_object_agg(c.relname,jsonb_build_array(c.relkind,pg_get_userbyid(c.relowner),(SELECT jsonb_agg(jsonb_build_array(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable) ORDER BY a.grantee=0,pg_get_userbyid(a.grantee),a.privilege_type) FROM aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a WHERE a.grantee<>'kodex_backup_reader'::regrole),CASE WHEN c.relkind IN('v','m') THEN pg_get_viewdef(c.oid) ELSE NULL END,(SELECT jsonb_build_array(seqstart,seqincrement,seqmax,seqmin,seqcache,seqcycle) FROM pg_sequence WHERE seqrelid=c.oid))) FROM pg_class c WHERE c.relnamespace='control_plane'::regnamespace AND c.relkind NOT IN('r','p','i','I','t')),
+ 'otherRelations',(SELECT jsonb_object_agg(c.relname,jsonb_build_array(c.relkind,pg_get_userbyid(c.relowner),(SELECT jsonb_agg(jsonb_build_array(CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END,pg_get_userbyid(a.grantor),a.privilege_type,a.is_grantable) ORDER BY a.grantee=0,pg_get_userbyid(a.grantee),a.privilege_type) FROM aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a WHERE c.relkind='S' OR a.grantee<>'kodex_backup_reader'::regrole),CASE WHEN c.relkind IN('v','m') THEN pg_get_viewdef(c.oid) ELSE NULL END,(SELECT jsonb_build_array(seqstart,seqincrement,seqmax,seqmin,seqcache,seqcycle) FROM pg_sequence WHERE seqrelid=c.oid))) FROM pg_class c WHERE c.relnamespace='control_plane'::regnamespace AND c.relkind NOT IN('r','p','i','I','t')),
  'types',(SELECT jsonb_object_agg(typname,jsonb_build_array(pg_get_userbyid(typowner),typtype,typcategory,typnotnull,typbasetype::regtype::text,typdefault)) FROM pg_type WHERE typnamespace='control_plane'::regnamespace),
  'tables',(SELECT jsonb_object_agg(relname,metadata) FROM table_catalog),
  'functions',(SELECT jsonb_object_agg(name,metadata) FROM function_catalog),
@@ -130,9 +164,43 @@ SELECT jsonb_build_object(
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
 'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;
- IF actual->>'catalogDigest' IS DISTINCT FROM '1f5dc702e9f7968f4b7dee3922d65e55106a093c7ec14cdbf05672ea1911375d' OR (actual->'tableDefaultACL' IS DISTINCT FROM $normal$["{control_plane_runtime=arwd/control_plane_owner}"]$normal$::jsonb AND actual->'tableDefaultACL' IS DISTINCT FROM $backup$["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"]$backup$::jsonb) THEN RAISE EXCEPTION 'Telegram notifications backup restore catalog changed';END IF;
- GRANT SELECT ON ALL TABLES IN SCHEMA control_plane,public TO kodex_backup_reader;
- ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GRANT SELECT ON TABLES TO kodex_backup_reader;
+ IF (actual->>'catalogDigest' IS DISTINCT FROM 'fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2' AND actual->>'catalogDigest' IS DISTINCT FROM '345bae3f900a1e7ccf37f792844b8031349f0157086a5cda5ae2a12b1fcc0131' AND actual->>'catalogDigest' IS DISTINCT FROM 'fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2') OR (actual->'tableDefaultACL' IS DISTINCT FROM $normal$["{control_plane_runtime=arwd/control_plane_owner}"]$normal$::jsonb AND actual->'tableDefaultACL' IS DISTINCT FROM $backup$["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"]$backup$::jsonb) THEN RAISE EXCEPTION 'Telegram notifications backup restore catalog changed';END IF;
+ SELECT jsonb_build_object( 'activeRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
+ 'activeArchiveTasks',(SELECT count(*) FROM control_plane.session_archive_tasks WHERE state IN ('READY','CLAIMED')),
+ 'activeRuntimeRuns',(SELECT count(*) FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED')),
+ 'activeRunNodes',(SELECT count(*) FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING')),
+ 'activeSessionTurns',(SELECT count(*) FROM control_plane.session_turns WHERE state IN ('QUEUED','RUNNING')),
+ 'claimedRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
+ 'openBuilds',(SELECT count(*) FROM control_plane.image_builds WHERE stage NOT IN ('COMPLETED','FAILED','CANCELLED','EXPIRED','DEAD_LETTER')),
+ 'pendingAdmissions',(SELECT count(*) FROM control_plane.image_artifacts WHERE admission_state IN ('PENDING','CLAIMED')),
+ 'pendingPromotions',(SELECT count(*) FROM control_plane.role_image_promotion_requests WHERE state IN ('QUEUED','PROMOTING'))+
+  (SELECT count(*) FROM control_plane.image_artifacts a WHERE a.promotion_state IN ('CLAIMED','AUTHORIZED')
+   AND NOT EXISTS(SELECT 1 FROM control_plane.role_image_promotion_requests r WHERE r.id=a.promotion_request_id
+    AND r.image_artifact_id=a.id AND r.organization_id=a.organization_id AND r.project_id IS NOT DISTINCT FROM a.project_id
+    AND r.state IN ('QUEUED','PROMOTING'))),
+ 'activeModelCatalogTasks',(SELECT count(*) FROM control_plane.provider_model_catalog_tasks WHERE state IN ('PENDING','CLAIMED')),
+ 'activeRenewalTasks',(SELECT count(*) FROM control_plane.provider_credential_renewal_tasks WHERE state IN ('CLAIMED','AUTHORIZED','UNKNOWN_OUTCOME')),
+ 'oldClaimSessions',(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()
+  AND query LIKE '%WITH candidates AS%' AND query LIKE '%UPDATE control_plane.outbox_events e SET state=%')
+,
+ 'activeIntegrationInvocations',(SELECT count(*) FROM control_plane.integration_invocations WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED','REJECTED','EXPIRED')),
+ 'activeIntegrationConnectionTests',(SELECT count(*) FROM control_plane.integration_connection_tests WHERE state IN ('DUE','CLAIMED')),
+ 'activePersonalCredentialTests',(SELECT count(*) FROM control_plane.integration_personal_credential_tests WHERE state IN ('DUE','CLAIMED','PROBING')),
+ 'activeRepositoryBundles',(SELECT count(*) FROM control_plane.repository_bundle_publications WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
+ 'activeConfigurationSources',(SELECT count(*) FROM control_plane.managed_configuration_source_work WHERE state IN ('QUEUED','CLAIMED')),
+ 'activeConfigurationWritebacks',(SELECT count(*) FROM control_plane.managed_configuration_writebacks WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
+ 'activeBackupSessions',(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND usesysid IN (WITH RECURSIVE backup_roles(oid) AS (SELECT oid FROM pg_roles WHERE rolname='kodex_backup_reader' UNION SELECT m.member FROM pg_auth_members m JOIN backup_roles r ON m.roleid=r.oid) SELECT oid FROM backup_roles)),
+ 'activeInteractionDeliveries',(SELECT count(*) FROM control_plane.interaction_deliveries WHERE state IN ('WAITING_APPROVAL','DUE','CLAIMED') OR (state='FAILED' AND completed_at IS NULL))) INTO activity;
+ IF EXISTS(SELECT 1 FROM jsonb_each_text(activity) WHERE value::bigint<>0) THEN RAISE EXCEPTION 'Telegram notifications backup owner is not idle';END IF;
+ GRANT CONNECT ON DATABASE control_plane TO kodex_backup_reader;
+GRANT USAGE ON SCHEMA public, control_plane TO kodex_backup_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public, control_plane TO kodex_backup_reader;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public, control_plane TO kodex_backup_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
+  GRANT SELECT ON TABLES TO kodex_backup_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
+  GRANT USAGE, SELECT ON SEQUENCES TO kodex_backup_reader;
+
  SELECT (-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -248,6 +316,6 @@ SELECT jsonb_build_object(
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
 'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;
- IF actual IS DISTINCT FROM $expected${"authorityDigest":"ddd91304bc9957a61c373ef08b3f6ba9b09987256cb54b4ad130c23b1120f3b8","catalogDigest":"617f19a5ecb365426166177cf3a3b79a071fc867951f712a07c469ba03ed78eb","functionCount":232,"functionsDigest":"33c4cdf8412f89a3d24b76c8e5bb9cce635cdcb506b77ed0844ef7408e49327d","purgeEdgeCount":320,"purgeEdgeFingerprint":"1cb01973881ffe170e65ca49f48a6289","purgeGraphDigest":"eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb","purgeNodeCount":114,"purgeNodeFingerprint":"7e9c4f53e840517ede4723bab15cbbd5","tableCount":169,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"],"tablesDigest":"afc986b79a2271b7abdc5b6462e06e3cfaaae1fc72cf56c83d4bfc7a71defa80","triggerCount":187,"triggersDigest":"68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"}$expected$::jsonb THEN RAISE EXCEPTION 'Telegram notifications backup restore final catalog changed';END IF;
+ IF actual IS DISTINCT FROM $expected${"authorityDigest":"1525715fe116df16749772105ed3f8ee7ab51ccfa0f9e23dc4b7fa6fbe8b7891","catalogDigest":"4e1adaf05bdc5cd8e80d311212a21a4faad709e10c1115a6bfaad44722979213","functionCount":233,"functionsDigest":"199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2","purgeEdgeCount":320,"purgeEdgeFingerprint":"1cb01973881ffe170e65ca49f48a6289","purgeGraphDigest":"eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb","purgeNodeCount":114,"purgeNodeFingerprint":"7e9c4f53e840517ede4723bab15cbbd5","tableCount":169,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"],"tablesDigest":"afc986b79a2271b7abdc5b6462e06e3cfaaae1fc72cf56c83d4bfc7a71defa80","triggerCount":187,"triggersDigest":"68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"}$expected$::jsonb THEN RAISE EXCEPTION 'Telegram notifications backup restore final catalog changed';END IF;
 END $restore046$;
 RESET ROLE;

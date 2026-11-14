@@ -1,19 +1,24 @@
 {
+  "backupInitializer": {
+    "path": "deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh",
+    "sqlSHA256": "ce3fd7b740ee2bbd4481d160d6d743f49a7bd7168cd580e2c9026e2b8d49176b"
+  },
   "catalogScope": "ALL_CONTROL_PLANE_TABLES_FUNCTIONS_TRIGGERS_AUTHORITY_AND_PROJECT_PURGE_GRAPH",
   "migrationVersion": 20261114140000,
+  "predecessorManifestSHA256": "d2d64c13a657c2f6ac80a4bd8ee4f46317285fb352fb388129d60524bc4720dc",
   "predecessorVersion": 20261114130000,
   "snapshots": {
     "backup-after": {
-      "authorityDigest": "ddd91304bc9957a61c373ef08b3f6ba9b09987256cb54b4ad130c23b1120f3b8",
-      "catalogDigest": "617f19a5ecb365426166177cf3a3b79a071fc867951f712a07c469ba03ed78eb",
-      "functionCount": 232,
-      "functionsDigest": "33c4cdf8412f89a3d24b76c8e5bb9cce635cdcb506b77ed0844ef7408e49327d",
+      "authorityDigest": "1525715fe116df16749772105ed3f8ee7ab51ccfa0f9e23dc4b7fa6fbe8b7891",
+      "catalogDigest": "4e1adaf05bdc5cd8e80d311212a21a4faad709e10c1115a6bfaad44722979213",
+      "functionCount": 233,
+      "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
       "purgeEdgeCount": 320,
       "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
       "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
       "purgeNodeCount": 114,
       "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
-      "restoreCatalogDigest": "1f5dc702e9f7968f4b7dee3922d65e55106a093c7ec14cdbf05672ea1911375d",
+      "restoreCatalogDigest": "345bae3f900a1e7ccf37f792844b8031349f0157086a5cda5ae2a12b1fcc0131",
       "tableCount": 169,
       "tableDefaultACL": [
         "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
@@ -23,8 +28,8 @@
       "triggersDigest": "68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"
     },
     "backup-before": {
-      "authorityDigest": "7c9c625617acd100ce4d5fe8c29722854d1083bf30f65aef0043a490f3dec03c",
-      "catalogDigest": "decd5c91c392daffc1476b84ef6db4b4d6b57a4203311bf3feb5abe839654814",
+      "authorityDigest": "dbbc0b0fa31f980c0d6f63654f3830a268f596f4e39790b86fca5e58ff0e8583",
+      "catalogDigest": "7efe0778ea06685ae2bec2eb8cf6e8db476aa28c9154c89cce89ded4c08d4888",
       "functionCount": 228,
       "functionsDigest": "8b2272337516e0974a537530e892cd6c675a194512b76e8513f9d45e0d6b8b8b",
       "purgeEdgeCount": 310,
@@ -32,7 +37,7 @@
       "purgeGraphDigest": "3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84",
       "purgeNodeCount": 112,
       "purgeNodeFingerprint": "97039cc15f63901977000dabe1167d5d",
-      "restoreCatalogDigest": "cf109f6027e1100a82098c5c0c689b61597f6992017686082712d2dc53d6ca1b",
+      "restoreCatalogDigest": "83f23b5d8a45ae685fff04ad37da74db3c31bc76d56ff26cd9d4829fd6e121c5",
       "tableCount": 168,
       "tableDefaultACL": [
         "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
@@ -43,15 +48,15 @@
     },
     "normal-after": {
       "authorityDigest": "48e658fe0cec5baa0c09f63d38f3b6d1057104cc1726a0f9c8b74be6497957a7",
-      "catalogDigest": "b64bb492a0dcce294dce320876a320613bb8b28f6557e9ad8b7650091c7a824f",
-      "functionCount": 232,
-      "functionsDigest": "33c4cdf8412f89a3d24b76c8e5bb9cce635cdcb506b77ed0844ef7408e49327d",
+      "catalogDigest": "ad3495f152515b4d7d4dbdad522143c28bc25aa2d72ca83fbcaa820929611bfb",
+      "functionCount": 233,
+      "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
       "purgeEdgeCount": 320,
       "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
       "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
       "purgeNodeCount": 114,
       "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
-      "restoreCatalogDigest": "1f5dc702e9f7968f4b7dee3922d65e55106a093c7ec14cdbf05672ea1911375d",
+      "restoreCatalogDigest": "fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2",
       "tableCount": 169,
       "tableDefaultACL": [
         "{control_plane_runtime=arwd/control_plane_owner}"
@@ -78,7 +83,45 @@
       "tablesDigest": "0d91da72186e22f49e56b5828d41c21221d53f20b3a69fa0146e3214b4147cb3",
       "triggerCount": 180,
       "triggersDigest": "225cb8882f62762c44b73ac5a877a2d062e6644d2903bfcf5be5312191e0265e"
+    },
+    "table-only-backup-after": {
+      "authorityDigest": "ddd91304bc9957a61c373ef08b3f6ba9b09987256cb54b4ad130c23b1120f3b8",
+      "catalogDigest": "2732ad259f62c377994a155a6cfe57dc978a2194df58e012fb9a395b92d0bcbb",
+      "functionCount": 233,
+      "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
+      "purgeEdgeCount": 320,
+      "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
+      "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
+      "purgeNodeCount": 114,
+      "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
+      "restoreCatalogDigest": "fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2",
+      "tableCount": 169,
+      "tableDefaultACL": [
+        "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+      ],
+      "tablesDigest": "afc986b79a2271b7abdc5b6462e06e3cfaaae1fc72cf56c83d4bfc7a71defa80",
+      "triggerCount": 187,
+      "triggersDigest": "68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"
+    },
+    "table-only-backup-before": {
+      "authorityDigest": "7c9c625617acd100ce4d5fe8c29722854d1083bf30f65aef0043a490f3dec03c",
+      "catalogDigest": "decd5c91c392daffc1476b84ef6db4b4d6b57a4203311bf3feb5abe839654814",
+      "functionCount": 228,
+      "functionsDigest": "8b2272337516e0974a537530e892cd6c675a194512b76e8513f9d45e0d6b8b8b",
+      "purgeEdgeCount": 310,
+      "purgeEdgeFingerprint": "2f32d3b42715f0a7c905ddc9f6957e71",
+      "purgeGraphDigest": "3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84",
+      "purgeNodeCount": 112,
+      "purgeNodeFingerprint": "97039cc15f63901977000dabe1167d5d",
+      "restoreCatalogDigest": "cf109f6027e1100a82098c5c0c689b61597f6992017686082712d2dc53d6ca1b",
+      "tableCount": 168,
+      "tableDefaultACL": [
+        "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+      ],
+      "tablesDigest": "394202dda9b558f18777d1dabdf9e0129e5ce551de8b2e86d235a0782cdcb8ed",
+      "triggerCount": 180,
+      "triggersDigest": "225cb8882f62762c44b73ac5a877a2d062e6644d2903bfcf5be5312191e0265e"
     }
   },
-  "version": 1
+  "version": 2
 }
