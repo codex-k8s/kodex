@@ -69,7 +69,7 @@ export async function readCanonicalBackupOwner({kube,plan,readSQL,now=Date.now})
  const phase=version.version===20261113000100?'before':'after',sql=readSQL(sqlFiles[phase]);
  ensure(digest(sql)===plan.ownerSQLSHA256[phase],'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
  const proof=database.read(sql,plan.postgres,plan.postgresBackend);
- ensure(proof.database==='control_plane'&&proof.readOnly==='on'&&proof.gooseVersion===version.version&&proof.backupQualification==='CANONICAL_BACKUP'&&proof.publicSequenceSafe===true&&(phase!=='before'||proof.activeBackupSessions===0)&&
+ ensure(proof.database==='control_plane'&&proof.readOnly==='on'&&proof.gooseVersion===version.version&&proof.backupQualification==='CANONICAL_BACKUP'&&proof.publicSequenceSafe===true&&(phase!=='before'||proof.activeBackupSessions===0&&proof.workspaceOwnerIdle===true)&&
   same(proof.schemaCatalog,githubRepositoryScopeCatalog.backup[phase]),'BACKUP_MAINTENANCE_CANONICAL_ACL_REQUIRED');
  return {schemaVersion:version.version,canonicalBackup:true,schemaCatalogSHA256:fingerprint(proof.schemaCatalog),observedAt:new Date(now()).toISOString()};
 }

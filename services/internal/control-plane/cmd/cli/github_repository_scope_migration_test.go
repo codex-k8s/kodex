@@ -312,3 +312,55 @@ func TestGitHubRepositoryScopePublicSequenceRestore(t *testing.T) {
 		t.Fatal("canonical Goose sequence authority changed", err)
 	}
 }
+
+// TestGitHubBackupRetainedWorkspace preserves inactive durable workspace records through canonical043 restoration and immutable044 maintenance, without interpreting historical BLOCKED metadata as writer quiescence.
+// TestGitHubBackupRetainedWorkspace сохраняет неактивные durable workspace records при canonical043 restore и неизменной044 maintenance, не трактуя исторический BLOCKED как writer quiescence.
+func TestGitHubBackupRetainedWorkspace(t *testing.T) {
+	ctx, database, observer := newWorkflowUpgradeDatabase(t)
+	if err := goose.UpToContext(ctx, database, "migrations", 20261113000100); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range []string{"testdata/opencode_native_cutover_seed.sql", "testdata/github_backup_retained_workspace.sql"} {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = observer.Exec(ctx, "SET ROLE control_plane_owner;"+string(raw)+"RESET ROLE;"); err != nil {
+			t.Fatal("seed retained workspace fixture", err)
+		}
+	}
+	if _, err := observer.Exec(ctx, canonicalGitHubBackupInitializer(t)); err != nil {
+		t.Fatal(err)
+	}
+	const rowsDigest = "SELECT encode(sha256(convert_to(jsonb_agg(to_jsonb(workspace) ORDER BY id)::text,'UTF8')),'hex') FROM control_plane.session_workspace_storage workspace"
+	var before, after string
+	if err := observer.QueryRow(ctx, rowsDigest).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err != nil {
+		t.Fatal("canonical043 restore rejected retained inactive workspace", err)
+	}
+	if err := observer.QueryRow(ctx, rowsDigest).Scan(&after); err != nil || before != after {
+		t.Fatal("restore043 changed durable workspace records", err)
+	}
+	proof, err := os.ReadFile("../../../../../tools/release/github-repository-scope-backup-migration-precondition.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []string{
+		"SET LOCAL session_replication_role=replica;INSERT INTO control_plane.session_workspace_volume_tasks(ref,volume_id,volume_generation,origin_node_id,root_run_id,origin_actor_id,kind,state,frozen_input) VALUES('svt_active_counterfactual',gen_random_uuid(),1,gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'CREATE_WORKSPACE_VOLUME','READY','{}')",
+		"SET LOCAL session_replication_role=replica;INSERT INTO control_plane.session_workspace_volume_attempts(task_id,attempt,lease_ref,fence_digest,workload_instance,input_snapshot,input_digest,grant_state,expires_at) VALUES(gen_random_uuid(),1,'lea_active_expired_counterfactual',repeat('a',64),'synthetic-workload','{}',encode(sha256(convert_to('{}','UTF8')),'hex'),'ACTIVE',clock_timestamp()-interval '1 hour')",
+	} {
+		// Orphan counterfactuals exist only inside the disposable rollback transaction; no live trigger or FK is altered.
+		// Orphan counterfactual существуют только в disposable rollback transaction; живые triggers и FK не меняются.
+		assertControlPlaneCatalogMutationRejected(t, ctx, observer, proof, mutation, "GitHub backup workspace owner is not idle")
+	}
+	readControlPlaneMigrationProof(t, ctx, observer, "github-repository-scope-backup", "precondition")
+	if err := applyPostgresMigrations(ctx, database, githubBackupUpgradeCommand); err != nil {
+		t.Fatal("upgrade retained durable workspace", err)
+	}
+	if err := observer.QueryRow(ctx, rowsDigest).Scan(&after); err != nil || before != after {
+		t.Fatal("maintenance044 changed durable workspace records", err)
+	}
+	readControlPlaneMigrationProof(t, ctx, observer, "github-repository-scope-backup", "postcondition")
+}

@@ -215,3 +215,24 @@ Discovery сохраняет только hash этого проверенног
 YAML1.1 octal0400/0550 разбираются `python3 -I` с существующим PyYAML;
 Context7 `/yaml/pyyaml` проверяет `safe_load_all`/`SafeLoader`, не Python object
 constructors. Источник: [PyYAML constructor](https://github.com/yaml/pyyaml/blob/main/lib/yaml/constructor.py).
+
+## Сохранённые workspace при ACL-only maintenance
+
+043/044 backup restore не изменяет workspace metadata, byte storage, writer
+custody или native history. Требование пустой `session_workspace_storage`
+принадлежало старому переходу015–028 и не переносится на эту ACL-only операцию.
+Эти старые SQL и применённая044 сохраняются неизменными.
+
+Один shared read-only query `github-repository-scope-workspace-idle.sql`
+входит в precondition до первого effect и повторяется в normalization/restore:
+нет активных runs/run nodes/runtime leases/archive tasks, volume tasks в
+READY/CLAIMED и volume attempts с ACTIVE grant. Expired ACTIVE не считается
+CLOSED. Historical EMPTY/RESTORED/CHECKPOINT_READY/BLOCKED/WRITER_PENDING rows
+не удаляются, не переводятся в released и не объявляются quiescent по этому
+допуску. Full schema/ACL/retention/purge guard остаётся прежним.
+
+Disposable native regression сохраняет полный hash retained EMPTY+BLOCKED
+строк до/после canonical043 restore и перехода immutable044 с cleanup. Orphan
+ACTIVE expired grant и READY volume task создаются только в отдельной
+counterfactual rollback transaction; оба должны отклониться до effects.
+Никакие живые workspace rows, PVC или task receipts для этой проверки не нужны.

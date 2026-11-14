@@ -38,6 +38,8 @@ query = (RELEASE / 'github-repository-scope-catalog.sql').read_text().strip().rs
 restore = (RELEASE / 'github-repository-scope-restore-catalog.sql').read_text().strip().rstrip(';')
 public_sequence = (RELEASE / 'github-repository-scope-public-sequence.sql').read_text().strip().rstrip(';')
 public_guard = 'IF ('+public_sequence+") IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub public sequence boundary changed';END IF;\n"
+workspace_idle = (RELEASE / 'github-repository-scope-workspace-idle.sql').read_text().strip().rstrip(';')
+workspace_guard = 'IF ('+workspace_idle+") IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub backup workspace owner is not idle';END IF;\n"
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'))
 def schema(mode, phase):
@@ -60,10 +62,10 @@ for mode in ['normal','backup']:
             fields += ", 'backupQualification','NONE'"
         fields += ", 'publicSequenceSafe',true"
         if phase=='before':
-            fields += ",'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped),"+activity
+            fields += ",'workspaceOwnerIdle',true,'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped),"+activity
         allowed = [schema(mode,phase)] + ([schema('table-only-backup',phase)] if mode == 'backup' else [])
         mismatch = ' AND '.join('actual IS DISTINCT FROM $expected'+str(i)+'$'+canonical(v)+'$expected'+str(i)+'$::jsonb' for i,v in enumerate(allowed))
-        guard="DO $catalog_guard$ DECLARE actual jsonb;BEGIN "+public_guard+"SELECT ("+query+") INTO actual;IF "+mismatch+" THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;\n"
+        guard="DO $catalog_guard$ DECLARE actual jsonb;BEGIN "+public_guard+(workspace_guard if phase=='before' else '')+"SELECT ("+query+") INTO actual;IF "+mismatch+" THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;\n"
         outputs[RELEASE/(prefix+'-migration-'+kind+'.sql')] = "-- Generated: generate-github-repository-scope-proof.py; полный закрытый schema catalog.\nBEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSET LOCAL statement_timeout='15s';SET LOCAL lock_timeout='500ms';SET LOCAL search_path=pg_catalog;\n"+guard+"SELECT jsonb_build_object("+fields+")::text;\nROLLBACK;\n"
 # Historical044 остаётся byte-identical; новый maintenance path не переписывает её DDL.
 if manifest.get('backupInitializer') != {'path': str(INITIALIZER.relative_to(ROOT)), 'sqlSHA256': initializer_sha256}:
@@ -80,14 +82,9 @@ for phase, version in [('before',20261113000100),('after',20261114120000)]:
  DO $restore044$
  DECLARE actual jsonb;
  BEGIN
-  """+public_guard+"""
+  """+public_guard+workspace_guard+"""
  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>"""+str(version)+""" THEN RAISE EXCEPTION 'GitHub backup restore boundary changed';END IF;
-  IF EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED'))
-  OR EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING'))
-  OR EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
-  OR EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
-  OR EXISTS(SELECT 1 FROM control_plane.session_workspace_storage)
-  OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
+  IF EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
   OR EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a WHERE (c.relnamespace='control_plane'::regnamespace OR c.oid='public.goose_db_version'::regclass) AND a.grantee='kodex_backup_reader'::regrole AND ((a.privilege_type<>'SELECT' AND NOT(c.relkind='S' AND a.privilege_type='USAGE')) OR a.is_grantable OR a.grantor<>'control_plane_owner'::regrole)) THEN RAISE EXCEPTION 'GitHub backup restore is not idle or safe';END IF;
   SELECT ("""+restore+""") INTO actual;
   IF (actual->>'catalogDigest' IS DISTINCT FROM '"""+normal['restoreCatalogDigest']+"""' AND actual->>'catalogDigest' IS DISTINCT FROM '"""+backup['restoreCatalogDigest']+"""' AND actual->>'catalogDigest' IS DISTINCT FROM '"""+table_only['restoreCatalogDigest']+"""') OR (actual->'tableDefaultACL' IS DISTINCT FROM $normal$"""+canonical(normal['tableDefaultACL'])+"""$normal$::jsonb AND actual->'tableDefaultACL' IS DISTINCT FROM $backup$"""+canonical(backup['tableDefaultACL'])+"""$backup$::jsonb) THEN RAISE EXCEPTION 'GitHub backup restore catalog changed';END IF;
@@ -106,7 +103,7 @@ SELECT pg_advisory_xact_lock(hashtextextended('kodex.workspace.backup-acl-mainte
 DO $normalize043$
 DECLARE actual jsonb; activity jsonb;
 BEGIN
- """+public_guard+"""
+ """+public_guard+workspace_guard+"""
  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>20261113000100 THEN RAISE EXCEPTION 'GitHub backup normalize boundary changed'; END IF;
  SELECT ("""+query+""") INTO actual;
  IF actual IS DISTINCT FROM $canonical$"""+canonical(schema('backup','before'))+"""$canonical$::jsonb AND actual IS DISTINCT FROM $table_only$"""+canonical(schema('table-only-backup','before'))+"""$table_only$::jsonb THEN RAISE EXCEPTION 'GitHub backup normalize catalog changed';END IF;

@@ -646,6 +646,7 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-backup-upgrade
 
 	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-public-sequence-negative
+	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-retained-workspace
 
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:

@@ -27,6 +27,10 @@ if [[ "$test_pattern" == --github-repository-scope-upgrade || "$test_pattern" ==
   if [[ -n ${KODEX_GITHUB_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestGitHubRepositoryScopeCatalogCapture$'; fi
   test_pattern=--review-qa-upgrade
 fi
+if [[ "$test_pattern" == --github-repository-scope-retained-workspace ]]; then
+  upgrade_test='^TestGitHubBackupRetainedWorkspace$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --github-repository-scope-public-sequence-negative ]]; then
   upgrade_test='^TestGitHubRepositoryScopePublicSequenceRestore$'
   test_pattern=--review-qa-upgrade

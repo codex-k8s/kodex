@@ -29,6 +29,16 @@ SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::re
  AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
  AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
  AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub public sequence boundary changed';END IF;
+IF (-- ACL-only maintenance не меняет workspace rows, filesystem, writer custody
+-- или quiescence. Historical BLOCKED/PENDING records сохраняются без трактовки
+-- как released. Закрывается только реально активный owner work/grant graph.
+SELECT NOT EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN('SUCCEEDED','FAILED','CANCELLED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN('QUEUED','RUNNING','WAITING'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_tasks WHERE state IN('READY','CLAIMED'))
+ -- Даже expired ACTIVE grant не считается CLOSED по времени.
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_attempts WHERE grant_state='ACTIVE')) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub backup workspace owner is not idle';END IF;
 SELECT (-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -258,7 +268,7 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog), 'backupQualification',CASE WHEN EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a WHERE n.oid='control_plane'::regnamespace AND a.grantee='kodex_backup_reader'::regrole AND a.privilege_type='USAGE') THEN 'CANONICAL_BACKUP' ELSE 'TABLE_ONLY_BACKUP' END, 'publicSequenceSafe',true,'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped), 'activeRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog), 'backupQualification',CASE WHEN EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a WHERE n.oid='control_plane'::regnamespace AND a.grantee='kodex_backup_reader'::regrole AND a.privilege_type='USAGE') THEN 'CANONICAL_BACKUP' ELSE 'TABLE_ONLY_BACKUP' END, 'publicSequenceSafe',true,'workspaceOwnerIdle',true,'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped), 'activeRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
  'activeArchiveTasks',(SELECT count(*) FROM control_plane.session_archive_tasks WHERE state IN ('READY','CLAIMED')),
  'activeRuntimeRuns',(SELECT count(*) FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED')),
  'activeRunNodes',(SELECT count(*) FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING')),

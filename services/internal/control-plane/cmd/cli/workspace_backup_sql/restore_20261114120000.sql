@@ -33,14 +33,19 @@ SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::re
  AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
  AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
  AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub public sequence boundary changed';END IF;
+IF (-- ACL-only maintenance не меняет workspace rows, filesystem, writer custody
+-- или quiescence. Historical BLOCKED/PENDING records сохраняются без трактовки
+-- как released. Закрывается только реально активный owner work/grant graph.
+SELECT NOT EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN('SUCCEEDED','FAILED','CANCELLED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN('QUEUED','RUNNING','WAITING'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_tasks WHERE state IN('READY','CLAIMED'))
+ -- Даже expired ACTIVE grant не считается CLOSED по времени.
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_attempts WHERE grant_state='ACTIVE')) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub backup workspace owner is not idle';END IF;
 
  IF session_user<>'control_plane_migrator' OR current_database()<>'control_plane' OR (SELECT max(version_id) FROM public.goose_db_version WHERE is_applied)<>20261114120000 THEN RAISE EXCEPTION 'GitHub backup restore boundary changed';END IF;
-  IF EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED'))
-  OR EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING'))
-  OR EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
-  OR EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
-  OR EXISTS(SELECT 1 FROM control_plane.session_workspace_storage)
-  OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
+  IF EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
   OR EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault(CASE WHEN c.relkind='S' THEN 'S'::"char" ELSE 'r'::"char" END,c.relowner))) a WHERE (c.relnamespace='control_plane'::regnamespace OR c.oid='public.goose_db_version'::regclass) AND a.grantee='kodex_backup_reader'::regrole AND ((a.privilege_type<>'SELECT' AND NOT(c.relkind='S' AND a.privilege_type='USAGE')) OR a.is_grantable OR a.grantor<>'control_plane_owner'::regrole)) THEN RAISE EXCEPTION 'GitHub backup restore is not idle or safe';END IF;
   SELECT (-- Полный каталог; отдельно проверенные table SELECT/default row нормализованы.
 -- Schema USAGE, sequence ACL и sequence default ACL сохраняются без нормализации.

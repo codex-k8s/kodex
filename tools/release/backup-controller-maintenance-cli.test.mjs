@@ -68,7 +68,7 @@ test('owner gate uses exact canonical catalog, source hash, backend and recursiv
  const f=setup(t);assert.equal(f.prepare().status,0);const state=f.read(),plan=f.plan();
  const sql=file=>readFileSync(new URL(file,import.meta.url));
  state.ownerProof={profile:'GITHUB_REPOSITORY_SCOPE_BACKUP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,
-  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
+  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,workspaceOwnerIdle:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
  const inputs=[];const kube=(args,input)=>{if(input)inputs.push(input);return backupMaintenanceKube(state,args,input);};
  const proof=await readCanonicalBackupOwner({kube,plan,readSQL:sql});assert.equal(proof.canonicalBackup,true);assert.ok(inputs.some(input=>input.includes('WITH RECURSIVE backup_roles')));
  for(const change of [s=>s.backupSessions=1,s=>s.ownerProof.activeBackupSessions=1,s=>s.ownerProof.backupQualification='TABLE_ONLY_BACKUP',s=>s.ownerProof.schemaCatalog={...s.ownerProof.schemaCatalog,authorityDigest:'0'.repeat(64)}]){
@@ -156,7 +156,7 @@ test('real CLI resume before DDL composes authoritative readonly inspect and per
  state.clusterUID=c.value.clusterUID;state.namespaceUID=c.value.namespaceUID;state.installation=c.observed.installation;
  state.cohort={deployments:c.deployments,nodes:c.observed.nodes};
  state.ownerProof={profile:'GITHUB_REPOSITORY_SCOPE_BACKUP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,
-  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
+  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,workspaceOwnerIdle:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
  const target={...c.target,resources:[{apiVersion:'apps/v1',kind:'Deployment',name:'backup-controller',uid:state.deployment.metadata.uid}]};
  f.store(state);writeFileSync(join(f.directory,'target.json'),JSON.stringify(target),{mode:0o600});
  let result=f.prepare();assert.equal(result.status,0,result.stderr);result=f.apply();assert.equal(result.status,0,result.stderr);
