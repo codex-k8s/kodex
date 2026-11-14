@@ -69,3 +69,15 @@ test('namespace discovery читает только metadata/refs и закры�
  assert.equal(calls[0].includes('-l'),false);assert.ok(calls[0].includes('deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods'));assert.ok(value.kinds.includes('ReplicationController'));assert.match(calls[0].at(-1),/secretKeyRef\.name/);assert.doesNotMatch(calls[0].at(-1),/\.env\}|\.data\}|\.value\}/);
  for(const bad of [row.replace(uid(300),'unknown'),row.replace('kodex-system','foreign'),row+'bad\n',row+row])assert.throws(()=>readBackupProducerInventory(()=>bad));
 });
+
+
+test('explicit successor executor preserves stopped source and cannot silently rebind maintenance',async()=>{
+ const f=setup(),journal=f.journal(f.stop);await f.step('apply',f.stop,journal);f.converge();await f.step('status',f.stop,journal);
+ const previous={plan:f.stop,events:journal.events},successor='b'.repeat(40);
+ assert.throws(()=>planBackupControllerMaintenance(f.deployment,f.target,f.observed,successor,'resume',previous,f.inventory()),/SCOPE_INVALID/);
+ for(const pin of ['c'.repeat(40),successor,'invalid'])assert.throws(()=>planBackupControllerMaintenance(f.deployment,f.target,f.observed,successor,'resume',previous,f.inventory(),pin),/EXECUTOR_INVALID/);
+ const resume=planBackupControllerMaintenance(f.deployment,f.target,f.observed,successor,'resume',previous,f.inventory(),f.sourceSHA);
+ assert.equal(resume.sourceSHA,f.sourceSHA);assert.equal(resume.executorSHA,successor);assert.equal(resume.stopPlanSHA256,fingerprint(f.stop));
+ const resumed=f.journal(resume);assert.equal((await f.step('apply',resume,resumed)).state,'CONVERGING');f.converge();
+ assert.equal((await f.step('status',resume,resumed)).state,'RESUMED');assert.equal(f.state.effects,2);
+});

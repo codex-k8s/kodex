@@ -150,7 +150,7 @@ test('terminal gate composes canonical043 cancellation and fully resumed044; UNK
  assert.throws(()=>verifyBackupMigrationScope({...migration,source:{revision:'b'.repeat(40)}},closed),/SCOPE_CHANGED/);
 });
 
-test('real CLI resume before DDL composes authoritative readonly inspect and permanently closes the shared migration boundary',t=>{
+for(const successor of [false,true])test(`real CLI resume before DDL composes authoritative readonly inspect and permanently closes the shared migration boundary: successor=${successor}`,t=>{
  const f=setup(t),c=componentCohortFixture('github-repository-scope-backup'),state=f.read();
  c.value.context=state.context;c.target.context=state.context;
  state.clusterUID=c.value.clusterUID;state.namespaceUID=c.value.namespaceUID;state.installation=c.observed.installation;
@@ -176,8 +176,21 @@ test('real CLI resume before DDL composes authoritative readonly inspect and per
  const resumeExtra=['--plan',resumePath,'--stopped-plan',stopPath,'--stopped-evidence',stopEvidence,'--migration-plan',migrationPath,'--migration-evidence',migrationEvidence];
  const run=(phase,extra)=>spawnSync(process.execPath,[cli,phase,'--context',state.context,'--kubeconfig','/synthetic/explicit config',...resumeExtra,...extra],
   {encoding:'utf8',timeout:30000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
- result=run('plan',['--action','resume','--target',join(f.directory,'target.json'),'--evidence',resumeEvidence]);assert.equal(result.status,0,result.stderr);
- const resume=JSON.parse(readFileSync(resumePath));result=run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(resume)]);
+ const planArguments=['--action','resume','--target',join(f.directory,'target.json'),'--evidence',resumeEvidence];
+ if(successor){
+  const updated=f.read();updated.sourceSHA='b'.repeat(40);f.store(updated);
+  result=run('plan',planArguments);assert.notEqual(result.status,0);assert.match(result.stderr,/SCOPE_INVALID/);assert.equal(existsSync(resumePath),false);
+  result=run('plan',[...planArguments,'--stopped-source-sha','c'.repeat(40)]);assert.notEqual(result.status,0);assert.match(result.stderr,/EXECUTOR_INVALID/);assert.equal(f.read().effects,1);
+  planArguments.push('--stopped-source-sha',stop.sourceSHA);
+ }
+ result=run('plan',planArguments);assert.equal(result.status,0,result.stderr);
+ const resume=JSON.parse(readFileSync(resumePath));assert.equal(resume.sourceSHA,stop.sourceSHA);
+ if(successor){
+  assert.equal(resume.executorSHA,'b'.repeat(40));const updated=f.read();updated.sourceSHA='c'.repeat(40);f.store(updated);
+  result=run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(resume)]);assert.notEqual(result.status,0);assert.match(result.stderr,/TARGET_CHANGED/);assert.equal(f.read().effects,1);
+  updated.sourceSHA=resume.executorSHA;f.store(updated);
+ }
+ result=run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(resume)]);
  assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).state,'RESUMED');assert.equal(f.read().effects,2);
  const events=readFileSync(stopEvidence,'utf8').trim().split('\n').map(JSON.parse);
  assert.equal(events.filter(e=>e.type==='BACKUP_MIGRATION_BOUND').length,1);assert.equal(events.filter(e=>e.type==='BACKUP_RESUME_INTENT').length,1);
@@ -185,6 +198,24 @@ test('real CLI resume before DDL composes authoritative readonly inspect and per
   '--context',state.context,'--kubeconfig','/synthetic/explicit config','--plan',migrationPath,'--evidence',migrationEvidence,'--confirm','APPLY-STAGING-CP-MIGRATION'],
   {encoding:'utf8',timeout:15000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
  assert.notEqual(late.status,0);assert.match(late.stderr,/BOUNDARY_CLOSED/);assert.equal(f.read().effects,2);
+});
+
+test('successor executor cannot change owner SQL pins or apply the selector outside resume planning',t=>{
+ const f=setup(t);assert.equal(f.prepare().status,0);assert.equal(f.apply().status,0);
+ const stop=f.plan(),stopPath=join(f.directory,'plan.json'),stopEvidence=join(f.directory,'evidence.jsonl');
+ let result=f.run('status',['--evidence',stopEvidence,'--stopped-source-sha',stop.sourceSHA]);assert.notEqual(result.status,0);assert.match(result.stderr,/ARGUMENT_INVALID/);
+ // Синтетический старый release содержит другой SQL pin, сохраняя согласованный journal header.
+ stop.ownerSQLSHA256.after='f'.repeat(64);writeFileSync(stopPath,JSON.stringify(stop),{mode:0o600});
+ const events=readFileSync(stopEvidence,'utf8').trim().split('\n').map(JSON.parse);events[0]={type:'HEADER',...backupControllerMaintenanceHeader(stop)};
+ writeFileSync(stopEvidence,events.map(event=>JSON.stringify(event)+'\n').join(''),{mode:0o600});
+ const updated=f.read();updated.sourceSHA='b'.repeat(40);f.store(updated);
+ const resumePath=join(f.directory,'resume.json');
+ result=spawnSync(process.execPath,[cli,'plan','--context',updated.context,'--kubeconfig','/synthetic/explicit config','--plan',resumePath,
+  '--action','resume','--target',join(f.directory,'target.json'),'--evidence',join(f.directory,'resume.jsonl'),
+  '--stopped-plan',stopPath,'--stopped-evidence',stopEvidence,'--stopped-source-sha',stop.sourceSHA,
+  '--migration-plan',join(f.directory,'migration.json'),'--migration-evidence',join(f.directory,'migration.jsonl')],
+  {encoding:'utf8',timeout:20000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
+ assert.notEqual(result.status,0);assert.match(result.stderr,/OWNER_SOURCE_CHANGED/);assert.equal(existsSync(resumePath),false);assert.equal(f.read().effects,1);
 });
 
 test('real CLI refuses a copied stop journal as a second maintenance boundary',t=>{
