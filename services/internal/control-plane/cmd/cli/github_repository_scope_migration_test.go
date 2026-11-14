@@ -47,6 +47,15 @@ func TestGitHubRepositoryScopeUpgrade(t *testing.T) {
 	if _, err := observer.Exec(ctx, "GRANT SELECT ON ALL TABLES IN SCHEMA control_plane,public TO kodex_backup_reader; ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane GRANT SELECT ON TABLES TO kodex_backup_reader"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := observer.Exec(ctx, "CREATE VIEW public.synthetic_backup_view AS SELECT 1 AS safe_fixture"); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err == nil {
+		t.Fatal("backup restore expanded read authority to an unknown public view")
+	}
+	if _, err := observer.Exec(ctx, "DROP VIEW public.synthetic_backup_view"); err != nil {
+		t.Fatal(err)
+	}
 	for repeat := 0; repeat < 2; repeat++ {
 		if err := applyPostgresMigrations(ctx, database, workspaceBackupRestoreCommand); err != nil {
 			t.Fatal("restore exact044 backup ACL", err)

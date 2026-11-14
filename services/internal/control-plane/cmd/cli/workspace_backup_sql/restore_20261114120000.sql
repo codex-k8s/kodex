@@ -11,7 +11,7 @@ BEGIN
  OR EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
  OR EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
  OR EXISTS(SELECT 1 FROM control_plane.session_workspace_storage)
- OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p') AND oid<>'public.goose_db_version'::regclass)
+ OR EXISTS(SELECT 1 FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind IN('r','p','v','m','f') AND oid<>'public.goose_db_version'::regclass)
  OR EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a WHERE (c.relnamespace='control_plane'::regnamespace OR c.oid='public.goose_db_version'::regclass) AND a.grantee='kodex_backup_reader'::regrole AND (a.privilege_type<>'SELECT' OR a.is_grantable OR a.grantor<>'control_plane_owner'::regrole)) THEN RAISE EXCEPTION 'GitHub backup restore is not idle or safe';END IF;
  SELECT (-- Тот же полный каталог; только separately validated backup SELECT/default row нормализованы.
 -- name: github_repository_scope_catalog :one
