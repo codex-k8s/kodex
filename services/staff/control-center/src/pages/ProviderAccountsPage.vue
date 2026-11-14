@@ -3,6 +3,7 @@ import { ArrowLeft } from "@lucide/vue";
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import ProviderAccountsWorkspace from "@/features/providers/ProviderAccountsWorkspace.vue";
+import ModelDiscoveryCatalog from "@/features/providers/ModelDiscoveryCatalog.vue";
 import PageFrame from "@/shared/ui/PageFrame.vue";
 const route = useRoute();
 const returnTo = computed(() => {
@@ -36,5 +37,6 @@ const returnTo = computed(() => {
         ><ArrowLeft :size="18" /></RouterLink
     ></template>
     <ProviderAccountsWorkspace />
+    <ModelDiscoveryCatalog />
   </PageFrame>
 </template>

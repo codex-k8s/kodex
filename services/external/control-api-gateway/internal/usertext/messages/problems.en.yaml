@@ -1085,3 +1085,5 @@ MODEL_MEASUREMENT_RECORDED:
   other: Model measurement recorded
 INFERENCE_CACHE_POLICY_UNSUPPORTED:
   other: The model route does not support the required cache policy
+CONTEXT_WINDOW_IMAGE_UNSUPPORTED:
+  other: The selected image has no verified context budget support. Select a new verified RoleImage or inherit the catalog window.

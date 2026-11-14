@@ -13,7 +13,7 @@ func TestGeneratedControlPlanePolicyLoadsInActualAuthorizer(t *testing.T) {
 		t.Fatal(err)
 	}
 	authorizer, digest, err := FromPolicy(raw, target, &revocationCheck{})
-	if err != nil || len(digest) != 64 || len(authorizer.bindings) != 448 {
+	if err != nil || len(digest) != 64 || len(authorizer.bindings) != 451 {
 		t.Fatal("generated policy rejected")
 	}
 	const caller = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"

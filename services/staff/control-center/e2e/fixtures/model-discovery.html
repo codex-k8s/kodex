@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка поискового каталога моделей</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import { resetOwnerRequests } from "../../src/shared/api/owner-lifetime";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import ModelDiscoveryCatalog from "../../src/features/providers/ModelDiscoveryCatalog.vue";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      createApp({
+        setup() {
+          return () =>
+            h("main", { style: "padding:16px;max-width:1100px;margin:auto;" }, [
+              h(
+                "button",
+                { type: "button", onClick: resetOwnerRequests },
+                "Сменить synthetic owner",
+              ),
+              h(ModelDiscoveryCatalog),
+            ]);
+        },
+      })
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

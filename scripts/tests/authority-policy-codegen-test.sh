@@ -34,7 +34,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-  .policy_revision == 105 and .policy.authority_abi_version == 2 and
+  .policy_revision == 106 and .policy.authority_abi_version == 2 and
 	([.policy.operation_bindings[] | select(.operation_id == "platform.oidc.session.resolve" or
 	  .operation_id == "platform.oidc.session.closure.get" or .operation_id == "platform.oidc.session.revoke") |
 	  select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and

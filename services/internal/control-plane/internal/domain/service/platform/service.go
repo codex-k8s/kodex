@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/modeldiscovery"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -79,6 +80,9 @@ func (service *Service) Bootstrap(ctx context.Context) error {
 // Ready checks only repository-owned control-plane state. Downstream materializer readiness is intentionally separate to avoid a startup cycle between control-plane and secret-broker.
 // Ready проверяет только принадлежащее репозиторию состояние control-plane. Готовность downstream-материализатора намеренно отделена во избежание стартового цикла между control-plane и secret-broker.
 func (service *Service) Ready(ctx context.Context) error {
+	if err := modeldiscovery.Ready(); err != nil {
+		return err
+	}
 	// Общая readiness подтверждает только owned state control-plane. Downstream
 	// materializer имеет отдельную exact-path readiness: иначе control-plane
 	// исчезает из Service endpoints до старта secret-broker, а secret-broker не
