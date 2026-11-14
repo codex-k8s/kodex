@@ -5,6 +5,7 @@ import {mkdtempSync,mkdirSync,writeFileSync,rmSync,chmodSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {fingerprint} from './scoped-release.mjs';
 import {planTelegramPortRepair,telegramPortRepairEffective,telegramPortRepairConfiguration,readTelegramPortRepair,telegramPortRepairManifestPaths} from './telegram-port-repair.mjs';
+import {resolveTelegramExecutorSource} from './telegram-executor-source.mjs';
 
 function fixture(t){
  const directory=mkdtempSync('/tmp/kodex-port-repair-');chmodSync(directory,0o700);t.after(()=>rmSync(directory,{recursive:true,force:true}));
@@ -74,5 +75,15 @@ test('unknown plan fields, content drift и новый executor не усыно�
  f.write(f.source+'/tools/release/changed.mjs','new executor');f.git('add','.');f.git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Другой executor');
  assert.throws(()=>readTelegramPortRepair(path,{executorSource:f.source}),/SOURCE_REJECTED/);
  const g=fixture(t);g.write(g.source+'/'+telegramPortRepairManifestPaths[0],'name: tg-connect\nport: 443\n');g.git('add','.');g.git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Лишняя delta');
+ assert.throws(()=>telegramPortRepairConfiguration(g.source,g.application),/CONFIG_REJECTED/);
+});
+
+test('deploy delta требует exact repair source proof, saved pin не переносится на иной план',t=>{
+ const f=fixture(t),{path}=f.store();
+ assert.throws(()=>resolveTelegramExecutorSource(f.source,{source:f.application.path,revision:f.application.revision}),/SOURCE_REJECTED/);
+ const proof=resolveTelegramExecutorSource(f.source,{source:f.application.path,revision:f.application.revision,repairPlanPath:path});
+ assert.equal(proof.telegramPortRepair.planPath,path);assert.deepEqual(resolveTelegramExecutorSource(f.source,{saved:proof}),proof);
+ assert.throws(()=>resolveTelegramExecutorSource(f.source,{saved:{...proof,telegramPortRepair:{...proof.telegramPortRepair,planSHA256:'f'.repeat(64)}}}),/SOURCE_REJECTED/);
+ const g=fixture(t);g.write(g.source+'/deploy/foreign.yaml','foreign config');g.git('add','.');g.git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Лишний deploy');
  assert.throws(()=>telegramPortRepairConfiguration(g.source,g.application),/CONFIG_REJECTED/);
 });
