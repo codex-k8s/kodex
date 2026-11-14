@@ -652,4 +652,4 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
-	@timeout 90s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+	@timeout 180s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs

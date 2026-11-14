@@ -6,6 +6,7 @@ import { lstatSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fingerprint } from './scoped-release.mjs';
+import {backupMigrationProfile,requiresBackupMaintenance} from './backup-migration-registry.mjs';
 import { inspectSource, planSourceChange } from './application-source.mjs';
 import { privateJournal } from '../dev/role-image-acceptance.mjs';
 import { planImmutableControlPlaneMigration, immutableMigrationExecution, runImmutableControlPlaneMigration, immutableMigrationProfile, isImmutableMigrationProfile } from './control-plane-immutable-migration.mjs';
@@ -108,8 +109,9 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
   const failed = job.status?.conditions?.some((c) => c.type === 'Failed' && c.status === 'True');
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');
   const executed = !isImmutableMigrationProfile(plan.profile) || immutableMigrationExecution(job, plan, pods, expectedJob);
+  const backupReceipt=requiresBackupMaintenance(plan.profile)?backupMigrationProfile(plan.profile).receipt:undefined;
   const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
-    (plan.profile==='github-repository-scope-backup' ? (logs ?? '').trim().split('\n').includes('GitHub repository scope backup migration completed at version 20261114120000') : new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '')));
+    (backupReceipt ? (logs ?? '').trim().split('\n').includes(backupReceipt) : new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '')));
   return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
     ...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
 }

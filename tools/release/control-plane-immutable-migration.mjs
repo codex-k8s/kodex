@@ -1,6 +1,7 @@
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
 import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
+import {requiresBackupMaintenance} from './backup-migration-registry.mjs';
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validatedStablePublication } from './stable-image-publication.mjs';
 import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
@@ -23,8 +24,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
-  'sentry-observability': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
-  'sentry-observability-backup': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
+  'sentry-observability': {anchorProfile:'portable',executionCommand:'up-sentry-observability',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
+  'sentry-observability-backup': {anchorProfile:'portable',executionCommand:'up-sentry-observability-backup-maintenance',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'github-repository-scope-backup': {anchorProfile:'portable',executionCommand:'up-github-repository-scope-backup-compatible',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-backup-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-backup-migration-precondition.sql',postconditionFile:'github-repository-scope-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'workspace-unbound-stop': {
@@ -250,8 +251,20 @@ export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.
 // Ожидание не повторяет effects и получает независимый конечный бюджет после каждой мутации.
 export async function waitMigrationMaintenance(observe, ready, code, {now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve,ms)), budget = 120000} = {}) {
   const deadline = now() + budget;
+  let discoveryRetries=0;
   for (;;) {
-    const actual = observe();
+    let actual;
+    try { actual=observe(); }
+    catch(error){
+      // Только повтор полного READ snapshot при естественном discovery race.
+      // Ни foreign UID/scope error, ни PATCH/DDL не повторяются и не считаются join.
+      if(error?.message!=='COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED'||discoveryRetries>=3)throw error;
+      discoveryRetries++;
+      ensure(now()<deadline,code);
+      await sleep(Math.min(250,deadline-now()));
+      ensure(now()<deadline,code);
+      continue;
+    }
     if (ready(actual)) return actual;
     ensure(now() < deadline, code);
     await sleep(250);
@@ -551,7 +564,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
     if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
-    if(profile==='github-repository-scope-backup') {
+    if(requiresBackupMaintenance(profile)) {
       ensure(options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'],'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
       const path=resolve(options['--backup-maintenance-plan']);
       plan.backupMaintenance={planPath:path,evidencePath:resolve(options['--backup-maintenance-evidence']),planSHA256:fingerprint(privateJSON(path))};
@@ -578,7 +591,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const readOnly = !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
   let backupBoundaryJournal,durable;
   try {
-    if(profile==='github-repository-scope-backup' && phase!=='inspect'){
+    if(requiresBackupMaintenance(profile) && phase!=='inspect'){
       const closed=privateJSON(plan.backupMaintenance.planPath);
       backupBoundaryJournal=privateJournal(plan.backupMaintenance.evidencePath,backupControllerMaintenanceHeader(closed));
       requireOpenBackupBoundary(backupBoundaryJournal.events,planSHA256);
@@ -589,7 +602,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     durable=privateJournal(options['--evidence'],{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256},{readOnly});
   } catch(error) { backupBoundaryJournal?.close();throw error; }
   const journal = readOnly ? {events:durable.events,append:()=>{},close:()=>durable.close()} : durable;
-  if(profile==='github-repository-scope-backup' && phase!=='inspect' && journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT')) {
+  if(requiresBackupMaintenance(profile) && phase!=='inspect' && journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT')) {
     journal.close();backupBoundaryJournal.close();throw Error('MIGRATION_BACKUP_RESUME_ALREADY_STARTED');
   }
 
@@ -717,6 +730,16 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         imageScope(plan.imageEvidence,plan.namespaceUID);
       }}) : undefined;
     if (phase === 'inspect') {
+      // Running exact Job ещё может писать schema/ACL. Возвращается лишь RUNNING;
+      // serving inventory и terminal exclusion не используются до его terminal proof.
+      if(!revalidationRevision&&(attempts.length||checks.length)){
+        const selected=attempts.length?plan.job:plan.checkJob;
+        const candidate=optionalJob(selected.metadata.name);
+        if(candidate&&!candidate.status?.conditions?.some(condition=>['Complete','Failed'].includes(condition.type)&&condition.status==='True')){
+          const pending=attempts.length?readJob():readCheck();
+          if(pending.status==='RUNNING')return output({...pending,cohortObservation:'WAITING_REGISTERED_JOB_TERMINAL'});
+        }
+      }
       const state = observeCP();
       const pairState = pair?.inspect();
       if(revalidationRevision) {
@@ -1498,14 +1521,19 @@ export function validGitHubRepositoryScopeBackupMigrationPrecondition(proof){ret
 
 // Полный catalog045 включает owner/RLS/ACL/ABI, все таблицы/functions/triggers и неизменённый purge graph.
 export function validSentryObservabilityMigrationPostcondition(proof,backup=false) {
-  const expected=sentryObservabilityCatalog[backup?'backup':'normal'].after;
-  return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114130000 && exactGitHubSchemaCatalog(proof.schemaCatalog,expected);
+  return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114130000 && proof.publicSequenceSafe===true && qualifiedSentrySchemaCatalog(proof,backup,'after');
 }
 // Backup не получает fallback к normal: весь фактический SELECT/defaultACL закреплён отдельно.
 export function validSentryObservabilityBackupMigrationPostcondition(proof){return validSentryObservabilityMigrationPostcondition(proof,true);}
 // Precondition связывает exact044 catalog с тишиной каждого затронутого worker/effect lifecycle.
 export function validSentryObservabilityMigrationPrecondition(proof,backup=false,requireStopped=true){
- return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && proof.sentryObservabilityAbsent===true && exactGitHubSchemaCatalog(proof.schemaCatalog,sentryObservabilityCatalog[backup?'backup':'normal'].before) && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+ return proof?.profile==='SENTRY_OBSERVABILITY_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && proof.sentryObservabilityAbsent===true && proof.workspaceOwnerIdle===true && proof.publicSequenceSafe===true && qualifiedSentrySchemaCatalog(proof,backup,'before') && proof.activeBackupSessions===0 && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+}
+
+// Table-only остаётся отдельной schema qualification; live backup maintenance требует CANONICAL_BACKUP.
+function qualifiedSentrySchemaCatalog(proof,backup,phase){
+ const modes=backup?[['backup','CANONICAL_BACKUP'],['table-only-backup','TABLE_ONLY_BACKUP']]:[['normal','NONE']];
+ return modes.some(([mode,qualification])=>proof.backupQualification===qualification&&exactGitHubSchemaCatalog(proof.schemaCatalog,sentryObservabilityCatalog[mode][phase]));
 }
 
 export function validSentryObservabilityBackupMigrationPrecondition(proof){return validSentryObservabilityMigrationPrecondition(proof,true);}

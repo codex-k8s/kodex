@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {fingerprint} from '../scoped-release.mjs';
-import {componentMigrationNames} from '../portable-component-migration.mjs';
+import {componentMigrationNames,componentMigrationConfiguration} from '../portable-component-migration.mjs';
 const revision='a'.repeat(40);
 const uuid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const roots={'control-plane':'services/internal/control-plane/','runtime-controller':'services/internal/runtime-controller/',
@@ -11,11 +11,12 @@ const roots={'control-plane':'services/internal/control-plane/','runtime-control
 // ни registry, ни пользовательские credentials тест не открывает.
 export function componentCohortFixture(migrationProfile='github-repository-scope') {
   const names=componentMigrationNames(migrationProfile);
+  const configuration=componentMigrationConfiguration(migrationProfile);
   const baseHeads={'control-plane':20261112000100,'internal-rpc-authority':2,'email-bridge':3};
   const value={schema:'kodex.portable-component-migration/v2',profile:migrationProfile,context:'portable-fixture',
     clusterUID:uuid(1),namespaceUID:uuid(2),baseSourceSHA:'b'.repeat(40),baseReleaseLockSHA256:'c'.repeat(64),
-    baseSchemaHeads:baseHeads,schemaHeadsBefore:{...baseHeads,'control-plane':20261113000100},
-    schemaHeadsAfter:{...baseHeads,'control-plane':20261114120000},runtimeABI:5,runnerInput:'v10',
+    baseSchemaHeads:baseHeads,schemaHeadsBefore:{...baseHeads,'control-plane':configuration.before},
+    schemaHeadsAfter:{...baseHeads,'control-plane':configuration.after},runtimeABI:5,runnerInput:'v10',
     registry:'registry.example.invalid',repositoryPrefix:'synthetic/upgrade',nodeUIDs:[uuid(3)],components:[]};
   for(const [index,component] of names.entries()) {
     const anchor=roots[component]+'internal/synthetic.go',changed=[anchor];
@@ -25,7 +26,7 @@ export function componentCohortFixture(migrationProfile='github-repository-scope
       production_file_sha256:'1'.repeat(64),schema_heads:value.schemaHeadsAfter,
       compatibility:{changed_files:changed,production_files:changed,shared_libs_contracts_unchanged:false,
         verified_cohort:{components:names,changed_files:changed,production_files:changed,anchor,
-          contract_change:'GITHUB_REPOSITORY_SCOPE_UPGRADE',schema_change:true,runner_input_abi:'UNCHANGED'}},
+          contract_change:configuration.contract,schema_change:true,runner_input_abi:'UNCHANGED'}},
       build:{dockerfile_sha256:'2'.repeat(64),metadata_sha256:'3'.repeat(64),private_source_sha:'4'.repeat(40),platform:'linux/amd64'},
       qualification:'PUBLISHED_NOT_NODE_QUALIFIED_NOT_DEPLOYED'};
     const part={component,expectedImageRef:`registry.example.invalid/base/${component}@sha256:${'f'.repeat(64)}`};

@@ -20,8 +20,14 @@ test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestSentryObservabilityP
 upgrade_timeout=180s
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
 if [[ "$test_pattern" == --sentry-observability-upgrade ]]; then
+	upgrade_timeout=600s
   upgrade_test='^TestSentryObservabilityUpgrade$'
   if [[ -n ${KODEX_SENTRY_OBSERVABILITY_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestSentryObservabilityCatalogCapture$'; fi
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --sentry-observability-backup-upgrade ]]; then
+  upgrade_timeout=600s
+  upgrade_test='^TestSentryObservabilityBackupUpgrade$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --github-repository-scope-upgrade || "$test_pattern" == --github-repository-scope-backup-upgrade ]]; then

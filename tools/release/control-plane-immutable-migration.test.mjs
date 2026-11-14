@@ -828,6 +828,24 @@ test('bounded maintenance timeout leaves no implied success and readback recover
   assert.equal(calls,3);assert.equal(ticks,500);
   assert.equal(await waitMigrationMaintenance(()=>true,v=>v,'MIGRATION_CP_STOP_TIMEOUT',clock),true);
 });
+test('maintenance retries only a bounded fresh POD discovery snapshot race and never foreign scope or mutations',async()=>{
+ const race=()=>Error('COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+ let ticks=0,calls=0,readyCalls=0;
+ const clock={now:()=>ticks,sleep:async ms=>{ticks+=ms;},budget:2000};
+ const actual=await waitMigrationMaintenance(()=>{if(++calls<=2)throw race();return {joined:true};},value=>{readyCalls++;return value.joined;},'MIGRATION_CP_STOP_TIMEOUT',clock);
+ assert.equal(actual.joined,true);assert.equal(calls,3);assert.equal(readyCalls,1);assert.equal(ticks,500);
+ calls=0;ticks=0;
+ await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw race();},()=>{throw Error('STALE_READ_ACCEPTED');},'MIGRATION_CP_STOP_TIMEOUT',clock),/POD_DISCOVERY_CHANGED/);
+ assert.equal(calls,4);assert.equal(ticks,750);
+ calls=0;ticks=0;
+ await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw race();},()=>true,'MIGRATION_CP_STOP_TIMEOUT',{...clock,budget:250}),/STOP_TIMEOUT/);
+ assert.equal(calls,1);assert.equal(ticks,250);
+ for(const message of ['COMPONENT_MIGRATION_POD_SCOPE_CHANGED','COMPONENT_MIGRATION_POD_INVALID','MIGRATION_PATCH_OUTCOME_UNKNOWN','COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED extra']){
+  calls=0;ticks=0;
+  await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw Error(message);},()=>true,'MIGRATION_CP_STOP_TIMEOUT',clock),error=>error.message===message);
+  assert.equal(calls,1);assert.equal(ticks,0);
+ }
+});
 test('SIGKILL after stop permits read-only inspect; mutations remain fenced by the original journal lock',t=>{
   const f=cli(t);pass(f,'plan','PLANNED');pass(f,'check');f.edit(s=>s.mode='stop-crash');
   const crashed=f.run('stop');assert.equal(crashed.signal,'SIGKILL');assert.equal(existsSync(`${f.evidence}.lock`),true);

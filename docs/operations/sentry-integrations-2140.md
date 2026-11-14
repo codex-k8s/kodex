@@ -4,7 +4,7 @@ title: Управляемая интеграция Sentry Cloud и Self-hosted
 type: operations
 status: approved
 owner: backend
-version: 1.1.0
+version: 1.1.1
 updated: 2026-11-14
 ---
 
@@ -204,6 +204,61 @@ GitHub scope migration `20261114120000`; она расширяет exact SQL che
 квалификации не означает допуска релиза. Возврат image не откатывает БД;
 оператор отключает новые grants/connections и оставляет forward-only schema.
 
+## Schema045 и канонический backup lifecycle
+
+Перед045 сохраняется квалифицированный044 из #2157. Capture отдельно закрепляет
+`normal`, `CANONICAL_BACKUP` и историческую `TABLE_ONLY_BACKUP`; каждый
+predecessor045 целиком совпадает с соответствующим terminal catalog044.
+Initializer SQL берётся из отмеченного блока production reconcile script и
+закреплён SHA-256. Schema USAGE, sequence ACL и sequence default ACL не
+маскируются при restore comparison. Чужая public sequence, view, ACL либо
+изменение функции/trigger/owner/RLS закрыто отклоняются.
+
+Обычный CLI `up-sentry-observability` применяет только045 и сохраняет normal
+ACL. Отдельный `up-sentry-observability-backup-maintenance` требует exact
+canonical044 или уже canonical045. Normal/table-only не получают canonical
+допуск автоматически. После подтверждённого preflight единственный Goose
+отделён от независимого bounded ACL cleanup: failure, cancel и потерянный ACK
+не разрешают второй DDL. Повтор при уже045 проверяет точный catalog без Goose.
+
+Для backup delivery выбирается явный
+`--migration-profile sentry-observability-backup` при создании backup-controller
+maintenance plan. Stop/readback, PostgreSQL backend, exact producer inventory,
+включая ReplicationController без Pod, и источник SQL связаны с одним plan.
+Этот stop boundary не переиспользуется для044, другой миграции или второго
+исполняемого plan. Resume требует актуального canonical owner read и terminal
+inspect/migration/cohort proof. Historical044 plan без нового selector сохраняет
+только прежнюю область043→044.
+
+ACL-only restore не удаляет durable workspace records и не объявляет
+исторические BLOCKED/WRITER_PENDING строки released. Закрывается реально активный
+owner graph: runs/nodes/leases/archive, volume tasks READY/CLAIMED и volume grants
+ACTIVE, включая expired ACTIVE. Native fixture проверяет неизменность полного
+hash retained rows, отказ неизвестной активной task/grant, failed/cancelled
+attempt, lost ACK, read-only rejoin, repeat restore и запрет Down.
+
+Во время ожидания maintenance только точный
+`COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED` допускает не более трёх повторов
+полного READ snapshot в исходном бюджете. Предыдущий snapshot не становится
+join; foreign UID/scope, PATCH и DDL не повторяются. Manifest component-lock
+не обрезается ради размера: согласованные producer/consumer bounds и полный
+source seal должны пройти собственную квалификацию доставки.
+
+Публичные локальные точки входа, без обращения к установленной среде:
+
+```sh
+python3 tools/release/generate-sentry-observability-proof.py --check
+bash scripts/tests/control-plane-postgres-test.sh --sentry-observability-upgrade
+bash scripts/tests/control-plane-postgres-test.sh --sentry-observability-backup-upgrade
+node --test tools/release/sentry-observability-proof.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs
+```
+
+Нужны закреплённый Go1.26.10 и безопасный disposable PostgreSQL. Capture
+запускается отдельно с явным private directory и одним из трёх режимов;
+`--prepare-capture` генерирует только closed predecessor из уже
+квалифицированного044, не подставляя выдуманный045 after fingerprint. После
+capture выполняются полная генерация, `--check` и native qualification.
+
 ## Проверка и ограничения доказательств
 
 Consumer fixture охватывает все объявленные операции обоих origins, реальные
@@ -213,10 +268,11 @@ scope JSON и UNKNOWN без replay. Owner unit проверяет двух по
 подключения, missing key/profile, revoke, expiry, rotation и configuration drift.
 Эти локальные synthetic проверки не являются живой приёмкой.
 
-Пока отсутствуют live targets и разрешённые credentials: проверка сотрудник →
-provider → owner audit, browser после доставки, полная disposable PostgreSQL
-квалификация migration и итоговый environment render нового candidate —
-`NOT RUN`. Нет claims о CI, установке либо закрытии #2140.
+Пока отсутствуют live targets и разрешённые credentials: живая проверка
+сотрудник → provider → owner audit и browser после доставки — `NOT RUN`.
+Disposable PostgreSQL, generated/render и browser fixtures квалифицируются
+локально на точном candidate SHA; протокол проверок в PR не подменяет живую
+приёмку. Нет claims о CI, установке либо закрытии #2140.
 
 Ручная проверка после qualified delivery: создать отдельные Cloud/self-hosted
 connections, добавить личный токен, проверить project и READ observations,

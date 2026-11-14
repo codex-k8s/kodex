@@ -1,7 +1,35 @@
 -- Generated: generate-sentry-observability-proof.py; полный закрытый schema catalog.
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SET LOCAL statement_timeout='15s';SET LOCAL lock_timeout='500ms';SET LOCAL search_path=pg_catalog;
-DO $catalog_guard$ DECLARE actual jsonb;BEGIN SELECT (-- name: github_repository_scope_catalog :one
+DO $catalog_guard$ DECLARE actual jsonb;BEGIN IF (-- Закрытая identity sequence канонического bootstrap. Public foreign sequences
+-- не получают backup grants при GRANT ON ALL SEQUENCES. Table-only и canonical
+-- допускают только отсутствие backup ACL либо точные SELECT+USAGE.
+WITH registered AS (
+ SELECT c.oid,c.relowner,c.relacl
+ FROM pg_catalog.pg_class c
+ JOIN pg_catalog.pg_sequence s ON s.seqrelid=c.oid
+ WHERE c.relnamespace='public'::regnamespace AND c.relname='goose_db_version_id_seq'
+ AND c.relkind='S' AND c.relowner='control_plane_owner'::regrole
+ AND c.relpersistence='p' AND c.reloptions IS NULL
+ AND s.seqtypid='integer'::regtype AND s.seqstart=1 AND s.seqincrement=1
+ AND s.seqmin=1 AND s.seqmax=2147483647 AND s.seqcache=1 AND NOT s.seqcycle
+ AND EXISTS(SELECT 1 FROM pg_catalog.pg_depend d JOIN pg_catalog.pg_attribute a
+  ON a.attrelid=d.refobjid AND a.attnum=d.refobjsubid
+  WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.objsubid=0
+   AND d.refclassid='pg_class'::regclass AND d.refobjid='public.goose_db_version'::regclass
+   AND d.deptype='i' AND a.attname='id' AND a.atttypid='integer'::regtype AND a.attidentity='d' AND NOT a.attisdropped)
+), acl AS (
+ SELECT a.* FROM registered r CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(r.relacl,pg_catalog.acldefault('S',r.relowner))) a
+)
+SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::regnamespace AND relkind='S')=1
+ AND (SELECT count(*) FROM registered)=1
+ AND NOT EXISTS(SELECT 1 FROM acl WHERE grantor<>'control_plane_owner'::regrole OR is_grantable
+  OR grantee NOT IN('control_plane_owner'::regrole,'control_plane_migrator'::regrole,'kodex_backup_reader'::regrole)
+  OR grantee='kodex_backup_reader'::regrole AND privilege_type NOT IN('SELECT','USAGE'))
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'Sentry observability public sequence boundary changed';END IF;
+SELECT (-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
 WITH RECURSIVE relations AS (
@@ -115,7 +143,7 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected${"authorityDigest":"9078371cb08839694c21e3d8750e8da1d309c6f45616662acbbc8d72eb0417eb","catalogDigest":"01cfac4486c0385d768376e5ebbeeef7d7e2e14b4c9b90f0d06f2345aca77317","functionCount":228,"functionsDigest":"8b2272337516e0974a537530e892cd6c675a194512b76e8513f9d45e0d6b8b8b","purgeEdgeCount":310,"purgeEdgeFingerprint":"2f32d3b42715f0a7c905ddc9f6957e71","purgeGraphDigest":"3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84","purgeNodeCount":112,"purgeNodeFingerprint":"97039cc15f63901977000dabe1167d5d","tableCount":168,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner}"],"tablesDigest":"0d91da72186e22f49e56b5828d41c21221d53f20b3a69fa0146e3214b4147cb3","triggerCount":180,"triggersDigest":"225cb8882f62762c44b73ac5a877a2d062e6644d2903bfcf5be5312191e0265e"}$expected$::jsonb THEN RAISE EXCEPTION 'Sentry observability schema catalog changed';END IF;END $catalog_guard$;
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected0${"authorityDigest":"9078371cb08839694c21e3d8750e8da1d309c6f45616662acbbc8d72eb0417eb","catalogDigest":"01cfac4486c0385d768376e5ebbeeef7d7e2e14b4c9b90f0d06f2345aca77317","functionCount":228,"functionsDigest":"8b2272337516e0974a537530e892cd6c675a194512b76e8513f9d45e0d6b8b8b","purgeEdgeCount":310,"purgeEdgeFingerprint":"2f32d3b42715f0a7c905ddc9f6957e71","purgeGraphDigest":"3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84","purgeNodeCount":112,"purgeNodeFingerprint":"97039cc15f63901977000dabe1167d5d","tableCount":168,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner}"],"tablesDigest":"0d91da72186e22f49e56b5828d41c21221d53f20b3a69fa0146e3214b4147cb3","triggerCount":180,"triggersDigest":"225cb8882f62762c44b73ac5a877a2d062e6644d2903bfcf5be5312191e0265e"}$expected0$::jsonb THEN RAISE EXCEPTION 'Sentry observability schema catalog changed';END IF;END $catalog_guard$;
 SELECT jsonb_build_object('profile', 'SENTRY_OBSERVABILITY_V1', 'database',current_database(),'readOnly',current_setting('transaction_read_only'),'gooseVersion',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schemaCatalog',(-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -230,5 +258,5 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog))::text;
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog), 'backupQualification','NONE', 'publicSequenceSafe',true)::text;
 ROLLBACK;
