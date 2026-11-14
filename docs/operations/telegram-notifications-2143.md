@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.14
+version: 1.0.15
 updated: 2026-11-14
 ---
 
@@ -190,6 +190,12 @@ Plan фиксирует исходные три replicas, но создавае�
 Namespace inventory без selector исключает orphan Pod/ReplicaSet; собственный
 ReplicaSet допустим только с точным новым owner UID и подтверждёнными нулевыми
 replicas. Наличие любого Pod этого gateway запрещено на данном этапе.
+
+Kubernetes возвращает `serviceAccount` как deprecated alias `serviceAccountName`.
+Dry-run admission принимает его только при точном совпадении с непустой
+identity исходного Pod template; другая identity и отсутствующий source закрыты.
+Проверено через Context7 `/websites/kubernetes_io` и официальный
+[контракт PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/core/pod-v1/).
 
 План закрепляет единственные абсолютные пути своего файла и evidence journal;
 копия плана либо другой journal закрыто отклоняются. До первого create
