@@ -15,7 +15,7 @@ const secretRegistry=['backup-controller-credentials','kodex-postgresql-runtime-
 export const backupControllerMaintenanceHeader=plan=>({schema:'kodex.backup-controller-maintenance-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID});
 
 // Namespace discovery включает все встроенные workload producers, включая
-// legacy ReplicationController без ещё созданного Pod. Selector не используется:
+// встроенный ReplicationController без ещё созданного Pod. Selector не используется:
 // label не может скрыть прежнего producer. В процесс попадают только identity,
 // owner edges и имена refs, не env values.
 export function readBackupProducerInventory(kube){

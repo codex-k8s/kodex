@@ -212,5 +212,6 @@ test('real CLI rejects ReplicationController awaiting its first Pod by exact tem
   assert.equal(f.read().effects,0);assert.equal(f.read().pods.length,1,'fixture unexpectedly created an RC Pod');
   const planned=f.run('plan',['--action','stop','--target',join(f.directory,'target.json'),'--evidence',join(f.directory,'evidence.jsonl')]);
   assert.notEqual(planned.status,0,'existing RC was omitted from plan discovery');
+  assert.match(planned.stderr,/BACKUP_MAINTENANCE_OTHER_PRODUCER_PRESENT/);
  }
 });
