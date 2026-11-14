@@ -4,7 +4,7 @@ title: Поисковый каталог моделей и Z.ai Coding Plan
 type: operations
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.0.2
 updated: 2026-11-14
 ---
 
@@ -48,8 +48,26 @@ Assets входят в прежний Docker input `services/internal/control-pl
 | Известна | `KNOWN` — есть в pinned artifact; `CUSTOM` — отдельно сопровождаемая запись; `REMOVED` — сохранена после удаления upstream |
 | Адаптер | `BUNDLED` означает наличие одного из трёх закреплённых SDK/протоколов. Это не квалификация конкретной модели. Другие SDK — `UNSUPPORTED`; npm из каталога не исполняется |
 | Аккаунт | `AVAILABLE` означает наличие хотя бы одного текущего eligible account этого exact endpoint/protocol/model route, а не проверку выбранного пользователем account или успешного turn. Отсутствие наблюдения — `UNKNOWN`. Сам import не подтверждает подписку |
-| Разрешено | Без настроенного exact route либо для retired записи — `UNAVAILABLE`; при наличии маршрута — `UNKNOWN`, поскольку поиск не имеет контекста agent/grant/Run |
+| Разрешено | Без включённого exact route либо для retired записи — `UNAVAILABLE`; при наличии маршрута — `UNKNOWN`, поскольку поиск не имеет контекста agent/grant/Run |
 | Проверено | `NOT_RUN`: эта read projection не извлекает model execution attestation. Synthetic adapter tests не превращаются в подтверждение живого аккаунта |
+
+Сохранённый exact descriptor задаёт `routeConfigured=true` независимо от
+включения provider и доступности account. Отключённый provider либо наблюдаемая
+модель без eligible account дают account `UNAVAILABLE`; отсутствие наблюдения —
+`UNKNOWN`. Ни одно из этих состояний не подтверждает выбранный account или turn.
+
+Для каждого запроса полностью перечитываются до4096 owner definitions страницами
+не более100 через прежний авторитетный repository path. Переполнение бюджета,
+повтор definition/cursor, пустая нетерминальная страница либо отказ authority
+отклоняют весь ответ без частичных route/account evidence. Каждый repository read
+заново проверяет organization eligibility; observation account не кешируется.
+
+RPC зарегистрирован атомарно в policy revision106: gateway operation profile,
+OIDC proof producer permission, exact method/request profile и target-owned
+service-identity policy. Генераторы `policygen` и `service-identity-policy.mjs`
+материализуют обе стороны; тест `TestModelDiscoveryGeneratedAuthorityMapping`
+использует фактическую generated policy, настоящий admission/middleware/resolver
+и синтетический verified TLS peer. Это локальная проверка mapping, не live TLS/SSO.
 
 Каталог не создаёт линейную «лестницу готовности». Даже account `AVAILABLE`
 не разрешает Run. Реальные `eligibleForSelection`/`allowedToSubmit`, текущие

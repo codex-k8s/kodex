@@ -102,11 +102,27 @@ func TestExactRouteEvidenceKeepsAuthorityAndExecutionUnknown(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, model := range page.Items {
-		if model.RouteConfigured || model.Account == "AVAILABLE" {
-			t.Fatal("disabled route retained account eligibility")
+		if model.ModelID == "glm-5.3" && (!model.RouteConfigured || model.Account != "UNAVAILABLE" || model.Allowed != "UNAVAILABLE") {
+			t.Fatal("disabled descriptor lost configuration or retained account eligibility")
 		}
 	}
 	definitions[0].Available = true
+	for _, models := range [][]entity.ModelCapability{nil, {{ID: "glm-5.3", Available: false, ReadinessBlockers: []string{"PROVIDER_ACCOUNT_REVOKED"}}}} {
+		definitions[0].Models = models
+		expectedAccount := "UNKNOWN"
+		if len(models) > 0 {
+			expectedAccount = "UNAVAILABLE"
+		}
+		page, err = Search("glm-5.3", "zai-coding-plan", "", 20, definitions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, model := range page.Items {
+			if model.ModelID == "glm-5.3" && (!model.RouteConfigured || model.Account != expectedAccount || model.Allowed != "UNKNOWN" || model.Tested != "NOT_RUN") {
+				t.Fatal("missing or revoked account erased configured descriptor or invented eligibility")
+			}
+		}
+	}
 	config.BaseURL = "https://api.z.ai/api/paas/v4"
 	page, err = Search("glm-5.3", "zai-coding-plan", "", 20, definitions)
 	if err != nil {

@@ -219,17 +219,29 @@ func annotate(record *entity.ModelDiscoveryRecord, definitions []entity.Provider
 		}
 	}
 	for _, definition := range definitions {
-		if !definition.Available || definition.ModelProvider == nil || !matchesRoute(*record, *definition.ModelProvider, record.ModelID) {
+		if definition.ModelProvider == nil || !matchesRoute(*record, *definition.ModelProvider, record.ModelID) {
 			continue
 		}
-		record.RouteConfigured, record.Allowed = true, "UNKNOWN"
+		record.RouteConfigured = true
 		if record.Known == "REMOVED" {
 			record.Allowed = "UNAVAILABLE"
 			continue
 		}
+		if !definition.Available {
+			if record.Account != "AVAILABLE" {
+				record.Account = "UNAVAILABLE"
+			}
+			continue
+		}
+		record.Allowed = "UNKNOWN"
 		for _, model := range definition.Models {
-			if model.ID == record.ModelID && model.Available {
+			if model.ID != record.ModelID {
+				continue
+			}
+			if model.Available {
 				record.Account = "AVAILABLE"
+			} else if record.Account != "AVAILABLE" {
+				record.Account = "UNAVAILABLE"
 			}
 		}
 	}
