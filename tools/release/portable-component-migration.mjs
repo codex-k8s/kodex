@@ -170,7 +170,13 @@ export function componentMigrationTarget(target, publication, observed) {
     publication.components.every(c => c.nodeProof.nodes.every(n => observed.nodes.some(actual => actual.metadata.uid === n.uid && actual.metadata.name === n.name &&
       !actual.metadata.deletionTimestamp && actual.status?.conditions?.some(v => v.type === 'Ready' && v.status === 'True')))), 'COMPONENT_MIGRATION_TARGET_MISMATCH');
   const gateway = observed.deployments.find(d => d.metadata.name === 'control-api-gateway');
-  requireValue(gateway.spec.replicas === 0, 'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
+  const opened=observed.apiRestoration;
+  if(opened)requireValue(['sentry-observability','sentry-observability-backup'].includes(publication.profile)&&
+    opened.uid===gateway.metadata.uid&&opened.proof?.deploymentUID===gateway.metadata.uid&&
+    opened.proof.specSHA256===fingerprint(gateway.spec)&&fingerprint(opened.spec)===fingerprint(gateway.spec)&&
+    opened.replicas===gateway.spec.replicas&&opened.replicas===opened.proof.replicas&&Number.isSafeInteger(opened.replicas)&&opened.replicas>=1&&opened.replicas<=8,
+    'COMPONENT_MIGRATION_API_RESTORATION_INVALID');
+  else requireValue(gateway.spec.replicas === 0, 'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
   return {...validated,targetSHA256:scope.digest};
 }
 
@@ -344,7 +350,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,apiRestoration}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -355,11 +361,16 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stages=expected.maintenance?['stoppedSpec','stagedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
-    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    const opened=apiRestoration&&name==='control-api-gateway';
+    if(opened)requireValue(expected.maintenance===true&&apiRestoration.uid===expected.uid&&
+      fingerprint(apiRestoration.spec)===fingerprint({...expected.stagedSpec,replicas:apiRestoration.replicas}),
+      'COMPONENT_MIGRATION_API_RESTORATION_INVALID');
+    const stage=opened&&fingerprint(apiRestoration.spec)===fingerprint(actual.spec)?'apiOpenedSpec':
+      stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
     const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
-    const ready=componentServingReady(actual,pods,expected.replicas);
+    const ready=componentServingReady(actual,pods,opened?apiRestoration.replicas:expected.replicas);
     return {actual,stage,joined,ready};
   };
   const inspect = () => names.map(name => {
@@ -368,6 +379,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     return {name,stage:state.stage,joined:state.joined,ready:state.ready,...(part(name).maintenance?{maintenance:true}:{})};
   });
   const transition = (name,stage,type) => {
+    requireValue(!apiRestoration,'COMPONENT_MIGRATION_API_RESTORATION_READ_ONLY');
     const state=observe(name), expected=part(name), wanted=expected[stage];
     const last=journal.events.findLastIndex(e => e.type === type && e.name === name);
     if (state.stage === stage) {

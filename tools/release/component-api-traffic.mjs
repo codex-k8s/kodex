@@ -11,6 +11,10 @@ import {portableRunnerTarget} from './portable-runner-target.mjs';
 import {readComponentServingInventory,componentServingInventory,componentServingReady} from './portable-component-migration.mjs';
 import {activeDeploymentPods} from './stable-archive-transition.mjs';
 import {confirmedAPIMaintenance,requireClosedAPIMaintenance} from './component-api-maintenance.mjs';
+import {readCatalogAuthorityBaseline,validateCatalogAuthorityBaseline,sameCatalogAuthorityBaseline} from './catalog-authority-baseline.mjs';
+import {isRoutineMigrationAPIRestoreProfile,validateRoutineMigrationIsolation} from './component-migration-api-admission.mjs';
+import {readMigrationAPITerminal,validateMigrationAPITerminal,sameMigrationAPITerminal} from './component-migration-api-terminal.mjs';
+import {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),name='control-api-gateway',key='kodex.dev/component-traffic-isolation';
 const requireValue=(ok,code)=>{if(!ok)throw Error(code);};
@@ -38,6 +42,7 @@ export function sameAuthorityOutcome(left,right){
   return same(outcome(left),outcome(right));
 }
 function validateTerminal(proof,plan,now=Date.now()){
+  if(plan.migrationRestoreProfile)return validateMigrationAPITerminal(proof,plan,now);
   const digest=v=>/^[a-f0-9]{64}$/.test(v??''),uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(proof&&typeof proof==='object'&&!Array.isArray(proof),'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
   const {terminalSHA256,...body}=proof,observed=Date.parse(proof.observedAt),readers=canonicalAuthorityReadbackContract();
@@ -67,7 +72,10 @@ function validate(plan){
     (isolate||/^[a-f0-9]{64}$/.test(plan.previousIsolationSHA256??'')), 'COMPONENT_API_TRAFFIC_PLAN_INVALID');
   // Старый план остаётся читаемым после TTL; fresh bound проверяется перед
   // restore intent. Исторический readback не открывает admission повторно.
-  requireValue(plan.authorityExecutorSHA===undefined||!isolate&&/^[a-f0-9]{40}$/.test(plan.authorityExecutorSHA)&&plan.authorityExecutorSHA!==plan.sourceSHA,'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
+  if(plan.migrationRestore)validateRoutineMigrationIsolation(plan);
+  requireValue(plan.migrationRestoreProfile===undefined||!isolate&&isRoutineMigrationAPIRestoreProfile(plan.migrationRestoreProfile)&&
+    /^[a-f0-9]{40}$/.test(plan.migrationSourceSHA??'')&&!plan.migrationRestore,'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
+  requireValue(plan.authorityExecutorSHA===undefined||(!isolate||!!plan.migrationRestore)&&/^[a-f0-9]{40}$/.test(plan.authorityExecutorSHA)&&plan.authorityExecutorSHA!==plan.sourceSHA,'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
   if(!isolate)validateTerminal(plan.authority,plan,Date.parse(plan.authority?.observedAt));
   else requireValue(!Object.hasOwn(plan,'authority'),'COMPONENT_API_TRAFFIC_PLAN_INVALID');
 }
@@ -101,7 +109,7 @@ export function requireClosedAPIAdmission(deployment,resources,closed,traffic){
   confirmedIsolation(plan,events);requireIsolatedAPIService(service,slices,pods,plan);
   return {...proof,trafficPlanSHA256:fingerprint(plan),serviceUID:plan.serviceUID};
 }
-export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityExecutorSHA}){
+export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal,authorityExecutorSHA,migrationRestore,migrationRestoreProfile,migrationSourceSHA}){
   const scope=portableRunnerTarget(target,observed),proof=confirmedAPIMaintenance(closed);
   requireValue(scope.allows(service)&&scope.allows(deployment)&&same(target,closed.plan.target)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&
     ['isolate','restore'].includes(action),'COMPONENT_API_TRAFFIC_SCOPE_INVALID');
@@ -115,7 +123,12 @@ export function planComponentAPITraffic({service,deployment,resources,target,obs
   const plan={schema:'kodex.component-api-traffic-plan/v1',action,sourceSHA,target,maintenanceID:proof.maintenanceID,closePlanSHA256:proof.planSHA256,
     serviceUID:service.metadata.uid,beforeResourceVersion:service.metadata.resourceVersion,beforeSpec:structuredClone(service.spec),afterSpec:structuredClone(service.spec),
     beforeAnnotations:{...service.metadata.annotations},afterAnnotations:{...service.metadata.annotations},
-    ...(action==='restore'?{previousIsolationSHA256:fingerprint(previous.plan),authority:terminal,...(authorityExecutorSHA?{authorityExecutorSHA}:{})}:{})};
+    ...(action==='restore'?{previousIsolationSHA256:fingerprint(previous.plan),authority:terminal,
+      ...(migrationRestoreProfile?{migrationRestoreProfile,migrationSourceSHA}:{}),...(authorityExecutorSHA?{authorityExecutorSHA}:{})}:
+      migrationRestore?{migrationRestore,...(authorityExecutorSHA?{authorityExecutorSHA}:{})}:{})};
+  requireValue(action==='isolate'?!migrationRestoreProfile&&!migrationSourceSHA:
+    (!previous.plan.migrationRestore&&!migrationRestoreProfile||previous.plan.migrationRestore?.profile===migrationRestoreProfile)&&!migrationRestore,
+    'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
   if(action==='isolate'){
     plan.afterSpec.selector[key]=proof.maintenanceID;plan.afterAnnotations[key]=marker(plan);
   }else{delete plan.afterSpec.selector[key];delete plan.afterAnnotations[key];}
@@ -143,8 +156,12 @@ export function componentAPITrafficStep({phase,plan,journal,get,slices,pods,gate
     {op:'test',path:'/spec',value:plan.beforeSpec},{op:'add',path:'/metadata/annotations',value:plan.afterAnnotations},{op:'replace',path:'/spec',value:plan.afterSpec}];
   patch(operations,true);const terminal=gate();
   if(plan.action==='restore'){
-    validateTerminal(terminal,plan);requireValue(sameAuthorityOutcome(terminal,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
-    journal.append({type:'AUTHORITY_CONFIRMED',plannedTerminalSHA256:plan.authority.terminalSHA256,authority:terminal});
+    validateTerminal(terminal,plan);requireValue((plan.migrationRestoreProfile?sameMigrationAPITerminal:sameAuthorityOutcome)(terminal,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+    journal.append({type:plan.migrationRestoreProfile?'MIGRATION_CONFIRMED':'AUTHORITY_CONFIRMED',plannedTerminalSHA256:plan.authority.terminalSHA256,authority:terminal});
+  }else if(plan.migrationRestore){
+    validateCatalogAuthorityBaseline(terminal);
+    requireValue(sameCatalogAuthorityBaseline(plan.migrationRestore.authority,terminal),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+    journal.append({type:'BASELINE_CONFIRMED',baseline:terminal});
   }
   journal.append({type:'INTENT',step:'apply'});
   try{patch(operations,false);}catch(error){journal.append({type:'UNKNOWN',step:'apply'});throw error;}
@@ -155,15 +172,21 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--authority-executor-sha'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--authority-executor-sha',
+    '--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
   requireValue(options['--predecessor-executor-sha']===undefined||phase==='status'&&/^[a-f0-9]{40}$/.test(options['--predecessor-executor-sha']),
     'COMPONENT_API_TRAFFIC_READBACK_SUCCESSOR_INVALID');
-  requireValue(options['--authority-executor-sha']===undefined||phase==='plan'&&options['--action']==='restore'&&/^[a-f0-9]{40}$/.test(options['--authority-executor-sha']),'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
+  requireValue(options['--authority-executor-sha']===undefined||phase==='plan'&&(options['--action']==='restore'||options['--action']==='isolate'&&isRoutineMigrationAPIRestoreProfile(options['--migration-profile']))&&/^[a-f0-9]{40}$/.test(options['--authority-executor-sha']),'COMPONENT_API_TRAFFIC_AUTHORITY_SUCCESSOR_INVALID');
   let authorityExecutorSHA=options['--authority-executor-sha'];
+  let migrationProfile=options['--migration-profile'],migrationSourceSHA=options['--migration-source-sha'],routineIsolation;
+  requireValue(migrationProfile===undefined||phase==='plan'&&isRoutineMigrationAPIRestoreProfile(migrationProfile),
+    'COMPONENT_API_TRAFFIC_MIGRATION_PROFILE_INVALID');
+  requireValue(migrationSourceSHA===undefined||phase==='plan'&&options['--action']==='restore'&&migrationProfile&&/^[a-f0-9]{40}$/.test(migrationSourceSHA),
+    'COMPONENT_API_TRAFFIC_MIGRATION_SOURCE_INVALID');
   const env=Object.fromEntries(['HOME','PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   const run=(command,argv)=>{try{return execFileSync(command,argv,{cwd:root,env,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:['ignore','pipe','pipe']});}
     catch{throw Error('COMPONENT_API_TRAFFIC_OPERATION_FAILED_OR_UNKNOWN');}};
@@ -185,7 +208,33 @@ async function main(args){
     const plan=await readPrivateJSON(resolve(options['--isolation-plan']));previous={plan,events:readEvidence(options['--isolation-evidence'],header(plan))};
   }else requireValue(!options['--isolation-evidence'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
   let terminal;
+  const readBaseline=expected=>{
+    requireValue(options['--authority-plan']&&options['--authority-evidence']&&!options['--authority-status-plan']&&!options['--authority-status-evidence'],
+      'COMPONENT_API_TRAFFIC_BASELINE_INPUT_REQUIRED');
+    const plan=readAuthorityPrivateJSON(options['--authority-plan']);
+    requireValue(plan.context===options['--context']&&plan.kubeconfig===options['--kubeconfig'],'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
+    verifyAuthorityObserverSource(plan.revision,sourceSHA,authorityExecutorSHA,
+      (old,current)=>run('git',['merge-base','--is-ancestor',old,current]));
+    return readCatalogAuthorityBaseline({plan,events:readAuthorityPrivateText(options['--authority-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),expected},kube);
+  };
   const readTerminal=async()=>{
+    if(migrationProfile){
+      requireValue(['--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].every(key=>options[key])&&
+        previous?.plan.migrationRestore?.profile===migrationProfile&&/^[a-f0-9]{40}$/.test(migrationSourceSHA??''),
+        'COMPONENT_API_TRAFFIC_MIGRATION_TERMINAL_INPUT_REQUIRED');
+      const migration=readAuthorityPrivateJSON(options['--migration-plan']);
+      requireValue(migration.profile===migrationProfile&&migration.source?.revision===migrationSourceSHA&&migration.context===options['--context'],
+        'COMPONENT_API_TRAFFIC_MIGRATION_SOURCE_CHANGED');
+      const args=[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'inspect','--profile',migrationProfile,
+        '--context',options['--context'],'--kubeconfig',options['--kubeconfig'],'--plan',resolve(options['--migration-plan']),
+        '--evidence',resolve(options['--migration-evidence']),'--api-restoration-open-plan',resolve(options['--api-open-plan']),
+        '--api-restoration-open-evidence',resolve(options['--api-open-evidence']),'--api-restoration-source-sha',migrationSourceSHA];
+      return readMigrationAPITerminal({migration,migrationEvidencePath:resolve(options['--migration-evidence']),
+        openPlanPath:resolve(options['--api-open-plan']),openEvidencePath:resolve(options['--api-open-evidence']),
+        inspect:async()=>{try{return parseAuthorityPrivateJSON(execFileSync(process.execPath,args,{cwd:root,env,encoding:'utf8',timeout:120000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']}));}
+          catch{throw Error('COMPONENT_API_TRAFFIC_MIGRATION_INSPECT_UNCONFIRMED');}},
+        readAuthority:expected=>readBaseline(expected)},kube);
+    }
     requireValue(['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'].every(k=>options[k]),
       'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
     const {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON}=await import('./authority-catalog-transition.mjs');
@@ -205,16 +254,27 @@ async function main(args){
   };
   const build=(target,action)=>{
     const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
-      target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA});
+      target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,
+      ...(action==='isolate'?{migrationRestore:routineIsolation}:migrationProfile?{migrationRestoreProfile:migrationProfile,migrationSourceSHA}:{})});
   };
   if(phase==='plan'){
     requireValue(options['--target']&&!options['--evidence']&&!options['--approved-plan-sha'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
+    requireValue(migrationProfile&&options['--action']==='restore'||!['--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].some(key=>options[key]),
+      'COMPONENT_API_TRAFFIC_MIGRATION_ARGUMENT_INVALID');
+    if(options['--action']==='isolate'&&migrationProfile){
+      const authority=readBaseline();
+      routineIsolation={profile:migrationProfile,closedPlanPath:resolve(options['--closed-plan']),closedEvidencePath:resolve(options['--closed-evidence']),authority};
+    }
     if(options['--action']==='restore')terminal=await readTerminal();
     const plan=build(await readPrivateJSON(resolve(options['--target'])),options['--action']);createPrivatePrettyJSONSync(resolve(options['--plan']),plan);
     console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
   }
   requireValue(options['--evidence']&&!options['--action']&&!options['--target'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
   const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;
+  migrationProfile=plan.migrationRestore?.profile??plan.migrationRestoreProfile;migrationSourceSHA=plan.migrationSourceSHA;
+  routineIsolation=plan.migrationRestore;
+  requireValue(migrationProfile&&plan.action==='restore'&&phase==='apply'||!['--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].some(key=>options[key]),
+    'COMPONENT_API_TRAFFIC_MIGRATION_ARGUMENT_INVALID');
   // Исправленный successor может только наблюдать прежнюю изоляцию. Старые
   // plan/header/nonce не переписываются; apply и restore остаются exact-source.
   if(options['--predecessor-executor-sha']){
@@ -229,10 +289,11 @@ async function main(args){
   try{
     if(options['--predecessor-executor-sha'])journal.append({type:'READBACK_EXECUTOR',sourceSHA,predecessorExecutorSHA:plan.sourceSHA});
     if(phase==='apply'&&plan.action==='restore'&&same(service().spec,plan.beforeSpec))terminal=await readTerminal();
+    if(phase==='apply'&&plan.action==='isolate'&&routineIsolation&&same(service().spec,plan.beforeSpec))terminal=readBaseline(routineIsolation.authority);
     const result=componentAPITrafficStep({phase,plan,journal,get:service,slices,pods,gate:()=>{
       const fresh=build(plan.target,plan.action);
       if(plan.action==='restore'){
-        requireValue(sameAuthorityOutcome(fresh.authority,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+        requireValue((plan.migrationRestoreProfile?sameMigrationAPITerminal:sameAuthorityOutcome)(fresh.authority,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
         fresh.authority=plan.authority;
       }
       requireValue(same(fresh,plan),'COMPONENT_API_TRAFFIC_GATE_CHANGED');
