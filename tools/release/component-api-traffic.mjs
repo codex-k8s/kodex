@@ -30,6 +30,13 @@ export function verifyAuthorityObserverSource(original,current,predecessor,ances
     ancestor(predecessor,current);
   }
 }
+// Новый status Job может подтвердить тот же неизменный owner outcome перед effect.
+// Различаются только provenance наблюдения и его время, не authority/target pins.
+export function sameAuthorityOutcome(left,right){
+  const outcome=value=>Object.fromEntries(Object.entries(value??{}).filter(([key])=>
+    !['terminalSHA256','observedAt','freshPlanSHA256','podUID','jobUID','actualReadbackCount'].includes(key)));
+  return same(outcome(left),outcome(right));
+}
 function validateTerminal(proof,plan,now=Date.now()){
   const digest=v=>/^[a-f0-9]{64}$/.test(v??''),uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(proof&&typeof proof==='object'&&!Array.isArray(proof),'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
@@ -136,7 +143,8 @@ export function componentAPITrafficStep({phase,plan,journal,get,slices,pods,gate
     {op:'test',path:'/spec',value:plan.beforeSpec},{op:'add',path:'/metadata/annotations',value:plan.afterAnnotations},{op:'replace',path:'/spec',value:plan.afterSpec}];
   patch(operations,true);const terminal=gate();
   if(plan.action==='restore'){
-    validateTerminal(terminal,plan);requireValue(same(terminal,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+    validateTerminal(terminal,plan);requireValue(sameAuthorityOutcome(terminal,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+    journal.append({type:'AUTHORITY_CONFIRMED',plannedTerminalSHA256:plan.authority.terminalSHA256,authority:terminal});
   }
   journal.append({type:'INTENT',step:'apply'});
   try{patch(operations,false);}catch(error){journal.append({type:'UNKNOWN',step:'apply'});throw error;}
@@ -188,11 +196,12 @@ async function main(args){
       'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
     verifyAuthorityObserverSource(plan.revision,sourceSHA,authorityExecutorSHA,
       (old,current)=>run('git',['merge-base','--is-ancestor',old,current]));
-    const d=deployment(),resources=readComponentServingInventory(kube,name,d.metadata.uid);
     return readCatalogAuthorityTerminal({plan,freshPlan,
       events:readAuthorityPrivateText(options['--authority-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
       freshEvents:readAuthorityPrivateText(options['--authority-status-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
-      admissionProof:requireClosedAPIAdmission(d,resources,closed,{...previous,service:service(),slices:slices(),pods:pods()})},kube);
+      // Getter сам читает актуальный admission и сверяет с исходным proof.
+      // Второй полный inventory здесь не добавляет отдельной границы authority.
+      admissionProof:plan.maintenance.proof},kube);
   };
   const build=(target,action)=>{
     const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
@@ -221,7 +230,12 @@ async function main(args){
     if(options['--predecessor-executor-sha'])journal.append({type:'READBACK_EXECUTOR',sourceSHA,predecessorExecutorSHA:plan.sourceSHA});
     if(phase==='apply'&&plan.action==='restore'&&same(service().spec,plan.beforeSpec))terminal=await readTerminal();
     const result=componentAPITrafficStep({phase,plan,journal,get:service,slices,pods,gate:()=>{
-      const fresh=build(plan.target,plan.action);requireValue(same(fresh,plan),'COMPONENT_API_TRAFFIC_GATE_CHANGED');
+      const fresh=build(plan.target,plan.action);
+      if(plan.action==='restore'){
+        requireValue(sameAuthorityOutcome(fresh.authority,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+        fresh.authority=plan.authority;
+      }
+      requireValue(same(fresh,plan),'COMPONENT_API_TRAFFIC_GATE_CHANGED');
       return terminal;
     },patch:(operations,dryRun)=>withPrivatePatchFile(operations,path=>kube(['-n','kodex-system','patch','service',name,'--type=json','--patch-file',path,
       ...(dryRun?['--dry-run=server']:[]),'-o','name']))});console.log(JSON.stringify(result));
