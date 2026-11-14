@@ -78,12 +78,15 @@ describe("IntegrationPackage canonical schema", () => {
       );
       const spec = value.spec as Record<string, unknown>;
       const fields = spec.configurationFields as Record<string, unknown>[];
+      const field = fields[0];
+      if (!field)
+        throw new Error("canonical Sentry configuration field missing");
       for (const [key, maximum] of [
         ["label", 120],
         ["help", 500],
       ] as const) {
-        const original = fields[0]![key];
-        fields[0]![key] = character.repeat(maximum);
+        const original = field[key];
+        field[key] = character.repeat(maximum);
         expect(packageDiagnostics(value)).toEqual([]);
         for (const invalid of [
           character.repeat(maximum + 1),
@@ -91,10 +94,10 @@ describe("IntegrationPackage canonical schema", () => {
           "a\rb",
           "a\nb",
         ]) {
-          fields[0]![key] = invalid;
+          field[key] = invalid;
           expect(packageDiagnostics(value).length).toBeGreaterThan(0);
         }
-        fields[0]![key] = original;
+        field[key] = original;
       }
     }
   });
