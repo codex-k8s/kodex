@@ -1033,6 +1033,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.telegram-subscription.configure",
+      "source_binding_sha256": "ff3a59d838b17b2c1e2e75c20f515e247c44ff4f236e922c58268db11eadc9ee",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.command.workflows.archive",
       "source_binding_sha256": "d1b75c587877c054b152791c22391114daec4ef1dc09849ffb03ef2365a8c9dc",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -1170,6 +1175,11 @@
     {
       "operation_id": "platform.interactions.connection-tests.complete",
       "source_binding_sha256": "00961dfa03c570f1275e131985e2e333710a7f3c55ba95e2328e1fa6cdb445ba",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.interactions.deliveries.begin",
+      "source_binding_sha256": "eab7eed86d5c031c47cbf1a322da3033e25e95be60bd330a9ec9fc6d4dfd06d8",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
@@ -1475,6 +1485,11 @@
     {
       "operation_id": "platform.query.integration-grant-candidates.recipients.list",
       "source_binding_sha256": "432ccc917dc05e22a309bef8546301ddfb82c931ac9084f158b2686a4294ce98",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.interaction-deliveries.list",
+      "source_binding_sha256": "3f069bec7bc008f77bfa474563b385a18ff03c73e753fba2cad4235469416864",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
@@ -1790,6 +1805,11 @@
     {
       "operation_id": "platform.query.system-stt.get",
       "source_binding_sha256": "3d89118adfbf486c373f15d91a9a288a042d9ebe004ab0aef49a05f7394a77c7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.telegram-subscription.get",
+      "source_binding_sha256": "9a1d79beae2d1e02d26fc4a28497ba08968d58c265a9e270d46d88da781ce758",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

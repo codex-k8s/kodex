@@ -30,7 +30,20 @@ const (
 	STTProfileName   = "openai-stt"
 	STTWorkload      = "stt-tts-service"
 	STTOperation     = "openai.transcription"
+	// TelegramProfileName registers a separate fixed Bot API listener; the default core destination set never gains Telegram reachability.
+	// TelegramProfileName регистрирует отдельный fixed Bot API listener; набор core destinations не получает доступ к Telegram.
+	TelegramProfileName = "telegram-notifications"
+	// TelegramWorkload is the only namespace-pinned peer admitted by the rendered listener NetworkPolicy.
+	// TelegramWorkload — единственный namespace-pinned peer, допускаемый итоговой NetworkPolicy listener.
+	TelegramWorkload = "interaction-gateway"
+	// TelegramOperation names outbound provider reachability without granting a subscription or send effect.
+	// TelegramOperation именует исходящий provider reachability без выдачи subscription либо send effect.
+	TelegramOperation = "telegram.bot-api"
 )
+
+// errUnregisteredProfile refuses unknown or expanded fixed listener tuples without echoing policy content.
+// errUnregisteredProfile отклоняет неизвестные либо расширенные fixed listener tuples без выдачи содержимого policy.
+var errUnregisteredProfile = errors.New("policy profile is not registered")
 
 // Document is the versioned machine policy contract loaded from JSON.
 // Document — версионированный контракт машинной политики из JSON.
@@ -317,16 +330,32 @@ func validate(document *Document) error {
 		}
 	}
 
-	if len(document.Spec.Profiles) > 1 {
+	if len(document.Spec.Profiles) > 2 {
 		return errors.New("policy profiles are invalid")
 	}
+	profiles := map[string]bool{}
 	for _, profile := range document.Spec.Profiles {
-		if profile.Name != STTProfileName || profile.Workload != STTWorkload || profile.Operation != STTOperation ||
-			len(profile.Destinations) != 1 || profile.Destinations[0] != (Destination{Hostname: "api.openai.com", Port: 443}) {
-			return errors.New("policy profile is not registered")
+		if profiles[profile.Name] || len(profile.Destinations) != 1 {
+			return errUnregisteredProfile
 		}
-		if _, exists := seen["api.openai.com:443"]; !exists {
-			return errors.New("policy profile destination is not registered")
+		profiles[profile.Name] = true
+		switch profile.Name {
+		case STTProfileName:
+			if profile.Workload != STTWorkload || profile.Operation != STTOperation || profile.Destinations[0] != (Destination{Hostname: "api.openai.com", Port: 443}) {
+				return errUnregisteredProfile
+			}
+			if _, exists := seen["api.openai.com:443"]; !exists {
+				return errors.New("policy profile destination is not registered")
+			}
+		case TelegramProfileName:
+			if profile.Workload != TelegramWorkload || profile.Operation != TelegramOperation || profile.Destinations[0] != (Destination{Hostname: "api.telegram.org", Port: 443}) {
+				return errUnregisteredProfile
+			}
+			if _, exists := seen["api.telegram.org:443"]; exists {
+				return errors.New("telegram destination must remain isolated from core policy")
+			}
+		default:
+			return errUnregisteredProfile
 		}
 	}
 	return nil

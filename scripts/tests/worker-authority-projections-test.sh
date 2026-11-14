@@ -19,8 +19,7 @@ for profile in web-only web-with-mattermost; do
     --slurpfile resources "$temporary_directory/resources.json" \
     --slurpfile projections "$repository_root/tools/install/secret-projections.json" '
     . as $registry | $resources[0] as $resources | $projections[0].secrets as $secrets |
-    (if $profile == "web-only" then ["email-bridge"]
-     else ["email-bridge", "interaction-gateway"] end) as $workloads |
+    ["email-bridge", "interaction-gateway"] as $workloads |
     def target($workload): [$registry.targets[] | select(.workload_id == $workload)];
     def delivery_names($target): [
       $target.auth_private_key.secret_name, $target.manifest_trust.secret_name,
@@ -37,7 +36,7 @@ for profile in web-only web-with-mattermost; do
             any(.podSelector.matchExpressions[]?;
               .key == "app.kubernetes.io/name" and .operator == "In" and
               (.values | index($workload)) != null))));
-    $registry.version == 1 and $registry.source_revision == 7 and
+    $registry.version == 1 and $registry.source_revision == 8 and
     all($workloads[]; . as $workload |
       target($workload) as $targets |
       ($targets | length) == 1 and $targets[0].role == "AUTHORIZATION_ISSUER" and
@@ -54,11 +53,7 @@ for profile in web-only web-with-mattermost; do
       network_allows("control-plane-exact-runtime-paths"; $workload; 8443) and
       network_allows("internal-rpc-authority-readback-attestor-exact-paths"; $workload; 8443) and
       network_allows("internal-rpc-authority-restore-controller-exact-paths"; $workload; 8443) and
-      network_allows("platform-postgresql-exact-clients"; $workload; 5432)) and
-    (if $profile == "web-only" then
-      (target("interaction-gateway") | length) == 0 and
-      (network_allows("platform-postgresql-exact-clients"; "interaction-gateway"; 5432) | not)
-     else true end)
+      network_allows("platform-postgresql-exact-clients"; $workload; 5432))
   ' "$temporary_directory/targets.json" >/dev/null ||
     fail "rendered issuer delivery, exact RBAC or inbound network path is incomplete: $profile"
 done

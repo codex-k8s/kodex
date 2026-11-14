@@ -42,6 +42,10 @@ var (
 	// queryTelegramSubscriptionBindGrant связывает лишь назначенное сервером точное разрешение подписки в той же транзакции владельца.
 	//go:embed sql/telegram_subscription_bind_grant.sql
 	queryTelegramSubscriptionBindGrant string
+	// queryTelegramGrantUpsert binds the internal recipient to the server-resolved project so purge and grant ownership share the same foreign-key boundary.
+	// queryTelegramGrantUpsert связывает внутреннего получателя с разрешённым сервером проектом, чтобы purge и grant ownership использовали одну foreign-key boundary.
+	//go:embed sql/telegram_grant_upsert.sql
+	queryTelegramGrantUpsert string
 )
 
 // telegramSubscriptionRow separates internal identifiers and immutable configuration from the public masked receipt.
@@ -72,9 +76,11 @@ func telegramProjectOwnerTx(ctx context.Context, tx pgx.Tx, current scope, proje
 func readTelegramSubscriptionTx(ctx context.Context, tx pgx.Tx, current scope, projectID, projectRef string) (telegramSubscriptionRow, error) {
 	var row telegramSubscriptionRow
 	var raw []byte
+	var now time.Time
+	var currentEligible bool
 	err := tx.QueryRow(ctx, queryTelegramSubscriptionLock, current.organizationID, projectID).Scan(&row.id, &row.view.Ref,
 		&row.view.Version, &row.view.ConnectionRef, &row.view.Enabled, &row.view.EventTypes, &row.view.ScopeDigest, &raw,
-		&row.view.ExpiresAt, &row.view.MaxEffects, &row.view.UsedEffects, &row.view.UpdatedAt, &row.grantID)
+		&row.view.ExpiresAt, &row.view.MaxEffects, &row.view.UsedEffects, &row.view.UpdatedAt, &row.grantID, &now, &currentEligible)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row, errs.ErrNotFound
 	}
@@ -94,12 +100,14 @@ func readTelegramSubscriptionTx(ctx context.Context, tx pgx.Tx, current scope, p
 	row.view.ChatDisplay = "…" + chat
 	row.view.TopicDisplay = row.configuration["topic"]
 	row.view.State = "ACTIVE"
-	if !row.view.Enabled {
-		row.view.State = "DISABLED"
-	} else if !row.view.ExpiresAt.After(time.Now().UTC()) {
+	if !row.view.ExpiresAt.After(now) {
 		row.view.State = "EXPIRED"
+	} else if !row.view.Enabled {
+		row.view.State = "DISABLED"
 	} else if row.view.UsedEffects >= row.view.MaxEffects {
 		row.view.State = "EXHAUSTED"
+	} else if !currentEligible {
+		row.view.State = "SCOPE_REVOKED"
 	}
 	return row, nil
 }
@@ -232,9 +240,9 @@ func (repository *Repository) configureTelegramSubscriptionTx(ctx context.Contex
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		err = tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantInsertIntegrationGrantsRefConnectionIdTargetKind,
-			grantRef, current.organizationID, connection.id, "telegram.notifications", "TELEGRAM_SUBSCRIPTION", ref, "HUMAN_SCOPED", current.actorID,
-			"WRITE", "HTTPS_RESOURCE", scopeRaw, digest, connection.definitionVersion, connection.definitionDigest, []string{}).Scan(&grantRef)
+		err = tx.QueryRow(ctx, queryTelegramGrantUpsert, pgx.StrictNamedArgs{"ref": grantRef, "organization_id": current.organizationID,
+			"connection_id": connection.id, "project_id": projectID, "subscription_ref": ref, "actor_id": current.actorID,
+			"scope": scopeRaw, "scope_digest": digest, "definition_version": connection.definitionVersion, "definition_digest": connection.definitionDigest}).Scan(&grantRef)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}

@@ -39,6 +39,7 @@ packages:
     consumers:
       - control-plane
       - integration-gateway
+      - interaction-gateway
   - id: control-api-gateway-api-v1
     format: openapi
     owner: control-api-gateway

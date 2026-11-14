@@ -17,7 +17,7 @@
             "env": [
               {
                 "name": "EGRESS_GATEWAY_MAIL_POLICY_DIGEST",
-                "value": "c6762097fc4eb495637172a385f21d080513d27c204deaf94c21888957a88edc"
+                "value": "d19b7e8995ff5d723684eb3dcd40fd91734b199d3a40696960055a160cdb49d0"
               }
             ],
             "name": "egress-gateway"
@@ -33,7 +33,7 @@
                   "path": "mail-policy.json"
                 }
               ],
-              "name": "egress-gateway-mail-c6762097fc4eb495637172a3"
+              "name": "egress-gateway-mail-d19b7e8995ff5d723684eb3d"
             },
             "name": "mail-policy"
           }

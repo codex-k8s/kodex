@@ -42,7 +42,7 @@ func New(config Config) (*Adapter, error) {
 	store, err := credentialfs.New(config.CredentialDirectory)
 	proxy, parseErr := url.Parse(config.ProxyURL)
 	if err != nil || parseErr != nil || config.Timeout < time.Second || config.Timeout > 2*time.Minute ||
-		proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" || proxy.User != nil ||
+		proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8086" || proxy.User != nil ||
 		proxy.Path != "" || proxy.RawPath != "" || proxy.RawQuery != "" || proxy.ForceQuery || proxy.Fragment != "" || proxy.Opaque != "" ||
 		(config.PublicOrigin != "" && integrationpackage.ValidateTelegramPublicOrigin(config.PublicOrigin) != nil) {
 		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}
@@ -74,7 +74,7 @@ func claimedSnapshot(claim *cp.InteractionDeliveryClaim) (integrationpackage.Tel
 	pin := claim.GetTelegram()
 	snapshot = integrationpackage.TelegramDeliverySnapshot{SubscriptionRef: pin.GetSubscriptionRef(), SubscriptionVersion: pin.GetSubscriptionVersion(),
 		ScopeDigest: pin.GetScopeDigest(), ProjectRef: pin.GetProjectRef(), RunRef: claim.GetRunRef(), GateRef: claim.GetGateRef(), GateVersion: claim.GetGateVersion(),
-		EventType: pin.GetEventType(), TemplateKey: pin.GetTemplateKey(), ConnectionVersion: claim.GetConnectionVersion(),
+		EventType: pin.GetEventType(), TemplateKey: pin.GetTemplateKey(), ConnectionVersion: claim.GetConnectionVersion(), SourceRunVersion: pin.GetSourceRunVersion(),
 		CredentialRevisionRef: claim.GetCredentialDescriptor().GetRef(), DefinitionDigest: claim.GetDefinitionDigest(), PublicOrigin: pin.GetPublicOrigin(),
 		Configuration: pin.GetConfiguration(), ExpiresAt: pin.GetExpiresAt().AsTime().UTC()}
 	digest, err := integrationpackage.TelegramDeliveryDigest(snapshot)
@@ -142,6 +142,9 @@ func (adapter *Adapter) TestConnection(ctx context.Context, claim *cp.Integratio
 	if err != nil || definition.ValidateConfiguration(values) != nil {
 		return "", &SafeError{Code: errorConfiguration, NoEffect: true}
 	}
+	operation, cancel := context.WithTimeout(ctx, min(adapter.timeout, time.Duration(definition.Spec.HealthCheck.TimeoutSeconds)*time.Second))
+	defer cancel()
+	ctx = operation
 	configuration, err := integrationpackage.ParseTelegramConfiguration(values)
 	if err != nil {
 		return "", &SafeError{Code: errorConfiguration, NoEffect: true}
@@ -176,6 +179,17 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *cp.InteractionDelive
 	if err != nil || definition.ValidateConfiguration(snapshot.Configuration) != nil {
 		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}
 	}
+	capability, _ := definition.Capability("telegram.notifications")
+	operation, cancel := context.WithTimeout(ctx, min(adapter.timeout, time.Duration(capability.Execution.TimeoutSeconds)*time.Second))
+	defer cancel()
+	ctx = operation
+	deadline := snapshot.ExpiresAt
+	if lease.GetExpiresAt().AsTime().Before(deadline) {
+		deadline = lease.GetExpiresAt().AsTime()
+	}
+	expiring, cancelExpiry := context.WithDeadline(ctx, deadline)
+	defer cancelExpiry()
+	ctx = expiring
 	text, err := integrationpackage.TelegramNotificationText(snapshot, claim.GetLocale())
 	if err != nil {
 		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}

@@ -80,6 +80,7 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 		"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST":            strings.Repeat("a", 64),
 		"EGRESS_GATEWAY_CONNECT_LISTEN":                    ":8080",
 		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":                ":8081",
+		"EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN":           ":8086",
 		"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN":               ":8082",
 		"EGRESS_GATEWAY_MAIL_POLICY_FILE":                  "/var/run/config/kodex/egress-gateway-mail/policy.json",
 		"EGRESS_GATEWAY_MAIL_POLICY_DIGEST":                strings.Repeat("b", 64),
@@ -149,7 +150,7 @@ func TestInvalidPolicyRuntimeCancelsAndJoinsWithoutConnectListener(t *testing.T)
 	go func() {
 		done <- runTechnicalOnly(lifecycle, context.Background(), Config{
 			TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0",
-			STTConnectAddress:         "127.0.0.1:0",
+			STTConnectAddress: "127.0.0.1:0", TelegramConnectAddress: "127.0.0.1:0",
 			MailConnectAddress:        "127.0.0.1:0",
 			IntegrationConnectAddress: "127.0.0.1:0",
 		}, newInvalidPolicyState(readiness, metrics, business), metrics, business)
@@ -200,7 +201,7 @@ func loadRepositoryPolicy(t *testing.T) *policy.Active {
 	if err != nil {
 		t.Fatal(err)
 	}
-	active, err := policy.Load(value, "2026-09-05.1", "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218")
+	active, err := policy.Load(value, "2026-09-05.1", "91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0")
 	if err != nil {
 		t.Fatal(err)
 	}

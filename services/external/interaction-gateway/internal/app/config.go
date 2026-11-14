@@ -26,6 +26,7 @@ const (
 // Secret contents are not loaded into this configuration; the adapter resolves connection credentials separately.
 // RU: Содержимое секретов в эти настройки не загружается; адаптер отдельно разрешает реквизиты подключений.
 type Config struct {
+	PublicOrigin                string        `env:"INTERACTION_PUBLIC_ORIGIN"`
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen             string        `env:"INTERACTION_GATEWAY_TECHNICAL_LISTEN"`
@@ -38,6 +39,7 @@ type Config struct {
 	InstanceID                  string        `env:"INTERACTION_GATEWAY_INSTANCE_ID"`
 	CredentialDirectory         string        `env:"INTERACTION_GATEWAY_CREDENTIAL_DIRECTORY"`
 	EgressProxyURL              string        `env:"INTERACTION_GATEWAY_EGRESS_PROXY_URL"`
+	TelegramProxyURL            string        `env:"INTERACTION_GATEWAY_TELEGRAM_PROXY_URL"`
 	AllowedHosts                string        `env:"INTERACTION_GATEWAY_ALLOWED_HOSTS"`
 	StartupTimeout              time.Duration `env:"INTERACTION_GATEWAY_STARTUP_TIMEOUT"`
 	ShutdownTimeout             time.Duration `env:"INTERACTION_GATEWAY_SHUTDOWN_TIMEOUT"`
@@ -61,6 +63,7 @@ func loadConfig() (Config, error) {
 		ApplicationGrantFile:        "/var/run/secrets/kodex/interaction-gateway/application-grant/application-grant.jws",
 		CredentialDirectory:         "/var/run/secrets/kodex/integration-connections",
 		EgressProxyURL:              "http://egress-gateway.kodex-system.svc.cluster.local:8080",
+		TelegramProxyURL:            "http://egress-gateway.kodex-system.svc.cluster.local:8086",
 		StartupTimeout:              30 * time.Second, ShutdownTimeout: 20 * time.Second,
 		RequestTimeout: 3 * time.Second, OperationTimeout: 30 * time.Second,
 		PollInterval: 500 * time.Millisecond, SourceRefreshInterval: 10 * time.Second,
@@ -94,6 +97,9 @@ func (config Config) validate() error {
 	proxy, err := url.Parse(config.EgressProxyURL)
 	if err != nil || proxy.Scheme != "http" || proxy.Host != "egress-gateway.kodex-system.svc.cluster.local:8080" || proxy.Path != "" || proxy.User != nil || proxy.RawQuery != "" {
 		return errors.New("interaction-gateway egress proxy is invalid")
+	}
+	if config.TelegramProxyURL != "http://egress-gateway.kodex-system.svc.cluster.local:8086" {
+		return errors.New("interaction-gateway Telegram egress proxy is invalid")
 	}
 	if strings.TrimSpace(config.ControlPlaneTLSServerName) == "" || strings.ContainsAny(config.ControlPlaneTLSServerName, "*/") {
 		return errors.New("interaction-gateway control-plane TLS name is invalid")

@@ -10,6 +10,12 @@ export default mergeConfig(base, {
     outDir: "dist-synthetic",
     rolldownOptions: {
       input: {
+        telegramNotifications: fileURLToPath(
+          new URL(
+            "./e2e/fixtures/telegram-notifications.html",
+            import.meta.url,
+          ),
+        ),
         modelDiscovery: fileURLToPath(
           new URL("./e2e/fixtures/model-discovery.html", import.meta.url),
         ),

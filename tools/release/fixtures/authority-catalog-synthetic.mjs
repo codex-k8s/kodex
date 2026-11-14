@@ -38,7 +38,7 @@ export function fixture(){
   const target=readCatalogTarget(profile,profile.context,get);
   const previous=renderAuthorityPolicyEnvironment(catalogPolicySource('predecessor').raw,target.transition.environment);
   const desired=renderAuthorityPolicyEnvironment(catalogPolicySource('desired').raw,target.transition.environment);
-  registry.data={'authority-policy.json':previous.raw,'key-delivery-targets.yaml':readFileSync(new URL('../../../deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml',import.meta.url),'utf8').replace('source_revision: 7','source_revision: 1'),'unrelated':'unchanged'};
+  registry.data={'authority-policy.json':previous.raw,'key-delivery-targets.yaml':readFileSync(new URL('./authority106-key-delivery-targets.yaml',import.meta.url),'utf8').replace('source_revision: 7','source_revision: 1'),'unrelated':'unchanged'};
   return {deployment,registry,publisher,api,service,installation,oidc,profile,get,resources,target,previous,desired};
 }
 

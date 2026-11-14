@@ -48,7 +48,7 @@ func TestActiveStartupWithUnavailableOptionalProjections(t *testing.T) {
 		}
 		return path
 	}
-	config := Config{TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0", STTConnectAddress: "127.0.0.1:0",
+	config := Config{TechnicalAddress: "127.0.0.1:0", ConnectAddress: "127.0.0.1:0", STTConnectAddress: "127.0.0.1:0", TelegramConnectAddress: "127.0.0.1:0",
 		MailConnectAddress: "127.0.0.1:0", IntegrationConnectAddress: "127.0.0.1:0", RuntimeConnectAddress: "127.0.0.1:0",
 		MailPolicyFile: filepath.Join(directory, "missing-mail.json"), IntegrationPolicyFile: filepath.Join(directory, "missing-integration.json"),
 		NativeConnectAddress: "127.0.0.1:0", NativePolicyFile: filepath.Join(directory, "missing-native.json"),

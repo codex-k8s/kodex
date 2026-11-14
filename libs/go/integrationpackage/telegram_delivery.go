@@ -22,6 +22,7 @@ type TelegramDeliverySnapshot struct {
 	ScopeDigest           string            `json:"scope_digest"`
 	ProjectRef            string            `json:"project_ref"`
 	RunRef                string            `json:"run_ref"`
+	SourceRunVersion      int64             `json:"source_run_version"`
 	GateRef               string            `json:"gate_ref"`
 	GateVersion           int64             `json:"gate_version"`
 	EventType             string            `json:"event_type"`
@@ -54,7 +55,7 @@ func TelegramDeliveryDigest(snapshot TelegramDeliverySnapshot) (string, error) {
 			return "", errTelegramConfiguration
 		}
 	}
-	if snapshot.SubscriptionVersion < 1 || snapshot.ConnectionVersion < 1 || !telegramDigest(snapshot.ScopeDigest) ||
+	if snapshot.SubscriptionVersion < 1 || snapshot.ConnectionVersion < 1 || snapshot.SourceRunVersion < 1 || !telegramDigest(snapshot.ScopeDigest) ||
 		!telegramDigest(snapshot.DefinitionDigest) || snapshot.ExpiresAt.IsZero() || snapshot.ExpiresAt.Location() != time.UTC ||
 		ValidateTelegramPublicOrigin(snapshot.PublicOrigin) != nil {
 		return "", errTelegramConfiguration

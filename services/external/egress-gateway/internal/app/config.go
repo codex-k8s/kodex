@@ -20,6 +20,7 @@ type Config struct {
 	ExpectedDigest            string `env:"EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST,required"`
 	ConnectAddress            string `env:"EGRESS_GATEWAY_CONNECT_LISTEN,required"`
 	STTConnectAddress         string `env:"EGRESS_GATEWAY_STT_CONNECT_LISTEN"`
+	TelegramConnectAddress    string `env:"EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN"`
 	MailConnectAddress        string `env:"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN"`
 	MailPolicyFile            string `env:"EGRESS_GATEWAY_MAIL_POLICY_FILE"`
 	MailExpectedDigest        string `env:"EGRESS_GATEWAY_MAIL_POLICY_DIGEST"`
@@ -76,6 +77,7 @@ func (config Config) validate() error {
 	if config.Mode == "" {
 		listeners = append(listeners,
 			struct{ address, port string }{config.STTConnectAddress, "8081"},
+			struct{ address, port string }{config.TelegramConnectAddress, "8086"},
 			struct{ address, port string }{config.MailConnectAddress, "8082"},
 			struct{ address, port string }{config.IntegrationConnectAddress, "8083"},
 			struct{ address, port string }{config.RuntimeConnectAddress, "8084"})

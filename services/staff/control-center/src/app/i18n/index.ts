@@ -1,4 +1,5 @@
 import { modelDiscoveryMessages } from "@/features/providers/model-discovery-messages";
+import { telegramNotificationsMessages } from "@/features/telegram-notifications/messages";
 import { modelMeasurementMessages } from "@/features/runs/model-measurement-messages";
 import { approvalConsentMessages } from "@/features/integrations/approval-consent-messages";
 import { createI18n } from "vue-i18n";
@@ -21,6 +22,7 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  telegramNotifications: telegramNotificationsMessages.ru,
   modelDiscovery: modelDiscoveryMessages.ru,
   modelMeasurements: modelMeasurementMessages.ru,
   integrationConsents: approvalConsentMessages.ru,
@@ -4936,6 +4938,7 @@ const ru = {
 const en = {
   ...ru,
   modelDiscovery: modelDiscoveryMessages.en,
+  telegramNotifications: telegramNotificationsMessages.en,
   modelMeasurements: modelMeasurementMessages.en,
   integrationConsents: approvalConsentMessages.en,
   credentialPolicy: {

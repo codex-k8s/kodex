@@ -90987,7 +90987,7 @@ func (x *ListInteractionDeliveriesResponse) GetPage() *PageInfo {
 	return nil
 }
 
-// Private immutable owner snapshot, не browser DTO и не grant из caller payload.
+// Приватный неизменяемый snapshot владельца, не browser DTO и не grant из payload.
 type TelegramDeliveryPin struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	SubscriptionRef     string                 `protobuf:"bytes,1,opt,name=subscription_ref,json=subscriptionRef,proto3" json:"subscription_ref,omitempty"`
@@ -91003,6 +91003,7 @@ type TelegramDeliveryPin struct {
 	ProjectRef          string                 `protobuf:"bytes,11,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
 	PublicOrigin        string                 `protobuf:"bytes,12,opt,name=public_origin,json=publicOrigin,proto3" json:"public_origin,omitempty"`
 	Configuration       map[string]string      `protobuf:"bytes,13,rep,name=configuration,proto3" json:"configuration,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	SourceRunVersion    int64                  `protobuf:"varint,14,opt,name=source_run_version,json=sourceRunVersion,proto3" json:"source_run_version,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -91126,6 +91127,13 @@ func (x *TelegramDeliveryPin) GetConfiguration() map[string]string {
 		return x.Configuration
 	}
 	return nil
+}
+
+func (x *TelegramDeliveryPin) GetSourceRunVersion() int64 {
+	if x != nil {
+		return x.SourceRunVersion
+	}
+	return 0
 }
 
 type TelegramDeliveryReceipt struct {
@@ -98643,7 +98651,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04page\x18\x02 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\"\x92\x01\n" +
 	"!ListInteractionDeliveriesResponse\x12>\n" +
 	"\x05items\x18\x01 \x03(\v2(.controlplane.v1.InteractionDeliveryViewR\x05items\x12-\n" +
-	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xe8\x04\n" +
+	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\x96\x05\n" +
 	"\x13TelegramDeliveryPin\x12)\n" +
 	"\x10subscription_ref\x18\x01 \x01(\tR\x0fsubscriptionRef\x121\n" +
 	"\x14subscription_version\x18\x02 \x01(\x03R\x13subscriptionVersion\x12!\n" +
@@ -98661,7 +98669,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\vproject_ref\x18\v \x01(\tR\n" +
 	"projectRef\x12#\n" +
 	"\rpublic_origin\x18\f \x01(\tR\fpublicOrigin\x12]\n" +
-	"\rconfiguration\x18\r \x03(\v27.controlplane.v1.TelegramDeliveryPin.ConfigurationEntryR\rconfiguration\x1a@\n" +
+	"\rconfiguration\x18\r \x03(\v27.controlplane.v1.TelegramDeliveryPin.ConfigurationEntryR\rconfiguration\x12,\n" +
+	"\x12source_run_version\x18\x0e \x01(\x03R\x10sourceRunVersion\x1a@\n" +
 	"\x12ConfigurationEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x83\x01\n" +

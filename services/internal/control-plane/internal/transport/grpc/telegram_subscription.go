@@ -19,7 +19,7 @@ func castTelegramDeliveryPin(snapshot integrationpackage.TelegramDeliverySnapsho
 	return &cp.TelegramDeliveryPin{SubscriptionRef: snapshot.SubscriptionRef, SubscriptionVersion: snapshot.SubscriptionVersion,
 		ScopeDigest: snapshot.ScopeDigest, BotId: configuration.BotID, ChatId: configuration.ChatID, TopicId: configuration.TopicID,
 		EventType: snapshot.EventType, TemplateKey: snapshot.TemplateKey, InputDigest: digest, ExpiresAt: timestamppb.New(snapshot.ExpiresAt),
-		ProjectRef: snapshot.ProjectRef, PublicOrigin: snapshot.PublicOrigin, Configuration: snapshot.Configuration}
+		ProjectRef: snapshot.ProjectRef, PublicOrigin: snapshot.PublicOrigin, Configuration: snapshot.Configuration, SourceRunVersion: snapshot.SourceRunVersion}
 }
 
 // castTelegramSubscription projects the safe owner receipt and deliberately has no private chat/token/descriptor fields to expose.

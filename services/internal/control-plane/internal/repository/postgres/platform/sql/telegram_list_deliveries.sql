@@ -9,11 +9,13 @@ JOIN control_plane.runs run ON run.id=delivery.root_run_id AND run.organization_
 JOIN control_plane.integration_connections connection ON connection.id=delivery.connection_id AND connection.organization_id=delivery.organization_id
 LEFT JOIN control_plane.owner_gates gate ON gate.id=COALESCE(delivery.telegram_gate_id,delivery.gate_id)
 WHERE delivery.organization_id=@organization_id::uuid AND delivery.project_id=@project_id::uuid
- AND delivery.ref>@after
+ AND (@after='' OR (delivery.created_at,delivery.ref)<(SELECT anchor.created_at,anchor.ref
+  FROM control_plane.interaction_deliveries anchor WHERE anchor.organization_id=@organization_id::uuid
+   AND anchor.project_id=@project_id::uuid AND anchor.ref=@after))
  AND control_plane.catalog_resource_visible(connection.organization_id,@actor_id::uuid,'integration.manage','INTEGRATION',
   connection.id,NULL,connection.created_by,'{}'::jsonb,transaction_timestamp())
  AND EXISTS (SELECT 1 FROM control_plane.catalog_access_targets target
   WHERE target.organization_id=run.organization_id AND target.kind='RUN' AND target.id=run.id
    AND control_plane.catalog_resource_visible(run.organization_id,@actor_id::uuid,'run.view',target.kind,
     target.id,target.project_id,target.owner_id,target.related_ids,transaction_timestamp()))
-ORDER BY delivery.ref LIMIT @limit;
+ORDER BY delivery.created_at DESC,delivery.ref DESC LIMIT @limit;

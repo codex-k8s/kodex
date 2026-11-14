@@ -18,12 +18,21 @@ import (
 //go:embed sql/telegram_claim_deliveries.sql
 var queryTelegramClaimDeliveries string
 
+// queryTelegramExpireSubscriptions durably closes a bounded tenant-scoped batch of expired subscriptions, grants and outstanding leases in the claim owner's transaction.
+// queryTelegramExpireSubscriptions устойчиво закрывает bounded tenant-scoped batch истёкших подписок, grants и незавершённых leases в транзакции владельца claim.
+//
+//go:embed sql/telegram_expire_subscriptions.sql
+var queryTelegramExpireSubscriptions string
+
 // claimTelegramDeliveriesTx uses the existing delivery ledger and caller transaction, validates every immutable input, then projects exact package and credential pins.
 // claimTelegramDeliveriesTx использует прежний delivery ledger и транзакцию вызывающего, проверяет каждый immutable input, затем проецирует точные package и credential pins.
 func (repository *Repository) claimTelegramDeliveriesTx(ctx context.Context, tx pgx.Tx, current scope, instance string, limit int32) ([]map[string]any, error) {
 	items := []map[string]any{}
 	if limit < 1 {
 		return items, nil
+	}
+	if _, err := tx.Exec(ctx, queryTelegramExpireSubscriptions, current.organizationID); err != nil {
+		return nil, errs.ErrUnavailable
 	}
 	rows, err := tx.Query(ctx, queryTelegramClaimDeliveries, pgx.StrictNamedArgs{"organization_id": current.organizationID, "workload_instance": instance, "claim_limit": limit})
 	if err != nil {

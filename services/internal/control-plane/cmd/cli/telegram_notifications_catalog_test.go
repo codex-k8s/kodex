@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/pressly/goose/v3"
@@ -55,6 +56,19 @@ func TestTelegramNotificationsCatalogCapture(t *testing.T) {
 				var raw []byte
 				if err := observer.QueryRow(ctx, string(query)).Scan(&raw); err != nil {
 					t.Fatal("read full schema catalog", err)
+				}
+				// Private full metadata supports field-level drift diagnosis; business rows and secret values are excluded by the canonical catalog query.
+				// Private полные metadata поддерживают диагностику дрейфа по полям; business rows и secret values исключены canonical catalog query.
+				selector := strings.LastIndex(string(query), "SELECT jsonb_build_object(\n")
+				if selector < 0 {
+					t.Fatal("full catalog selector is not canonical")
+				}
+				var full []byte
+				if err := observer.QueryRow(ctx, string(query[:selector])+"SELECT content FROM complete_catalog;").Scan(&full); err != nil {
+					t.Fatal("read full schema metadata", err)
+				}
+				if err := os.WriteFile(filepath.Join(directory, name+"-"+phase+"-full-schema.json"), full, 0600); err != nil {
+					t.Fatal(err)
 				}
 				var normalized []byte
 				if err := observer.QueryRow(ctx, string(restoreQuery)).Scan(&normalized); err != nil {

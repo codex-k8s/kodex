@@ -76,6 +76,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		if _, err := activePolicy.ForProfile(policy.STTProfileName); err != nil {
 			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
 		}
+		if _, err := activePolicy.ForProfile(policy.TelegramProfileName); err != nil {
+			return runTechnicalOnly(lifecycle, shutdownBase, config, newInvalidPolicyState(readiness, metrics, business), metrics, business)
+		}
 	}
 	servers, err := dnsresolver.LoadSystemServers(config.ResolverConfig)
 	if err != nil {
@@ -149,12 +152,17 @@ func runActive(
 	if err != nil {
 		return err
 	}
-	for index, profile := range []*policy.Active{activePolicy, sttPolicy} {
-		address := config.ConnectAddress
-		if index == 1 {
-			address = config.STTConnectAddress
-		}
-		server, err := gateway.New(runContext, address, profile, resolver, &gateway.NetDialer{}, current.state, business)
+	telegramPolicy, err := activePolicy.ForProfile(policy.TelegramProfileName)
+	if err != nil {
+		return err
+	}
+	for _, listener := range []struct {
+		address string
+		profile *policy.Active
+	}{
+		{config.ConnectAddress, activePolicy}, {config.STTConnectAddress, sttPolicy}, {config.TelegramConnectAddress, telegramPolicy},
+	} {
+		server, err := gateway.New(runContext, listener.address, listener.profile, resolver, &gateway.NetDialer{}, current.state, business)
 		if err != nil {
 			return err
 		}
@@ -292,7 +300,7 @@ func runTechnicalOnly(
 	}
 	addresses := []string{config.ConnectAddress}
 	if config.Mode != "clamav" {
-		addresses = append(addresses, config.STTConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
+		addresses = append(addresses, config.STTConnectAddress, config.TelegramConnectAddress, config.MailConnectAddress, config.IntegrationConnectAddress)
 	}
 	if config.NativeConnectAddress != "" {
 		addresses = append(addresses, config.NativeConnectAddress)

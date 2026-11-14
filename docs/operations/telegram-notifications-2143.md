@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-14
 ---
 
@@ -77,7 +77,7 @@ zone. Расчёт продвигает реальные UTC минуты, уч�
 | Claim expiry до Begin | Для Telegram доказано отсутствие send, поскольку adapter обязан получить Begin. Старый lease отзывается, bounded retry сохраняет тот же intent. Mattermost claim expiry остаётся прежним UNKNOWN path |
 | Claim → Begin | Атомарно проверяются текущие полномочия и ограничения, резервируется quota, фиксируются effect-start и exact input digest. Повтор Begin не разрешает ещё один send |
 | Quiet/rate/expiry/revoke до Begin | Внешнего эффекта нет. Задержка ограничена owner queue; expiry/revoke закрывают intent. Текущие project/connection/subscription/grant проверяются повторно, cached receipt не выдаёт authority |
-| Provider success → complete | Сохраняются exact Telegram receipt и terminal success, lease/grant закрываются. Lost completion ACK восстанавливается owner readback/повтором completion, а не send |
+| Provider success → complete | Сохраняются exact Telegram receipt и terminal success, lease закрывается. Подписка и её grant сохраняют прежние срок и оставшийся лимит; Lost completion ACK восстанавливается owner readback/повтором completion, а не send |
 | Проверенный429 | Только валидный Bot API envelope с bounded retry_after доказывает no-effect. Owner может назначить bounded следующую attempt с новыми lease/fence и всеми свежими проверками |
 | Иной подтверждённый provider rejection | No-effect фиксируется закрытым кодом. Не применяется другой bot/chat/topic; migration/permission отказ требует явного исправления настройки |
 | Transport failure/неверный success после dispatch | UNKNOWN_OUTCOME, без автоматического retry send. Telegram не предоставляет универсальную idempotency для sendMessage; exactly-once не обещается |
@@ -101,6 +101,36 @@ Raw provider error/description отбрасываются, operation/metric labe
 Credential читается по exact server-issued descriptor; token не становится
 общим header, public configuration либо prompt. TLS использует точные
 hostname/SNI/CA и штатный egress path без plaintext/insecure fallback.
+
+## Материализация и развёртывание
+
+`interaction-gateway` входит в общий состав `web-only` и
+`web-with-mattermost`. Mattermost остаётся необязательной настройкой;
+пустой список его hosts не препятствует запуску общего gateway. Отсутствие
+подписки либо credential отображается как отсутствие настройки и не является
+успешной проверкой внешнего провайдера.
+
+Telegram использует отдельный закрытый CONNECT listener8086 с фиксированным
+`api.telegram.org:443` и точным ingress только от `interaction-gateway` в
+`kodex-system`. Прежние core destinations8080 сохраняются. Runtime policy,
+Service, readiness parsing и итоговые NetworkPolicy доставляются вместе;
+caller header не выбирает профиль. Изменение общего policy digest требует
+пересборки пустых bootstrap mail/integration projections штатными producers.
+Живые owner-проекции этим bootstrap действием не заменяются.
+
+Публичный origin берётся из существующего
+`kodex-platform-endpoints.data.publicOrigin` через `INTERACTION_PUBLIC_ORIGIN`
+у CP и gateway. Caller Host, request URL и payload origin не используются.
+Новый issuer добавляется к полному прежнему набору16 targets как17-й с новой
+source revision8. Замороженный переход105→106 сохраняет отдельную16-target
+оснастку; он не переосмысливается как107.
+
+В установленном web-only новый gateway отсутствует. Адресная доставка должна
+доказать namespace ownership, отсутствие чужих ресурсов, exact specs и
+подлинные image/materialization receipts, затем создать либо восстановить
+только принадлежащие этому delivery ресурсы. Один render не является такой
+установкой. Worker начинает работу после protected owner startup barrier;
+shutdown отменяет и ожидает workers до закрытия зависимостей.
 
 ## Квалификация
 

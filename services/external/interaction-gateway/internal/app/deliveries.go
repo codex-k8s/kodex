@@ -103,6 +103,12 @@ func processTelegramDelivery(ctx context.Context, control controlplanev1.Interac
 		return nil
 	}
 	success := sendErr == nil && receipt != nil
+	if !success {
+		receipt = nil
+		if sendErr == nil {
+			sendErr = errDeliveryResponse
+		}
+	}
 	code := "TELEGRAM_OUTCOME_UNKNOWN"
 	noEffect := false
 	var retryAfter int32
@@ -111,7 +117,7 @@ func processTelegramDelivery(ctx context.Context, control controlplanev1.Interac
 	} else {
 		var safe *telegram.SafeError
 		if errors.As(sendErr, &safe) {
-			code = safe.Code
+			_, code = telegram.Outcome(sendErr)
 			noEffect = safe.NoEffect
 			if safe.RetryAfter > 0 && safe.RetryAfter <= time.Hour {
 				retryAfter = int32(safe.RetryAfter / time.Second)

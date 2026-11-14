@@ -18,6 +18,7 @@ JOIN control_plane.integration_connections connection ON connection.id=subscript
 JOIN control_plane.integration_credential_revisions credential ON credential.id=subscription.credential_revision_id
  AND credential.organization_id=subscription.organization_id AND credential.connection_id=connection.id
 JOIN control_plane.integration_grants grant_binding ON grant_binding.id=subscription.grant_id
+ AND grant_binding.telegram_project_id=subscription.project_id
  AND grant_binding.organization_id=subscription.organization_id AND grant_binding.connection_id=connection.id
  AND grant_binding.target_kind='TELEGRAM_SUBSCRIPTION' AND grant_binding.target_ref=subscription.ref
  AND grant_binding.enabled AND grant_binding.capability_key='telegram.notifications' AND grant_binding.approval_policy='HUMAN_SCOPED'

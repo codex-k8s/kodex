@@ -171,7 +171,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 106, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 107, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -275,6 +275,12 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 // operationRequestProfile выбирает точные требования привязки перед общими правилами.
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	switch operationID {
+	case "platform.query.telegram-subscription.get", "platform.query.interaction-deliveries.list", "platform.interactions.deliveries.begin":
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.command.telegram-subscription.configure":
+		// First creation and OCC updates share one owner command; the complete nested proposal/version is pinned by the canonical Proto digest.
+		// Первое создание и OCC updates используют одну owner команду; полные nested proposal/version закреплены canonical Proto digest.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}
 	case "platform.personal-integrations.list", "platform.integration-approval-consents.list":
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.personal-integration-tests.claim", "platform.personal-integration-tests.begin", "platform.personal-integration-calls.begin":

@@ -29,7 +29,7 @@ func telegramAdapterFixture(t *testing.T) (*Adapter, *cp.InteractionDeliveryClai
 	if err := os.WriteFile(filepath.Join(root, "fixture-token"), []byte(fixtureToken), 0o400); err != nil {
 		t.Fatal("prepare synthetic credential")
 	}
-	adapter, err := New(Config{CredentialDirectory: root, ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8080", PublicOrigin: "https://kodex.example.test", Timeout: time.Second})
+	adapter, err := New(Config{CredentialDirectory: root, ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8086", PublicOrigin: "https://kodex.example.test", Timeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func telegramAdapterFixture(t *testing.T) (*Adapter, *cp.InteractionDeliveryClai
 		SecretUid: "11111111-1111-4111-8111-111111111111", SecretResourceVersion: "1", ContentSha256: hex.EncodeToString(credentialDigest[:])}
 	configuration := map[string]string{"base_url": apiOrigin, "bot_id": "123456", "chat_id": "-1001234", "topic": "77"}
 	snapshot := integrationpackage.TelegramDeliverySnapshot{SubscriptionRef: "tgs_fixture_owned", SubscriptionVersion: 1, ScopeDigest: strings.Repeat("a", 64),
-		ProjectRef: "project_fixture", RunRef: "run_fixture_owned", EventType: "FINISHED", TemplateKey: "TELEGRAM_FINISHED_V1", ConnectionVersion: 1,
+		ProjectRef: "project_fixture", RunRef: "run_fixture_owned", SourceRunVersion: 1, EventType: "FINISHED", TemplateKey: "TELEGRAM_FINISHED_V1", ConnectionVersion: 1,
 		CredentialRevisionRef: credential.Ref, DefinitionDigest: definition.Digest, PublicOrigin: adapter.origin, Configuration: configuration, ExpiresAt: time.Now().UTC().Add(time.Hour)}
 	digest, err := integrationpackage.TelegramDeliveryDigest(snapshot)
 	if err != nil {
@@ -55,7 +55,7 @@ func telegramAdapterFixture(t *testing.T) (*Adapter, *cp.InteractionDeliveryClai
 		CredentialDescriptor: credential, BaseUrl: apiOrigin, CapabilityKey: "telegram.notifications", SourceCapabilityKey: "telegram.notifications",
 		MessageKey: snapshot.TemplateKey, Locale: "ru", RunRef: snapshot.RunRef,
 		Telegram: &cp.TelegramDeliveryPin{SubscriptionRef: snapshot.SubscriptionRef, SubscriptionVersion: 1, ScopeDigest: snapshot.ScopeDigest,
-			BotId: 123456, ChatId: -1001234, TopicId: 77, EventType: snapshot.EventType, TemplateKey: snapshot.TemplateKey, InputDigest: digest,
+			BotId: 123456, ChatId: -1001234, TopicId: 77, EventType: snapshot.EventType, TemplateKey: snapshot.TemplateKey, InputDigest: digest, SourceRunVersion: 1,
 			ExpiresAt: timestamppb.New(snapshot.ExpiresAt), ProjectRef: snapshot.ProjectRef, PublicOrigin: snapshot.PublicOrigin, Configuration: configuration},
 		Lease: &cp.WorkLease{Ref: "lease_fixture", Fence: "fence_fixture", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(time.Minute))}}
 	return adapter, claim

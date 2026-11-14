@@ -109,6 +109,12 @@ fi
 if [[ "$upgrade_test" != '^TestIntegrationResourcePolicyOwnerRegressionSeed$' ]]; then
   owner_test='^TestWorkspaceWriterOwnerComponent$'
 fi
+if [[ "$test_pattern" == --telegram-notifications-owner ]]; then
+  volume_owner=true
+  upgrade_test='^TestTelegramNotificationsOwnerSeed$'
+  owner_test='^TestTelegramSubscriptionOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --authority-proof-counter-owner-regression ]]; then
   volume_owner=true
   upgrade_test='^TestAuthorityProofCounterOwnerRegressionSeed$'

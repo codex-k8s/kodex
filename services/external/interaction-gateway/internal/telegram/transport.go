@@ -94,6 +94,22 @@ func OwnerAdmissionClosed(err error) bool {
 	return errors.As(err, &safe) && safe.Code == errorAdmissionClosed && safe.NoEffect
 }
 
+// Outcome returns a closed provider result code without allowing arbitrary errors to expand diagnostics or metric cardinality.
+// Outcome возвращает закрытый provider result code, не позволяя произвольным ошибкам расширять диагностику либо metric cardinality.
+func Outcome(err error) (bool, string) {
+	if err == nil {
+		return true, ""
+	}
+	var safe *SafeError
+	if errors.As(err, &safe) {
+		switch safe.Code {
+		case errorConfiguration, errorProviderRejected, errorRateLimited, errorUnknown, errorPreflightUnavailable, errorAdmissionClosed:
+			return false, safe.Code
+		}
+	}
+	return false, errorUnknown
+}
+
 // apiClient owns one short-lived credential and a non-instrumented exact-origin transport; it never returns an HTTP request or response to callers.
 // apiClient владеет одними краткоживущими реквизитами и неинструментированным transport точного origin; HTTP request/response callers не выдаются.
 type apiClient struct {

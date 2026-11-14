@@ -9997,6 +9997,7 @@ message TelegramDeliveryPin {
   string project_ref = 11;
   string public_origin = 12;
   map<string, string> configuration = 13;
+  int64 source_run_version = 14;
 }
 message TelegramDeliveryReceipt {
   int64 bot_id = 1;

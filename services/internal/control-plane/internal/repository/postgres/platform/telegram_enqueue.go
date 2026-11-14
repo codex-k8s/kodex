@@ -34,11 +34,11 @@ func (repository *Repository) enqueueTelegramDeliveryTx(ctx context.Context, tx 
 	var id, connectionID, grantID, state, locale string
 	var raw []byte
 	var expiresAt, now time.Time
-	var runVersion, pending int64
+	var pending int64
 	err := tx.QueryRow(ctx, queryTelegramSourceCandidate, pgx.StrictNamedArgs{"organization_id": current.organizationID,
 		"project_id": projectID, "root_run_id": rootRunID, "gate_id": gateID}).Scan(&id, &snapshot.SubscriptionRef,
 		&snapshot.SubscriptionVersion, &snapshot.ScopeDigest, &raw, &expiresAt, &snapshot.ConnectionVersion, &snapshot.DefinitionDigest,
-		&snapshot.CredentialRevisionRef, &connectionID, &grantID, &snapshot.RunRef, &runVersion, &state, &snapshot.ProjectRef, &locale,
+		&snapshot.CredentialRevisionRef, &connectionID, &grantID, &snapshot.RunRef, &snapshot.SourceRunVersion, &state, &snapshot.ProjectRef, &locale,
 		&snapshot.GateRef, &snapshot.GateVersion, &now, &pending)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil

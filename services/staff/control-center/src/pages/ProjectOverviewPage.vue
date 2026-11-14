@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import TelegramNotifications from "@/features/telegram-notifications/TelegramNotifications.vue";
 import { useRoute } from "vue-router";
 
 import { usePlatformStore } from "@/features/platform/store";
@@ -124,6 +125,11 @@ function refresh(): void {
 
       <div class="project-workboard">
         <div class="project-workboard__main">
+          <TelegramNotifications
+            v-if="projectReady && project?.nextActions.includes('EDIT')"
+            :key="projectRef"
+            :project-ref="projectRef"
+          />
           <WorkboardSection
             :title="$t('workboard.attention')"
             :count="attention.length"
