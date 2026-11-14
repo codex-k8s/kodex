@@ -9848,20 +9848,20 @@ message ModelCacheResolution {
 
 // Только безопасные наблюдения собственного ключа; эти поля никогда не являются источником authority.
 message GitHubDiscoveredRepository {
- int64 id=1;
- string full_name=2;
- string owner_kind=3;
- bool private=4;
- bool archived=5;
- bool can_read=6;
- bool can_push=7;
+  int64 id = 1;
+  string full_name = 2;
+  string owner_kind = 3;
+  bool private = 4;
+  bool archived = 5;
+  bool can_read = 6;
+  bool can_push = 7;
 }
 message GitHubRepositoryDiscoveryPage {
- int64 identity_id=1;
- string login=2;
- int32 page=3;
- int32 next_page=4;
- repeated GitHubDiscoveredRepository items=5;
+  int64 identity_id = 1;
+  string login = 2;
+  int32 page = 3;
+  int32 next_page = 4;
+  repeated GitHubDiscoveredRepository items = 5;
 }
 
 // Закреплённые provenance и статусы поиска; не являются account observation.
