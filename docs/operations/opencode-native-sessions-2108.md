@@ -4,8 +4,8 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.32
-updated: 2026-11-13
+version: 1.4.33
+updated: 2026-11-14
 ---
 
 # OpenCode: нативные сессии и восстановление
@@ -1780,3 +1780,54 @@ HOME и продолжает импортированную историю read-
 owner join и новый turn из сохранённой сессии требуют отдельного readback нового
 полного immutable cohort; локальные тесты не являются этим доказательством.
 Команды воспроизведения приведены в [README runner](../../services/jobs/agent-runner/README.md#квалификация-executor-после-sigterm).
+
+## Текущие owner instructions после auto-compaction — #2136
+
+На закреплённом OpenCode1.19.5 обычная auto-compaction создаёт synthetic user
+continuation без прежнего `system`. Следующий business request выбирает latest
+user; исходный per-message `Prompt.System` поэтому не является долговечным каналом
+текущих owner instructions. Это видно в точных upstream
+[compaction.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/session/compaction.ts#L489)
+и [request.ts](https://github.com/anomalyco/opencode/blob/810c0eba1a7348036f8bdf61e6632d0c36c6876c/packages/opencode/src/session/llm/request.ts#L51).
+
+Runner материализует только `input.Instructions` в новый файл0400 внутри
+provider-only HOME0700 и добавляет его абсолютный путь к штатному
+`config.instructions`, сохраняя existing skill paths. Project config остаётся
+отключённым; файл не называется `AGENTS.md`, не выбирается моделью, не читается из
+workspace и не переносится official export/import. Повторное создание того же
+файла запрещено; невалидный UTF-8, NUL, более1MiB и небезопасный HOME закрыто
+останавливают подготовку. Новый turn получает новую материализацию, включая
+пустой текущий набор. Известный preparation failure удаляет private HOME до
+возможного запуска native process. Перед restore/start этот допуск снимается:
+unknown writer сохраняет прежний lifecycle с обязательным положительным join.
+
+| Граница | Authority и проверка |
+| --- | --- |
+| Первый NORMAL request | Текущие owner instructions через explicit local config path, без дублирующего `Prompt.System` |
+| NORMAL после auto-compaction | Штатный `Instruction.system()` заново читает current file перед каждым agent-loop model request |
+| Новый turn и restore | Новый private HOME и current instructions B; прежний A не становится system authority |
+| User task и repository AGENTS | Task остаётся USER input; project config выключен, содержимое рабочего дерева не повышается до SYSTEM |
+| Native summary request | Отдельный upstream compactor/prompt, без собственного summarizer и без обещания owner instructions на summary wire |
+| Неизвестный writer outcome | Прежние cancel/join/checkpoint guards сохраняются; instruction file не разрешает очистку старого writer |
+
+Real-binary counterfactual со старым `Prompt.System` получил13 NORMAL requests,
+3 compactions и9 post-compaction requests без current marker. Regression с новым
+файлом выполняет два turns A→B в разных процессах с official export/import той же
+native session: каждый turn получил13 NORMAL requests,3 compactions и9
+post-compaction requests. Current owner и skill marker присутствуют ровно один
+раз в каждом business request; stale marker, synthetic task/project data и
+credential sentinel в SYSTEM отсутствуют. Все24 synthetic managed effects
+выполнены последовательно; business input в export не продублирован, текущий
+ephemeral owner text в export не сохранён. Отдельный прежний `user.System`
+создан штатным NoReply API и сохранён в export/import ровно один раз: он остаётся
+историческими metadata и не возвращается в SYSTEM нового turn.
+
+```bash
+KODEX_TEST_OPENCODE_BINARY=/absolute/path/to/qualified/opencode \
+  go test ./internal/opencode -run '^TestNativeCurrentInstructionsSurviveCompaction$' -count=1 -v
+```
+
+Команда выполняется из `services/jobs/agent-runner`. Это локальная synthetic
+qualification с exact pinned executable, без платной модели и внешних writes.
+Она не доказывает installed provider-language/task-count acceptance и не
+приписывает конкретное отклонение бизнес-результата только compaction.

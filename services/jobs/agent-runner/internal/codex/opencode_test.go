@@ -2,12 +2,48 @@ package codex
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
+	native "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/opencode"
 )
+
+// TestOpenCodePreparationCleanupPreservesUncertainWriter distinguishes known setup failure from
+// possible restore/start writers without deleting the current materialization of a live process.
+// TestOpenCodePreparationCleanupPreservesUncertainWriter отличает известный setup failure от
+// возможного restore/start writer, не удаляя current materialization живого процесса.
+func TestOpenCodePreparationCleanupPreservesUncertainWriter(t *testing.T) {
+	for _, phase := range []string{"preparation", "restore-uncertain", "start-uncertain"} {
+		t.Run(phase, func(t *testing.T) {
+			home := t.TempDir()
+			if os.Chmod(home, 0o700) != nil {
+				t.Fatal("prepare private HOME")
+			}
+			path, err := native.InstallCurrentInstructions(home, "Synthetic current owner text")
+			if err != nil {
+				t.Fatal(err)
+			}
+			preparing := true
+			if phase != "preparation" {
+				preparing = false
+			}
+			cleanupOpenCodePreparation(home, &preparing)
+			if phase == "preparation" {
+				if _, err := os.Lstat(home); !os.IsNotExist(err) {
+					t.Fatal("known preparation failure retained current owner text")
+				}
+				return
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != "Synthetic current owner text" {
+				t.Fatal("uncertain native writer lost its current materialization")
+			}
+		})
+	}
+}
 
 // openCodeInputFixture constructs inert provider metadata, not an authorized live runner snapshot.
 // openCodeInputFixture создаёт неактивные metadata, не авторизованный live runner snapshot.
