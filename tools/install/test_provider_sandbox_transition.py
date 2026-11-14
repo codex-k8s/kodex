@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from deployment_profile import Rejected
@@ -11,6 +12,7 @@ from portable_state import State, key
 import provider_sandbox_profile as profile
 import provider_sandbox_transition as delivery
 from test_provider_sandbox_profile import fixture
+import test_provider_sandbox_profile as profile_fixtures
 
 HEADS={'control-plane':1,'internal-rpc-authority':2,'email-bridge':3}
 
@@ -92,6 +94,95 @@ class FakeFence:
 
 
 class Tests(unittest.TestCase):
+    def test_explicit_kubeconfig_is_used_by_each_state_call_and_database_transport(self):
+        with tempfile.TemporaryDirectory()as directory:
+            kubeconfig=Path(directory)/'kubeconfig';kubeconfig.write_text('synthetic')
+            state=State('selected',kubeconfig)
+            with patch('portable_state.subprocess.run',return_value=SimpleNamespace(returncode=0,stdout=b'{}')) as run:
+                state.call(['get','namespace','kodex-system'])
+                self.assertEqual(run.call_args.args[0][:5],['kubectl','--kubeconfig',str(kubeconfig),'--context','selected'])
+            command=delivery.postgres_command(state)
+            self.assertEqual(command[:5],['kubectl','--kubeconfig',str(kubeconfig),'--context','selected'])
+            self.assertIn('env',command);self.assertIn('-i',command);self.assertIn('--no-password',command)
+            self.assertIn('postgresql',command)
+
+    def test_explicit_forward_schema_pins_preserve_base_profile_and_reject_drift(self):
+        before,target=self.reconciliation()
+        for values in (before,target):
+            next(r for r in values if r['metadata']['name']=='kodex-installation-profile')['data']['schema-heads.json']=json.dumps({**HEADS,'control-plane':99})
+        state=FakeState(before)
+        with tempfile.TemporaryDirectory()as directory:
+            with self.assertRaises(Rejected):self.execute(state,before,target,directory,'plan',reconcile=True)
+            self.execute(state,before,target,directory,'plan',reconcile=True,schema_heads=HEADS)
+            with self.assertRaises(Rejected):self.execute(state,before,target,directory,reconcile=True,schema_heads={**HEADS,'control-plane':3})
+            self.assertFalse(state.writes)
+            self.execute(state,before,target,directory,reconcile=True,schema_heads=HEADS,joined_checker=lambda *_:True)
+            self.assertFalse(any('kodex-installation-profile' in name for name in state.writes))
+
+    def reconciliation(self):
+        before,_=profile_fixtures.Tests().changed_policy('')
+        before.append(resources()[-1])
+        return before,profile.reconcile_policy(before)
+
+    def test_policy_reconciliation_joins_before_binding_and_preserves_history(self):
+        before,target=self.reconciliation();state=FakeState(before)
+        initial=state.get(before[0]);joins=[]
+        def joined(state,stopped):
+            self.assertTrue(state.fenced)
+            self.assertEqual(state.get(stopped)['spec']['replicas'],0)
+            self.assertEqual(state.get(before[2])['spec'],before[2]['spec'])
+            joins.append(True);return True
+        with tempfile.TemporaryDirectory()as directory:
+            self.execute(state,before,target,directory,'plan',reconcile=True)
+            result=self.execute(state,before,target,directory,reconcile=True,joined_checker=joined)
+            self.assertEqual(result['phase'],'PROVIDER_PROFILE_APPLIED')
+            self.assertEqual(joins,[True]);self.assertEqual(len(state.writes),5)
+            self.assertEqual(state.get(before[0]),initial)
+            self.assertEqual(state.get(target[-1])['data'],target[-1]['data'])
+            count=len(state.writes)
+            self.execute(state,before,target,directory,reconcile=True,joined_checker=joined)
+            self.assertEqual(len(state.writes),count)
+
+    def test_policy_reconciliation_stop_lost_ack_requires_readback_and_join(self):
+        before,target=self.reconciliation();state=FakeState(before)
+        controller=key(before[1])
+        with tempfile.TemporaryDirectory()as directory:
+            self.execute(state,before,target,directory,'plan',reconcile=True)
+            state.lost=controller
+            with self.assertRaises(Rejected):self.execute(state,before,target,directory,reconcile=True,joined_checker=lambda *_:True)
+            self.assertEqual(state.writes,[controller]);self.assertEqual(state.get(before[1])['spec']['replicas'],0)
+            with self.assertRaises(Rejected):self.execute(state,before,target,directory,reconcile=True,resume=True,joined_checker=lambda *_:True)
+            self.execute(state,before,target,directory,'readback',reconcile=True)
+            result=self.execute(state,before,target,directory,reconcile=True,resume=True,joined_checker=lambda *_:True)
+            self.assertEqual(result['phase'],'PROVIDER_PROFILE_APPLIED')
+            self.assertEqual(state.writes.count(key(target[-1])),1)
+
+    def test_policy_reconciliation_unknown_join_never_changes_binding(self):
+        before,target=self.reconciliation();state=FakeState(before)
+        def unknown(*_):raise Rejected('SYNTHETIC_NODE_UNKNOWN')
+        with tempfile.TemporaryDirectory()as directory:
+            self.execute(state,before,target,directory,'plan',reconcile=True)
+            with self.assertRaises(Rejected):self.execute(state,before,target,directory,reconcile=True,joined_checker=unknown)
+            self.assertEqual(state.writes,[key(before[1])])
+            self.assertEqual(state.get(before[2])['spec'],before[2]['spec'])
+
+    def test_stopped_runtime_requires_all_containers_and_exact_generated_identity(self):
+        names=['role-runtime','provider-runtime','provider-credential-relay']
+        pod={'metadata':{'name':'runtime-turn-'+'a'*16,'uid':'synthetic','namespace':'kodex-runtime',
+            'labels':{'runtime.kodex.dev/managed':'true','runtime.kodex.dev/mode':'turn'},
+            'annotations':{'runtime.kodex.dev/lease-ref':'lea_'+'b'*24}},
+            'spec':{'serviceAccountName':'runtime-sa-'+'a'*16,'containers':[{'name':n} for n in names]},
+            'status':{'phase':'Succeeded','containerStatuses':[{'name':n,'state':{'terminated':{'exitCode':0}}} for n in names]}}
+        self.assertTrue(delivery.stopped_runtime_history(pod))
+        for change in ('running','missing','unknown','foreign','ephemeral'):
+            bad=copy.deepcopy(pod)
+            if change=='running':bad['status']['containerStatuses'][0]['state']={'running':{}}
+            elif change=='missing':bad['status']['containerStatuses'].pop()
+            elif change=='unknown':bad['status']['reason']='NodeLost'
+            elif change=='foreign':bad['spec']['serviceAccountName']='foreign'
+            else:bad['spec']['ephemeralContainers']=[{'name':'debug'}]
+            with self.subTest(change=change):self.assertFalse(delivery.stopped_runtime_history(bad))
+
     def test_fence_loss_between_read_and_write_prevents_mutation(self):
         before=resources();target=profile.transform(before,profile.PROFILE);state=FakeState(before)
         with tempfile.TemporaryDirectory()as directory:
@@ -111,7 +202,7 @@ class Tests(unittest.TestCase):
 
     def execute(self,state,before,target,directory,mode='apply',**kwargs):
         return delivery.execute(state,before,target,Path(directory),mode,{'context':'synthetic-context','previous_render_sha256':'a'*64,'render_sha256':'b'*64},
-            maintenance=True,fence_factory=lambda:FakeFence(state),**kwargs)
+            maintenance=True,fence_factory=lambda:FakeFence(state),ready_checker=lambda *_:True,**kwargs)
 
     def test_plan_then_fenced_apply_and_repeat_without_effect(self):
         before=resources();target=profile.transform(before,profile.PROFILE);state=FakeState(before)

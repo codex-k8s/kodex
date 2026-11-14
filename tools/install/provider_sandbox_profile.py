@@ -205,11 +205,13 @@ def reconcile_policy(resources):
     return result
 
 
-def transition(previous, desired):
+def transition(previous, desired, reconcile=False):
     """Разрешён только exact runtime-profile delta; manifests/jobs/policy вне трёх объектов неизменны."""
     profile = active(desired)
     require(profile is not None, 'EXPLICIT_PROVIDER_PROFILE_TRANSITION_REQUIRED')
-    require(desired == transform(previous, profile), 'EXACT_PROVIDER_PROFILE_DELTA_REQUIRED')
+    require(type(reconcile) is bool, 'PROVIDER_PROFILE_TRANSITION_MODE_REQUIRED')
+    expected = reconcile_policy(previous) if reconcile else transform(previous, profile)
+    require(desired == expected, 'EXACT_PROVIDER_PROFILE_DELTA_REQUIRED')
     target = projection(source_policy(desired), profile)
     deployment, binding, _ = targets(desired)
     return [target, binding, deployment]

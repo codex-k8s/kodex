@@ -27,7 +27,7 @@ class Native(unittest.TestCase):
             if ready.returncode==0:break
             time.sleep(.2)
         else:raise RuntimeError('native PostgreSQL readiness timeout')
-        cls.sql('CREATE SCHEMA control_plane; CREATE TABLE control_plane.runs(state text); CREATE TABLE control_plane.run_nodes(state text); CREATE TABLE control_plane.runtime_leases(state text);')
+        cls.sql('CREATE SCHEMA control_plane; CREATE TABLE control_plane.runs(state text); CREATE TABLE control_plane.run_nodes(state text); CREATE TABLE control_plane.runtime_leases(state text); CREATE TABLE control_plane.session_workspace_volume_attempts(grant_state text);')
 
     @classmethod
     def sql(cls,value,check=True):
@@ -36,7 +36,16 @@ class Native(unittest.TestCase):
         return result
 
     def setUp(self):
-        self.sql('TRUNCATE control_plane.runs, control_plane.run_nodes, control_plane.runtime_leases;')
+        self.sql('TRUNCATE control_plane.runs, control_plane.run_nodes, control_plane.runtime_leases, control_plane.session_workspace_volume_attempts;')
+
+    def test_reconciliation_rejects_existing_volume_grant_and_blocks_new_grants(self):
+        self.sql("INSERT INTO control_plane.session_workspace_volume_attempts VALUES ('ACTIVE');")
+        with self.assertRaises(Rejected):
+            with Fence(self.command,reconcile=True):self.fail('active volume grant admitted')
+        self.sql("UPDATE control_plane.session_workspace_volume_attempts SET grant_state='CLOSED';")
+        with Fence(self.command,reconcile=True)as fence:
+            blocked=self.sql("SET lock_timeout='100ms'; INSERT INTO control_plane.session_workspace_volume_attempts VALUES ('ACTIVE');",check=False)
+            self.assertNotEqual(blocked.returncode,0);fence.ping()
 
     def test_share_fence_blocks_insert_until_rollback_and_serializes_operators(self):
         with Fence(self.command)as fence:

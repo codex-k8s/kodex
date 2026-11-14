@@ -317,13 +317,20 @@ def verify_resource(expected, actual):
 
 
 class State:
-    def __init__(self, context):
+    def __init__(self, context, kubeconfig=None):
         self.context = context
+        self.kubeconfig = kubeconfig
+        if kubeconfig is not None:
+            path = Path(kubeconfig)
+            require(path.is_absolute() and path.is_file() and not path.is_symlink() and
+                    str(path.resolve()) == str(path) and not any(c in str(path) for c in '\r\n\0'),
+                    'EXACT_KUBECONFIG_REQUIRED')
         self.routes = {}
         self.resource_hint = ''
 
     def call(self, args, value=None):
-        result = subprocess.run(['kubectl', '--context', self.context, '--request-timeout=15s', *args],
+        selected = [] if self.kubeconfig is None else ['--kubeconfig', str(self.kubeconfig)]
+        result = subprocess.run(['kubectl', *selected, '--context', self.context, '--request-timeout=15s', *args],
             input=None if value is None else json.dumps(value).encode(), capture_output=True, timeout=20)
         require(result.returncode == 0, 'KUBERNETES_OPERATION_FAILED_RECONCILE_REQUIRED')
         return result.stdout
@@ -511,10 +518,10 @@ class State:
         require(not claims and all(any(c.get('type')in('Complete','Failed')and c.get('status')=='True'for c in j.get('status',{}).get('conditions',[]))for j in jobs), 'ADMISSION_WORK_MUST_BE_DRAINED')
 
 
-def verify_schemas(state, resources):
+def verify_schemas(state, resources, schema_heads=None):
     records = [r for r in resources if r['kind'] == 'ConfigMap' and r['metadata']['name'] == 'kodex-installation-profile']
     require(len(records) == 1, 'INSTALLATION_PROFILE_REQUIRED')
-    expected = json.loads(records[0]['data']['schema-heads.json'])
+    expected = json.loads(records[0]['data']['schema-heads.json']) if schema_heads is None else schema_heads
     require(set(expected) == {'control-plane', 'internal-rpc-authority', 'email-bridge'}, 'SCHEMA_PIN_SET_REJECTED')
     targets = {'control-plane': ('kodex-postgresql-0', 'control_plane'),
                'internal-rpc-authority': ('kodex-postgresql-0', 'internal_rpc_authority'),
@@ -537,7 +544,7 @@ def verify_readback(state, resources, completion=None):
     verify_resource_set(state, resources, completion)
 
 
-def verify_resource_set(state, resources, completion=None):
+def verify_resource_set(state, resources, completion=None, schema_heads=None):
     """Читает заданный набор объектов; coherence полного render проверяет вызывающий."""
     import bootstrap_completion
     if completion is not None:bootstrap_completion.verify(state, resources, completion)
@@ -548,7 +555,7 @@ def verify_resource_set(state, resources, completion=None):
             continue
         require(actual is not None, 'LIVE_RESOURCE_MISSING')
         verify_resource(expected, actual)
-    if completion is None:verify_schemas(state, resources)
+    if completion is None or schema_heads is not None:verify_schemas(state, resources,schema_heads)
 
 
 def main():

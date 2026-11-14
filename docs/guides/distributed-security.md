@@ -73,6 +73,16 @@ bootstrap effects не повторяются, итоговый render прох�
 Совпадение только имени binding или runner digest недостаточно; stale marker,
 другая ABI, дополнительные поля проекции и неподтверждённый source закрыты.
 
+Перенос runtime-проекции между policy использует отдельный явно выбранный режим
+того же delivery-инструмента. Его immutable plan закрепляет kubeconfig/context,
+namespace/source UID и PostgreSQL Pod/StatefulSet/backend identity. SQL fence
+сохраняет запрет новых execution claims и workspace grants до положительного
+join старого producer и согласованного возврата controller. Начальные schema pins
+установки не переписываются после forward migration: отдельный выбранный набор
+текущих версий проверяется непосредственно в БД и входит в identity операции.
+Неизвестный исход stop/create требует readback прежнего журнала; новый render
+или state directory не заменяет доказательство завершения прежнего перехода.
+
 Свежий профиль с несколькими репликами signed worker использует grant v2 с
 `metadata.uid` из Downward API. Общий v1 revision watermark не разделяет
 экземпляры: ротация одной реплики может отклонять действующий credential другой.
