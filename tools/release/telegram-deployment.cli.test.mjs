@@ -154,7 +154,7 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  Object.assign(base.metadata,{namespace:'kodex-system',labels:{...base.metadata.labels,...labels}});write(render,base);
  const precondition={profile:backup?'TELEGRAM_NOTIFICATIONS_BACKUP_PREDECESSOR_V1':'TELEGRAM_NOTIFICATIONS_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114130000,backupQualification:backup?'CANONICAL_BACKUP':'NONE',
   schemaCatalog:telegramNotificationsCatalog[backup?'backup':'normal'].before,telegramNotificationsAbsent:true,workspaceOwnerIdle:true,publicSequenceSafe:true,...Object.fromEntries(activities.map(key=>[key,0]))};
- const postcondition={profile:backup?'TELEGRAM_NOTIFICATIONS_BACKUP_V1':'TELEGRAM_NOTIFICATIONS_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114140000,backupQualification:'NONE',schemaCatalog:telegramNotificationsCatalog[backup?'backup':'normal'].after,backupQualification:backup?'CANONICAL_BACKUP':'NONE',publicSequenceSafe:true};
+ const postcondition={profile:backup?'TELEGRAM_NOTIFICATIONS_BACKUP_V1':'TELEGRAM_NOTIFICATIONS_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114140000,schemaCatalog:telegramNotificationsCatalog[backup?'backup':'normal'].after,backupQualification:backup?'CANONICAL_BACKUP':'NONE',publicSequenceSafe:true};
  let backupState;const backupTarget=join(directory,'backup-target.json'),backupPlan=join(directory,'backup-stop.json'),backupEvidence=join(directory,'backup-stop.jsonl');
  if(backup){
   const b=backupMaintenanceFixture(),pgSpec=canonicalPostgresBackupSpec();
@@ -170,10 +170,15 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  writeFileSync(join(bin,'kubectl'),`#!${process.execPath}\nprocess.env.KODEX_TELEGRAM_SYNTHETIC_STATE=${JSON.stringify(state)};\nrequire(${JSON.stringify(backend)});\n`,{mode:0o700});
  const setEvidence=path=>{const value=read(state);value.activeEvidence=path;write(state,value);};
  let activeRepair,newPlanner=false;const repairPath=join(directory,'port-repair.json');
- const run=(phase,extra=[])=>{setEvidence(evidence);return spawnSync(process.execPath,[join(repair?(phase==='plan'&&!newPlanner?source:executor):root,'tools/release/control-plane-migration.mjs'),phase,...(activeRepair?['--telegram-port-repair-plan',activeRepair]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
+ const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair?(phase==='plan'&&!newPlanner?source:executor):root,'tools/release/control-plane-migration.mjs'),phase,...(activeRepair?['--telegram-port-repair-plan',activeRepair]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
   '--context',f.target.context,'--plan',plan,...(phase==='plan'?['--source',source,'--revision',revision,'--base-render',render,'--component-publication',component,'--portable-target',target,...(backup?['--backup-maintenance-plan',backupPlan,'--backup-maintenance-evidence',backupEvidence]:[])]:['--evidence',evidence]),
   ...(['check','stop','apply','handoff','resume','activate'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
-  {encoding:'utf8',timeout:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});};
+  {encoding:'utf8',timeout:backup?180000:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});
+  let callCount;try{callCount=read(state).calls.length-beforeCalls;}catch{}
+  const observation={phase,elapsedMs:Date.now()-started,status:result.status,signal:result.signal,error:result.error?.code,callCount};
+  if(backup&&phase==='handoff')console.log(JSON.stringify({code:'SYNTHETIC_MIGRATION_PHASE_OBSERVED',...observation}));
+  if(result.status!==0)result.stderr=JSON.stringify({code:'SYNTHETIC_MIGRATION_PHASE_FAILED',...observation})+'\n'+String(result.stderr??'');
+  return result;};
  const authorityTarget=join(directory,'authority-target.json');write(authorityTarget,authorityProfile);
  const apiTarget=join(directory,'api-target.json');write(apiTarget,apiProfile);
  const command=(file,args)=>{setEvidence(args.includes('--evidence')?args[args.indexOf('--evidence')+1]:evidence);return spawnSync(process.execPath,[join(file==='component-api-maintenance.mjs'||file==='backup-controller-maintenance-cli.mjs'&&args.includes('stop')?source:executor,'tools/release',file),...args],{encoding:'utf8',timeout:file==='backup-controller-maintenance-cli.mjs'?400000:180000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});};
