@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Профили наблюдаемости</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import { useServerMessage } from "../../src/shared/ui/server-message";
+      import IntegrationCatalogPanel from "../../src/features/integrations/ui/IntegrationCatalogPanel.vue";
+      import IntegrationPublicConfigurationFields from "../../src/features/integrations/ui/IntegrationPublicConfigurationFields.vue";
+      import { buildIntegrationPackages } from "../../src/features/integrations/ui/model";
+      import { observabilityDefinitions } from "./observability-packages-data";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      createApp({
+        setup() {
+          const selected = ref("grafana-dashboard");
+          const values = ref({});
+          const search = ref("");
+          const message = useServerMessage();
+          const choose = (key) => {
+            selected.value = key;
+            values.value = {};
+          };
+          return () => {
+            const definition = observabilityDefinitions.find(
+              (candidate) => candidate.key === selected.value,
+            );
+            const qualified = [
+              "grafana-dashboard-annotations",
+              "grafana-organization-rule-delete",
+              "loki-ruler-namespace",
+            ].includes(selected.value);
+            return h(
+              "main",
+              { style: "padding:24px;max-width:1100px;margin:auto;" },
+              [
+                h("h1", "Профили наблюдаемости"),
+                h("label", { class: "field" }, [
+                  h("span", "Профиль подключения"),
+                  h(
+                    "select",
+                    {
+                      value: selected.value,
+                      onChange: (event) => choose(event.target.value),
+                    },
+                    observabilityDefinitions.map((item) =>
+                      h("option", { value: item.key }, item.name),
+                    ),
+                  ),
+                ]),
+                h("section", { "aria-label": "Выбранный профиль" }, [
+                  h("h2", definition.name),
+                  h("p", definition.description),
+                  h(IntegrationPublicConfigurationFields, {
+                    fields: definition.configurationFields,
+                    values: values.value,
+                    onChange: (key, value) => {
+                      values.value = { ...values.value, [key]: value };
+                    },
+                  }),
+                  qualified
+                    ? h(
+                        "p",
+                        { role: "status" },
+                        message(
+                          "i18n:INTEGRATION_OPERATOR_QUALIFICATION_REQUIRED",
+                        ),
+                      )
+                    : null,
+                  h(
+                    "output",
+                    { "aria-label": "Публичные параметры" },
+                    JSON.stringify(values.value),
+                  ),
+                ]),
+                h(IntegrationCatalogPanel, {
+                  packages: buildIntegrationPackages(
+                    observabilityDefinitions.filter((item) =>
+                      item.name
+                        .toLowerCase()
+                        .includes(search.value.toLowerCase()),
+                    ),
+                    true,
+                  ),
+                  categories: ["observability"],
+                  search: search.value,
+                  category: "observability",
+                  "onUpdate:search": (value) => {
+                    search.value = value;
+                  },
+                  onConnect: choose,
+                }),
+              ],
+            );
+          };
+        },
+      })
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

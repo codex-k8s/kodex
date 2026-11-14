@@ -26,6 +26,7 @@ usage() {
     '  [--model-provider-configuration <json> --model-provider-default-model <model>]'  \
     '  [--authority-registry-configuration <json>]' \
     '  [--native-integration-configuration <json> --native-integration-configuration-sha256 <64-hex>; optional operator routes]' \
+    '  [--observability-qualification <json> --observability-qualification-sha256 <64-hex>; optional operator evidence]' \
     '  [--disable-observability; exporters only]' \
     '  [--clamav-storage-profile shared-rwx|node-local-rwo; default shared-rwx]' \
     '  [--session-workspace-profile disabled|SESSION_WORKSPACE_V2; default disabled]' \
@@ -45,6 +46,8 @@ provider_apparmor_profile_selected=false
 authority_registry_configuration=""
 native_integration_configuration=""
 native_integration_configuration_sha256=""
+observability_qualification=""
+observability_qualification_sha256=""
 deployment_profile=""
 oidc_authority_profile=""
 oidc_authority_profile_selected=false
@@ -91,6 +94,8 @@ while (($# > 0)); do
     --provider-apparmor-profile) provider_apparmor_profile="${2-}"; provider_apparmor_profile_selected=true; shift 2 ;;
     --authority-registry-configuration) authority_registry_configuration="${2:-}"; shift 2 ;;
     --native-integration-configuration) native_integration_configuration="${2:-}"; shift 2 ;;
+    --observability-qualification) observability_qualification="${2:-}"; shift 2 ;;
+    --observability-qualification-sha256) observability_qualification_sha256="${2:-}"; shift 2 ;;
     --native-integration-configuration-sha256) native_integration_configuration_sha256="${2:-}"; shift 2 ;;
     --model-provider-configuration) model_provider_configuration="${2:-}"; shift 2 ;;
     --model-provider-default-model) model_provider_default_model="${2:-}"; shift 2 ;;
@@ -722,7 +727,7 @@ yq -i '
   ); del(.metadata.namespace))
 ' "$rendered"
 
-if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" || -n "$native_integration_configuration$native_integration_configuration_sha256" ]]; then
+if [[ -n "$deployment_profile" || -n "$oidc_authority_profile" || -n "$native_integration_configuration$native_integration_configuration_sha256" || -n "$observability_qualification$observability_qualification_sha256" ]]; then
   expected_schema_heads=$(python3 "$repository_root/tools/release/schema-heads.py")
   jq -e --argjson expected "$expected_schema_heads" '.schema_heads == $expected' "$lock_file" >/dev/null ||
     fail 'portable release lock schema pins differ from source'
@@ -754,6 +759,13 @@ if [[ -n "$native_integration_configuration$native_integration_configuration_sha
     --configuration "$native_integration_configuration" --configuration-sha256 "$native_integration_configuration_sha256" ||
     fail 'native integration profile render rejected'
 fi
+
+if [[ -n "$observability_qualification$observability_qualification_sha256" ]]; then
+  [[ -n "$observability_qualification" && "$observability_qualification_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'exact observability qualification and digest are required'
+  python3 "$repository_root/tools/install/observability_qualification.py" --render "$rendered" \
+    --configuration "$observability_qualification" --configuration-sha256 "$observability_qualification_sha256" || fail 'observability qualification render rejected'
+fi
+python3 "$repository_root/tools/install/observability_qualification.py" --check --render "$rendered" || fail 'observability qualification check rejected'
 
 python3 "$repository_root/tools/install/workspace_storage_profile.py" --render "$rendered" \
   --profile "$session_workspace_profile" || fail 'workspace storage profile render rejected'

@@ -1,0 +1,822 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Закрытый Prometheus-compatible provider subset",
+    "version": "1.0.0",
+    "description": "Prometheus3.14.0 / Thanos0.42.5; типизированные чтения endpoint. timeout и lookback_delta принудительны для query. limit применяется только Prometheus; Thanos не поддерживает query result limit, его ответы проверяет bounded consumer. Синтаксис и история AST не доказывают лимиты CPU/memory."
+  },
+  "servers": [
+    {
+      "url": "https://metrics.example.invalid"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/status/buildinfo": {
+      "get": {
+        "operationId": "metrics.connection.read",
+        "parameters": [
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/query": {
+      "get": {
+        "operationId": "metrics.query.instant",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5s"
+              ]
+            }
+          },
+          {
+            "name": "lookback_delta",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5m"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50
+              ]
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "dedup",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          },
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/query_range": {
+      "get": {
+        "operationId": "metrics.query.range",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5s"
+              ]
+            }
+          },
+          {
+            "name": "lookback_delta",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5m"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50
+              ]
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "dedup",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          },
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/labels": {
+      "get": {
+        "operationId": "metrics.labels.list",
+        "parameters": [
+          {
+            "name": "match[]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/label/{name}/values": {
+      "get": {
+        "operationId": "metrics.label.values",
+        "parameters": [
+          {
+            "name": "match[]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z_][a-zA-Z_0-9]{0,99}$"
+            }
+          },
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/series": {
+      "get": {
+        "operationId": "metrics.series.list",
+        "parameters": [
+          {
+            "name": "match[]",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/rules": {
+      "get": {
+        "operationId": "metrics.rules.list",
+        "parameters": [
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "operationId": "metrics.alerts.list",
+        "parameters": [
+          {
+            "name": "THANOS-TENANT",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный provider envelope; consumer независимо проверяет typed data и запрещает warnings/infos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "data"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "success"
+                      ]
+                    },
+                    "data": {},
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "infos": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Credential либо scope отклонён"
+          }
+        }
+      }
+    }
+  }
+}

@@ -50,8 +50,8 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 14 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 14", len(definitions))
+	if len(definitions) != 27 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 27", len(definitions))
 	}
 	github := definitions["github"]
 	if github.Digest == "" || github.Metadata.Version != "6.5.0" || github.Spec.Credential.SecretKey != "token" {

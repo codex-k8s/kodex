@@ -86,6 +86,8 @@
             "MATTERMOST_INTERACTION",
             "TELEGRAM_INTERACTION",
             "CONTEXT7",
+            "SENTRY",
+            "OBSERVABILITY",
             "SSH_COMPOSE"
           ]
         },

@@ -1,0 +1,91 @@
+package platform
+
+import (
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+)
+
+// TestSentryPersonalCredentialPreflight preserves root-user ownership, current key/configuration pins and known-deny metadata for each separate Cloud/self-hosted connection; a valid shared key never repairs a missing personal key.
+// TestSentryPersonalCredentialPreflight сохраняет root-user ownership, текущие key/configuration pins и known-deny metadata каждого Cloud/self-hosted подключения; пригодный общий ключ не заменяет отсутствующий личный.
+func TestSentryPersonalCredentialPreflight(t *testing.T) {
+	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization"} {
+		t.Run(key, func(t *testing.T) {
+			for _, scenario := range []string{"ready", "no-scope-observation", "known-readonly", "foreign-user", "foreign-project", "revoked", "expired", "rotated", "changed-host", "missing-personal", "missing-profile"} {
+				t.Run(scenario, func(t *testing.T) {
+					requirement, initiator, binding, now := personalCredentialFixture()
+					requirement.DefinitionKey, requirement.CapabilityKey, requirement.ResourcePermissionProfile = key, "sentry.issue.status.update", integrationpackage.CredentialResourcePermissionSentryStatusV1
+					binding.VerifiedCapabilities = []string{"sentry.project.read"}
+					if strings.HasSuffix(key, "-organization") {
+						requirement.CapabilityKey = "sentry.organization.release.create"
+						requirement.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionSentryOrganizationMutationV1
+						binding.VerifiedCapabilities = []string{"sentry.organization.read"}
+					}
+					binding.ObservedPermissionProfiles = []string{integrationpackage.CredentialObservationSentryScopesV1}
+					shared := *binding.Credential
+					personal := &binding
+					expected := entity.IntegrationCredentialProblem("")
+					forbidden, invalid := false, false
+					switch scenario {
+					case "no-scope-observation":
+						binding.ObservedPermissionProfiles = nil
+						expected = entity.IntegrationCredentialUnconfirmed
+					case "known-readonly":
+						binding.DeniedCapabilities = []string{requirement.CapabilityKey}
+						expected = entity.IntegrationCredentialInsufficient
+					case "foreign-user":
+						binding.SubjectID = "usr_other"
+						forbidden = true
+					case "foreign-project":
+						binding.ConnectionRef = "int_other"
+						forbidden = true
+					case "revoked":
+						binding.State = "REVOKED"
+						expected = entity.IntegrationCredentialRevoked
+					case "expired":
+						binding.ExpiresAt = &now
+						expected = entity.IntegrationCredentialExpired
+					case "rotated":
+						binding.Credential.Ref = "icr_other"
+						expected = entity.IntegrationCredentialCheckRequired
+					case "changed-host":
+						binding.VerifiedConfigurationDigest = ""
+						expected = entity.IntegrationCredentialCheckRequired
+					case "missing-personal":
+						personal = nil
+						expected = entity.IntegrationCredentialMissing
+					case "missing-profile":
+						requirement.ResourcePermissionProfile = ""
+						invalid = true
+					}
+					selected, err := ResolveIntegrationCredential(requirement, initiator, &shared, personal, now)
+					if forbidden {
+						if !errors.Is(err, errs.ErrForbidden) {
+							t.Fatal("foreign owner admitted", err)
+						}
+						return
+					}
+					if invalid {
+						if !errors.Is(err, errs.ErrInvalid) {
+							t.Fatal("missing typed Sentry profile admitted", err)
+						}
+						return
+					}
+					if err != nil || selected.Problem != expected {
+						t.Fatalf("Sentry credential classification mismatch: %v %v", err, selected.Problem)
+					}
+					if expected != "" && selected.Credential != nil {
+						t.Fatal("failed personal selection fell back to shared key")
+					}
+					if expected == "" && (selected.Credential == nil || selected.Credential.Ref != binding.Credential.Ref || selected.BindingGeneration != binding.Generation) {
+						t.Fatal("Sentry personal selection lost exact current lineage")
+					}
+				})
+			}
+		})
+	}
+}

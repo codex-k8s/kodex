@@ -19775,6 +19775,7 @@ components:
                 CONFLUENCE,
                 EMAIL_HTTPS,
                 MATTERMOST_INTERACTION,
+                TELEGRAM_INTERACTION,
                 HTTPS_JSON_READ,
                 OPENAPI_MCP,
                 CONTEXT7,

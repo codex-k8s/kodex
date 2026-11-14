@@ -3,6 +3,8 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,6 +23,15 @@ import (
 // JSON and multipart bodies are mutually exclusive; Client optionally selects an already configured specialized transport.
 // RU: JSON и multipart body взаимоисключаемы; Client необязательно выбирает уже настроенный специализированный transport.
 type providerCall struct {
+	// invalidCredentialProbe is private to the typed observability authentication probe; it never contains caller-supplied material.
+	// invalidCredentialProbe доступен только typed observability authentication probe и не содержит caller-supplied данных.
+	invalidCredentialProbe bool
+	// lokiRulerYAML carries only the server-built fixed single-alert model; it is unavailable to request/configuration fields or generic OpenAPI transport.
+	// lokiRulerYAML содержит только server-built fixed single-alert model; request/configuration fields и generic OpenAPI transport его не принимают.
+	lokiRulerYAML []byte
+	// tenantHeader/tenantID carry only server-selected routing context, never evidence of tenant isolation.
+	// tenantHeader/tenantID содержат только выбранный сервером routing context, не доказательство tenant isolation.
+	tenantHeader, tenantID                                                                string
 	permissionEffect                                                                      *permissionEffectObservation
 	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
 	Query                                                                                 url.Values
@@ -61,17 +72,17 @@ type providerResponse struct {
 func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerCall) (*providerResponse, error) {
 	baseURL, err := parseProviderBaseURL(call.BaseURL)
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
 	}
 	if binding := call.Capability.OpenAPI; binding != nil &&
 		(call.AuthScheme != binding.AuthScheme || call.AuthHeader != binding.AuthHeader ||
 			call.IdempotencyHeader != binding.IdempotencyHeader) {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
 	}
 	var credential []byte
 	if call.AuthScheme == "NONE" {
 		if call.Capability.OpenAPI == nil || call.Credential != nil {
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 	} else {
 		credential, err = adapter.readCredential(ctx, call.Credential)
@@ -80,19 +91,45 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 	}
 	defer clear(credential)
+	if call.invalidCredentialProbe {
+		if call.Method != http.MethodGet || call.Capability.Risk != "READ" || call.Capability.OpenAPI != nil || call.AuthScheme != "BEARER" || (call.Path != "/api/v1/status/buildinfo" && call.Path != "/loki/api/v1/labels" && call.Path != "/api/user") {
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
+		}
+		clear(credential)
+		probe := make([]byte, 32)
+		if _, err := rand.Read(probe); err != nil {
+			return nil, &SafeError{Code: providerUnavailableCode}
+		}
+		credential = []byte("kodex-invalid-" + hex.EncodeToString(probe))
+		defer clear(credential)
+		clear(probe)
+	}
+	if call.tenantHeader != "" && ((call.tenantHeader != "THANOS-TENANT" && call.tenantHeader != "X-Scope-OrgID") || !integrationpackage.ValidSentrySlug(call.tenantID) || call.Capability.OpenAPI != nil) {
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
+	}
 
 	body := []byte(nil)
 	if call.Body != nil {
 		body, err = json.Marshal(call.Body)
 		if err != nil || len(body) > maximumResponseBytes {
-			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, &SafeError{Code: providerRequestRejectedCode}
 		}
 	}
 	if call.MultipartBody != nil {
 		if call.Body != nil || len(call.MultipartBody) > maximumResponseBytes {
-			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, &SafeError{Code: providerRequestRejectedCode}
 		}
 		body = call.MultipartBody
+	}
+	if call.lokiRulerYAML != nil {
+		namespace := strings.TrimPrefix(call.Path, "/loki/api/v1/rules/")
+		if call.Method != http.MethodPost || call.Capability.Operation != "loki.ruler.group.replace" || call.Capability.Risk != "WRITE" || call.Capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" || call.Capability.OpenAPI != nil || !strings.HasPrefix(call.Path, "/loki/api/v1/rules/") || !integrationpackage.ValidSentrySlug(namespace) || call.Body != nil || call.MultipartBody != nil || len(call.lokiRulerYAML) > 8192 {
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
+		}
+		if _, ok := boundedProviderYAML(call.lokiRulerYAML, nil); !ok {
+			return nil, &SafeError{Code: providerRequestRejectedCode}
+		}
+		body = call.lokiRulerYAML
 	}
 	attempts := call.Capability.Execution.MaxAttempts
 	if attempts < 1 {
@@ -112,7 +149,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		escapedPath := strings.TrimSuffix(endpoint.EscapedPath(), "/") + call.Path
 		decodedPath, decodeErr := url.PathUnescape(escapedPath)
 		if decodeErr != nil || !strings.HasPrefix(decodedPath, "/") {
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		endpoint.Path = decodedPath
 		endpoint.RawPath = escapedPath
@@ -121,11 +158,17 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		request, requestErr := http.NewRequestWithContext(attemptContext, call.Method, endpoint.String(), bytes.NewReader(body))
 		if requestErr != nil {
 			cancel()
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		request.Header.Set("Accept", "application/json")
+		if call.tenantHeader != "" {
+			request.Header.Set(call.tenantHeader, call.tenantID)
+		}
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
+		}
+		if call.lokiRulerYAML != nil {
+			request.Header.Set("Content-Type", "application/yaml")
 		}
 		if call.MultipartBody != nil {
 			request.Header.Set("Content-Type", call.MultipartType)
@@ -139,18 +182,18 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		case "API_KEY_HEADER":
 			if call.Capability.OpenAPI == nil || !integrationpackage.ValidOpenAPIOutboundHeader(call.AuthHeader) {
 				cancel()
-				return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+				return nil, &SafeError{Code: providerConfigurationInvalidCode}
 			}
 			request.Header.Set(call.AuthHeader, string(credential))
 		case "BASIC":
 			if call.Username == "" {
 				cancel()
-				return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+				return nil, &SafeError{Code: providerConfigurationInvalidCode}
 			}
 			request.SetBasicAuth(call.Username, string(credential))
 		default:
 			cancel()
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		if call.EffectKey != "" {
 			if call.Capability.OpenAPI == nil {
@@ -184,7 +227,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			if attempt < attempts && waitProviderRetry(ctx, call.Capability, attempt, "") {
 				continue
 			}
-			return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+			return nil, &SafeError{Code: providerUnavailableCode}
 		}
 		responseBody, readErr := readBoundedResponse(response.Body)
 		_ = response.Body.Close()
@@ -196,6 +239,18 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+			yamlSafe := true
+			if strings.HasPrefix(call.Capability.Operation, "loki.") && strings.HasPrefix(call.Path, "/loki/api/v1/rules/") {
+				_, yamlSafe = boundedProviderYAML(responseBody, func(value string) bool {
+					return providerCredentialEcho([]byte(value), credential, request.Header.Get("Authorization"))
+				})
+			}
+			if !yamlSafe || providerCredentialEcho(responseBody, credential, request.Header.Get("Authorization")) {
+				if mutation {
+					return nil, &UnknownOutcomeError{stage: "response_body"}
+				}
+				return nil, &SafeError{Code: providerResponseInvalidCode}
+			}
 			return &providerResponse{Body: responseBody, Header: response.Header.Clone(), StatusCode: response.StatusCode}, nil
 		}
 		if mutation && response.StatusCode >= http.StatusInternalServerError {
@@ -207,7 +262,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 		return nil, statusError(response.StatusCode)
 	}
-	return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+	return nil, &SafeError{Code: providerUnavailableCode}
 }
 
 // parseProviderBaseURL accepts an HTTPS hostname at the default or explicit 443 port, rejecting literal IPs, userinfo, query, fragment and paths beyond root.
@@ -276,7 +331,7 @@ func waitProviderRetry(ctx context.Context, capability integrationpackage.Capabi
 func decodeProviderJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(target); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return &SafeError{Code: providerResponseInvalidCode}
 	}
 	return nil
 }
@@ -287,11 +342,11 @@ func decodeProviderJSON(raw []byte, target any) error {
 // RU: Ошибка marshal возвращает пустой результат с безопасным кодом; итоговые размер и output schema проверяет validateExecutionResult.
 func providerResult(request Request, providerRef string, projection any) (Result, error) {
 	if providerRef == "" {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	summary, err := json.Marshal(projection)
 	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return successfulResult(string(summary), request, providerRef), nil
 }

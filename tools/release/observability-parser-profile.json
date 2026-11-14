@@ -1,0 +1,598 @@
+{
+  "schema": "kodex-observability-parser-profile/v1",
+  "libraryModule": "github.com/grafana/loki/v3",
+  "libraryVersion": "v3.6.17",
+  "qualifiedRuntimeVersion": "v3.6.21",
+  "prometheusModule": "github.com/prometheus/prometheus",
+  "prometheusVersion": "v0.314.0",
+  "sourceFiles": [
+    {
+      "path": "pkg/logql/syntax/ast.go",
+      "sha256": "6c3ca2bed2b7919ff32182cd79ab762744ab9215e4bd1def3d55b29f664871c8"
+    },
+    {
+      "path": "pkg/logql/syntax/clone.go",
+      "sha256": "e5b683ddf6c5e2d082e51e7d0dced7ea1c1a95698712f75703cd223752e6074c"
+    },
+    {
+      "path": "pkg/logql/syntax/extractor.go",
+      "sha256": "9090c9d77651c4d71a620b8bc12c2a886bbb18da939ada72ca16eebfcf7de11d"
+    },
+    {
+      "path": "pkg/logql/syntax/fuzz.go",
+      "sha256": "b0f96931c38f63f0068c6a1d19a43929f59eea8069abeeb8de188894d36e1a6c"
+    },
+    {
+      "path": "pkg/logql/syntax/lex.go",
+      "sha256": "5822798441d3c52f65ad4afefa2e984b9aa93b76f00d9316e9e9161c51acf200"
+    },
+    {
+      "path": "pkg/logql/syntax/linefilter.go",
+      "sha256": "2c87b5709f681b3680c0d22ab3c9b4643a99cd267b9e52a06bcf69a5d5914813"
+    },
+    {
+      "path": "pkg/logql/syntax/parser.go",
+      "sha256": "98b1a7bca5ba504e57a0281f6cee90d6243282f90a60b31828849fb452cca039"
+    },
+    {
+      "path": "pkg/logql/syntax/prettier.go",
+      "sha256": "2e34cec03b0426dd37f8310a61813937cfa04594d51ac2fed385ccdbc4697d3c"
+    },
+    {
+      "path": "pkg/logql/syntax/query_scanner.go",
+      "sha256": "d344145614c8580f169fe0d02b80c6e339bc7c311478c9d5eae2ea528a7781a5"
+    },
+    {
+      "path": "pkg/logql/syntax/serialize.go",
+      "sha256": "993652599109acca2d3d7368133526d7f304780352c4e33bf37e75dfb8774d52"
+    },
+    {
+      "path": "pkg/logql/syntax/syntax.y",
+      "sha256": "cf3e7a35661a4301778efcc75b95616b3d35ed9bc80fa99e517acf681903ccd0"
+    },
+    {
+      "path": "pkg/logql/syntax/syntax.y.go",
+      "sha256": "a13dbb7ac70490dbfc9a7bedf6303e6301aeaa95f30b360f7d8c1a209482a09f"
+    },
+    {
+      "path": "pkg/logql/syntax/test_utils.go",
+      "sha256": "487b2a5aac7970ce7bbcdb003184aa07f5daa8ab7cf42d1c440459ccdad26c3d"
+    },
+    {
+      "path": "pkg/logql/syntax/visit.go",
+      "sha256": "378e4c2f4f21a6a09fa302ecb8796018d857f45155f2769aa76a51e8f4c5dcc2"
+    },
+    {
+      "path": "pkg/logql/syntax/walk.go",
+      "sha256": "0202a6d923cb7adb28706636f556b27ccec636d95e3200828d28933936ca407b"
+    }
+  ],
+  "goos": "linux",
+  "goarch": "amd64",
+  "importedPackages": [
+    "github.com/grafana/loki/v3/pkg/logql/log",
+    "github.com/grafana/loki/v3/pkg/logql/log/jsonexpr",
+    "github.com/grafana/loki/v3/pkg/logql/log/logfmt",
+    "github.com/grafana/loki/v3/pkg/logql/log/pattern",
+    "github.com/grafana/loki/v3/pkg/logql/syntax",
+    "github.com/grafana/loki/v3/pkg/logqlmodel",
+    "github.com/grafana/loki/v3/pkg/logqlmodel/stats",
+    "github.com/grafana/loki/v3/pkg/querier/queryrange/queryrangebase/definitions",
+    "github.com/grafana/loki/v3/pkg/storage/chunk/cache",
+    "github.com/grafana/loki/v3/pkg/storage/chunk/cache/resultscache",
+    "github.com/grafana/loki/v3/pkg/util",
+    "github.com/grafana/loki/v3/pkg/util/constants",
+    "github.com/grafana/loki/v3/pkg/util/encoding",
+    "github.com/grafana/loki/v3/pkg/util/flagext",
+    "github.com/grafana/loki/v3/pkg/util/httpreq",
+    "github.com/grafana/loki/v3/pkg/util/jumphash",
+    "github.com/grafana/loki/v3/pkg/util/log",
+    "github.com/grafana/loki/v3/pkg/util/validation"
+  ],
+  "importedSourceFiles": [
+    {
+      "path": "pkg/logql/log/consolidated_variant_extractor.go",
+      "sha256": "834eab66a5c3be02af35428df9414e5996e8cd73c0d203429096ed0e310fb732"
+    },
+    {
+      "path": "pkg/logql/log/drop_labels.go",
+      "sha256": "691cf8c3cd183b73034c96107d32d6249b199f88c313adaf85e81708d5c40c75"
+    },
+    {
+      "path": "pkg/logql/log/error.go",
+      "sha256": "8e2b03c625587eec6510382758e538d262606b5e995767663b4f842699d833ed"
+    },
+    {
+      "path": "pkg/logql/log/filter.go",
+      "sha256": "421ec2b94b10a0fa9da7403fe7039ead588e013aab1ef5b8497588caba6133e9"
+    },
+    {
+      "path": "pkg/logql/log/fmt.go",
+      "sha256": "d8c54382530470b94a4ebc791ae5574f8ddb3e22b07e4247b40484eabe401830"
+    },
+    {
+      "path": "pkg/logql/log/ip.go",
+      "sha256": "4729f97dbcf93c79c307e53568b088a49844e9a38fa382211a7177f9df0c4ada"
+    },
+    {
+      "path": "pkg/logql/log/jsonexpr/jsonexpr.y.go",
+      "sha256": "6d6bc3b71a46d60b11498df40516dfe1b627d392ce7fd2855034221fd4f7bddc"
+    },
+    {
+      "path": "pkg/logql/log/jsonexpr/lexer.go",
+      "sha256": "7aed220c87f4b14faa0ff255595be2579c28b03f36b6080244ba674193796666"
+    },
+    {
+      "path": "pkg/logql/log/jsonexpr/parser.go",
+      "sha256": "8dc2e6cc58c76e76e90708d451026c2751bea175faa17db85b05be5565328b91"
+    },
+    {
+      "path": "pkg/logql/log/keep_labels.go",
+      "sha256": "b37d9af29ca1b45411da0b04041704bf84a6d0a3efeac11db75e160a407d40d2"
+    },
+    {
+      "path": "pkg/logql/log/label_extraction_expr.go",
+      "sha256": "3189670192dca184620dbd5dad9874ff1e2348ffb9724d141f3c64e999dba355"
+    },
+    {
+      "path": "pkg/logql/log/label_filter.go",
+      "sha256": "045546aaffa0de69fb45e55846e7d967972996d0f2f166a0d330af13e8d14efc"
+    },
+    {
+      "path": "pkg/logql/log/labels.go",
+      "sha256": "5d2725b0895011e1227d65db5d9122619686bd083da54bf78dcd3b3af8bfa6c9"
+    },
+    {
+      "path": "pkg/logql/log/labels_stringlabels.go",
+      "sha256": "d04a4f17f3c138333d73f7bab2aa3bb9cf8de9a03058f1e394647ea89d4aad80"
+    },
+    {
+      "path": "pkg/logql/log/logfmt/decode.go",
+      "sha256": "2a0daf412effd4c8cd20a549d6bce9f0fac2c0c2281150e283a9421df9ed8614"
+    },
+    {
+      "path": "pkg/logql/log/logfmt/jsonstring.go",
+      "sha256": "6199f8e6b263117d128af3afffecfd0650f640716804b524cffc333013470b24"
+    },
+    {
+      "path": "pkg/logql/log/logfmt/lexer.go",
+      "sha256": "3c55120b42909b95a003c671e9a366e55df3aaaad62057ab13f3d7d3e9a60d66"
+    },
+    {
+      "path": "pkg/logql/log/logfmt/logfmtexpr.y.go",
+      "sha256": "ce5bc729b3427692166c57b102884c9ee2ff64d0b04138c8c4401ccbce91ff19"
+    },
+    {
+      "path": "pkg/logql/log/logfmt/parser.go",
+      "sha256": "7badf3121a95a6265925d8d1c5eb868234671f2f24d50b066c8b5a4da729d2b2"
+    },
+    {
+      "path": "pkg/logql/log/metrics_extraction.go",
+      "sha256": "1d87ff667f5b44c6736aeacb5c39dafec0d0ed0534060d9ff04758bf7f2da329"
+    },
+    {
+      "path": "pkg/logql/log/parser.go",
+      "sha256": "3cf42e516ca6f8b3c1c338b22135cfeadb5104bf09f679acb038dc4e4ba3654a"
+    },
+    {
+      "path": "pkg/logql/log/parser_hints.go",
+      "sha256": "0097383130ecd562a231a7583f9cdd68bd2f3e0eede467fb3059f5cce849981c"
+    },
+    {
+      "path": "pkg/logql/log/pattern/ast.go",
+      "sha256": "d2a417f0d87baad603b4993e355756ed9b1fb72e6e35ee4c2ff3332c9d7f8024"
+    },
+    {
+      "path": "pkg/logql/log/pattern/expr.y.go",
+      "sha256": "cbb1de620049133bc6d24d07409300828b807df9ab37e483002be4be7f5f5ea6"
+    },
+    {
+      "path": "pkg/logql/log/pattern/lexer.go",
+      "sha256": "74a727526708d3201da6250918fe45523ebc7432e670d99c45deb1422549d434"
+    },
+    {
+      "path": "pkg/logql/log/pattern/lexer.rl.go",
+      "sha256": "23bf8e409cffea16b182688f768931fb8e3d5ebf5300414ab547c0a4c9f3c2bb"
+    },
+    {
+      "path": "pkg/logql/log/pattern/parser.go",
+      "sha256": "b8f550a04c07618dcc89feb69587f8391d1a7a8b37e956fa72cdb6a66f0364f8"
+    },
+    {
+      "path": "pkg/logql/log/pattern/pattern.go",
+      "sha256": "77dd0860a5e8cfb2751dcbd0e40f400248ca32d041b68cf3df5ec43da252e160"
+    },
+    {
+      "path": "pkg/logql/log/pipeline.go",
+      "sha256": "68dfabd9de2ae3e01ad6d0eeb929bcd7b7b40705b1889b40949309dd502a50cd"
+    },
+    {
+      "path": "pkg/logql/log/util.go",
+      "sha256": "50c291848f8db80618b711e1def54ec6e0875c7ef0590afdf6ad809c712cbf24"
+    },
+    {
+      "path": "pkg/logql/log/vector.go",
+      "sha256": "90e0ff63db965821635fada8dee2b991ab875534378b800515942d4041c3c3ab"
+    },
+    {
+      "path": "pkg/logql/syntax/ast.go",
+      "sha256": "6c3ca2bed2b7919ff32182cd79ab762744ab9215e4bd1def3d55b29f664871c8"
+    },
+    {
+      "path": "pkg/logql/syntax/clone.go",
+      "sha256": "e5b683ddf6c5e2d082e51e7d0dced7ea1c1a95698712f75703cd223752e6074c"
+    },
+    {
+      "path": "pkg/logql/syntax/extractor.go",
+      "sha256": "9090c9d77651c4d71a620b8bc12c2a886bbb18da939ada72ca16eebfcf7de11d"
+    },
+    {
+      "path": "pkg/logql/syntax/lex.go",
+      "sha256": "5822798441d3c52f65ad4afefa2e984b9aa93b76f00d9316e9e9161c51acf200"
+    },
+    {
+      "path": "pkg/logql/syntax/linefilter.go",
+      "sha256": "2c87b5709f681b3680c0d22ab3c9b4643a99cd267b9e52a06bcf69a5d5914813"
+    },
+    {
+      "path": "pkg/logql/syntax/parser.go",
+      "sha256": "98b1a7bca5ba504e57a0281f6cee90d6243282f90a60b31828849fb452cca039"
+    },
+    {
+      "path": "pkg/logql/syntax/prettier.go",
+      "sha256": "2e34cec03b0426dd37f8310a61813937cfa04594d51ac2fed385ccdbc4697d3c"
+    },
+    {
+      "path": "pkg/logql/syntax/query_scanner.go",
+      "sha256": "d344145614c8580f169fe0d02b80c6e339bc7c311478c9d5eae2ea528a7781a5"
+    },
+    {
+      "path": "pkg/logql/syntax/serialize.go",
+      "sha256": "993652599109acca2d3d7368133526d7f304780352c4e33bf37e75dfb8774d52"
+    },
+    {
+      "path": "pkg/logql/syntax/syntax.y.go",
+      "sha256": "a13dbb7ac70490dbfc9a7bedf6303e6301aeaa95f30b360f7d8c1a209482a09f"
+    },
+    {
+      "path": "pkg/logql/syntax/test_utils.go",
+      "sha256": "487b2a5aac7970ce7bbcdb003184aa07f5daa8ab7cf42d1c440459ccdad26c3d"
+    },
+    {
+      "path": "pkg/logql/syntax/visit.go",
+      "sha256": "378e4c2f4f21a6a09fa302ecb8796018d857f45155f2769aa76a51e8f4c5dcc2"
+    },
+    {
+      "path": "pkg/logql/syntax/walk.go",
+      "sha256": "0202a6d923cb7adb28706636f556b27ccec636d95e3200828d28933936ca407b"
+    },
+    {
+      "path": "pkg/logqlmodel/error.go",
+      "sha256": "265af6dfcd7fc7687766844a375347c0f7e7a95fb60c5a071a90e51e0243f25b"
+    },
+    {
+      "path": "pkg/logqlmodel/logqlmodel.go",
+      "sha256": "f6b099a7f3b09906a4bff88ddbe79615315bbdd72677da51c04ffe6eb642d607"
+    },
+    {
+      "path": "pkg/logqlmodel/stats/context.go",
+      "sha256": "94666206367bbbb200a32a3d57073f1a6d89ba9e46f93a2b4377fa19209e24f2"
+    },
+    {
+      "path": "pkg/logqlmodel/stats/stats.pb.go",
+      "sha256": "147a0fa038f1e41cf67b8ff6a4fbfdd9786b4fe24b1c78e400146095bac2ba3d"
+    },
+    {
+      "path": "pkg/querier/queryrange/queryrangebase/definitions/definitions.pb.go",
+      "sha256": "87c7c8788764701823b9fcb53ea8d5ce2e08aaee0d4fa13d8215cfa102270c93"
+    },
+    {
+      "path": "pkg/querier/queryrange/queryrangebase/definitions/interface.go",
+      "sha256": "41c900571687160ac7b8a511691740e4978cda0270c68676c96644fdd51bea7c"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/background.go",
+      "sha256": "2f9d3ed400077d473fc6ddde61c50acd3c4aece6126b7953741893a83ccf0725"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/cache.go",
+      "sha256": "0ef6b165a292fb13adae4bc3aeab4d1025fbf865ae66e1b97b76a0cd3afa4861"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/cache_gen.go",
+      "sha256": "934ccb5d7fa94f1cdbe549fd6884e4e251fd7412152ddcab5b27ebc9361b243a"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/embeddedcache.go",
+      "sha256": "3c764accbcc17fa289a279017dba6d1eab59ab65fcb0d741e70d1042dc3389a8"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/instrumented.go",
+      "sha256": "28cee97afebecabcaa70ddf2f2c2fd3642b1fb36375d898877fd74e5beeeb42c"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/memcached.go",
+      "sha256": "0e9f3e8e088cb0d2f83aafdc979cb98604861eafe93eeae35e76f4a49ee31b26"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/memcached_client.go",
+      "sha256": "ce67f06f0eb6d0bd14ea4a7020a77fdfd49e85b631f2a08dcc24e80788bc3aab"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/mock.go",
+      "sha256": "0053915d76a7719a01fe6c3bd52894b2a066e34a6339a83fef091bec98864d02"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/redis_cache.go",
+      "sha256": "ce2835bd24d48c0562acc154d1bbed74a9e9b052b483c58877cf9add209b7997"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/redis_client.go",
+      "sha256": "5f18f173d0013bfaf286fd907ba6f96da86b5106204a957dcab56f877d10323e"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/cache.go",
+      "sha256": "615f1e86f0187b428cbb62627f89b064ebe9192806ad1033b910e372cb161571"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/config.go",
+      "sha256": "26d0bf4889538ec1b94d4625262655fa3d468d8df488d450db6b64857b050561"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/interface.go",
+      "sha256": "fa23408c79ce1d3f79b689e4a12b1f4111e7b5a7145a84c8c77de7dcfcf50e2d"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/pipelinewrapper_keygen.go",
+      "sha256": "7d34f5f6edcf668fa5b5ee9e18c7f836c22fbfb3eea09aae4102a488067bb9db"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/test_types.pb.go",
+      "sha256": "0eb5222eb728e338a8a8a2ca846cffbf58a7aec1e27d84624c0b7aa7d246eb09"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/types.pb.go",
+      "sha256": "50fe2bbd4b697f29af773790d17f892d7c2d32858a6e45fc6c0c249248a2e7da"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/resultscache/util.go",
+      "sha256": "5dde20ac82350eba499a1c691e81081cc464908ef096b1766010f6ce33be333b"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/snappy.go",
+      "sha256": "23eef0706e5eb2fcb72dce0eb7308302f2d876b44a1d48bea41934803c6f3f08"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/stats.go",
+      "sha256": "830593180a4cf5cb1bd99659aa34e1a66ad46ca9a2fb4eeef8fa588c636cdcd2"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/stop_once.go",
+      "sha256": "bf6f17a0e6bc6cc2ddaf7243c0c99f656b38d025f2ecd7972073d91c64260406"
+    },
+    {
+      "path": "pkg/storage/chunk/cache/tiered.go",
+      "sha256": "10d895b99c88628627f297c05627edf7f460da60fa881cf8f33037979035494f"
+    },
+    {
+      "path": "pkg/util/active_user.go",
+      "sha256": "556310d0ed325450f803b42bfdc0ee6eeaf8d81520d1a5dc82e874ec6c179969"
+    },
+    {
+      "path": "pkg/util/allowed_tenants.go",
+      "sha256": "0734e3abdcf25d4a21d56f7546af24bd02859c407d644c17539e991525a05159"
+    },
+    {
+      "path": "pkg/util/config.go",
+      "sha256": "a75adb743f14c751cb1119d93836f05ed4341ba5d3e817b2ed96f51189fe8ffc"
+    },
+    {
+      "path": "pkg/util/constants/internal_streams.go",
+      "sha256": "30c54505af5f0bf462fb07c42647ab076ee1725e33ea334cbbb5f3b4fe3b069d"
+    },
+    {
+      "path": "pkg/util/constants/levels.go",
+      "sha256": "2c314c99a61d6342813f5a9ec4f58134d667d8d426aae529c79efa8e84735b2d"
+    },
+    {
+      "path": "pkg/util/constants/metrics_namespace.go",
+      "sha256": "6c6ff394be27da63f938c96495e185f8da4f46fa19bf37b24f99a48e9aec97b5"
+    },
+    {
+      "path": "pkg/util/constants/variants.go",
+      "sha256": "ca83b7166bb212d1deb1777b1c8af53c382cbf15ed37e933de39263cdaa6a09a"
+    },
+    {
+      "path": "pkg/util/conv.go",
+      "sha256": "ac52b3564caca298d197bdf84b7dc96ef5aabc7a193f1321253b5309505931fa"
+    },
+    {
+      "path": "pkg/util/dns_watcher.go",
+      "sha256": "7e5a4fc890029a52e80231d257f3ae62727ab707bd17ebd5674dc4eb8254bb72"
+    },
+    {
+      "path": "pkg/util/encoding/encoding.go",
+      "sha256": "f0290c908a60a8a7e3c0ab124a4408d2432f663184d330cf762a57d12f7945bb"
+    },
+    {
+      "path": "pkg/util/entry_size.go",
+      "sha256": "e09bc140ddf1807f47c8434c23d09225928e25650fdc08268b208c7ca48e0221"
+    },
+    {
+      "path": "pkg/util/errors.go",
+      "sha256": "e55707ace01ad9257e478943ae511658a71975e2480593b14ce302613353b90b"
+    },
+    {
+      "path": "pkg/util/events.go",
+      "sha256": "739fbec82ff8e08d62a7e807f02ee5be4d924b2b678472cbce0ee736efee546c"
+    },
+    {
+      "path": "pkg/util/evicting_queue.go",
+      "sha256": "a22e3252971814815478b7f6c32f7016bd8505699d8747f4c37eb596c60e89e5"
+    },
+    {
+      "path": "pkg/util/flagext/bytesize.go",
+      "sha256": "860bd4f5127e933596c8f0da9790af89aa835d109f3267a08210d101e0eaa086"
+    },
+    {
+      "path": "pkg/util/flagext/csv.go",
+      "sha256": "e77276a6913801d3f7aade1a2b717ab923088a7b6dc771c7911da1f7283a6b8a"
+    },
+    {
+      "path": "pkg/util/flagext/flagsetskip.go",
+      "sha256": "cba9fb3fc19efacece396537caf0f61ea1d078ea3030e57a02af33338770c054"
+    },
+    {
+      "path": "pkg/util/flagext/labelset.go",
+      "sha256": "e839b8364b8e64bf6eab6107f6f28c6c8cd9e148702c2046fc6729289fa33c4a"
+    },
+    {
+      "path": "pkg/util/hash_fp.go",
+      "sha256": "4ce5cf809b0984897eb5a90cb872c84a32d6a7c5ee197136fd96cac64b308f2f"
+    },
+    {
+      "path": "pkg/util/http.go",
+      "sha256": "af5a3776b54572392e2088dfd76414de504172670cbca338bd57ef6d94096664"
+    },
+    {
+      "path": "pkg/util/httpreq/encoding_flags.go",
+      "sha256": "b1b4bc8640d88ef4a0b0f675e43f020b70dc09b792b6a2db25572bf373295aff"
+    },
+    {
+      "path": "pkg/util/httpreq/headers.go",
+      "sha256": "57efd176b667c6e6fa76325653dadf6b3503a09942b8172c3b2933aaaa2fa07d"
+    },
+    {
+      "path": "pkg/util/httpreq/tags.go",
+      "sha256": "38cbcda8ba3ed0c41a0878bb29510f3900cabe6aac9127851e62e3ea6cb64204"
+    },
+    {
+      "path": "pkg/util/jumphash/memcached_client_selector.go",
+      "sha256": "77cee43ebcaf92bf6778383297e50a2dc8021c158cf33ad1573a3091deb1e022"
+    },
+    {
+      "path": "pkg/util/list.go",
+      "sha256": "8e65aa43ab1b85a0c57adf152cbffaf6cbfe2dac21c48a3cdb15f3ffc511a3b0"
+    },
+    {
+      "path": "pkg/util/log.go",
+      "sha256": "657f1c23656b01aa23e7403b8e9534c4843351787dae92105bcc451cd8816af5"
+    },
+    {
+      "path": "pkg/util/log/experimental.go",
+      "sha256": "836ab4e008ce72ec0c5d99c94aecfdb0a9b9e8e51524400daff15d43b4bc2ef5"
+    },
+    {
+      "path": "pkg/util/log/log.go",
+      "sha256": "c04bafd98f2cf1440417537426d220cc2e935be97d646e67a2857b88d4bebbf8"
+    },
+    {
+      "path": "pkg/util/log/slogadapter.go",
+      "sha256": "c1c530e1a8de3d1cfb6ef0ea98de29cbbff7f53de3b24bd6824340bf728ac3f4"
+    },
+    {
+      "path": "pkg/util/log/wrappers.go",
+      "sha256": "0e4f5288e8125bd0eeb5135b0c72b02b8ea4303a4d87503f73a77c97477b71f0"
+    },
+    {
+      "path": "pkg/util/map.go",
+      "sha256": "b1bd6bc347f86cc0ead41b24d6b625e8794e7bf4347e1fca99f36b1cd3c0ff74"
+    },
+    {
+      "path": "pkg/util/mapmerge.go",
+      "sha256": "c4d751bcb608e2dff5d961d393a4be62958ce573c2e31771f3a0f3e18d52820b"
+    },
+    {
+      "path": "pkg/util/matchers.go",
+      "sha256": "eb4ac9751b38b30c094705911668e0f4922bca9f0c3988c411c92ef1fe1024e5"
+    },
+    {
+      "path": "pkg/util/merger.go",
+      "sha256": "4e7c0206e90d4e14b5eb993783997f843a46db6570b09b47b086b2062e767d5a"
+    },
+    {
+      "path": "pkg/util/metrics_helper.go",
+      "sha256": "0c200a1fa66589d7b6f58ae5bc02da4ed5654976f145e4cf9019c60a0d254dc9"
+    },
+    {
+      "path": "pkg/util/mock.go",
+      "sha256": "e096500486510452bfc18ac6f33b14686fabe641e6b7eb7294a0b173dd920521"
+    },
+    {
+      "path": "pkg/util/net.go",
+      "sha256": "7aea8ec49e56c592804cc89742ce25ab46d300b7127b55bd5c1a5a3456abd3ae"
+    },
+    {
+      "path": "pkg/util/noop_registry.go",
+      "sha256": "730b2df53e789ee82a0a198f1202cc33d1bea4be24e26422a958c567457a4068"
+    },
+    {
+      "path": "pkg/util/priority_queue.go",
+      "sha256": "24325202873a7ebea9d95e1ed552e6f5754691310b9da1272eacf1fbcbfbb52b"
+    },
+    {
+      "path": "pkg/util/query_string_builder.go",
+      "sha256": "c696ad74f8f03468495afb18626054709c7b1f2347bb86ee4e576f3c64a827f1"
+    },
+    {
+      "path": "pkg/util/queue.go",
+      "sha256": "eb2557def6feac7b36bdc4aaa08d5f3408af0ba7cdd2da36860efc6405eba7b1"
+    },
+    {
+      "path": "pkg/util/reader.go",
+      "sha256": "e29323354a9cdb57c08bb5f302592c3e20ed15c411583f6fe8ea592a6ddd72bd"
+    },
+    {
+      "path": "pkg/util/regex.go",
+      "sha256": "4821e80639f1a26e6e0135fb151a3c03dc8a223849db9213782e53fce628265f"
+    },
+    {
+      "path": "pkg/util/ring_watcher.go",
+      "sha256": "d4e1625a9f8d4fc39edae8441a9562c19bbfb61161e620e8dbb6772d1ad52038"
+    },
+    {
+      "path": "pkg/util/sample.go",
+      "sha256": "20151074a214514f40c3c78fad48af1336d71a3d03e0da3863703b171be9f6ff"
+    },
+    {
+      "path": "pkg/util/series_volume.go",
+      "sha256": "680f6e4534208a0d69b4df6181badc6340dd36b81008a089139281d0d0f0dfaa"
+    },
+    {
+      "path": "pkg/util/shard.go",
+      "sha256": "abecba7663e74a85a5d586083892c449e02aef5c408035086dbd3d101bc8891e"
+    },
+    {
+      "path": "pkg/util/string.go",
+      "sha256": "23289ece453c42a5af8a16c46a64b182c2a1ffe030f82d75b4bda7b8b10f3988"
+    },
+    {
+      "path": "pkg/util/ticker.go",
+      "sha256": "3236bfc43cf6bbb4ce6e1a07c20168ab505a19eac77810f1ad712676392e4a78"
+    },
+    {
+      "path": "pkg/util/time.go",
+      "sha256": "136343f636c3d65017f77a2d7e3f5747b2ed80c9da22babd8bb312f354494341"
+    },
+    {
+      "path": "pkg/util/validation/blocked_queries.go",
+      "sha256": "ea0590b245d40d2c7974f4ae89509c569bc37d58aa68a5cf708b958037a668c0"
+    },
+    {
+      "path": "pkg/util/validation/limits.go",
+      "sha256": "e9059af5998d292866805b1ff7ae91df6e701cdabe4f84523a949d7810a71370"
+    },
+    {
+      "path": "pkg/util/validation/notifications_limit_flag.go",
+      "sha256": "0ff9921491f4bbe6352b34ac09cd40df27e5517ac9bb2bcad76ac46eb27dc493"
+    },
+    {
+      "path": "pkg/util/validation/validate.go",
+      "sha256": "0d9360686c2e9f6037c6d9df82bbd1574d53dad85f1fee7b1743b05e5249178d"
+    },
+    {
+      "path": "pkg/util/yolo.go",
+      "sha256": "e329e672a3280a4e62215bd000d6bf447ac86b9d6c901776ccdc8b8bc3f00b5c"
+    }
+  ]
+}

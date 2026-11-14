@@ -4654,7 +4654,7 @@ export type IntegrationDefinition = {
     definitionVersion: string;
     origin: 'SHIPPED';
     digest: string;
-    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY';
+    adapter: 'SYNTHETIC_HTTP' | 'GITHUB' | 'GITLAB' | 'JIRA' | 'CONFLUENCE' | 'EMAIL_HTTPS' | 'MATTERMOST_INTERACTION' | 'TELEGRAM_INTERACTION' | 'HTTPS_JSON_READ' | 'OPENAPI_MCP' | 'CONTEXT7' | 'SSH_COMPOSE' | 'SENTRY' | 'OBSERVABILITY';
     adapterOwner: 'integration-gateway' | 'interaction-gateway';
     executionRoute: 'MANAGED_MCP' | 'INTERACTION';
     adapterReadiness: 'READY' | 'NOT_READY';

@@ -55,6 +55,7 @@ type Config struct {
 	RPCProfile                                                       string
 	CredentialDirectory, ProxyURL, OpenAPIProxyURL, SyntheticBaseURL string
 	NativeProxyURL                                                   string
+	ObservabilityQualificationFile, ObservabilityQualificationSHA256 string
 	LocalOpenAPIBaseURL, LocalOpenAPICAFile                          string
 	EmailCAFile, EmailCertificateFile, EmailPrivateKeyFile           string
 	Timeout                                                          time.Duration
@@ -95,10 +96,10 @@ type Request struct {
 	PersonalObservationProfiles, PersonalDeniedWriteCapabilityKeys    []string
 }
 
-// permissionEffectObservation tracks only the current registered personal adapter's HTTP
+// permissionEffectObservation tracks only the current registered adapter's HTTP
 // mutation boundary. It is not a persisted receipt or a proof usable after process/ACK loss.
 // permissionEffectObservation отслеживает только HTTP mutation boundary текущего registered
-// personal adapter. Это не durable receipt и не proof после потери процесса либо ACK.
+// adapter. Это не durable receipt и не proof после потери процесса либо ACK.
 type permissionEffectObservation struct {
 	mutationAttempted bool
 }
@@ -174,21 +175,22 @@ func IsUnknownOutcome(err error) bool {
 // Request validation and effect receipts remain separate from transport; the adapter does not create owner grants or make HumanGate decisions.
 // RU: Проверка запросов и квитанции эффектов отделены от транспорта; адаптер не создаёт owner grants и не принимает решения HumanGate.
 type Adapter struct {
-	proxyURL            string
-	credentials         *credentialfs.Store
-	definitions         map[string]integrationpackage.Package
-	githubHTTPClient    *http.Client
-	githubBaseURL       *url.URL
-	providerHTTPClient  *http.Client
-	nativeHTTPClient    *http.Client
-	openAPIHTTPClient   *http.Client
-	context7HTTPClient  *http.Client
-	localOpenAPIClient  *http.Client
-	emailHTTPClient     *http.Client
-	syntheticClient     *http.Client
-	syntheticBaseURL    *url.URL
-	localOpenAPIBaseURL *url.URL
-	timeout             time.Duration
+	proxyURL                                                         string
+	credentials                                                      *credentialfs.Store
+	definitions                                                      map[string]integrationpackage.Package
+	githubHTTPClient                                                 *http.Client
+	githubBaseURL                                                    *url.URL
+	providerHTTPClient                                               *http.Client
+	nativeHTTPClient                                                 *http.Client
+	observabilityQualificationFile, observabilityQualificationSHA256 string
+	openAPIHTTPClient                                                *http.Client
+	context7HTTPClient                                               *http.Client
+	localOpenAPIClient                                               *http.Client
+	emailHTTPClient                                                  *http.Client
+	syntheticClient                                                  *http.Client
+	syntheticBaseURL                                                 *url.URL
+	localOpenAPIBaseURL                                              *url.URL
+	timeout                                                          time.Duration
 }
 
 // New checks the local writeback runtime and exact proxy/synthetic endpoints, then loads shipped definitions and builds separate bounded provider clients.
@@ -198,6 +200,12 @@ type Adapter struct {
 // Optional local OpenAPI, email TLS and Context7 transports are delegated to their own constructors; no provider operation is executed here.
 // RU: Необязательные локальный OpenAPI, email TLS и Context7 transport передаются своим конструкторам; provider-операция здесь не выполняется.
 func New(config Config) (*Adapter, error) {
+	if err := ValidateObservabilityQualificationConfiguration(config.ObservabilityQualificationFile, config.ObservabilityQualificationSHA256); err != nil {
+		return nil, err
+	}
+	if config.ObservabilityQualificationFile != "" && config.NativeProxyURL == "" {
+		return nil, errOperatorQualificationConfiguration
+	}
 	if err := checkWriteBackRuntime(); err != nil {
 		return nil, err
 	}
@@ -254,8 +262,9 @@ func New(config Config) (*Adapter, error) {
 		return nil, err
 	}
 	return &Adapter{
-		proxyURL:           config.ProxyURL,
-		nativeHTTPClient:   nativeClient,
+		proxyURL:                       config.ProxyURL,
+		nativeHTTPClient:               nativeClient,
+		observabilityQualificationFile: config.ObservabilityQualificationFile, observabilityQualificationSHA256: config.ObservabilityQualificationSHA256,
 		emailHTTPClient:    emailClient,
 		context7HTTPClient: context7Client,
 		credentials:        credentials, definitions: definitions,
@@ -411,6 +420,9 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	result, err := adapter.Execute(ctx, request)
 	var safe *SafeError
 	err = healthCredentialError(err)
+	if errors.As(err, &safe) && safe.Code == providerCapabilityUnsupportedCode && safe.HealthSummary == operatorQualificationRequiredSummary {
+		return safe.HealthSummary, err
+	}
 	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
 		return safe.HealthSummary, err
 	}
@@ -447,7 +459,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || (capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE") {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" || definition.Spec.Adapter == "OBSERVABILITY" {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -470,6 +482,10 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	case "OPENAPI_MCP":
 		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
+	case "OBSERVABILITY":
+		result, err = adapter.executeObservability(ctx, request, capability, configuration)
+	case "SENTRY":
+		result, err = adapter.executeSentry(ctx, request, capability, configuration)
 	case "CONTEXT7":
 		result, err = adapter.executeContext7(ctx, request, capability, configuration, canonicalInput)
 	default:
@@ -1087,6 +1103,12 @@ func personalObservationProfilesFromProto(profiles []controlplanev1.PersonalInte
 		value := "UNSUPPORTED"
 		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 {
 			value = integrationpackage.CredentialObservationGitLabProjectWriteScopeV1
+		}
+		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GRAFANA_CURRENT_PERMISSIONS_V1 {
+			value = integrationpackage.CredentialObservationGrafanaPermissionsV1
+		}
+		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 {
+			value = integrationpackage.CredentialObservationSentryScopesV1
 		}
 		result = append(result, value)
 	}

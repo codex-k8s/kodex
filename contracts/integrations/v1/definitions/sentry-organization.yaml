@@ -1,0 +1,845 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "sentry-organization",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Sentry Cloud — вся организация",
+    "description": "Явный доступ ко всем проектам организации: общие releases и alerts. Не расширяет project-подключения.",
+    "category": "observability",
+    "adapter": "SENTRY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "allowedValues": [
+          "https://sentry.io",
+          "https://us.sentry.io",
+          "https://de.sentry.io"
+        ],
+        "label": "Адрес Sentry API",
+        "help": "Точный HTTPS-адрес выбранной установки или региона; перенаправления запрещены."
+      },
+      {
+        "key": "organization_slug",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Организация Sentry",
+        "help": "Короткое имя организации из её адреса в Sentry."
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "sentry_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "sentry.organization.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "sentry.organization.read",
+        "name": "Проверить всю организацию Sentry",
+        "description": "Проверить всю организацию Sentry. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.project.list",
+        "name": "Прочитать проекты организации",
+        "description": "Прочитать проекты организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.project.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "required": false,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.release.list",
+        "name": "Прочитать релизы организации",
+        "description": "Прочитать релизы организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.release.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "required": false,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.release.read",
+        "name": "Прочитать общий релиз",
+        "description": "Прочитать общий релиз. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.release.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "version",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Версия релиза",
+            "help": "Точная версия общего релиза организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.release.create",
+        "name": "Создать или связать общий релиз",
+        "description": "Создать или связать общий релиз. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.release.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "version",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Версия релиза",
+            "help": "Точная версия общего релиза организации."
+          },
+          {
+            "key": "project_slug",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 100,
+            "label": "Проект Sentry",
+            "help": "Короткое имя проекта внутри выбранной организации."
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "allowedValues": [
+              "open",
+              "archived"
+            ],
+            "label": "Статус",
+            "help": "Точный новый статус выбранной ошибки или релиза."
+          },
+          {
+            "key": "ref",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Ссылка на ревизию",
+            "help": "Ограниченный идентификатор ревизии; URL и загрузка файлов не принимаются."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.release.update",
+        "name": "Изменить metadata общего релиза",
+        "description": "Изменить metadata общего релиза. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.release.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "version",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Версия релиза",
+            "help": "Точная версия общего релиза организации."
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "allowedValues": [
+              "open",
+              "archived"
+            ],
+            "label": "Статус",
+            "help": "Точный новый статус выбранной ошибки или релиза."
+          },
+          {
+            "key": "ref",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Ссылка на ревизию",
+            "help": "Ограниченный идентификатор ревизии; URL и загрузка файлов не принимаются."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.alert.list",
+        "name": "Прочитать оповещения всей организации",
+        "description": "Прочитать оповещения всей организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.alert.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "required": false,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.alert.read",
+        "name": "Прочитать оповещение организации",
+        "description": "Прочитать оповещение организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.alert.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "alert_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Оповещение",
+            "help": "Числовой идентификатор оповещения в выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.detector.list",
+        "name": "Прочитать monitors организации",
+        "description": "Прочитать monitors организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.detector.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "required": false,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.detector.read",
+        "name": "Прочитать monitor организации",
+        "description": "Прочитать monitor организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.detector.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "detector_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Монитор",
+            "help": "Числовой идентификатор монитора выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.alert.create",
+        "name": "Создать оповещение организации",
+        "description": "Создать оповещение организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.alert.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "name",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 256,
+            "label": "Название",
+            "help": "Короткое название оповещения."
+          },
+          {
+            "key": "enabled",
+            "type": "BOOLEAN",
+            "required": true,
+            "label": "Включено",
+            "help": "Разрешить выполнение настроенного оповещения."
+          },
+          {
+            "key": "detector_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Монитор",
+            "help": "Числовой идентификатор монитора выбранной организации."
+          },
+          {
+            "key": "trigger",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "allowedValues": [
+              "first_seen_event",
+              "regression_event",
+              "reappeared_event"
+            ],
+            "label": "Условие оповещения",
+            "help": "Новая, повторно появившаяся или регрессировавшая ошибка."
+          },
+          {
+            "key": "notification_target",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 40,
+            "label": "Получатель уведомления",
+            "help": "user:<номер>, team:<номер> или issue_owners. Автоматическая подмена получателя запрещена."
+          },
+          {
+            "key": "frequency_minutes",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 10080,
+            "label": "Интервал уведомлений",
+            "help": "Минимальный интервал повторного оповещения об одной ошибке, в минутах."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.alert.update",
+        "name": "Настроить оповещение организации",
+        "description": "Настроить оповещение организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.alert.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "alert_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Оповещение",
+            "help": "Числовой идентификатор оповещения в выбранной организации."
+          },
+          {
+            "key": "name",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 256,
+            "label": "Название",
+            "help": "Короткое название оповещения."
+          },
+          {
+            "key": "enabled",
+            "type": "BOOLEAN",
+            "required": true,
+            "label": "Включено",
+            "help": "Разрешить выполнение настроенного оповещения."
+          },
+          {
+            "key": "detector_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Монитор",
+            "help": "Числовой идентификатор монитора выбранной организации."
+          },
+          {
+            "key": "trigger",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 128,
+            "allowedValues": [
+              "first_seen_event",
+              "regression_event",
+              "reappeared_event"
+            ],
+            "label": "Условие оповещения",
+            "help": "Новая, повторно появившаяся или регрессировавшая ошибка."
+          },
+          {
+            "key": "notification_target",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 40,
+            "label": "Получатель уведомления",
+            "help": "user:<номер>, team:<номер> или issue_owners. Автоматическая подмена получателя запрещена."
+          },
+          {
+            "key": "frequency_minutes",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 10080,
+            "label": "Интервал уведомлений",
+            "help": "Минимальный интервал повторного оповещения об одной ошибке, в минутах."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.organization.alert.delete",
+        "name": "Удалить оповещение организации",
+        "description": "Удалить оповещение организации. Connection и grant явно охватывают всю выбранную организацию, включая все затронутые проекты.",
+        "operation": "sentry.organization.alert.delete",
+        "risk": "DESTRUCTIVE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "alert_id",
+            "type": "STRING",
+            "required": true,
+            "format": "IDENTIFIER",
+            "maximumLength": 32,
+            "label": "Оповещение",
+            "help": "Числовой идентификатор оповещения в выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "required": true,
+            "format": "PLAIN",
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

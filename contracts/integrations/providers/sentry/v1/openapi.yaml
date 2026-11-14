@@ -1,0 +1,2334 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Ограниченный контракт Sentry API для первой вертикали Kodex",
+    "version": "1.0.0",
+    "description": "Собственный subset официального API, проверенный14.11.2026 через Context7 /getsentry/sentry-docs и /getsentry/sentry. Не импортируется как произвольный HTTP adapter."
+  },
+  "servers": [
+    {
+      "url": "https://sentry.example.invalid"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/0/": {
+      "get": {
+        "operationId": "sentry.token.metadata.read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenMetadata"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/": {
+      "get": {
+        "operationId": "sentry.project.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/issues/": {
+      "get": {
+        "operationId": "sentry.issue.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[0-9]+:[0-9]+:[0-9]+$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "$ref": "#/components/schemas/Issue"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/issues/{issue_id}/": {
+      "get": {
+        "operationId": "sentry.issue.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        }
+      },
+      "put": {
+        "operationId": "sentry.issue.attributes.update",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Issue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/StatusUpdate"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AssignmentUpdate"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/events/{event_id}/": {
+      "get": {
+        "operationId": "sentry.event.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[0-9a-f]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Неверный токен."
+          },
+          "403": {
+            "description": "Нет текущего допуска."
+          },
+          "404": {
+            "description": "Объект недоступен."
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/issues/{issue_id}/comments/": {
+      "get": {
+        "operationId": "sentry.issue.comment.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Comment"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "sentry.issue.comment.create",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/issues/{issue_id}/events/": {
+      "get": {
+        "operationId": "sentry.issue.event.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "issue_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Event"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/releases/": {
+      "get": {
+        "operationId": "sentry.release.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Release"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/releases/{version}/": {
+      "get": {
+        "operationId": "sentry.release.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/workflows/": {
+      "get": {
+        "operationId": "sentry.alert.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "project",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Alert"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "sentry.organization.alert.create",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/workflows/{alert_id}/": {
+      "get": {
+        "operationId": "sentry.alert.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alert"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "sentry.organization.alert.update",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowWrite"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "sentry.organization.alert.delete",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Принят запрос асинхронного удаления."
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/workflows/{alert_id}/project-scope/": {
+      "get": {
+        "operationId": "sentry.alert.project-scope.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ответ провайдера.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/": {
+      "get": {
+        "operationId": "sentry.organization.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Organization"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/projects/": {
+      "get": {
+        "operationId": "sentry.organization.project.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectSummary"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/releases/": {
+      "get": {
+        "operationId": "sentry.organization.release.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Release"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "sentry.organization.release.create",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release"
+                }
+              }
+            }
+          },
+          "208": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseCreate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/releases/{version}/": {
+      "get": {
+        "operationId": "sentry.organization.release.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "sentry.organization.release.update",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Release"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseUpdate"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/detectors/": {
+      "get": {
+        "operationId": "sentry.organization.detector.list",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Detector"
+                  },
+                  "maxItems": 50
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/organizations/{organization_slug}/detectors/{detector_id}/": {
+      "get": {
+        "operationId": "sentry.organization.detector.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            }
+          },
+          {
+            "name": "detector_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Проверенный ограниченный ответ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detector"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/0/projects/{organization_slug}/{project_slug}/stats/": {
+      "get": {
+        "operationId": "sentry.project.counts.read",
+        "parameters": [
+          {
+            "name": "organization_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "project_slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          },
+          {
+            "name": "stat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "received"
+              ]
+            }
+          },
+          {
+            "name": "resolution",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1h"
+              ]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Почасовые native received counts выбранного проекта.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "Project": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "organization": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[a-zA-Z0-9_-]+$"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[1-9][0-9]{0,31}$"
+              }
+            },
+            "required": [
+              "id",
+              "slug"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "organization"
+        ],
+        "additionalProperties": true
+      },
+      "Issue": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unresolved",
+              "ignored"
+            ]
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[1-9][0-9]{0,31}$"
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[a-zA-Z0-9_-]+$"
+              }
+            },
+            "required": [
+              "id",
+              "slug"
+            ],
+            "additionalProperties": true
+          },
+          "assignedTo": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[1-9][0-9]{0,31}$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "team"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "type"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "project"
+        ],
+        "additionalProperties": true
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "eventID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[0-9a-f]{32}$"
+          },
+          "projectID": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "platform": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type",
+                "data"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "data": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "required": [
+          "eventID",
+          "projectID",
+          "title",
+          "platform"
+        ],
+        "additionalProperties": true
+      },
+      "TokenMetadata": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "type": "object",
+            "properties": {
+              "scopes": {
+                "type": "array",
+                "maxItems": 64,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            },
+            "required": [
+              "scopes"
+            ],
+            "additionalProperties": true
+          },
+          "user": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[1-9][0-9]{0,31}$"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "auth"
+        ],
+        "additionalProperties": true
+      },
+      "StatusUpdate": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "resolved",
+              "unresolved",
+              "ignored"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 5000
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "additionalProperties": true
+          },
+          "user": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32,
+                "pattern": "^[1-9][0-9]{0,31}$"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "id",
+          "data",
+          "user"
+        ],
+        "additionalProperties": true
+      },
+      "Release": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 32,
+                      "pattern": "^[1-9][0-9]{0,31}$"
+                    },
+                    {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  ]
+                },
+                "slug": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[a-zA-Z0-9_-]+$"
+                }
+              },
+              "required": [
+                "id",
+                "slug"
+              ],
+              "additionalProperties": true
+            },
+            "maxItems": 100
+          },
+          "ref": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "version",
+          "status",
+          "projects"
+        ],
+        "additionalProperties": true
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "organizationId"
+        ],
+        "additionalProperties": true
+      },
+      "Scope": {
+        "type": "object",
+        "properties": {
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            },
+            "maxItems": 100
+          },
+          "includesAllProjects": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "projectIds",
+          "includesAllProjects"
+        ],
+        "additionalProperties": true
+      },
+      "CommentCreate": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "AssignmentUpdate": {
+        "type": "object",
+        "properties": {
+          "assignedTo": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": [
+          "assignedTo"
+        ],
+        "additionalProperties": false
+      },
+      "Organization": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "additionalProperties": true
+      },
+      "ProjectSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-zA-Z0-9_-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "additionalProperties": true
+      },
+      "ReleaseCreate": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-zA-Z0-9_-]+$"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "archived"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "version",
+          "projects",
+          "status",
+          "ref"
+        ],
+        "additionalProperties": false
+      },
+      "ReleaseUpdate": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "archived"
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "status",
+          "ref"
+        ],
+        "additionalProperties": false
+      },
+      "Detector": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "type"
+        ],
+        "additionalProperties": true
+      },
+      "WorkflowWrite": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "detectorIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "frequency": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10080
+              }
+            },
+            "required": [
+              "frequency"
+            ],
+            "additionalProperties": false
+          },
+          "triggers": {
+            "type": "object",
+            "properties": {
+              "logicType": {
+                "type": "string",
+                "enum": [
+                  "any-short"
+                ]
+              },
+              "conditions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "first_seen_event",
+                        "regression_event",
+                        "reappeared_event"
+                      ]
+                    },
+                    "comparison": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "conditionResult": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "comparison",
+                    "conditionResult"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "logicType",
+              "conditions"
+            ],
+            "additionalProperties": false
+          },
+          "actionFilters": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "logicType": {
+                  "type": "string",
+                  "enum": [
+                    "all"
+                  ]
+                },
+                "conditions": {
+                  "type": "array",
+                  "maxItems": 0,
+                  "items": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+                  }
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "email"
+                        ]
+                      },
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "fallthrough_type": {
+                            "type": "string",
+                            "enum": [
+                              "NoOne"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fallthrough_type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "config": {
+                        "type": "object",
+                        "properties": {
+                          "target_type": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "team",
+                              "issue_owners"
+                            ]
+                          },
+                          "target_identifier": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 32,
+                            "pattern": "^[1-9][0-9]{0,31}$"
+                          }
+                        },
+                        "required": [
+                          "target_type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "data",
+                      "config"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "logicType",
+                "conditions",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "name",
+          "enabled",
+          "detectorIds",
+          "config",
+          "triggers",
+          "actionFilters"
+        ],
+        "additionalProperties": false
+      },
+      "WorkflowResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "organizationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[1-9][0-9]{0,31}$"
+          },
+          "detectorIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[1-9][0-9]{0,31}$"
+            }
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "frequency": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10080
+              }
+            },
+            "required": [
+              "frequency"
+            ],
+            "additionalProperties": false
+          },
+          "triggers": {
+            "type": "object",
+            "properties": {
+              "logicType": {
+                "type": "string",
+                "enum": [
+                  "any-short"
+                ]
+              },
+              "conditions": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "first_seen_event",
+                        "regression_event",
+                        "reappeared_event"
+                      ]
+                    },
+                    "comparison": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "conditionResult": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "comparison",
+                    "conditionResult"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "logicType",
+              "conditions"
+            ],
+            "additionalProperties": false
+          },
+          "actionFilters": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "logicType": {
+                  "type": "string",
+                  "enum": [
+                    "all"
+                  ]
+                },
+                "conditions": {
+                  "type": "array",
+                  "maxItems": 0,
+                  "items": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                    "additionalProperties": false
+                  }
+                },
+                "actions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "email"
+                        ]
+                      },
+                      "data": {
+                        "type": "object",
+                        "properties": {
+                          "fallthrough_type": {
+                            "type": "string",
+                            "enum": [
+                              "NoOne"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "fallthrough_type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "config": {
+                        "type": "object",
+                        "properties": {
+                          "target_type": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "team",
+                              "issue_owners"
+                            ]
+                          },
+                          "target_identifier": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 32,
+                            "pattern": "^[1-9][0-9]{0,31}$"
+                          }
+                        },
+                        "required": [
+                          "target_type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "data",
+                      "config"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "logicType",
+                "conditions",
+                "actions"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "enabled",
+          "organizationId",
+          "detectorIds",
+          "config",
+          "triggers",
+          "actionFilters"
+        ],
+        "additionalProperties": true
+      }
+    }
+  }
+}

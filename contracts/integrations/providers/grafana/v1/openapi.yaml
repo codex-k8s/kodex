@@ -1,0 +1,1137 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Закрытый provider subset Grafana13.2.0",
+    "version": "1.0.0",
+    "description": "Только выбранные READ и EACH typed annotation/silence effects; dashboard/whole-org scopes различаются. Proxy URL/path строит сервер из одного выбранного UID и fixed Prometheus query route. Generic plugin POST, file provisioning writes и arbitrary JSON отсутствуют."
+  },
+  "servers": [
+    {
+      "url": "https://grafana.example.invalid"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "grafana.build.read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/user": {
+      "get": {
+        "operationId": "grafana.identity.read",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/access-control/user/permissions": {
+      "get": {
+        "operationId": "grafana.permissions.read",
+        "parameters": [
+          {
+            "name": "reloadcache",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/dashboards/uid/{uid}": {
+      "get": {
+        "operationId": "grafana.dashboard.read",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/datasources/uid/{uid}": {
+      "get": {
+        "operationId": "grafana.datasource.read",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/datasources/proxy/uid/{uid}/api/v1/query_range": {
+      "get": {
+        "operationId": "grafana.datasource.query",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "step",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3600
+            }
+          },
+          {
+            "name": "timeout",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5s"
+              ]
+            }
+          },
+          {
+            "name": "lookback_delta",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "5m"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50
+              ]
+            }
+          },
+          {
+            "name": "partial_response",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                false
+              ]
+            }
+          },
+          {
+            "name": "dedup",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "enum": [
+                true
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/annotations": {
+      "get": {
+        "operationId": "grafana.annotation.list",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "enum": [
+                50
+              ]
+            }
+          },
+          {
+            "name": "dashboardUID",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "post": {
+        "operationId": "grafana.annotation.create",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "time",
+                  "timeEnd",
+                  "dashboardUID"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "time": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "timeEnd": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "dashboardUID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/annotations/{id}": {
+      "get": {
+        "operationId": "grafana.annotation.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "grafana.annotation.update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "time",
+                  "timeEnd"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "time": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "timeEnd": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "grafana.annotation.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    },
+    "/api/v1/provisioning/alert-rules": {
+      "get": {
+        "operationId": "grafana.rule.list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "post": {
+        "operationId": "grafana.rule.create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Типизированный native receipt; consumer проверяет identity и readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "uid",
+                  "orgID",
+                  "folderUID",
+                  "ruleGroup",
+                  "title",
+                  "condition",
+                  "data",
+                  "noDataState",
+                  "execErrState",
+                  "for",
+                  "isPaused"
+                ],
+                "properties": {
+                  "uid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "orgID": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "folderUID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "ruleGroup": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "B"
+                    ]
+                  },
+                  "data": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "refId",
+                        "datasourceUid",
+                        "relativeTimeRange",
+                        "model"
+                      ],
+                      "properties": {
+                        "refId": {
+                          "type": "string",
+                          "enum": [
+                            "A",
+                            "B"
+                          ]
+                        },
+                        "datasourceUid": {
+                          "type": "string"
+                        },
+                        "relativeTimeRange": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 300
+                            },
+                            "to": {
+                              "type": "integer",
+                              "enum": [
+                                0
+                              ]
+                            }
+                          }
+                        },
+                        "model": {
+                          "type": "object",
+                          "description": "Две server-built модели A=Prometheus instant, B=classic_conditions; поля independently проверяет wire fixture."
+                        }
+                      }
+                    }
+                  },
+                  "noDataState": {
+                    "type": "string",
+                    "enum": [
+                      "NoData"
+                    ]
+                  },
+                  "execErrState": {
+                    "type": "string",
+                    "enum": [
+                      "Error"
+                    ]
+                  },
+                  "for": {
+                    "type": "string"
+                  },
+                  "isPaused": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/provisioning/alert-rules/{uid}": {
+      "get": {
+        "operationId": "grafana.rule.read",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "put": {
+        "operationId": "grafana.rule.update",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный native receipt; consumer проверяет identity и readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "uid",
+                  "orgID",
+                  "folderUID",
+                  "ruleGroup",
+                  "title",
+                  "condition",
+                  "data",
+                  "noDataState",
+                  "execErrState",
+                  "for",
+                  "isPaused"
+                ],
+                "properties": {
+                  "uid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "orgID": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "folderUID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "ruleGroup": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "B"
+                    ]
+                  },
+                  "data": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "refId",
+                        "datasourceUid",
+                        "relativeTimeRange",
+                        "model"
+                      ],
+                      "properties": {
+                        "refId": {
+                          "type": "string",
+                          "enum": [
+                            "A",
+                            "B"
+                          ]
+                        },
+                        "datasourceUid": {
+                          "type": "string"
+                        },
+                        "relativeTimeRange": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 300
+                            },
+                            "to": {
+                              "type": "integer",
+                              "enum": [
+                                0
+                              ]
+                            }
+                          }
+                        },
+                        "model": {
+                          "type": "object",
+                          "description": "Две server-built модели A=Prometheus instant, B=classic_conditions; поля independently проверяет wire fixture."
+                        }
+                      }
+                    }
+                  },
+                  "noDataState": {
+                    "type": "string",
+                    "enum": [
+                      "NoData"
+                    ]
+                  },
+                  "execErrState": {
+                    "type": "string",
+                    "enum": [
+                      "Error"
+                    ]
+                  },
+                  "for": {
+                    "type": "string"
+                  },
+                  "isPaused": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "grafana.rule.delete",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Native deletion accepted; no replay or terminal event is inferred."
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
+          }
+        }
+      }
+    },
+    "/api/alertmanager/grafana/api/v2/silences": {
+      "get": {
+        "operationId": "grafana.silence.list",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "post": {
+        "operationId": "grafana.silence.create-or-update",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "matchers",
+                  "startsAt",
+                  "endsAt",
+                  "createdBy",
+                  "comment"
+                ],
+                "properties": {
+                  "matchers": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "value",
+                        "isRegex",
+                        "isEqual"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        },
+                        "value": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 256
+                        },
+                        "isRegex": {
+                          "type": "boolean",
+                          "enum": [
+                            false
+                          ]
+                        },
+                        "isEqual": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "startsAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "endsAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "createdBy": {
+                    "type": "string",
+                    "enum": [
+                      "Kodex"
+                    ]
+                  },
+                  "comment": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alertmanager/grafana/api/v2/silence/{id}": {
+      "get": {
+        "operationId": "grafana.silence.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "grafana.silence.delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный успешный provider response; safe projection и identity проверяет consumer.",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Credential отклонён"
+          },
+          "403": {
+            "description": "Provider permission отклонён"
+          }
+        }
+      }
+    }
+  }
+}

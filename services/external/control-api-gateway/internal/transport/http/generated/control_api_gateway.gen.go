@@ -2845,6 +2845,7 @@ const (
 	IntegrationDefinitionAdapterSENTRY                IntegrationDefinitionAdapter = "SENTRY"
 	IntegrationDefinitionAdapterSSHCOMPOSE            IntegrationDefinitionAdapter = "SSH_COMPOSE"
 	IntegrationDefinitionAdapterSYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
+	IntegrationDefinitionAdapterTELEGRAMINTERACTION   IntegrationDefinitionAdapter = "TELEGRAM_INTERACTION"
 )
 
 // Valid indicates whether the value is a known member of the IntegrationDefinitionAdapter enum.
@@ -2875,6 +2876,8 @@ func (e IntegrationDefinitionAdapter) Valid() bool {
 	case IntegrationDefinitionAdapterSSHCOMPOSE:
 		return true
 	case IntegrationDefinitionAdapterSYNTHETICHTTP:
+		return true
+	case IntegrationDefinitionAdapterTELEGRAMINTERACTION:
 		return true
 	default:
 		return false

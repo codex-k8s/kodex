@@ -40,3 +40,27 @@ func TestIntegrationEgressShippedPackagePins(t *testing.T) {
 		})
 	}
 }
+
+// TestSentryEgressShippedPins keeps Cloud projection on exact shipped revisions while self-hosted credentials remain on the separate operator-pinned native transport.
+// TestSentryEgressShippedPins сохраняет Cloud projection на точных shipped revisions; self-hosted credentials остаются в отдельном operator-pinned native transport.
+func TestSentryEgressShippedPins(t *testing.T) {
+	definitions, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &Repository{integrationDefinitions: definitions}
+	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization"} {
+		definition := definitions[key]
+		_, err := repository.integrationEgressPackage(key, definition.Metadata.Version, definition.Digest, "", "")
+		if (err == nil) != (key == "sentry" || key == "sentry-organization") {
+			t.Fatal("Sentry projection crossed transport boundary")
+		}
+	}
+	definition := definitions["sentry"]
+	if _, err := repository.integrationEgressPackage("sentry", definition.Metadata.Version, strings.Repeat("f", 64), "", ""); err == nil {
+		t.Fatal("Sentry foreign digest reached projection")
+	}
+	if _, err := repository.integrationEgressPackage("sentry", definition.Metadata.Version, definition.Digest, "JSON", "{}"); err == nil {
+		t.Fatal("Sentry invalid managed binding fell back to shipped")
+	}
+}

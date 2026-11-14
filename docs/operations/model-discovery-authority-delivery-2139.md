@@ -4,7 +4,7 @@ title: Поставка authority105→106 для каталога моделе�
 type: operation-guide
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.0.3
 updated: 2026-11-14
 ---
 
@@ -324,3 +324,18 @@ SHA должен совпасть с исходным rotation plan и быть 
 в утверждённом плане, а apply/status читают его оттуда. Flag запрещён для
 isolate/apply/status. Новые status plans выполняются прежним executor; source,
 CLI digest, target, operation, registry, Job/Pod и fresh30s proof не ослабляются.
+
+
+Если status apply вернул `RUNNING`, `observe` только показывает состояние.
+После завершения нужен `resume` того же status plan/evidence: он читает уже
+существующий exact Job и сохраняет `SUCCEEDED` в журнал без повторного create.
+Отсутствующая durable квитанция закрывает terminal getter даже при успешном stdout.
+
+Подготовка restore plan и apply могут использовать разные явно созданные status
+Jobs. В `--authority-status-plan` / `--authority-status-evidence` для apply
+передаются свежие файлы. Owner operation, policy, registry, snapshot, required
+set, installation и исходный rotation plan должны совпадать. Меняться могут
+только provenance status Job, observedAt и actual count, по-прежнему не ниже
+required count. Новый proof с исходным terminal hash сохраняется в событии
+`AUTHORITY_CONFIRMED` до effect; план не переписывается. Окно30s перед effect
+сохраняется. При его истечении нужен очередной status Job, а не увеличение TTL.

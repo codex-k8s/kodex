@@ -335,6 +335,16 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return err
 		}
 	}
+	if definition.Spec.Adapter == string(AdapterObservability) {
+		if err := validateObservabilityConfiguration(definition, configuration); err != nil {
+			return err
+		}
+	}
+	if definition.Spec.Adapter == string(AdapterSentry) {
+		if err := validateSentryConfiguration(definition, configuration); err != nil {
+			return err
+		}
+	}
 	if definition.Metadata.Key == "jira-server-dc" {
 		if _, err := ParseJiraCreateFields(configuration["issue_create_fields"]); err != nil {
 			return err
