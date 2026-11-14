@@ -239,7 +239,6 @@ async function main(args){
     }
     requireValue(['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'].every(k=>options[k]),
       'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
-    const {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON}=await import('./authority-catalog-transition.mjs');
     const {readCatalogAuthorityTerminal}=await import('./authority-rotation-transition.mjs');
     requireValue(typeof readCatalogAuthorityTerminal==='function','COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
     const plan=readAuthorityPrivateJSON(options['--authority-plan']),freshPlan=readAuthorityPrivateJSON(options['--authority-status-plan']);
