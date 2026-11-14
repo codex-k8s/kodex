@@ -64,6 +64,21 @@ test('not-ready/terminating адреса, чужой Service UID и Pod с nonce
     const f=fixture();f.step();mutate(f);assert.throws(()=>requireClosedAPIAdmission(f.deployment,f.resources,f.closed,f.traffic()));
   }
 });
+test('nullable пустой EndpointSlice допускается только с exact owner и без адресов',()=>{
+  const empty={apiVersion:'discovery.k8s.io/v1',kind:'EndpointSlice',metadata:{namespace:'kodex-system',labels:{'kubernetes.io/service-name':name},
+    ownerReferences:[{kind:'Service',uid:serviceUID,controller:true}]},endpoints:null,ports:null};
+  for(const endpoints of [null,[]]){
+    const f=fixture();f.slices.items=[{...structuredClone(empty),endpoints}];assert.equal(f.step().state,'ISOLATED');
+    assert.doesNotThrow(()=>requireClosedAPIAdmission(f.deployment,f.resources,f.closed,f.traffic()));
+  }
+  for(const mutate of [s=>{delete s.endpoints;},s=>{s.endpoints={};},s=>{s.endpoints='';},s=>{s.endpoints=false;},
+    s=>{s.endpoints=[{addresses:['192.0.2.2'],conditions:{ready:false,terminating:true}}];},s=>{s.endpoints=[{addresses:[]}];},
+    s=>{s.metadata.ownerReferences[0].uid=uid;},s=>{s.metadata.ownerReferences[0].controller=false;},
+    s=>{s.metadata.namespace='foreign';},s=>{s.metadata.labels['kubernetes.io/service-name']='foreign';}]){
+    const f=fixture();f.step();const slice=structuredClone(empty);mutate(slice);f.slices.items=[slice];
+    assert.throws(()=>requireClosedAPIAdmission(f.deployment,f.resources,f.closed,f.traffic()),/ENDPOINTS_REMAIN/);
+  }
+});
 test('UNKNOWN patch разрешается readback без повторной изоляции',()=>{
   const f=fixture();f.loseACK=true;assert.throws(()=>f.step(),/lost acknowledgement/);assert.equal(f.effects,1);
   assert.equal(f.step('status').state,'ISOLATED');assert.equal(f.step().state,'ISOLATED');assert.equal(f.effects,1);

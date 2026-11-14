@@ -27,7 +27,7 @@ function setup(t){
 const fs=require('node:fs'),path=require('node:path'),base=path.join(__dirname,'..'),a=process.argv.slice(2),file=path.join(base,'state.json'),s=JSON.parse(fs.readFileSync(file));
 const program=path.basename(process.argv[1]),save=()=>fs.writeFileSync(file,JSON.stringify(s)),out=v=>{save();console.log(JSON.stringify(v));};
 s.calls.push({program,args:a});
-if(program==='git'){save();if(a[0]==='rev-parse')console.log(s.source);else if(a[0]==='status'){if(s.dirty)console.log(' M fixture');}else process.exit(4);process.exit(0);}
+if(program==='git'){save();if(a[0]==='rev-parse')console.log(s.source);else if(a[0]==='status'){if(s.dirty)console.log(' M fixture');}else if(a[0]==='merge-base'&&a[1]==='--is-ancestor'){if(s.notAncestor||a[2]!=='a'.repeat(40)||a[3]!==s.source)process.exit(1);}else process.exit(4);process.exit(0);}
 if(a[a.indexOf('--context')+1]!==s.target.context||a[a.indexOf('--kubeconfig')+1]!==path.join(base,'explicit config'))process.exit(5);
 const inventory=()=>{
  const d=s.deployment,rs={kind:'ReplicaSet',metadata:{name:'api-rs',uid:'api-rs',namespace:'kodex-system',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},pods=[];
@@ -95,4 +95,39 @@ test('CLI закрыто отклоняют другой cluster и грязны
   const f=setup(t);f.pass('maintenance','plan','close',['--action','close']);f.edit(s=>s.foreign=true);
   assert.notEqual(f.run('maintenance','apply','close').status,0);assert.equal(f.state().effects.length,0);
   f.edit(s=>{s.foreign=false;s.dirty=true;});assert.notEqual(f.run('maintenance','apply','close').status,0);assert.equal(f.state().effects.length,0);
+});
+test('исправленный successor наблюдает прежний nullable slice без повторного effect или изменения plan/header',t=>{
+  const f=setup(t);f.pass('maintenance','plan','close',['--action','close']);f.pass('maintenance','apply','close');
+  f.pass('traffic','plan','isolate',['--action','isolate']);f.edit(s=>s.lost='service');
+  assert.notEqual(f.run('traffic','apply','isolate').status,0);
+  const plan=readFileSync(join(f.directory,'isolate.json'),'utf8'),before=readFileSync(join(f.directory,'isolate.jsonl'),'utf8');
+  f.edit(s=>{s.source='b'.repeat(40);s.slices.items=[{apiVersion:'discovery.k8s.io/v1',kind:'EndpointSlice',metadata:{namespace:'kodex-system',
+    labels:{'kubernetes.io/service-name':'control-api-gateway'},ownerReferences:[{kind:'Service',uid:s.service.metadata.uid,controller:true}]},endpoints:null,ports:null}];});
+  assert.notEqual(f.run('traffic','status','isolate').status,0);
+  assert.equal(f.pass('traffic','status','isolate',['--predecessor-executor-sha','a'.repeat(40)]).state,'ISOLATED');
+  assert.equal(readFileSync(join(f.directory,'isolate.json'),'utf8'),plan);
+  const after=readFileSync(join(f.directory,'isolate.jsonl'),'utf8');assert.ok(after.startsWith(before));
+  const events=after.trim().split('\n').map(JSON.parse);
+  assert.ok(events.some(e=>e.type==='READBACK_EXECUTOR'&&e.sourceSHA==='b'.repeat(40)&&e.predecessorExecutorSHA==='a'.repeat(40)));
+  assert.deepEqual(f.state().effects,['deployment','service']);
+  assert.notEqual(f.run('traffic','apply','isolate',['--predecessor-executor-sha','a'.repeat(40)]).status,0);
+  assert.notEqual(f.run('traffic','apply','isolate').status,0);
+  assert.deepEqual(f.state().effects,['deployment','service']);
+});
+test('successor readback закрыт для неверного SHA, non-ancestor, dirty source и подменённого scope',t=>{
+  for(const mutate of [s=>{s.notAncestor=true;},s=>{s.dirty=true;},s=>{s.foreign=true;},
+    s=>{s.service.metadata.uid='33333333-3333-4333-8333-333333333333';},
+    s=>{s.service.spec.selector['kodex.dev/component-traffic-isolation']='foreign';}]){
+    const f=setup(t);f.pass('maintenance','plan','close',['--action','close']);f.pass('maintenance','apply','close');
+    f.pass('traffic','plan','isolate',['--action','isolate']);f.pass('traffic','apply','isolate');
+    f.edit(s=>{s.source='b'.repeat(40);mutate(s);});
+    assert.notEqual(f.run('traffic','status','isolate',['--predecessor-executor-sha','a'.repeat(40)]).status,0);
+    assert.deepEqual(f.state().effects,['deployment','service']);
+  }
+  const f=setup(t);f.pass('maintenance','plan','close',['--action','close']);f.pass('maintenance','apply','close');
+  f.pass('traffic','plan','isolate',['--action','isolate']);f.pass('traffic','apply','isolate');f.edit(s=>s.source='b'.repeat(40));
+  assert.notEqual(f.run('traffic','status','isolate',['--predecessor-executor-sha','c'.repeat(40)]).status,0);
+  assert.notEqual(f.run('traffic','status','isolate',['--predecessor-executor-sha','']).status,0);
+  assert.notEqual(f.run('traffic','plan','other',['--action','restore','--predecessor-executor-sha','a'.repeat(40)]).status,0);
+  assert.deepEqual(f.state().effects,['deployment','service']);
 });

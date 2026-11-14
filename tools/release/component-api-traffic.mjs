@@ -62,7 +62,7 @@ export function requireIsolatedAPIService(service,slices,pods,plan){
   requireValue(Array.isArray(slices?.items)&&!slices.metadata?.continue&&slices.items.every(slice=>
     slice.apiVersion==='discovery.k8s.io/v1'&&slice.kind==='EndpointSlice'&&slice.metadata?.namespace==='kodex-system'&&
     slice.metadata.labels?.['kubernetes.io/service-name']===name&&slice.metadata.ownerReferences?.some(o=>o.kind==='Service'&&o.uid===plan.serviceUID&&o.controller===true)&&
-    Array.isArray(slice.endpoints)&&slice.endpoints.length===0),'COMPONENT_API_TRAFFIC_ENDPOINTS_REMAIN');
+    (slice.endpoints===null||Array.isArray(slice.endpoints)&&slice.endpoints.length===0)),'COMPONENT_API_TRAFFIC_ENDPOINTS_REMAIN');
   requireValue(Array.isArray(pods?.items)&&!pods.metadata?.continue&&pods.items.every(p=>p.kind==='Pod'&&p.metadata?.namespace==='kodex-system'&&
     !Object.entries(plan.afterSpec.selector).every(([k,v])=>p.metadata.labels?.[k]===v)), 'COMPONENT_API_TRAFFIC_SELECTOR_MATCHES_POD');
 }
@@ -135,11 +135,13 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
+  requireValue(options['--predecessor-executor-sha']===undefined||phase==='status'&&/^[a-f0-9]{40}$/.test(options['--predecessor-executor-sha']),
+    'COMPONENT_API_TRAFFIC_READBACK_SUCCESSOR_INVALID');
   const env=Object.fromEntries(['HOME','PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
   const run=(command,argv)=>{try{return execFileSync(command,argv,{cwd:root,env,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:['ignore','pipe','pipe']});}
     catch{throw Error('COMPONENT_API_TRAFFIC_OPERATION_FAILED_OR_UNKNOWN');}};
@@ -188,11 +190,19 @@ async function main(args){
   }
   requireValue(options['--evidence']&&!options['--action']&&!options['--target'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
   const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);
-  requireValue(plan.sourceSHA===sourceSHA&&portableRunnerTarget(plan.target,observed).allows(service())&&
+  // Исправленный successor может только наблюдать прежнюю изоляцию. Старые
+  // plan/header/nonce не переписываются; apply и restore остаются exact-source.
+  if(options['--predecessor-executor-sha']){
+    requireValue(phase==='status'&&plan.action==='isolate'&&plan.sourceSHA===options['--predecessor-executor-sha']&&plan.sourceSHA!==sourceSHA,
+      'COMPONENT_API_TRAFFIC_READBACK_SUCCESSOR_INVALID');
+    run('git',['merge-base','--is-ancestor',plan.sourceSHA,sourceSHA]);
+  }
+  requireValue((plan.sourceSHA===sourceSHA||!!options['--predecessor-executor-sha'])&&portableRunnerTarget(plan.target,observed).allows(service())&&
     same(plan.target,closed.plan.target)&&plan.closePlanSHA256===fingerprint(closed.plan)&&
     (phase==='apply'?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha']),'COMPONENT_API_TRAFFIC_TARGET_CHANGED');
   const journal=privateJournal(options['--evidence'],header(plan));
   try{
+    if(options['--predecessor-executor-sha'])journal.append({type:'READBACK_EXECUTOR',sourceSHA,predecessorExecutorSHA:plan.sourceSHA});
     if(phase==='apply'&&plan.action==='restore'&&same(service().spec,plan.beforeSpec))terminal=await readTerminal();
     const result=componentAPITrafficStep({phase,plan,journal,get:service,slices,pods,gate:()=>{
       const fresh=build(plan.target,plan.action);requireValue(same(fresh,plan),'COMPONENT_API_TRAFFIC_GATE_CHANGED');
