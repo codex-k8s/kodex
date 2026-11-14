@@ -84,7 +84,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 	var redirect atomic.Bool
 	api := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.Host != "gitlab.example.invalid" || r.TLS == nil || r.TLS.ServerName != "gitlab.example.invalid" || r.URL.EscapedPath() != "/api/v4/projects/group%2Fproject" {
+		if r.Host != "gitlab.example.invalid" || r.TLS == nil || r.TLS.ServerName != "gitlab.example.invalid" || (r.URL.EscapedPath() != "/api/v4/projects/group%2Fproject" && r.URL.EscapedPath() != "/api/v4/projects/42") {
 			t.Error("typed provider request escaped expected TLS/auth/resource binding")
 			w.WriteHeader(403)
 			return
@@ -99,7 +99,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":42,"path_with_namespace":"group/project","default_branch":"main","visibility":"private","archived":false}`)
+		_, _ = io.WriteString(w, `{"id":42,"path_with_namespace":"group/project","default_branch":"main","visibility":"private","archived":false,"namespace":{"id":10,"full_path":"group","kind":"group"}}`)
 	}))
 	api.TLS = &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{certificate}}
 	api.Config.ErrorLog = log.New(io.Discard, "", 0)
@@ -158,7 +158,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer adapter.nativeHTTPClient.CloseIdleConnections()
-	invocation := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.project.metadata.read", map[string]any{}, credential)
+	invocation := invocationRequest(t, adapter.definitions["gitlab"], "gitlab.project.metadata.read", map[string]any{"project_id": 42, "project_path": "group/project"}, credential)
 	invocation.Configuration["base_url"] = "https://gitlab.example.invalid"
 	capability, _ := adapter.definitions["gitlab"].Capability(invocation.CapabilityKey)
 	invocation.ResourceScope, err = capability.ResourceScopeValues(map[string]string{"base_url": "https://gitlab.example.invalid", "scope_kind": "PROJECT", "project_path": "group/project"})
@@ -169,7 +169,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 	scopeDigest := sha256.Sum256(scope)
 	invocation.ResourceScopeDigest = hex.EncodeToString(scopeDigest[:])
 	result, err := adapter.Execute(ctx, invocation)
-	if err != nil || !strings.Contains(result.Summary, `"id":42`) || calls.Load() != 1 {
+	if err != nil || !strings.Contains(result.Summary, `"id":42`) || calls.Load() != 2 {
 		t.Fatalf("typed native HTTPS request failed: %v %s", err, result.Summary)
 	}
 	// A separately verified user key cannot turn an untrusted certificate into a valid API peer.
@@ -180,7 +180,7 @@ func TestNativeHTTPSProcessKeepsTypedAdapterCredentialsAndTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := adapter.Execute(ctx, invocation); err == nil || calls.Load() != 1 {
+	if _, err := adapter.Execute(ctx, invocation); err == nil || calls.Load() != 2 {
 		t.Fatal("untrusted TLS reached credential-bearing API")
 	}
 	adapter.nativeHTTPClient.CloseIdleConnections()
