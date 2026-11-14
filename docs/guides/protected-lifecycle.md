@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.80
+version: 1.1.81
 updated: 2026-11-14
 ---
 
@@ -1377,3 +1377,16 @@ v2 READ и новая операция; прежний CP закрыто отк�
 согласованно, чтобы новая операция не предлагалась старому CP. Схема PostgreSQL
 не меняется. Опубликованные настройки восстанавливаются штатным owner-планом,
 а не ручным SQL. Локальные component/unit проверки не являются live-приёмкой.
+
+
+## Старые Evicted Pods с неизвестным execution tail
+
+`Failed/Evicted` без container/init/ephemeral status не доказывает прекращение
+writer. Readiness не исключает такие Pods только по phase. Отдельная metadata
+recovery может удалить лишь exact owner-bound UID/RV после двух свежих полных
+CRI/containerd snapshots всех закреплённых nodes, при отсутствии target UID и
+неразрешённых tasks. Private full preimage и сами bounded proof metadata
+сохраняются/fsync до каждого эффекта; один hash без исходного proof недостаточен.
+UNKNOWN разрешается отдельным readback исходного journal, без нового намерения
+или force. Scope, пример и матрица:
+[Evicted metadata recovery](../operations/evicted-pod-metadata-recovery-2033.md).

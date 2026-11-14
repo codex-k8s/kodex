@@ -4,7 +4,7 @@ title: Поставка authority105→106 для каталога моделе�
 type: operation-guide
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-14
 ---
 
@@ -100,6 +100,24 @@ Required readers включают `control-api-gateway/AUTHORIZATION_ISSUER`.
 Ожидать16 новых receipts при API replicas0 нельзя: такой порядок сам блокирует
 публикацию. Закрытие admission и остановка Pods — разные проверяемые состояния.
 Наблюдение без effects остаётся доступно и при работающих API Pods.
+
+Пустой `EndpointSlice.endpoints` допускает `[]` и `null`: официальный
+[тип Kubernetes1.35.5](https://github.com/kubernetes/kubernetes/blob/v1.35.5/staging/src/k8s.io/api/discovery/v1/types.go)
+сериализует nil slice без `omitempty`. Отсутствующее поле, другой тип, любой
+endpoint, чужой Service UID или неполная пагинация не доказывают изоляцию.
+Context7 `/kubernetes/api` дополнительно подтверждает этот контракт;
+версионным источником остаётся приведённый код1.35.5.
+
+Если прежний executor уже изолировал Service, но его проверка отвергла
+канонический `null`, исправленный чистый successor может выполнить только
+`component-api-traffic.mjs status --predecessor-executor-sha EXACT_OLD_SHA`
+с прежними plan/evidence/closed-plan/closed-evidence и явными kubeconfig/context.
+SHA обязан совпасть с исходным планом и быть Git ancestor текущего executor.
+В журнал дописываются provenance нового наблюдателя и свежий readback;
+исходные plan/hash/header/nonce не меняются. Этот flag запрещён для plan/apply
+и restore; он не разрешает повтор изоляции после UNKNOWN. Новые image/open/
+authority/restore планы создаются уже исправленным executor, поскольку их
+consumer также повторно проверяет фактические EndpointSlices.
 
 Новый CP binary не требует106 на startup: настоящий constructor/readiness и
 прежняя worker operation проверяются с полной105 policy. Legacy resolver105
