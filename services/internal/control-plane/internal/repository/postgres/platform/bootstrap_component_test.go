@@ -381,6 +381,9 @@ func TestBootstrapComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
+	// Existing background-source cases qualify the historical6.4 connection contract; the current6.5 discovery/service setup requires its own explicit qualification.
+	// Существующие background-source cases квалифицируют historical6.4 connection contract; текущий6.5 discovery/service setup требует собственной явной квалификации.
+	pinHistoricalGitHubComponent(t, repository)
 	configureComponentArtifactScanner(t, repository)
 	configureComponentProviderAndRoleImages(t, repository)
 	profile := *repository.defaultModelProvider()
