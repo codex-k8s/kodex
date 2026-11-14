@@ -32,6 +32,16 @@ replicas только по текущему Job UID, известному execut
 не заменяют этот proof. Такое исключение не выдаёт migration/check PASS и не
 разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
 
+Открытие пользовательского API после обновления требует подтверждённой readiness
+всего serving inventory: owner lineage, полный набор containers/init/ephemeral,
+точные image digests и весь заданный template spec, включая config/secret volumes
+и service account. Counters Deployment либо готовый main container не заменяют
+этот proof. Если API должен работать для служебного policy readback, пользовательский
+Service остаётся отдельно изолированным после положительного join старых writers.
+Возврат маршрута связан с exact завершённым owner protocol и свежим authoritative
+status, а не только с прежним ACK или completed Job. Исполняемый порядок:
+[обслуживание API](../runbooks/portable-install.md#закрытие-api-при-согласованном-обновлении-компонентов).
+
 После BIND отмена Pod немедленно закрывает command admission executor и отменяет
 активную команду. Ограниченное ожидание разрешает только `QUIESCE` прежней
 trusted роли с тем же binding. Полностью записанный положительный ACK executor

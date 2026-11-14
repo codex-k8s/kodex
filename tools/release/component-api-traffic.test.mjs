@@ -42,6 +42,12 @@ function ready(f){
     ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},spec:structuredClone(d.spec.template.spec),
     status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:d.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}}))]};
 }
+function terminal(f,overrides={}){
+  const proof={policyRevision:106,policySHA256:'a'.repeat(64),operationID:uid,registryRevision:2,registrySHA256:'b'.repeat(64),
+    snapshotRevision:4,snapshotSHA256:'c'.repeat(64),expectedReadbackCount:16,actualReadbackCount:16,observedAt:new Date().toISOString(),
+    planSHA256:'d'.repeat(64),freshPlanSHA256:'e'.repeat(64),targetSHA256:fingerprint(f.target),trafficPlanSHA256:fingerprint(f.plan),serviceUID,
+    ...overrides};return {...proof,terminalSHA256:fingerprint(proof)};
+}
 test('Service isolation сохраняет ports/IP и допускает readers при возобновлённом API',()=>{
   const f=fixture(),before=structuredClone(f.service.spec);
   assert.equal(f.step().state,'ISOLATED');assert.equal(f.effects,1);assert.equal(f.dryRuns,1);
@@ -74,9 +80,9 @@ test('журнал другой установки, отозванная изо�
 });
 test('restore требует ready API и снимает только собственный selector/annotation',()=>{
   const f=fixture();f.step();const previous=f.traffic();
-  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous}),/READY_API_REQUIRED/);
+  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f)}),/READY_API_REQUIRED/);
   ready(f);
-  const plan=planComponentAPITraffic({...f,action:'restore',previous});assert.deepEqual(plan.afterSpec,f.plan.beforeSpec);
+  const plan=planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f)});assert.deepEqual(plan.afterSpec,f.plan.beforeSpec);
   assert.deepEqual(plan.afterAnnotations,f.plan.beforeAnnotations);assert.equal(plan.previousIsolationSHA256,fingerprint(f.plan));
 });
 test('план не может заменить clusterIP/ports и isolate не допускается без фактического join',()=>{
@@ -93,5 +99,14 @@ test('restore не доверяет counters при неполном или чу
     f=>{f.resources.items[1].spec.hostPID=true;},
     f=>{f.resources.items[1].metadata.ownerReferences[0].uid='foreign';}]){
     const f=fixture();f.step();ready(f);change(f);assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous:f.traffic()}));
+  }
+});
+
+test('restore требует точный свежий terminal proof106 той же изоляции',()=>{
+  const f=fixture();f.step();ready(f);const previous=f.traffic();
+  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous}),/AUTHORITY_TERMINAL_REQUIRED/);
+  for(const overrides of [{policyRevision:105},{actualReadbackCount:15},{serviceUID:uid},{trafficPlanSHA256:'f'.repeat(64)},
+    {targetSHA256:'f'.repeat(64)},{observedAt:new Date(Date.now()-31000).toISOString()}]){
+    assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
   }
 });
