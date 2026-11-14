@@ -199,7 +199,7 @@ test('real CLI отказывает wrong publication target, dirty source, orph
 test('admission defaults не скрывают новый sidecar/env/volume/endpoint или изменённый source',()=>{
  const f=fixture(),p=f.plan(),request=p.objects.at(-1).request,defaulted=structuredClone(request);
  Object.assign(defaulted.spec,{progressDeadlineSeconds:600});
- Object.assign(defaulted.spec.template.spec,{dnsPolicy:'ClusterFirst',restartPolicy:'Always',schedulerName:'default-scheduler'});
+ Object.assign(defaulted.spec.template.spec,{dnsPolicy:'ClusterFirst',restartPolicy:'Always',schedulerName:'default-scheduler',serviceAccount:request.spec.template.spec.serviceAccountName});
  for(const container of [...defaulted.spec.template.spec.containers,...defaulted.spec.template.spec.initContainers])Object.assign(container,{imagePullPolicy:'IfNotPresent',terminationMessagePath:'/dev/termination-log',terminationMessagePolicy:'File'});
  assert.doesNotThrow(()=>requireTelegramCreateAdmission(request,defaulted));
  for(const mutate of [r=>r.spec.template.spec.containers.push({name:'injected'}),r=>r.spec.template.spec.containers[0].env=[{name:'FOREIGN',value:'value'}],r=>r.spec.template.spec.volumes=[{name:'extra',hostPath:{path:'/host'}}],r=>r.spec.template.spec.containers[0].image='foreign',r=>r.spec.template.spec.hostNetwork=true]){
@@ -207,6 +207,21 @@ test('admission defaults не скрывают новый sidecar/env/volume/end
  }
  const live=f.dryRun(request);live.metadata.annotations['deployment.kubernetes.io/revision']='1';assert.deepEqual(telegramResourceCreateProjection(live).value,request);
  live.metadata.annotations['deployment.kubernetes.io/revision']='2';assert.throws(()=>telegramResourceCreateProjection(live),/REVISION_CHANGED/);
+});
+
+test('deprecated serviceAccount допускает только непустую exact source identity',()=>{
+ const f=fixture(),request=f.plan().objects.at(-1).request;
+ for(const alias of ['foreign','',null,42,[],{}]){
+  const value=structuredClone(request);value.spec.template.spec.serviceAccount=alias;
+  assert.throws(()=>requireTelegramCreateAdmission(request,value),/EXPANDED_SOURCE/);
+ }
+ for(const account of [undefined,'',null]){
+  const source=structuredClone(request);
+  if(account===undefined)delete source.spec.template.spec.serviceAccountName;
+  else source.spec.template.spec.serviceAccountName=account;
+  const value=structuredClone(source);value.spec.template.spec.serviceAccount=account??'default';
+  assert.throws(()=>requireTelegramCreateAdmission(source,value),/EXPANDED_SOURCE/);
+ }
 });
 
 // 107 admission перечитывает actual objects и private create/publication lineage;

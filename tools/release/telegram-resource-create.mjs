@@ -144,6 +144,11 @@ export function requireTelegramCreateAdmission(request,expected){
   const identity=request.kind+'|'+path;
   if(Object.hasOwn(defaults,identity))return same(value,defaults[identity]);
   if(request.kind!=='Deployment')return false;
+  // API возвращает deprecated alias; он не вправе выбирать другую identity.
+  if(path==='spec.template.spec.serviceAccount'){
+   const account=request.spec?.template?.spec?.serviceAccountName;
+   return typeof account==='string'&&account.length>0&&value===account;
+  }
   const container=/^spec\.template\.spec\.(?:containers|initContainers)\.\d+\.(.*)$/.exec(path);
   if(container){
    const field=container[1],known={imagePullPolicy:'IfNotPresent',terminationMessagePath:'/dev/termination-log',terminationMessagePolicy:'File',resources:{}};
