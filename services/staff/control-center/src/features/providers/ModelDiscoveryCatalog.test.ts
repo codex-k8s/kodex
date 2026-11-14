@@ -1,5 +1,6 @@
 import { createSSRApp, ref } from "vue";
 import { renderToString } from "@vue/server-renderer";
+import { modelDiscoveryMessages } from "./model-discovery-messages";
 import { createI18n } from "vue-i18n";
 import { describe, expect, it, vi } from "vitest";
 
@@ -62,7 +63,13 @@ import ModelDiscoveryCatalog from "./ModelDiscoveryCatalog.vue";
 describe("панель поиска моделей", () => {
   it("показывает владельцу все пять независимых статусов и отдельное отсутствие маршрута", async () => {
     const app = createSSRApp(ModelDiscoveryCatalog);
-    app.use(createI18n({ legacy: false, locale: "ru", messages: {} }));
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: { modelDiscovery: modelDiscoveryMessages.ru } },
+      }),
+    );
     const html = await renderToString(app);
     for (const text of [
       "Известна каталогу",

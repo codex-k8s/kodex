@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { useModelDiscovery } from "./model-discovery";
-import { modelDiscoveryMessages } from "./model-discovery-messages";
 
-const { t } = useI18n({ useScope: "local", messages: modelDiscoveryMessages });
+const { t } = useI18n();
 const {
   query,
   filters,
@@ -30,26 +29,28 @@ function opened(event: Event): void {
 
 <template>
   <details class="model-discovery" @toggle="opened">
-    <summary>{{ t("title") }}</summary>
-    <p>{{ t("notice") }}</p>
-    <p>{{ t("zai") }}</p>
+    <summary>{{ t("modelDiscovery.title") }}</summary>
+    <p>{{ t("modelDiscovery.notice") }}</p>
+    <p>{{ t("modelDiscovery.zai") }}</p>
     <form class="model-discovery__search" @submit.prevent="search()">
       <label>
-        <span>{{ t("search") }}</span>
+        <span>{{ t("modelDiscovery.search") }}</span>
         <input v-model="query" type="search" maxlength="200" />
       </label>
-      <button type="submit" :disabled="loading">{{ t("find") }}</button>
+      <button type="submit" :disabled="loading">
+        {{ t("modelDiscovery.find") }}
+      </button>
       <fieldset class="model-discovery__filters">
         <label
-          ><span>{{ t("provider") }}</span
+          ><span>{{ t("modelDiscovery.provider") }}</span
           ><input v-model="filters.providerId" maxlength="128"
         /></label>
         <label
-          ><span>{{ t("family") }}</span
+          ><span>{{ t("modelDiscovery.family") }}</span
           ><input v-model="filters.family" maxlength="128"
         /></label>
         <label
-          ><span>{{ t("minimumContext") }}</span
+          ><span>{{ t("modelDiscovery.minimumContext") }}</span
           ><input
             v-model.number="filters.minimumContextTokens"
             required
@@ -59,14 +60,14 @@ function opened(event: Event): void {
             step="1"
         /></label>
         <label
-          ><span>{{ t("inputModality") }}</span
+          ><span>{{ t("modelDiscovery.inputModality") }}</span
           ><input
             v-model="filters.inputModality"
             maxlength="128"
             placeholder="text, image, image/png"
         /></label>
         <label
-          ><span>{{ t("outputModality") }}</span
+          ><span>{{ t("modelDiscovery.outputModality") }}</span
           ><input
             v-model="filters.outputModality"
             maxlength="128"
@@ -75,22 +76,22 @@ function opened(event: Event): void {
         <label
           v-for="dimension in ['tools', 'reasoning'] as const"
           :key="dimension"
-          ><span>{{ t(dimension) }}</span
+          ><span>{{ t(`modelDiscovery.${dimension}`) }}</span
           ><select v-model="filters[dimension]">
-            <option value="">{{ t("any") }}</option>
+            <option value="">{{ t("modelDiscovery.any") }}</option>
             <option
               v-for="state in ['SUPPORTED', 'UNSUPPORTED', 'UNKNOWN']"
               :key="state"
               :value="state"
             >
-              {{ t(`capabilityStates.${state}`) }}
+              {{ t(`modelDiscovery.capabilityStates.${state}`) }}
             </option>
           </select></label
         >
         <label
-          ><span>{{ t("cache") }}</span
+          ><span>{{ t("modelDiscovery.cache") }}</span
           ><select v-model="filters.cache">
-            <option value="">{{ t("any") }}</option>
+            <option value="">{{ t("modelDiscovery.any") }}</option>
             <option
               v-for="kind in [
                 'NONE',
@@ -102,34 +103,40 @@ function opened(event: Event): void {
               :key="kind"
               :value="kind"
             >
-              {{ t(`cacheKinds.${kind}`) }}
+              {{ t(`modelDiscovery.cacheKinds.${kind}`) }}
             </option>
           </select></label
         >
         <label
-          ><span>{{ t("groupBy") }}</span
+          ><span>{{ t("modelDiscovery.groupBy") }}</span
           ><select v-model="filters.groupBy">
-            <option value="PROVIDER">{{ t("providerGroup") }}</option>
-            <option value="FAMILY">{{ t("familyGroup") }}</option>
+            <option value="PROVIDER">
+              {{ t("modelDiscovery.providerGroup") }}
+            </option>
+            <option value="FAMILY">
+              {{ t("modelDiscovery.familyGroup") }}
+            </option>
           </select></label
         >
       </fieldset>
     </form>
-    <p v-if="failed" role="alert">{{ t("failed") }}</p>
-    <p v-if="loading" role="status">{{ t("loading") }}</p>
-    <p v-if="loaded && !items.length && !loading">{{ t("empty") }}</p>
+    <p v-if="failed" role="alert">{{ t("modelDiscovery.failed") }}</p>
+    <p v-if="loading" role="status">{{ t("modelDiscovery.loading") }}</p>
+    <p v-if="loaded && !items.length && !loading">
+      {{ t("modelDiscovery.empty") }}
+    </p>
     <template v-if="source">
-      <p>{{ t("total", { count: total }) }}</p>
+      <p>{{ t("modelDiscovery.total", { count: total }) }}</p>
       <details class="model-discovery__source">
-        <summary>{{ t("source") }}</summary>
+        <summary>{{ t("modelDiscovery.source") }}</summary>
         <p>models.dev · MIT · {{ source.upstreamSchema }}</p>
         <code>{{ source.sourceRevision }}</code>
         <code>{{ source.catalogSha256 }}</code>
         <p>
-          {{ t("retrievedAt") }}:
+          {{ t("modelDiscovery.retrievedAt") }}:
           <time :datetime="source.retrievedAt">{{ source.retrievedAt }}</time>
         </p>
-        <p>{{ t("projectionOnly") }}</p>
+        <p>{{ t("modelDiscovery.projectionOnly") }}</p>
       </details>
     </template>
     <section
@@ -137,7 +144,11 @@ function opened(event: Event): void {
       :key="group.id"
       class="model-discovery__group"
     >
-      <h3>{{ group.label === "UNKNOWN" ? t("unknown") : group.label }}</h3>
+      <h3>
+        {{
+          group.label === "UNKNOWN" ? t("modelDiscovery.unknown") : group.label
+        }}
+      </h3>
       <ul class="model-discovery__models">
         <li
           v-for="model in group.items"
@@ -149,25 +160,56 @@ function opened(event: Event): void {
             <code>{{ model.modelId }}</code>
           </p>
           <p>
-            {{ t("context") }}:
-            {{ model.contextKnown ? model.contextTokens : t("unknown") }} /
-            {{ model.outputKnown ? model.outputTokens : t("unknown") }}
+            {{ t("modelDiscovery.context") }}:
+            {{
+              model.contextKnown
+                ? model.contextTokens
+                : t("modelDiscovery.unknown")
+            }}
+            /
+            {{
+              model.outputKnown
+                ? model.outputTokens
+                : t("modelDiscovery.unknown")
+            }}
           </p>
           <p>
-            {{ t("family") }}:
-            {{ model.family === "UNKNOWN" ? t("unknown") : model.family }}
+            {{ t("modelDiscovery.family") }}:
+            {{
+              model.family === "UNKNOWN"
+                ? t("modelDiscovery.unknown")
+                : model.family
+            }}
           </p>
           <p>
-            {{ t("tools") }}: {{ t(`capabilityStates.${model.tools}`) }} ·
-            {{ t("reasoning") }}: {{ t(`capabilityStates.${model.reasoning}`) }}
+            {{ t("modelDiscovery.tools") }}:
+            {{ t(`modelDiscovery.capabilityStates.${model.tools}`) }} ·
+            {{ t("modelDiscovery.reasoning") }}:
+            {{ t(`modelDiscovery.capabilityStates.${model.reasoning}`) }}
           </p>
-          <p>{{ t("cache") }}: {{ t(`cacheKinds.${model.cache}`) }}</p>
           <p>
-            {{ t("modalities") }}:
-            {{ model.inputModalities.join(", ") || t("unknown") }} /
-            {{ model.outputModalities.join(", ") || t("unknown") }}
+            {{ t("modelDiscovery.cache") }}:
+            {{ t(`modelDiscovery.cacheKinds.${model.cache}`) }}
           </p>
-          <p>{{ t(model.routeConfigured ? "route" : "noRoute") }}</p>
+          <p>
+            {{ t("modelDiscovery.modalities") }}:
+            {{
+              model.inputModalities.join(", ") || t("modelDiscovery.unknown")
+            }}
+            /
+            {{
+              model.outputModalities.join(", ") || t("modelDiscovery.unknown")
+            }}
+          </p>
+          <p>
+            {{
+              t(
+                model.routeConfigured
+                  ? "modelDiscovery.route"
+                  : "modelDiscovery.noRoute",
+              )
+            }}
+          </p>
           <dl>
             <template
               v-for="dimension in [
@@ -179,8 +221,8 @@ function opened(event: Event): void {
               ] as const"
               :key="dimension"
             >
-              <dt>{{ t(dimension) }}</dt>
-              <dd>{{ t(`statuses.${model[dimension]}`) }}</dd>
+              <dt>{{ t(`modelDiscovery.${dimension}`) }}</dt>
+              <dd>{{ t(`modelDiscovery.statuses.${model[dimension]}`) }}</dd>
             </template>
           </dl>
         </li>
@@ -192,7 +234,7 @@ function opened(event: Event): void {
       :disabled="loading"
       @click="search(true)"
     >
-      {{ t("more") }}
+      {{ t("modelDiscovery.more") }}
     </button>
   </details>
 </template>

@@ -4,7 +4,7 @@ title: Поисковый каталог моделей и Z.ai Coding Plan
 type: operations
 status: approved
 owner: manager
-version: 1.0.2
+version: 1.0.3
 updated: 2026-11-14
 ---
 
@@ -160,7 +160,64 @@ Conservative owner ceilings: context1000000, output32768. Это operator limits
 источники: [GLM5.3](https://docs.z.ai/guides/llm/glm-5.3),
 [подключение инструментов](https://docs.z.ai/devpack/tool/others),
 [управление keys](https://docs.z.ai/devpack/notice/api-key-management).
+Через Context7 дополнительно проверен `/microsoft/playwright/v1.61.1`
+(перехват API, fulfilment и отмена запросов) для локального browser-контура.
 Latest документация не является доказательством ABI установленного бинарника.
+
+## Локальная квалификация без живого аккаунта
+
+Полный frontend baseline выполняется штатными `npm run lint`,
+`npm run typecheck`, `npm run test:unit -- --maxWorkers=2 --testTimeout=15000`,
+`npm run build` и `npm run test:e2e:check`. CLI budget15 секунд сохраняет все
+assertions, включая общий AST-проход ключей перевода, при ограничении workers.
+Переводы каталога зарегистрированы в общем namespace `modelDiscovery` для
+обоих языков, без обхода общего контракта ключей.
+
+Поддерживаемый synthetic browser-сценарий запускается через
+`npm run test:e2e:synthetic -- e2e/model-discovery.synthetic.spec.ts`.
+Он использует production-компонент, общий API client и owner lifetime,
+подменяя только runtime config и wire-ответы API в отдельной fixture.
+Для Chromium, Firefox и WebKit при ширине1440/390 проверяются все фильтры,
+FAMILY grouping, cursor с применёнными фильтрами, timestamp provenance,
+раздельные статусы, смена owner с отменой запроса и непринятием позднего ответа,
+пустой результат, ошибка503 и отсутствие горизонтального переполнения.
+Fixture не подтверждает SSO, TLS/mTLS до сервиса либо живую подписку.
+
+`TestModelDiscoveryEligibilityComponent` добавлен в стандартный
+`make test-control-plane-postgres`. Отдельный bounded запуск:
+`KODEX_TEST_POSTGRES_STORAGE=ram KODEX_TEST_POSTGRES_NETWORK=host bash scripts/tests/control-plane-postgres-test.sh '^TestModelDiscoveryEligibilityComponent$'`.
+Оснастка создаёт собственный PostgreSQL18 и изолированную базу: проверяются
+настоящие owner reads, account disable/enable/revoke, необходимость нового
+catalog observation после смены версии account, чужие actor/tenant и отмена.
+Credential metadata и наблюдения синтетические, model API не вызывается.
+Все Go-проверки выполняются с явным `GOTOOLCHAIN=go1.26.10`; private
+`GOCACHE`, `GOTMPDIR` и временные файлы располагаются на выбранном локальном
+диске. В Go1.26 `testing.TempDir` использует `GOTMPDIR`; длина пути для Unix
+socket fixtures должна учитывать системный лимит108 bytes.
+
+## Состав доставки и authority
+
+Обязательный image cohort: `control-plane`, `control-api-gateway` и
+`control-center`. Каталог не меняет production binary `agent-runner`,
+`runtime-controller`, `secret-broker` или `egress-gateway`: runner diff содержит
+только synthetic test. Для фактической активации Z.ai отдельно доставляются
+operator-owned route pins CP/broker/egress прежним installer path.
+
+Policy revision106 добавляет exact gateway operation и OIDC producer permission.
+Она отличается от `source_revision` delivery registry и snapshot generation.
+Publisher связывает policy bytes с publication input digest и durable delivery
+revision; замена policy под прежней сохранённой revision не является доставкой.
+Оператор сначала читает actual registry/snapshot pins и использует существующий
+forward-only rotation/publication protocol: durable intent, новая delivery
+revision, распространение, обязательный consumer readback и переключение.
+Текущий RPC profile сохраняется; новый каталог открывают после принятия106,
+готовности нового CP handler/embedded assets и обновления gateway/PWA.
+Live readback, SSO и TLS-путь записываются отдельно от локальной квалификации.
+
+Rollback сначала прекращает новые gateway/PWA вызовы, затем возвращает
+совместимый application cohort. Сохранённый policy high-watermark не понижается
+до105: удаление операции требует отдельной forward revision после прекращения
+вызовов. Новая операция не требует смены сертификатов, CA или credential keys.
 
 ## Ручная проверка
 
