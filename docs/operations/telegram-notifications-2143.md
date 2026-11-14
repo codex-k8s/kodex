@@ -4,11 +4,18 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.11
+version: 1.0.12
 updated: 2026-11-14
 ---
 
 # Уведомления проекта через Telegram
+
+Общий `INTERACTION_GATEWAY_OPERATION_TIMEOUT` сохраняет default30s и допустимый
+диапазон1s–2m для worker/Mattermost. Telegram ограничивает каждый HTTP call
+отдельно значением `min(operationTimeout,20s)`; более ранние operation,
+capability, lease и subscription deadlines по-прежнему прекращают вызов.
+Default ConfigMap обоих web profiles и его фактические health/send paths
+проверяются вместе с границами допустимого operation budget.
 
 Источники: #2143, #2033, #1830, `GUIDE-DOC-003`, `GUIDE-DOC-006` и явный
 выбор владельца14.11.2026. Срез обслуживает `FINISHED`, `FAILED`, `HUMAN_GATE`

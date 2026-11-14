@@ -25,11 +25,18 @@ import (
 // telegramAdapterFixture создаёт точные synthetic owner/package/credential pins и private projected token; transport не обращается к внешней сети.
 func telegramAdapterFixture(t *testing.T) (*Adapter, *cp.InteractionDeliveryClaim) {
 	t.Helper()
+	return telegramAdapterBudgetFixture(t, time.Second)
+}
+
+// telegramAdapterBudgetFixture keeps the production constructor budget while preparing exact synthetic owner and credential pins without external I/O.
+// telegramAdapterBudgetFixture сохраняет production constructor budget, подготавливая точные synthetic owner и credential pins без внешнего I/O.
+func telegramAdapterBudgetFixture(t *testing.T, timeout time.Duration) (*Adapter, *cp.InteractionDeliveryClaim) {
+	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "fixture-token"), []byte(fixtureToken), 0o400); err != nil {
 		t.Fatal("prepare synthetic credential")
 	}
-	adapter, err := New(Config{CredentialDirectory: root, ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8086", PublicOrigin: "https://kodex.example.test", Timeout: time.Second})
+	adapter, err := New(Config{CredentialDirectory: root, ProxyURL: "http://egress-gateway.kodex-system.svc.cluster.local:8086", PublicOrigin: "https://kodex.example.test", Timeout: timeout})
 	if err != nil {
 		t.Fatal(err)
 	}

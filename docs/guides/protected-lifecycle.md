@@ -4,11 +4,17 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.90
+version: 1.1.91
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Бюджет отдельного provider call ограничивается внутри допустимого worker
+operation budget. Проверяется весь материализованный путь default ConfigMap →
+app configuration → adapter constructor → health/preflight → dispatch, включая
+максимальный допустимый operation budget. Успешный constructor и fixtures с
+меньшим timeout не доказывают работоспособность установленного профиля.
 
 Допуск нового workload/issuer проверяет все встроенные producers namespace,
 включая pending Deployment/StatefulSet/DaemonSet/ReplicationController/Job/CronJob

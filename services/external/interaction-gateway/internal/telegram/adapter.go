@@ -57,7 +57,7 @@ func New(config Config) (*Adapter, error) {
 func (adapter *Adapter) defaultTransport() http.RoundTripper {
 	return &http.Transport{Proxy: http.ProxyURL(adapter.proxy), TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, ServerName: "api.telegram.org"},
 		DisableKeepAlives: true, ForceAttemptHTTP2: false, TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
-		TLSHandshakeTimeout: adapter.timeout, ResponseHeaderTimeout: adapter.timeout}
+		TLSHandshakeTimeout: min(adapter.timeout, maximumAPICallTimeout), ResponseHeaderTimeout: min(adapter.timeout, maximumAPICallTimeout)}
 }
 
 // claimedSnapshot reconstructs the one canonical owner input from private pins and rejects inconsistent duplicate coordinates before credential reads or network calls.
@@ -109,7 +109,7 @@ func (adapter *Adapter) client(ctx context.Context, credential *cp.IntegrationCr
 	}
 	defer clear(raw)
 	transport := adapter.newTransport()
-	client, err := newAPIClient(string(raw), transport, adapter.timeout)
+	client, err := newAPIClient(string(raw), transport, min(adapter.timeout, maximumAPICallTimeout))
 	cleanup := func() {
 		if client != nil {
 			client.token = ""

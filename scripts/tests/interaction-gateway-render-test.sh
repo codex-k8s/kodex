@@ -21,6 +21,7 @@ for profile in web-only web-with-mattermost; do
       ($deployments | length) == 1 and ($runtime | length) == 1 and
       $runtime[0].data.INTERACTION_GATEWAY_TELEGRAM_PROXY_URL == "http://egress-gateway.kodex-system.svc.cluster.local:8086" and
       $runtime[0].data.INTERACTION_GATEWAY_ALLOWED_HOSTS == "" and
+      $runtime[0].data.INTERACTION_GATEWAY_OPERATION_TIMEOUT == "30s" and
       $runtime[0].data.INTERACTION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME == "control-plane.kodex-system.svc.cluster.local" and
       all($resources[]; .kind != "Deployment" or (.metadata.name != "mattermost" and .metadata.name != "mattermost-postgresql")) and
       $pod.serviceAccountName == "interaction-gateway" and

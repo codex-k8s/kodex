@@ -23,6 +23,9 @@ const (
 	// maximumResponseBytes bounds provider envelopes before JSON decoding, including chunked responses.
 	// maximumResponseBytes ограничивает provider envelope до JSON decode, включая chunked ответы.
 	maximumResponseBytes = 256 << 10
+	// maximumAPICallTimeout bounds one token-bearing HTTP call independently of the larger worker operation budget; the operation context still cancels earlier.
+	// maximumAPICallTimeout ограничивает один token-bearing HTTP call независимо от большего worker operation budget; operation context по-прежнему отменяет вызов раньше.
+	maximumAPICallTimeout = 20 * time.Second
 	// maximumIdentifier keeps Bot API coordinates within Telegram's documented 52-bit integer range.
 	// maximumIdentifier удерживает координаты Bot API в документированном 52-битном диапазоне Telegram.
 	maximumIdentifier int64 = integrationpackage.TelegramMaximumIdentifier
@@ -122,7 +125,7 @@ type apiClient struct {
 // newAPIClient проверяет канонический сегмент token path и конечный timeout без provider I/O; identity бота по-прежнему требует getMe.
 func newAPIClient(token string, next http.RoundTripper, timeout time.Duration) (*apiClient, error) {
 	parts := strings.Split(token, ":")
-	if len(parts) != 2 || len(token) > 256 || len(parts[1]) < 20 || next == nil || timeout < time.Second || timeout > 20*time.Second {
+	if len(parts) != 2 || len(token) > 256 || len(parts[1]) < 20 || next == nil || timeout < time.Second || timeout > maximumAPICallTimeout {
 		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}
 	}
 	id, err := strconv.ParseInt(parts[0], 10, 64)
