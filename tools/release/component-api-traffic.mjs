@@ -190,9 +190,9 @@ async function main(args){
   requireValue(migrationSourceSHA===undefined||phase==='plan'&&options['--action']==='restore'&&migrationProfile&&/^[a-f0-9]{40}$/.test(migrationSourceSHA),
     'COMPONENT_API_TRAFFIC_MIGRATION_SOURCE_INVALID');
   const env=Object.fromEntries(['HOME','PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));
-  const run=(command,argv)=>{try{return execFileSync(command,argv,{cwd:root,env,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:['ignore','pipe','pipe']});}
+  const run=(command,argv,input)=>{try{return execFileSync(command,argv,{cwd:root,env,input,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:[input===undefined?'ignore':'pipe','pipe','pipe']});}
     catch{throw Error('COMPONENT_API_TRAFFIC_OPERATION_FAILED_OR_UNKNOWN');}};
-  const kube=argv=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv]);
+  const kube=(argv,input)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input);
   const get=(kind,n)=>JSON.parse(kube(['-n','kodex-system','get',kind,n,'-o','json']));
   const sourceSHA=run('git',['rev-parse','HEAD']).trim();requireValue(!run('git',['status','--porcelain','--untracked-files=normal']).trim(),
     'COMPONENT_API_TRAFFIC_CLEAN_SOURCE_REQUIRED');

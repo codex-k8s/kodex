@@ -52,9 +52,14 @@ test('native PostgreSQL18: exact owner function/read-only SQL, db identity, memb
  // Контрфактический повреждённый VOLATILE owner не может превратить pinned
  // READ ONLY в запись: проверяется реальный отказ ядра PostgreSQL, не mock flag.
  sql(`CREATE TABLE public.baseline_write_probe(value integer);
+ GRANT USAGE ON SCHEMA public TO internal_rpc_authority_readback_owner;
+ GRANT INSERT ON public.baseline_write_probe TO internal_rpc_authority_readback_owner;
  CREATE OR REPLACE FUNCTION internal_rpc_authority.authority_rotation_status() RETURNS jsonb
  LANGUAGE plpgsql VOLATILE SECURITY DEFINER AS $$ BEGIN INSERT INTO public.baseline_write_probe VALUES (1); RETURN '{}'::jsonb; END $$;`);
- assert.throws(()=>reader.read(catalogAuthorityBaselineSQL(),pod,backend));
+ sql('SELECT internal_rpc_authority.authority_rotation_status();');
+ assert.equal(sql('SELECT count(*) FROM public.baseline_write_probe;').trim(),'1');
+ sql('TRUNCATE public.baseline_write_probe;');
+ assert.throws(()=>reader.read(catalogAuthorityBaselineSQL(),pod,backend),error=>String(error.stderr).includes('read-only transaction'));
  assert.equal(sql('SELECT count(*) FROM public.baseline_write_probe;').trim(),'0');
  assert.equal(JSON.parse(sql("SELECT json_build_object('database',current_database());")).database,'internal_rpc_authority');
 });
