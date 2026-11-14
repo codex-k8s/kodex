@@ -86,7 +86,8 @@ export function routineMigrationAPIFixture(t){
   migrationFileSHA256:hash('services/internal/control-plane/cmd/cli/migrations/'+configuration.file),
   preconditionSQLSHA256:hash('tools/release/'+configuration.preconditionFile),postconditionSQLSHA256:hash('tools/release/'+configuration.postconditionFile),
   componentDrainSQLSHA256:hash('tools/release/portable-component-migration-drain.sql')});
- migration.apiMaintenance=readMigrationAPIAdmission({isolationPlanPath:join(directory,'isolate.json'),isolationEvidencePath:join(directory,'isolate.jsonl')},baseline.kube,{stopped:true}).admission;
+ const admissionKube=(args,input)=>args.includes('endpointslices')||args[args.indexOf('get')+1]==='pods'?'{"items":[]}':baseline.kube(args,input);
+ migration.apiMaintenance=readMigrationAPIAdmission({isolationPlanPath:join(directory,'isolate.json'),isolationEvidencePath:join(directory,'isolate.jsonl')},admissionKube,{stopped:true}).admission;
  const planSHA=fingerprint(migration),job=structuredClone(migration.job);
  Object.assign(job.metadata,{uid:uid(220),resourceVersion:'1',annotations:{[configuration.annotation]:planSHA}});
  job.status={succeeded:1,conditions:[{type:'Complete',status:'True'}]};
