@@ -95,10 +95,10 @@ type Request struct {
 	PersonalObservationProfiles, PersonalDeniedWriteCapabilityKeys    []string
 }
 
-// permissionEffectObservation tracks only the current registered personal adapter's HTTP
+// permissionEffectObservation tracks only the current registered adapter's HTTP
 // mutation boundary. It is not a persisted receipt or a proof usable after process/ACK loss.
 // permissionEffectObservation отслеживает только HTTP mutation boundary текущего registered
-// personal adapter. Это не durable receipt и не proof после потери процесса либо ACK.
+// adapter. Это не durable receipt и не proof после потери процесса либо ACK.
 type permissionEffectObservation struct {
 	mutationAttempted bool
 }
@@ -447,7 +447,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || (capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE") {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE" || definition.Spec.Adapter == "SENTRY" {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -470,6 +470,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	case "OPENAPI_MCP":
 		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
+	case "SENTRY":
+		result, err = adapter.executeSentry(ctx, request, capability, configuration)
 	case "CONTEXT7":
 		result, err = adapter.executeContext7(ctx, request, capability, configuration, canonicalInput)
 	default:
@@ -1087,6 +1089,9 @@ func personalObservationProfilesFromProto(profiles []controlplanev1.PersonalInte
 		value := "UNSUPPORTED"
 		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 {
 			value = integrationpackage.CredentialObservationGitLabProjectWriteScopeV1
+		}
+		if profile == controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 {
+			value = integrationpackage.CredentialObservationSentryScopesV1
 		}
 		result = append(result, value)
 	}

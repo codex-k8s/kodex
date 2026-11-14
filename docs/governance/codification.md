@@ -39,6 +39,8 @@ updated: 2026-11-14
 
 Документ задает устойчивые идентификаторы и реестр документации.
 
+- `OPS-DOC-SENTRY-INTEGRATIONS-2140` — [Управляемая интеграция Sentry](../operations/sentry-integrations-2140.md).
+
 ## Frontmatter
 
 ```yaml

@@ -1,0 +1,742 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "sentry-self-hosted",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Sentry Self-hosted",
+    "description": "Типизированные чтение проекта, ошибок и событий и изменение статуса ошибки Sentry.",
+    "category": "observability",
+    "adapter": "SENTRY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048
+      },
+      {
+        "key": "organization_slug",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100
+      },
+      {
+        "key": "project_slug",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "sentry_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "sentry.project.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "sentry.project.read",
+        "name": "Прочитать проект",
+        "description": "Прочитать проект только в выбранном проекте Sentry.",
+        "operation": "sentry.project.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.issue.list",
+        "name": "Найти ошибки",
+        "description": "Найти ошибки только в выбранном проекте Sentry.",
+        "operation": "sentry.issue.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 1000
+          },
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": false,
+            "maximumLength": 128
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.issue.read",
+        "name": "Прочитать ошибку",
+        "description": "Прочитать ошибку только в выбранном проекте Sentry.",
+        "operation": "sentry.issue.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.event.read",
+        "name": "Прочитать событие",
+        "description": "Прочитать событие только в выбранном проекте Sentry.",
+        "operation": "sentry.event.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "event_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.issue.status.update",
+        "name": "Изменить статус ошибки",
+        "description": "Изменить статус ошибки только в выбранном проекте Sentry.",
+        "operation": "sentry.issue.status.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT",
+          "HUMAN_SCOPED"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "status",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 16,
+            "allowedValues": [
+              "resolved",
+              "unresolved",
+              "ignored"
+            ]
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        },
+        "approvalScope": {
+          "name": "Статус одной ошибки Sentry",
+          "requiredInputPaths": [
+            "/issue_id",
+            "/status"
+          ],
+          "limits": {
+            "durationSeconds": 86400,
+            "maxEffects": 100
+          },
+          "allowedLifetimes": [
+            "ROOT_RUN",
+            "INITIATOR_RESOURCE"
+          ]
+        }
+      },
+      {
+        "key": "sentry.issue.event.list",
+        "name": "Прочитать события ошибки",
+        "description": "Прочитать события ошибки только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.issue.event.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": false,
+            "maximumLength": 128
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.issue.comment.list",
+        "name": "Прочитать комментарии ошибки",
+        "description": "Прочитать комментарии ошибки только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.issue.comment.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": false,
+            "maximumLength": 128
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.issue.comment.create",
+        "name": "Добавить комментарий ошибки",
+        "description": "Добавить комментарий ошибки только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.issue.comment.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT",
+          "HUMAN_SCOPED"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 5000
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        },
+        "approvalScope": {
+          "name": "Добавить комментарий ошибки",
+          "requiredInputPaths": [
+            "/issue_id",
+            "/text"
+          ],
+          "limits": {
+            "durationSeconds": 86400,
+            "maxEffects": 100
+          },
+          "allowedLifetimes": [
+            "ROOT_RUN",
+            "INITIATOR_RESOURCE"
+          ]
+        }
+      },
+      {
+        "key": "sentry.issue.assignment.update",
+        "name": "Назначить ответственного ошибки",
+        "description": "Назначить ответственного ошибки только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.issue.assignment.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT",
+          "HUMAN_SCOPED"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "issue_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          },
+          {
+            "key": "assignee",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 40
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        },
+        "approvalScope": {
+          "name": "Назначить ответственного ошибки",
+          "requiredInputPaths": [
+            "/issue_id",
+            "/assignee"
+          ],
+          "limits": {
+            "durationSeconds": 86400,
+            "maxEffects": 100
+          },
+          "allowedLifetimes": [
+            "ROOT_RUN",
+            "INITIATOR_RESOURCE"
+          ]
+        }
+      },
+      {
+        "key": "sentry.release.list",
+        "name": "Прочитать релизы проекта",
+        "description": "Прочитать релизы проекта только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.release.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": false,
+            "maximumLength": 128
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.release.read",
+        "name": "Прочитать релиз проекта",
+        "description": "Прочитать релиз проекта только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.release.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "version",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 128
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.alert.list",
+        "name": "Прочитать оповещения проекта",
+        "description": "Прочитать оповещения проекта только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.alert.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "cursor",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": false,
+            "maximumLength": 128
+          },
+          {
+            "key": "limit",
+            "type": "INTEGER",
+            "required": false,
+            "minimum": 1,
+            "maximum": 50
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "sentry.alert.read",
+        "name": "Прочитать оповещение проекта",
+        "description": "Прочитать оповещение проекта только в выбранном проекте и закреплённом API profile Sentry26.10.1.",
+        "operation": "sentry.alert.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_slug",
+            "project_slug"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "alert_id",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 32
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 32768
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

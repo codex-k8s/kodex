@@ -325,6 +325,11 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return errors.New("integration configuration required field is missing")
 		}
 	}
+	if definition.Spec.Adapter == string(AdapterSentry) {
+		if err := validateSentryConfiguration(definition, configuration); err != nil {
+			return err
+		}
+	}
 	if definition.Metadata.Key == "jira-server-dc" {
 		if _, err := ParseJiraCreateFields(configuration["issue_create_fields"]); err != nil {
 			return err

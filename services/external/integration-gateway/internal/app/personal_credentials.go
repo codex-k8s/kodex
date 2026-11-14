@@ -76,6 +76,10 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 	}
 	profiles := make([]cp.PersonalIntegrationCredentialObservationProfile, 0, len(observation.ObservedPermissionProfiles))
 	for _, profile := range observation.ObservedPermissionProfiles {
+		if profile == integrationpackage.CredentialObservationSentryScopesV1 {
+			profiles = append(profiles, cp.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1)
+			continue
+		}
 		if profile != integrationpackage.CredentialObservationGitLabProjectWriteScopeV1 {
 			return 1, errors.New("personal credential observation profile is invalid")
 		}

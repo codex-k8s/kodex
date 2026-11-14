@@ -172,6 +172,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 			continue
 		}
+		if definition.Spec.Adapter == "SENTRY" {
+			t.Run(key, func(t *testing.T) { testSentryCapabilities(t, key) })
+			continue
+		}
 		if key == jiraServerDefinition || key == confluenceServerDefinition {
 			t.Run(key, func(t *testing.T) { testAtlassianServerCapabilities(t, key) })
 			continue

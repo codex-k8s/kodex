@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -994,6 +995,9 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		value := controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_UNSPECIFIED
 		if profile == "GITLAB_PROJECT_WRITE_SCOPE_V1" {
 			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1
+		}
+		if profile == integrationpackage.CredentialObservationSentryScopesV1 {
+			value = controlplanev1.PersonalIntegrationCredentialObservationProfile_PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1
 		}
 		claim.PersonalObservationProfiles = append(claim.PersonalObservationProfiles, value)
 	}

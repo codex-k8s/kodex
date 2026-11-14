@@ -54,6 +54,7 @@
             "OPENAPI_MCP",
             "MATTERMOST_INTERACTION",
             "CONTEXT7",
+            "SENTRY",
             "SSH_COMPOSE"
           ]
         },

@@ -4901,6 +4901,8 @@ message PreviewScheduleResponse {
 enum PersonalIntegrationCredentialObservationProfile {
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_UNSPECIFIED = 0;
   PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_GITLAB_PROJECT_WRITE_SCOPE_V1 = 1;
+  // Собственные scopes токена Sentry; не права на конкретную ошибку.
+  PERSONAL_INTEGRATION_CREDENTIAL_OBSERVATION_PROFILE_SENTRY_TOKEN_SCOPES_V1 = 2;
 }
 message IntegrationConnectionTestClaim {
   string test_ref = 1;
@@ -4985,6 +4987,16 @@ enum IntegrationCredentialResourcePermissionProfile {
   // Fresh scoped object/token checks; health подтверждает только identity, не global WRITE.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITLAB_SCOPED_RESOURCE_V2 = 11;
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GITHUB_SCOPED_RESOURCE_V1 = 12;
+  // Точный Sentry GET проверяет объект выбранного проекта без глобального READ proof.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_PROJECT_OBJECT_READ_V1 = 13;
+  // Текущие token scopes и принадлежность ошибки проверяются перед единственным PUT.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ISSUE_STATUS_WRITE_V1 = 14;
+  // Текущие scope и project/issue boundary перед comment/assignment mutation; не общее разрешение записи.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_PROJECT_MUTATION_V1 = 15;
+  // Чтение общей организации допускается только отдельным явным connection/grant.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_OBJECT_READ_V1 = 16;
+  // Общие release/workflow изменяются только full-organization grant и отдельным EACH решением.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_MUTATION_V1 = 17;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;

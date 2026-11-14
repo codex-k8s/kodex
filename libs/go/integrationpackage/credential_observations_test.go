@@ -6,9 +6,9 @@ import (
 )
 
 // TestCredentialObservationRequests pins requests to the closed executable package tuples and
-// checks non-aliasing. Non-GitLab and modified write contracts must never request metadata rights.
+// checks non-aliasing. Unregistered and modified write contracts must never request metadata rights.
 // TestCredentialObservationRequests закрепляет requests за closed executable package tuples и
-// проверяет отсутствие aliasing. Не-GitLab и изменённые write contracts не запрашивают metadata rights.
+// проверяет отсутствие aliasing. Незарегистрированные и изменённые write contracts не запрашивают metadata rights.
 func TestCredentialObservationRequests(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -19,6 +19,18 @@ func TestCredentialObservationRequests(t *testing.T) {
 			definition = legacyGitLabPackage(t)
 		}
 		profiles, keys := CredentialObservationRequests(definition)
+		if key == "sentry" || key == "sentry-self-hosted" {
+			if !slices.Equal(profiles, []string{CredentialObservationSentryScopesV1}) || !slices.Equal(keys, []string{"sentry.issue.status.update", "sentry.issue.comment.create", "sentry.issue.assignment.update"}) {
+				t.Fatal("Sentry metadata request changed")
+			}
+			continue
+		}
+		if key == "sentry-organization" || key == "sentry-self-hosted-organization" {
+			if !slices.Equal(profiles, []string{CredentialObservationSentryScopesV1}) || !slices.Equal(keys, []string{"sentry.organization.release.create", "sentry.organization.release.update", "sentry.organization.alert.create", "sentry.organization.alert.update", "sentry.organization.alert.delete"}) {
+				t.Fatal("Sentry organization metadata request changed")
+			}
+			continue
+		}
 		if key != "gitlab" {
 			if len(profiles) != 0 || len(keys) != 0 {
 				t.Fatal("unregistered definition obtained observations")
