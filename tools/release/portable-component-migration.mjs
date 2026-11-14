@@ -306,7 +306,10 @@ export function componentServingReady(actual,pods,expectedReplicas) {
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expectedReplicas) && Array.isArray(pods) && expectedReplicas > 0 && pods.length === expectedReplicas &&
       pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
         Object.entries(actual.spec.template.spec).every(([key,value])=>Object.hasOwn(p.spec??{},key)&&fingerprint(p.spec[key])===fingerprint(value))&&
-        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key))&&
+        // Kubernetes defaulting добавляет enableServiceLinks=true именно Pod,
+        // а не PodTemplate. Явное значение template сравнивается выше без исключений.
+        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key)||
+          key==='enableServiceLinks'&&p.spec[key]===true)&&
         ['containers','initContainers','ephemeralContainers'].every(field => {
           const expected=actual.spec.template.spec[field] ?? [], observed=p.spec?.[field] ?? [];
           const statusField={containers:'containerStatuses',initContainers:'initContainerStatuses',ephemeralContainers:'ephemeralContainerStatuses'}[field];
