@@ -180,6 +180,7 @@ func ControlAPIGatewayOperations() map[string]string {
 		"platform.query.schedule-runs.list":                                 controlplanev1.PlatformQueryService_ListScheduleRuns_FullMethodName,
 		"platform.query.schedules.preview":                                  controlplanev1.PlatformQueryService_PreviewSchedule_FullMethodName,
 		"platform.query.provider-definitions.list":                          controlplanev1.PlatformQueryService_ListProviderDefinitions_FullMethodName,
+		"platform.query.model-discovery.list":                               controlplanev1.PlatformQueryService_ListModelDiscovery_FullMethodName,
 		"platform.query.models.list":                                        controlplanev1.PlatformQueryService_ListModelCapabilities_FullMethodName,
 		"platform.query.provider-accounts.list":                             controlplanev1.PlatformQueryService_ListProviderAccounts_FullMethodName,
 		"platform.query.provider-accounts.get":                              controlplanev1.PlatformQueryService_GetProviderAccount_FullMethodName,

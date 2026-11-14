@@ -1,0 +1,16 @@
+{
+  "license": "MIT",
+  "model_count": 9726,
+  "projection_schema": "urn:kodex:contract:model-provider-discovery:v1",
+  "projection_schema_sha256": "a910f874ca70d4573a00fe456f8c3c8539392bfe6cdbf0dcfd002662e1ab81ba",
+  "retrieved_at": "2026-11-14T04:03:01.859067Z",
+  "schema": "kodex.model-provider-discovery/v1",
+  "schema_sha256": "311d8d6fd567011417344ca66ea0e823564044673acdc16702070025e442deb5",
+  "snapshot_sha256": "53a8131b3ad1c26ba068156b759c844501d996668554bcbc8613e9190afddf99",
+  "source": "models.dev",
+  "source_revision": "a5458bdc8326d995619413b54425db97e911f4d4",
+  "source_url": "https://models.dev/_experimental_v2.0_api.json",
+  "upstream_schema": "models.dev/experimental-v2.0",
+  "upstream_schema_validation": "NOT_PERFORMED",
+  "upstream_sha256": "408e76fe27e67dfde4ea7462da1a0144ddf22488d48489dfe4ee17e677c63ef3"
+}

@@ -106,6 +106,8 @@ service PlatformQueryService {
   rpc ListRuntimeEnvironmentAgents(ListRuntimeEnvironmentAgentsRequest) returns (ListRuntimeEnvironmentAgentsResponse);
   rpc ListTemplateVariables(ListTemplateVariablesRequest) returns (ListTemplateVariablesResponse);
   rpc ListProviderDefinitions(ListProviderDefinitionsRequest) returns (ListProviderDefinitionsResponse);
+  // Справочный каталог не разрешает запуск модели и не читает credentials.
+  rpc ListModelDiscovery(ListModelDiscoveryRequest) returns (ListModelDiscoveryResponse);
   rpc ListModelCapabilities(ListModelCapabilitiesRequest) returns (ListModelCapabilitiesResponse);
   rpc ListRoleImageRecipeRevisions(ListRoleImageRecipeRevisionsRequest) returns (ListRoleImageRecipeRevisionsResponse);
   rpc ValidatePromptTemplate(ValidatePromptTemplateRequest) returns (ValidatePromptTemplateResponse);
@@ -9748,40 +9750,44 @@ message IntegrationCredentialPreflightDetail {
 
 // Собственное согласование не содержит credential либо перенесённый worker grant.
 message IntegrationApprovalConsent {
- string ref = 1;
- int64 version = 2;
- string connection_ref = 3;
- string connection_name = 4;
- string capability_key = 5;
- string agent_ref = 6;
- string root_run_ref = 7;
- IntegrationApprovalScopeLifetime lifetime = 8;
- IntegrationApprovalConsentState state = 9;
- repeated string scope_paths = 10;
- string scope_values_json = 11;
- int64 max_effects = 12;
- int64 reserved_effects = 13;
- google.protobuf.Timestamp created_at = 14;
- google.protobuf.Timestamp expires_at = 15;
- google.protobuf.Timestamp revoked_at = 16;
+  string ref = 1;
+  int64 version = 2;
+  string connection_ref = 3;
+  string connection_name = 4;
+  string capability_key = 5;
+  string agent_ref = 6;
+  string root_run_ref = 7;
+  IntegrationApprovalScopeLifetime lifetime = 8;
+  IntegrationApprovalConsentState state = 9;
+  repeated string scope_paths = 10;
+  string scope_values_json = 11;
+  int64 max_effects = 12;
+  int64 reserved_effects = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp expires_at = 15;
+  google.protobuf.Timestamp revoked_at = 16;
 }
 enum IntegrationApprovalConsentState {
- INTEGRATION_APPROVAL_CONSENT_STATE_UNSPECIFIED = 0;
- INTEGRATION_APPROVAL_CONSENT_STATE_ACTIVE = 1;
- INTEGRATION_APPROVAL_CONSENT_STATE_EXPIRED = 2;
- INTEGRATION_APPROVAL_CONSENT_STATE_EXHAUSTED = 3;
- INTEGRATION_APPROVAL_CONSENT_STATE_REVOKED = 4;
+  INTEGRATION_APPROVAL_CONSENT_STATE_UNSPECIFIED = 0;
+  INTEGRATION_APPROVAL_CONSENT_STATE_ACTIVE = 1;
+  INTEGRATION_APPROVAL_CONSENT_STATE_EXPIRED = 2;
+  INTEGRATION_APPROVAL_CONSENT_STATE_EXHAUSTED = 3;
+  INTEGRATION_APPROVAL_CONSENT_STATE_REVOKED = 4;
 }
-message ListIntegrationApprovalConsentsRequest { PageRequest page = 1; }
+message ListIntegrationApprovalConsentsRequest {
+  PageRequest page = 1;
+}
 message ListIntegrationApprovalConsentsResponse {
- repeated IntegrationApprovalConsent consents = 1;
- PageInfo page = 2;
+  repeated IntegrationApprovalConsent consents = 1;
+  PageInfo page = 2;
 }
 message RevokeIntegrationApprovalConsentRequest {
- MutationContext mutation = 1;
- string consent_ref = 2;
+  MutationContext mutation = 1;
+  string consent_ref = 2;
 }
-message RevokeIntegrationApprovalConsentResponse { IntegrationApprovalConsent consent = 1; }
+message RevokeIntegrationApprovalConsentResponse {
+  IntegrationApprovalConsent consent = 1;
+}
 
 message NativeSessionCheckpoint {
   string session_id = 1;
@@ -9836,4 +9842,71 @@ message GitHubRepositoryDiscoveryPage {
  int32 page=3;
  int32 next_page=4;
  repeated GitHubDiscoveredRepository items=5;
+}
+
+// Закреплённые provenance и статусы поиска; не являются account observation.
+message ModelDiscoverySource {
+  string schema = 1;
+  string source = 2;
+  string license = 3;
+  string source_revision = 4;
+  string upstream_schema = 5;
+  string schema_sha256 = 6;
+  string upstream_sha256 = 7;
+  string snapshot_sha256 = 8;
+  string source_url = 9;
+  int32 model_count = 10;
+  string overlay_sha256 = 11;
+  string catalog_sha256 = 12;
+  string retrieved_at = 13;
+  string projection_schema = 14;
+  string projection_schema_sha256 = 15;
+  string upstream_schema_validation = 16;
+}
+message ModelDiscoveryModel {
+  string provider_id = 1;
+  string provider_name = 2;
+  string model_id = 3;
+  string name = 4;
+  string type = 5;
+  int64 context_tokens = 6;
+  int64 output_tokens = 7;
+  string tools = 8;
+  string reasoning = 9;
+  repeated string reasoning_efforts = 10;
+  repeated string input_modalities = 11;
+  repeated string output_modalities = 12;
+  string upstream_status = 13;
+  string known = 14;
+  string adapter = 15;
+  string account = 16;
+  string allowed = 17;
+  string tested = 18;
+  bool route_configured = 19;
+  string family = 20;
+  string cache = 21;
+  string cache_implicit = 22;
+  string cache_explicit = 23;
+  bool context_known = 24;
+  bool output_known = 25;
+}
+message ListModelDiscoveryRequest {
+  PageRequest page = 1;
+  string query = 2;
+  string provider_id = 3;
+  string family = 4;
+  int64 minimum_context_tokens = 5;
+  string input_modality = 6;
+  string output_modality = 7;
+  string tools = 8;
+  string reasoning = 9;
+  string cache = 10;
+  string group_by = 11;
+}
+message ListModelDiscoveryResponse {
+  repeated ModelDiscoveryModel models = 1;
+  PageInfo page = 2;
+  ModelDiscoverySource source = 3;
+  int64 total = 4;
+  string group_by = 5;
 }

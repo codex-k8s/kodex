@@ -1085,3 +1085,5 @@ MODEL_MEASUREMENT_RECORDED:
   other: Измерение модели сохранено
 INFERENCE_CACHE_POLICY_UNSUPPORTED:
   other: Маршрут модели не поддерживает обязательную политику кеша
+CONTEXT_WINDOW_IMAGE_UNSUPPORTED:
+  other: Выбранный образ не подтверждает поддержку бюджета контекста. Выберите новый проверенный RoleImage или наследуйте окно каталога.

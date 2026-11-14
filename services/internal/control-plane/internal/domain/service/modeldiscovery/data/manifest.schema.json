@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:contract:model-provider-discovery-manifest:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "source",
+    "license",
+    "source_revision",
+    "upstream_schema",
+    "schema_sha256",
+    "upstream_sha256",
+    "snapshot_sha256",
+    "source_url",
+    "retrieved_at",
+    "projection_schema",
+    "projection_schema_sha256",
+    "upstream_schema_validation",
+    "model_count"
+  ],
+  "properties": {
+    "schema": {
+      "const": "kodex.model-provider-discovery/v1"
+    },
+    "source": {
+      "const": "models.dev"
+    },
+    "license": {
+      "const": "MIT"
+    },
+    "source_revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "upstream_schema": {
+      "const": "models.dev/experimental-v2.0"
+    },
+    "schema_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "upstream_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "snapshot_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_url": {
+      "const": "https://models.dev/_experimental_v2.0_api.json"
+    },
+    "retrieved_at": {
+      "type": "string",
+      "format": "date-time",
+      "maxLength": 40
+    },
+    "projection_schema": {
+      "const": "urn:kodex:contract:model-provider-discovery:v1"
+    },
+    "projection_schema_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "upstream_schema_validation": {
+      "const": "NOT_PERFORMED"
+    },
+    "model_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50000
+    }
+  }
+}

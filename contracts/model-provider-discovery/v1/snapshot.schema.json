@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:contract:model-provider-discovery:v1",
+  "title": "Поисковая проекция models.dev; метаданные не разрешают исполнение",
+  "type": "array",
+  "maxItems": 50000,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "provider_id",
+      "provider_name",
+      "model_id",
+      "name",
+      "type",
+      "upstream_status",
+      "context_tokens",
+      "output_tokens",
+      "tools",
+      "reasoning",
+      "reasoning_efforts",
+      "input_modalities",
+      "output_modalities",
+      "apis",
+      "cache_implicit",
+      "cache_explicit",
+      "cache",
+      "family",
+      "context_known",
+      "output_known"
+    ],
+    "properties": {
+      "provider_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "provider_name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "model_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "type": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "upstream_status": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "context_tokens": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000000
+      },
+      "output_tokens": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000000
+      },
+      "tools": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "UNSUPPORTED",
+          "UNKNOWN"
+        ]
+      },
+      "reasoning": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "UNSUPPORTED",
+          "UNKNOWN"
+        ]
+      },
+      "reasoning_efforts": {
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[^\u0000-\u001f]*$"
+        },
+        "uniqueItems": true
+      },
+      "input_modalities": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\u0000-\u001f]*$"
+        },
+        "uniqueItems": true
+      },
+      "output_modalities": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\u0000-\u001f]*$"
+        },
+        "uniqueItems": true
+      },
+      "apis": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocol",
+            "base_url",
+            "sdk"
+          ],
+          "properties": {
+            "protocol": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\u0000-\u001f]*$"
+            },
+            "base_url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[^\u0000-\u001f]*$"
+            },
+            "sdk": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "pattern": "^[^\u0000-\u001f]*$"
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\u0000-\u001f]*$"
+            }
+          }
+        }
+      },
+      "cache_implicit": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "UNSUPPORTED",
+          "UNKNOWN"
+        ]
+      },
+      "cache_explicit": {
+        "type": "string",
+        "enum": [
+          "SUPPORTED",
+          "UNSUPPORTED",
+          "UNKNOWN"
+        ]
+      },
+      "cache": {
+        "type": "string",
+        "enum": [
+          "NONE",
+          "IMPLICIT",
+          "EXPLICIT",
+          "BOTH",
+          "UNKNOWN"
+        ]
+      },
+      "family": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[^\u0000-\u001f]*$"
+      },
+      "context_known": {
+        "type": "boolean"
+      },
+      "output_known": {
+        "type": "boolean"
+      }
+    }
+  }
+}

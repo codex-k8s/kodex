@@ -2239,6 +2239,61 @@ export type ModelExecutionPolicy = {
     eligible: boolean;
 };
 
+export type ModelDiscoverySource = {
+    schema: 'kodex.model-provider-discovery/v1';
+    source: 'models.dev';
+    license: 'MIT';
+    sourceRevision: string;
+    upstreamSchema: 'models.dev/experimental-v2.0';
+    schemaSha256: string;
+    upstreamSha256: string;
+    snapshotSha256: string;
+    sourceUrl: 'https://models.dev/_experimental_v2.0_api.json';
+    modelCount: number;
+    overlaySha256: string;
+    catalogSha256: string;
+    retrievedAt: string;
+    projectionSchema: 'urn:kodex:contract:model-provider-discovery:v1';
+    projectionSchemaSha256: string;
+    upstreamSchemaValidation: 'NOT_PERFORMED';
+};
+
+export type ModelDiscoveryModel = {
+    providerId: string;
+    providerName: string;
+    modelId: string;
+    name: string;
+    type: string;
+    contextTokens: string;
+    outputTokens: string;
+    tools: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    reasoning: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    reasoningEfforts: Array<string>;
+    inputModalities: Array<string>;
+    outputModalities: Array<string>;
+    upstreamStatus: string;
+    known: 'KNOWN' | 'CUSTOM' | 'REMOVED';
+    adapter: 'BUNDLED' | 'UNSUPPORTED' | 'UNKNOWN';
+    account: 'AVAILABLE' | 'UNAVAILABLE' | 'UNKNOWN';
+    allowed: 'UNKNOWN' | 'UNAVAILABLE';
+    tested: 'NOT_RUN';
+    routeConfigured: boolean;
+    family: string;
+    cache: 'NONE' | 'IMPLICIT' | 'EXPLICIT' | 'BOTH' | 'UNKNOWN';
+    cacheImplicit: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    cacheExplicit: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    contextKnown: boolean;
+    outputKnown: boolean;
+};
+
+export type ModelDiscoveryPage = {
+    items: Array<ModelDiscoveryModel>;
+    nextPageToken: string;
+    source: ModelDiscoverySource;
+    total: string;
+    groupBy: 'PROVIDER' | 'FAMILY';
+};
+
 export type ProviderDefinitionPage = {
     items: Array<ProviderDefinition>;
     nextPageToken: string;
@@ -7550,6 +7605,44 @@ export type ListProviderDefinitionsResponses = {
 };
 
 export type ListProviderDefinitionsResponse = ListProviderDefinitionsResponses[keyof ListProviderDefinitionsResponses];
+
+export type ListModelDiscoveryData = {
+    body?: never;
+    path?: never;
+    query?: {
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+        providerId?: string;
+        family?: string;
+        minimumContextTokens?: number;
+        inputModality?: string;
+        outputModality?: string;
+        tools?: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+        reasoning?: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+        cache?: 'NONE' | 'IMPLICIT' | 'EXPLICIT' | 'BOTH' | 'UNKNOWN';
+        groupBy?: 'PROVIDER' | 'FAMILY';
+    };
+    url: '/api/v1/model-discovery';
+};
+
+export type ListModelDiscoveryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListModelDiscoveryError = ListModelDiscoveryErrors[keyof ListModelDiscoveryErrors];
+
+export type ListModelDiscoveryResponses = {
+    /**
+     * Страница справочного каталога с независимыми статусами
+     */
+    200: ModelDiscoveryPage;
+};
+
+export type ListModelDiscoveryResponse = ListModelDiscoveryResponses[keyof ListModelDiscoveryResponses];
 
 export type ListModelCapabilitiesData = {
     body?: never;

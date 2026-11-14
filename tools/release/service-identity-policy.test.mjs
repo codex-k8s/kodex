@@ -61,8 +61,8 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(source.policy_revision,105);
-  assert.equal(policy.bindings.length,450);
+  assert.equal(source.policy_revision,106);
+  assert.equal(policy.bindings.length,451);
   for (const [operation, method, caller] of [
     ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
     ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
@@ -85,7 +85,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,334);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,335);
   assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,116);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
@@ -194,4 +194,23 @@ test("проверка API-подключения сохраняет USER/OCC/id
     mutate(changed.policy.operation_bindings.find(value=>value.operation_id===operation));
     assert.throws(()=>buildServicePolicy(changed,classification),/classification drift/);
   }
+});
+
+test("каталог моделей сохраняет exact gateway mapping и обязательную пользовательскую authority", () => {
+ const operation="platform.query.model-discovery.list";
+ const originals=source.policy.operation_bindings.filter(binding=>binding.operation_id===operation);
+ assert.equal(originals.length,1);
+ const original=originals[0];
+ assert.equal(original.authority_proof_producer_id,"control-plane.oidc");
+ assert.deepEqual(original.authority_sources,["OIDC_SESSION","DOMAIN_STATE"]);
+ assert.deepEqual(original.request_profile,{mode:"UNARY_PROTO_SHA256",resource:"FORBIDDEN",version:"FORBIDDEN",attempt:"FORBIDDEN",idempotency:"FORBIDDEN"});
+ const expected={caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",full_method:"/controlplane.v1.PlatformQueryService/ListModelDiscovery",operation_id:operation,permission:operation,actor_mode:"USER_CREDENTIAL_REQUIRED",project_required:false};
+ const compiled=buildServicePolicy(source,classification).bindings.filter(binding=>binding.operation_id===operation);
+ assert.deepEqual(compiled,[expected]);
+ const generated=JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-policy.json",import.meta.url),"utf8"));
+ assert.deepEqual(generated.bindings.filter(binding=>binding.operation_id===operation),compiled);
+ for(const mutate of [binding=>binding.caller_spiffe_id="spiffe://kodex.local/ns/kodex-system/sa/agent-runner",binding=>binding.full_method="/controlplane.v1.PlatformQueryService/ListModels",binding=>binding.permission="organization.view",binding=>binding.request_profile.resource="REQUIRED"]) {
+  const changed=structuredClone(source);mutate(changed.policy.operation_bindings.find(binding=>binding.operation_id===operation));
+  assert.throws(()=>buildServicePolicy(changed,classification),/service operation classification drift/);
+ }
 });

@@ -101,6 +101,7 @@ const (
 	PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentAgents"
 	PlatformQueryService_ListTemplateVariables_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
 	PlatformQueryService_ListProviderDefinitions_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListProviderDefinitions"
+	PlatformQueryService_ListModelDiscovery_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListModelDiscovery"
 	PlatformQueryService_ListModelCapabilities_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListModelCapabilities"
 	PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListRoleImageRecipeRevisions"
 	PlatformQueryService_ValidatePromptTemplate_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
@@ -212,6 +213,8 @@ type PlatformQueryServiceClient interface {
 	ListRuntimeEnvironmentAgents(ctx context.Context, in *ListRuntimeEnvironmentAgentsRequest, opts ...grpc.CallOption) (*ListRuntimeEnvironmentAgentsResponse, error)
 	ListTemplateVariables(ctx context.Context, in *ListTemplateVariablesRequest, opts ...grpc.CallOption) (*ListTemplateVariablesResponse, error)
 	ListProviderDefinitions(ctx context.Context, in *ListProviderDefinitionsRequest, opts ...grpc.CallOption) (*ListProviderDefinitionsResponse, error)
+	// Справочный каталог не разрешает запуск модели и не читает credentials.
+	ListModelDiscovery(ctx context.Context, in *ListModelDiscoveryRequest, opts ...grpc.CallOption) (*ListModelDiscoveryResponse, error)
 	ListModelCapabilities(ctx context.Context, in *ListModelCapabilitiesRequest, opts ...grpc.CallOption) (*ListModelCapabilitiesResponse, error)
 	ListRoleImageRecipeRevisions(ctx context.Context, in *ListRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListRoleImageRecipeRevisionsResponse, error)
 	ValidatePromptTemplate(ctx context.Context, in *ValidatePromptTemplateRequest, opts ...grpc.CallOption) (*ValidatePromptTemplateResponse, error)
@@ -1061,6 +1064,16 @@ func (c *platformQueryServiceClient) ListProviderDefinitions(ctx context.Context
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) ListModelDiscovery(ctx context.Context, in *ListModelDiscoveryRequest, opts ...grpc.CallOption) (*ListModelDiscoveryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListModelDiscoveryResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListModelDiscovery_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) ListModelCapabilities(ctx context.Context, in *ListModelCapabilitiesRequest, opts ...grpc.CallOption) (*ListModelCapabilitiesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListModelCapabilitiesResponse)
@@ -1341,6 +1354,8 @@ type PlatformQueryServiceServer interface {
 	ListRuntimeEnvironmentAgents(context.Context, *ListRuntimeEnvironmentAgentsRequest) (*ListRuntimeEnvironmentAgentsResponse, error)
 	ListTemplateVariables(context.Context, *ListTemplateVariablesRequest) (*ListTemplateVariablesResponse, error)
 	ListProviderDefinitions(context.Context, *ListProviderDefinitionsRequest) (*ListProviderDefinitionsResponse, error)
+	// Справочный каталог не разрешает запуск модели и не читает credentials.
+	ListModelDiscovery(context.Context, *ListModelDiscoveryRequest) (*ListModelDiscoveryResponse, error)
 	ListModelCapabilities(context.Context, *ListModelCapabilitiesRequest) (*ListModelCapabilitiesResponse, error)
 	ListRoleImageRecipeRevisions(context.Context, *ListRoleImageRecipeRevisionsRequest) (*ListRoleImageRecipeRevisionsResponse, error)
 	ValidatePromptTemplate(context.Context, *ValidatePromptTemplateRequest) (*ValidatePromptTemplateResponse, error)
@@ -1615,6 +1630,9 @@ func (UnimplementedPlatformQueryServiceServer) ListTemplateVariables(context.Con
 }
 func (UnimplementedPlatformQueryServiceServer) ListProviderDefinitions(context.Context, *ListProviderDefinitionsRequest) (*ListProviderDefinitionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListProviderDefinitions not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListModelDiscovery(context.Context, *ListModelDiscoveryRequest) (*ListModelDiscoveryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListModelDiscovery not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) ListModelCapabilities(context.Context, *ListModelCapabilitiesRequest) (*ListModelCapabilitiesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListModelCapabilities not implemented")
@@ -3170,6 +3188,24 @@ func _PlatformQueryService_ListProviderDefinitions_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_ListModelDiscovery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListModelDiscoveryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListModelDiscovery(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListModelDiscovery_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListModelDiscovery(ctx, req.(*ListModelDiscoveryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_ListModelCapabilities_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListModelCapabilitiesRequest)
 	if err := dec(in); err != nil {
@@ -3846,6 +3882,10 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListProviderDefinitions",
 			Handler:    _PlatformQueryService_ListProviderDefinitions_Handler,
+		},
+		{
+			MethodName: "ListModelDiscovery",
+			Handler:    _PlatformQueryService_ListModelDiscovery_Handler,
 		},
 		{
 			MethodName: "ListModelCapabilities",
