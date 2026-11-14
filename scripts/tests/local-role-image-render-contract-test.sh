@@ -660,11 +660,18 @@ from pathlib import Path
 for path in sys.argv[1:]:
     raw = Path(path).read_text()
     hosts = set(re.findall(r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.invalid\b', raw))
-    assert hosts <= {'gateway.example.invalid'}, 'unresolved synthetic render hostname'
+    assert hosts <= {'gateway.example.invalid', 'second.example.invalid'}, 'unresolved synthetic render hostname'
 resources = list(filter(None, yaml.safe_load_all(Path(sys.argv[1]).read_text())))
 providers = [r for r in resources if r['kind'] == 'ConfigMap' and r['metadata']['name'].startswith('kodex-model-provider-')]
 assert len(providers) == 1
-assert json.loads(providers[0]['data']['provider.json'])['base_url'] == 'https://gateway.example.invalid/v1'
+catalog = json.loads(providers[0]['data']['provider.json'])
+assert catalog['schema'] == 'kodex.model-provider-catalog/v1'
+assert catalog['default_provider'] == 'opencode-test-gateway'
+assert catalog['default_model'] == 'vendor/model-v1'
+assert {p['provider_id']: p['base_url'] for p in catalog['providers']} == {
+    'test-gateway': 'https://gateway.example.invalid/v1',
+    'second-gateway': 'https://second.example.invalid/v1',
+}
 for r in resources:
     if r['kind'] in ('Deployment', 'StatefulSet', 'Job'):
         pod = r['spec']['template']['spec']
