@@ -15,8 +15,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// TestRepositoryBundleRPCWireContract pins the pre-fix d580 field numbers, kinds, JSON names, cardinality and presence for every method while requiring method-owned message names and unchanged gRPC paths. Message identifiers may change; wire payloads and authority methods may not.
-// TestRepositoryBundleRPCWireContract закрепляет номера, типы, JSON names, cardinality и presence всех полей до исправления d580 при отдельных message names каждого метода и неизменных gRPC paths. Имена типов меняются, wire payload и authority methods — нет.
+// TestRepositoryBundleRPCWireContract pins legacy field numbers, kinds, JSON names, cardinality and presence plus the explicitly additive scoped repository locator while requiring method-owned message names and unchanged gRPC paths. Existing fields and authority methods cannot be changed.
+// TestRepositoryBundleRPCWireContract закрепляет прежние номера, типы, JSON names, cardinality и presence вместе с явно additive repository locator при отдельных message names каждого метода и неизменных gRPC paths. Прежние поля и authority methods не меняются.
 func TestRepositoryBundleRPCWireContract(t *testing.T) {
 	service := cp.File_controlplane_v1_repository_bundle_proto.Services().ByName("RepositoryBundlePublicationService")
 	if service == nil || service.FullName() != "controlplane.v1.RepositoryBundlePublicationService" || service.Methods().Len() != 8 {
@@ -33,7 +33,7 @@ func TestRepositoryBundleRPCWireContract(t *testing.T) {
 		"ReadRepositoryBundlePublication":     cp.RepositoryBundlePublicationService_ReadRepositoryBundlePublication_FullMethodName,
 	}
 	for _, fixture := range []struct{ name, request, response string }{
-		{"PrepareRepositoryBundlePublication", "lease_ref=1:leaseRef:string:false:false|fence=2:fence:string:false:false|generation=3:generation:int64:false:false|grant_ref=4:grantRef:string:false:false|archive=5:archive:controlplane.v1.RepositoryBundleArtifactPin:false:true|manifest=6:manifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|base_commit_sha=7:baseCommitSha:string:false:false|idempotency_key=8:idempotencyKey:string:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true|rejoin=2:rejoin:controlplane.v1.RepositoryBundlePublicationRejoin:false:true"},
+		{"PrepareRepositoryBundlePublication", "lease_ref=1:leaseRef:string:false:false|fence=2:fence:string:false:false|generation=3:generation:int64:false:false|grant_ref=4:grantRef:string:false:false|archive=5:archive:controlplane.v1.RepositoryBundleArtifactPin:false:true|manifest=6:manifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|base_commit_sha=7:baseCommitSha:string:false:false|idempotency_key=8:idempotencyKey:string:false:false|repository_id=9:repositoryId:int64:false:false|repository_full_name=10:repositoryFullName:string:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true|rejoin=2:rejoin:controlplane.v1.RepositoryBundlePublicationRejoin:false:true"},
 		{"GetRepositoryBundlePublication", "proposal_ref=1:proposalRef:string:false:false|gate_ref=2:gateRef:string:false:false|expected_version=3:expectedVersion:int64:false:false|expected_manifest_sha256=4:expectedManifestSha256:string:false:false|offset=5:offset:int32:false:false|limit=6:limit:int32:false:false", "proposal=1:proposal:controlplane.v1.RepositoryBundlePublication:false:true|files=2:files:controlplane.v1.RepositoryBundleFile:true:false|offset=3:offset:int32:false:false|next_offset=4:nextOffset:int32:false:false|complete=5:complete:bool:false:false"},
 		{"ClaimRepositoryBundlePublications", "claimant=1:claimant:string:false:false|limit=2:limit:int32:false:false", "work=1:work:controlplane.v1.RepositoryBundlePublicationWork:true:false"},
 		{"RenewRepositoryBundlePublication", "lease=1:lease:controlplane.v1.RepositoryBundleLease:false:true", "lease=1:lease:controlplane.v1.RepositoryBundleLease:false:true"},
@@ -118,5 +118,38 @@ func TestRepositoryBundleRejoinPresenceCompatibility(t *testing.T) {
 	}
 	if repositoryBundleWireFields(response.Rejoin.ProtoReflect().Descriptor()) != "schema=1:schema:string:false:false|mode=2:mode:string:false:false|current_run_ref=3:currentRunRef:string:false:false|current_node_ref=4:currentNodeRef:string:false:false|current_runtime_revision_ref=5:currentRuntimeRevisionRef:string:false:false|current_lease_ref=6:currentLeaseRef:string:false:false|current_generation=7:currentGeneration:int64:false:false|current_runtime_attempt=8:currentRuntimeAttempt:int32:false:false|business_attempt=9:businessAttempt:int32:false:false|current_session_ref=10:currentSessionRef:string:false:false|current_turn_ref=11:currentTurnRef:string:false:false|connection_version=12:connectionVersion:int64:false:false|semantic_digest=13:semanticDigest:string:false:false|receipt_ref=14:receiptRef:string:false:false|receipt_digest=15:receiptDigest:string:false:false|current_archive=16:currentArchive:controlplane.v1.RepositoryBundleArtifactPin:false:true|current_manifest=17:currentManifest:controlplane.v1.RepositoryBundleArtifactPin:false:true|result_key=18:resultKey:string:false:false" {
 		t.Fatal("typed rejoin wire contract changed")
+	}
+}
+
+// TestRepositoryBundleScopedLocatorCompatibility proves absent selectors preserve legacy bytes and typed selectors survive binary and JSON transport without changing prior fields.
+// TestRepositoryBundleScopedLocatorCompatibility доказывает прежние bytes при отсутствии selectors и точную передачу typed selectors через binary/JSON без изменения прежних полей.
+func TestRepositoryBundleScopedLocatorCompatibility(t *testing.T) {
+	request := &cp.PrepareRepositoryBundlePublicationRequest{LeaseRef: "lease_original", IdempotencyKey: "idem_original"}
+	legacy := protowire.AppendString(protowire.AppendTag(nil, 1, protowire.BytesType), request.LeaseRef)
+	legacy = protowire.AppendString(protowire.AppendTag(legacy, 8, protowire.BytesType), request.IdempotencyKey)
+	actual, err := proto.Marshal(request)
+	if err != nil || !bytes.Equal(actual, legacy) {
+		t.Fatal("absent repository locator changed legacy request bytes")
+	}
+	request.RepositoryId = 9007199254740991
+	request.RepositoryFullName = "Canonical/Repository"
+	scoped, err := proto.Marshal(request)
+	if err != nil || !bytes.HasPrefix(scoped, legacy) {
+		t.Fatal("additive repository locator changed legacy request prefix")
+	}
+	decoded := &cp.PrepareRepositoryBundlePublicationRequest{}
+	if proto.Unmarshal(scoped, decoded) != nil || !proto.Equal(request, decoded) {
+		t.Fatal("repository locator lost exact binary coordinates")
+	}
+	encoded, err := protojson.Marshal(request)
+	var projection map[string]any
+	if err != nil || json.Unmarshal(encoded, &projection) != nil || projection["repositoryId"] != "9007199254740991" || projection["repositoryFullName"] != "Canonical/Repository" {
+		t.Fatal("repository locator lost exact JSON coordinates")
+	}
+	proposal := &cp.RepositoryBundlePublication{RepositoryId: request.RepositoryId, RepositoryFullName: request.RepositoryFullName}
+	fields := proposal.ProtoReflect().Descriptor().Fields()
+	id, name := fields.ByNumber(30), fields.ByNumber(31)
+	if id == nil || name == nil || id.Name() != "repository_id" || id.Kind() != protoreflect.Int64Kind || name.Name() != "repository_full_name" || name.Kind() != protoreflect.StringKind {
+		t.Fatal("sealed proposal repository locator ABI changed")
 	}
 }
