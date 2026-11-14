@@ -41,7 +41,7 @@ function cliFixture(t,{revision='a'.repeat(40)}={}){
     if(argv[0]==='auth')return 'yes';
     if(argv[0]==='get'){
       const [,kind,name]=argv;
-      if(kind==='replicasets,pods,jobs')return '';
+      if(kind==='replicasets,pods,jobs')return state.servingMetadata??'';
       if(kind==='endpointslices')return JSON.stringify(state.slices);
       if(kind==='pods'){
         const selector=argv[argv.indexOf('-l')+1];
@@ -119,6 +119,30 @@ test('public portable status planner pins context/kubeconfig and uses only bound
   assert.equal(f.calls.filter(args=>args[0]==='create'&&args.includes('--dry-run=server')).length,1);
   assert.equal(f.calls.filter(args=>['patch','replace','delete'].includes(args[0])).length,0);
   assert.equal(f.calls.filter(args=>args[0]==='config').length,0);
+});
+
+test('default Kubernetes transport preserves trailing empty TSV owner and trims only scalar prerequisites',async t=>{
+  for(const malformed of [false,true]){
+    const f=cliFixture(t),admission=prepareAdmission(f),args=f.args();args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags);
+    f.state.servingMetadata=['Job','synthetic-retained-job',uid(900),'unrelated','kodex-system',''].join('\t')+'\n';
+    if(malformed)f.state.servingMetadata=f.state.servingMetadata.trim();
+    const io={inspectSource:f.io.inspectSource,execFileSync:(program,argv,options)=>{
+      const value=f.io.execFileSync(program,argv,options);
+      // Настоящий kubectl завершает scalar/JSON LF; TSV уже содержит необходимые delimiters.
+      return value&&!argv.includes('replicasets,pods,jobs')?value+'\n':value;
+    }};
+    if(malformed){await assert.rejects(rotationMain(args,io),/COMPONENT_MIGRATION_METADATA_INVALID/);assert.equal(f.effects.length,0);}
+    else{
+      await rotationMain(args,io);const plan=JSON.parse(readFileSync(f.output,'utf8'));
+      assert.equal(plan.action,'rotate');assert.ok(plan.maintenance.proof);assert.equal(f.effects.length,0);
+      assert.ok(f.calls.some(argv=>argv.includes('replicasets,pods,jobs')));
+      await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,
+        '--evidence',join(f.directory,'raw-authority.jsonl'),'--confirm','APPLY-PORTABLE-CATALOG-AUTHORITY'],io);
+      assert.equal(f.effects.filter(key=>key.startsWith('configmap/')).length,1);
+      assert.equal(f.effects.filter(key=>key.startsWith('deployment/')).length,1);
+      assert.equal(f.effects.filter(key=>key.startsWith('job/')).length,1);
+    }
+  }
 });
 
 test('public portable planner rejects changed installation/CP before dry-run and never falls back to ambient kubeconfig',async t=>{
