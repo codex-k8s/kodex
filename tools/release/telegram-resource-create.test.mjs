@@ -1,3 +1,5 @@
+import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
+import {telegramIntroductionResources} from './telegram-introduction-inventory.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {telegramCreateSourceFixture} from './fixtures/telegram-introduction-synthetic.mjs';
@@ -97,6 +99,7 @@ test('закрытые source objects/image/containers и service allocation н�
 const cli=fileURLToPath(new URL('./telegram-resource-create.mjs',import.meta.url));
 const backend=String.raw`#!${process.execPath}
 const fs=require('node:fs'),path=require('node:path'),args=process.argv.slice(2),base=path.join(__dirname,'..');
+const producerMetadata=require(${JSON.stringify(fileURLToPath(new URL('./fixtures/telegram-producer-metadata.cjs',import.meta.url)))});
 const statePath=path.join(base,'state.json'),state=JSON.parse(fs.readFileSync(statePath,'utf8'));
 const save=()=>fs.writeFileSync(statePath,JSON.stringify(state));
 const output=value=>process.stdout.write(JSON.stringify(value)+'\n');
@@ -117,7 +120,7 @@ if(command[0]==='get'&&command[1]==='namespace'){
 if(command[0]!=='-n'||command[1]!=='kodex-system')throw Error('foreign namespace');
 const call=command.slice(2);
 if(call[0]==='get'){
- if(call[1]==='replicasets,pods'){output({items:state.extra});process.exit(0);}
+ if(call[1]==='deployments,statefulsets,daemonsets,replicasets,replicationcontrollers,jobs,cronjobs,pods'){process.stdout.write(producerMetadata([...Object.values(state.stored),...state.extra],call[1]));process.exit(0);}
  if(call[1]==='configmap'&&call[2]==='kodex-installation-profile'){const value=state.observed.installation;if(state.targetDrift)value.metadata.uid='00000000-0000-4000-8000-000000009999';output(value);process.exit(0);}
  if(call[1]==='deployment'&&call[2]==='internal-rpc-authority-publisher'){output(state.observed.publisher);process.exit(0);}
  const resource=state.stored[call[1]+'/'+call[2]];if(resource)output(resource);else if(!call.includes('--ignore-not-found'))process.exit(1);process.exit(0);
@@ -128,6 +131,7 @@ if(call[0]==='create'){
  if(state.stored[key])throw Error('duplicate create');
  const value=structuredClone(request);Object.assign(value.metadata,{uid:'00000000-0000-4000-8000-'+String(100+state.effects).padStart(12,'0'),resourceVersion:'1',creationTimestamp:'2026-11-14T00:00:00Z'});
  if(value.kind==='Service')Object.assign(value.spec,{clusterIP:'10.43.1.2',clusterIPs:['10.43.1.2'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});
+ if(value.kind==='Deployment'){value.metadata.generation=1;value.status={observedGeneration:1,replicas:0};}
  if(!call.includes('--dry-run=server')){state.stored[key]=value;state.effects++;save();if(state.lostACK){process.stderr.write('PRIVATE_PROVIDER_OR_URL_MUST_NOT_ESCAPE');process.exit(1);}}
  output(value);process.exit(0);
 }
@@ -225,7 +229,7 @@ test('107 introduction связывает source/publication,10actualUID и dorm
    calls.push(args);assert.ok(args.includes('get'));assert.equal(args.includes('create'),false);
    const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
    if(kind==='namespace')return JSON.stringify(name==='kube-system'?{metadata:{uid:f.target.clusterUID}}:f.observe().namespace);
-   if(kind==='replicasets,pods')return JSON.stringify(f.inventory());
+   if(kind===telegramIntroductionResources)return producerMetadata(f.inventory().items,kind);
    if(kind==='configmap'&&name==='kodex-installation-profile')return JSON.stringify(f.observe().installation);
    if(kind==='deployment'&&name==='internal-rpc-authority-publisher')return JSON.stringify(f.observe().publisher);
    const value=[...f.stored.values()].find(r=>r.kind.toLowerCase()===kind&&r.metadata.name===name);return value?JSON.stringify(value):'';
@@ -244,4 +248,18 @@ test('107 introduction связывает source/publication,10actualUID и dorm
   publication.publicationPlan.namespaceUID=uid(999);await writeFile(publicationPath,JSON.stringify(publication)+'\n',{mode:0o600});
   await assert.rejects(read());assert.equal(f.state.effects,10);
  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test('real CLI metadata scan отказывает pending foreign builtin controller до plan/create без EEXIST false-pass',async()=>{
+ for(const kind of ['Deployment','StatefulSet','DaemonSet','ReplicationController','Job','CronJob']){
+  const f=await cliFixture();
+  try{
+   const template={metadata:{labels:{}},spec:{serviceAccountName:'foreign',volumes:[{name:'identity',secret:{secretName:'interaction-gateway-platform-worker-grant-signer'}}]}};
+   f.state.extra=[{kind,metadata:{name:'unrelated-controller',namespace:'kodex-system',uid:uid(990),generation:1},
+    spec:kind==='CronJob'?{jobTemplate:{spec:{template}}}:{replicas:0,template}}];await f.save();
+   const denied=f.run('plan');assert.equal(denied.status,1);assert.match(denied.output,/TELEGRAM_CREATE_ORPHAN_WORKLOAD_PRESENT/);
+   assert.equal(JSON.parse(await readFile(f.statePath,'utf8')).effects,0);
+   await assert.rejects(readFile(f.planPath),error=>error.code==='ENOENT');
+  }finally{await rm(f.directory,{recursive:true,force:true});}
+ }
 });

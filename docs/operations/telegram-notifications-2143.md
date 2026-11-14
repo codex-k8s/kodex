@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.8
+version: 1.0.9
 updated: 2026-11-14
 ---
 
@@ -215,6 +215,18 @@ writer, незавершённая interaction delivery блокирует schem
 Старый immutable ConfigMap не изменяется; отдельная ссылка участвует в новом
 Pod template полного cohort.
 
+Admission перед create и первым107 CAS сканирует все восемь встроенных
+Kubernetes producer kinds, включая controllers с ещё не созданным Pod. Только
+assigned Deployment0 и собственный ReplicaSet0 допускаются по exact UID и
+положительному observedGeneration. Чужие SA/template labels либо прямые refs десяти identity Secrets, даже у suspended
+CronJob либо нулевого ReplicationController, не дают право усыновить workload.
+Metadata-only TSV содержит только имена refs, не env/commands/Secret values; пустые trailing
+columns сохраняются. Негативные fixtures фильтруют именно запрошенные kinds,
+чтобы старый неполный scan не получил лишний ответ fake API.
+Проверены Context7 `/websites/kubernetes_io`,
+[Pod templates](https://kubernetes.io/docs/concepts/workloads/pods/) и
+[service account Pod template](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_set/kubectl_set_serviceaccount/).
+
 ## Порядок authority107
 
 `TELEGRAM_NOTIFICATIONS_106_107` — отдельный закрытый профиль. Его source
@@ -263,6 +275,13 @@ Terminal UNKNOWN с `completed_at` и всеми закрытыми lease fields
 произойти и изменение настройки не отменяет прежнюю отправку. Новый scope
 требует свежей проверки credentials и явного Configure; прежний source event
 не отправляется повторно, stale completion не превращает UNKNOWN в SUCCESS.
+
+`make test-telegram-deployment` — отдельный public real-CLI transport contour
+с бюджетом900 секунд: source-only Git checkout, настоящий creator journal,
+полный045→046 metadata proof, check/stop/join/DDL, адресные input effects,
+lost ACK, image/config cohort и повторный resume без второго DDL. Синтетические
+Kubernetes/PostgreSQL transports не заменяют native SQL либо installed proof;
+результат остаётся `PENDING_AUTHORITY` до107 owner acceptance.
 
 ## Квалификация
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {readTelegramIntroductionInventory,telegramIdentitySecretNames,telegramProducerSecretReferences} from './telegram-introduction-inventory.mjs';
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {constants,lstatSync,realpathSync,openSync,fsyncSync,closeSync} from 'node:fs';
@@ -69,6 +70,8 @@ export function telegramResourceCreateRequests(resources,target,createID,interac
    fail(item.spec?.replicas===3&&item.spec.template?.spec?.serviceAccountName==='interaction-gateway','TELEGRAM_CREATE_SOURCE_DEPLOYMENT_INVALID');
    item.spec.replicas=0;
    const spec=item.spec.template.spec,agents=[...(spec.containers??[]),...(spec.initContainers??[])];
+   const identityRefs=[...new Set(telegramProducerSecretReferences(spec).filter(name=>name.startsWith('internal-rpc-authority-interaction-gateway-')||name.startsWith('interaction-gateway-platform-worker-')))];
+   fail(same(identityRefs.sort(),[...telegramIdentitySecretNames].sort()),'TELEGRAM_CREATE_SOURCE_IDENTITY_SECRET_CLOSURE_INVALID');
    const expected=['interaction-gateway','internal-rpc-authority-issuer','internal-rpc-authority-socket-init','platform-worker-grant-agent'];
    fail(agents.length===expected.length&&same(agents.map(c=>c.name).sort(),[...expected].sort())&&!spec.ephemeralContainers?.length,
     'TELEGRAM_CREATE_SOURCE_CONTAINERS_INVALID');
@@ -114,9 +117,13 @@ export function requireTelegramDormantInventory(inventory,deploymentUID){
   const owned=uuid(deploymentUID)&&item.metadata?.ownerReferences?.some(o=>o.kind==='Deployment'&&o.controller===true&&o.uid===deploymentUID);
   const candidate=owned||item.metadata?.name==='interaction-gateway'||item.metadata?.name?.startsWith('interaction-gateway-')||
    item.metadata?.labels?.['app.kubernetes.io/name']==='interaction-gateway'||item.spec?.serviceAccountName==='interaction-gateway'||
-   item.spec?.template?.spec?.serviceAccountName==='interaction-gateway';
-  fail(!candidate||item.kind==='ReplicaSet'&&owned&&item.spec?.replicas===0&&(item.status?.replicas??0)===0&&
-   Number.isSafeInteger(item.metadata?.generation)&&item.status?.observedGeneration>=item.metadata.generation,'TELEGRAM_CREATE_ORPHAN_WORKLOAD_PRESENT');
+   item.spec?.template?.spec?.serviceAccountName==='interaction-gateway'||item.spec?.jobTemplate?.spec?.template?.spec?.serviceAccountName==='interaction-gateway'||
+   item.spec?.template?.metadata?.labels?.['app.kubernetes.io/name']==='interaction-gateway'||
+   item.spec?.jobTemplate?.spec?.template?.metadata?.labels?.['app.kubernetes.io/name']==='interaction-gateway'||
+   (item.secretRefs??telegramProducerSecretReferences(item.spec)).some(name=>telegramIdentitySecretNames.includes(name));
+  const assigned=uuid(deploymentUID)&&item.kind==='Deployment'&&item.metadata?.uid===deploymentUID;
+  fail(!candidate||(assigned||item.kind==='ReplicaSet'&&owned)&&item.spec?.replicas===0&&(item.status?.replicas??0)===0&&
+   Number.isSafeInteger(item.metadata?.generation)&&item.metadata.generation>0&&item.status?.observedGeneration>=item.metadata.generation,'TELEGRAM_CREATE_ORPHAN_WORKLOAD_PRESENT');
  }
 }
 
@@ -279,7 +286,7 @@ async function main(args){
   namespaceUID:ns.metadata.uid,namespace:ns,installation:get('configmap','kodex-installation-profile'),publisher:get('deployment','internal-rpc-authority-publisher')};};
  const resourceGet=request=>{const raw=kube(['-n',namespace,'get',request.kind.toLowerCase(),request.metadata.name,'--ignore-not-found','-o','json']);return raw.trim()===''?null:JSON.parse(raw);};
  const create=(request,dry=false)=>withPrivatePatchFile(request,path=>JSON.parse(kube(['-n',namespace,'create','--validate=strict',...(dry?['--dry-run=server']:[]),'-f',path,'-o','json'])));
- const inventory=()=>JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-o','json'],undefined,32<<20));
+ const inventory=()=>readTelegramIntroductionInventory(kube);
  const raw=kube(['kustomize','deploy/k8s/profiles/web-only'],undefined,32<<20);
  const resources=decodeTelegramResourceCreateSource(raw,run);
  let plan;

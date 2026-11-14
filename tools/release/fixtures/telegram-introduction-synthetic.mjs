@@ -1,3 +1,4 @@
+import {telegramIdentitySecretNames} from '../telegram-introduction-inventory.mjs';
 import {telegramResourceCreateKeys} from '../telegram-introduction-contract.mjs';
 const uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 
@@ -18,5 +19,6 @@ export function telegramCreateSourceFixture(){
  const metadata=name=>({name,namespace:'kodex-system',labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}});
  const resources=telegramResourceCreateKeys.map(identity=>{const [apiVersion,kind,name]=identity.split('|');return {apiVersion,kind,metadata:metadata(name),...(kind==='ConfigMap'?{data:{INTERACTION_GATEWAY_ALLOWED_HOSTS:''}}:kind==='ServiceAccount'?{}:{spec:{}})};});
  resources.find(r=>r.kind==='Deployment').spec={replicas:3,selector:{matchLabels:{'app.kubernetes.io/name':'interaction-gateway'}},template:{metadata:{labels:{'app.kubernetes.io/name':'interaction-gateway'}},spec:{serviceAccountName:'interaction-gateway',containers:[{name:'interaction-gateway'},{name:'internal-rpc-authority-issuer'},{name:'platform-worker-grant-agent'}],initContainers:[{name:'internal-rpc-authority-socket-init'}]}}};
+ resources.find(r=>r.kind==='Deployment').spec.template.spec.volumes=telegramIdentitySecretNames.map((secretName,index)=>({name:'identity-'+index,secret:{secretName}}));
  resources.find(r=>r.kind==='Service').spec={type:'ClusterIP',selector:{'app.kubernetes.io/name':'interaction-gateway'},ports:[{name:'metrics',port:9090,targetPort:'metrics',protocol:'TCP'}]};return resources;
 }

@@ -4,11 +4,21 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.87
+version: 1.1.88
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Допуск нового workload/issuer проверяет все встроенные producers namespace,
+включая pending Deployment/StatefulSet/DaemonSet/ReplicationController/Job/CronJob
+без созданного Pod. Проверяются SA, labels и Secret refs identity полного Pod template, включая
+вложенный CronJob jobTemplate. Имя или label selector не заменяет полный scan.
+Исключаются только assigned собственный Deployment0 и его ReplicaSet0 с exact
+UID, положительным observedGeneration и без Pods. Namespace metadata projection
+не читает env/commands/Secret values и сохраняет пустые TSV columns; неизвестная
+или повреждённая строка закрывает admission. Матрица:
+[ввод Telegram receiver](../operations/telegram-notifications-2143.md#порядок-authority107).
 
 Подтверждение тишины сканирует все встроенные Kubernetes workload producers,
 включая ReplicationController без ещё созданного Pod. Нулевой status replicas

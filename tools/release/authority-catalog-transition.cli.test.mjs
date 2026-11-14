@@ -1,3 +1,5 @@
+import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
+import {telegramIntroductionResources} from './telegram-introduction-inventory.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,copyFileSync} from 'node:fs';
@@ -58,6 +60,7 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false,authorityTr
     if(argv[0]==='get'){
       const [,kind,name]=argv;
       if(kind==='replicasets,pods,jobs')return state.servingMetadata??'';
+      if(kind===telegramIntroductionResources)return producerMetadata([...f.resources.values(),...(state.introduction?.inventory??[])],kind);
       if(kind==='replicasets,pods')return JSON.stringify({items:state.introduction?.inventory??[]});
       if(kind==='endpointslices')return JSON.stringify(state.slices);
       if(kind==='pods'){
@@ -246,7 +249,7 @@ async function prepareTelegramIntroduction(f){
   installationUID:f.installation.metadata.uid,installationSHA256:fingerprint(f.installation.data),publisherUID:f.publisher.metadata.uid,authorityImage:f.publisher.spec.template.spec.containers[0].image};
  const observe=()=>({context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,namespace:f.get('namespace','kodex-system'),installation:f.installation,publisher:f.publisher});
  const get=request=>f.get(request.kind.toLowerCase(),request.metadata.name)??null;
- const dryRun=request=>{const r=structuredClone(request);Object.assign(r.metadata,{uid:uid(200),resourceVersion:'1',generation:1});if(r.kind==='Service')Object.assign(r.spec,{clusterIP:'10.43.1.2',clusterIPs:['10.43.1.2'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});return r;};
+ const dryRun=request=>{const r=structuredClone(request);Object.assign(r.metadata,{uid:uid(200),resourceVersion:'1',generation:1});if(r.kind==='Service')Object.assign(r.spec,{clusterIP:'10.43.1.2',clusterIPs:['10.43.1.2'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});if(r.kind==='Deployment')r.status={observedGeneration:1,replicas:0};return r;};
  const interactionImage='registry.local.kodex/kodex/interaction-gateway@sha256:'+'d'.repeat(64);
  const plan=planTelegramResourceCreate({target,observed:observe(),resources,interactionImage,get,dryRun,inventory:()=>({items:[]}),planPath,evidencePath,createID:uid(190)});
  const journal={events:[{type:'HEADER',...telegramResourceCreateHeader(plan)}],append(e){this.events.push(e);}};

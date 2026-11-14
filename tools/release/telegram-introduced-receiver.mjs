@@ -1,3 +1,4 @@
+import {readTelegramIntroductionInventory} from './telegram-introduction-inventory.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import {resolve} from 'node:path';
 import {validatedStablePublication} from './stable-image-publication.mjs';
@@ -33,7 +34,7 @@ export async function readTelegramIntroducedReceiver({planPath,evidencePath,publ
    namespaceUID:ns.metadata.uid,namespace:ns,installation:get('configmap','kodex-installation-profile'),publisher:get('deployment','internal-rpc-authority-publisher')};
  };
  const result=await telegramResourceCreateStep({phase:'status',plan,journal:{events,append:()=>{}},observe,
-  inventory:()=>JSON.parse(kube(['-n',namespace,'get','replicasets,pods','-o','json'])),
+  inventory:()=>readTelegramIntroductionInventory(kube),
   get:request=>{const raw=kube(['-n',namespace,'get',request.kind.toLowerCase(),request.metadata.name,'--ignore-not-found','-o','json']);return raw.trim()?JSON.parse(raw):null;},
   dryRun:()=>{throw Error('TELEGRAM_INTRODUCTION_READ_ONLY_REQUIRED');},create:()=>{throw Error('TELEGRAM_INTRODUCTION_READ_ONLY_REQUIRED');}});
  fail(result.state==='CREATED_DORMANT'&&result.qualification==='NOT_ACTIVATED_NOT_INSTALLED','TELEGRAM_INTRODUCTION_DORMANT_REQUIRED');
