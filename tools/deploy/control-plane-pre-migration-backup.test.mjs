@@ -22,7 +22,7 @@ test("backup requires explicit kubeconfig and independently inventoried target U
 });
 
 // Настоящий CLI запускается с синтетическими внешними командами; живого кластера нет.
-for(const scenario of ["success","foreign-before","foreign-after","replacement"]){
+for(const scenario of ["success","foreign-before","foreign-after","replacement","backend-replacement"]){
  test(`backup CLI ${scenario} preserves explicit target and refuses uncertain source`,async()=>{
   const root=await mkdtemp(join(tmpdir(),"kodex-preimage-test-"));
   try{
@@ -31,8 +31,9 @@ for(const scenario of ["success","foreign-before","foreign-after","replacement"]
 const fs=require('node:fs');const args=process.argv.slice(2),log=${JSON.stringify(calls)};
 let previous=[];try{previous=fs.readFileSync(log,'utf8').trim().split('\\n').filter(Boolean).map(JSON.parse);}catch{}
 fs.appendFileSync(log,JSON.stringify(args)+'\\n');
-const pos=args.indexOf('get'),kind=args[pos+1],name=args[pos+2],after=previous.some(a=>a.includes('exec'));
-if(args.includes('exec')){process.stdout.write('PGDMP-synthetic-fixture');process.exit(0);}
+const pos=args.indexOf('get'),kind=args[pos+1],name=args[pos+2],after=previous.some(a=>a.includes('pg_dump'));
+if(args.includes('pg_dump')){process.stdout.write('PGDMP-synthetic-fixture');process.exit(0);}
+if(args.includes('psql')){process.stdout.write(JSON.stringify({systemIdentifier:after&&${JSON.stringify(scenario)}==='backend-replacement'?'999':'18446744073709551615',databaseOID:'456',database:'control_plane',port:'5432',serverAddress:null,serverPort:null}));process.exit(0);}
 let value;
 if(kind==='namespace')value={kind:'Namespace',metadata:{name,uid:name==='kube-system'?${JSON.stringify(clusterUID)}:${JSON.stringify(namespaceUID)}}};
 if(kind==='namespace' && name==='kube-system' && (${JSON.stringify(scenario)}==='foreign-before'||(${JSON.stringify(scenario)}==='foreign-after'&&after)))value.metadata.uid='foreign';
@@ -49,11 +50,16 @@ if(!value)process.exit(2);process.stdout.write(JSON.stringify(value));
    const invoked=(await readFile(calls,"utf8")).trim().split("\n").map(JSON.parse);
    assert.ok(invoked.every(args=>args[0]==="--kubeconfig"&&args[1]==="/synthetic/kubeconfig"&&args[2]==="--context"&&args[3]==="k3d-kodex"));
    assert.equal(invoked.some(args=>args.includes("exec")),scenario!=="foreign-before");
+   for(const args of invoked.filter(args=>args.includes("exec"))){
+    assert.deepEqual(args.slice(args.indexOf("--")+1,args.indexOf("--")+4),["env","-i","PATH=/usr/local/bin:/usr/bin:/bin"]);
+    for(const value of ["--host=/var/run/postgresql","--port=5432","--username=postgres","--dbname=control_plane","--no-password"])assert.ok(args.includes(value));
+   }
    const snapshots=(await readdir(root)).filter(name=>name.startsWith("cp-pre-migration-"));
    if(scenario==="success"){
     const receipt=JSON.parse(result.stdout),bytes=await readFile(receipt.path);
     assert.equal(receipt.sha256,createHash("sha256").update(bytes).digest("hex"));
     assert.equal(receipt.clusterUID,clusterUID);assert.equal(receipt.namespaceUID,namespaceUID);
+    assert.equal(receipt.backend.systemIdentifier,"18446744073709551615");assert.equal(receipt.backend.databaseOID,"456");
     assert.equal(receipt.restore,"NOT RUN");assert.equal(snapshots.length,1);
    }else for(const directory of snapshots)assert.ok(!(await readdir(join(root,directory))).includes("receipt.json"));
   }finally{await rm(root,{recursive:true,force:true});}
