@@ -22,7 +22,7 @@ const require=createRequire(import.meta.url),transport=require('./routine-migrat
 
 // Настоящие owner factory, JSON files, argv parser и child CLI сохраняются.
 // Только external Kubernetes/SQL transport заменён finite metadata fixture.
-export function routineMigrationAPIFixture(t,{predecessorSource=false,authoritySquashSource=false,profile='sentry-observability-backup'}={}){
+export function routineMigrationAPIFixture(t,{predecessorSource=false,authoritySquashSource=false,rolloutAnnotations,profile='sentry-observability-backup'}={}){
  const root=fileURLToPath(new URL('../../../',import.meta.url)).replace(/\/$/,'');
  assert.ok(['sentry-observability','sentry-observability-backup'].includes(profile));
  const backup=profile.endsWith('-backup');
@@ -70,6 +70,7 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,authorityS
  baseline.events[0].planSHA256=fingerprint(baseline.plan);
  const authority=baseline.read();
  const observed={context:cohort.target.context,clusterUID:cohort.target.clusterUID,namespaceUID:cohort.target.namespaceUID,installation:cohort.observed.installation,resources:{items:[]}};
+ if(rolloutAnnotations)api.metadata.annotations={...api.metadata.annotations,...rolloutAnnotations.before};
  const closedPlan=planComponentAPIMaintenance(api,baseline.profile,observed,closedSourceSHA,'close');
  const closed={plan:closedPlan,events:[{type:'HEADER',schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(closedPlan),maintenanceID:closedPlan.maintenanceID},
   {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:api.metadata.uid,maintenanceID:closedPlan.maintenanceID}]};
@@ -123,6 +124,7 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,authorityS
   app.status={observedGeneration:2,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(name=>[name,app.spec.replicas]))};
  }
  cp.metadata.annotations={...(cp.metadata.annotations??{}),[configuration.annotation]:planSHA};
+ if(rolloutAnnotations)api.metadata.annotations={...api.metadata.annotations,...rolloutAnnotations.after};
  const openPlan=planComponentAPIMaintenance(api,baseline.profile,observed,executorSHA,'open',closed,isolation);
  api.spec=structuredClone(openPlan.afterSpec);api.metadata.annotations=structuredClone(openPlan.afterAnnotations);
  for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])api.status[key]=api.spec.replicas;

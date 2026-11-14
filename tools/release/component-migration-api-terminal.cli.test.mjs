@@ -140,3 +140,23 @@ test('native CLI requires explicit source and rejects unrelated source or change
   const refused=f.run('plan',[],mutate);assert.notEqual(refused.status,0,change);assert.deepEqual(f.state().effects,[]);
  }
 });
+
+
+test('native CLI rollout revision6→7 preserves old close and exact current OPEN while restoring once',t=>{
+ const revision='deployment.kubernetes.io/revision';
+ const f=routineMigrationAPIFixture(t,{rolloutAnnotations:{before:{[revision]:'6'},after:{[revision]:'7'}}});
+ const names=['close.json','close.jsonl','migration.json','migration.jsonl','open.json','open.jsonl'];
+ const before=names.map(name=>readFileSync(join(f.directory,name),'utf8'));
+ assert.equal(f.pass('plan').status,'PLAN_ONLY');assert.equal(f.pass('apply').state,'RESTORED');
+ assert.equal(f.pass('apply').state,'RESTORED');assert.deepEqual(f.state().effects,['service']);
+ assert.deepEqual(names.map(name=>readFileSync(join(f.directory,name),'utf8')),before);
+});
+
+test('native CLI rejects non-controller annotation drift and invalid or decreasing rollout revision before restore',t=>{
+ const revision='deployment.kubernetes.io/revision';
+ for(const after of [{[revision]:'5'},{[revision]:'NaN'},{[revision]:''},{[revision]:'07'},{[revision]:'7','kodex.dev/foreign':'changed'}]){
+  const f=routineMigrationAPIFixture(t,{rolloutAnnotations:{before:{[revision]:'6'},after}});
+  const result=f.run('plan');assert.notEqual(result.status,0);assert.match(result.stderr,/OPEN_STAGE_CHANGED/);
+  assert.deepEqual(f.state().effects,[]);
+ }
+});
