@@ -62,4 +62,3 @@ export function baselineFixture(){
  const read=expected=>readCatalogAuthorityBaseline({plan,events,expected,now:()=>now},kube,{inspectSource:()=>({revision:plan.revision})});
  return {...f,plan,events,now,owner,pg,set,publisherPod,backend,calls,faults,kube,read};
 }
-
