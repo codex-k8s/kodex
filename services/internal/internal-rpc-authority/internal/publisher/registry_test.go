@@ -10,11 +10,10 @@ import (
 	"testing"
 )
 
-// TestCanonicalDeliveryRegistriesLoad projects both repository registries as read-only files and
-// verifies required targets, exact startup counts and stable ordering without contacting a cluster.
-// TestCanonicalDeliveryRegistriesLoad материализует оба реестра репозитория в файлы только для чтения и
-// проверяет обязательные цели, точные количества при запуске и устойчивый порядок без обращения к
-// кластеру.
+// TestCanonicalDeliveryRegistriesLoad checks exact107 and frozen106 membership from read-only files.
+// Current web profiles share the base source and retain separate full-render qualification.
+// TestCanonicalDeliveryRegistriesLoad проверяет точный состав107 и frozen106 из файлов только для чтения.
+// Текущие web-профили используют общий base source и отдельную квалификацию полного render.
 func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 	t.Parallel()
 
@@ -23,33 +22,34 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		t.Fatal("не удалось определить путь теста")
 	}
 	repositoryRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "..", "..", ".."))
+	// baseStartupTargets preserves all106 bindings;107 adds only the interaction issuer.
+	// baseStartupTargets сохраняет все bindings106;107 добавляет только interaction issuer.
+	baseStartupTargets := []string{
+		"role-image-builder.authorization-issuer",
+		"automation-scheduler.authorization-issuer",
+		"secret-broker.authorization-issuer",
+		"secret-broker.authorization-verifier",
+		"session-archive.authorization-issuer",
+		"control-api-gateway.authorization-issuer",
+		"control-plane.authorization-issuer",
+		"control-plane.authorization-verifier",
+		"control-plane.authority-proof-resolver",
+		"integration-gateway.authorization-issuer",
+		"runtime-controller.authorization-issuer",
+		"stt-tts-service.authorization-issuer",
+		"stt-tts-service.authorization-verifier",
+		"email-bridge.authorization-issuer",
+	}
 	for _, testCase := range []struct {
 		relative             string
 		wantStartupReadbacks int
+		wantRegistered       int
 		requiredTargets      []string
 	}{
-		{
-			relative:             "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml",
-			wantStartupReadbacks: 14,
-			requiredTargets: []string{
-				"control-plane.authorization-issuer",
-				"secret-broker.authorization-verifier",
-				"stt-tts-service.authorization-issuer",
-				"stt-tts-service.authorization-verifier",
-				"email-bridge.authorization-issuer",
-			},
-		},
-		{
-			relative:             "deploy/k8s/profiles/web-with-mattermost/key-delivery-targets.yaml",
-			wantStartupReadbacks: 15,
-			requiredTargets: []string{
-				"control-plane.authorization-issuer",
-				"secret-broker.authorization-verifier",
-				"email-bridge.authorization-issuer",
-				"interaction-gateway.authorization-issuer",
-				"session-archive.authorization-issuer",
-			},
-		},
+		{relative: "deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml", wantStartupReadbacks: 15, wantRegistered: 17,
+			requiredTargets: append(append([]string(nil), baseStartupTargets...), "interaction-gateway.authorization-issuer")},
+		{relative: "tools/release/fixtures/authority106-key-delivery-targets.yaml", wantStartupReadbacks: 14, wantRegistered: 16,
+			requiredTargets: baseStartupTargets},
 	} {
 		source, err := os.ReadFile(filepath.Join(repositoryRoot, testCase.relative))
 		if err != nil {
@@ -63,8 +63,20 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		if err != nil {
 			t.Fatalf("реестр %s не прошёл runtime-валидацию: %v", testCase.relative, err)
 		}
-		if len(registry.Targets) == 0 {
-			t.Fatalf("реестр %s не содержит целей", testCase.relative)
+		if len(registry.Targets) != testCase.wantRegistered {
+			t.Fatalf("registry %s contains %d registered targets, expected %d", testCase.relative, len(registry.Targets), testCase.wantRegistered)
+		}
+		wanted := make(map[string]bool, testCase.wantRegistered)
+		for _, targetID := range testCase.requiredTargets {
+			wanted[targetID] = true
+		}
+		for _, targetID := range []string{"image-admission.authorization-issuer", "image-promotion.authorization-issuer"} {
+			wanted[targetID] = false
+		}
+		for targetID := range registry.Targets {
+			if _, ok := wanted[targetID]; !ok {
+				t.Fatalf("registry %s contains unexpected target %s", testCase.relative, targetID)
+			}
 		}
 		for _, targetID := range testCase.requiredTargets {
 			if _, ok := registry.Targets[targetID]; !ok {
@@ -82,6 +94,10 @@ func TestCanonicalDeliveryRegistriesLoad(t *testing.T) {
 		startupTargets := registry.StartupReadbackTargets()
 		startupTargetKeys := make([]string, 0, len(startupTargets))
 		for _, target := range startupTargets {
+			targetID := target.WorkloadID + "." + strings.ReplaceAll(strings.ToLower(target.Role), "_", "-")
+			if !wanted[targetID] || target.WorkloadGeneration != 1 {
+				t.Fatalf("registry %s contains unexpected startup binding %s generation %d", testCase.relative, targetID, target.WorkloadGeneration)
+			}
 			startupTargetKeys = append(
 				startupTargetKeys,
 				target.WorkloadID+"\x00"+target.Role+"\x00"+
