@@ -4,11 +4,12 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {verifyAuthorityObserverSource} from './component-api-traffic.mjs';
 
-test('routine observer proves actual squash source by exact full tree and actual canonical ancestry',()=>{
+test('routine observer proves synthetic orphan source by exact full tree and actual canonical ancestry',()=>{
  const root=fileURLToPath(new URL('../../',import.meta.url));
  const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:30000}).trim();
- const original='d70f86f5550c04ce6d5a4cdaf79fc1043ccf39a4',equivalent='6b2e0cbc12305b184904728ab1a124825bc17200',current=git('rev-parse','HEAD');
+ const equivalent=git('rev-parse','HEAD^'),current=git('rev-parse','HEAD');
  const tree=revision=>git('rev-parse',`${revision}^{tree}`),ancestor=(old,next)=>git('merge-base','--is-ancestor',old,next);
+ const original=git('-c','commit.gpgSign=false','commit-tree',tree(equivalent),'-m','Исходный synthetic squash source2140');
  assert.throws(()=>ancestor(original,current));assert.equal(tree(original),tree(equivalent));ancestor(equivalent,current);
  verifyAuthorityObserverSource(original,current,original,ancestor,{revision:equivalent,tree});
  assert.throws(()=>verifyAuthorityObserverSource(original,current,undefined,ancestor,{revision:equivalent,tree}),/SOURCE_CHANGED/);

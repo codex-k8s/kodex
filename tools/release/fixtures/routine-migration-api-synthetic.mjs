@@ -30,8 +30,12 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,authorityS
  const sourceSHA=predecessorSource?execFileSync('git',['-C',root,'rev-parse','HEAD^'],{encoding:'utf8'}).trim():executorSHA;
  const directory=mkdtempSync(join(tmpdir(),'kodex-routine-api-'));
  let sourceRoot=root,authorityRoot=root;
- const authoritySHA=authoritySquashSource?'d70f86f5550c04ce6d5a4cdaf79fc1043ccf39a4':executorSHA;
- const authorityEquivalentSHA=authoritySquashSource?'6b2e0cbc12305b184904728ab1a124825bc17200':undefined;
+ const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:'pipe',timeout:30000}).trim();
+ const authorityEquivalentSHA=authoritySquashSource?(authoritySquashSource.equivalent??git('rev-parse','HEAD^')):undefined;
+ // Public fixture не зависит от недостижимого original PR head после squash:
+ // настоящий orphan создаётся из tree доступного ancestor без refs или fetch.
+ const authoritySHA=authoritySquashSource?(authoritySquashSource.original??git('-c','commit.gpgSign=false','commit-tree',git('rev-parse',`${authorityEquivalentSHA}^{tree}`),'-m','Синтетический исходный squash executor2140')):executorSHA;
+ const closedSourceSHA=authoritySquashSource?(authoritySquashSource.close??authorityEquivalentSHA):executorSHA;
  t.after(()=>{if(authorityRoot!==root)execFileSync('git',['-C',root,'worktree','remove','--force',authorityRoot],{stdio:'pipe',timeout:30000});if(sourceRoot!==root)execFileSync('git',['-C',root,'worktree','remove','--force',sourceRoot],{stdio:'pipe',timeout:30000});rmSync(directory,{recursive:true,force:true});});
  if(predecessorSource){
   const selected=join(directory,'selected-source');
@@ -66,7 +70,7 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,authorityS
  baseline.events[0].planSHA256=fingerprint(baseline.plan);
  const authority=baseline.read();
  const observed={context:cohort.target.context,clusterUID:cohort.target.clusterUID,namespaceUID:cohort.target.namespaceUID,installation:cohort.observed.installation,resources:{items:[]}};
- const closedPlan=planComponentAPIMaintenance(api,baseline.profile,observed,authoritySquashSource?'4c34d99478803a19fcc67d81cef9db64319952ea':executorSHA,'close');
+ const closedPlan=planComponentAPIMaintenance(api,baseline.profile,observed,closedSourceSHA,'close');
  const closed={plan:closedPlan,events:[{type:'HEADER',schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(closedPlan),maintenanceID:closedPlan.maintenanceID},
   {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:api.metadata.uid,maintenanceID:closedPlan.maintenanceID}]};
  api.spec=structuredClone(closedPlan.afterSpec);api.metadata.annotations=structuredClone(closedPlan.afterAnnotations);

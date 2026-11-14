@@ -4,7 +4,7 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {routineMigrationAPIFixture} from './fixtures/routine-migration-api-synthetic.mjs';
 
-test('native CLI historical squash authority: exact original source and immutable old close receipt survive full restore',t=>{
+test('native CLI synthetic squash authority: exact orphan source and immutable ancestor close receipt survive full restore',t=>{
  const f=routineMigrationAPIFixture(t,{authoritySquashSource:true,predecessorSource:true});
  const names=['authority.json','authority.jsonl','close.json','close.jsonl','migration.json','migration.jsonl','open.json','open.jsonl'];
  const before=names.map(name=>readFileSync(join(f.directory,name),'utf8'));
