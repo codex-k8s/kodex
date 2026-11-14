@@ -1,4 +1,6 @@
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
+import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
+import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validatedStablePublication } from './stable-image-publication.mjs';
 import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
@@ -24,7 +26,7 @@ const immutableProfiles = {
   'sentry-observability': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'sentry-observability-backup': {anchorProfile:'portable',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-backup-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-backup-migration-precondition.sql',postconditionFile:'sentry-observability-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
   'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
-  'github-repository-scope-backup': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-backup-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-backup-migration-precondition.sql',postconditionFile:'github-repository-scope-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
+  'github-repository-scope-backup': {anchorProfile:'portable',executionCommand:'up-github-repository-scope-backup-compatible',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-backup-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-backup-migration-precondition.sql',postconditionFile:'github-repository-scope-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'workspace-unbound-stop': {
     anchorProfile:'portable',version:'20261113000100',file:'20261113000100_workspace_unbound_stop.sql',
     annotation:'kodex.dev/cp-workspace-unbound-stop-migration-plan',previousVersion:20261112000100,
@@ -308,6 +310,19 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return {kind,name,uid,resourceVersion};
   };
   const namespaceUID = () => kube(['get','namespace',namespace,'-o','jsonpath={.metadata.uid}']).trim();
+  const backupProof = migration => {
+    ensure(migration.backupMaintenance?.planPath && migration.backupMaintenance?.evidencePath,'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
+    const closed={plan:privateJSON(migration.backupMaintenance.planPath)};
+    ensure(fingerprint(closed.plan)===migration.backupMaintenance.planSHA256,'MIGRATION_BACKUP_STOP_PLAN_CHANGED');
+    ensure(closed.plan.planPath===migration.backupMaintenance.planPath&&closed.plan.evidencePath===migration.backupMaintenance.evidencePath,'MIGRATION_BACKUP_JOURNAL_PATH_CHANGED');
+    const proofJournal=privateJournal(migration.backupMaintenance.evidencePath,backupControllerMaintenanceHeader(closed.plan),{readOnly:true});
+    try {
+      closed.events=structuredClone(proofJournal.events);
+      verifyBackupMigrationScope(migration,closed);
+      return readStoppedBackupMaintenance(kube,closed,{migrationPlanSHA256:fingerprint(migration)});
+    } finally { proofJournal.close(); }
+  };
+
   const dependencies = () => {
     if (profile==='workspace-backup') {
       // Пока backup SELECT временно снят, не допускается автоматический backup либо credential reconciler.
@@ -536,6 +551,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
     if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
+    if(profile==='github-repository-scope-backup') {
+      ensure(options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'],'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
+      const path=resolve(options['--backup-maintenance-plan']);
+      plan.backupMaintenance={planPath:path,evidencePath:resolve(options['--backup-maintenance-evidence']),planSHA256:fingerprint(privateJSON(path))};
+      backupProof(plan);
+    }
     precondition(source,plan.postgres,plan.preconditionSQLSHA256,false,plan.postgresBackend);
     writePrivate(options['--plan'],plan);
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
@@ -555,8 +576,23 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   // После SIGKILL lock сохраняется. Inspect всё равно доступен без записи/снятия lock;
   // mutations закрыты до ручной проверки завершения прежнего процесса владельцем.
   const readOnly = !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
-  const durable = privateJournal(options['--evidence'], {version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256}, {readOnly});
+  let backupBoundaryJournal,durable;
+  try {
+    if(profile==='github-repository-scope-backup' && phase!=='inspect'){
+      const closed=privateJSON(plan.backupMaintenance.planPath);
+      backupBoundaryJournal=privateJournal(plan.backupMaintenance.evidencePath,backupControllerMaintenanceHeader(closed));
+      requireOpenBackupBoundary(backupBoundaryJournal.events,planSHA256);
+      backupProof(plan);
+      if(!backupBoundaryJournal.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND'))
+        backupBoundaryJournal.append({type:'BACKUP_MIGRATION_BOUND',migrationPlanSHA256:planSHA256});
+    }
+    durable=privateJournal(options['--evidence'],{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256},{readOnly});
+  } catch(error) { backupBoundaryJournal?.close();throw error; }
   const journal = readOnly ? {events:durable.events,append:()=>{},close:()=>durable.close()} : durable;
+  if(profile==='github-repository-scope-backup' && phase!=='inspect' && journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT')) {
+    journal.close();backupBoundaryJournal.close();throw Error('MIGRATION_BACKUP_RESUME_ALREADY_STARTED');
+  }
+
   let revalidation;
   try {
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
@@ -833,7 +869,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     }
     const result = readJob();output(result);
     if (['FAIL','READBACK_UNCONFIRMED'].includes(result.status)) process.exitCode = 1;
-  } finally { journal.close(); }
+  } finally { journal.close();backupBoundaryJournal?.close(); }
 }
 
 // Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
@@ -1443,14 +1479,18 @@ export function validWorkspaceUnboundStopMigrationPostcondition(proof) {
 
 // Полный catalog044 включает owner/RLS/ACL/ABI, все таблицы/functions/triggers и неизменённый purge graph.
 export function validGitHubRepositoryScopeMigrationPostcondition(proof,backup=false) {
-  const expected=githubRepositoryScopeCatalog[backup?'backup':'normal'].after;
-  return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && exactGitHubSchemaCatalog(proof.schemaCatalog,expected);
+  return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && proof.publicSequenceSafe===true && qualifiedGitHubSchemaCatalog(proof,backup,'after');
 }
 // Backup не получает fallback к normal: весь фактический SELECT/defaultACL закреплён отдельно.
 export function validGitHubRepositoryScopeBackupMigrationPostcondition(proof){return validGitHubRepositoryScopeMigrationPostcondition(proof,true);}
 // Precondition связывает exact043 catalog с тишиной каждого затронутого worker/effect lifecycle.
 export function validGitHubRepositoryScopeMigrationPrecondition(proof,backup=false,requireStopped=true){
- return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261113000100 && proof.githubRepositoryScopeAbsent===true && exactGitHubSchemaCatalog(proof.schemaCatalog,githubRepositoryScopeCatalog[backup?'backup':'normal'].before) && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+ return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261113000100 && proof.githubRepositoryScopeAbsent===true && proof.workspaceOwnerIdle===true && proof.publicSequenceSafe===true && qualifiedGitHubSchemaCatalog(proof,backup,'before') && proof.activeBackupSessions===0 && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+}
+// Это только две закрытые schema ACL qualifications; runtime readers не добавляются.
+function qualifiedGitHubSchemaCatalog(proof,backup,phase){
+ const modes=backup?[['backup','CANONICAL_BACKUP'],['table-only-backup','TABLE_ONLY_BACKUP']]:[['normal','NONE']];
+ return modes.some(([mode,qualification])=>proof.backupQualification===qualification && exactGitHubSchemaCatalog(proof.schemaCatalog,githubRepositoryScopeCatalog[mode][phase]));
 }
 // Каноническое сравнение включает точный набор полей; extra/missing/drift закрыто отвергаются.
 function exactGitHubSchemaCatalog(actual,expected){return actual!==null && typeof actual==='object' && !Array.isArray(actual) && Object.keys(actual).length===Object.keys(expected).length && Object.entries(expected).every(([key,value])=>JSON.stringify(actual[key])===JSON.stringify(value));}
