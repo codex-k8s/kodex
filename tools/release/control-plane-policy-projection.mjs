@@ -233,7 +233,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
       acknowledged.get('CP_POINTER_CAS')===current.deployment.metadata.uid&&acknowledged.get('CREATE_PROJECTION')===projection.metadata.uid,'POLICY_PROJECTION_READBACK_MISMATCH');
     process.stdout.write(JSON.stringify({status:'APPLIED',target:'control-plane',policySHA256:plan.renderedPolicySHA256})+'\n');return;
   }
-  requireValue(command==='resume'||options['--confirm']==='APPLY-PORTABLE-CATALOG-PROJECTION','CONFIRMATION_REQUIRED');
+  requireValue(command==='resume'||options['--confirm']===(transitionProfile===telegramPolicyTransition?'APPLY-PORTABLE-TELEGRAM-PROJECTION':'APPLY-PORTABLE-CATALOG-PROJECTION'),'CONFIRMATION_REQUIRED');
   requireValue(command!=='apply'||!changed,'POLICY_PROJECTION_EXISTING_OPERATION_REQUIRES_RESUME');
   const journal=openCatalogProjectionJournal(options['--evidence'],plan,command==='resume');
   try {

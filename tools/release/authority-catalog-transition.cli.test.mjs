@@ -5,11 +5,14 @@ import {execFileSync,spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {main as rotationMain,readCatalogAuthorityTerminal,verifyCatalogAuthorityJobPod} from './authority-rotation-transition.mjs';
+import {main as rotationMain,readCatalogAuthorityTerminal,readTelegramAuthorityTerminal,readTelegramAuthorityDelivered,verifyCatalogAuthorityJobPod} from './authority-rotation-transition.mjs';
 import {main as projectionMain} from './control-plane-policy-projection.mjs';
 import {fingerprint} from './scoped-release.mjs';
-import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
-import {catalogPolicyTransition} from './authority-catalog-transition.mjs';
+import {telegramCreateSourceFixture} from './fixtures/telegram-introduction-synthetic.mjs';
+import {planTelegramResourceCreate,telegramResourceCreateStep,telegramResourceCreateHeader} from './telegram-resource-create.mjs';
+import {telegramPolicyTransition,telegramPolicySource,telegramRegistrySource} from './authority-telegram-transition.mjs';
+import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
+import {catalogPolicyTransition,readCatalogTarget} from './authority-catalog-transition.mjs';
 import {fixture,uid,prepareAdmission} from './fixtures/authority-catalog-synthetic.mjs';
 
 function prerequisites(){
@@ -23,9 +26,19 @@ function prerequisites(){
   return {sa,egress,ingress};
 }
 
-function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
+function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false,authorityTransition=catalogPolicyTransition}={}){
   const f=fixture(),directory=mkdtempSync(join(tmpdir(),'catalog-authority-cli-'));
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
+  const telegram=authorityTransition===telegramPolicyTransition;
+  if(telegram){
+    f.publisher.spec.template.spec.containers[0].image='registry.local.kodex/kodex/internal-rpc-authority@sha256:'+'a'.repeat(64);
+    f.resources.set('namespace/kodex-system',{apiVersion:'v1',kind:'Namespace',metadata:{name:'kodex-system',uid:f.profile.namespaceUID},status:{phase:'Active'}});
+    f.target=readCatalogTarget(f.profile,f.profile.context,f.get,authorityTransition);
+    f.previous=renderAuthorityPolicyEnvironment(telegramPolicySource('predecessor').raw,f.target.transition.environment);
+    f.desired=renderAuthorityPolicyEnvironment(telegramPolicySource('desired').raw,f.target.transition.environment);
+    f.registry.data['authority-policy.json']=f.previous.raw;
+    f.registry.data['key-delivery-targets.yaml']=telegramRegistrySource('predecessor').raw.replace('source_revision: 7','source_revision: 2');
+  }
   const kubeconfig=join(directory,'kubeconfig'),profile=join(directory,'target.json'),output=join(directory,'plan.json');
   writeFileSync(kubeconfig,'synthetic-unused-private-fixture',{mode:0o600});
   writeFileSync(profile,JSON.stringify(f.profile),{mode:0o600});
@@ -34,15 +47,18 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
   const state={slices:{items:[]},isolationPods:{items:[]},completeStatus:false};
   const expectedPrefix=['--kubeconfig',kubeconfig,'--context',f.profile.context,'--request-timeout=30s'];
   const run=(command,args,input)=>{
+    if(command==='python3'){assert.equal(args[0],'-I');return execFileSync(command,args,{input,encoding:'utf8',timeout:10000});}
     assert.equal(command,'kubectl');assert.deepEqual(args.slice(0,expectedPrefix.length),expectedPrefix);
     const tail=args.slice(expectedPrefix.length),argv=[];
     for(let i=0;i<tail.length;i++){if(tail[i]==='-n'){assert.equal(tail[++i],'kodex-system');}else argv.push(tail[i]);}
     calls.push(argv);
+    if(argv[0]==='kustomize'){assert.equal(argv[1],join(source,'deploy/k8s/profiles/web-only'));assert.ok(state.introduction);return state.introduction.resources.map(r=>JSON.stringify(r)).join('\n---\n');}
     if(argv[0]==='config')return f.profile.context;
     if(argv[0]==='auth')return 'yes';
     if(argv[0]==='get'){
       const [,kind,name]=argv;
       if(kind==='replicasets,pods,jobs')return '';
+      if(kind==='replicasets,pods')return JSON.stringify({items:state.introduction?.inventory??[]});
       if(kind==='endpointslices')return JSON.stringify(state.slices);
       if(kind==='pods'){
         const selector=argv[argv.indexOf('-l')+1];
@@ -50,8 +66,8 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
         return JSON.stringify(state.isolationPods);
       }
       if(kind==='job')return jobs.has(name)?JSON.stringify(jobs.get(name)):'';
-      if(kind==='serviceaccount')return JSON.stringify(sa);
-      if(kind==='networkpolicy')return JSON.stringify(name==='internal-rpc-authority-migrator'?egress:ingress);
+      if(kind==='serviceaccount'&&name==='internal-rpc-authority-migrator')return JSON.stringify(sa);
+      if(kind==='networkpolicy'&&['internal-rpc-authority-migrator','internal-rpc-authority-postgresql-from-migrator'].includes(name))return JSON.stringify(name==='internal-rpc-authority-migrator'?egress:ingress);
       if(kind==='secret'||name==='internal-rpc-authority-postgresql-ca')return kind+'/'+name;
       const value=f.get(kind,name);if(!value&&argv.includes('--ignore-not-found'))return '';
       assert.ok(value,'unexpected synthetic GET');return JSON.stringify(value);
@@ -96,11 +112,11 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
   };
   // Frozen106 fixture не читает current107 source: старый closed consumer
   // воспроизводится на собственных точных policy/registry/template bytes.
-  const source=join(directory,'source106');
+  const source=join(directory,telegram?'source107':'source106');
   for(const relative of ['deploy/k8s/base/internal-rpc-authority-data','deploy/k8s/base/internal-rpc-authority-publisher'])mkdirSync(join(source,relative),{recursive:true});
   copyFileSync(new URL('../../deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml'));
-  copyFileSync(new URL('./fixtures/authority-policy-revision106.json',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'));
-  copyFileSync(new URL('./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml'));
+  copyFileSync(new URL(telegram?'./fixtures/authority-policy-revision107.json':'./fixtures/authority-policy-revision106.json',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'));
+  copyFileSync(new URL(telegram?'./fixtures/authority107-key-delivery-targets.yaml':'./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml'));
   if(syntheticSource){
     // Отдельный process использует настоящий clean Git checkout fixture с теми
     // же tracked executor bytes. Никакого blanket fake git clean/HEAD нет.
@@ -113,11 +129,11 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
     execFileSync('git',['-C',source,'-c','user.name=Synthetic fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','Изолированная fixture106']);
     revision=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
   }
-  const args=()=>['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,
+  const args=()=>['plan','--policy-transition',authorityTransition,'--context',f.profile.context,
     '--kubeconfig',kubeconfig,'--portable-target',profile,'--source',source,'--revision',revision,'--action','status','--output',output];
   const kube=argv=>run('kubectl',[...expectedPrefix,...argv]);
   const syntheticExecFileSync=(program,argv,options)=>run(program,argv,options?.input);
-  return {...f,directory,kubeconfig,profilePath:profile,output,calls,args,source,revision,jobs,jobPods,jobLogs,losses,effects,state,kube,
+  return {...f,directory,kubeconfig,authorityTransition,profilePath:profile,output,calls,args,source,revision,jobs,jobPods,jobLogs,losses,effects,state,kube,
     io:{run,execFileSync:syntheticExecFileSync,inspectSource:()=>({revision})}};
 }
 
@@ -156,14 +172,14 @@ test('catalog portable scope cannot silently enable legacy77 on production label
   assert.equal(f.calls.length,0);
 });
 
-test('public106 rotation keeps registry/publisher/Job single across three lost ACKs and allows readers behind isolation',async t=>{
-  const f=cliFixture(t),admission=prepareAdmission(f),args=f.args();args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags);
+for(const authorityTransition of [catalogPolicyTransition,telegramPolicyTransition])test(`public rotation ${authorityTransition} keeps registry/publisher/Job single across three lost ACKs and allows readers behind isolation`,async t=>{
+  const f=cliFixture(t,{authorityTransition}),telegram=authorityTransition===telegramPolicyTransition,introductionFlags=telegram?await prepareTelegramIntroduction(f):[],admission=prepareAdmission(f),args=f.args();args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags,...introductionFlags);
   await rotationMain(args,f.io);
   const plan=JSON.parse(readFileSync(f.output,'utf8')),evidence=join(f.directory,'authority.jsonl');
   f.losses.add('registry');f.losses.add('publisher');f.losses.add('job');
-  const apply=['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,'--evidence',evidence,'--confirm','APPLY-PORTABLE-CATALOG-AUTHORITY'];
+  const apply=['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,'--evidence',evidence,'--confirm',telegram?'APPLY-PORTABLE-TELEGRAM-AUTHORITY':'APPLY-PORTABLE-CATALOG-AUTHORITY'];
   await rotationMain(apply,f.io);
-  assert.equal(JSON.parse(f.registry.data['authority-policy.json']).policy_revision,106);
+  assert.equal(JSON.parse(f.registry.data['authority-policy.json']).policy_revision,telegram?107:106);
   assert.equal(f.effects.filter(key=>key.startsWith('configmap/')).length,1);
   assert.equal(f.effects.filter(key=>key.startsWith('deployment/')).length,1);
   assert.equal(f.effects.filter(key=>key.startsWith('job/')).length,1);
@@ -174,39 +190,71 @@ test('public106 rotation keeps registry/publisher/Job single across three lost A
   assert.equal(plan.maintenance.proof.trafficPlanSHA256,admission.proof.trafficPlanSHA256);
 });
 
-test('public CP projection recovers both lost ACKs without a second create or pointer patch',async t=>{
-  const f=cliFixture(t),admission=prepareAdmission(f);f.registry.data['authority-policy.json']=f.desired.raw;
+for(const authorityTransition of [catalogPolicyTransition,telegramPolicyTransition])test(`public CP projection ${authorityTransition} recovers both lost ACKs without a second create or pointer patch`,async t=>{
+  const f=cliFixture(t,{authorityTransition}),telegram=authorityTransition===telegramPolicyTransition,admission=prepareAdmission(f);f.registry.data['authority-policy.json']=f.desired.raw;
+  let oldProjection;
+  if(telegram){
+    const name=`control-plane-policy-projection-${f.previous.renderedSHA256.slice(0,16)}`;
+    oldProjection={apiVersion:'v1',kind:'ConfigMap',metadata:{name,namespace:'kodex-system',uid:uid(60),resourceVersion:'1',labels:{'app.kubernetes.io/part-of':'kodex'}},immutable:true,data:{'policy.json':f.previous.raw}};
+    f.resources.set('configmap/'+name,oldProjection);const app=f.deployment.spec.template.spec.containers[0];
+    app.env.push({name:'CONTROL_PLANE_AUTHORITY_POLICY_FILE',value:'/var/run/config/kodex/control-plane/environment-policy/policy.json'});
+    app.volumeMounts.push({name:'control-plane-environment-policy',mountPath:'/var/run/config/kodex/control-plane/environment-policy',readOnly:true});
+    f.deployment.spec.template.spec.volumes.push({name:'control-plane-environment-policy',configMap:{name,defaultMode:292}});
+  }
+  const oldBytes=JSON.stringify(oldProjection);
   const output=join(f.directory,'projection-plan.json'),evidence=join(f.directory,'projection.jsonl');
-  await projectionMain(['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,'--kubeconfig',f.kubeconfig,
+  await projectionMain(['plan','--policy-transition',authorityTransition,'--context',f.profile.context,'--kubeconfig',f.kubeconfig,
     '--portable-target',f.profilePath,...admission.flags,'--output',output],f.io);
   f.losses.add('projection');f.losses.add('pointer');
   const flags=['--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',output,'--evidence',evidence];
-  await projectionMain(['apply',...flags,'--confirm','APPLY-PORTABLE-CATALOG-PROJECTION'],f.io);
+  await projectionMain(['apply',...flags,'--confirm',telegram?'APPLY-PORTABLE-TELEGRAM-PROJECTION':'APPLY-PORTABLE-CATALOG-PROJECTION'],f.io);
   await projectionMain(['resume',...flags],f.io);
   await projectionMain(['observe',...flags],f.io);
   assert.equal(f.effects.filter(key=>key.startsWith('configmap/control-plane-policy-projection-')).length,1);
   assert.equal(f.effects.filter(key=>key==='patch/control-plane').length,1);
   assert.equal(readFileSync(evidence,'utf8').split('\n').filter(Boolean).map(JSON.parse).filter(row=>row.status==='UNKNOWN').length,2);
+  if(telegram){assert.equal(JSON.stringify(oldProjection),oldBytes);const plan=JSON.parse(readFileSync(output));assert.equal(plan.predecessor.uid,oldProjection.metadata.uid);assert.equal(plan.projection.metadata.labels['kodex.dev/policy-projection-issue'],'2143');}
 });
 
+async function prepareTelegramIntroduction(f){
+ const resources=telegramCreateSourceFixture(),planPath=join(f.directory,'introduced.json'),evidencePath=join(f.directory,'introduced.jsonl'),publicationPath=join(f.directory,'introduced-publication.json');
+ const target={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:f.revision,context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,
+  installationUID:f.installation.metadata.uid,installationSHA256:fingerprint(f.installation.data),publisherUID:f.publisher.metadata.uid,authorityImage:f.publisher.spec.template.spec.containers[0].image};
+ const observe=()=>({context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,namespace:f.get('namespace','kodex-system'),installation:f.installation,publisher:f.publisher});
+ const get=request=>f.get(request.kind.toLowerCase(),request.metadata.name)??null;
+ const dryRun=request=>{const r=structuredClone(request);Object.assign(r.metadata,{uid:uid(200),resourceVersion:'1',generation:1});if(r.kind==='Service')Object.assign(r.spec,{clusterIP:'10.43.1.2',clusterIPs:['10.43.1.2'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});return r;};
+ const interactionImage='registry.local.kodex/kodex/interaction-gateway@sha256:'+'d'.repeat(64);
+ const plan=planTelegramResourceCreate({target,observed:observe(),resources,interactionImage,get,dryRun,inventory:()=>({items:[]}),planPath,evidencePath,createID:uid(190)});
+ const journal={events:[{type:'HEADER',...telegramResourceCreateHeader(plan)}],append(e){this.events.push(e);}};
+ let nextUID=200;await telegramResourceCreateStep({phase:'apply',plan,journal,observe,inventory:()=>({items:[]}),get,dryRun,create:request=>{const value=dryRun(request);value.metadata.uid=uid(++nextUID);f.resources.set(request.kind.toLowerCase()+'/'+request.metadata.name,value);return value;}});
+ const receipt={schema:'kodex.stable-local-build/v1',component:'interaction-gateway',sourceSHA:f.revision,contextSHA256:'a'.repeat(64),archiveSHA256:'b'.repeat(64),imageDigest:'sha256:'+'d'.repeat(64),publication:'NOT_RUN',admission:'NOT_RUN',nodePull:'NOT_RUN'};
+ const image={component:receipt.component,sourceSHA:receipt.sourceSHA,digest:receipt.imageDigest,tag:'stable-'+receipt.sourceSHA+'-'+'d'.repeat(12)};
+ const publicationPlan={schema:'kodex.stable-image-publication/v2',artifactProfile:'built',receipt,image,archiveSHA256:receipt.archiveSHA256,context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID};
+ const publication={publicationPlan,publicationEvidence:[{schema:'kodex.stable-image-publication-attempt/v1',status:'INTENT',mode:'apply',planSHA256:fingerprint(publicationPlan),component:receipt.component,digest:receipt.imageDigest},{status:'PASS',phase:'REGISTRY_PUBLICATION_ONLY',nodePull:'NOT_RUN'}]};
+ for(const [path,value] of [[planPath,plan],[publicationPath,publication]])writeFileSync(path,JSON.stringify(value)+'\n',{mode:0o600});
+ writeFileSync(evidencePath,journal.events.map(row=>JSON.stringify(row)+'\n').join(''),{mode:0o600});f.state.introduction={resources,inventory:[]};
+ return ['--introduced-plan',planPath,'--introduced-evidence',evidencePath,'--introduced-publication',publicationPath];
+}
+
 async function terminalFixture(t,options){
-  const f=cliFixture(t,options),admission=prepareAdmission(f),args=f.args();args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags);
+  const f=cliFixture(t,options),telegram=f.authorityTransition===telegramPolicyTransition,introductionFlags=telegram?await prepareTelegramIntroduction(f):[],admission=prepareAdmission(f),args=f.args();args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags,...introductionFlags);
+  const confirmation=telegram?'APPLY-PORTABLE-TELEGRAM-AUTHORITY':'APPLY-PORTABLE-CATALOG-AUTHORITY';
   await rotationMain(args,f.io);
   const evidence=join(f.directory,'authority.jsonl');
-  await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,'--evidence',evidence,'--confirm','APPLY-PORTABLE-CATALOG-AUTHORITY'],f.io);
+  await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,'--evidence',evidence,'--confirm',confirmation],f.io);
   const plan=JSON.parse(readFileSync(f.output,'utf8')),now=Date.now();
   const ownerStatus={observedAt:new Date(now).toISOString(),operationId:plan.ownerOperationID,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',
-    registryRevision:plan.registry.sourceRevision,registrySourceDigestSHA256:plan.registry.sourceDigestSHA256,baseRevision:1,baseDigestSHA256:'c'.repeat(64),
-    sourceRevision:4,sourceDigestSHA256:'d'.repeat(64),intentId:uid(90),protocolVersion:2,expectedReadbackCount:16,actualReadbackCount:16,
+    registryRevision:plan.registry.sourceRevision,registrySourceDigestSHA256:plan.registry.sourceDigestSHA256,baseRevision:telegram?4:1,baseDigestSHA256:'c'.repeat(64),
+    sourceRevision:telegram?7:4,sourceDigestSHA256:'d'.repeat(64),intentId:uid(90),protocolVersion:2,expectedReadbackCount:telegram?17:16,actualReadbackCount:telegram?17:16,
     switchNotBefore:new Date(now-90000).toISOString(),previousNotAfter:new Date(now-5000).toISOString(),completedAt:new Date(now-1000).toISOString()};
   f.state.ownerStatus=ownerStatus;f.state.completeStatus=true;
   const freshOutput=join(f.directory,'fresh-plan.json'),freshEvidence=join(f.directory,'fresh.jsonl'),freshArgs=f.args();freshArgs[freshArgs.indexOf('--output')+1]=freshOutput;
   await rotationMain(freshArgs,f.io);
-  await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',freshOutput,'--evidence',freshEvidence,'--confirm','APPLY-PORTABLE-CATALOG-AUTHORITY'],f.io);
+  await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',freshOutput,'--evidence',freshEvidence,'--confirm',confirmation],f.io);
   const freshPlan=JSON.parse(readFileSync(freshOutput,'utf8')),freshJob=[...f.jobs.values()].find(job=>job.spec.template.spec.containers[0].args[0]==='rotation-status');
   const input={plan,freshPlan,events:readFileSync(evidence,'utf8').trim().split('\n').map(JSON.parse),
     freshEvents:readFileSync(freshEvidence,'utf8').trim().split('\n').map(JSON.parse),admissionProof:admission.proof,now};
-  const read=()=>readCatalogAuthorityTerminal(input,f.kube,f.io);
+  const read=()=>telegram?readTelegramAuthorityTerminal(input,f.kube,f.io):readCatalogAuthorityTerminal(input,f.kube,f.io);
   return {...f,input,read,ownerStatus,freshJob,admission,evidence,freshOutput,freshEvidence};
 }
 
@@ -312,4 +360,42 @@ test('107 public rotation требует introduced create/publication proof д�
  args[args.indexOf('--action')+1]='rotate';const admission=prepareAdmission(f);args.push(...admission.flags);
  await assert.rejects(rotationMain(args,f.io),/TELEGRAM_INTRODUCTION_REQUIRED/);
  assert.equal(f.effects.length,0);assert.equal(f.calls.some(argv=>['replace','patch'].includes(argv[0])),false);
+});
+
+test('107 positive CLI binds introduced UID, live registry2→3/snapshot4→7 и exact17 terminal',async t=>{
+ const f=await terminalFixture(t,{authorityTransition:telegramPolicyTransition}),proof=await f.read();
+ assert.equal(proof.policyRevision,107);assert.equal(proof.registryRevision,3);assert.equal(proof.snapshotRevision,7);assert.equal(proof.expectedReadbackCount,17);
+ assert.equal(f.input.plan.introducedReceiver.deploymentUID,f.get('deployment','interaction-gateway').metadata.uid);
+ assert.equal(f.get('deployment','interaction-gateway').spec.replicas,0);
+ assert.equal(f.effects.filter(key=>key==='configmap/internal-rpc-authority-publisher-target-registry').length,1);
+ const before=f.effects.length;f.ownerStatus.expectedReadbackCount=16;f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(f.ownerStatus)+'\n');
+ await assert.rejects(f.read(),/TERMINAL_OWNER_REJECTED/);assert.equal(f.effects.length,before);
+});
+
+test('107 fresh DELIVER owner read is intermediate, stale/foreign/106 state cannot start issuer',async t=>{
+ const f=await terminalFixture(t,{authorityTransition:telegramPolicyTransition}),now=f.input.now;
+ const status={...f.ownerStatus,status:'DISTRIBUTING',operationStatus:'DISTRIBUTING',phase:'DISTRIBUTE',sourceRevision:5,actualReadbackCount:16,
+  deliveryStartedAt:new Date(now-10000).toISOString(),deliveredAt:new Date(now-5000).toISOString()};
+ for(const key of ['switchNotBefore','previousNotAfter','completedAt'])delete status[key];
+ f.input.freshEvents.at(-1).rotationStatus='DISTRIBUTING';f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(status)+'\n');
+ const read=()=>readTelegramAuthorityDelivered(f.input,f.kube,f.io),proof=await read();
+ assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.snapshotRevision,5);assert.equal(proof.actualReadbackCount,16);assert.equal(Object.hasOwn(proof,'terminalSHA256'),false);
+ assert.equal(proof.introducedReceiverSHA256,fingerprint(f.input.plan.introducedReceiver));
+ await assert.rejects(f.read());
+ for(const mutate of [s=>delete s.deliveredAt,s=>s.expectedReadbackCount=16,s=>s.operationId=uid(999),s=>s.registryRevision=2,s=>s.sourceRevision=7,
+  s=>s.observedAt=new Date(now-30001).toISOString()]){const altered=structuredClone(status);mutate(altered);f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(altered)+'\n');await assert.rejects(read());}
+});
+
+test('107 registry CAS fresh-check закрывает replaced UID, ранний start, Service drift и orphan до effects',async t=>{
+ for(const [mutate,expected] of [
+  [f=>f.resources.get('deployment/interaction-gateway').metadata.uid=uid(999),/UID_OR_ALLOCATION_CHANGED/],
+  [f=>f.resources.get('deployment/interaction-gateway').spec.replicas=1,/FOREIGN_OR_DRIFTED_RESOURCE/],
+  [f=>f.resources.get('service/interaction-gateway').spec.clusterIP='10.43.1.3',/ALLOCATION_INVALID/],
+  [f=>f.state.introduction.inventory.push({kind:'Pod',metadata:{name:'interaction-gateway-debug'},spec:{serviceAccountName:'interaction-gateway'}}),/ORPHAN_WORKLOAD_PRESENT/],
+ ]){
+  const f=cliFixture(t,{authorityTransition:telegramPolicyTransition}),flags=await prepareTelegramIntroduction(f),admission=prepareAdmission(f),args=f.args();
+  args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags,...flags);await rotationMain(args,f.io);const before=fingerprint(f.registry.data);mutate(f);
+  await assert.rejects(rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',f.output,'--evidence',join(f.directory,'denied.jsonl'),'--confirm','APPLY-PORTABLE-TELEGRAM-AUTHORITY'],f.io),expected);
+  assert.equal(f.effects.length,0);assert.equal(fingerprint(f.registry.data),before);
+ }
 });

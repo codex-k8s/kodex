@@ -50,7 +50,7 @@ export function prepareAdmission(f){
     {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:f.api.metadata.uid,maintenanceID:closePlan.maintenanceID}]};
   f.api.spec=structuredClone(closePlan.afterSpec);f.api.metadata.annotations=structuredClone(closePlan.afterAnnotations);
   f.api.status={observedGeneration:1,replicas:0,updatedReplicas:0,readyReplicas:0,availableReplicas:0};
-  const trafficPlan=planComponentAPITraffic({service:f.service,deployment:f.api,resources:{items:[]},target:f.profile,observed,sourceSHA:f.revision,action:'isolate',closed});
+  const trafficPlan=planComponentAPITraffic({service:f.service,deployment:f.api,resources:{items:[]},target:f.profile,observed,sourceSHA:f.revision,action:'isolate',closed,authorityTransition:f.authorityTransition});
   const trafficEvents=[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(trafficPlan),maintenanceID:trafficPlan.maintenanceID},
     {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'ISOLATED',serviceUID:f.service.metadata.uid,maintenanceID:closePlan.maintenanceID}];
   f.service.spec=structuredClone(trafficPlan.afterSpec);f.service.metadata.annotations=structuredClone(trafficPlan.afterAnnotations);

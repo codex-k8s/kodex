@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {telegramCreateSourceFixture} from './fixtures/telegram-introduction-synthetic.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {execFileSync} from 'node:child_process';
@@ -17,10 +18,7 @@ function fixture(){
  const target={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:'b'.repeat(40),context:'k3d-kodex',clusterUID:uid(1),namespaceUID:uid(2),installationUID:uid(3),installationSHA256:fingerprint(installation.data),publisherUID:uid(4),authorityImage:'registry.local.kodex/kodex/internal-rpc-authority@sha256:'+'c'.repeat(64)};
  const publisher={apiVersion:'apps/v1',kind:'Deployment',metadata:{...metadata('internal-rpc-authority-publisher'),uid:uid(4)},spec:{template:{spec:{containers:[{name:'publisher',image:target.authorityImage}]}}}};
  const observed={context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,namespace:{kind:'Namespace',metadata:{name:'kodex-system',uid:target.namespaceUID},status:{phase:'Active'}},installation,publisher};
- const resources=telegramResourceCreateKeys.map(identity=>{const [apiVersion,kind,name]=identity.split('|');return {apiVersion,kind,metadata:metadata(name),...(kind==='ConfigMap'?{data:{INTERACTION_GATEWAY_ALLOWED_HOSTS:''}}:kind==='ServiceAccount'?{}:{spec:{}})};});
- const deployment=resources.find(r=>r.kind==='Deployment');
- deployment.spec={replicas:3,selector:{matchLabels:{'app.kubernetes.io/name':'interaction-gateway'}},template:{metadata:{labels:{'app.kubernetes.io/name':'interaction-gateway'}},spec:{serviceAccountName:'interaction-gateway',containers:[{name:'interaction-gateway'},{name:'internal-rpc-authority-issuer'},{name:'platform-worker-grant-agent'}],initContainers:[{name:'internal-rpc-authority-socket-init'}]}}};
- resources.find(r=>r.kind==='Service').spec={type:'ClusterIP',selector:{'app.kubernetes.io/name':'interaction-gateway'},ports:[{name:'metrics',port:9090,targetPort:'metrics',protocol:'TCP'}]};
+ const resources=telegramCreateSourceFixture();
  const interactionImage='registry.local.kodex/kodex/interaction-gateway@sha256:'+'d'.repeat(64),stored=new Map(),state={effects:0,lostACK:false,extra:[],allocated:'10.43.1.2',gateDrift:false};
  const key=r=>`${r.kind}/${r.metadata.name}`,get=r=>structuredClone(stored.get(key(r))??null);
  const dryRun=request=>{const r=structuredClone(request);r.metadata.uid=uid(800);r.metadata.resourceVersion='1';r.metadata.creationTimestamp='2026-11-14T00:00:00Z';
