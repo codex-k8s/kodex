@@ -209,10 +209,10 @@ func NormalizeTelegramEvents(events []string) ([]string, error) {
 	return result, nil
 }
 
-// validateTelegramDefinition keeps the system-only two-operation contract fixed across managed revisions without treating a version string as authorization.
-// validateTelegramDefinition сохраняет system-only контракт двух операций между managed revisions, не используя version string как authorization.
+// validateTelegramDefinition restricts managed revisions to the system-only health and optional notification operations; removing notification is a valid narrowing, while every effect consumer must require its retained capability separately. A version string never grants authority.
+// validateTelegramDefinition ограничивает managed revisions системными health и необязательной notification operation; удаление notification допустимо как сужение, а каждый effect consumer отдельно требует сохранённую capability. Version string не выдаёт authority.
 func validateTelegramDefinition(definition Package) error {
-	if len(definition.Spec.Capabilities) != 2 {
+	if len(definition.Spec.Capabilities) < 1 || len(definition.Spec.Capabilities) > 2 {
 		return errTelegramConfiguration
 	}
 	if definition.Metadata.Key != "telegram" || definition.Spec.Adapter != string(AdapterTelegram) || definition.Spec.AdapterOwner != string(OwnerInteractionGateway) || definition.Spec.ExecutionRoute != string(RouteInteraction) || definition.Spec.HealthCheck.Operation != "telegram.connection.read" || definition.Spec.Credential == nil || definition.Spec.Credential.SecretKey != "bot_token" || definition.Spec.Credential.Kind != "TOKEN" {

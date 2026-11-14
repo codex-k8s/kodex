@@ -1,6 +1,7 @@
 package integrationpackage
 
 import (
+	"encoding/json"
 	"maps"
 	"testing"
 	"time"
@@ -103,5 +104,46 @@ func TestTelegramQuietSchedulingUsesRealInstants(t *testing.T) {
 	instant := time.Date(2026, 11, 14, 10, 11, 12, 13, time.UTC)
 	if next, err := NextAllowedTelegramDelivery(configuration, instant); err != nil || !next.Equal(instant) {
 		t.Fatal("disabled quiet hours altered dispatch time")
+	}
+}
+
+// TestTelegramManagedRevisionCanRemoveOnlyNotification preserves the shared managed narrowing contract while retaining a mandatory health operation and exact system-only adapter scope.
+// TestTelegramManagedRevisionCanRemoveOnlyNotification сохраняет общий managed narrowing contract, обязательную health operation и точную системную область адаптера.
+func TestTelegramManagedRevisionCanRemoveOnlyNotification(t *testing.T) {
+	definitions, err := LoadShipped()
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline := definitions["telegram"]
+	candidate := baseline
+	candidate.Metadata.Origin = OriginUI
+	candidate.Metadata.Version = "2.0.0"
+	health, exists := baseline.Capability("telegram.connection.read")
+	if !exists {
+		t.Fatal("shipped health operation missing")
+	}
+	candidate.Spec.Capabilities = []Capability{health}
+	raw, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err = Parse(raw)
+	if err != nil || ValidateExecutableRevision(candidate, baseline) != nil {
+		t.Fatal("health-only managed revision did not narrow the shipped adapter contract", err)
+	}
+	if _, exists := candidate.Capability("telegram.notifications"); exists {
+		t.Fatal("health-only revision retained an effect capability")
+	}
+	if err := candidate.ValidateConfiguration(telegramConfigurationFixture()); err != nil {
+		t.Fatal("health-only connection configuration rejected", err)
+	}
+	notification, _ := baseline.Capability("telegram.notifications")
+	candidate.Spec.Capabilities = []Capability{notification}
+	raw, err = json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Parse(raw); err == nil {
+		t.Fatal("managed Telegram revision removed mandatory health operation")
 	}
 }

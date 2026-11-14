@@ -13,7 +13,10 @@ SELECT
   + (SELECT count(*)
      FROM control_plane.interaction_deliveries delivery
      WHERE delivery.connection_id = @connection_id::uuid
-       AND delivery.state IN ('WAITING_APPROVAL', 'DUE', 'CLAIMED', 'FAILED', 'UNKNOWN_OUTCOME')) AS active_effects,
+       AND delivery.state IN ('WAITING_APPROVAL', 'DUE', 'CLAIMED', 'FAILED', 'UNKNOWN_OUTCOME')
+       AND NOT (@allow_terminal_telegram_unknown::boolean AND delivery.capability_key='telegram.notifications'
+        AND delivery.telegram_subscription_id IS NOT NULL AND delivery.state='UNKNOWN_OUTCOME' AND delivery.completed_at IS NOT NULL
+        AND delivery.lease_ref IS NULL AND delivery.fence_digest IS NULL AND delivery.workload_instance IS NULL AND delivery.lease_expires_at IS NULL)) AS active_effects,
     (SELECT count(*)
      FROM control_plane.integration_grants grant_row
      WHERE grant_row.connection_id = @connection_id::uuid

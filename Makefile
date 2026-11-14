@@ -535,6 +535,14 @@ test-scoped-backup-reader:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
 
 .PHONY: test-control-plane-migration
+.PHONY: test-telegram-resource-create test-telegram-notifications-owner
+
+test-telegram-resource-create:
+	@timeout 180s node --test tools/release/telegram-resource-create.test.mjs
+
+test-telegram-notifications-owner:
+	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-owner
+
 test-control-plane-migration:
 	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs
 

@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-11-14
 ---
 
@@ -132,6 +132,56 @@ source revision8. Замороженный переход105→106 сохран�
 установкой. Worker начинает работу после protected owner startup barrier;
 shutdown отменяет и ожидает workers до закрытия зависимостей.
 
+## Адресное создание отсутствующего gateway
+
+`tools/release/telegram-resource-create.mjs` обслуживает только первоначальное
+создание десяти ресурсов gateway в существующей установке `web-only`. Источник
+получает сам helper через canonical Kustomize на чистом закреплённом Git SHA;
+произвольные objects, patch, Secret, RBAC либо render overrides не принимаются.
+Точный image gateway связывается с прежним publication receipt; общий image
+issuer/worker — с UID и image текущего принадлежащего установке publisher.
+Оба образа закреплены digest. Registry publication здесь не доказывает node pull.
+
+Target содержит точные context, cluster/namespace/installation/publisher UID,
+installation data digest и source SHA. Каждый kubectl получает явный
+`--kubeconfig` и `--context`; terminating namespace, другой publisher или изменение
+installation data отклоняются. Plan/target/publication — canonical JSON0600 в
+принадлежащем текущему пользователю каталоге0700. В target не помещают credentials.
+
+Plan фиксирует исходные три replicas, но создаваемый Deployment имеет строго
+ноль. Server-side dry-run допускает лишь закрытый набор штатных defaults:
+добавленные sidecar, env, volume, network destination или изменённое исходное
+поле отклоняются. Нет автоматического усыновления существующего ресурса.
+Namespace inventory без selector исключает orphan Pod/ReplicaSet; собственный
+ReplicaSet допустим только с точным новым owner UID и подтверждёнными нулевыми
+replicas. Наличие любого Pod этого gateway запрещено на данном этапе.
+
+План закрепляет единственные абсолютные пути своего файла и evidence journal;
+копия плана либо другой journal закрыто отклоняются. До первого create
+сохраняются и fsync файла, и directory entry плана/журнала.
+Перед каждым create журнал устойчиво сохраняет INTENT. Readback связывает
+назначенный API UID, точный spec, installation owner reference и уникальный
+marker плана. После потерянного ACK `status` восстанавливает только совпадающий
+объект; повторного create нет. Отсутствие после INTENT, удалённый объект, смена
+UID или Service allocation требуют отдельной диагностики и не создают новый UID.
+История UNKNOWN сохраняется. Этот протокол не выполняет patch, delete, rollout
+либо запуск worker.
+
+Публичная проверка модели и настоящего CLI с synthetic Kubernetes backend —
+`make test-telegram-resource-create` с бюджетом180 секунд. Только результат
+`CREATED_DORMANT` с `NOT_ACTIVATED_NOT_INSTALLED` допустим для этого этапа.
+Следующая materialization/schema046/policy107 волна отдельно доказывает все
+семнадцать readers, node pull, startup/readiness, bounded shutdown и сохранение
+изоляции API. Сам create receipt не разрешает обход этого barrier.
+
+Terminal UNKNOWN с `completed_at` и всеми закрытыми lease fields не блокирует
+явное изменение metadata Telegram connection. Только этот путь допускает
+исключение; удаление, credential policy, package binding и Mattermost сохраняют
+прежний запрет при неопределённом исходе. UI предупреждает, что доставка могла
+произойти и изменение настройки не отменяет прежнюю отправку. Новый scope
+требует свежей проверки credentials и явного Configure; прежний source event
+не отправляется повторно, stale completion не превращает UNKNOWN в SUCCESS.
+
 ## Квалификация
 
 Обязательны native owner PostgreSQL переходы Configure/claim/Begin/complete,
@@ -152,3 +202,9 @@ Live acceptance выполняет root после установленного 
 getMe/getChat/getChatMember/sendMessage, message_thread_id, ResponseParameters,
 retry_after и ограничения sendMessage. Источник:
 [Telegram Bot API](https://core.telegram.org/bots/api).
+
+Для адресного create через Context7 `/websites/kubernetes_io` проверены
+[API concepts](https://kubernetes.io/docs/reference/using-api/api-concepts/)
+и [garbage collection](https://kubernetes.io/docs/concepts/architecture/garbage-collection/):
+server-side dry-run не сохраняет объект, назначаемые UID/resourceVersion/Service
+адреса могут отличаться, owner reference относится к той же namespace boundary.

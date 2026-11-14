@@ -80,7 +80,8 @@ func (repository *Repository) claimTelegramDeliveriesTx(ctx context.Context, tx 
 		if err != nil {
 			return nil, err
 		}
-		if !definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction) {
+		_, notificationsPresent := definition.Capability("telegram.notifications")
+		if !notificationsPresent || !definition.ExecutableBy(integrationpackage.OwnerInteractionGateway, integrationpackage.RouteInteraction) {
 			return nil, errs.ErrForbidden
 		}
 		if err := projectInteractionPackage(item, connection, definition); err != nil {

@@ -179,7 +179,10 @@ func (adapter *Adapter) Deliver(ctx context.Context, claim *cp.InteractionDelive
 	if err != nil || definition.ValidateConfiguration(snapshot.Configuration) != nil {
 		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}
 	}
-	capability, _ := definition.Capability("telegram.notifications")
+	capability, notificationsPresent := definition.Capability("telegram.notifications")
+	if !notificationsPresent {
+		return nil, &SafeError{Code: errorConfiguration, NoEffect: true}
+	}
 	operation, cancel := context.WithTimeout(ctx, min(adapter.timeout, time.Duration(capability.Execution.TimeoutSeconds)*time.Second))
 	defer cancel()
 	ctx = operation

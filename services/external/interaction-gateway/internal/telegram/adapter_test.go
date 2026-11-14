@@ -161,3 +161,57 @@ func TestTelegramDeliveryRejectsMalformedPinsBeforeProvider(t *testing.T) {
 		})
 	}
 }
+
+// TestTelegramHealthOnlyRevisionCannotBeginOrReadCredential proves a valid owner-managed narrowing cannot be used as notification authority even when its private snapshot pins are internally consistent.
+// TestTelegramHealthOnlyRevisionCannotBeginOrReadCredential доказывает, что допустимое owner-managed сужение не выдаёт права уведомления даже при внутренне согласованных private snapshot pins.
+func TestTelegramHealthOnlyRevisionCannotBeginOrReadCredential(t *testing.T) {
+	adapter, claim := telegramAdapterFixture(t)
+	definition, err := integrationpackage.Parse(claim.DefinitionPackage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Metadata.Origin = integrationpackage.OriginUI
+	definition.Metadata.Version = "2.0.0"
+	health, exists := definition.Capability("telegram.connection.read")
+	if !exists {
+		t.Fatal("health operation missing")
+	}
+	definition.Spec.Capabilities = []integrationpackage.Capability{health}
+	raw, err := json.Marshal(definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err = integrationpackage.Parse(raw)
+	if err != nil {
+		t.Fatal("health-only revision rejected", err)
+	}
+	claim.DefinitionPackage = raw
+	claim.DefinitionVersion = definition.Metadata.Version
+	claim.DefinitionDigest = definition.Digest
+	snapshot, err := claimedSnapshot(claim)
+	// Rebind only this synthetic source digest to the valid narrowed definition;
+	// production consumers receive these immutable pins from the owner ledger.
+	// Перепривязывается только synthetic source digest к допустимому сужению;
+	// production consumers получают immutable pins из owner ledger.
+	if err == nil {
+		t.Fatal("changed package unexpectedly retained the old immutable input digest")
+	}
+	snapshot.DefinitionDigest = definition.Digest
+	digest, err := integrationpackage.TelegramDeliveryDigest(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim.Telegram.InputDigest = digest
+	calls := 0
+	adapter.newTransport = func() http.RoundTripper { calls++; return telegramProviderFixture(t, new([]string), 200) }
+	begin := func(context.Context, *cp.BeginInteractionDeliveryRequest) (*cp.BeginInteractionDeliveryResponse, error) {
+		calls++
+		return &cp.BeginInteractionDeliveryResponse{Allowed: true}, nil
+	}
+	if receipt, err := adapter.Deliver(t.Context(), claim, begin); err == nil || receipt != nil {
+		t.Fatal("health-only package admitted a notification")
+	}
+	if calls != 0 {
+		t.Fatal("health-only package reached credential transport or owner Begin")
+	}
+}

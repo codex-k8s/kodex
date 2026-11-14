@@ -33,6 +33,16 @@ test("backup controller publication keeps exact identity and rejects fake outcom
     assert.throws(() => validateStableReceipt({ ...receipt, ...patch }));
 });
 
+test("interaction gateway publication accepts only its exact immutable source receipt", () => {
+  const receipt = { schema: "kodex.stable-local-build/v1", component: "interaction-gateway", sourceSHA: "a".repeat(40),
+    contextSHA256: "b".repeat(64), archiveSHA256: "c".repeat(64), imageDigest: "sha256:" + "d".repeat(64),
+    admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
+  assert.equal(validateStableReceipt(receipt).component, "interaction-gateway");
+  for (const patch of [{ component: "interaction-gateway-foreign" }, { publication: "PASS" }, { admission: "PASS" },
+    { nodePull: "PASS" }, { sourceSHA: "0".repeat(40) }, { imageDigest: "interaction:latest" }])
+    assert.throws(() => validateStableReceipt({ ...receipt, ...patch }));
+});
+
 test("verified archive descriptor rejects writable files links and unexpected ownership shape", async () => {
   const directory = await mkdtemp(join(tmpdir(), "kodex-stable-archive-node-"));
   try {
@@ -117,7 +127,7 @@ async function setup(retainedComponent, builtComponent = "control-plane", config
   execFileSync("tar", ["-cf", archive, "-C", layout, ...files]); await chmod(archive, 0o600);
   const receipt = { schema: "kodex.stable-local-build/v1", component, sourceSHA: "a".repeat(40),
     contextSHA256: sha("synthetic git archive"), archiveSHA256: sha(await readFile(archive)), imageDigest: manifest.digest,
-    dockerfile: component === "backup-controller" ? "services/jobs/backup-controller/Dockerfile" : "services/internal/" + component + "/Dockerfile",
+    dockerfile: component === "backup-controller" ? "services/jobs/backup-controller/Dockerfile" : component === "interaction-gateway" ? "services/external/interaction-gateway/Dockerfile" : "services/internal/" + component + "/Dockerfile",
     target: "", admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
   if (!retainedComponent) await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt), { mode: 0o600 });
   else {
@@ -164,7 +174,7 @@ test("capability-free publication container reads private inputs only as their a
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-for (const component of ["control-plane", "backup-controller"]) test(`real publication CLI and worker keep credentials private and readback never imports again: ${component}`, async () => {
+for (const component of ["control-plane", "backup-controller", "interaction-gateway"]) test(`real publication CLI and worker keep credentials private and readback never imports again: ${component}`, async () => {
   const { directory, run, plan } = await setup(undefined, component);
   try {
     const planned = plan(); assert.equal(planned.status, 0, planned.output);

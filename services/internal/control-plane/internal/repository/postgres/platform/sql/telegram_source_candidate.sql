@@ -30,6 +30,7 @@ LEFT JOIN control_plane.owner_gates gate ON gate.id=NULLIF(@gate_id,'')::uuid AN
  AND gate.root_run_id=run.id AND gate.project_id=project.id
 WHERE subscription.organization_id=@organization_id::uuid AND subscription.project_id=@project_id::uuid
  AND subscription.enabled AND subscription.expires_at>clock_timestamp() AND subscription.used_effects<subscription.max_effects
+ AND control_plane.telegram_subscription_current(subscription.id)
  AND project.lifecycle='ACTIVE'
  AND ((@gate_id='' AND run.state IN ('SUCCEEDED','FAILED')) OR (@gate_id<>'' AND gate.state='OPEN' AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELLING')))
  AND control_plane.catalog_resource_visible(project.organization_id,actor.id,'project.manage','PROJECT',

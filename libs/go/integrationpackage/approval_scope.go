@@ -143,7 +143,7 @@ func (capability Capability) validateApprovalScopeContract() error {
 	if _, err := capability.ApprovalScopeLifetimes(); err != nil {
 		return err
 	}
-	if contract.RequiredInputPaths == nil || validateStringValue(Field{Key: "name", Type: "STRING", Format: "PLAIN", Required: true, MaximumLength: 128}, contract.Name, false) != nil {
+	if contract.RequiredInputPaths == nil || contract.Name == "" || !validDisplayText(contract.Name, 128) || strings.ContainsAny(contract.Name, "\x00\r\n") {
 		return errors.New("integration approval scope contract is invalid")
 	}
 	_, err := capability.approvalScopeDescriptors(contract.RequiredInputPaths)

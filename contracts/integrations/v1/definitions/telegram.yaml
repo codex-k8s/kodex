@@ -16,17 +16,17 @@ spec:
     secretKey: bot_token
     kind: TOKEN
   configurationFields:
-    - {key: base_url, type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 256, allowedValues: ["https://api.telegram.org"]}
-    - {key: bot_id, type: INTEGER, required: true, minimum: 1, maximum: 4503599627370495}
-    - {key: chat_id, type: STRING, format: PLAIN, required: true, maximumLength: 17}
-    - {key: topic, type: STRING, format: PLAIN, required: true, maximumLength: 10}
-    - {key: quiet_enabled, type: BOOLEAN, required: false}
-    - {key: quiet_start, type: STRING, format: PLAIN, required: false, maximumLength: 5}
-    - {key: quiet_end, type: STRING, format: PLAIN, required: false, maximumLength: 5}
-    - {key: quiet_timezone, type: STRING, format: PLAIN, required: false, maximumLength: 80}
-    - {key: queue_limit, type: INTEGER, required: false, minimum: 1, maximum: 1000}
-    - {key: rate_per_minute, type: INTEGER, required: false, minimum: 1, maximum: 20}
-    - {key: delivery_ttl_seconds, type: INTEGER, required: false, minimum: 60, maximum: 86400}
+    - {key: base_url, label: "Адрес Telegram Bot API", help: "Только официальный HTTPS endpoint; собственный сервер и перенаправления не поддерживаются.", type: STRING, format: HTTPS_ORIGIN, required: true, maximumLength: 256, allowedValues: ["https://api.telegram.org"]}
+    - {key: bot_id, label: "Идентификатор бота", help: "Положительный числовой идентификатор служебного бота. Сервер повторно сверит его по ключу.", type: INTEGER, required: true, minimum: 1, maximum: 4503599627370495}
+    - {key: chat_id, label: "Идентификатор чата", help: "Точный числовой идентификатор, включая минус для группы. Имена и автоматическая замена чата запрещены.", type: STRING, format: PLAIN, required: true, maximumLength: 17}
+    - {key: topic, label: "Тема чата", help: "NONE для доставки без темы либо положительный числовой идентификатор существующей темы. Новая тема не создаётся.", type: STRING, format: PLAIN, required: true, maximumLength: 10}
+    - {key: quiet_enabled, label: "Включить тихие часы", help: "По умолчанию выключены. При включении обязательны начало, конец и часовой пояс.", type: BOOLEAN, required: false}
+    - {key: quiet_start, label: "Начало тихих часов", help: "Время в формате HH:MM в выбранном часовом поясе.", type: STRING, format: PLAIN, required: false, maximumLength: 5}
+    - {key: quiet_end, label: "Конец тихих часов", help: "Время в формате HH:MM; интервал может пересекать полночь.", type: STRING, format: PLAIN, required: false, maximumLength: 5}
+    - {key: quiet_timezone, label: "Часовой пояс тихих часов", help: "Имя IANA, например Europe/Saratov. Часовой пояс браузера не выбирается автоматически.", type: STRING, format: PLAIN, required: false, maximumLength: 80}
+    - {key: queue_limit, label: "Размер очереди", help: "Необязательный предел от 1 до 1000; по умолчанию 64 незавершённых уведомления.", type: INTEGER, required: false, minimum: 1, maximum: 1000}
+    - {key: rate_per_minute, label: "Уведомлений в минуту", help: "Необязательный предел от 1 до 20; по умолчанию 6. Лимит подписки задаётся отдельно.", type: INTEGER, required: false, minimum: 1, maximum: 20}
+    - {key: delivery_ttl_seconds, label: "Срок доставки, секунд", help: "От 60 до 86400, по умолчанию 3600. После истечения уведомление не отправляется.", type: INTEGER, required: false, minimum: 60, maximum: 86400}
   networkDestinations:
     - {key: telegram_bot_api, source: STATIC, hostname: api.telegram.org, port: 443, tls: REQUIRED}
   healthCheck:

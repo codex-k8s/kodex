@@ -52,7 +52,7 @@ export const telegramNotificationsMessages = {
     cancelled: "Отменено",
     unknown: "Исход неизвестен",
     unknownHelp:
-      "После возможной отправки исход неизвестен. Автоматического повтора нет, чтобы не создать дубликат.",
+      "Доставка могла произойти. Автоматического повтора нет, чтобы не создать дубликат. Изменение настройки не отменяет прежнюю отправку.",
     attempt: "Попытка {attempt}",
   },
   en: {
@@ -108,7 +108,7 @@ export const telegramNotificationsMessages = {
     cancelled: "Cancelled",
     unknown: "Unknown outcome",
     unknownHelp:
-      "The outcome is unknown after a possible send. Automatic retry is disabled to prevent duplicates.",
+      "Delivery may have occurred. Automatic retry is disabled to prevent duplicates. Changing the configuration does not cancel the previous send.",
     attempt: "Attempt {attempt}",
   },
 };

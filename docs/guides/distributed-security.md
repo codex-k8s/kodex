@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.69
+version: 1.7.70
 updated: 2026-11-14
 ---
 
@@ -805,6 +805,14 @@ VFS и одиночный Artifact read используют те же теку�
 закреплённый immutable package; совпадение capability key у двух подключений
 не переносит разрешение между ними. Shipped schema не заменяет более узкую
 UI/Git revision. Выдача capability проверяет полномочия до OCC и receipt replay.
+Managed revision вправе удалить effect capability, сохранив обязательный health
+probe. Fixed adapter validator не запрещает такое сужение; Configure, выдача
+claim и effect consumer отдельно требуют наличие операции в фактически
+закреплённом пакете. Shipped operation и пустой default timeout не восстанавливают
+удалённую capability. Typed connection configuration нормализуется только по
+типам полей pinned package: JSON number допускается лишь для точного безопасного
+целого INTEGER, boolean — лишь для BOOLEAN; STRING не получает coercion.
+Хранимые канонические строки и provider-specific ограничения сохраняются.
 Для адресного integration grant проверяются оба владельца: точное соединение
 и точный Agent/Workflow внутри Project/tenant. Selector выдачи использует тот
 же owner admission predicate для страницы и total, но не требует заранее

@@ -130,7 +130,7 @@ func (repository *Repository) hydrateProjectAssistantConnection(ctx context.Cont
 	definitionKey := assistantString(operation.Parameters, "definitionKey")
 	definition, exists := repository.integrationDefinitions[definitionKey]
 	configuration, valid := assistantObjectValue(operation.Parameters, "publicConfiguration")
-	values, validValues := integrationStringConfiguration(configuration)
+	values, validValues := integrationConfigurationValues(definition, configuration)
 	name := strings.TrimSpace(assistantString(operation.Parameters, "name"))
 	if !exists || !valid || !validValues || definition.ValidateConnectionBootstrapConfiguration(values) != nil || name == "" || len(name) > 160 {
 		return operation, errs.ErrInvalid
@@ -146,7 +146,11 @@ func (repository *Repository) hydrateProjectAssistantConnection(ctx context.Cont
 	}
 	params := cloneAssistantFields(owner)
 	delete(params, "assistantName")
-	params["definitionKey"], params["name"], params["publicConfiguration"] = definitionKey, name, configuration
+	canonicalConfiguration := make(map[string]any, len(values))
+	for key, value := range values {
+		canonicalConfiguration[key] = value
+	}
+	params["definitionKey"], params["name"], params["publicConfiguration"] = definitionKey, name, canonicalConfiguration
 	params["definitionVersion"], params["definitionDigest"] = version, digest
 	operation.Parameters, operation.Before, operation.After = params, cloneAssistantFields(owner), cloneAssistantFields(params)
 	operation.Before["definitionVersion"], operation.Before["definitionDigest"] = version, digest

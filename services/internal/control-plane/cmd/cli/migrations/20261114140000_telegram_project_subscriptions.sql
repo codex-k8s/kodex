@@ -224,6 +224,39 @@ GRANT SELECT,INSERT,UPDATE ON control_plane.telegram_subscriptions TO control_pl
 REVOKE DELETE,TRUNCATE ON control_plane.telegram_subscriptions FROM control_plane_runtime;
 
 -- +goose StatementBegin
+CREATE FUNCTION control_plane.telegram_subscription_current(subscription_id uuid)
+RETURNS boolean LANGUAGE sql VOLATILE SET search_path=pg_catalog AS $current$
+ SELECT EXISTS (
+  SELECT 1 FROM control_plane.telegram_subscriptions subscription
+  JOIN control_plane.projects project ON project.id=subscription.project_id AND project.organization_id=subscription.organization_id
+  JOIN control_plane.subjects actor ON actor.id=subscription.approved_by AND actor.active
+  JOIN control_plane.integration_connections connection ON connection.id=subscription.connection_id
+   AND connection.organization_id=subscription.organization_id AND connection.definition_key='telegram'
+   AND connection.lifecycle_state='ACTIVE' AND connection.enabled AND connection.state='CONNECTED'
+   AND connection.credential_policy='PROJECT_SHARED' AND control_plane.integration_connection_configuration_ready(connection.id)
+   AND connection.version=subscription.connection_version AND connection.definition_version=subscription.definition_version
+   AND connection.definition_digest=subscription.definition_digest AND connection.credential_revision_id=subscription.credential_revision_id
+   AND connection.public_configuration=subscription.configuration
+  JOIN control_plane.integration_credential_revisions credential ON credential.id=subscription.credential_revision_id
+   AND credential.organization_id=subscription.organization_id AND credential.connection_id=connection.id
+  JOIN control_plane.integration_grants binding ON binding.id=subscription.grant_id
+   AND binding.telegram_project_id=project.id AND binding.organization_id=subscription.organization_id AND binding.connection_id=connection.id
+   AND binding.target_kind='TELEGRAM_SUBSCRIPTION' AND binding.target_ref=subscription.ref AND binding.enabled
+   AND binding.capability_key='telegram.notifications' AND binding.approval_policy='HUMAN_SCOPED'
+   AND binding.resource_scope_digest=subscription.scope_digest
+   AND binding.definition_version=subscription.definition_version AND binding.definition_digest=subscription.definition_digest
+  WHERE subscription.id=subscription_id AND subscription.enabled AND project.lifecycle='ACTIVE'
+   AND control_plane.catalog_resource_visible(project.organization_id,actor.id,'project.manage','PROJECT',
+    project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp())
+   AND control_plane.catalog_resource_visible(connection.organization_id,actor.id,'integration.manage','INTEGRATION',
+    connection.id,NULL,connection.created_by,'{}'::jsonb,transaction_timestamp())
+ );
+$current$;
+-- +goose StatementEnd
+REVOKE ALL ON FUNCTION control_plane.telegram_subscription_current(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION control_plane.telegram_subscription_current(uuid) TO control_plane_runtime;
+
+-- +goose StatementBegin
 CREATE FUNCTION control_plane.telegram_subscription_eligible(subscription_id uuid,run_id uuid,gate_id uuid,event_type text)
 RETURNS boolean LANGUAGE sql VOLATILE SET search_path=pg_catalog AS $eligible$
  SELECT EXISTS (
@@ -251,6 +284,7 @@ RETURNS boolean LANGUAGE sql VOLATILE SET search_path=pg_catalog AS $eligible$
   LEFT JOIN control_plane.owner_gates gate ON gate.id=gate_id AND gate.organization_id=subscription.organization_id
    AND gate.project_id=project.id AND gate.root_run_id=run.id
   WHERE subscription.id=subscription_id AND subscription.enabled AND subscription.expires_at>clock_timestamp()
+   AND control_plane.telegram_subscription_current(subscription.id)
    AND subscription.used_effects<subscription.max_effects AND event_type=ANY(subscription.event_types)
    AND project.lifecycle='ACTIVE'
    AND ((event_type='FINISHED' AND gate_id IS NULL AND run.state='SUCCEEDED')
@@ -494,6 +528,7 @@ BEGIN
   RAISE EXCEPTION 'telegram purge readback failed';END IF;
 END $telegram_purge$;
 -- +goose StatementEnd
+SET LOCAL search_path=public;
 RESET ROLE;
 
 -- +goose Down
