@@ -1,6 +1,6 @@
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
-import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
+import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -120,7 +120,7 @@ const mounts = [
 
 // Повторно связывает проверенный stable build с точным publication receipt, без registry writes.
 export function immutableMigrationImage(source, evidence, profile = 'outbox-index') {
-  if (evidence?.schema === componentMigrationSchema)
+  if (isComponentMigrationPublication(evidence))
     return componentMigrationPublication(evidence,source,profile).components.find(c => c.component === 'control-plane').imageRef;
   const { publicationPlan: plan, publicationEvidence: records } = evidence ?? {};
   const image = validateStableReceipt(plan?.receipt);
@@ -194,7 +194,7 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
     const job = {apiVersion:'batch/v1',kind:'Job',metadata:{name:`control-plane-migrate-${migrationVersion}${configuration.jobSuffix ?? ''}${attempt === 2 ? '-attempt2' : ''}`,namespace,labels},spec:{
     backoffLimit:0,activeDeadlineSeconds:300,ttlSecondsAfterFinished:86400,
     template:{metadata:{labels,annotations:{'kodex.dev/source-revision':source.revision,
-      ...(evidence.schema === componentMigrationSchema
+      ...(isComponentMigrationPublication(evidence)
         ? {'kodex.dev/component-lock-sha256':evidence.components.find(c => c.component === 'control-plane').componentLockSHA256}
         : {'kodex.dev/image-context-sha256':evidence.publicationPlan.receipt.contextSHA256})}},spec:{
       serviceAccountName:'control-plane-migrator',automountServiceAccountToken:false,restartPolicy:'Never',enableServiceLinks:false,
@@ -230,7 +230,7 @@ export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.
   ensure(matching.length <= 1 && matching.length === pods.length, 'MIGRATION_EXECUTION_SCOPE_CHANGED');
   if (matching.length !== 1) return false;
   const pod = matching[0], state = pod.status?.containerStatuses?.[0], expected = expectedJob.spec.template.spec;
-  const digest = plan.imageEvidence.schema === componentMigrationSchema
+  const digest = isComponentMigrationPublication(plan.imageEvidence)
     ? componentMigrationPublication(plan.imageEvidence,plan.source,plan.profile).components.find(c => c.component === 'control-plane').digest
     : plan.imageEvidence.publicationPlan.image.digest;
   const expectedInit = expected.initContainers ?? [], actualInit = pod.spec?.initContainers ?? [];
@@ -277,10 +277,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const retainedPlan = phase === 'plan' ? undefined : privateJSON(options['--plan']);
   const componentPublication = phase === 'plan'
     ? (options['--component-publication'] ? privateJSON(options['--component-publication']) : undefined)
-    : (retainedPlan.imageEvidence?.schema === componentMigrationSchema ? retainedPlan.imageEvidence : undefined);
+    : (isComponentMigrationPublication(retainedPlan.imageEvidence) ? retainedPlan.imageEvidence : undefined);
   const portableTarget = phase === 'plan'
     ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
-  ensure(componentPublication ? profile === 'workspace-unbound-stop' && portableTarget && context === componentPublication.context
+  // Для044 прежний CP043 не является допустимым rollback после DDL. Normal и
+  // backup требуют одного полного нового cohort, но разные exact schema proofs.
+  ensure(!['github-repository-scope','github-repository-scope-backup'].includes(profile) || componentPublication,
+    'COMPONENT_MIGRATION_COHORT_REQUIRED');
+  ensure(componentPublication ? isComponentMigrationProfile(profile) && portableTarget && context === componentPublication.context
     : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
   ensure(phase !== 'handoff' || componentPublication, 'COMPONENT_MIGRATION_HANDOFF_PROFILE_REQUIRED');
   const get = (kind, name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
@@ -352,9 +356,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
   const imageScope = (evidence, nsUID) => {
-    if (evidence.schema === componentMigrationSchema) {
+    if (isComponentMigrationPublication(evidence)) {
       const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
-      const apps = ['control-plane','runtime-controller','control-api-gateway'].map(name => get('deployment',name));
+      const apps = componentMigrationTargetNames(evidence.profile).map(name => get('deployment',name));
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
         installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items});
       const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
@@ -384,6 +388,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return {pod:'kodex-postgresql-0',uid,ownerUID};
   };
   const preconditionSQL = source => readFileSync(`${source.path}/tools/release/${configuration.preconditionFile}`);
+  const drainSQL = source => readFileSync(`${source.path}/tools/release/portable-component-migration-drain.sql`);
   const precondition = (source, expectedPostgres, expectedSQL, requireStopped = false) => {
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const sql = preconditionSQL(source);
@@ -530,7 +535,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
     if (componentPublication) {
       plan.portableTarget = structuredClone(portableTarget);
-      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,[anchor,get('deployment','runtime-controller')],source);
+      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,componentMigrationNames(profile).map(name=>name==='control-plane'?anchor:get('deployment',name)),source);
+      if(componentPublication.schema === componentMigrationCohortSchema)
+        plan.componentDrainSQLSHA256=createHash('sha256').update(drainSQL(source)).digest('hex');
     }
     if (previous) plan.predecessor = previous;
     plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
@@ -673,7 +680,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
-    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,postgresIdentity,
+    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,validateInputs:() => {
         ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -721,7 +728,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       }
       return output({...result,
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
-        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready),forwardOnly:true} : {})});
+        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || s.maintenance === true && s.stage === 'stagedSpec' && s.joined),forwardOnly:true} : {})});
     }
     if (phase === 'check') {
       if (!checks.length) {
