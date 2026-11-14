@@ -689,6 +689,7 @@ test-telegram-frozen-delivery:
 
 .PHONY: test-telegram-port-repair-backup
 test-telegram-port-repair-backup:
+	@timeout 60s node --test tools/release/telegram-backup-inventory.test.mjs
 	@timeout 900s node --test --test-name-pattern='^real CLI046/107 backup-port-repair:' tools/release/telegram-deployment.cli.test.mjs
 
 .PHONY: test-telegram-port-repair

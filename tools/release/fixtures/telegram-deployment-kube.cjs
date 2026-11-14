@@ -18,6 +18,7 @@ const save=()=>{
 const out=value=>{save();process.stdout.write(typeof value==='string'?value:JSON.stringify(value));};
 const fail=()=>{save();process.exit(71);};
 const key=(kind,name)=>kind.toLowerCase()+'/'+name;
+const syntheticUID=value=>{const hex=crypto.createHash('sha256').update(value).digest('hex').slice(0,32);return [hex.slice(0,8),hex.slice(8,12),hex.slice(12,16),hex.slice(16,20),hex.slice(20)].join('-');};
 const get=(kind,name)=>s.resources[key(kind,name)];
 let inputBytes;const input=()=>inputBytes??=(fs.readFileSync(0,'utf8'));
 const evidence=s.activeEvidence??s.evidence;
@@ -27,9 +28,9 @@ const sync=app=>{app.metadata.resourceVersion=String(Number(app.metadata.resourc
  app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(field=>[field,['readyReplicas','availableReplicas'].includes(field)&&!cpReady(app)?0:app.spec.replicas]))};};
 const inventory=()=>{
  const result=[];
- for(const name of s.componentNames){const app=get('deployment',name),rs=name+'-rs',rsUID=app.metadata.uid+'-rs';
+ for(const name of s.componentNames){const app=get('deployment',name),rs=name+'-rs',rsUID=s.backup?syntheticUID('rs/'+app.metadata.uid):app.metadata.uid+'-rs';
   result.push({kind:'ReplicaSet',metadata:{name:rs,uid:rsUID,namespace:'kodex-system',generation:1,labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'Deployment',name,uid:app.metadata.uid,controller:true}]},spec:{replicas:app.spec.replicas},status:{replicas:app.spec.replicas,observedGeneration:1}});
-  for(let index=0;index<app.spec.replicas;index++)result.push({kind:'Pod',metadata:{name:name+'-'+index,uid:rsUID+'-'+index,namespace:'kodex-system',
+  for(let index=0;index<app.spec.replicas;index++)result.push({kind:'Pod',metadata:{name:name+'-'+index,uid:s.backup?syntheticUID('pod/'+rsUID+'/'+index):rsUID+'-'+index,namespace:'kodex-system',
    labels:structuredClone(app.spec.template.metadata.labels??{'app.kubernetes.io/name':name}),ownerReferences:[{kind:'ReplicaSet',name:rs,uid:rsUID,controller:true}]},spec:app.spec.template.spec,
    status:{phase:'Running',conditions:[{type:'Ready',status:cpReady(app)?'True':'False'}],containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:cpReady(app),restartCount:0,imageID:c.image,state:{running:{}}})),
     initContainerStatuses:(app.spec.template.spec.initContainers??[]).map(c=>({name:c.name,ready:c.restartPolicy==='Always',restartCount:0,imageID:c.image,state:c.restartPolicy==='Always'?{running:{}}:{terminated:{exitCode:0}}}))}});
@@ -41,7 +42,8 @@ const inventory=()=>{
 let backupMaintenanceKube;
 const backupRun=(args,bytes='')=>{
  const b=s.backup;b.ownerVersion=s.schemaMigrated?20261114140000:20261114130000;b.ownerProof=s.schemaMigrated?s.postcondition:s.precondition;
- b.foreignControllers=Object.values(s.resources);const effects=b.effects;
+ const owned=new Set([b.deployment.metadata.uid,b.rs.metadata.uid,...b.pods.map(p=>p.metadata.uid),b.pgStatefulSet.metadata.uid,b.pgPod.metadata.uid]);
+ b.foreignControllers=[...new Map([...Object.values(s.resources),...inventory()].filter(r=>r?.metadata?.uid&&!owned.has(r.metadata.uid)).map(r=>[r.kind+'/'+r.metadata.name,r])).values()];const effects=b.effects;
  const result=backupMaintenanceKube(b,args,bytes);if(b.effects!==effects)s.effects.push('BACKUP_PATCH');return out(result);
 };
 // Один закрытый routing predicate управляет и импортом, и исполнением.
@@ -124,8 +126,8 @@ const run=request=>{
    s.effects.push('AUTHORITY_JOB');return out(object);
   }
   const check=object.spec.template.spec.containers[0].args[0]==='check';assert.equal(events().at(-1).type,check?'CHECK_CREATE_INTENT':'CREATE_INTENT');
-  object.metadata.uid='job-'+(s.effects.length+1);object.status={succeeded:1,completionTime:new Date().toISOString(),conditions:[{type:'Complete',status:'True'}]};
-  s.jobs[object.metadata.name]=object;s.jobPods[object.metadata.name]={kind:'Pod',metadata:{name:object.metadata.name+'-pod',namespace:'kodex-system',uid:'pod-'+object.metadata.uid,resourceVersion:'1',
+  object.metadata.uid=s.backup?syntheticUID('migration-job/'+object.metadata.name):'job-'+(s.effects.length+1);object.status={succeeded:1,completionTime:new Date().toISOString(),conditions:[{type:'Complete',status:'True'}]};
+  s.jobs[object.metadata.name]=object;s.jobPods[object.metadata.name]={kind:'Pod',metadata:{name:object.metadata.name+'-pod',namespace:'kodex-system',uid:s.backup?syntheticUID('migration-pod/'+object.metadata.uid):'pod-'+object.metadata.uid,resourceVersion:'1',
    labels:object.spec.template.metadata.labels,ownerReferences:[{kind:'Job',name:object.metadata.name,uid:object.metadata.uid,controller:true}]},spec:object.spec.template.spec,
    status:{phase:'Succeeded',initContainerStatuses:[{name:'wait-for-postgresql',restartCount:0,state:{terminated:{exitCode:0}}}],
     containerStatuses:[{name:'migrate',restartCount:0,imageID:object.spec.template.spec.containers[0].image,state:{terminated:{exitCode:0}}}]}};

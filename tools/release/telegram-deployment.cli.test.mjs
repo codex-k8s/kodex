@@ -294,6 +294,12 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   const resumed=join(f.directory,'backup-resume.json'),resumedEvidence=join(f.directory,'backup-resume.jsonl');
   const refs=['--stopped-plan',f.backupPlan,'--stopped-evidence',f.backupEvidence,'--migration-plan',f.plan,'--migration-evidence',f.evidence,
    '--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence,...apiOpen,...authority,...restoreStatus,'--api-restore-plan',restored,'--api-restore-evidence',restoredEvidence,'--telegram-port-repair-plan',f.repairPath];
+  const beforeBackup=f.read().backup.effects,foreign='unrelated-backup-producer';
+  f.edit(s=>{s.jobs[foreign]={apiVersion:'batch/v1',kind:'Job',metadata:{name:foreign,namespace:'kodex-system',uid:uid(9901),labels:{}},spec:{template:{spec:{serviceAccountName:'backup-controller',containers:[{name:'foreign',image:'synthetic.invalid/foreign@sha256:'+'e'.repeat(64)}],volumes:[{name:'credentials',secret:{secretName:'backup-controller-credentials'}}]}}},status:{active:1}};
+   s.jobPods[foreign]={apiVersion:'v1',kind:'Pod',metadata:{name:foreign+'-pod',namespace:'kodex-system',uid:uid(9902),resourceVersion:'1',labels:{},ownerReferences:[{kind:'Job',uid:uid(9901),controller:true}]},spec:structuredClone(s.jobs[foreign].spec.template.spec),status:{phase:'Running'}};});
+  const rejectedBackup=f.command('backup-controller-maintenance-cli.mjs',['plan','--action','resume',...flags,'--target',f.backupTarget,'--plan',resumed,'--evidence',resumedEvidence,'--stopped-source-sha',f.revision,...refs]);
+  assert.notEqual(rejectedBackup.status,0);assert.match(rejectedBackup.stderr,/BACKUP_MAINTENANCE_OTHER_PRODUCER_PRESENT/);assert.equal(existsSync(resumed),false);assert.equal(f.read().backup.effects,beforeBackup);
+  f.edit(s=>{delete s.jobs[foreign];delete s.jobPods[foreign];});
   checked('backup-controller-maintenance-cli.mjs',['plan','--action','resume',...flags,'--target',f.backupTarget,'--plan',resumed,'--evidence',resumedEvidence,'--stopped-source-sha',f.revision,...refs]);
   checked('backup-controller-maintenance-cli.mjs',['apply',...flags,'--plan',resumed,'--evidence',resumedEvidence,'--approved-plan-sha',fingerprint(read(resumed))]);
   checked('backup-controller-maintenance-cli.mjs',['status',...flags,'--plan',resumed,'--evidence',resumedEvidence]);
