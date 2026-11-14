@@ -11,12 +11,16 @@ import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {readSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
+import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory} from './authority-catalog-transition.mjs';
+import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
 
 const namespace='kodex-system';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const sha=/^[a-f0-9]{64}$/;
 const revision=/^[1-9][0-9]{0,15}$/;
 const policySHA256='763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504';
+const portableAuthorityImage=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(value)&&!value.includes('..');
+const planActionNeedsAdmission=action=>['rotate','abort'].includes(action);
 function requireValue(ok,code){if(!ok)throw new Error(code);}
 const run=(command,args,input)=>execFileSync(command,args,{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:30_000,maxBuffer:16<<20}).trim();
 export function deriveRotationOperationID(sourceRevision,sourceDigestSHA256){
@@ -43,21 +47,23 @@ export function canonicalRegistryMatches(raw,canonicalRaw){
  const actual=JSON.parse(run('yq',['-o=json','-I=0','.','-'],raw)),canonical=JSON.parse(run('yq',['-o=json','-I=0','.','-'],canonicalRaw));canonical.source_revision=actual.source_revision;
  return fingerprint(actual)===fingerprint(canonical);
 }
-export function validateRotationPolicy(raw){
+export function validateRotationPolicy(raw,transition){
+ if(transition!==undefined)return validateCatalogPolicy(raw,'desired',transition);
  requireValue(createHash('sha256').update(raw).digest('hex')===policySHA256,'EXACT_ROTATION_POLICY_REQUIRED');
  const policy=JSON.parse(raw),matches=policy?.policy?.operation_bindings?.filter(binding=>binding.operation_id==='platform.command.integration-definitions.create-draft');
  requireValue(policy.v===1&&policy.policy_revision===77&&policy.policy?.authority_abi_version===2&&matches?.length===1&&matches[0].project_required===false&&
   matches[0].request_profile?.resource==='FORBIDDEN','ROTATION_POLICY_BINDING_REJECTED');return {revision:77,sha256:policySHA256};
 }
-export function validatePredecessorPolicy(raw){
+export function validatePredecessorPolicy(raw,transition){
+ if(transition!==undefined)return validateCatalogPolicy(raw,'predecessor',transition);
  const policy=JSON.parse(raw),matches=policy?.policy?.operation_bindings?.filter(binding=>binding.operation_id==='platform.command.integration-definitions.create-draft');
- const transition=policy.v===1&&policy.policy_revision===76&&policy.policy?.authority_abi_version===2&&matches?.length===1&&matches[0].project_required===true;
+ const legacyTransition=policy.v===1&&policy.policy_revision===76&&policy.policy?.authority_abi_version===2&&matches?.length===1&&matches[0].project_required===true;
  const current=policy.policy_revision===77&&createHash('sha256').update(raw).digest('hex')===policySHA256;
- requireValue(transition||current,'ROTATION_PREDECESSOR_POLICY_REJECTED');return {revision:policy.policy_revision,sha256:createHash('sha256').update(raw).digest('hex')};
+ requireValue(legacyTransition||current,'ROTATION_PREDECESSOR_POLICY_REJECTED');return {revision:policy.policy_revision,sha256:createHash('sha256').update(raw).digest('hex')};
 }
-function validateRotationTemplate(job){
+function validateRotationTemplate(job,portable=false){
  const pod=job.spec?.template?.spec,container=pod?.containers?.[0];
- const immutable=container?.command?.length===1&&container.command[0]==='/usr/local/bin/internal-rpc-authority-cli'&&/^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(container.image??'');
+ const immutable=container?.command?.length===1&&container.command[0]==='/usr/local/bin/internal-rpc-authority-cli'&&(portable?portableAuthorityImage(container.image):/^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(container.image??''));
  const source=container?.image===authorityGoImage&&fingerprint(container.command)===fingerprint(['/workspace/tools/dev/run-go-command.sh'])&&
   fingerprint(container.args)===fingerprint(['services/internal/internal-rpc-authority','./cmd/cli','up']);
  requireValue(job.kind==='Job'&&job.metadata?.namespace===namespace&&pod?.restartPolicy==='Never'&&
@@ -102,9 +108,10 @@ export function normalizeRotationPrerequisiteSpec(policy){
 export function rotationPrerequisiteSpecSHA256(policy){return fingerprint(normalizeRotationPrerequisiteSpec(policy));}
 
 export function createRotationJob(template,plan){
- validateRotationTemplate(template);
+ const portable=plan.policyTransition?.profile===catalogPolicyTransition;
+ validateRotationTemplate(template,portable);
  requireValue(plan.version===3&&uuid.test(plan.intentID)&&['status','abort','rotate'].includes(plan.action)&&/^[a-f0-9]{40}$/.test(plan.revision)&&
-  /^\/srv\/kodex-dev\/[A-Za-z0-9._-]+$/.test(plan.source),'INVALID_ROTATION_PLAN');
+  (portable?typeof plan.source==='string'&&resolve(plan.source)===plan.source:/^\/srv\/kodex-dev\/[A-Za-z0-9._-]+$/.test(plan.source)),'INVALID_ROTATION_PLAN');
 	if(plan.action==='rotate')requireValue(uuid.test(plan.ownerOperationID)&&plan.ownerOperationID!==plan.intentID,'INVALID_ROTATION_OWNER_OPERATION');
  if(plan.action==='abort')requireValue(uuid.test(plan.rotation.intentID)&&revision.test(String(plan.rotation.sourceRevision))&&
   Number(plan.rotation.sourceRevision)<=9007199254740991&&sha.test(plan.rotation.sourceDigestSHA256),'INVALID_ROTATION_ABORT');
@@ -121,12 +128,12 @@ export function createRotationJob(template,plan){
  const annotations={'kodex.dev/rotation-intent':plan.intentID,'kodex.dev/rotation-plan-sha256':fingerprint(plan)};
 	if(plan.action==='rotate')annotations['kodex.dev/rotation-operation']=plan.ownerOperationID;
  return {apiVersion:'batch/v1',kind:'Job',metadata:{name:`authority-rotation-${plan.intentID}`,namespace,
-  labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'staging'},annotations:{
+  labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':portable?'production':'staging',...(portable?{'kodex.dev/profile':'web-only'}:{})},annotations:{
    ...annotations}},spec};
 }
 
-export function createCanonicalRotationTemplate(source,image){
- requireValue(/^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(image),'EXACT_CLI_IMAGE_REQUIRED');
+export function createCanonicalRotationTemplate(source,image,portable=false){
+ requireValue(portable?portableAuthorityImage(image):/^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(image),'EXACT_CLI_IMAGE_REQUIRED');
 	const path=`${source}/deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml`;
 	const canonical=JSON.parse(run('yq',['-o=json','-I=0','.',path]));
 	requireValue(canonical.metadata?.name==='internal-rpc-authority-migrate','EXACT_CLI_TEMPLATE_SOURCE_REQUIRED');
@@ -150,10 +157,10 @@ export function createRegistryCAS(current,plan){
   current.metadata?.resourceVersion===plan.registry.resourceVersion&&
   fingerprint(current.data)===plan.registry.currentDataSHA256&&
 	 createHash('sha256').update(current.data?.['authority-policy.json']??'').digest('hex')===plan.registry.previousPolicySHA256&&
-	 validatePredecessorPolicy(current.data?.['authority-policy.json']).revision===plan.registry.previousPolicyRevision&&
+	 validatePredecessorPolicy(current.data?.['authority-policy.json'],plan.policyTransition).revision===plan.registry.previousPolicyRevision&&
 	 deriveRegistryRotationIdentity(current.data?.['key-delivery-targets.yaml']).sourceRevision===plan.registry.previousSourceRevision&&
 	 deriveRegistryRotationIdentity(current.data?.['key-delivery-targets.yaml']).sourceDigestSHA256===plan.registry.previousSourceDigestSHA256&&
-  validateRotationPolicy(plan.registry.desiredData?.['authority-policy.json']).sha256===plan.registry.policySHA256,
+  validateRotationPolicy(plan.registry.desiredData?.['authority-policy.json'],plan.policyTransition).sha256===plan.registry.policySHA256,
 	 'ROTATION_REGISTRY_CAS_DRIFT');
  const desired=structuredClone(current);delete desired.status;
  for(const key of ['managedFields','creationTimestamp','generation'])delete desired.metadata[key];
@@ -210,26 +217,37 @@ function sourcePublisherExecutable(deployment,get,kube,k3sSudo){
  requireValue(proofs.length>0&&new Set(proofs).size===1,'SOURCE_PUBLISHER_EXECUTABLES_DIFFER');return proofs[0];
 }
 
-async function main(args){
+export async function main(args,io={}){
+ const execute=io.run??run,inspect=io.inspectSource??inspectSource;
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
- while(args.length){const key=args.shift();requireValue(['--context','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
- requireValue(options['--context']&&!/prod/i.test(options['--context']),'EXACT_STAGING_CONTEXT_REQUIRED');
- const kube=(...argv)=>options['--k3s-sudo']?run('sudo',['-n','k3s','kubectl','--context',options['--context'],...argv]):run('kubectl',['--context',options['--context'],...argv]);
-	const kubeInput=(input,...argv)=>options['--k3s-sudo']?run('sudo',['-n','k3s','kubectl','--context',options['--context'],...argv],input):run('kubectl',['--context',options['--context'],...argv],input);
-	const replace=value=>options['--k3s-sudo']?
-	 run('sudo',['-n','k3s','kubectl','--context',options['--context'],'replace','-f','-'],JSON.stringify(value)):
-	 run('kubectl',['--context',options['--context'],'replace','-f','-'],JSON.stringify(value));
+ while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
+ const loadedPlan=command==='plan'?null:readAuthorityPrivateJSON(options['--plan']);
+ const profile=options['--policy-transition']??loadedPlan?.policyTransition?.profile;
+ requireValue(profile===undefined||profile===catalogPolicyTransition,'CATALOG_POLICY_TRANSITION_REQUIRED');
+ const catalog=profile===catalogPolicyTransition;
+ requireValue(typeof options['--context']==='string'&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context'])&&(catalog||!/prod/i.test(options['--context'])),'EXACT_STAGING_CONTEXT_REQUIRED');
+ const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
+ requireValue(catalog||!options['--portable-target'],'CATALOG_POLICY_TRANSITION_REQUIRED');
+ const kubeArgs=[...(kubeconfig?['--kubeconfig',kubeconfig]:[]),'--context',options['--context'],'--request-timeout=30s'];
+ const kubeInput=(input,...argv)=>options['--k3s-sudo']?execute('sudo',['-n','k3s','kubectl',...kubeArgs,...argv],input):execute('kubectl',[...kubeArgs,...argv],input);
+ const kube=(...argv)=>kubeInput(undefined,...argv);
+ const replace=value=>kubeInput(JSON.stringify(value),'replace','-f','-');
  requireValue(kube('config','current-context')===options['--context'],'CONTEXT_MISMATCH');
  const get=(kind,name)=>JSON.parse(kube('get',kind,...(name?[name]:[]),'-n',namespace,'-o','json'));
- const ns=get('namespace',namespace);requireValue(ns.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&ns.metadata.labels?.['kodex.dev/environment']==='staging','STAGING_NAMESPACE_REQUIRED');
+ const ns=get('namespace',namespace);
+ const targetProfile=catalog?(command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):loadedPlan.policyTransition.targetProfile):undefined;
+ if(catalog&&command!=='plan')requireValue(loadedPlan.kubeconfig===kubeconfig&&(!options['--portable-target']||fingerprint(readAuthorityPrivateJSON(options['--portable-target']))===fingerprint(targetProfile)),'CATALOG_AUTHORITY_TARGET_DRIFT');
+ const catalogTarget=catalog?readCatalogTarget(targetProfile,options['--context'],get):undefined;
+ if(catalog&&command!=='plan')verifyCatalogTransition(loadedPlan.policyTransition,catalogTarget.transition);
+ requireValue(catalog||ns.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&ns.metadata.labels?.['kodex.dev/environment']==='staging','STAGING_NAMESPACE_REQUIRED');
 	validateRotationPrerequisites(get('serviceaccount','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-postgresql-from-migrator'));
 	requireValue(kube('auth','can-i','create','jobs','-n',namespace)==='yes'&&
 	 kube('get','secret','internal-rpc-authority-postgres-migration','-n',namespace,'-o','name')==='secret/internal-rpc-authority-postgres-migration'&&
 	 kube('get','configmap','internal-rpc-authority-postgresql-ca','-n',namespace,'-o','name')==='configmap/internal-rpc-authority-postgresql-ca','ROTATION_JOB_API_PREREQUISITES_REJECTED');
  const livePublisher=get('deployment','internal-rpc-authority-publisher');
  const publisherContainer=livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher');
- const loadedPlan=command==='plan'?null:JSON.parse(readFileSync(options['--plan'],'utf8'));
  const sourceProfile=publisherContainer?.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh');let sourceDelivery,sourceMigrationReceipt;
+ requireValue(!catalog||!sourceProfile,'CATALOG_IMMUTABLE_PUBLISHER_REQUIRED');
  if(sourceProfile){if(command==='plan')requireValue(options['--source-delivery-plan']&&options['--source-migration-receipt'],'SOURCE_DELIVERY_EVIDENCE_REQUIRED');const publisherState=validateSourcePublisher(livePublisher);sourceDelivery=command==='plan'?JSON.parse(readFileSync(options['--source-delivery-plan'],'utf8')):loadedPlan.sourceDelivery;validateSourceDeliveryPlan(sourceDelivery);
   const sourceMigration=createSourceMigrationJob(sourceDelivery.migration.rendered,sourceDelivery);sourceMigrationReceipt=command==='plan'?readSourceMigrationReceipt(options['--source-migration-receipt'],sourceMigration,sourceDelivery):validateSourceMigrationReceipt(loadedPlan.sourceMigrationReceipt,sourceMigration,sourceDelivery);
   validateSourceMigrationPrerequisite(sourceDelivery,sourceMigrationReceipt,get('job',sourceMigration.metadata.name));
@@ -238,22 +256,28 @@ async function main(args){
   requireValue(publisherState.source===sourceDelivery.source&&allowedPublisherSpec&&
    sourcePublisherExecutable(livePublisher,get,kube,options['--k3s-sudo'])===sourceDelivery.capability.publisherSHA256,'SOURCE_DELIVERY_NOT_ACTIVE');
  }else requireValue(publisherContainer?.command?.length===1&&publisherContainer.command[0]==='/usr/local/bin/internal-rpc-authority-publisher'&&
-  /^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(publisherContainer.image),'EXACT_PUBLISHER_EXECUTABLE_REQUIRED');
+  (catalog?portableAuthorityImage(publisherContainer.image):/^ghcr\.io\/codex-k8s\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(publisherContainer.image)),'EXACT_PUBLISHER_EXECUTABLE_REQUIRED');
 	const source=command==='plan'?options['--source']:loadedPlan.source;
 	if(sourceProfile)requireValue(source===sourceDelivery.source&&(command!=='plan'||options['--revision']===sourceDelivery.revision),'SOURCE_DELIVERY_PLAN_DRIFT');
-	const template=sourceProfile?createSourceRotationTemplate(sourceDelivery.migration.rendered,source):createCanonicalRotationTemplate(source,publisherContainer.image);validateRotationTemplate(template);
+	const template=sourceProfile?createSourceRotationTemplate(sourceDelivery.migration.rendered,source):createCanonicalRotationTemplate(source,publisherContainer.image,catalog);validateRotationTemplate(template,catalog);
  let plan;
  if(command==='plan'){
   requireValue(['status','abort','rotate'].includes(options['--action']),'ROTATION_ACTION_REQUIRED');
   plan={version:3,intentID:randomUUID(),context:options['--context'],namespaceUID:ns.metadata.uid,
    templateSpecSHA256:fingerprint(template.spec),cliImage:template.spec.template.spec.containers[0].image,
    cliCommand:template.spec.template.spec.containers[0].command,source:options['--source'],revision:options['--revision'],action:options['--action'],
-   ...(sourceProfile?{sourceDelivery,sourceDeliveryPlanSHA256:fingerprint(sourceDelivery),sourceMigrationReceipt,sourceMigrationReceiptSHA256:fingerprint(sourceMigrationReceipt),publisherExecutableSHA256:sourceDelivery.capability.publisherSHA256}:{})};
+   ...(sourceProfile?{sourceDelivery,sourceDeliveryPlanSHA256:fingerprint(sourceDelivery),sourceMigrationReceipt,sourceMigrationReceiptSHA256:fingerprint(sourceMigrationReceipt),publisherExecutableSHA256:sourceDelivery.capability.publisherSHA256}:{}),
+   ...(catalog?{policyTransition:catalogTarget.transition,kubeconfig,
+     ...(planActionNeedsAdmission(options['--action'])?{maintenance:await readCatalogMaintenance(options['--maintenance-plan'],options['--maintenance-evidence'],argv=>kube(...argv),
+       {trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']})}:{})}:{})};
   if(plan.action==='rotate'){
    const liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    const registryFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`;
    requireValue(!options['--registry-file']||options['--registry-file']===registryFile,'EXACT_ROTATION_REGISTRY_FILE_REQUIRED');
-   const policyFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,policyRaw=readFileSync(policyFile,'utf8');validateRotationPolicy(policyRaw);const previousPolicy=validatePredecessorPolicy(liveRegistry.data?.['authority-policy.json']);
+   const policyFile=`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json`,sourcePolicyRaw=readFileSync(policyFile,'utf8');
+   if(catalog)requireValue(sourcePolicyRaw===catalogPolicySource('desired').raw,'CATALOG_POLICY_SOURCE_REJECTED');
+   const policyRaw=catalog?renderAuthorityPolicyEnvironment(sourcePolicyRaw,plan.policyTransition.environment).raw:sourcePolicyRaw;
+   const desiredPolicy=validateRotationPolicy(policyRaw,plan.policyTransition),previousPolicy=validatePredecessorPolicy(liveRegistry.data?.['authority-policy.json'],plan.policyTransition);
    const advance=deriveCanonicalRegistryAdvance(liveRegistry.data?.['key-delivery-targets.yaml'],readFileSync(registryFile,'utf8'));
    const desiredData=structuredClone(liveRegistry.data);desiredData['key-delivery-targets.yaml']=advance.raw;desiredData['authority-policy.json']=policyRaw;
    requireValue(fingerprint(liveRegistry.data)!==fingerprint(desiredData),'ROTATION_REGISTRY_MUST_ADVANCE');
@@ -265,7 +289,7 @@ async function main(args){
 	    currentDataSHA256:fingerprint(liveRegistry.data),desiredData,desiredDataSHA256:fingerprint(desiredData),sourceFile:registryFile.slice(plan.source.length+1),
 	    previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,
 	    sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256,
-      policySourceFile:policyFile.slice(plan.source.length+1),previousPolicyRevision:previousPolicy.revision,previousPolicySHA256:previousPolicy.sha256,policyRevision:77,policySHA256};
+      policySourceFile:policyFile.slice(plan.source.length+1),previousPolicyRevision:previousPolicy.revision,previousPolicySHA256:previousPolicy.sha256,policyRevision:desiredPolicy.revision,policySHA256:desiredPolicy.sha256};
    plan.publisher={uid:livePublisher.metadata.uid,resourceVersion:livePublisher.metadata.resourceVersion,
     specSHA256:fingerprint(livePublisher.spec),image:livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher').image,
     command:livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher').command};
@@ -273,14 +297,15 @@ async function main(args){
   }
   if(plan.action==='abort')plan.rotation={intentID:options['--intent-id'],sourceRevision:Number(options['--source-revision']),sourceDigestSHA256:options['--source-digest-sha256']};
  }else plan=loadedPlan;
+ if(catalog&&planActionNeedsAdmission(plan.action))verifyCatalogAdmission(plan.maintenance,plan.policyTransition);
  requireValue(plan.context===options['--context']&&plan.namespaceUID===ns.metadata.uid&&
   plan.templateSpecSHA256===fingerprint(template.spec)&&plan.cliImage===template.spec.template.spec.containers[0].image&&
   fingerprint(plan.cliCommand)===fingerprint(template.spec.template.spec.containers[0].command),'ROTATION_PLAN_DRIFT');
 	if(plan.action==='rotate')requireValue(uuid.test(plan.registry?.uid)&&String(plan.registry.resourceVersion).length>0&&sha.test(plan.registry.currentDataSHA256)&&
 	 sha.test(plan.registry.desiredDataSHA256)&&fingerprint(plan.registry.desiredData)===plan.registry.desiredDataSHA256&&
 	 typeof plan.registry.desiredData?.['key-delivery-targets.yaml']==='string'&&
-	 typeof plan.registry.desiredData?.['authority-policy.json']==='string'&&validateRotationPolicy(plan.registry.desiredData['authority-policy.json']).revision===plan.registry.policyRevision&&
-	 plan.registry.policySHA256===policySHA256&&[76,77].includes(plan.registry.previousPolicyRevision)&&sha.test(plan.registry.previousPolicySHA256)&&plan.registry.policySourceFile==='deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'&&
+	 typeof plan.registry.desiredData?.['authority-policy.json']==='string'&&validateRotationPolicy(plan.registry.desiredData['authority-policy.json'],plan.policyTransition).revision===plan.registry.policyRevision&&
+	 plan.registry.policySHA256===validateRotationPolicy(plan.registry.desiredData['authority-policy.json'],plan.policyTransition).sha256&&(catalog?plan.registry.previousPolicyRevision===105:[76,77].includes(plan.registry.previousPolicyRevision))&&sha.test(plan.registry.previousPolicySHA256)&&plan.registry.policySourceFile==='deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceRevision===plan.registry.sourceRevision&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).sourceDigestSHA256===plan.registry.sourceDigestSHA256&&
 	 deriveRegistryRotationIdentity(plan.registry.desiredData['key-delivery-targets.yaml']).ownerOperationID===plan.ownerOperationID&&
@@ -290,21 +315,30 @@ async function main(args){
 	 uuid.test(plan.publisher?.uid)&&String(plan.publisher.resourceVersion).length>0&&sha.test(plan.publisher.specSHA256)&&sha.test(plan.publisher.desiredSpecSHA256)&&
 	 plan.publisher.image===plan.cliImage&&fingerprint(plan.publisher.command)===fingerprint(sourceProfile?['/workspace/tools/dev/run-go-hot-reload.sh']:['/usr/local/bin/internal-rpc-authority-publisher'])&&
   (!sourceProfile||(plan.sourceDeliveryPlanSHA256===fingerprint(sourceDelivery)&&plan.sourceMigrationReceiptSHA256===fingerprint(sourceMigrationReceipt)&&plan.publisherExecutableSHA256===sourceDelivery.capability.publisherSHA256)),'ROTATION_PLAN_DRIFT');
- requireValue(inspectSource(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');const job=createRotationJob(template,plan);
+ requireValue(inspect(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');const job=createRotationJob(template,plan);
 	if(plan.action==='rotate'){
    requireValue(canonicalRegistryMatches(plan.registry.desiredData['key-delivery-targets.yaml'],readFileSync(`${plan.source}/${plan.registry.sourceFile}`,'utf8'))&&
-    readFileSync(`${plan.source}/${plan.registry.policySourceFile}`,'utf8')===plan.registry.desiredData['authority-policy.json'],'ROTATION_REGISTRY_SOURCE_DRIFT');
+    (catalog?renderAuthorityPolicyEnvironment(readFileSync(`${plan.source}/${plan.registry.policySourceFile}`,'utf8'),plan.policyTransition.environment).raw:readFileSync(`${plan.source}/${plan.registry.policySourceFile}`,'utf8'))===plan.registry.desiredData['authority-policy.json'],'ROTATION_REGISTRY_SOURCE_DRIFT');
   }
 	if(command==='plan'){
 	 const dryRun=JSON.parse(kubeInput(JSON.stringify(job),'create','--dry-run=server','-f','-','-o','json'));
 	 verifyRotationJobReadback(dryRun,job);
-	 writeFileSync(options['--output'],JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});process.stdout.write(`Authority rotation plan: ${fingerprint(plan)}\n`);return;
+	 if(catalog)writeAuthorityPrivatePlan(options['--output'],plan);else writeFileSync(options['--output'],JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});process.stdout.write(`Authority rotation plan: ${fingerprint(plan)}\n`);return;
 	}
  let fd;const evidence=record=>{if(fd===undefined)return;writeSync(fd,JSON.stringify({at:new Date().toISOString(),intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,...record})+'\n');fsyncSync(fd);};
+ const requireAdmission=async()=>{
+   if(!catalog)return;
+   requireValue(plan.maintenance,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
+   verifyCatalogTransition(plan.policyTransition,readCatalogTarget(targetProfile,options['--context'],get).transition);
+   const fresh=await readCatalogMaintenance(plan.maintenance.planPath,plan.maintenance.evidencePath,argv=>kube(...argv),plan.maintenance);
+   verifyCatalogAdmission(fresh,plan.policyTransition);
+   requireValue(fingerprint(fresh)===fingerprint(plan.maintenance),'CATALOG_API_ADMISSION_DRIFT');
+ };
 	 if(command==='apply'){
-  requireValue(options['--confirm']==='APPLY-STAGING-AUTHORITY-ROTATION','STAGING_CONFIRMATION_REQUIRED');
+  requireValue(options['--confirm']===(catalog?'APPLY-PORTABLE-CATALOG-AUTHORITY':'APPLY-STAGING-AUTHORITY-ROTATION'),'STAGING_CONFIRMATION_REQUIRED');
   requireValue(!kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json'),'EXISTING_OPERATION_REQUIRES_RESUME');
-  fd=openSync(options['--evidence'],'wx',0o600);evidence({status:'INTENT',action:plan.action,planSHA256:fingerprint(plan)});
+  if(catalog)syncAuthorityJournalDirectory(options['--evidence']);
+  fd=openSync(options['--evidence'],'wx',0o600);if(catalog)syncAuthorityJournalDirectory(options['--evidence']);evidence({status:'INTENT',action:plan.action,planSHA256:fingerprint(plan)});
 	 }
 	 if(command==='resume'){
 	  requireValue(options['--evidence'],'ROTATION_EVIDENCE_REQUIRED');
@@ -317,6 +351,7 @@ async function main(args){
 	 if((command==='apply'||command==='resume')&&plan.action==='rotate'){
    let liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');
    if(fingerprint(liveRegistry.data)!==plan.registry.desiredDataSHA256){
+    await requireAdmission();
     const desired=createRegistryCAS(liveRegistry,plan);evidence({status:'INTENT',operation:'REGISTRY_CAS'});
     try{replace(desired);}
     catch{evidence({status:'UNKNOWN',operation:'REGISTRY_CAS'});}
@@ -329,6 +364,7 @@ async function main(args){
    let livePublisher=get('deployment','internal-rpc-authority-publisher');
    if(livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-intent']!==plan.intentID||
     livePublisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']!==plan.ownerOperationID){
+    await requireAdmission();
     const desired=createPublisherRestart(livePublisher,plan);evidence({status:'INTENT',operation:'PUBLISHER_RESTART'});
     try{replace(desired);}
     catch{evidence({status:'UNKNOWN',operation:'PUBLISHER_RESTART'});}
@@ -341,16 +377,19 @@ async function main(args){
    if(sourceProfile){kube('rollout','status','deployment/internal-rpc-authority-publisher','--timeout=300s','-n',namespace);livePublisher=get('deployment','internal-rpc-authority-publisher');
     requireValue(sourcePublisherExecutable(livePublisher,get,kube,options['--k3s-sudo'])===plan.publisherExecutableSHA256,'ROTATION_SOURCE_PUBLISHER_EXECUTABLE_MISMATCH');}
    liveRegistry=get('configmap','internal-rpc-authority-publisher-target-registry');requireValue(liveRegistry.metadata.uid===plan.registry.uid&&fingerprint(liveRegistry.data)===plan.registry.desiredDataSHA256&&
-    validateRotationPolicy(liveRegistry.data?.['authority-policy.json']).sha256===plan.registry.policySHA256,'ROTATION_REGISTRY_POST_RESTART_DRIFT');
+    validateRotationPolicy(liveRegistry.data?.['authority-policy.json'],plan.policyTransition).sha256===plan.registry.policySHA256,'ROTATION_REGISTRY_POST_RESTART_DRIFT');
    evidence({status:'APPLIED',operation:'PUBLISHER_RESTART',resourceVersion:livePublisher.metadata.resourceVersion});
 	 }
 	 if(command==='apply'||command==='resume'){
 	  const existingJob=kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json');
-	  if(!existingJob)try{
-	   const argv=['--context',options['--context'],'create','-f','-'];
-	   if(options['--k3s-sudo'])run('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job));
-	   else run('kubectl',argv,JSON.stringify(job));
-	  }catch{evidence({status:'UNKNOWN',operation:'CREATE'});}
+	  if(!existingJob){
+	   if(planActionNeedsAdmission(plan.action))await requireAdmission();
+	   try{
+	   const argv=[...kubeArgs,'create','-f','-'];
+	   if(options['--k3s-sudo'])execute('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job));
+	   else execute('kubectl',argv,JSON.stringify(job));
+	   }catch{evidence({status:'UNKNOWN',operation:'CREATE'});}
+	  }
 	 }
  try{
   const created=get('job',job.metadata.name);verifyRotationJobReadback(created,job);

@@ -4,7 +4,7 @@ title: Поисковый каталог моделей и Z.ai Coding Plan
 type: operations
 status: approved
 owner: manager
-version: 1.0.3
+version: 1.0.4
 updated: 2026-11-14
 ---
 
@@ -213,6 +213,9 @@ revision, распространение, обязательный consumer read
 Текущий RPC profile сохраняется; новый каталог открывают после принятия106,
 готовности нового CP handler/embedded assets и обновления gateway/PWA.
 Live readback, SSO и TLS-путь записываются отдельно от локальной квалификации.
+Исполняемый portable переход105→106, совместимость CP binary с105 и отдельная
+изоляция API для всех16 reader receipts описаны в
+[порядке поставки authority](model-discovery-authority-delivery-2139.md).
 
 Rollback сначала прекращает новые gateway/PWA вызовы, затем возвращает
 совместимый application cohort. Сохранённый policy high-watermark не понижается

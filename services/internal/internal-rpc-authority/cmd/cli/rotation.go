@@ -101,13 +101,27 @@ func parseRotationOptions(action command, args []string) (rotationOptions, error
 	return rotationOptions{intentID: args[2], revision: revision, sourceDigest: args[6]}, nil
 }
 
-// readRotationStatus decodes one database JSON result and requires an observation time, closed state sets and the action-dependent intent or operation bindings. Compound operations require canonical identity, consistent state, bounded adjacent registry/base revisions, expected-readback count, digest syntax and phase/deadline/completion presence; nonempty single intents require supported protocol, source revision and digest. It uses json.Unmarshal rather than a strict unknown-field decoder and does not verify signatures, all optional timestamps or actual readback completeness.
-// readRotationStatus декодирует один JSON-результат БД и требует время наблюдения, закрытые наборы состояний и зависящие от формы привязки намерения либо операции. Для составной операции нужны каноническая идентичность, согласованное состояние, ограниченные соседние ревизии реестра и базы, ожидаемое число readback, синтаксис дайджестов и присутствие фазы, сроков и завершения; непустому отдельному намерению нужны поддерживаемый протокол, исходная ревизия и дайджест. Используется json.Unmarshal, а не строгий декодер неизвестных полей; подписи, все необязательные времена и фактическая полнота readback не проверяются.
+// readRotationStatus reads one authoritative owner result and delegates wire validation without
+// interpreting registry and snapshot revisions as one sequence. It does not issue a transition,
+// verify a signature or replace the owner's durable predecessor and exact-readback checks.
+// readRotationStatus читает один авторитетный owner result и передаёт wire validation без
+// объединения registry и snapshot revisions в одну последовательность. Не выполняет переход,
+// не проверяет подпись и не заменяет устойчивые predecessor и exact-readback проверки owner.
 func readRotationStatus(ctx context.Context, db *sql.DB) (rotationStatus, error) {
 	var raw []byte
 	if err := db.QueryRowContext(ctx, rotationStatusSQL).Scan(&raw); err != nil {
 		return rotationStatus{}, errors.New("authority rotation readback failed")
 	}
+	return decodeRotationStatus(raw)
+}
+
+// decodeRotationStatus validates the owner query's bounded wire result without assigning authority.
+// Registry and snapshot revisions belong to different sequences; the owner SQL checks first-operation
+// adjacency and later registry successors against its durable history, which is absent from this DTO.
+// decodeRotationStatus проверяет ограниченный wire result запроса owner без назначения полномочий.
+// Registry и snapshot revisions принадлежат разным последовательностям; owner SQL проверяет смежность
+// первой operation и последующие registry revisions по своей устойчивой истории, которой нет в DTO.
+func decodeRotationStatus(raw []byte) (rotationStatus, error) {
 	var result rotationStatus
 	decodeErr := json.Unmarshal(raw, &result)
 	allowed := map[string]bool{
@@ -129,7 +143,6 @@ func readRotationStatus(ctx context.Context, db *sql.DB) (rotationStatus, error)
 			result.RegistryRevision == nil || result.BaseRevision == nil ||
 			*result.RegistryRevision < 1 || *result.RegistryRevision > 9007199254740991 ||
 			*result.BaseRevision < 1 || *result.BaseRevision > 9007199254740988 ||
-			*result.RegistryRevision != *result.BaseRevision+1 ||
 			result.ExpectedReadbacks == nil || *result.ExpectedReadbacks < 1 || *result.ExpectedReadbacks > 384 ||
 			!rotationDigestPattern.MatchString(result.RegistrySourceDigestSHA256) ||
 			!rotationDigestPattern.MatchString(result.BaseDigestSHA256) ||
