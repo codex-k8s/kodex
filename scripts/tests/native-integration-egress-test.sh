@@ -5,7 +5,9 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 test_environment=(env -i "HOME=$HOME" "PATH=$PATH" GOENV=off GOWORK=off)
-[[ -z "${GOROOT:-}" ]] || test_environment+=("GOROOT=$GOROOT")
+for key in GOROOT GOCACHE GOTMPDIR TMPDIR GOTOOLCHAIN GOMAXPROCS; do
+  [[ -z "${!key:-}" ]] || test_environment+=("$key=${!key}")
+done
 (
   cd "$root/services/external/egress-gateway"
   "${test_environment[@]}" timeout 180s go test -c -race -o "$temporary/native-gateway.test" ./internal/gateway
