@@ -637,6 +637,10 @@ test-component-publication:
 test-component-api-maintenance:
 	@timeout 120s node --test tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-api-maintenance-cli.test.mjs tools/release/portable-runner-target.test.mjs
 
+.PHONY: test-component-migration-api-restore
+test-component-migration-api-restore:
+	@timeout 420s node --test --test-concurrency=2 tools/release/catalog-authority-baseline.test.mjs tools/release/catalog-authority-baseline.native.test.mjs tools/release/component-migration-api-executor.test.mjs tools/release/component-migration-api-terminal.cli.test.mjs tools/release/migration-owner-database.test.mjs tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs
+
 .PHONY: test-evicted-pod-metadata-recovery
 test-evicted-pod-metadata-recovery:
 	@timeout 120s python3 -B tools/release/test_evicted_pod_metadata_recovery.py
