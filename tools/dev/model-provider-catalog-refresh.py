@@ -27,12 +27,15 @@ def unique(pairs):
     return result
 
 
-def read_bounded(path):
-    with Path(path).open("rb") as stream:
-        raw = stream.read(MAXIMUM_BYTES + 1)
+def bounded_bytes(raw):
     if not raw or len(raw) > MAXIMUM_BYTES:
         raise ValueError("catalog size is invalid")
     return raw
+
+
+def read_bounded(path):
+    with Path(path).open("rb") as stream:
+        return bounded_bytes(stream.read(MAXIMUM_BYTES + 1))
 
 
 def decode(raw):
@@ -156,7 +159,7 @@ def refresh(raw, revision, schema_raw, output=DATA, retrieved_at=''):
         raise ValueError('retrieval timestamp is invalid')
     datetime.fromisoformat(retrieved_at)
     records = project(raw)
-    payload = json.dumps(records, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    payload = bounded_bytes(json.dumps(records, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode())
     retired = {}
     retired_path = output / 'retired-models.json'
     if retired_path.exists():
@@ -176,7 +179,7 @@ def refresh(raw, revision, schema_raw, output=DATA, retrieved_at=''):
             retired[(record['provider_id'], record['model_id'])] = record
     for record in records:
         retired.pop((record['provider_id'], record['model_id']), None)
-    retired_payload = json.dumps([retired[key] for key in sorted(retired)], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+    retired_payload = bounded_bytes(json.dumps([retired[key] for key in sorted(retired)], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode())
     if len(retired) + len(records) > 50000:
         raise ValueError('combined catalog exceeds limit')
     manifest = {"schema": SCHEMA, "source": "models.dev", "license": "MIT", "source_revision": revision,
@@ -187,13 +190,17 @@ def refresh(raw, revision, schema_raw, output=DATA, retrieved_at=''):
                 "projection_schema_sha256": hashlib.sha256(schema_file('snapshot.schema.json')).hexdigest(),
                 "upstream_schema_validation": 'NOT_PERFORMED'}
     jsonschema.Draft202012Validator(decode(schema_file('manifest.schema.json')), format_checker=jsonschema.FormatChecker()).validate(manifest)
+    # Каждый распакованный документ и каждый публикуемый файл укладываются в предел runtime loader до первой замены.
+    artifacts = [("snapshot.json.gz", gzip.compress(payload, mtime=0)),
+                 ("retired-models.json", retired_payload),
+                 ("snapshot.schema.json", schema_file('snapshot.schema.json')),
+                 ("manifest.schema.json", schema_file('manifest.schema.json')),
+                 ("manifest.json", json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2).encode() + b"\n")]
+    for _, content in artifacts:
+        bounded_bytes(content)
     # Обновляется только импорт. Custom overrides и выбранные пользователями модели не читаются и не переписываются.
     output.mkdir(parents=True, exist_ok=True)
-    for filename, content in [("snapshot.json.gz", gzip.compress(payload, mtime=0)),
-                              ("retired-models.json", retired_payload),
-                              ("snapshot.schema.json", schema_file('snapshot.schema.json')),
-                              ("manifest.schema.json", schema_file('manifest.schema.json')),
-                              ("manifest.json", json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2).encode() + b"\n")]:
+    for filename, content in artifacts:
         with tempfile.NamedTemporaryFile(dir=output, delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(content)

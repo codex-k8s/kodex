@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import gzip
 
 SPEC = importlib.util.spec_from_file_location("catalog_refresh", Path(__file__).with_name("model-provider-catalog-refresh.py"))
 CATALOG = importlib.util.module_from_spec(SPEC)
@@ -78,6 +80,48 @@ class CatalogRefreshTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.refresh(raw, 'b' * 40, output)
             self.assertEqual(previous, (output / 'snapshot.json.gz').read_bytes())
+
+    def test_projection_expansion_fails_before_replacing_any_asset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            raw = json.dumps(self.fixture()).encode()
+            self.refresh(raw, 'a' * 40, output)
+            (output / 'custom-overrides.json').write_bytes(json.dumps(CATALOG.project(json.dumps(self.fixture()).encode()), indent=2).encode() + b'\n')
+            (output / 'selections.json').write_bytes(b'{"selected":"same"}')
+            before = {path.name: path.read_bytes() for path in output.iterdir()}
+            fixture = self.fixture()
+            template = fixture['fixture']['models']['same']
+            fixture['fixture']['models'] = {str(index): {**template, 'id': str(index)} for index in range(16)}
+            expanded_raw = json.dumps(fixture).encode()
+            payload = json.dumps(CATALOG.project(expanded_raw), ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+            self.assertGreater(len(payload), len(expanded_raw))
+            with patch.object(CATALOG, 'MAXIMUM_BYTES', len(expanded_raw)):
+                with self.assertRaisesRegex(ValueError, 'catalog size is invalid'):
+                    self.refresh(expanded_raw, 'b' * 40, output)
+            self.assertEqual(before, {path.name: path.read_bytes() for path in output.iterdir()})
+
+    def test_combined_retired_bytes_fail_before_replacing_any_asset(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            fixture = self.fixture()
+            self.refresh(json.dumps(fixture).encode(), 'a' * 40, output)
+            fixture['fixture']['models'] = {'second': {**fixture['fixture']['models']['same'], 'id': 'second'}}
+            self.refresh(json.dumps(fixture).encode(), 'b' * 40, output)
+            (output / 'custom-overrides.json').write_bytes(json.dumps(CATALOG.project(json.dumps(self.fixture()).encode()), indent=2).encode() + b'\n')
+            (output / 'selections.json').write_bytes(b'{"selected":"same"}')
+            before = {path.name: path.read_bytes() for path in output.iterdir()}
+            previous = gzip.decompress(before['snapshot.json.gz'])
+            retired = before['retired-models.json']
+            fixture['fixture']['models'] = {'third': {**fixture['fixture']['models']['second'], 'id': 'third'}}
+            raw = json.dumps(fixture).encode()
+            projected = json.dumps(CATALOG.project(raw), ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+            limit = max(len(previous), len(retired), len(before['manifest.json']), len(before['custom-overrides.json']), len(raw), len(projected))
+            merged = json.dumps(json.loads(retired) + json.loads(previous), ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
+            self.assertGreater(len(merged), limit)
+            with patch.object(CATALOG, 'MAXIMUM_BYTES', limit):
+                with self.assertRaisesRegex(ValueError, 'catalog size is invalid'):
+                    self.refresh(raw, 'c' * 40, output)
+            self.assertEqual(before, {path.name: path.read_bytes() for path in output.iterdir()})
 
     def test_unqualified_upstream_schema_and_invalid_timestamp_fail(self):
         with tempfile.TemporaryDirectory() as temporary:
