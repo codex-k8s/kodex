@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.3
+version: 1.0.4
 updated: 2026-11-14
 ---
 
@@ -191,6 +191,12 @@ receipts и terminal proof16 не разрешают открыть Service, и�
 | Запуск readers | Fresh owner status Job подтверждает exact107 operation/registry, `DISTRIBUTE`, protocol2, опубликованный snapshot `base+1` и `deliveredAt`. Это `PENDING_AUTHORITY`, без требования выдуманных17 readbacks до запуска |
 | Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP получает107 projection, все17 обязанных readers дают свежие readbacks. Exact owner RETIRE относится к `base+3` и той же operation |
 | Service restore | Только отдельный fresh terminal107 proof17 и полный ready serving inventory открывают прежний selector. Dormant/DELIVER receipt не является terminal admission |
+
+Для нового receiver schema handoff является устойчивым принятием уже
+созданного exact spec0 без patch: исходный creator proof должен остаться
+проверяемым перед107 CAS. Отдельный start меняет replicas0→3 только после
+DELIVER; lostACK восстанавливается по intent и полному ready inventory,
+не повторяя patch. Результат `READERS_STARTED_PENDING_RETIRE` сохраняет API0.
 
 `make test-telegram-authority-delivery` воспроизводит закрытые policy/registry
 границы107, промежуточный DELIVER, creator lineage и старые106 regressions с

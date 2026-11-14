@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.85
+version: 1.1.86
 updated: 2026-11-14
 ---
 
@@ -50,6 +50,17 @@ replicas только по текущему Job UID, известному execut
 Незнакомая команда, дополнительные args, работающий контейнер и чужой lineage
 по-прежнему закрыто отклоняются. Такое исключение не выдаёт migration/check PASS
 и не разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
+
+Новый reader/issuer, отсутствующий в установленном профиле, получает отдельный
+протокол ввода: assigned UID, exact spec/image и dormant replicas0 связываются с
+устойчивым create receipt до registry CAS. Schema handoff сохраняет его spec и
+не объявляет READY; требовать старта до доставки необходимых authority keys
+создаёт недостижимый цикл. Запуск требует свежего owner DELIVER той же source,
+установки и операции. Потерянный ACK восстанавливается по own start intent,
+exact spec и полному ready inventory без повторного старта; terminal17/RETIRE и
+открытие API остаются отдельным допуском. Сохранённый boolean или caller proof
+не заменяет authoritative read path. Для уже существующих cohorts их прежние
+counts, join и terminal guards сохраняются.
 
 Открытие пользовательского API после обновления требует подтверждённой readiness
 всего serving inventory: owner lineage, полный набор containers/init/ephemeral,

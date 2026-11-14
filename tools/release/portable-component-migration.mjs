@@ -202,10 +202,10 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
       const mains = staged.template.spec.containers.filter(c => c.name === part.component);
       requireValue(mains.length === 1 && mains[0].image === part.expectedImageRef,'COMPONENT_MIGRATION_HANDOFF_PREDECESSOR_INVALID');
       mains[0].image=part.imageRef;
-      const annotations = staged.template.metadata ??= {};
+      const annotations = introduced ? {} : (staged.template.metadata ??= {});
       const values = annotations.annotations ??= {};
-      delete values['kodex.dev/component-image-profile-sha256'];
-      Object.assign(values,{'kodex.dev/component-source-sha':source.revision,'kodex.dev/component-base-lock-sha256':publication.baseReleaseLockSHA256,
+      if(!introduced)delete values['kodex.dev/component-image-profile-sha256'];
+      if(!introduced)Object.assign(values,{'kodex.dev/component-source-sha':source.revision,'kodex.dev/component-base-lock-sha256':publication.baseReleaseLockSHA256,
         'kodex.dev/component-upgrade-sha256':validated.digest});
       const resumed=structuredClone(staged);resumed.replicas=introduced?proof.intendedReplicas:count;
       return {name:part.component,uid:before.metadata.uid,replicas:introduced?proof.intendedReplicas:count,...(maintenance?{maintenance:true}:{}),...(introduced?{introduced:true}:{}),beforeSpec:structuredClone(before.spec),stoppedSpec:stopped,stagedSpec:staged,resumedSpec:resumed};
@@ -351,7 +351,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -362,7 +362,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stages=expected.maintenance?['stoppedSpec','stagedSpec']:expected.introduced?['stoppedSpec','stagedSpec','resumedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
-    const stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    let stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    if(expected.introduced&&stage==='stoppedSpec'&&journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'&&e.name===name))stage='stagedSpec';
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
     const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
@@ -384,6 +385,13 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(state.stage === previous,'COMPONENT_MIGRATION_HANDOFF_ORDER_INVALID');
     if (last >= 0) requireValue(journal.events.findLastIndex(e => e.type === 'PAIR_INSPECT' && e.name === name &&
       e.stage === state.stage && e.resourceVersion === state.actual.metadata.resourceVersion) > last,'COMPONENT_MIGRATION_UNKNOWN_INSPECT_REQUIRED');
+    // Введённый receiver уже имеет новый exact image/spec. Его handoff —
+    // durable принятие существующего dormant0; patch нарушил бы creator proof,
+    // обязательный перед следующим107 CAS. Ни replicas, ни READY не меняются.
+    if(expected.introduced&&stage==='stagedSpec'&&fingerprint(wanted)===fingerprint(state.actual.spec)){
+      requireValue(state.joined,'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+      journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion,noEffect:true});return;
+    }
     const patch=[{op:'test',path:'/metadata/uid',value:expected.uid},{op:'test',path:'/metadata/resourceVersion',value:state.actual.metadata.resourceVersion},
       {op:'test',path:'/spec',value:state.actual.spec},{op:'replace',path:'/spec',value:wanted}];
     withPrivatePatchFile(patch, path => {
@@ -453,11 +461,43 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       journal.append({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};
     },
+    // Новый receiver запускается отдельно от schema resume. Свежий callback
+    // принадлежит closed owner reader, а не caller boolean/переданному payload.
+    async activateIntroduced() {
+      const introduced=profiles[plan.imageEvidence.profile].introduced;
+      requireValue(introduced&&typeof readAuthorityDelivery==='function','TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+      schemaReady(true);requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      for(const name of names.filter(name=>name!==introduced)){
+        const state=observe(name);
+        requireValue(part(name).maintenance?state.stage==='stagedSpec'&&state.joined:state.stage==='resumedSpec'&&state.ready,
+          'TELEGRAM_COHORT_READERS_REQUIRED');
+      }
+      const current=observe(introduced);
+      if(current.stage==='stagedSpec'){
+        requireValue(current.joined,'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+        const proof=await readAuthorityDelivery(),{deliverySHA256,...body}=proof??{};
+        const observed=Date.parse(proof?.observedAt),now=Date.now(),target=plan.portableTarget;
+        requireValue(proof?.state==='PENDING_AUTHORITY'&&proof.policyRevision===107&&proof.expectedReadbackCount===17&&
+          proof.sourceSHA===plan.source.revision&&proof.introducedReceiverSHA256===fingerprint(plan.imageEvidence.introducedReceiver)&&
+          proof.clusterUID===target?.clusterUID&&proof.namespaceUID===target.namespaceUID&&proof.installationUID===target.installationUID&&
+          proof.installationSHA256===target.installationSHA256&&sha(deliverySHA256)&&deliverySHA256===fingerprint(body)&&
+          observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+        journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',operationID:proof.operationID,deliverySHA256,snapshotRevision:proof.snapshotRevision});
+        transition(introduced,'resumedSpec','PAIR_ACTIVATE_INTENT');
+      }else requireValue(current.stage==='resumedSpec'&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===introduced),
+        'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+      await wait(()=>observe(introduced),s=>s.stage==='resumedSpec'&&s.ready,'COMPONENT_MIGRATION_RESUME_TIMEOUT',clock);
+      journal.append({type:'PAIR_ACTIVATE_ACK',name:introduced});
+      return {status:'READERS_STARTED_PENDING_RETIRE',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:true,forwardOnly:true};
+    },
     async resume() {
       schemaReady(true);requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
       for (const name of names) {
         if(part(name).maintenance||part(name).introduced) {
           const state=observe(name);
+          if(part(name).introduced&&state.stage==='resumedSpec'){
+            requireValue(state.ready&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');continue;
+          }
           requireValue(state.stage === 'stagedSpec' && state.joined,'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
           continue;
         }

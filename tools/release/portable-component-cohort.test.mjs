@@ -63,10 +63,10 @@ function lifecycleFixture(profile='github-repository-scope') {
   const f=fixture(profile),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
   const drain=readFileSync(new URL('./portable-component-migration-drain.sql',import.meta.url));
   const postgres={pod:'kodex-postgresql-0',uid:uuid(30),ownerUID:uuid(31)};
-  const plan={source:{revision},imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
+  const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -112,7 +112,7 @@ function lifecycleFixture(profile='github-repository-scope') {
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},clock:{}});
   return {lifecycle,apps,events,patches,faults,plan,
@@ -226,7 +226,9 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
   const f=lifecycleFixture(profile);await f.lifecycle.stopController();f.lifecycle.requireStopped();f.stopCP();f.faults.schema=true;
   const introduced=f.plan.componentHandoff.components.find(c=>c.name==='interaction-gateway');
   assert.equal(introduced.introduced,true);assert.equal(introduced.replicas,3);assert.equal(introduced.beforeSpec.replicas,0);
-  await f.lifecycle.handoff();const result=await f.lifecycle.resume();assert.equal(result.status,'PENDING_AUTHORITY');assert.equal(result.pairReady,false);
+  await f.lifecycle.handoff();assert.deepEqual(f.apps.get('interaction-gateway').spec,introduced.beforeSpec);
+  assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,0);
+  const result=await f.lifecycle.resume();assert.equal(result.status,'PENDING_AUTHORITY');assert.equal(result.pairReady,false);
   assert.equal(f.apps.get('interaction-gateway').spec.replicas,0);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
   assert.equal(f.apps.get('control-plane').spec.replicas,3);assert.equal(f.apps.get('egress-gateway').spec.replicas,2);
   const writes=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,writes);
@@ -235,4 +237,27 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
  assert.throws(()=>planComponentMigrationHandoff(f.value,f.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
  const g=fixture('telegram-notifications');g.deployments.at(-1).spec.template.spec.containers[0].env.push({name:'FOREIGN',value:'changed'});
  assert.throws(()=>planComponentMigrationHandoff(g.value,g.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
+});
+
+test('046 activation требует fresh107 DELIVER, lostACK rejoin не повторяет start и не открывает API',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();await f.lifecycle.resume();
+ const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,expectedReadbackCount:17,sourceSHA:revision,
+  introducedReceiverSHA256:fingerprint(f.plan.imageEvidence.introducedReceiver),clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
+  installationUID:target.installationUID,installationSHA256:target.installationSHA256,observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};
+ const sign=value=>({...value,deliverySHA256:fingerprint(value)});
+ for(const mutate of [p=>p.policyRevision=106,p=>p.expectedReadbackCount=16,p=>p.sourceSHA='f'.repeat(40),p=>p.introducedReceiverSHA256='f'.repeat(64),
+  p=>p.installationUID=uuid(999),p=>p.observedAt=new Date(Date.now()-30001).toISOString()]){
+  const altered=structuredClone(body);mutate(altered);f.faults.authorityDelivery=sign(altered);
+  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ }
+ f.faults.authorityDelivery=sign(body);f.faults.lostACK='interaction-gateway';await assert.rejects(()=>f.lifecycle.activateIntroduced(),/RESPONSE_LOST/);
+ const started=f.patches.length;assert.equal(started,writes+1);assert.equal(f.apps.get('interaction-gateway').spec.replicas,3);
+ // Восстановление уже выполненного start читает exact owned spec/CRI и intent;
+ // оно не выдаёт новый effect и не требует заново возвращать ротацию в DISTRIBUTE.
+ f.faults.authorityDelivery=null;f.lifecycle.inspect();const result=await f.lifecycle.activateIntroduced();
+ assert.equal(result.status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,started);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
+ assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,started);
+ const intent=f.events.find(e=>e.type==='PAIR_ACTIVATE_INTENT');intent.type='FOREIGN';
+ await assert.rejects(()=>f.lifecycle.activateIntroduced(),/UNOWNED_HANDOFF/);
 });

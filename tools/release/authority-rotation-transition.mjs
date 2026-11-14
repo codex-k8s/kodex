@@ -283,6 +283,7 @@ export async function readTelegramAuthorityTerminal(input,kube,io={}){return rea
 export async function readTelegramAuthorityDelivered(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition,'delivered');}
 async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io,profile,purpose='terminal'){
  const configuration=authorityPolicyTransitionConfiguration(profile);
+ if(profile===telegramPolicyTransition)requireValue(plan?.introducedReceiver?.sourceSHA===plan.revision&&plan.introducedReceiver.state==='PENDING_AUTHORITY','TELEGRAM_INTRODUCTION_REQUIRED');
  requireValue(plan?.action==='rotate'&&plan.policyTransition?.profile===profile&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===profile&&
   freshPlan.context===plan.context&&freshPlan.kubeconfig===plan.kubeconfig&&freshPlan.source===plan.source&&freshPlan.revision===plan.revision&&
   freshPlan.cliImage===plan.cliImage&&Number.isFinite(now),'CATALOG_AUTHORITY_TERMINAL_INPUT_REJECTED');
@@ -329,7 +330,8 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
  if(purpose==='delivered'){
   requireValue(profile===telegramPolicyTransition&&classified.phase==='SUCCEEDED','TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
   const delivery=validateTelegramAuthorityDeliveryState(state,identity,plan.ownerOperationID,now);
-  const proof={...delivery,policySHA256:policy.sha256,planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),
+  const proof={...delivery,sourceSHA:plan.revision,introducedReceiverSHA256:fingerprint(plan.introducedReceiver),
+   clusterUID:plan.policyTransition.clusterUID,namespaceUID:plan.policyTransition.namespaceUID,installationUID:plan.policyTransition.installationUID,installationSHA256:plan.policyTransition.installationSHA256,policySHA256:policy.sha256,planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),
    targetSHA256:plan.policyTransition.targetSHA256,trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
   return Object.freeze({...proof,deliverySHA256:fingerprint(proof)});
  }
