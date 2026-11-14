@@ -4,7 +4,7 @@ title: Управляемая интеграция Sentry Cloud и Self-hosted
 type: operations
 status: approved
 owner: backend
-version: 1.1.3
+version: 1.1.4
 updated: 2026-11-14
 ---
 
@@ -264,7 +264,25 @@ retired owner operation. Старый rotation restore остаётся связ
 До новой изоляции `traffic plan --action isolate --migration-profile
 sentry-observability-backup` получает `--authority-plan` и
 `--authority-evidence` прежней106. При другом source нужен явный
-`--authority-executor-sha` с ревизией исходного authority plan. Новый baseline
+`--authority-executor-sha` с ревизией исходного authority plan.
+Если этот source был слит через squash, явный
+`--authority-source-equivalent-sha` при `plan` изоляции и восстановления
+выбирает конкретный канонический commit. Проверяются настоящий ancestor этого
+commit относительно текущего executor и равенство **полных Git trees**
+исходного и канонического commits, а не отдельных файлов либо сообщений.
+Исходный pin остаётся обязательным; оба pins сохраняются в новом immutable
+plan и заново проверяются при fresh baseline перед effect. Исходные authority
+plan/journal и уже подтверждённый API close receipt не переписываются.
+Для исторической ротации106 исходный commit
+`d70f86f5550c04ce6d5a4cdaf79fc1043ccf39a4` и merge commit
+`6b2e0cbc12305b184904728ab1a124825bc17200` имеют один полный tree
+`7dc69e00f7345383559348c7cea08d88746254e9`; head и merged commit подтверждены
+authoritative readback [PR2161](https://github.com/codex-k8s/kodex/pull/2161).
+Совместимость не ищется автоматически. Этот вариант относится только к
+readonly observer рутинного045; старый rotation restore требует прежний
+ancestry path и не принимает equivalent pin.
+
+Новый baseline
 связывает immutable owner/registry/publisher/snapshot pins, обязательные
 `workload/role/generation` bindings, installation и exact PostgreSQL
 Pod/StatefulSet/system identifier/database OID. В отдельной фиксированной БД

@@ -22,14 +22,22 @@ const require=createRequire(import.meta.url),transport=require('./routine-migrat
 
 // Настоящие owner factory, JSON files, argv parser и child CLI сохраняются.
 // Только external Kubernetes/SQL transport заменён finite metadata fixture.
-export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='sentry-observability-backup'}={}){
+export function routineMigrationAPIFixture(t,{predecessorSource=false,authoritySquashSource=false,profile='sentry-observability-backup'}={}){
  const root=fileURLToPath(new URL('../../../',import.meta.url)).replace(/\/$/,'');
  assert.ok(['sentry-observability','sentry-observability-backup'].includes(profile));
  const backup=profile.endsWith('-backup');
  const executorSHA=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
  const selected=historicalCatalog106Source(t,predecessorSource?catalog106PredecessorSHA:catalog106SourceSHA),sourceSHA=selected.revision,sourceRoot=selected.path;
  const directory=mkdtempSync(join(tmpdir(),'kodex-routine-api-'));
- t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const git=(...args)=>execFileSync('git',['-C',root,...args],{encoding:'utf8',stdio:'pipe',timeout:30000}).trim();
+ const authorityEquivalentSHA=authoritySquashSource?(authoritySquashSource.equivalent??sourceSHA):undefined;
+ // Orphan содержит именно опубликованный045/106 tree: текущий107 не выдаётся
+ // за старый16-target source и не ослабляет проверку runtime reader.
+ const authoritySHA=authoritySquashSource?(authoritySquashSource.original??git('-c','commit.gpgSign=false','commit-tree',git('rev-parse',`${authorityEquivalentSHA}^{tree}`),'-m','Синтетический исходный squash executor2140')):sourceSHA;
+ const closedSourceSHA=authoritySquashSource?(authoritySquashSource.close??authorityEquivalentSHA):executorSHA;
+ let authorityRoot=sourceRoot;
+ if(authoritySquashSource){authorityRoot=join(directory,'authority-original');git('worktree','add','--detach',authorityRoot,authoritySHA);}
+ t.after(()=>{if(authoritySquashSource)git('worktree','remove','--force',authorityRoot);rmSync(directory,{recursive:true,force:true});});
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});
  const kubeconfig=join(directory,'explicit config');writeFileSync(kubeconfig,'synthetic',{mode:0o600});
  const save=(name,value)=>writeFileSync(join(directory,name),JSON.stringify(value,null,2)+'\n',{mode:0o600});
@@ -50,18 +58,18 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
  baseline.resources.set('configmap/kodex-installation-profile',cohort.observed.installation);
  for(const app of Object.values(apps))baseline.resources.set('deployment/'+app.metadata.name,app);
  baseline.plan.policyTransition=readCatalogTarget(baseline.profile,baseline.profile.context,baseline.get).transition;
- baseline.plan.context=cohort.target.context;baseline.plan.revision=sourceSHA;baseline.plan.kubeconfig=kubeconfig;
+ baseline.plan.context=cohort.target.context;baseline.plan.source=authorityRoot;baseline.plan.revision=authoritySHA;baseline.plan.kubeconfig=kubeconfig;
  baseline.events.at(-1).status='RUNNING';delete baseline.events.at(-1).rotationStatus;
  baseline.events[0].planSHA256=fingerprint(baseline.plan);
  const authority=baseline.read();
  const observed={context:cohort.target.context,clusterUID:cohort.target.clusterUID,namespaceUID:cohort.target.namespaceUID,installation:cohort.observed.installation,resources:{items:[]}};
- const closedPlan=planComponentAPIMaintenance(api,baseline.profile,observed,executorSHA,'close');
+ const closedPlan=planComponentAPIMaintenance(api,baseline.profile,observed,closedSourceSHA,'close');
  const closed={plan:closedPlan,events:[{type:'HEADER',schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(closedPlan),maintenanceID:closedPlan.maintenanceID},
   {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'CLOSED',deploymentUID:api.metadata.uid,maintenanceID:closedPlan.maintenanceID}]};
  api.spec=structuredClone(closedPlan.afterSpec);api.metadata.annotations=structuredClone(closedPlan.afterAnnotations);
  for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])api.status[key]=0;
  save('close.json',closedPlan);journal('close.jsonl',closed.events);
- const isolationPlan=planComponentAPITraffic({service:baseline.service,deployment:api,resources:{items:[]},target:baseline.profile,observed,sourceSHA:executorSHA,action:'isolate',closed,authorityExecutorSHA:sourceSHA,
+ const isolationPlan=planComponentAPITraffic({service:baseline.service,deployment:api,resources:{items:[]},target:baseline.profile,observed,sourceSHA:executorSHA,action:'isolate',closed,authorityExecutorSHA:authoritySHA,...(authoritySquashSource?{authoritySourceEquivalentSHA:authorityEquivalentSHA}:{}),
   migrationRestore:{profile,closedPlanPath:join(directory,'close.json'),closedEvidencePath:join(directory,'close.jsonl'),authority}});
  const isolation={plan:isolationPlan,events:[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(isolationPlan),maintenanceID:isolationPlan.maintenanceID},
   {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'ISOLATED',serviceUID:baseline.service.metadata.uid,maintenanceID:isolationPlan.maintenanceID}],
@@ -130,20 +138,21 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
   '--isolation-plan',join(directory,'isolate.json'),'--isolation-evidence',join(directory,'isolate.jsonl'),
   '--migration-plan',join(directory,'migration.json'),'--migration-evidence',join(directory,'migration.jsonl'),
   '--api-open-plan',join(directory,'open.json'),'--api-open-evidence',join(directory,'open.jsonl')];
+ const authoritySourceArgs=['--authority-executor-sha',authoritySHA,...(authoritySquashSource?['--authority-source-equivalent-sha',authorityEquivalentSHA]:[])];
  const run=(phase,extra=[],changeArguments)=>{
   const argv=[fileURLToPath(new URL('../component-api-traffic.mjs',import.meta.url)),phase,
   '--plan',join(directory,'restore.json'),...common,...(phase==='plan'?['--action','restore','--target',join(directory,'target.json'),
-   '--migration-profile',profile,'--migration-source-sha',sourceSHA,'--authority-executor-sha',sourceSHA,...inputs]:['--evidence',join(directory,'restore.jsonl'),
+   '--migration-profile',profile,'--migration-source-sha',sourceSHA,...authoritySourceArgs,...inputs]:['--evidence',join(directory,'restore.jsonl'),
    ...(phase==='apply'?['--approved-plan-sha',fingerprint(read('restore.json')),...inputs]:[])]),...extra];
   changeArguments?.(argv);
   return spawnSync(process.execPath,argv,{encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});
  };
- const runIsolation=phase=>spawnSync(process.execPath,[fileURLToPath(new URL('../component-api-traffic.mjs',import.meta.url)),phase,
-  '--plan',join(directory,'new-isolate.json'),...common,...(phase==='plan'?['--action','isolate','--target',join(directory,'target.json'),'--migration-profile',profile,'--authority-executor-sha',sourceSHA]:
+ const runIsolation=(phase,changeArguments)=>{const argv=[fileURLToPath(new URL('../component-api-traffic.mjs',import.meta.url)),phase,
+  '--plan',join(directory,'new-isolate.json'),...common,...(phase==='plan'?['--action','isolate','--target',join(directory,'target.json'),'--migration-profile',profile,...authoritySourceArgs]:
    ['--evidence',join(directory,'new-isolate.jsonl'),...(phase==='apply'?['--approved-plan-sha',fingerprint(read('new-isolate.json'))]:[])]),
-  ...(['plan','apply'].includes(phase)?['--authority-plan',join(directory,'authority.json'),'--authority-evidence',join(directory,'authority.jsonl')]:[])],
-  {encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});
+  ...(['plan','apply'].includes(phase)?['--authority-plan',join(directory,'authority.json'),'--authority-evidence',join(directory,'authority.jsonl')]:[])];
+  changeArguments?.(argv);return spawnSync(process.execPath,argv,{encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});};
  const pass=phase=>{const result=run(phase);assert.equal(result.status,0,result.stderr+"\n"+(read('state.json').diagnostic??''));return JSON.parse(result.stdout);};
- return {directory,root,sourceRoot,sourceSHA,executorSHA,state:()=>read('state.json'),read,edit,run,runIsolation,pass,save,journal,migration,closed,isolation,openPlan,openEvents,
+ return {directory,root,sourceRoot,sourceSHA,executorSHA,authoritySHA,authorityEquivalentSHA,state:()=>read('state.json'),read,edit,run,runIsolation,pass,save,journal,migration,closed,isolation,openPlan,openEvents,
   kube:(args,input='')=>transport.run(state,['--kubeconfig',kubeconfig,'--context',cohort.target.context,...args],String(input))};
 }

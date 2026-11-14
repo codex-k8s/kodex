@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.73
+version: 1.7.74
 updated: 2026-11-14
 ---
 
@@ -21,6 +21,15 @@ current workload относительно его же current template не на
 Новый readonly executor требует явного source compatibility и сохраняет
 исходные images/locks/receipts. UNKNOWN после PATCH ACK loss разрешается через
 readback, без автоматического повторения эффекта.
+
+Squash merge не создаёт ancestry исходного executor. Исторический readonly
+observer может использовать только отдельно выбранный канонический commit,
+который действительно является ancestor нового executor и имеет полностью
+тот же Git tree, что exact исходный source. Оба pins сохраняются в новом
+plan и проверяются перед fresh owner READ; старые receipts не меняются.
+Совпадение отдельных файлов, имя PR или похожий commit message не заменяют
+такое доказательство. Расширение одного закрытого observer не разрешает
+обход source-проверок других effect либо rotation paths.
 
 При проверке ротации число всех получателей delivery и обязательный startup
 набор — разные величины. Обязательные `(workload, role, generation)` выводятся
