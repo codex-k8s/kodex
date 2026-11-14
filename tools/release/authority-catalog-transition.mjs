@@ -1,4 +1,5 @@
-import {telegramPolicyTransition,telegramPolicyReaders,telegramPolicySource,validateTelegramPolicy} from './authority-telegram-transition.mjs';
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
+import {telegramPolicyTransition,telegramPolicyTargets,telegramPolicySource,validateTelegramPolicy,telegramAuthorityReadbackContract,telegramRegistrySource} from './authority-telegram-transition.mjs';
 import { constants, openSync, closeSync, fstatSync, readFileSync, writeFileSync, fsyncSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -36,9 +37,13 @@ export function validateCatalogPolicy(raw, role, transition) {
 // Закрытый registry различает две конкретные поставки. Required membership
 // выводится из выбранного профиля; payload не задаёт число readers либо revision.
 export function authorityPolicyTransitionConfiguration(profile){
- if(profile===catalogPolicyTransition)return {profile,predecessorRevision:105,desiredRevision:106,expectedReaders:16};
- if(profile===telegramPolicyTransition)return {profile,predecessorRevision:106,desiredRevision:107,expectedReaders:telegramPolicyReaders};
+ if(profile===catalogPolicyTransition)return {profile,predecessorRevision:105,desiredRevision:106,registeredReadbackCount:16};
+ if(profile===telegramPolicyTransition)return {profile,predecessorRevision:106,desiredRevision:107,registeredReadbackCount:telegramPolicyTargets};
  throw Error('CATALOG_POLICY_TRANSITION_REQUIRED');
+}
+export function authorityPolicyReadbackContract(profile){
+ authorityPolicyTransitionConfiguration(profile);
+ return profile===catalogPolicyTransition?authorityReadbackContract(telegramRegistrySource('predecessor').raw):telegramAuthorityReadbackContract();
 }
 export function isPortableAuthorityTransition(profile){return profile===catalogPolicyTransition||profile===telegramPolicyTransition;}
 export function authorityPolicySource(role,profile){

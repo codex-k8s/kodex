@@ -1,3 +1,4 @@
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
@@ -5,7 +6,7 @@ import {fingerprint} from './scoped-release.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
 
 export const telegramPolicyTransition='TELEGRAM_NOTIFICATIONS_106_107';
-export const telegramPolicyReaders=17;
+export const telegramPolicyTargets=17;
 const fail=(ok,code)=>{if(!ok)throw Error(code);};
 const digest=raw=>createHash('sha256').update(raw).digest('hex');
 const policies=Object.freeze({
@@ -55,7 +56,7 @@ export function verifyTelegramPolicyDelta(){
  after.policy.operation_bindings=after.policy.operation_bindings.filter(b=>!operations.includes(b.operation_id));
  for(const producer of after.policy.authority_proof_producers)producer.allowed_operation_ids=producer.allowed_operation_ids.filter(id=>!operations.includes(id));
  fail(fingerprint(before)===fingerprint(after),'TELEGRAM_POLICY_PREDECESSOR_CHANGED');
- return {predecessor:106,desired:107,addedOperations:[...operations],expectedReaders:telegramPolicyReaders};
+ return {predecessor:106,desired:107,addedOperations:[...operations],registeredReadbackCount:telegramPolicyTargets};
 }
 
 const registryParser='import json,sys,yaml\nclass Unique(yaml.SafeLoader): pass\ndef mapping(loader,node,deep=False):\n out={}\n for key,value in node.value:\n  key=loader.construct_object(key,deep=deep)\n  if key in out: raise ValueError("duplicate YAML key")\n  out[key]=loader.construct_object(value,deep=deep)\n return out\nUnique.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,mapping)\nprint(json.dumps(yaml.load(sys.stdin,Loader=Unique)))\n';
@@ -68,7 +69,7 @@ function python(program,input){
 export function telegramRegistrySource(role){
  const config=registries[role];fail(config,'TELEGRAM_POLICY_ROLE_REJECTED');
  const raw=readFileSync(new URL(config.path,import.meta.url),'utf8');fail(digest(raw)===config.sha256,'TELEGRAM_POLICY_REGISTRY_SOURCE_REJECTED');
- return {raw,sourceSHA256:config.sha256,expectedReaders:config.count};
+ return {raw,sourceSHA256:config.sha256,registeredReadbackCount:config.count};
 }
 function registry(raw){
  fail(typeof raw==='string'&&Buffer.byteLength(raw)>0&&Buffer.byteLength(raw)<=1<<20,'TELEGRAM_POLICY_REGISTRY_PARSE_REJECTED');
@@ -83,7 +84,7 @@ export function validateTelegramRegistry(raw,role){
  const expected=registry(telegramRegistrySource(role).raw),actual=registry(raw),normalized=structuredClone(actual);
  normalized.source_revision=expected.source_revision;
  fail(fingerprint(normalized)===fingerprint(expected),'TELEGRAM_POLICY_REGISTRY_CLOSURE_REJECTED');
- return {value:actual,sourceRevision:actual.source_revision,sourceDigestSHA256:digest(raw),expectedReaders:registries[role].count};
+ return {value:actual,sourceRevision:actual.source_revision,sourceDigestSHA256:digest(raw),registeredReadbackCount:registries[role].count};
 }
 export function advanceTelegramRegistry(liveRaw,sourceRaw){
  const expected=telegramRegistrySource('desired');fail(sourceRaw===expected.raw,'TELEGRAM_POLICY_REGISTRY_SOURCE_REJECTED');
@@ -95,19 +96,22 @@ export function advanceTelegramRegistry(liveRaw,sourceRaw){
  const raw=python(registryWriter,JSON.stringify(after));validateTelegramRegistry(raw,'desired');return raw;
 }
 
+export function telegramAuthorityReadbackContract(){return authorityReadbackContract(telegramRegistrySource('desired').raw);}
+
 // DELIVER допускает только запуск новых readers под уже опубликованным материалом.
 // Это отдельный промежуточный owner proof; он никогда не заменяет17 readbacks/RETIRE.
 export function validateTelegramAuthorityDeliveryState(state,identity,operationID,now=Date.now()){
+ const readers=telegramAuthorityReadbackContract();
  const observed=Date.parse(state?.observedAt),started=Date.parse(state?.deliveryStartedAt),delivered=Date.parse(state?.deliveredAt);
  fail(state?.operationId===operationID&&state.status==='DISTRIBUTING'&&state.operationStatus==='DISTRIBUTING'&&state.phase==='DISTRIBUTE'&&
   state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
   Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+1&&
   /^[a-f0-9]{64}$/.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(state.intentId??'')&&
-  state.expectedReadbackCount===telegramPolicyReaders&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=0&&state.actualReadbackCount<=telegramPolicyReaders*24&&
+  state.expectedReadbackCount===readers.expectedReadbackCount&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=0&&state.actualReadbackCount<=384&&
   Number.isFinite(now)&&observed<=now+5000&&now-observed<=30000&&started<=delivered&&delivered<=observed&&
   state.abortedAt===undefined&&state.promotedAt===undefined&&state.retiredAt===undefined&&state.completedAt===undefined,
   'TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
  return {state:'PENDING_AUTHORITY',policyRevision:107,operationID,registryRevision:identity.sourceRevision,registrySHA256:identity.sourceDigestSHA256,
-  snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,expectedReadbackCount:telegramPolicyReaders,
+  snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,...readers,
   actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,deliveredAt:state.deliveredAt};
 }

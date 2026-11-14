@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.86
+version: 1.1.87
 updated: 2026-11-14
 ---
 
@@ -62,7 +62,7 @@ replicas только по текущему Job UID, известному execut
 не объявляет READY; требовать старта до доставки необходимых authority keys
 создаёт недостижимый цикл. Запуск требует свежего owner DELIVER той же source,
 установки и операции. Потерянный ACK восстанавливается по own start intent,
-exact spec и полному ready inventory без повторного старта; terminal17/RETIRE и
+exact spec и полному ready inventory без повторного старта; terminal required-set proof/RETIRE и
 открытие API остаются отдельным допуском. Сохранённый boolean или caller proof
 не заменяет authoritative read path. Для уже существующих cohorts их прежние
 counts, join и terminal guards сохраняются.

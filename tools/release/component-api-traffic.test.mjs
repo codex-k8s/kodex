@@ -1,10 +1,11 @@
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
 import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
-import {verifyCatalogAdmission} from './authority-catalog-transition.mjs';
+import {verifyCatalogAdmission,authorityPolicyReadbackContract,catalogPolicyTransition} from './authority-catalog-transition.mjs';
 import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
-import {planComponentAPITraffic,componentAPITrafficStep,requireClosedAPIAdmission,requireIsolatedAPIService} from './component-api-traffic.mjs';
+import {verifyAuthorityObserverSource,planComponentAPITraffic,componentAPITrafficStep,requireClosedAPIAdmission,requireIsolatedAPIService} from './component-api-traffic.mjs';
 
 const uid='11111111-1111-4111-8111-111111111111',serviceUID='22222222-2222-4222-8222-222222222222',source='a'.repeat(40),name='control-api-gateway';
 function fixture(){
@@ -46,7 +47,7 @@ function ready(f){
 }
 function terminal(f,overrides={}){
   const proof={policyRevision:106,policySHA256:'a'.repeat(64),operationID:uid,registryRevision:2,registrySHA256:'b'.repeat(64),
-    snapshotRevision:4,snapshotSHA256:'c'.repeat(64),expectedReadbackCount:16,actualReadbackCount:16,observedAt:new Date().toISOString(),
+    snapshotRevision:4,snapshotSHA256:'c'.repeat(64),...authorityPolicyReadbackContract(catalogPolicyTransition),actualReadbackCount:16,observedAt:new Date().toISOString(),
     planSHA256:'d'.repeat(64),freshPlanSHA256:'e'.repeat(64),targetSHA256:fingerprint(f.target),trafficPlanSHA256:fingerprint(f.plan),serviceUID,
     ...overrides};return {...proof,terminalSHA256:fingerprint(proof)};
 }
@@ -122,13 +123,13 @@ test('restore не доверяет counters при неполном или чу
 test('restore требует точный свежий terminal proof106 той же изоляции',()=>{
   const f=fixture();f.step();ready(f);const previous=f.traffic();
   assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous}),/AUTHORITY_TERMINAL_REQUIRED/);
-  for(const overrides of [{policyRevision:105},{actualReadbackCount:15},{serviceUID:uid},{trafficPlanSHA256:'f'.repeat(64)},
+  for(const overrides of [{policyRevision:105},{actualReadbackCount:authorityPolicyReadbackContract(catalogPolicyTransition).expectedReadbackCount-1},{serviceUID:uid},{trafficPlanSHA256:'f'.repeat(64)},
     {targetSHA256:'f'.repeat(64)},{observedAt:new Date(Date.now()-31000).toISOString()}]){
     assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
   }
 });
 
-test('107 isolation требует terminal107 и17readers,106receipt не открывает новую Service boundary',()=>{
+test('107 isolation требует terminal107 и exact source required subset для17targets,106receipt не открывает новую Service boundary',()=>{
  const f=fixture();f.plan=planComponentAPITraffic({...f,action:'isolate',authorityTransition:telegramPolicyTransition});
  f.journal.events[0].planSHA256=fingerprint(f.plan);
  assert.equal(f.step().state,'ISOLATED');
@@ -140,10 +141,50 @@ test('107 isolation требует terminal107 и17readers,106receipt не от�
  const {authorityTransition:removed,...oldAdmission}=admission;assert.equal(removed,telegramPolicyTransition);
  assert.throws(()=>verifyCatalogAdmission({proof:oldAdmission},{profile:telegramPolicyTransition}),/ADMISSION_PROFILE_REQUIRED/);
  ready(f);const previous=f.traffic();
- for(const overrides of [{},{policyRevision:107},{policyRevision:107,expectedReadbackCount:17,actualReadbackCount:16}])
+ for(const overrides of [{},{policyRevision:107},{policyRevision:107,...authorityPolicyReadbackContract(telegramPolicyTransition),actualReadbackCount:authorityPolicyReadbackContract(telegramPolicyTransition).expectedReadbackCount-1}])
   assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,overrides)}),/AUTHORITY_TERMINAL_REQUIRED/);
- const proof=terminal(f,{policyRevision:107,expectedReadbackCount:17,actualReadbackCount:17,registryRevision:3,snapshotRevision:7});
+ const proof=terminal(f,{policyRevision:107,...authorityPolicyReadbackContract(telegramPolicyTransition),actualReadbackCount:17,registryRevision:3,snapshotRevision:7});
  const restored=planComponentAPITraffic({...f,action:'restore',previous,terminal:proof});
  assert.equal(restored.authorityTransition,telegramPolicyTransition);assert.deepEqual(restored.afterSpec,f.plan.beforeSpec);
  assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:proof,authorityTransition:'MODEL_DISCOVERY_105_106'}),/AUTHORITY_PROFILE_INVALID/);
+});
+
+test('обязательные bindings выводятся из registry, optional receipts не меняют контракт',()=>{
+  const target=(workload,required)=>({workload_id:workload,role:'AUTHORIZATION_ISSUER',workload_generation:1,startup_readback_required:required});
+  const registry={version:1,targets:[target('synthetic-a',true),target('synthetic-b',false),target('synthetic-c',true)]};
+  const contract=authorityReadbackContract(JSON.stringify(registry));
+  assert.equal(contract.expectedReadbackCount,2);assert.equal(contract.registeredReadbackCount,3);
+  const reordered=structuredClone(registry);reordered.targets.reverse();
+  assert.deepEqual(authorityReadbackContract(JSON.stringify(reordered)),contract);
+  const changed=structuredClone(registry);changed.targets[0].workload_generation=2;
+  assert.notEqual(authorityReadbackContract(JSON.stringify(changed)).requiredReadbackTargetsSHA256,contract.requiredReadbackTargetsSHA256);
+  for(const change of [r=>r.targets.push(r.targets[0]),r=>delete r.targets[0].startup_readback_required,
+    r=>r.targets[0].startup_readback_required='true',r=>r.targets[0].workload_generation=0,
+    r=>r.targets.forEach(t=>t.startup_readback_required=false)]){
+    const broken=structuredClone(registry);change(broken);assert.throws(()=>authorityReadbackContract(JSON.stringify(broken)),/REGISTRY_REJECTED/);
+  }
+});
+
+test('restore связывает required subset hash и total с source, а не с числом receipts',()=>{
+  const f=fixture();f.step();ready(f);const previous=f.traffic(),readers=authorityPolicyReadbackContract(catalogPolicyTransition);
+  assert.doesNotThrow(()=>planComponentAPITraffic({...f,action:'restore',previous,
+    terminal:terminal(f,{actualReadbackCount:readers.expectedReadbackCount})}));
+  for(const changed of [{expectedReadbackCount:readers.registeredReadbackCount},
+    {registeredReadbackCount:readers.registeredReadbackCount+1},{requiredReadbackTargetsSHA256:'f'.repeat(64)}]){
+    assert.throws(()=>planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f,changed)}),/AUTHORITY_TERMINAL_REQUIRED/);
+  }
+});
+
+test('successor observer требует explicit exact ancestor без изменения source прежнего plan',()=>{
+  const old='a'.repeat(40),current='b'.repeat(40),calls=[];
+  const ancestor=(a,b)=>calls.push([a,b]);
+  verifyAuthorityObserverSource(old,old,undefined,ancestor);assert.equal(calls.length,0);
+  verifyAuthorityObserverSource(old,current,old,ancestor);assert.deepEqual(calls,[[old,current]]);
+  assert.throws(()=>verifyAuthorityObserverSource(old,current,undefined,ancestor),/SOURCE_CHANGED/);
+  assert.throws(()=>verifyAuthorityObserverSource(old,current,'c'.repeat(40),ancestor),/SOURCE_CHANGED/);
+  assert.throws(()=>verifyAuthorityObserverSource(old,old,old,ancestor),/SUCCESSOR_INVALID/);
+  assert.throws(()=>verifyAuthorityObserverSource(old,current,old,()=>{throw Error('NOT_ANCESTOR');}),/NOT_ANCESTOR/);
+  const f=fixture();f.step();ready(f);
+  const plan=planComponentAPITraffic({...f,sourceSHA:current,authorityExecutorSHA:old,action:'restore',previous:f.traffic(),terminal:terminal(f)});
+  assert.equal(plan.sourceSHA,current);assert.equal(plan.authorityExecutorSHA,old);
 });

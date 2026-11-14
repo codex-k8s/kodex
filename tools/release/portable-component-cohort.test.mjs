@@ -1,3 +1,4 @@
+import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import test from 'node:test';
 import {componentCohortFixture as fixture,replaceComponentLock as replaceLock} from './fixtures/component-cohort-synthetic.mjs';
 import assert from 'node:assert/strict';
@@ -277,7 +278,7 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
 test('046 activation требует fresh107 DELIVER, lostACK rejoin не повторяет start и не открывает API',async()=>{
  const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();await f.lifecycle.resume();
  const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
- const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,expectedReadbackCount:17,sourceSHA:revision,
+ const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
   introducedReceiverSHA256:fingerprint(f.plan.imageEvidence.introducedReceiver),clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
   installationUID:target.installationUID,installationSHA256:target.installationSHA256,observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};
  const sign=value=>({...value,deliverySHA256:fingerprint(value)});

@@ -2,6 +2,7 @@
 import {telegramPolicyTransition,advanceTelegramRegistry,validateTelegramRegistry,validateTelegramAuthorityDeliveryState} from './authority-telegram-transition.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
@@ -14,7 +15,7 @@ import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {readSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
-import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, isPortableAuthorityTransition, authorityPolicySource, validateAuthorityPolicy, authorityPolicyTransitionConfiguration, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
+import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, isPortableAuthorityTransition, authorityPolicySource, validateAuthorityPolicy, authorityPolicyTransitionConfiguration, authorityPolicyReadbackContract, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
 import {isProvenStoppedPod} from './stable-archive-transition.mjs';
 
@@ -278,7 +279,7 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 
 // Fresh getter создаёт только GET/logs: status Job заранее запускается обычным
 // plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
-// SQL owner сохраняет exact membership всех16 readers на трёх promotion phases;
+// SQL owner сохраняет exact membership обязательных readers из pinned registry;
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
 export async function readCatalogAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,catalogPolicyTransition);}
 export async function readTelegramAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition);}
@@ -313,6 +314,8 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
   identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256&&canonicalRegistryMatches(registry.data['key-delivery-targets.yaml'],
    readFileSync(`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8')),
   'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
+ const readers=authorityReadbackContract(registry.data['key-delivery-targets.yaml']);
+ requireValue(fingerprint(readers)===fingerprint(authorityPolicyReadbackContract(profile)),'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
  const canonical=createCanonicalRotationTemplate(freshPlan.source,freshPlan.cliImage,true),expected=createRotationJob(canonical,freshPlan);
  const job=get('job',expected.metadata.name);
  verifyRotationJobReadback(job,expected);
@@ -342,12 +345,12 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
   state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
   Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+3&&
   sha.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&uuid.test(state.intentId??'')&&
-  state.expectedReadbackCount===configuration.expectedReaders&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=configuration.expectedReaders&&state.actualReadbackCount<=configuration.expectedReaders*24&&
+  state.expectedReadbackCount===readers.expectedReadbackCount&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=readers.expectedReadbackCount&&state.actualReadbackCount<=384&&
   observed<=now+5000&&now-observed<=30000&&completed<=observed&&previous<=completed&&switched<=previous,
   'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
  const proof={policyRevision:configuration.desiredRevision,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
-  expectedReadbackCount:configuration.expectedReaders,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
+  ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
   planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:plan.policyTransition.targetSHA256,
   trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
  return Object.freeze({...proof,terminalSHA256:fingerprint(proof)});

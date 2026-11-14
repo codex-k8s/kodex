@@ -1,3 +1,4 @@
+import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import { createHash } from 'node:crypto';
 import { fingerprint, withPrivatePatchFile } from './scoped-release.mjs';
@@ -479,7 +480,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
         requireValue(current.joined,'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
         const proof=await readAuthorityDelivery(),{deliverySHA256,...body}=proof??{};
         const observed=Date.parse(proof?.observedAt),now=Date.now(),target=plan.portableTarget;
-        requireValue(proof?.state==='PENDING_AUTHORITY'&&proof.policyRevision===107&&proof.expectedReadbackCount===17&&
+        const readers=telegramAuthorityReadbackContract();
+        requireValue(proof?.state==='PENDING_AUTHORITY'&&proof.policyRevision===107&&Object.entries(readers).every(([key,value])=>proof[key]===value)&&
           proof.sourceSHA===plan.source.revision&&proof.introducedReceiverSHA256===fingerprint(plan.imageEvidence.introducedReceiver)&&
           proof.clusterUID===target?.clusterUID&&proof.namespaceUID===target.namespaceUID&&proof.installationUID===target.installationUID&&
           proof.installationSHA256===target.installationSHA256&&sha(deliverySHA256)&&deliverySHA256===fingerprint(body)&&

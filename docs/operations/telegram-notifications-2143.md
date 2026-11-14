@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.4
+version: 1.0.5
 updated: 2026-11-14
 ---
 
@@ -124,6 +124,11 @@ caller header не выбирает профиль. Изменение обще�
 Новый issuer добавляется к полному прежнему набору16 targets как17-й с новой
 source revision `actual + 1`: после установленного106 это обычно2→3,
 а не номер policy107 и не статический revision8 исходного render.
+`startup_readback_required` определяет обязательный subset независимо от
+общего размера registry. Для зафиксированных106/107 источников это14/15 required
+при16/17 registered targets; два optional build issuer не становятся обязательными
+из-за наличия receipts. Проверяются source-derived count, sorted tuple hash и
+registered count вместе; caller не задаёт эти множества.
 Замороженный переход105→106 сохраняет отдельную16-target
 оснастку; он не переосмысливается как107.
 
@@ -173,7 +178,7 @@ UID или Service allocation требуют отдельной диагност
 `make test-telegram-resource-create` с бюджетом180 секунд. Только результат
 `CREATED_DORMANT` с `NOT_ACTIVATED_NOT_INSTALLED` допустим для этого этапа.
 Следующая materialization/schema046/policy107 волна отдельно доказывает все
-семнадцать readers, node pull, startup/readiness, bounded shutdown и сохранение
+семнадцать registered targets и обязательный subset readers, node pull, startup/readiness, bounded shutdown и сохранение
 изоляции API. Сам create receipt не разрешает обход этого barrier.
 
 ## Порядок authority107
@@ -189,8 +194,8 @@ receipts и terminal proof16 не разрешают открыть Service, и�
 | Schema046 и cohort | Закрытый predecessor045, полный normal/backup catalog, node proof и неизменные UID старых компонентов. Новый receiver сохраняется0; весь cohort ещё не READY |
 | Registry/key DELIVER | Fresh isolated Service и прежний API join; перед первым CAS снова читаются все dormant objects и private create lineage. Registry revision увеличивается от actual, publisher остаётся exact owned image |
 | Запуск readers | Fresh owner status Job подтверждает exact107 operation/registry, `DISTRIBUTE`, protocol2, опубликованный snapshot `base+1` и `deliveredAt`. Это `PENDING_AUTHORITY`, без требования выдуманных17 readbacks до запуска |
-| Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP получает107 projection, все17 обязанных readers дают свежие readbacks. Exact owner RETIRE относится к `base+3` и той же operation |
-| Service restore | Только отдельный fresh terminal107 proof17 и полный ready serving inventory открывают прежний selector. Dormant/DELIVER receipt не является terminal admission |
+| Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP получает107 projection, точный startup-required subset из17 registered targets даёт свежие readbacks. Exact owner RETIRE с required-set hash относится к `base+3` и той же operation |
+| Service restore | Только отдельный fresh terminal107 proof с точным required subset и registered17 и полный ready serving inventory открывают прежний selector. Dormant/DELIVER receipt не является terminal admission |
 
 Для нового receiver schema handoff является устойчивым принятием уже
 созданного exact spec0 без patch: исходный creator proof должен остаться
@@ -199,7 +204,7 @@ DELIVER; lostACK восстанавливается по intent и полном�
 не повторяя patch. Результат `READERS_STARTED_PENDING_RETIRE` сохраняет API0.
 
 `make test-telegram-authority-delivery` воспроизводит закрытые policy/registry
-границы107, промежуточный DELIVER, creator lineage и старые106 regressions с
+границы107 и отдельные total/required counts, промежуточный DELIVER, creator lineage и старые106 regressions с
 бюджетом180 секунд без live effects. Полный install/activation unit и actual
 readbacks квалифицируются отдельно; один этот target не доказывает установку.
 

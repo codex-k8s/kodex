@@ -4,7 +4,7 @@ title: Поставка authority105→106 для каталога моделе�
 type: operation-guide
 status: approved
 owner: developer
-version: 1.0.1
+version: 1.0.2
 updated: 2026-11-14
 ---
 
@@ -41,7 +41,7 @@ Policy106 отличается от `source_revision` delivery registry и snaps
 | Тот же оператор | Exact105 source → environment render → live predecessor bytes | Новый immutable plan связывает source/render hashes; несовпадение закрывает переход |
 | Тот же оператор | Durable admission proof и fresh API/Service/EndpointSlices readback | Закрытый API admission, пригодный для миграции и запуска sidecars |
 | Transition CLI | UID/RV/data CAS registry и UID/RV/full-spec CAS publisher | Одна атомарная замена registry+policy106; restart только publisher |
-| Действующий publisher | Та же owner operation и immutable input digest | PostgreSQL intent/history; три публикации; все16 обязательных reader receipts |
+| Действующий publisher | Та же owner operation и immutable input digest | PostgreSQL intent/history; три публикации; exact обязательные reader receipts |
 | Projection CLI | Registry106, exact CPUID/spec/RV, predecessor immutable CM UID/hash | Новая immutable106 CM; изменяются только CP policy pointer arrays |
 | Наблюдатель | Exact operation UUID и readback Job | Авторитетный rotation status; `UNKNOWN` требует resume/readback того же plan |
 
@@ -84,20 +84,29 @@ source105 → environment render → live105 SHA-256
    revision и environment-rendered106. Выполнить bounded publisher-only restart
    и наблюдать тот же owner UUID. При неизвестном ответе читать состояние и
    продолжать `resume`, не создавать другое намерение.
-5. Пока API admission закрыт, подготовить новую immutable106 projection и
-   переключить CP policy pointer. Существующая immutable105 CM остаётся
-   неизменной. Сохраняются application image, sidecars, replica count и остальные
-   поля template. CP заново читает policy при запуске; он не hot-reload resolver.
-6. Вернуть API Pods с уже допущенным application template, сохраняя изоляцию
-   Service. Дождаться issuer/readiness и всех16 exact readbacks каждой phase.
-   Штатные `DISTRIBUTING → WAITING_SWITCH → SWITCHING → WAITING_RETIRE → RETIRING
-   → RETIRED` и оба40-секундных окна не сокращаются.
+5. Вернуть API Pods с уже допущенным application template, сохраняя изоляцию
+   Service. Это отдельный maintenance open receipt, а не открытие admission.
+   Publisher требует API issuer в обязательном наборе; остановленный API может
+   задержать ротацию и readiness CP sidecars.
+6. Дождаться обязательных exact readbacks и восстановления CP readiness.
+   Подготовить immutable106 projection и переключить CP policy pointer.
+   Прежняя immutable105 CM сохраняется; application image, sidecars, replicas
+   и остальные поля template не меняются. CP перечитывает policy при запуске.
+   Полностью проверить rollout. Переходы `DISTRIBUTING → WAITING_SWITCH →
+   SWITCHING → WAITING_RETIRE → RETIRING → RETIRED` и оба40-секундных окна
+   не сокращаются; до восстановления readiness projection закрыто отклоняется.
+
 7. После `RETIRED` и проверки рабочего пути открыть только исходный Service
    selector. Открытие не восстанавливает прежний CP/API template, policy105 или
    прежние ключи. Ручной owner login и обычный tool turn фиксируются отдельно.
 
 Required readers включают `control-api-gateway/AUTHORIZATION_ISSUER`.
-Ожидать16 новых receipts при API replicas0 нельзя: такой порядок сам блокирует
+Source registry содержит16 delivery targets, но14 обязательных startup bindings:
+`image-admission` и `image-promotion` отмечены optional. Это свойство закреплённого
+registry, а не константа в terminal guard. Proof хранит total, required count и
+hash sorted `(workload, role, generation)`; owner SQL проверяет exact membership.
+Фактический count может быть больше required за счёт optional receipts.
+Ожидать полный обязательный набор receipts при API replicas0 нельзя: такой порядок сам блокирует
 публикацию. Закрытие admission и остановка Pods — разные проверяемые состояния.
 Наблюдение без effects остаётся доступно и при работающих API Pods.
 
@@ -188,7 +197,7 @@ node tools/release/control-plane-policy-projection.mjs apply \
 `--action status` plan/apply с тем же source/context/kubeconfig. Его canonical
 read-only CLI Job должен завершиться, а owner `observedAt` быть не старше30секунд.
 `readCatalogAuthorityTerminal` проверяет exact operation UUID, registry/policy
-hashes, все16 required readbacks, `RETIRED`, phase deadlines и source snapshot.
+hashes, обязательный registry-derived набор readbacks, `RETIRED`, phase deadlines и source snapshot.
 Job/Pod связываются по UID, полным container/init/ephemeral arrays и CRI digests.
 Старый успешный watch Job не считается свежим DB query. Getter сам только
 читает; создание status Job остаётся явной операторской операцией.
@@ -279,7 +288,7 @@ images `control-plane`, `control-api-gateway`, `control-center`; прочие im
 большего cohort принадлежат своим изменениям. Исправление CLI для последующих
 rotations требует отдельно описанного нового `internal-rpc-authority` image;
 sidecar ABI2 и DB schema от этого не меняются. Пересборка authority без причины
-не подменяет source publication,16 receipts или фактическую готовность RPC.
+не подменяет source publication, обязательные receipts или фактическую готовность RPC.
 
 Portable migration owner reads используют exact контейнер `postgresql`, очищенное
 `env -i`, `psql -X`, локальный socket `/var/run/postgresql:5432` и явные database/user
@@ -301,3 +310,17 @@ Custom archive и TOC подтверждают формат снимка, но �
 Для operator subprocess проверен Node.js24 (`/websites/nodejs_latest-v24_x_api`):
 [execFileSync, env, timeout и maxBuffer](https://nodejs.org/docs/latest-v24.x/api/child_process.html).
 Используются argument arrays без shell; stderr внешнего процесса не раскрывается.
+
+## Исправленный observer и продолжение после timeout
+
+`rotation-watch` ограничен300s. Его timeout не является отменой owner operation;
+проверяется новый `status` Job с прежними source/image pins и тот же operation ID.
+Повторный rotate, изменение старого плана и сброс журнала не нужны.
+
+Если guard исправлен после запуска ротации, новый clean executor создаёт только
+новый restore plan с `--authority-executor-sha EXACT_ROTATION_SOURCE_SHA`.
+SHA должен совпасть с исходным rotation plan и быть Git ancestor нового executor;
+старый checkout также остаётся clean/exact. Поле `authorityExecutorSHA` сохраняется
+в утверждённом плане, а apply/status читают его оттуда. Flag запрещён для
+isolate/apply/status. Новые status plans выполняются прежним executor; source,
+CLI digest, target, operation, registry, Job/Pod и fresh30s proof не ослабляются.
