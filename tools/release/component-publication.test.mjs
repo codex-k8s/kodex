@@ -67,7 +67,7 @@ if(program==='git'){
  else if(a[0]==='archive')process.stdout.write('synthetic archive');
  else if(a[0]==='show')process.stdout.write('FROM scratch\\n');
  else if(a[0]==='diff'){
-  if(a.includes('--name-only'))process.stdout.write(a.at(-1)+'internal/synthetic.go\\0');
+  if(a.includes('--name-only'))process.stdout.write((s.manifests?.[a.at(-1)]??[a.at(-1)+'internal/synthetic.go']).join('\\0')+'\\0');
   else process.stdout.write('synthetic binary diff');
  }else if(!['merge-base','cat-file'].includes(a[0]))process.exit(2);
 }else if(program==='kubectl'){
@@ -130,6 +130,33 @@ for(const profile of ['workspace-unbound-stop','github-repository-scope'])test(`
     assert.equal(f.state().pulls,pulls);assert.deepEqual(JSON.parse(readFileSync(join(f.directory,'readback.json'))),publication);
     trace=readFileSync(join(f.directory,'trace'),'utf8').trim().split('\n').map(JSON.parse);
     assert.ok(trace.filter(x=>x.program==='docker'&&x.args[0]==='exec').every(x=>x.args[1]==='2'.repeat(64)));
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+test('large cohort keeps the full manifest within 64KiB using canonical compact encoding',()=>{
+  const f=setup('github-repository-scope');
+  try{
+    const sample=fixture('github-repository-scope'),component=sample.config.components[0],e=sample.evidence(component);
+    let manifest;
+    for(let count=100;count<250;count++){
+      const changedFiles=[component.anchor,...Array.from({length:count},(_,i)=>
+        'services/internal/control-plane/internal/production/'+String(i).padStart(4,'0')+'_'+'x'.repeat(20)+'.go')].sort();
+      const lock=createComponentImageLock(sample.config,component,e,{receipt:e.publicationPlan.receipt,receiptSHA256:'1'.repeat(64),
+        dockerfileSHA256:'2'.repeat(64),productionSHA256:'3'.repeat(64),contextSHA256:sha('synthetic archive'),changedFiles});
+      if(Buffer.byteLength(JSON.stringify(lock,null,2)+'\n')>65536 && Buffer.byteLength(JSON.stringify(lock)+'\n')<65536){manifest=changedFiles;break;}
+    }
+    assert.ok(manifest,'fixture crosses the pretty encoding budget');
+    f.change({manifests:{'services/internal/control-plane/':manifest}});
+    const p=f.run('prepare','prepared.json');assert.equal(p.code,0,p.out);
+    const part=f.prepared().publication.components[0],raw=Buffer.from(part.componentLockRawBase64,'base64'),lock=JSON.parse(raw);
+    assert.ok(raw.length<=65536);assert.ok(Buffer.byteLength(JSON.stringify(lock,null,2)+'\n')>65536);
+    assert.deepEqual(lock.compatibility.changed_files,manifest);assert.deepEqual(lock.compatibility.production_files,manifest);
+    assert.deepEqual(lock.compatibility.verified_cohort.changed_files,manifest);assert.deepEqual(lock.compatibility.verified_cohort.production_files,manifest);
+    const q=f.run('qualify','publication.json',['--approved-plan-sha',fingerprint(f.prepared())]);assert.equal(q.code,0,q.out);
+    const publication=JSON.parse(readFileSync(join(f.directory,'publication.json')));
+    assert.equal(componentMigrationPublication(publication,{revision},'github-repository-scope').components.length,5);
+    const duplicate=Buffer.from(raw.toString().replace('{','{"component":"control-plane",'));
+    publication.components[0].componentLockRawBase64=duplicate.toString('base64');publication.components[0].componentLockSHA256=sha(duplicate);
+    assert.throws(()=>componentMigrationPublication(publication,{revision},'github-repository-scope'),/LOCK_ENCODING_INVALID/);
   }finally{rmSync(f.directory,{recursive:true,force:true});}
 });
 test('lost final pull response is UNKNOWN, readback proves resident digests without replay',()=>{

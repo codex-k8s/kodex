@@ -88,9 +88,10 @@ export function componentMigrationPublication(value, source, profile = 'workspac
       createHash('sha256').update(raw).digest('hex') === part.componentLockSHA256, 'COMPONENT_MIGRATION_LOCK_HASH_INVALID');
     let lock;
     try { lock = JSON.parse(raw.toString('utf8')); } catch { throw Error('COMPONENT_MIGRATION_LOCK_INVALID'); }
-    // Штатный publisher сохраняет json.dumps(indent=2) + LF. Все допустимые
-    // строки ASCII; roundtrip исключает duplicate keys без второго JSON parser.
-    requireValue(raw.equals(Buffer.from(JSON.stringify(lock,null,2)+'\n')), 'COMPONENT_MIGRATION_LOCK_ENCODING_INVALID');
+    // Compact и прежний pretty publisher сохраняют ровно один LF. Roundtrip
+    // отвергает duplicate keys и произвольное оформление при прежнем лимите64KiB.
+    requireValue(raw.equals(Buffer.from(JSON.stringify(lock)+'\n')) ||
+      raw.equals(Buffer.from(JSON.stringify(lock,null,2)+'\n')), 'COMPONENT_MIGRATION_LOCK_ENCODING_INVALID');
     requireValue(fields(lock,['schema','component','source_sha','base_application_source_sha','base_release_lock_sha256','image_ref','digest',
       'production_file_sha256','schema_heads','compatibility','build','qualification']) && lock.schema === 'kodex.component-image/v1' &&
       lock.component === part.component && lock.source_sha === source.revision && lock.base_application_source_sha === value.baseSourceSHA &&
