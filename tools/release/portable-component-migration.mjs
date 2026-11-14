@@ -198,7 +198,7 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
 // Чужой Pod из serving selector исключается только как подтверждённая завершённая
 // repo-owned CLI Job; labels, terminal phase или имя Job по отдельности недостаточны.
 export function componentServingInventory(list, name, deploymentUID) {
-  requireValue(Array.isArray(list?.items) && [...names,'internal-rpc-authority-publisher'].includes(name), 'COMPONENT_MIGRATION_POD_INVENTORY_INVALID');
+  requireValue(Array.isArray(list?.items) && [...names,'internal-rpc-authority-publisher','backup-controller'].includes(name), 'COMPONENT_MIGRATION_POD_INVENTORY_INVALID');
   const sets=list.items.filter(r => r.kind === 'ReplicaSet');
   const owners=new Set(sets.filter(r => r.metadata?.ownerReferences?.some(o =>
     o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID)).map(r => r.metadata.uid));

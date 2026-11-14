@@ -15,6 +15,9 @@ const (
 	// workspaceBackupUpgradeCommand selects the explicit stopped-owner compatibility path, never ordinary up.
 	// workspaceBackupUpgradeCommand выбирает явный compatibility path остановленного owner, а не обычный up.
 	workspaceBackupUpgradeCommand = "up-workspace-backup-compatible"
+	// githubBackupUpgradeCommand selects only the exact043 backup ACL maintenance boundary before immutable044; it does not replay an applied migration.
+	// githubBackupUpgradeCommand выбирает только точную043 backup ACL maintenance boundary перед неизменной044; применённая миграция не повторяется.
+	githubBackupUpgradeCommand = "up-github-repository-scope-backup-compatible"
 	// workspaceBackupRestoreCommand repairs only the closed backup SELECT set after an interrupted maintenance command.
 	// workspaceBackupRestoreCommand восстанавливает только закрытый набор backup SELECT после прерванного обслуживания.
 	workspaceBackupRestoreCommand = "restore-workspace-backup-acl"
@@ -31,11 +34,11 @@ const (
 //go:embed workspace_backup_sql/*.sql
 var workspaceBackupStatements embed.FS
 
-// validPostgresCommand closes dispatch over the existing diagnostic commands and two exact maintenance operations.
-// validPostgresCommand замыкает dispatch на прежние diagnostic commands и две точные maintenance operations.
+// validPostgresCommand closes dispatch over the existing diagnostic commands and registered exact maintenance operations.
+// validPostgresCommand замыкает dispatch на прежние diagnostic commands и зарегистрированные точные maintenance operations.
 func validPostgresCommand(command string) bool {
 	switch command {
-	case "check", "up", "status", workspaceBackupUpgradeCommand, workspaceBackupRestoreCommand:
+	case "check", "up", "status", workspaceBackupUpgradeCommand, githubBackupUpgradeCommand, workspaceBackupRestoreCommand:
 		return true
 	default:
 		return false
@@ -75,7 +78,7 @@ func restoreWorkspaceBackupACL(ctx context.Context, database *sql.DB) error {
 		return err
 	}
 	switch version {
-	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261114120000:
+	case 20261026001500, 20261026001600, 20261026001700, 20261027000100, 20261028000100, 20261029000100, 20261029000200, 20261029000300, 20261030000100, 20261105000100, 20261106000100, 20261107000100, 20261108000100, 20261109000100, 20261113000100, 20261114120000:
 		return executeWorkspaceBackupStatement(ctx, database, fmt.Sprintf("restore_%d.sql", version))
 	default:
 		return errors.New("workspace backup restore schema is not registered")
@@ -99,11 +102,42 @@ func upgradeWorkspaceWithBackupCompatibility(ctx context.Context, database *sql.
 // executeWorkspaceBackupUpgrade отделяет единственный migration effect от independently cancellable ACL cleanup.
 // Callback позволяет проверить native cancellation без подмены database transactions или catalog assertions.
 func executeWorkspaceBackupUpgrade(ctx context.Context, database *sql.DB, migrate func(context.Context, *sql.DB) error) error {
-	if err := executeWorkspaceBackupStatement(ctx, database, "normalize.sql"); err != nil {
+	return executeBackupUpgradeWithStatement(ctx, database, "normalize.sql", migrate)
+}
+
+// executeBackupUpgradeWithStatement runs a registered normalization once and always attempts independent bounded forward ACL restoration after a confirmed normalization commit; unknown commits stop before migration.
+// executeBackupUpgradeWithStatement выполняет зарегистрированную normalization один раз и всегда пробует независимое bounded forward восстановление ACL после подтверждённого commit; неизвестный commit останавливает вход в миграцию.
+func executeBackupUpgradeWithStatement(ctx context.Context, database *sql.DB, normalization string, migrate func(context.Context, *sql.DB) error) error {
+	if normalization != "normalize.sql" && normalization != "normalize_20261113000100.sql" {
+		return errors.New("backup normalization is not registered")
+	}
+	if err := executeWorkspaceBackupStatement(ctx, database, normalization); err != nil {
 		return err
 	}
 	migrationErr := migrate(ctx, database)
 	cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), workspaceBackupCleanupBudget)
 	defer stop()
 	return errors.Join(migrationErr, restoreWorkspaceBackupACL(cleanup, database))
+}
+
+// upgradeGitHubWithBackupCompatibility preserves immutable044 and advances only an exact043 known backup ACL variant through bounded normalization, one Goose call and forward canonical restoration. An already applied044 is read/restored without replaying Goose.
+// upgradeGitHubWithBackupCompatibility сохраняет неизменную044 и переводит только точную043 известную backup ACL qualification через bounded normalization, один Goose и forward canonical restore. Применённая044 читается/восстанавливается без повторного Goose.
+func upgradeGitHubWithBackupCompatibility(ctx context.Context, database *sql.DB) error {
+	selector, err := workspaceBackupStatements.ReadFile("workspace_backup_sql/version.sql")
+	if err != nil {
+		return err
+	}
+	var version int64
+	if err := database.QueryRowContext(ctx, string(selector)).Scan(&version); err != nil {
+		return err
+	}
+	if version == 20261114120000 {
+		return restoreWorkspaceBackupACL(ctx, database)
+	}
+	if version != 20261113000100 {
+		return errors.New("GitHub backup upgrade predecessor is not registered")
+	}
+	return executeBackupUpgradeWithStatement(ctx, database, "normalize_20261113000100.sql", func(ctx context.Context, database *sql.DB) error {
+		return goose.UpToContext(ctx, database, "migrations", 20261114120000)
+	})
 }

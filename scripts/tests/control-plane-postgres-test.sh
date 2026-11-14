@@ -17,10 +17,22 @@ upgrade_container_id=""
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestNativeSessionOwnerComponent|TestWorkspaceWriterOwnerComponent|TestWorkspaceUnboundStopOwnerComponent|TestWorkflowWorkspaceOwnerComponent|TestModelDiscoveryEligibilityComponent|TestModelProviderBootstrapComponent|TestModelProviderCatalogComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeSecretDraftReadinessComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestNativeCompletionCapabilityRevokeComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestPersonalGitHubScopedPolicyComponent|TestRepositoryBundlePersonalCredentialComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
+upgrade_timeout=180s
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
-if [[ "$test_pattern" == --github-repository-scope-upgrade ]]; then
+if [[ "$test_pattern" == --github-repository-scope-upgrade || "$test_pattern" == --github-repository-scope-backup-upgrade ]]; then
+  if [[ "$test_pattern" == --github-repository-scope-backup-upgrade ]]; then export KODEX_GITHUB_UPGRADE_MODE=backup; else export KODEX_GITHUB_UPGRADE_MODE=normal; fi
+  command -v node >/dev/null 2>&1 || fail 'node is required for schema verifier'
+  upgrade_timeout=600s
   upgrade_test='^TestGitHubRepositoryScopeUpgrade$'
   if [[ -n ${KODEX_GITHUB_SCHEMA_CAPTURE_DIRECTORY:-} ]]; then upgrade_test='^TestGitHubRepositoryScopeCatalogCapture$'; fi
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --github-repository-scope-retained-workspace ]]; then
+  upgrade_test='^TestGitHubBackupRetainedWorkspace$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --github-repository-scope-public-sequence-negative ]]; then
+  upgrade_test='^TestGitHubRepositoryScopePublicSequenceRestore$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --workspace-unbound-stop-upgrade ]]; then
@@ -360,7 +372,7 @@ if [[ "$test_pattern" == --review-qa-upgrade ]]; then
     cd -- "$repository_root/services/internal/control-plane"
     KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
       KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=180s \
+      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout="$upgrade_timeout" \
       ./cmd/cli -run "$upgrade_test"
   )
   if [[ "$volume_owner" == true ]]; then
