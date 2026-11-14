@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {telegramPolicyTransition,telegramPolicyReaders,telegramPolicySource,validateTelegramPolicy,verifyTelegramPolicyDelta,
- telegramRegistrySource,validateTelegramRegistry,advanceTelegramRegistry} from './authority-telegram-transition.mjs';
+ telegramRegistrySource,validateTelegramRegistry,advanceTelegramRegistry,validateTelegramAuthorityDeliveryState} from './authority-telegram-transition.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
 
 const transition={profile:telegramPolicyTransition,environment:{oidcIssuer:'https://login.example.test/realms/fixture',oidcAudience:'kodex-control-api'}};
@@ -28,4 +28,20 @@ test('106 membership16 не заменяется17,107 registry сохраняе
  for(const raw of [before.raw.replace('source_revision: 7','source_revision: 7\nsource_revision: 2'),before.raw.replace('role: AUTHORIZATION_ISSUER','role: FOREIGN_ROLE'),before.raw.replace('source_revision: 7','source_revision: 9007199254740991')])assert.throws(()=>advanceTelegramRegistry(raw,after.raw));
  assert.throws(()=>advanceTelegramRegistry(actual,after.raw+'\n'),/SOURCE_REJECTED/);
  assert.throws(()=>advanceTelegramRegistry(after.raw,after.raw),/CLOSURE_REJECTED/);
+});
+
+test('DELIVER owner107 позволяет только PENDING_AUTHORITY, не требует выдуманного17readback до start',()=>{
+ const now=Date.parse('2026-11-14T12:00:00Z'),operationID='00000000-0000-4000-8000-000000000001';
+ const identity={sourceRevision:3,sourceDigestSHA256:'a'.repeat(64)};
+ const state={observedAt:new Date(now).toISOString(),operationId:operationID,status:'DISTRIBUTING',operationStatus:'DISTRIBUTING',phase:'DISTRIBUTE',
+  registryRevision:3,registrySourceDigestSHA256:identity.sourceDigestSHA256,baseRevision:4,sourceRevision:5,sourceDigestSHA256:'b'.repeat(64),protocolVersion:2,
+  intentId:'00000000-0000-4000-8000-000000000002',expectedReadbackCount:17,actualReadbackCount:16,
+  deliveryStartedAt:new Date(now-10000).toISOString(),deliveredAt:new Date(now-5000).toISOString()};
+ const proof=validateTelegramAuthorityDeliveryState(state,identity,operationID,now);assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.actualReadbackCount,16);
+ assert.equal(Object.hasOwn(proof,'terminalSHA256'),false);
+ for(const mutate of [s=>delete s.deliveredAt,s=>s.phase='SWITCH',s=>s.operationId='foreign',s=>s.expectedReadbackCount=16,s=>s.sourceRevision=7,
+  s=>s.registryRevision=2,s=>s.sourceDigestSHA256='unknown',s=>s.observedAt=new Date(now-30001).toISOString(),s=>s.deliveredAt=new Date(now+1000).toISOString(),
+  s=>s.abortedAt=new Date(now).toISOString(),s=>s.completedAt=new Date(now).toISOString(),s=>s.actualReadbackCount=409]){
+  const changed=structuredClone(state);mutate(changed);assert.throws(()=>validateTelegramAuthorityDeliveryState(changed,identity,operationID,now),/DELIVERY_OWNER_REJECTED/);
+ }
 });

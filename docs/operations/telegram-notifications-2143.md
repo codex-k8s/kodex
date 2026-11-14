@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.2
+version: 1.0.3
 updated: 2026-11-14
 ---
 
@@ -122,7 +122,9 @@ caller header не выбирает профиль. Изменение обще�
 `kodex-platform-endpoints.data.publicOrigin` через `INTERACTION_PUBLIC_ORIGIN`
 у CP и gateway. Caller Host, request URL и payload origin не используются.
 Новый issuer добавляется к полному прежнему набору16 targets как17-й с новой
-source revision8. Замороженный переход105→106 сохраняет отдельную16-target
+source revision `actual + 1`: после установленного106 это обычно2→3,
+а не номер policy107 и не статический revision8 исходного render.
+Замороженный переход105→106 сохраняет отдельную16-target
 оснастку; он не переосмысливается как107.
 
 В установленном web-only новый gateway отсутствует. Адресная доставка должна
@@ -173,6 +175,27 @@ UID или Service allocation требуют отдельной диагност
 Следующая materialization/schema046/policy107 волна отдельно доказывает все
 семнадцать readers, node pull, startup/readiness, bounded shutdown и сохранение
 изоляции API. Сам create receipt не разрешает обход этого barrier.
+
+## Порядок authority107
+
+`TELEGRAM_NOTIFICATIONS_106_107` — отдельный закрытый профиль. Его source
+policy107 добавляет ровно четыре operation profiles к106; registry сохраняет
+все прежние16 entries и добавляет только issuer нового gateway. Старые106
+receipts и terminal proof16 не разрешают открыть Service, изолированный для107.
+
+| Этап | Авторитетное доказательство и допустимый результат |
+| --- | --- |
+| Dormant create | Свежие source/publication receipt и10 actual objects с назначенными UID/spec; Deployment0, плановые replicas3. Только `PENDING_AUTHORITY` |
+| Schema046 и cohort | Закрытый predecessor045, полный normal/backup catalog, node proof и неизменные UID старых компонентов. Новый receiver сохраняется0; весь cohort ещё не READY |
+| Registry/key DELIVER | Fresh isolated Service и прежний API join; перед первым CAS снова читаются все dormant objects и private create lineage. Registry revision увеличивается от actual, publisher остаётся exact owned image |
+| Запуск readers | Fresh owner status Job подтверждает exact107 operation/registry, `DISTRIBUTE`, protocol2, опубликованный snapshot `base+1` и `deliveredAt`. Это `PENDING_AUTHORITY`, без требования выдуманных17 readbacks до запуска |
+| Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP получает107 projection, все17 обязанных readers дают свежие readbacks. Exact owner RETIRE относится к `base+3` и той же operation |
+| Service restore | Только отдельный fresh terminal107 proof17 и полный ready serving inventory открывают прежний selector. Dormant/DELIVER receipt не является terminal admission |
+
+`make test-telegram-authority-delivery` воспроизводит закрытые policy/registry
+границы107, промежуточный DELIVER, creator lineage и старые106 regressions с
+бюджетом180 секунд без live effects. Полный install/activation unit и actual
+readbacks квалифицируются отдельно; один этот target не доказывает установку.
 
 Terminal UNKNOWN с `completed_at` и всеми закрытыми lease fields не блокирует
 явное изменение metadata Telegram connection. Только этот путь допускает

@@ -94,3 +94,20 @@ export function advanceTelegramRegistry(liveRaw,sourceRaw){
  after.source_revision=before.sourceRevision+1;
  const raw=python(registryWriter,JSON.stringify(after));validateTelegramRegistry(raw,'desired');return raw;
 }
+
+// DELIVER допускает только запуск новых readers под уже опубликованным материалом.
+// Это отдельный промежуточный owner proof; он никогда не заменяет17 readbacks/RETIRE.
+export function validateTelegramAuthorityDeliveryState(state,identity,operationID,now=Date.now()){
+ const observed=Date.parse(state?.observedAt),started=Date.parse(state?.deliveryStartedAt),delivered=Date.parse(state?.deliveredAt);
+ fail(state?.operationId===operationID&&state.status==='DISTRIBUTING'&&state.operationStatus==='DISTRIBUTING'&&state.phase==='DISTRIBUTE'&&
+  state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
+  Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+1&&
+  /^[a-f0-9]{64}$/.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(state.intentId??'')&&
+  state.expectedReadbackCount===telegramPolicyReaders&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=0&&state.actualReadbackCount<=telegramPolicyReaders*24&&
+  Number.isFinite(now)&&observed<=now+5000&&now-observed<=30000&&started<=delivered&&delivered<=observed&&
+  state.abortedAt===undefined&&state.promotedAt===undefined&&state.retiredAt===undefined&&state.completedAt===undefined,
+  'TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
+ return {state:'PENDING_AUTHORITY',policyRevision:107,operationID,registryRevision:identity.sourceRevision,registrySHA256:identity.sourceDigestSHA256,
+  snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,expectedReadbackCount:telegramPolicyReaders,
+  actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,deliveredAt:state.deliveredAt};
+}

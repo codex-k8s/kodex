@@ -3,7 +3,7 @@ import test from 'node:test';
 import {mkdtempSync,writeFileSync,readFileSync,rmSync,mkdirSync,copyFileSync} from 'node:fs';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {main as rotationMain,readCatalogAuthorityTerminal,verifyCatalogAuthorityJobPod} from './authority-rotation-transition.mjs';
 import {main as projectionMain} from './control-plane-policy-projection.mjs';
@@ -23,7 +23,7 @@ function prerequisites(){
   return {sa,egress,ingress};
 }
 
-function cliFixture(t,{revision='a'.repeat(40)}={}){
+function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false}={}){
   const f=fixture(),directory=mkdtempSync(join(tmpdir(),'catalog-authority-cli-'));
   t.after(()=>rmSync(directory,{recursive:true,force:true}));
   const kubeconfig=join(directory,'kubeconfig'),profile=join(directory,'target.json'),output=join(directory,'plan.json');
@@ -101,12 +101,24 @@ function cliFixture(t,{revision='a'.repeat(40)}={}){
   copyFileSync(new URL('../../deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-data/migration-job.yaml'));
   copyFileSync(new URL('./fixtures/authority-policy-revision106.json',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json'));
   copyFileSync(new URL('./fixtures/authority106-key-delivery-targets.yaml',import.meta.url),join(source,'deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml'));
+  if(syntheticSource){
+    // Отдельный process использует настоящий clean Git checkout fixture с теми
+    // же tracked executor bytes. Никакого blanket fake git clean/HEAD нет.
+    const repository=fileURLToPath(new URL('../../',import.meta.url));
+    const tracked=execFileSync('git',['-C',repository,'ls-files','-z','--','tools','infra/public-ingress'],{encoding:'utf8'}).split('\0').filter(Boolean);
+    for(const relative of tracked){mkdirSync(dirname(join(source,relative)),{recursive:true});copyFileSync(join(repository,relative),join(source,relative));}
+    execFileSync('git',['init','--quiet',source]);
+    execFileSync('git',['-C',source,'remote','add','origin','https://github.com/codex-k8s/kodex.git']);
+    execFileSync('git',['-C',source,'add','.']);
+    execFileSync('git',['-C',source,'-c','user.name=Synthetic fixture','-c','user.email=fixture@example.invalid','commit','--quiet','-m','Изолированная fixture106']);
+    revision=execFileSync('git',['-C',source,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  }
   const args=()=>['plan','--policy-transition',catalogPolicyTransition,'--context',f.profile.context,
     '--kubeconfig',kubeconfig,'--portable-target',profile,'--source',source,'--revision',revision,'--action','status','--output',output];
   const kube=argv=>run('kubectl',[...expectedPrefix,...argv]);
-  const execFileSync=(program,argv,options)=>run(program,argv,options?.input);
+  const syntheticExecFileSync=(program,argv,options)=>run(program,argv,options?.input);
   return {...f,directory,kubeconfig,profilePath:profile,output,calls,args,source,revision,jobs,jobPods,jobLogs,losses,effects,state,kube,
-    io:{run,execFileSync,inspectSource:()=>({revision})}};
+    io:{run,execFileSync:syntheticExecFileSync,inspectSource:()=>({revision})}};
 }
 
 function completedJobPod(job){
@@ -236,8 +248,7 @@ test('fresh authority Job proof rejects extra containers, altered credentials/co
 });
 
 test('separate-process restore CLI opens only after fresh106 owner terminal and rejoins without another effect',async t=>{
-  const revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
-  const f=await terminalFixture(t,{revision}),bin=join(f.directory,'bin'),statePath=join(f.directory,'synthetic-api.json');mkdirSync(bin,{mode:0o700});
+  const f=await terminalFixture(t,{syntheticSource:true}),bin=join(f.directory,'bin'),statePath=join(f.directory,'synthetic-api.json');mkdirSync(bin,{mode:0o700});
   f.api.spec.replicas=3;f.api.status={observedGeneration:1,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
   const state={resources:Object.fromEntries(f.resources),jobs:Object.fromEntries(f.jobs),jobPods:Object.fromEntries(f.jobPods),logs:Object.fromEntries(f.jobLogs),
     kubeconfig:f.kubeconfig,context:f.profile.context,calls:[],effects:0,lostACK:true};
@@ -278,7 +289,7 @@ else if(patch>=0){
   const flags=['--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--closed-plan',f.admission.paths.planPath,'--closed-evidence',f.admission.paths.evidencePath,
     '--isolation-plan',f.admission.paths.trafficPlanPath,'--isolation-evidence',f.admission.paths.trafficEvidencePath,
     '--authority-plan',f.output,'--authority-evidence',f.evidence,'--authority-status-plan',f.freshOutput,'--authority-status-evidence',f.freshEvidence];
-  const run=args=>spawnSync(process.execPath,[fileURLToPath(new URL('./component-api-traffic.mjs',import.meta.url)),...args],{encoding:'utf8',timeout:30000,
+  const run=args=>spawnSync(process.execPath,[join(f.source,'tools/release/component-api-traffic.mjs'),...args],{encoding:'utf8',timeout:30000,
     env:{...process.env,PATH:bin+':'+process.env.PATH}});
   let result=run(['plan',...flags,'--target',f.profilePath,'--action','restore','--plan',restorePlan]);
   assert.equal(result.status,0,result.stderr);

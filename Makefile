@@ -535,7 +535,7 @@ test-scoped-backup-reader:
 	@./scripts/tests/local-backup-controller-credentials-contract-test.sh
 
 .PHONY: test-control-plane-migration
-.PHONY: test-telegram-resource-create test-telegram-notifications-owner
+.PHONY: test-telegram-resource-create test-telegram-notifications-owner test-telegram-authority-delivery
 
 test-telegram-resource-create:
 	@timeout 180s node --test tools/release/telegram-resource-create.test.mjs
@@ -659,3 +659,7 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
 	@timeout 90s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+
+# Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
+test-telegram-authority-delivery:
+	@timeout 180s node --test tools/release/authority-telegram-transition.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs

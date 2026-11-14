@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {telegramPolicyTransition,advanceTelegramRegistry,validateTelegramRegistry} from './authority-telegram-transition.mjs';
+import {telegramPolicyTransition,advanceTelegramRegistry,validateTelegramRegistry,validateTelegramAuthorityDeliveryState} from './authority-telegram-transition.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
@@ -280,7 +280,8 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
 export async function readCatalogAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,catalogPolicyTransition);}
 export async function readTelegramAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition);}
-async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io,profile){
+export async function readTelegramAuthorityDelivered(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition,'delivered');}
+async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io,profile,purpose='terminal'){
  const configuration=authorityPolicyTransitionConfiguration(profile);
  requireValue(plan?.action==='rotate'&&plan.policyTransition?.profile===profile&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===profile&&
   freshPlan.context===plan.context&&freshPlan.kubeconfig===plan.kubeconfig&&freshPlan.source===plan.source&&freshPlan.revision===plan.revision&&
@@ -288,7 +289,7 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
  const original=validateCatalogAuthorityEvidence(plan,events,profile),fresh=validateCatalogAuthorityEvidence(freshPlan,freshEvents,profile);
  requireValue(original.jobUID&&fresh.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
   events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART')&&
-  freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus==='RETIRED'),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
+  freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus===(purpose==='delivered'?'DISTRIBUTING':'RETIRED')),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
  requireValue((io.inspectSource??inspectSource)(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
  const get=(kind,name)=>parseAuthorityPrivateJSON(kube(['-n',namespace,'get',kind,name,'-o','json']));
  const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get,profile);
@@ -325,6 +326,13 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
   'predecessorRevision','predecessorDigestSHA256','deliveryStartedAt','deliveredAt','promotedAt','overlapUntil','retiredAt','abortedAt','status','expectedReadbackCount','actualReadbackCount']);
  requireValue(Object.keys(state).every(key=>ownerFields.has(key)),'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const classified=classifyRotationStatus(job,JSON.stringify(state));
+ if(purpose==='delivered'){
+  requireValue(profile===telegramPolicyTransition&&classified.phase==='SUCCEEDED','TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
+  const delivery=validateTelegramAuthorityDeliveryState(state,identity,plan.ownerOperationID,now);
+  const proof={...delivery,policySHA256:policy.sha256,planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),
+   targetSHA256:plan.policyTransition.targetSHA256,trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
+  return Object.freeze({...proof,deliverySHA256:fingerprint(proof)});
+ }
  const observed=Date.parse(state.observedAt),completed=Date.parse(state.completedAt),previous=Date.parse(state.previousNotAfter),switched=Date.parse(state.switchNotBefore);
  requireValue(classified.phase==='SUCCEEDED'&&state.status==='RETIRED'&&state.operationStatus==='RETIRED'&&state.operationId===plan.ownerOperationID&&
   state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
