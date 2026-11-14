@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './stable-inventory.mjs';
-import {componentMigrationConfiguration,componentMigrationPublication} from './portable-component-migration.mjs';
+import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockMaxBytes,componentImageLockMaxBase64,componentPublicationMaxBytes} from './portable-component-migration.mjs';
 import {validateStableReceipt} from './stable-image-publication.mjs';
 import {createComponentImageLock,validateComponentPublicationConfiguration} from './component-publication.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex'),revision='a'.repeat(40),uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -157,6 +157,51 @@ test('large cohort keeps the full manifest within 64KiB using canonical compact 
     const duplicate=Buffer.from(raw.toString().replace('{','{"component":"control-plane",'));
     publication.components[0].componentLockRawBase64=duplicate.toString('base64');publication.components[0].componentLockSHA256=sha(duplicate);
     assert.throws(()=>componentMigrationPublication(publication,{revision},'github-repository-scope'),/LOCK_ENCODING_INVALID/);
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+test('full manifest above64KiB survives publisher, exact CRI proof and consumer with bounded128KiB lock',()=>{
+  const f=setup('github-repository-scope');
+  try{
+    const component=f.config.components[0];
+    const manifest=[component.anchor,...Array.from({length:300},(_,i)=>
+      'services/internal/control-plane/internal/production/'+String(i).padStart(4,'0')+'_'+'x'.repeat(20)+'.go')].sort();
+    f.change({manifests:{'services/internal/control-plane/':manifest}});
+    const prepared=f.run('prepare','prepared.json');assert.equal(prepared.code,0,prepared.out);
+    const raw=Buffer.from(f.prepared().publication.components[0].componentLockRawBase64,'base64');
+    assert.ok(raw.length>65536);assert.ok(raw.length<=componentImageLockMaxBytes);
+    const qualified=f.run('qualify','publication.json',['--approved-plan-sha',fingerprint(f.prepared())]);assert.equal(qualified.code,0,qualified.out);
+    const publication=JSON.parse(readFileSync(join(f.directory,'publication.json')));
+    const accepted=componentMigrationPublication(publication,{revision},'github-repository-scope');
+    assert.deepEqual(accepted.components[0].lock.compatibility.changed_files,manifest);
+    assert.deepEqual(accepted.components[0].lock.compatibility.verified_cohort.production_files,manifest);
+    const pulls=f.state().pulls;assert.equal(f.run('readback','readback.json').code,0);assert.equal(f.state().pulls,pulls);
+    for(const length of [componentImageLockMaxBytes+1,componentImageLockMaxBytes+3]){
+      const altered=structuredClone(publication),part=altered.components[0],oversized=Buffer.alloc(length,32);
+      part.componentLockRawBase64=oversized.toString('base64');part.componentLockSHA256=sha(oversized);
+      assert.throws(()=>componentMigrationPublication(altered,{revision},'github-repository-scope'),/LOCK_(?:HASH_)?INVALID/);
+    }
+    assert.equal(componentImageLockMaxBase64,4*Math.ceil(componentImageLockMaxBytes/3));
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+test('prepared aggregate budget is finite and rejected before any node operation',()=>{
+  const f=setup('github-repository-scope');
+  try{
+    assert.equal(f.run('prepare','prepared.json').code,0);
+    const prepared=f.prepared();prepared.untrusted='x'.repeat(componentPublicationMaxBytes);
+    f.store(join(f.directory,'prepared.json'),prepared);
+    const rejected=f.run('qualify','rejected.json',['--approved-plan-sha',fingerprint(prepared)]);
+    assert.notEqual(rejected.code,0);assert.match(rejected.out,/PRIVATE_FILE_REQUIRED/);assert.equal(f.state().pulls,0);
+    assert.throws(()=>componentMigrationPublication({untrusted:prepared.untrusted},{revision},'github-repository-scope'),/PUBLICATION_TOO_LARGE/);
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+});
+test('publisher rejects oversize full manifest before publication without silently truncating files',()=>{
+  const f=setup('github-repository-scope');
+  try{
+    const manifest=[f.config.components[0].anchor,...Array.from({length:500},(_,i)=>
+      'services/internal/control-plane/internal/production/'+String(i).padStart(4,'0')+'_'+'x'.repeat(20)+'.go')].sort();
+    f.change({manifests:{'services/internal/control-plane/':manifest}});
+    const result=f.run('prepare','prepared.json');assert.notEqual(result.code,0);assert.match(result.out,/LOCK_TOO_LARGE/);
+    assert.equal(existsSync(join(f.directory,'prepared.json')),false);assert.equal(f.state().pulls,0);
   }finally{rmSync(f.directory,{recursive:true,force:true});}
 });
 test('lost final pull response is UNKNOWN, readback proves resident digests without replay',()=>{

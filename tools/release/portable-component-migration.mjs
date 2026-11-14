@@ -10,6 +10,10 @@ const sha = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const revision = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value) && value !== '0'.repeat(40);
 const uid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const image = value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/.test(value) && !value.includes('/../');
+// Ограниченный полный manifest: единый byte budget publisher и consumer.
+export const componentImageLockMaxBytes = 128 << 10;
+export const componentImageLockMaxBase64 = 4 * Math.ceil(componentImageLockMaxBytes / 3);
+export const componentPublicationMaxBytes = 2 << 20;
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 export const componentMigrationCohortSchema = 'kodex.portable-component-migration/v2';
 const profiles = Object.freeze({
@@ -54,6 +58,7 @@ function installationProfileFingerprint(profile) {
 // Честный alternate receipt: stock component-lock bytes и выполненный CRI proof,
 // а не синтезированная stable-publication INTENT/PASS история другого publisher.
 export function componentMigrationPublication(value, source, profile = 'workspace-unbound-stop') {
+  requireValue(Buffer.byteLength(JSON.stringify(value)??'') <= componentPublicationMaxBytes, 'COMPONENT_MIGRATION_PUBLICATION_TOO_LARGE');
   requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
   const configuration=profiles[profile], componentsNames=configuration.components;
   const extended=configuration.schema === componentMigrationCohortSchema;
@@ -82,14 +87,14 @@ export function componentMigrationPublication(value, source, profile = 'workspac
   const components = value.components.map(part => {
     requireValue(fields(part,['component','expectedImageRef','componentLockRawBase64','componentLockSHA256','nodeProof']) &&
       image(part.expectedImageRef) && sha(part.componentLockSHA256) && typeof part.componentLockRawBase64 === 'string' &&
-      part.componentLockRawBase64.length <= 90000, 'COMPONENT_MIGRATION_LOCK_INVALID');
+      part.componentLockRawBase64.length <= componentImageLockMaxBase64, 'COMPONENT_MIGRATION_LOCK_INVALID');
     const raw = Buffer.from(part.componentLockRawBase64,'base64');
-    requireValue(raw.length > 0 && raw.length <= 65536 && raw.toString('base64') === part.componentLockRawBase64 &&
+    requireValue(raw.length > 0 && raw.length <= componentImageLockMaxBytes && raw.toString('base64') === part.componentLockRawBase64 &&
       createHash('sha256').update(raw).digest('hex') === part.componentLockSHA256, 'COMPONENT_MIGRATION_LOCK_HASH_INVALID');
     let lock;
     try { lock = JSON.parse(raw.toString('utf8')); } catch { throw Error('COMPONENT_MIGRATION_LOCK_INVALID'); }
     // Compact и прежний pretty publisher сохраняют ровно один LF. Roundtrip
-    // отвергает duplicate keys и произвольное оформление при прежнем лимите64KiB.
+    // отвергает duplicate keys и произвольное оформление при общем ограниченном byte budget.
     requireValue(raw.equals(Buffer.from(JSON.stringify(lock)+'\n')) ||
       raw.equals(Buffer.from(JSON.stringify(lock,null,2)+'\n')), 'COMPONENT_MIGRATION_LOCK_ENCODING_INVALID');
     requireValue(fields(lock,['schema','component','source_sha','base_application_source_sha','base_release_lock_sha256','image_ref','digest',

@@ -874,6 +874,12 @@ private registry/default endpoint fallback и actual CLI `crictl inspecti`;
 pins остальных images остаются прежними. Старый stable-publication путь
 миграций не меняется. Same-schema component profile выше не разрешает DDL.
 
+Полный manifest каждого component lock ограничен 128KiB исходных JSON bytes.
+Producer и consumer используют один предел и точный canonical Base64 budget;
+весь prepared/publication input ограничен 2MiB. Отступы не расходуют budget
+компактного producer. Превышение закрыто отклоняется до публикации, без
+усечения changed/production paths и без подмены исходного base release seal.
+
 Publisher передаёт два настоящих `kodex.component-image/v1` lock: исходные
 байты в `componentLockRawBase64` и их SHA256, прежний `expectedImageRef`,
 source/base-lock pins, schema heads и явный проверенный cohort
