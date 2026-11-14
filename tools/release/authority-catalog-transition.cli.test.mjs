@@ -225,6 +225,21 @@ test('fresh terminal getter reads exact canonical status Job and owner RETIRED w
   assert.equal(f.effects.length,before);assert.equal(Object.isFrozen(proof),true);
 });
 
+test('timeout watcher не отменяет owner: fresh RETIRED той же операции допускается без нового rotate',async t=>{
+  const f=await terminalFixture(t),before=f.effects.length;
+  const watcher=[...f.jobs.values()].find(job=>job.spec.template.spec.containers[0].args[0]==='rotation-watch');
+  watcher.status={failed:1,conditions:[{type:'Failed',status:'True',reason:'DeadlineExceeded'}]};
+  f.input.events.push({...f.input.events.at(-1),status:'FAILED'});
+  const proof=await f.read();
+  assert.equal(proof.operationID,f.input.plan.ownerOperationID);
+  assert.equal(proof.expectedReadbackCount,canonicalAuthorityReadbackContract().expectedReadbackCount);
+  assert.equal(f.effects.length,before);
+  f.ownerStatus.operationId=uid(98);
+  f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(f.ownerStatus)+'\n');
+  await assert.rejects(f.read(),/TERMINAL_OWNER_REJECTED/);
+  assert.equal(f.effects.length,before);
+});
+
 test('fresh terminal owner rejects stale/foreign/incomplete operation and duplicate log fields',async t=>{
   const f=await terminalFixture(t),name=f.freshJob.metadata.name,before=f.effects.length;
   for(const mutate of [value=>value.observedAt=new Date(f.input.now-30001).toISOString(),value=>value.operationId=uid(99),

@@ -197,7 +197,7 @@ node tools/release/control-plane-policy-projection.mjs apply \
 `--action status` plan/apply с тем же source/context/kubeconfig. Его canonical
 read-only CLI Job должен завершиться, а owner `observedAt` быть не старше30секунд.
 `readCatalogAuthorityTerminal` проверяет exact operation UUID, registry/policy
-hashes, все16 required readbacks, `RETIRED`, phase deadlines и source snapshot.
+hashes, обязательный registry-derived набор readbacks, `RETIRED`, phase deadlines и source snapshot.
 Job/Pod связываются по UID, полным container/init/ephemeral arrays и CRI digests.
 Старый успешный watch Job не считается свежим DB query. Getter сам только
 читает; создание status Job остаётся явной операторской операцией.
@@ -288,7 +288,7 @@ images `control-plane`, `control-api-gateway`, `control-center`; прочие im
 большего cohort принадлежат своим изменениям. Исправление CLI для последующих
 rotations требует отдельно описанного нового `internal-rpc-authority` image;
 sidecar ABI2 и DB schema от этого не меняются. Пересборка authority без причины
-не подменяет source publication,16 receipts или фактическую готовность RPC.
+не подменяет source publication, обязательные receipts или фактическую готовность RPC.
 
 Portable migration owner reads используют exact контейнер `postgresql`, очищенное
 `env -i`, `psql -X`, локальный socket `/var/run/postgresql:5432` и явные database/user
