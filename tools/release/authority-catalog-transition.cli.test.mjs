@@ -1,3 +1,5 @@
+import {authorityOwnerPostgresObjects} from './fixtures/authority-owner-postgres-synthetic.mjs';
+import {catalogAuthorityBaselineSQL} from './catalog-authority-baseline.mjs';
 import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
 import {telegramIntroductionResources} from './telegram-introduction-inventory.mjs';
 import assert from 'node:assert/strict';
@@ -47,6 +49,7 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false,authorityTr
   const calls=[],{sa,egress,ingress}=prerequisites(),jobs=new Map(),jobPods=new Map(),jobLogs=new Map(),losses=new Set(),effects=[];
   let jobSequence=30;
   const state={slices:{items:[]},isolationPods:{items:[]},completeStatus:false};
+ const postgres=authorityOwnerPostgresObjects();f.resources.set('pod/kodex-postgresql-0',postgres.pod);f.resources.set('statefulset/kodex-postgresql',postgres.set);state.ownerBackend=postgres.backend;
   const expectedPrefix=['--kubeconfig',kubeconfig,'--context',f.profile.context,'--request-timeout=30s'];
   const run=(command,args,input)=>{
     if(command==='python3'){assert.equal(args[0],'-I');return execFileSync(command,args,{input,encoding:'utf8',timeout:10000});}
@@ -54,6 +57,12 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false,authorityTr
     const tail=args.slice(expectedPrefix.length),argv=[];
     for(let i=0;i<tail.length;i++){if(tail[i]==='-n'){assert.equal(tail[++i],'kodex-system');}else argv.push(tail[i]);}
     calls.push(argv);
+    if(argv[0]==='exec'){
+      assert.ok((typeof input==='string'||Buffer.isBuffer(input))&&input.length>0,'fixed SQL stdin required');assert.ok(argv.includes('--dbname=internal_rpc_authority'));
+      if(input.includes('pg_catalog.pg_control_system()'))return JSON.stringify(state.ownerBackend);
+      assert.ok(Buffer.from(input).equals(catalogAuthorityBaselineSQL()));
+      return JSON.stringify({...state.ownerStatus,observedAt:new Date().toISOString(),...state.ownerCurrentOverride});
+    }
     if(argv[0]==='kustomize'){assert.equal(argv[1],join(source,'deploy/k8s/profiles/web-only'));assert.ok(state.introduction);return state.introduction.resources.map(r=>JSON.stringify(r)).join('\n---\n');}
     if(argv[0]==='config')return f.profile.context;
     if(argv[0]==='auth')return 'yes';
@@ -134,7 +143,7 @@ function cliFixture(t,{revision='a'.repeat(40),syntheticSource=false,authorityTr
   }
   const args=()=>['plan','--policy-transition',authorityTransition,'--context',f.profile.context,
     '--kubeconfig',kubeconfig,'--portable-target',profile,'--source',source,'--revision',revision,'--action','status','--output',output];
-  const kube=argv=>run('kubectl',[...expectedPrefix,...argv]);
+  const kube=(argv,input)=>run('kubectl',[...expectedPrefix,...argv],input);
   const syntheticExecFileSync=(program,argv,options)=>run(program,argv,options?.input);
   return {...f,directory,kubeconfig,authorityTransition,profilePath:profile,output,calls,args,source,revision,jobs,jobPods,jobLogs,losses,effects,state,kube,
     io:{run,execFileSync:syntheticExecFileSync,inspectSource:()=>({revision})}};
@@ -434,13 +443,13 @@ test('107 fresh DELIVER owner read is intermediate, stale/foreign/106 state cann
  const status={...f.ownerStatus,status:'DISTRIBUTING',operationStatus:'DISTRIBUTING',phase:'DISTRIBUTE',sourceRevision:5,actualReadbackCount:16,
   deliveryStartedAt:new Date(now-10000).toISOString(),deliveredAt:new Date(now-5000).toISOString()};
  for(const key of ['switchNotBefore','previousNotAfter','completedAt'])delete status[key];
- f.input.freshEvents.at(-1).rotationStatus='DISTRIBUTING';f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(status)+'\n');
+ f.state.ownerStatus=status;f.input.freshEvents.at(-1).rotationStatus='DISTRIBUTING';f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(status)+'\n');
  const read=()=>readTelegramAuthorityDelivered(f.input,f.kube,f.io),proof=await read();
  assert.equal(proof.state,'PENDING_AUTHORITY');assert.equal(proof.snapshotRevision,5);assert.equal(proof.actualReadbackCount,16);assert.equal(Object.hasOwn(proof,'terminalSHA256'),false);
  assert.equal(proof.introducedReceiverSHA256,fingerprint(f.input.plan.introducedReceiver));
  await assert.rejects(f.read());
- for(const mutate of [s=>delete s.deliveredAt,s=>s.expectedReadbackCount=16,s=>s.operationId=uid(999),s=>s.registryRevision=2,s=>s.sourceRevision=7,
-  s=>s.observedAt=new Date(now-30001).toISOString()]){const altered=structuredClone(status);mutate(altered);f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(altered)+'\n');await assert.rejects(read());}
+ const oldLog=JSON.stringify({...status,observedAt:new Date(now-120000).toISOString()})+'\n';f.jobLogs.set(f.freshJob.metadata.name,oldLog);await read();assert.equal(f.jobLogs.get(f.freshJob.metadata.name),oldLog);
+ for(const mutate of [s=>delete s.deliveredAt,s=>s.expectedReadbackCount=16,s=>s.operationId=uid(999),s=>s.registryRevision=2,s=>s.sourceRevision=7]){const altered=structuredClone(status);mutate(altered);f.jobLogs.set(f.freshJob.metadata.name,JSON.stringify(altered)+'\n');await assert.rejects(read());}
 });
 
 test('107 registry CAS fresh-check закрывает replaced UID, ранний start, Service drift и orphan до effects',async t=>{

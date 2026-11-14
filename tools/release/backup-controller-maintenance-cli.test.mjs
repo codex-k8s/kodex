@@ -290,7 +290,7 @@ const telegramFinalFlags=['--cp-projection-plan','--cp-projection-evidence','--a
 
 test('backup107 child inspect получает закрытый полный набор receipts; иные profiles/argv отказаны',()=>{
  const references=Object.fromEntries(telegramFinalFlags.map((key,index)=>[key,`/private/synthetic-${index}.json`]));
- references['--telegram-port-repair-plan']='/private/port-repair.json';
+ references['--telegram-port-repair-plan']='/private/port-repair.json';references['--telegram-port-repair-executor-sha']='a'.repeat(40);
  const args=backupMigrationInspectArguments({profile:'telegram-notifications-backup',context:'synthetic',kubeconfig:'/private/kubeconfig',
   migrationPlanPath:'/private/migration.json',migrationEvidencePath:'/private/migration.jsonl',references});
  assert.equal(args[1],'inspect');
@@ -299,7 +299,7 @@ test('backup107 child inspect получает закрытый полный н�
  assert.deepEqual(backupMigrationInspectReferences('github-repository-scope-backup'),{});
  for(const profile of ['github-repository-scope-backup','sentry-observability-backup','telegram-notifications'])
   assert.throws(()=>backupMigrationInspectReferences(profile,references),/INSPECT_INPUT_INVALID/);
- for(const mutate of [r=>delete r['--api-restore-plan'],r=>r['--source']='/foreign',r=>r['--context']='foreign',
+ for(const mutate of [r=>r['--telegram-port-repair-executor-sha']='invalid',r=>delete r['--telegram-port-repair-plan'],r=>delete r['--api-restore-plan'],r=>r['--source']='/foreign',r=>r['--context']='foreign',
   r=>r['--authority-plan']='relative.json',r=>r['--authority-plan']='/private/../foreign',r=>r['--authority-plan']='/private/line\nsecret']){
   const changed={...references};mutate(changed);assert.throws(()=>backupMigrationInspectReferences('telegram-notifications-backup',changed),/INSPECT_INPUT_INVALID/);
  }

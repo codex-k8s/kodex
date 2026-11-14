@@ -1,5 +1,6 @@
+import {authorityOwnerPostgresObjects} from './fixtures/authority-owner-postgres-synthetic.mjs';
+import {catalogAuthorityBaselineSQL} from './catalog-authority-baseline.mjs';
 import {backupMaintenanceFixture} from './fixtures/backup-controller-maintenance-synthetic.mjs';
-import {canonicalPostgresBackupSpec} from './backup-postgres-boundary.mjs';
 import {prepareAdmission} from './fixtures/authority-catalog-synthetic.mjs';
 import {readCatalogTarget} from './authority-catalog-transition.mjs';
 import {telegramPolicyTransition,telegramPolicySource,telegramRegistrySource} from './authority-telegram-transition.mjs';
@@ -157,20 +158,19 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  const postcondition={profile:backup?'TELEGRAM_NOTIFICATIONS_BACKUP_V1':'TELEGRAM_NOTIFICATIONS_V1',database:'control_plane',readOnly:'on',gooseVersion:20261114140000,schemaCatalog:telegramNotificationsCatalog[backup?'backup':'normal'].after,backupQualification:backup?'CANONICAL_BACKUP':'NONE',publicSequenceSafe:true};
  let backupState;const backupTarget=join(directory,'backup-target.json'),backupPlan=join(directory,'backup-stop.json'),backupEvidence=join(directory,'backup-stop.jsonl');
  if(backup){
-  const b=backupMaintenanceFixture(),pgSpec=canonicalPostgresBackupSpec();
+  const b=backupMaintenanceFixture(),pg=authorityOwnerPostgresObjects({podUID:b.postgres.uid,ownerUID:b.postgres.ownerUID});
   backupState={sourceSHA:revision,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,deployment:b.deployment,postgres:b.postgres,installation,
    rs:b.rs,pods:b.state.pods,originalPods:b.state.pods,extra:[],effects:0,backend:{systemIdentifier:'18446744073709551615',databaseOID:'1',database:'control_plane',port:'5432',serverAddress:null,serverPort:null},
-   pgStatefulSet:{kind:'StatefulSet',metadata:{name:'kodex-postgresql',namespace:'kodex-system',uid:b.postgres.ownerUID,labels:{'app.kubernetes.io/name':'kodex-postgresql'}},spec:{template:{spec:pgSpec}}},
-   pgPod:{kind:'Pod',metadata:{name:'kodex-postgresql-0',namespace:'kodex-system',uid:b.postgres.uid,labels:{'app.kubernetes.io/name':'kodex-postgresql'},ownerReferences:[{kind:'StatefulSet',uid:b.postgres.ownerUID,controller:true}]},spec:{...structuredClone(pgSpec),volumes:[...pgSpec.volumes,{name:'data',persistentVolumeClaim:{claimName:'data-kodex-postgresql-0'}}]}}};
+   pgStatefulSet:pg.set,pgPod:pg.pod};
   write(backupTarget,{...f.target,resources:[{apiVersion:'apps/v1',kind:'Deployment',name:'backup-controller',uid:b.deployment.metadata.uid}]});
  }
- write(state,{...(backupState?{backup:backupState}:{}),source,kubeconfig,context:f.target.context,target:f.target,resources,sourceRenderPath:join(source,'source-render.json'),nodes:f.observed.nodes,componentNames:f.value.components.map(c=>c.component),
+ write(state,{ownerPostgres:authorityOwnerPostgresObjects(backupState?{podUID:backupState.postgres.uid,ownerUID:backupState.postgres.ownerUID}:{}),ownerSQL:catalogAuthorityBaselineSQL().toString(),...(backupState?{backup:backupState}:{}),source,kubeconfig,context:f.target.context,target:f.target,resources,sourceRenderPath:join(source,'source-render.json'),nodes:f.observed.nodes,componentNames:f.value.components.map(c=>c.component),
   evidence,policyUID:uid(950),cpOldImage:f.value.components[0].expectedImageRef,precondition,postcondition,jobs:{},jobPods:{},calls:[],effects:[]});
  const backend=fileURLToPath(new URL('./fixtures/telegram-deployment-kube.cjs',import.meta.url));
  writeFileSync(join(bin,'kubectl'),`#!${process.execPath}\nprocess.env.KODEX_TELEGRAM_SYNTHETIC_STATE=${JSON.stringify(state)};\nrequire(${JSON.stringify(backend)});\n`,{mode:0o700});
  const setEvidence=path=>{const value=read(state);value.activeEvidence=path;write(state,value);};
- let activeRepair,newPlanner=false;const repairPath=join(directory,'port-repair.json');
- const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair?(phase==='plan'&&!newPlanner?source:executor):root,'tools/release/control-plane-migration.mjs'),phase,...(activeRepair?['--telegram-port-repair-plan',activeRepair]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
+ let activeRepair,activeRepairExecutor,newPlanner=false;const repairPath=join(directory,'port-repair.json');
+ const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair?(phase==='plan'&&!newPlanner?source:executor):root,'tools/release/control-plane-migration.mjs'),phase,...(activeRepair?['--telegram-port-repair-plan',activeRepair,...(activeRepairExecutor?['--telegram-port-repair-executor-sha',activeRepairExecutor]:[])]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
   '--context',f.target.context,'--plan',plan,...(phase==='plan'?['--source',source,'--revision',revision,'--base-render',render,'--component-publication',component,'--portable-target',target,...(backup?['--backup-maintenance-plan',backupPlan,'--backup-maintenance-evidence',backupEvidence]:[])]:['--evidence',evidence]),
   ...(['check','stop','apply','handoff','resume','activate'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
   {encoding:'utf8',timeout:backup?180000:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});
@@ -196,7 +196,11 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   const prepared=command('backup-controller-maintenance-cli.mjs',['plan','--action','stop','--migration-profile',migrationProfile,'--target',backupTarget,...flags]);assert.equal(prepared.status,0,prepared.stderr);
   const applied=spawnSync(process.execPath,[join(source,'tools/release/backup-controller-maintenance-cli.mjs'),'apply',...flags,'--approved-plan-sha',fingerprint(read(backupPlan))],{encoding:'utf8',timeout:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});assert.equal(applied.status,0,applied.stderr);
  }
- return {backupPlan,backupEvidence,backupTarget,useCurrentPlanner:()=>{newPlanner=true;},withoutRepair:(phase,extra)=>{const saved=activeRepair;activeRepair=undefined;try{return run(phase,extra);}finally{activeRepair=saved;}},enableRepair:()=>{activeRepair=repairPath;applicationFlags.push('--telegram-port-repair-plan',repairPath);},repairPath,run,command,directory,source,executor,applicationFlags,apiTarget,revision,kubeconfig,context:f.target.context,authorityTarget,admission,creator,publicationPath,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);},plan,evidence};
+ return {backupPlan,backupEvidence,backupTarget,useCurrentPlanner:()=>{newPlanner=true;},withoutRepair:(phase,extra)=>{const saved=activeRepair;activeRepair=undefined;try{return run(phase,extra);}finally{activeRepair=saved;}},enableRepair:()=>{activeRepair=repairPath;applicationFlags.push('--telegram-port-repair-plan',repairPath);},
+  upgradeRepairExecutor:()=>{const config=executor;executor=join(directory,'late-owner-executor');execute('git',['-C',config,'worktree','add','-q','--detach',executor,'HEAD']);
+   writeFileSync(join(executor,'tools/release/synthetic-owner-successor.txt'),'Synthetic tools-only late owner successor\n',{mode:0o644});execute('git',['-C',executor,'add','.']);
+   execute('git',['-C',executor,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Синтетический late owner executor']);
+   activeRepairExecutor=execute('git',['-C',executor,'rev-parse','HEAD']).trim();applicationFlags.push('--telegram-port-repair-executor-sha',activeRepairExecutor);return config;},repairPath,run,command,directory,source,get executor(){return executor;},get repairExecutor(){return activeRepairExecutor;},applicationFlags,apiTarget,revision,kubeconfig,context:f.target.context,authorityTarget,admission,creator,publicationPath,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);},plan,evidence};
 }
 
 for(const scenario of [{name:'real CLI046/107:',narrow:false,successor:false},{name:'real CLI046/107 frozen:',narrow:true,successor:true},{name:'real CLI046/107 port-repair:',narrow:true,successor:true,repair:true},{name:'real CLI046/107 backup-port-repair:',narrow:true,successor:true,repair:true,backup:true}])
@@ -211,7 +215,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   assert.equal(failedRows.some(e=>e.type==='PAIR_HANDOFF_INTENT'||e.type==='TELEGRAM_INPUT_PATCH_INTENT'&&e.resource==='v1|Service|egress-gateway'),false);
   const frozenMigration=readFileSync(f.plan),prefix=readFileSync(f.evidence);
   const result=f.command('telegram-port-repair.mjs',['plan','--context',f.context,'--kubeconfig',f.kubeconfig,'--migration-plan',f.plan,'--migration-evidence',f.evidence,'--output',f.repairPath]);
-  assert.equal(result.status,0,result.stderr);f.enableRepair();
+  assert.equal(result.status,0,result.stderr);f.enableRepair();f.upgradeRepairExecutor();
   assert.deepEqual(readFileSync(f.plan),frozenMigration);assert.deepEqual(readFileSync(f.evidence).subarray(0,prefix.length),prefix);
  }
  f.edit(s=>s.lostACK='internal-rpc-authority-publisher');const failed=f.run('handoff');assert.notEqual(failed.status,0);assert.match(failed.stderr,/KUBERNETES_OPERATION_UNKNOWN/);
@@ -256,7 +260,11 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  assert.equal(f.read().resources['deployment/control-plane'].spec.template.spec.volumes.find(v=>v.name==='control-plane-environment-policy').configMap.name,
   planned.componentHandoff.components[0].stagedSpec.template.spec.volumes.find(v=>v.name==='control-plane-environment-policy').configMap.name);
  f.edit(s=>{s.ownerStatus.status=s.ownerStatus.operationStatus='DISTRIBUTING';});
- checked('control-plane-policy-projection.mjs',['resume',...flags,'--plan',projection,'--evidence',projectionEvidence,...fresh()]);
+ const delayedProjectionStatus=fresh(),projectionHistory=structuredClone(f.read().ownerLogs);
+ if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);
+ checked('control-plane-policy-projection.mjs',['resume',...flags,'--plan',projection,'--evidence',projectionEvidence,...delayedProjectionStatus]);
+ assert.deepEqual(f.read().ownerLogs,projectionHistory);
+ if(scenario.repair)assert.ok(f.read().ownerReadEvidence.at(-1).ageMS<30000);
  assert.equal(f.read().effects.filter(effect=>effect==='POLICY_PROJECTION_CREATE').length,1);
  const projected=f.read();assert.equal(projected.resources['deployment/control-plane'].spec.replicas,0);
  const cpProjection=['--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence];
@@ -277,8 +285,9 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   switchNotBefore:new Date(now-10000).toISOString(),previousNotAfter:new Date(now-2000).toISOString(),completedAt:new Date(now-1000).toISOString()};});
  const restored=join(f.directory,'restored.json'),restoredEvidence=join(f.directory,'restored.jsonl');
  checked('component-api-traffic.mjs',['plan',...flags,...f.applicationFlags,'--policy-transition',telegramPolicyTransition,'--action','restore','--target',f.apiTarget,'--plan',restored,...closed,...isolated,...authority,...fresh()]);
- const restoreStatus=fresh();
+ const restoreStatus=fresh(),restoreHistory=structuredClone(f.read().ownerLogs);if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);
  checked('component-api-traffic.mjs',['apply',...flags,'--plan',restored,'--evidence',restoredEvidence,'--approved-plan-sha',fingerprint(read(restored)),...closed,...isolated,...authority,...restoreStatus]);
+ assert.deepEqual(f.read().ownerLogs,restoreHistory);
  assert.equal(Object.hasOwn(f.read().resources['service/control-api-gateway'].spec.selector,'kodex.dev/component-traffic-isolation'),false);
  const restoredState=f.read(),selector=restoredState.resources['service/control-api-gateway'].spec.selector,labels=restoredState.resources['deployment/control-api-gateway'].spec.template.metadata.labels;
  assert.ok(Object.entries(selector).every(([key,value])=>labels[key]===value));
@@ -293,7 +302,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  if(scenario.backup){
   const resumed=join(f.directory,'backup-resume.json'),resumedEvidence=join(f.directory,'backup-resume.jsonl');
   const refs=['--stopped-plan',f.backupPlan,'--stopped-evidence',f.backupEvidence,'--migration-plan',f.plan,'--migration-evidence',f.evidence,
-   '--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence,...apiOpen,...authority,...restoreStatus,'--api-restore-plan',restored,'--api-restore-evidence',restoredEvidence,'--telegram-port-repair-plan',f.repairPath];
+   '--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence,...apiOpen,...authority,...restoreStatus,'--api-restore-plan',restored,'--api-restore-evidence',restoredEvidence,'--telegram-port-repair-plan',f.repairPath,...(f.repairExecutor?['--telegram-port-repair-executor-sha',f.repairExecutor]:[])];
   const beforeBackup=f.read().backup.effects,foreign='unrelated-backup-producer';
   f.edit(s=>{s.jobs[foreign]={apiVersion:'batch/v1',kind:'Job',metadata:{name:foreign,namespace:'kodex-system',uid:uid(9901),labels:{}},spec:{template:{spec:{serviceAccountName:'backup-controller',containers:[{name:'foreign',image:'synthetic.invalid/foreign@sha256:'+'e'.repeat(64)}],volumes:[{name:'credentials',secret:{secretName:'backup-controller-credentials'}}]}}},status:{active:1}};
    s.jobPods[foreign]={apiVersion:'v1',kind:'Pod',metadata:{name:foreign+'-pod',namespace:'kodex-system',uid:uid(9902),resourceVersion:'1',labels:{},ownerReferences:[{kind:'Job',uid:uid(9901),controller:true}]},spec:structuredClone(s.jobs[foreign].spec.template.spec),status:{phase:'Running'}};});
@@ -311,6 +320,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   const pin=read(projection).sourceCompatibility;assert.equal(pin.source,f.source);assert.equal(pin.executorSource,f.executor);
   assert.equal(pin.revision,f.revision);assert.notEqual(pin.executorRevision,pin.revision);
   assert.deepEqual(read(restored).sourceCompatibility,pin);
+  if(scenario.repair){assert.equal(pin.repairExecutor.configurationSource,read(f.repairPath).configuration.source);assert.equal(pin.repairExecutor.executorRevision,f.repairExecutor);assert.notEqual(pin.repairExecutor.configurationRevision,pin.repairExecutor.executorRevision);}
   assert.notEqual(read(restored).authority.targetSHA256,read(restored).authority.authorityTargetSHA256);
  }
 });

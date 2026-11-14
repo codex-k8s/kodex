@@ -408,7 +408,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   };
   const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
     openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
-    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan']},kube);
+    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
   const readAuthorityDelivery = async () => {
     const authority=activationAuthority();
     ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
@@ -652,12 +652,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return;
   }
   const plan = retainedPlan;
-  const portRepair=options['--telegram-port-repair-plan']?readTelegramPortRepair(options['--telegram-port-repair-plan'],{migration:plan,phase}):undefined;
+  const portRepair=options['--telegram-port-repair-plan']?readTelegramPortRepair(options['--telegram-port-repair-plan'],{migration:plan,phase,executorRevision:options['--telegram-port-repair-executor-sha']}):undefined;
   ensure(!portRepair||portRepair.repair.migrationPlanPath===resolve(options['--plan'])&&portRepair.repair.migrationEvidencePath===resolve(options['--evidence']),'TELEGRAM_PORT_REPAIR_SCOPE_CHANGED');
   const effectiveInputs=portRepair?.inputs??plan.telegramInputs;
   const readCPProjection=(required=true)=>{
     if(!options['--cp-projection-plan']&&!required)return undefined;
-    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence'],repairPlanPath:options['--telegram-port-repair-plan']},kube);
+    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
   };
   if(componentPublication?.introducedReceiver)ensure(plan.kubeconfig===resolve(options['--kubeconfig']),'MIGRATION_KUBECONFIG_CHANGED');
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
@@ -775,7 +775,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(jobs.every(job => job.status?.conditions?.some(c => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
     };
     const verifyRuntimeInputs = (staged=false) => {
-      if(portRepair)ensure(readTelegramPortRepair(portRepair.path,{migration:plan,phase}).sha256===portRepair.sha256,telegramPortRepairCodes.pinRequired);
+      if(portRepair)ensure(readTelegramPortRepair(portRepair.path,{migration:plan,phase,executorRevision:options['--telegram-port-repair-executor-sha']}).sha256===portRepair.sha256,telegramPortRepairCodes.pinRequired);
       if(!plan.imageEvidence.introducedReceiver)return;
       ensure(plan.telegramInputs?.sourceSHA===plan.source.revision&&plan.telegramInputs.migrationID===plan.id&&
         fingerprint(metadata('secret','control-plane-interaction-grant-trust'))===fingerprint(plan.telegramTrustDependency),

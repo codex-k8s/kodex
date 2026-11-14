@@ -83,13 +83,32 @@ export function planTelegramPortRepair({migration,migrationPlanPath,migrationEvi
   inspection:copy(inspection),targetSHA256:fingerprint(migration.portableTarget),postgresSHA256:fingerprint(migration.postgres),postconditionSQLSHA256:migration.postconditionSQLSHA256,observedAt};
 }
 
-export function readTelegramPortRepair(path,{migration,executorSource=root,phase,events}={}){
+// CONFIG остаётся исходным immutable root. Новый явно выбранный executor
+// является его настоящим tools-only descendant, без новых app/config/SQL pins.
+export function telegramPortRepairExecutor(configuration,executorSource,expectedRevision){
+ const executorRevision=inspectSource(executorSource).revision;
+ if(executorSource===configuration.source&&executorRevision===configuration.revision){
+  fail(expectedRevision===undefined||expectedRevision===executorRevision,telegramPortRepairCodes.sourceRejected);return;
+ }
+ fail(expectedRevision===executorRevision&&inspectSource(configuration.source).revision===configuration.revision,telegramPortRepairCodes.sourceRejected);
+ const git=(...args)=>execFileSync('git',sourceGitArguments(executorSource,...args),{encoding:'utf8',timeout:15000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']});
+ let changed;try{git('merge-base','--is-ancestor',configuration.revision,executorRevision);
+  changed=git('diff','--no-ext-diff','--no-textconv','--no-renames','--name-only','-z',configuration.revision,executorRevision).split('\0').filter(Boolean);
+ }catch{throw Error(telegramPortRepairCodes.sourceRejected);}
+ fail(changed.every(path=>(path.startsWith('tools/release/')||path.startsWith('docs/')||path==='Makefile')&&
+  !path.endsWith('.sql')&&!path.startsWith('tools/release/fixtures/authority-policy-')&&
+  !['tools/release/authority-telegram-transition.mjs','tools/release/telegram-notifications-catalog.gen.mjs'].includes(path)),telegramPortRepairCodes.sourceRejected);
+ return {schema:'kodex.telegram-port-repair-executor/v1',configurationSource:configuration.source,configurationRevision:configuration.revision,executorSource,executorRevision};
+}
+
+export function readTelegramPortRepair(path,{migration,executorSource=root,executorRevision,phase,events}={}){
  const repair=readAuthorityPrivateJSON(path),original=migration??readAuthorityPrivateJSON(repair.migrationPlanPath);
  fail(repair.schema==='kodex.telegram-port-repair/v1'&&repair.migrationPlanSHA256===fingerprint(original)&&
   same(repair.application,original.source)&&repair.migrationID===original.id&&repair.targetSHA256===fingerprint(original.portableTarget)&&
   repair.postgresSHA256===fingerprint(original.postgres)&&repair.postconditionSQLSHA256===original.postconditionSQLSHA256);
  fail(!phase||['handoff','resume','inspect','activate'].includes(phase),telegramPortRepairCodes.phaseRejected);
- fail(same(telegramPortRepairConfiguration(executorSource,original.source),repair.configuration),telegramPortRepairCodes.sourceRejected);
+ fail(same(telegramPortRepairConfiguration(repair.configuration.source,original.source),repair.configuration),telegramPortRepairCodes.sourceRejected);
+ const executor=telegramPortRepairExecutor(repair.configuration,resolve(executorSource),executorRevision);
  const evidence=readAuthorityPrivateText(repair.migrationEvidencePath),bytes=Buffer.from(evidence);
  fail(Number.isSafeInteger(repair.evidencePrefixBytes)&&repair.evidencePrefixBytes>0&&bytes.length>=repair.evidencePrefixBytes&&
   hash(bytes.subarray(0,repair.evidencePrefixBytes))===repair.evidencePrefixSHA256,'TELEGRAM_PORT_REPAIR_EVIDENCE_CHANGED');
@@ -104,7 +123,7 @@ export function readTelegramPortRepair(path,{migration,executorSource=root,phase
  const bound=rows.filter(e=>e.type===telegramPortRepairBound);
  fail(bound.length<=1&&(!bound.length||bound[0].repairSHA256===fingerprint(repair)&&bound[0].jobUID===repair.jobUID),telegramPortRepairCodes.pinRequired);
  fail(rows.some(e=>e.type==='TERMINAL_READBACK'&&e.jobUID===repair.jobUID),telegramPortRepairCodes.jobChanged);
- return {path:resolve(path),sha256:fingerprint(repair),repair,...effective};
+ return {path:resolve(path),sha256:fingerprint(repair),repair,...effective,...(executor?{executor}:{})};
 }
 
 async function main(args){

@@ -24,6 +24,7 @@ const sharedTarget=target=>Object.fromEntries(Object.entries(target).filter(([ke
 const telegramInspectFlags=Object.freeze(['--cp-projection-plan','--cp-projection-evidence','--authority-plan','--authority-evidence',
  '--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--api-restore-plan','--api-restore-evidence']);
 const telegramRepairFlag='--telegram-port-repair-plan';
+const telegramRepairExecutorFlag='--telegram-port-repair-executor-sha';
 const telegramInspectTimeoutMs=300000;
 
 // Только полный набор final107 receipts. Scope и owner proof проверяет сам
@@ -31,12 +32,13 @@ const telegramInspectTimeoutMs=300000;
 export function backupMigrationInspectReferences(profile,references={}){
  ensure(references&&typeof references==='object'&&!Array.isArray(references),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
  const keys=Object.keys(references);
+ ensure(!Object.hasOwn(references,telegramRepairExecutorFlag)||Object.hasOwn(references,telegramRepairFlag),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
  if(!keys.length)return {};
- ensure(profile==='telegram-notifications-backup'&&keys.every(key=>telegramInspectFlags.includes(key)||key===telegramRepairFlag)&&
+ ensure(profile==='telegram-notifications-backup'&&keys.every(key=>telegramInspectFlags.includes(key)||key===telegramRepairFlag||key===telegramRepairExecutorFlag)&&
   telegramInspectFlags.every(key=>Object.hasOwn(references,key))&&keys.every(key=>typeof references[key]==='string'&&
-   references[key].startsWith('/')&&references[key]===resolve(references[key])&&!/[\r\n\0]/.test(references[key])),
+   (key===telegramRepairExecutorFlag?/^[a-f0-9]{40}$/.test(references[key]):references[key].startsWith('/')&&references[key]===resolve(references[key])&&!/[\r\n\0]/.test(references[key]))),
   'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
- return Object.fromEntries([...telegramInspectFlags,...(Object.hasOwn(references,telegramRepairFlag)?[telegramRepairFlag]:[])].map(key=>[key,references[key]]));
+ return Object.fromEntries([...telegramInspectFlags,...(Object.hasOwn(references,telegramRepairFlag)?[telegramRepairFlag]:[]),...(Object.hasOwn(references,telegramRepairExecutorFlag)?[telegramRepairExecutorFlag]:[])].map(key=>[key,references[key]]));
 }
 
 // Последний consumer передаёт immutable ссылки тому же закрытому CLI. Никакие
@@ -153,11 +155,11 @@ export async function readBackupCleanupTerminal({kube,closed,migration,events,in
 
 async function main(args){
  const phase=args.shift(),options={};
- while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha',...telegramInspectFlags,telegramRepairFlag].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
+ while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha',...telegramInspectFlags,telegramRepairFlag,telegramRepairExecutorFlag].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
  ensure(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  ensure(!options['--stopped-source-sha']||phase==='plan'&&options['--action']==='resume'&&/^[a-f0-9]{40}$/.test(options['--stopped-source-sha']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
- const suppliedInspect=Object.fromEntries([...telegramInspectFlags,telegramRepairFlag].filter(key=>Object.hasOwn(options,key)).map(key=>{ensure(typeof options[key]==='string'&&options[key].length>0&&!/[\r\n\0]/.test(options[key]),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');return [key,resolve(options[key])];}));
+ const suppliedInspect=Object.fromEntries([...telegramInspectFlags,telegramRepairFlag,telegramRepairExecutorFlag].filter(key=>Object.hasOwn(options,key)).map(key=>{ensure(typeof options[key]==='string'&&options[key].length>0&&!/[\r\n\0]/.test(options[key]),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');return [key,key===telegramRepairExecutorFlag?options[key]:resolve(options[key])];}));
  const env=Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]));
  const run=(cmd,argv,input,timeout=35000)=>{try{return execFileSync(cmd,argv,{cwd:root,env,input,encoding:'utf8',timeout,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch{throw Error('BACKUP_MAINTENANCE_OPERATION_FAILED_OR_UNKNOWN');}};
  const kube=(argv,input)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input);

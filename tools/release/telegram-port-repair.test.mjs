@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,rmSync,chmodSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,chmodSync} from 'node:fs';
 import {dirname} from 'node:path';
 import {fingerprint} from './scoped-release.mjs';
 import {planTelegramPortRepair,telegramPortRepairEffective,telegramPortRepairConfiguration,readTelegramPortRepair,telegramPortRepairManifestPaths} from './telegram-port-repair.mjs';
@@ -86,4 +86,36 @@ test('deploy delta требует exact repair source proof, saved pin не пе
  assert.throws(()=>resolveTelegramExecutorSource(f.source,{saved:{...proof,telegramPortRepair:{...proof.telegramPortRepair,planSHA256:'f'.repeat(64)}}}),/SOURCE_REJECTED/);
  const g=fixture(t);g.write(g.source+'/deploy/foreign.yaml','foreign config');g.git('add','.');g.git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Лишний deploy');
  assert.throws(()=>telegramPortRepairConfiguration(g.source,g.application),/CONFIG_REJECTED/);
+});
+
+
+test('APPLICATION A / CONFIG B / EXECUTOR C сохраняют original repair и требуют explicit tools-only ancestor',t=>{
+ const f=fixture(t),{path,plan}=f.store(),original=readFileSync(path),prefix=readFileSync(f.input.migrationEvidencePath),next=f.source+'-late';
+ f.git('worktree','add','-q','--detach',next,'HEAD');
+ const git=(...args)=>execFileSync('git',['-C',next,...args],{encoding:'utf8',timeout:15000,stdio:['ignore','pipe','pipe']}).trim();
+ f.write(next+'/tools/release/late-owner.mjs','qualified tools-only successor');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Позднее owner чтение');
+ const revision=git('rev-parse','HEAD');
+ assert.throws(()=>readTelegramPortRepair(path,{executorSource:next}),/SOURCE_REJECTED/);
+ assert.throws(()=>readTelegramPortRepair(path,{executorSource:next,executorRevision:'f'.repeat(40)}),/SOURCE_REJECTED/);
+ const loaded=readTelegramPortRepair(path,{executorSource:next,executorRevision:revision});
+ assert.deepEqual(loaded.repair.configuration,plan.configuration);assert.equal(loaded.executor.configurationRevision,plan.configuration.revision);assert.equal(loaded.executor.executorRevision,revision);
+ const proof=resolveTelegramExecutorSource(next,{source:f.application.path,revision:f.application.revision,repairPlanPath:path,repairExecutorRevision:revision});
+ assert.deepEqual(resolveTelegramExecutorSource(next,{saved:proof}),proof);
+ assert.throws(()=>resolveTelegramExecutorSource(next,{saved:{...proof,repairExecutor:{...proof.repairExecutor,configurationRevision:'f'.repeat(40)}}}),/SOURCE_REJECTED/);
+ assert.deepEqual(readFileSync(path),original);assert.deepEqual(readFileSync(f.input.migrationEvidencePath),prefix);
+ f.write(next+'/tools/release/dirty.mjs','dirty');assert.throws(()=>readTelegramPortRepair(path,{executorSource:next,executorRevision:revision}));
+});
+
+for(const changed of ['deploy/foreign.yaml','services/example/main.go','contracts/foreign.proto','tools/release/foreign.sql','tools/release/authority-telegram-transition.mjs','tools/release/fixtures/authority-policy-foreign.json'])
+ test(`late repair executor закрывает protected delta ${changed}`,t=>{
+  const f=fixture(t),{path}=f.store(),next=f.source+'-late';f.git('worktree','add','-q','--detach',next,'HEAD');
+  const git=(...args)=>execFileSync('git',['-C',next,...args],{encoding:'utf8',timeout:15000,stdio:['ignore','pipe','pipe']}).trim();
+  f.write(next+'/'+changed,'foreign');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Запрещённая delta');
+  assert.throws(()=>readTelegramPortRepair(path,{executorSource:next,executorRevision:git('rev-parse','HEAD')}),/SOURCE_REJECTED/);
+ });
+
+test('same-tree orphan не заменяет настоящую ancestry CONFIG→EXECUTOR',t=>{
+ const f=fixture(t),{path}=f.store(),tree=f.git('rev-parse','HEAD^{tree}'),orphan=f.git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit-tree',tree,'-m','Синтетический orphan'),next=f.source+'-orphan';
+ f.git('worktree','add','-q','--detach',next,orphan);
+ assert.throws(()=>readTelegramPortRepair(path,{executorSource:next,executorRevision:orphan}),/SOURCE_REJECTED/);
 });

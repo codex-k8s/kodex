@@ -480,3 +480,56 @@ API restore → real backup resume plan/apply/status через spawned final in
 Он не добавляет второй DDL и не изменяет original plan. Normal repair и backup
 имеют отдельные конечные бюджеты; последовательный запуск обоих не укладывается
 в один общий900s budget.
+
+
+## Позднее owner чтение107 и отдельный executor ремонта
+
+Проверка полного staged cohort может длиться дольше30 секунд. Job
+`rotation-status` остаётся неизменной исторической квитанцией; его timestamp
+нельзя обновлять по часам клиента. Для107 новый status plan отдельно закрепляет
+`ownerScope`: точные context/kubeconfig, исходную application revision,
+целевой authority scope, UID PostgreSQL Pod/StatefulSet, system identifier,
+database OID и hash фиксированного READ ONLY SQL. Ранее созданный rotate plan,
+его Job, registry/publisher provenance и журналы сохраняются.
+
+| Consumer | Историческое доказательство | Непосредственно перед допуском |
+| --- | --- | --- |
+| Projection107 и запуск CP | Original rotate + status Job/Pod и полный staged046 inspect | Fixed local-socket `internal_rpc_authority` READ ONLY; та же operation/phase/registry/snapshot/required-reader область; затем повторный registry/publisher readback |
+| API readers/activate | Те же immutable status/source/installation координаты | Новое actual owner чтение DELIVER, прежний30s TTL и монотонный readback count |
+| Service restore/final inspect/backup resume | Original RETIRE Job и exact API2/fullauthority5 отношение | Actual RETIRE owner чтение с теми же immutable координатами; новый observedAt только из PostgreSQL |
+
+Неизвестные поля, смена operation, phase, snapshot, PG system identifier/OID,
+Pod/StatefulSet либо уменьшение readback count закрыто отвергаются. SQL JSON
+`+00:00` и Go `time.Time` JSON `Z` сравниваются как один instant без потери
+микросекунд. Прежний106 rotation/restore path не получает нового допуска.
+
+Если ремонт уже закреплён за CONFIG revision, новый tools-only EXECUTOR
+использует эту же immutable repair plan. Каждый migration handoff/resume/
+inspect/activate получает прежний `--telegram-port-repair-plan` и явный
+`--telegram-port-repair-executor-sha <EXECUTOR_SHA>`. При создании projection
+и restore планов передаются также прежние `--application-source` и
+`--application-revision`. Saved sourceCompatibility сохраняет три отдельных
+pin: APPLICATION, CONFIG и EXECUTOR. Требуется настоящая ancestry
+CONFIG→EXECUTOR, чистые checkouts и неизменность application, deploy, contracts,
+SQL и107 policy. Отсутствующий либо чужой executor pin не разрешает продолжение.
+Backup resume plan получает тот же дополнительный SHA вместе с полным набором
+final107 references; child inspection передаёт их без изменения.
+
+Публичные проверки:
+
+```sh
+make test-telegram-authority-owner
+GOCACHE=<PRIVATE_TMPFS_CACHE> GOTMPDIR=<PRIVATE_TMPFS_TEMP> TMPDIR=<PRIVATE_TMPFS_TEMP> \
+  KODEX_NATIVE_GO=<GO_1_26_10_BINARY> make test-telegram-authority-owner-native
+make test-telegram-port-repair
+make test-telegram-port-repair-backup
+```
+
+Native точка запускает pinned PostgreSQL18.3 только в RAM disposable container
+без host volumes/network, с loopback ephemeral port, и применяет private Go
+`-overlay` к exact-SHA существующей проверке ротации. Настоящие SQL status,
+`decodeRotationStatus`, `json.Marshal` и повторный SQL сопоставляются общим
+wire contract. Overlay/source pins, RAM filesystem и exact container join
+проверяются; source Go и SQL не изменяются. Это representation qualification,
+а не live107 delivery или новый authority grant. WholeCLI repair сценарии
+добавляют реальную35s задержку до late read, сохраняя старые Job logs.

@@ -81,7 +81,8 @@ const run=request=>{
    if(selector?.startsWith('batch.kubernetes.io/job-name=')){const pod=s.jobPods[selector.split('=')[1]];return out({items:pod?[pod]:[]});}
    return out({items:[]});
   }
-  if(kind==='pod'&&name==='kodex-postgresql-0')return out('pg-uid|StatefulSet|kodex-postgresql|pg-owner|kodex-postgresql|Running|');
+  if(kind==='pod'&&name==='kodex-postgresql-0'){const pg=s.ownerPostgres.pod;return out(format==='json'?pg:[pg.metadata.uid,'StatefulSet','kodex-postgresql',pg.metadata.ownerReferences[0].uid,'kodex-postgresql','Running',''].join('|'));}
+  if(kind==='statefulset'&&name==='kodex-postgresql')return out(s.ownerPostgres.set);
   if(kind==='bundles.trust.cert-manager.io')return out('bundle-uid|1|'+JSON.stringify({sources:[{secret:{name:'kodex-installation-ca',key:'tls.crt'}}],target:{namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':'kodex-system'}},configMap:{key:'ca.pem'}}}));
   if(kind==='configmap'&&name==='control-plane-postgresql-ca')return out('ca-uid|1|control-plane-postgresql-ca|'+JSON.stringify([{apiVersion:'trust.cert-manager.io/v1alpha1',kind:'Bundle',name,uid:'bundle-uid',controller:true}]));
   if(kind==='secret'||kind==='serviceaccount'&&name==='control-plane-migrator'){
@@ -99,12 +100,19 @@ const run=request=>{
  if(args.includes('exec')){
   assert.ok(args.includes('--host=/var/run/postgresql')&&args.includes('--port=5432')&&args.includes('--no-password')&&args[args.indexOf('env')+1]==='-i');
   const sql=input();
-  if(sql.includes('pg_catalog.pg_control_system()'))return out({systemIdentifier:'18446744073709551615',databaseOID:'1',database:'control_plane',port:'5432',serverAddress:null,serverPort:null});
+  if(sql.includes('pg_catalog.pg_control_system()'))return out(args.includes('--dbname=internal_rpc_authority')?s.ownerPostgres.backend:{systemIdentifier:'18446744073709551615',databaseOID:'1',database:'control_plane',port:'5432',serverAddress:null,serverPort:null});
+  if(args.includes('--dbname=internal_rpc_authority')){
+   assert.equal(sql,s.ownerSQL,'fixed owner SQL stdin required');const observedAt=new Date().toISOString();s.ownerReadEvidence??=[];s.ownerReadEvidence.push({observedAt,ageMS:Date.now()-Date.parse(observedAt)});
+   return out({...s.ownerStatus,observedAt,...s.ownerCurrentOverride});
+  }
   assert.ok(sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')&&sql.includes('ROLLBACK;'));
   if(sql.includes('PORTABLE_COMPONENT_DRAIN_V1'))return out({...s.precondition,profile:'PORTABLE_COMPONENT_DRAIN_V1',gooseVersion:s.schemaMigrated?20261114140000:20261114130000,
    oldClaimSessions:get('deployment','control-plane').spec.replicas?3:0,...s.drainOverrides});
   if(sql.includes('TELEGRAM_NOTIFICATIONS_PREDECESSOR_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_PREDECESSOR_V1'))return out({...s.precondition,...s.preconditionOverrides});
-  if(sql.includes('TELEGRAM_NOTIFICATIONS_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_V1'))return out({...s.postcondition,...s.postconditionOverrides});
+  if(sql.includes('TELEGRAM_NOTIFICATIONS_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_V1')){
+   if(s.ownerPreflightDelayMS){const duration=s.ownerPreflightDelayMS;delete s.ownerPreflightDelayMS;save();Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,duration);}
+   return out({...s.postcondition,...s.postconditionOverrides});
+  }
   throw Error('SYNTHETIC_SQL_NOT_REGISTERED');
  }
  if(args.includes('create')){

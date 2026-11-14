@@ -342,26 +342,37 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
  requireValue(Buffer.byteLength(log)<=1<<20,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const rows=log.trim().split('\n').filter(Boolean);
  requireValue(rows.length===1,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
- const state=parseAuthorityPrivateJSON(rows[0]);
+ let state=parseAuthorityPrivateJSON(rows[0]);
  const ownerFields=new Set(['observedAt','operationId','operationStatus','phase','intentId','protocolVersion','sourceRevision','sourceDigestSHA256',
   'registrySourceDigestSHA256','registryRevision','baseRevision','baseDigestSHA256','switchNotBefore','previousNotAfter','completedAt',
   'predecessorRevision','predecessorDigestSHA256','deliveryStartedAt','deliveredAt','promotedAt','overlapUntil','retiredAt','abortedAt','status','expectedReadbackCount','actualReadbackCount']);
  requireValue(Object.keys(state).every(key=>ownerFields.has(key)),'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
  const classified=classifyRotationStatus(job,JSON.stringify(state));
+ let ownerScope;
+ if(profile===telegramPolicyTransition){
+  requireValue(classified.phase==='SUCCEEDED','TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
+  const {readTelegramOwner}=await import('./telegram-authority-owner.mjs');
+  const refreshed=readTelegramOwner(freshPlan.ownerScope,plan,state,kube,io);state=refreshed.state;ownerScope=refreshed.scope;
+  // Actual owner READ не заменяет immutable target/registry/publisher proof.
+  requireValue(fingerprint(get('configmap',registry.metadata.name))===fingerprint(registry)&&
+   fingerprint(get('deployment',publisher.metadata.name))===fingerprint(publisher),'CATALOG_AUTHORITY_TERMINAL_TARGET_DRIFT');
+  requireValue(Object.keys(state).every(key=>ownerFields.has(key)),'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
+ }
+ const ownerNow=profile===telegramPolicyTransition?(io.now??Date.now)():now;
  if(purpose==='delivered'){
   requireValue(profile===telegramPolicyTransition&&classified.phase==='SUCCEEDED','TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED');
-  const delivery=validateTelegramAuthorityDeliveryState(state,identity,plan.ownerOperationID,now);
-  const proof={...delivery,sourceSHA:plan.revision,introducedReceiverSHA256:fingerprint(plan.introducedReceiver),
+  const delivery=validateTelegramAuthorityDeliveryState(state,identity,plan.ownerOperationID,ownerNow);
+  const proof={...delivery,ownerScope,sourceSHA:plan.revision,introducedReceiverSHA256:fingerprint(plan.introducedReceiver),
    clusterUID:plan.policyTransition.clusterUID,namespaceUID:plan.policyTransition.namespaceUID,installationUID:plan.policyTransition.installationUID,installationSHA256:plan.policyTransition.installationSHA256,policySHA256:policy.sha256,planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),
    targetSHA256:plan.policyTransition.targetSHA256,trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
   return Object.freeze({...proof,deliverySHA256:fingerprint(proof)});
  }
  requireValue(classified.phase==='SUCCEEDED','CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
- validateRetiredCatalogOwnerState(state,plan,identity,readers,now);
+ validateRetiredCatalogOwnerState(state,plan,identity,readers,ownerNow);
  const proof={policyRevision:configuration.desiredRevision,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
   ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
-  planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:admissionProof.targetSHA256,
+  planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),...(ownerScope?{ownerScope}:{}),targetSHA256:admissionProof.targetSHA256,
   ...(admissionProof.targetSHA256!==plan.policyTransition.targetSHA256?{authorityTargetSHA256:plan.policyTransition.targetSHA256}:{}),
   trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
  return Object.freeze({...proof,terminalSHA256:fingerprint(proof)});
@@ -434,6 +445,10 @@ export async function main(args,io={}){
    ...(catalog?{policyTransition:catalogTarget.transition,kubeconfig,
      ...(planActionNeedsAdmission(options['--action'])?{maintenance:await readCatalogMaintenance(options['--maintenance-plan'],options['--maintenance-evidence'],argv=>kube(...argv),
        {trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']})}:{})}:{})};
+  if(profile===telegramPolicyTransition&&plan.action==='status'){
+   const {captureTelegramOwnerScope}=await import('./telegram-authority-owner.mjs');
+   plan.ownerScope=captureTelegramOwnerScope(plan,(argv,input)=>kubeInput(input,...argv),{inspectSource:inspect});
+  }
   if(plan.action==='rotate'){
    if(profile===telegramPolicyTransition){
     requireValue(options['--introduced-plan']&&options['--introduced-evidence']&&options['--introduced-publication'],'TELEGRAM_INTRODUCTION_REQUIRED');
@@ -466,6 +481,9 @@ export async function main(args,io={}){
   }
   if(plan.action==='abort')plan.rotation={intentID:options['--intent-id'],sourceRevision:Number(options['--source-revision']),sourceDigestSHA256:options['--source-digest-sha256']};
  }else plan=loadedPlan;
+ if(profile===telegramPolicyTransition&&plan.action==='status'){
+  const {validateTelegramOwnerScope}=await import('./telegram-authority-owner.mjs');validateTelegramOwnerScope(plan.ownerScope,plan);
+ }
  if(catalog&&planActionNeedsAdmission(plan.action))verifyCatalogAdmission(plan.maintenance,plan.policyTransition);
  if(profile===telegramPolicyTransition&&plan.action==='rotate')requireValue(plan.introducedReceiver?.schema==='kodex.telegram-introduced-receiver/v1'&&
   plan.introducedReceiver.state==='PENDING_AUTHORITY'&&plan.introducedReceiver.sourceSHA===plan.revision,'TELEGRAM_INTRODUCTION_REQUIRED');
