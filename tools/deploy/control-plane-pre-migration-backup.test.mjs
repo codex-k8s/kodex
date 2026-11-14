@@ -22,7 +22,7 @@ test("backup requires explicit kubeconfig and independently inventoried target U
 });
 
 // Настоящий CLI запускается с синтетическими внешними командами; живого кластера нет.
-for(const scenario of ["success","foreign-before","foreign-after","replacement","backend-replacement"]){
+for(const scenario of ["success","large-inventory","foreign-before","foreign-after","replacement","backend-replacement"]){
  test(`backup CLI ${scenario} preserves explicit target and refuses uncertain source`,async()=>{
   const root=await mkdtemp(join(tmpdir(),"kodex-preimage-test-"));
   try{
@@ -39,6 +39,7 @@ if(kind==='namespace')value={kind:'Namespace',metadata:{name,uid:name==='kube-sy
 if(kind==='namespace' && name==='kube-system' && (${JSON.stringify(scenario)}==='foreign-before'||(${JSON.stringify(scenario)}==='foreign-after'&&after)))value.metadata.uid='foreign';
 if(kind==='statefulset')value={kind:'StatefulSet',metadata:{name:'kodex-postgresql',namespace:'kodex-system',uid:'database'},spec:{replicas:1}};
 if(kind==='pods')value={items:[{metadata:{name:'database-0',uid:after&&${JSON.stringify(scenario)}==='replacement'?'replacement':'pod',ownerReferences:[{kind:'StatefulSet',controller:true,uid:'database'}]},status:{phase:'Running',containerStatuses:[{name:'postgresql',ready:true,containerID:'container',imageID:'image',restartCount:0}]}}]};
+if(kind==='pods'&&${JSON.stringify(scenario)}==='large-inventory')value.items.push({metadata:{uid:'unrelated',annotations:{synthetic:'x'.repeat(5<<20)}}});
 if(!value)process.exit(2);process.stdout.write(JSON.stringify(value));
 `;
    await writeFile(join(root,"kubectl"),mock,{mode:0o700});
@@ -46,7 +47,8 @@ if(!value)process.exit(2);process.stdout.write(JSON.stringify(value));
    let result,failed=false;
    try{result=await execute(process.execPath,[fileURLToPath(new URL("./control-plane-pre-migration-backup.mjs",import.meta.url)),...options(root)],
     {env:{PATH:root},timeout:15000});}catch(error){result=error;failed=true;}
-   assert.equal(failed,scenario!=="success",result.stderr);
+   const success=["success","large-inventory"].includes(scenario);
+   assert.equal(failed,!success,result.stderr);
    const invoked=(await readFile(calls,"utf8")).trim().split("\n").map(JSON.parse);
    assert.ok(invoked.every(args=>args[0]==="--kubeconfig"&&args[1]==="/synthetic/kubeconfig"&&args[2]==="--context"&&args[3]==="k3d-kodex"));
    assert.equal(invoked.some(args=>args.includes("exec")),scenario!=="foreign-before");
@@ -55,7 +57,7 @@ if(!value)process.exit(2);process.stdout.write(JSON.stringify(value));
     for(const value of ["--host=/var/run/postgresql","--port=5432","--username=postgres","--dbname=control_plane","--no-password"])assert.ok(args.includes(value));
    }
    const snapshots=(await readdir(root)).filter(name=>name.startsWith("cp-pre-migration-"));
-   if(scenario==="success"){
+   if(success){
     const receipt=JSON.parse(result.stdout),bytes=await readFile(receipt.path);
     assert.equal(receipt.sha256,createHash("sha256").update(bytes).digest("hex"));
     assert.equal(receipt.clusterUID,clusterUID);assert.equal(receipt.namespaceUID,namespaceUID);

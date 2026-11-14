@@ -38,8 +38,11 @@ async function backup({context,kubeconfig,clusterUID,namespaceUID,parent}) {
  const space=await statfs(parent);
  ensure(space.bavail*space.bsize>=4*1024**3,"BACKUP_INSUFFICIENT_DISK_SPACE");
  const kubeArgs=["--kubeconfig",kubeconfig,"--context",context];
- const kube=args=>{try{return execFileSync("kubectl",[...kubeArgs,"--request-timeout=30s","-n",namespace,...args],
-  {encoding:"utf8",timeout:35000,maxBuffer:4<<20,stdio:["ignore","pipe","pipe"]});}catch{throw Error("BACKUP_KUBERNETES_READ_FAILED");}};
+ const kube=(args,maxBuffer=4<<20)=>{try{return execFileSync("kubectl",[...kubeArgs,"--request-timeout=30s","-n",namespace,...args],
+  {encoding:"utf8",timeout:35000,maxBuffer,stdio:["ignore","pipe","pipe"]});}catch{throw Error("BACKUP_KUBERNETES_READ_FAILED");}};
+ // Полный namespace inventory нужен для проверки owner UID даже при drift labels.
+ // Для него действует отдельный bounded бюджет, как у release inventory.
+ const pods=()=>JSON.parse(kube(["get","pods","-o","json"],32<<20)).items;
  const verifyTarget=()=>{
   for(const [name,uid] of [["kube-system",clusterUID],[namespace,namespaceUID]]){
    const item=JSON.parse(kube(["get","namespace",name,"-o","json"]));
@@ -48,7 +51,7 @@ async function backup({context,kubeconfig,clusterUID,namespaceUID,parent}) {
  };
  verifyTarget();
  const workload=JSON.parse(kube(["get","statefulset","kodex-postgresql","-o","json"]));
- const before=sourceDatabasePod(workload,JSON.parse(kube(["get","pods","-o","json"])).items);
+ const before=sourceDatabasePod(workload,pods());
  // PGHOST/PGSERVICE и .psqlrc не выбирают источник: только локальный socket
  // канонического PostgreSQL-контейнера, без унаследованного окружения процесса.
  const databaseArgs=["--host=/var/run/postgresql","--port=5432","--username=postgres","--dbname=control_plane","--no-password"];
@@ -81,7 +84,7 @@ async function backup({context,kubeconfig,clusterUID,namespaceUID,parent}) {
  }finally{if(!success)child.kill("SIGKILL");await finished;await file.close();}
  verifyTarget();
  const afterWorkload=JSON.parse(kube(["get","statefulset","kodex-postgresql","-o","json"]));
- const after=sourceDatabasePod(afterWorkload,JSON.parse(kube(["get","pods","-o","json"])).items);
+ const after=sourceDatabasePod(afterWorkload,pods());
  ensure(afterWorkload.metadata.uid===workload.metadata.uid && JSON.stringify(before)===JSON.stringify(after),"BACKUP_SOURCE_INSTANCE_CHANGED");
  ensure(JSON.stringify(databaseIdentity())===JSON.stringify(backendBefore),"BACKUP_DATABASE_INSTANCE_CHANGED");
  let toc;
