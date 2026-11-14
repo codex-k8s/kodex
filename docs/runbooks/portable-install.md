@@ -1465,6 +1465,7 @@ Registry overlay пересчитывает её anchors после измене
 python3 tools/install/provider_sandbox_profile.py \
   --render /protected/candidate.yaml --profile kodex-provider-runtime
 python3 tools/install/provider_sandbox_transition.py plan \
+  --kubeconfig /protected/kubeconfig \
   --context example-context \
   --previous-render /protected/previous.yaml --previous-render-sha256 <sha256> \
   --render /protected/candidate.yaml --render-sha256 <sha256> \

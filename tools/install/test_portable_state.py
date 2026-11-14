@@ -82,6 +82,7 @@ class FixtureState(State):
         else:
             raise AssertionError('Unexpected external operation')
         self.writes.append((args, value))
+        if args[0] == 'create':return json.dumps(self.objects[key(value)]).encode()
         return b'{}'
 
 
@@ -115,6 +116,26 @@ class InitialEgressFenceTest(unittest.TestCase):
 
 
 class StateTest(unittest.TestCase):
+    def test_replacement_after_write_never_rebinds_approved_inventory(self):
+        for operation in ('create','cas','ssa'):
+            with self.subTest(operation=operation):
+                desired=resource()
+                if operation=='cas':
+                    desired.update(apiVersion='v1',kind='ConfigMap',data={'mode':'new'})
+                    desired.pop('spec')
+                actual=live(desired)
+                class ReplacedState(FixtureState):
+                    def call(self,args,value=None):
+                        acknowledged=super().call(args,value)
+                        self.objects[key(desired)]['metadata']['uid']='replacement'
+                        return acknowledged
+                state=ReplacedState([] if operation=='create' else [actual])
+                inventory=state.inventory([desired]);approved=copy.deepcopy(inventory)
+                with self.assertRaisesRegex(Rejected,'WRITE_READBACK_UID_DRIFT'):
+                    state.apply(desired,inventory)
+                self.assertEqual(inventory,approved)
+                self.assertEqual(len(state.writes),1)
+
     def test_owned_clusterip_selector_change_uses_fenced_patch_without_losing_allocations(self):
         for allocation in ({'clusterIP':'192.0.2.10','clusterIPs':['192.0.2.10'],'ipFamilies':['IPv4'],'ipFamilyPolicy':'SingleStack'},
                            {'clusterIP':'None','clusterIPs':['None'],'ipFamilies':['IPv4'],'ipFamilyPolicy':'SingleStack'},
@@ -197,7 +218,9 @@ class StateTest(unittest.TestCase):
                     assert value['preconditions']=={'uid':current['metadata']['uid'],'resourceVersion':current['metadata']['resourceVersion']}
                     self.objects.pop(key(desired));self.writes.append((args,value));return b'{}'
                 result=super().call(args,value)
-                if args[0]=='create'and '--dry-run=server'not in args:self.objects[key(desired)]['metadata']['uid']='synthetic-successor'
+                if args[0]=='create'and '--dry-run=server'not in args:
+                    self.objects[key(desired)]['metadata']['uid']='synthetic-successor'
+                    return json.dumps(self.objects[key(desired)]).encode()
                 return result
             def path(self,r):return '/apis/supplychain.kodex.dev/v1alpha1/namespaces/kodex-system/imageadmissionpolicyparameters/kodex-image-admission-policy'
         state=ImmutableState();inventory=state.inventory([desired]);state.preflight_apply(desired)

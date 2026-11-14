@@ -632,7 +632,9 @@ test-personal-integration-assistant-regression-postgres: check-go-toolchain
 
 .PHONY: test-runner-policy-transition
 test-runner-policy-transition:
-	@timeout 300s node --test tools/release/portable-runner-target.test.mjs tools/release/runner-policy-transition.test.mjs tools/release/default-runner-transition.test.mjs
+	@timeout 300s node --test tools/release/portable-runner-target.test.mjs tools/release/runner-policy-transition.test.mjs tools/release/default-runner-transition.test.mjs tools/release/component-serving-readback.test.mjs
+	@timeout 30s python3 -B tools/install/test_provider_sandbox_profile.py
+	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py
 
 .PHONY: test-component-publication
 test-component-publication:

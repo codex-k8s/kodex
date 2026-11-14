@@ -4,7 +4,7 @@ title: Ограниченная выкладка runner и admission policy
 type: runbook
 status: approved
 owner: manager
-version: 1.1.1
+version: 1.1.2
 updated: 2026-11-14
 ---
 
@@ -80,13 +80,50 @@ Canonical consumers могут читать policy через exact immutable `c
 отдельного runtime binding/default перехода. Optional references, Secret,
 неизвестный ключ, дубликат env и чужая ConfigMap закрыто отклоняются.
 
-Если render содержит отдельную provider sandbox projection, после default
-перехода она перебазируется штатным `provider_sandbox_profile.rebase` на policy,
+Если render содержит отдельную provider sandbox projection, перед default
+переходом она перебазируется штатным `provider_sandbox_profile.reconcile_policy` на policy,
 выбранную admission-controller. Сохраняется прежнее явное значение AppArmor,
 обновляются exact source digest, node readback image, runtime env/marker и Deny
 binding. Историческая image policy и её Jobs остаются неизменными. Промежуточный
 default readback не заменяет итоговый portable readback всей проекции; старый
 source или расходящиеся env/binding считаются drift.
+
+Live-перенос выполняет `tools/install/provider_sandbox_transition.py` с явными
+`--kubeconfig`, `--context` и `--reconcile-policy`. Previous render содержит
+фактические старую и новую immutable policy, выбранный image-admission-controller,
+старую runtime-проекцию, runtime-controller, Deny binding и installation profile.
+Candidate получается только через `provider_sandbox_profile.py --reconcile-policy`;
+оба SHA закрепляются до `plan`. Профиль AppArmor при этом сохраняется. Другой
+image, sidecar, policy payload или дополнительный объект не входит в delta.
+
+После forward migration начальный installation profile может сохранять прежние
+schema heads. В этом случае передаются `--schema-heads-file` и
+`--schema-heads-sha256`: private JSON содержит три фактические положительные
+версии `control-plane`, `internal-rpc-authority`, `email-bridge`. Это отдельный
+immutable input плана; каждая версия проверяется чтением БД до и после перехода,
+а прежний installation ConfigMap не переписывается.
+
+Apply получает ограниченную SQL-блокировку runs/nodes/leases и workspace grants,
+сверяет UID PostgreSQL Pod/StatefulSet и backend identity, останавливает
+runtime-controller и проверяет общий Deployment→ReplicaSet→Pod join. Затем
+создаёт новую проекцию, переключает binding и остановленный template, возвращает
+прежнее число replicas и ждёт Ready. Неизвестный Pod, работающий init/debug
+container и активный volume grant закрывают следующий шаг. Сохранённые завершённые
+turn Pods не удаляются: проверяется их полный terminated status и точная
+генерируемая runtime identity. При потерянном ответе используются прежний журнал,
+`readback`, затем явный `apply --resume --maintenance-confirmed`; stop/create не
+повторяются по одному отсутствующему ACK. После PASS выполняется отдельный
+`default-runner-transition.mjs`; он заново проверяет согласованность проекции.
+
+Stop/ready читают lineage по исходному UID Deployment. Замена объекта до bridge
+или между CAS и readback закрывает операцию без перепривязки inventory.
+Создание новой проекции связывает UID API-ответа с последующим GET; потерянный
+ответ по-прежнему требует reconciliation. Plan также dry-run проверяет оба
+остановленных состояния controller. PostgreSQL18 metadata сериализует database
+OID явно как `bigint`, а system identifier — как строку без потери точности;
+форма и совпадение identity внутри fence проверяются на настоящей БД.
+Проверена документация PostgreSQL18 через Context7:
+[JSON creation functions](https://www.postgresql.org/docs/18/functions-json.html).
 
 Закрытая схема `kodex.portable-runner-target/v1` содержит `context`, `clusterUID`,
 `namespaceUID`, `installationUID`, `installationSHA256` и `resources`.
