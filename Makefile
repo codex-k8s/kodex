@@ -627,3 +627,7 @@ test-runner-policy-transition:
 test-component-publication:
 	@timeout 180s node --test tools/release/component-publication.test.mjs tools/release/stable-image-publication.test.mjs
 	@bash -n tools/release/publish-stable-image-worker.sh
+
+.PHONY: test-component-api-maintenance
+test-component-api-maintenance:
+	@timeout 120s node --test tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-api-maintenance-cli.test.mjs tools/release/portable-runner-target.test.mjs
