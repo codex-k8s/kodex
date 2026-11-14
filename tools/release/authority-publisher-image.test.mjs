@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,copyFileSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {publisherImageSource,readPublisherImageNodes,planPublisherImage,publisherImageStep,main} from './authority-publisher-image.mjs';
+import {publisherImageSource,readPublisherImageNodes,planPublisherImage,publisherImageStep,verifyPublisherReadbackExecutor,main} from './authority-publisher-image.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {fixture,prepareAdmission,uid} from './fixtures/authority-catalog-synthetic.mjs';
 
@@ -96,6 +96,43 @@ test('publisher UNKNOWN resumes by readback with no second image patch and rejec
  f.publisher.spec.template.spec.volumes=[{name:'foreign'}];await assert.rejects(f.step('apply'),/DEPLOYMENT_DRIFT/);
 });
 
+test('готовность принимает только точный Pod default enableServiceLinks=true при отсутствии поля в template',async t=>{
+ const f=imageFixture(t);await f.step('apply');f.ready();
+ const pod=f.getResources().items.find(value=>value.kind==='Pod');
+ pod.spec.enableServiceLinks=true;
+ assert.equal((await f.step('status')).state,'READY');
+ for(const value of [false,null,'true',1]){
+  pod.spec.enableServiceLinks=value;assert.equal((await f.step('status')).state,'CONVERGING');
+ }
+ pod.spec.enableServiceLinks=true;pod.spec.unknownDefault=true;
+ assert.equal((await f.step('status')).state,'CONVERGING');
+ delete pod.spec.unknownDefault;pod.spec.containers[0].args=['foreign'];
+ assert.equal((await f.step('status')).state,'CONVERGING');
+ assert.equal(f.state.effects,1);
+});
+
+test('явный enableServiceLinks=false остаётся обязательным значением template',async t=>{
+ const f=imageFixture(t);
+ for(const spec of [f.publisher.spec,f.plan.beforeSpec,f.plan.afterSpec])spec.template.spec.enableServiceLinks=false;
+ await f.step('apply');f.ready();const pod=f.getResources().items.find(value=>value.kind==='Pod');
+ assert.equal((await f.step('status')).state,'READY');
+ pod.spec.enableServiceLinks=true;assert.equal((await f.step('status')).state,'CONVERGING');
+ delete pod.spec.enableServiceLinks;assert.equal((await f.step('status')).state,'CONVERGING');
+});
+
+test('successor readback требует exact clean predecessor и подтверждённое Git ancestry',()=>{
+ const previous={path:'/synthetic/old',revision:'a'.repeat(40)},current={path:'/synthetic/new',revision:'b'.repeat(40)};
+ const inspect=path=>{assert.equal(path,previous.path);return {revision:previous.revision};};
+ let joins=0;const ancestor=(path,before,after)=>{assert.equal(path,current.path);assert.equal(before,previous.revision);assert.equal(after,current.revision);joins++;};
+ verifyPublisherReadbackExecutor(current,previous,previous.revision,inspect,ancestor);assert.equal(joins,1);
+ assert.throws(()=>verifyPublisherReadbackExecutor(current,previous,'c'.repeat(40),inspect,ancestor),/SUCCESSOR_INVALID/);
+ assert.throws(()=>verifyPublisherReadbackExecutor(previous,previous,previous.revision,inspect,ancestor),/SUCCESSOR_INVALID/);
+ assert.throws(()=>verifyPublisherReadbackExecutor(current,previous,previous.revision,()=>({revision:current.revision}),ancestor),/SUCCESSOR_INVALID/);
+ assert.throws(()=>verifyPublisherReadbackExecutor(current,previous,previous.revision,()=>{throw Error('SOURCE_CHECKOUT_NOT_EXACT');},ancestor),/NOT_EXACT/);
+ assert.throws(()=>verifyPublisherReadbackExecutor(current,previous,previous.revision,inspect,()=>{throw Error('NON_ANCESTOR');}),/NON_ANCESTOR/);
+ assert.equal(joins,1);
+});
+
 test('public image CLI consumes authentic receipts, re-reads nodes and preserves READY after Service reopens',async t=>{
  const f=imageFixture(t),path=name=>join(f.directory,name),write=(name,value)=>writeFileSync(path(name),JSON.stringify(value),{mode:0o600});
  write('publication.json',f.evidence.publicationPlan);writeFileSync(path('publication.jsonl'),f.evidence.publicationEvidence.map(row=>JSON.stringify(row)+'\n').join(''),{mode:0o600});
@@ -122,6 +159,7 @@ test('public image CLI consumes authentic receipts, re-reads nodes and preserves
  const stored=JSON.parse(readFileSync(path('nodes.json'),'utf8'));assert.deepEqual(stored,f.nodeProof);
  await main(['plan',...common,...sourceFlags,...f.admission.flags,'--node-proof',path('nodes.json'),'--plan',path('plan.json')],io);
  const plan=JSON.parse(readFileSync(path('plan.json'),'utf8'));
+ for(const phase of ['apply','plan','nodes'])await assert.rejects(main([phase,...common,'--predecessor-executor-sha',f.revision],io),/ARGUMENTS_REJECTED/);
  const changedIO={...io,inspectSource:path=>({revision:path===plan.executorSource.path?'d'.repeat(40):f.revision})};
  await assert.rejects(main(['apply',...common,'--plan',path('plan.json'),'--evidence',path('wrong-executor.jsonl'),'--approved-plan-sha',fingerprint(plan)],changedIO),/EXECUTOR_SOURCE_CHANGED/);
  assert.equal(f.state.effects,0);
@@ -131,4 +169,28 @@ test('public image CLI consumes authentic receipts, re-reads nodes and preserves
  delete f.service.spec.selector['kodex.dev/component-traffic-isolation'];delete f.service.metadata.annotations['kodex.dev/component-traffic-isolation'];
  await main(['status',...common,'--plan',path('plan.json'),'--evidence',path('image.jsonl')],io);
  assert.equal(f.state.effects,1);assert.equal(f.state.calls.some(call=>call.includes('pull')),false);
+ // Отдельная synthetic история моделирует прежний executor и image checkout.
+ // Исходные fixture plan/journal сохраняются; новый CLI только дописывает readback.
+ const inherited=structuredClone(plan),imageSource=path('image-source'),oldExecutor=path('old-executor'),nextSHA='d'.repeat(40);
+ const dockerfile='services/internal/internal-rpc-authority/Dockerfile';
+ mkdirSync(join(imageSource,'services/internal/internal-rpc-authority'),{recursive:true});
+ copyFileSync(join(source,dockerfile),join(imageSource,dockerfile));
+ inherited.source.path=imageSource;inherited.executorSource.path=oldExecutor;
+ write('inherited-plan.json',inherited);
+ const events=readFileSync(path('image.jsonl'),'utf8').trim().split('\n').map(JSON.parse);events[0].planSHA256=fingerprint(inherited);
+ const original=events.map(value=>JSON.stringify(value)+'\n').join('');
+ writeFileSync(path('inherited.jsonl'),original,{mode:0o600});
+ const inheritedBytes=readFileSync(path('inherited-plan.json'));
+ const successorIO={...io,inspectSource:where=>({revision:where===source?nextSHA:f.revision}),execFileSync:(program,args,options)=>{
+  if(program==='git'){assert.deepEqual(args,['-C',source,'merge-base','--is-ancestor',f.revision,nextSHA]);return '';}
+  return io.execFileSync(program,args,options);
+ }};
+ const inheritedArgs=[...common,'--plan',path('inherited-plan.json'),'--evidence',path('inherited.jsonl')];
+ await assert.rejects(main(['status',...inheritedArgs],successorIO),/EXECUTOR_SOURCE_CHANGED/);
+ await main(['status',...inheritedArgs,'--predecessor-executor-sha',f.revision],successorIO);
+ const updated=readFileSync(path('inherited.jsonl'),'utf8');assert.ok(updated.startsWith(original));
+ const rows=updated.trim().split('\n').map(JSON.parse);
+ assert.deepEqual(rows.at(-2),{type:'READBACK_EXECUTOR',sourceSHA:nextSHA,predecessorExecutorSHA:f.revision,at:rows.at(-2).at});
+ assert.equal(rows.at(-1).state,'READY');assert.deepEqual(readFileSync(path('inherited-plan.json')),inheritedBytes);
+ assert.equal(f.state.effects,1);
 });

@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.10
+version: 1.6.11
 updated: 2026-11-14
 ---
 
@@ -1258,6 +1258,15 @@ reconciliation. Неизвестный внешний эффект не разр
 Перед продолжением обязателен отдельный актуальный backup данных. Старый image
 и metadata preimage не гарантируют безопасного отката схемы. После restart снова
 проверить API/login и настоящий runtime turn/tool/resume; Ready Pod этого не доказывает.
+
+Для уже применённого publisher image plan новый чистый descendant executor может
+выполнить только `authority-publisher-image.mjs status --predecessor-executor-sha
+<exact-old-sha>` с прежними `--plan`, `--evidence`, `--kubeconfig` и `--context`.
+Прежний checkout должен оставаться чистым на закреплённом SHA; Git ancestry
+проверяется до readback. Journal сохраняет исходный header и отдельную запись
+`READBACK_EXECUTOR`; plan, image, UID, node proof и исходный mutation authority
+не переписываются. Флаг запрещён для `nodes`, `plan` и `apply`. Этот readback
+не повторяет patch и не заменяет проверку нового deployment/native runtime.
 
 Закрытая нормализация API defaults допускает только пустые `command/args`,
 пустой `emptyDir.medium` и `fieldRef.apiVersion=v1` в обычном и projected downward

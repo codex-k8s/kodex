@@ -146,10 +146,18 @@ export async function publisherImageStep({phase,plan,journal,get,resources,gate,
  const result={...observation,state:complete?'READY':'CONVERGING',resourceVersion:actual.metadata.resourceVersion};journal.append(result);return result;
 }
 
+// Readback successor не получает права применять исходный plan. Оба clean
+// checkout и Git ancestry проверяются до открытия журнала и до Kubernetes.
+export function verifyPublisherReadbackExecutor(current,previous,predecessorSHA,inspect,ancestor){
+ requireValue(previous?.revision===predecessorSHA&&/^[a-f0-9]{40}$/.test(predecessorSHA??'')&&
+  predecessorSHA!==current.revision&&inspect(previous.path).revision===predecessorSHA,'AUTHORITY_IMAGE_READBACK_SUCCESSOR_INVALID');
+ ancestor(current.path,predecessorSHA,current.revision);
+}
+
 export async function main(args,io={}){
  const [phase,...raw]=args,options={};
  for(let i=0;i<raw.length;i++){const key=raw[i];requireValue(['--source','--revision','--publication-plan','--publication-evidence','--build','--target','--node-proof','--maintenance-plan','--maintenance-evidence',
-  '--traffic-plan','--traffic-evidence','--kubeconfig','--context','--plan','--evidence','--output','--approved-plan-sha'].includes(key)&&!Object.hasOwn(options,key)&&raw[i+1],
+  '--traffic-plan','--traffic-evidence','--kubeconfig','--context','--plan','--evidence','--output','--approved-plan-sha','--predecessor-executor-sha'].includes(key)&&!Object.hasOwn(options,key)&&raw[i+1],
   'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');options[key]=raw[++i];}
  requireValue(['nodes','plan','apply','status'].includes(phase),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
  const common=['--kubeconfig','--context'];
@@ -157,7 +165,9 @@ export async function main(args,io={}){
  const gateFlags=['--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence'];
  const required=phase==='nodes'?[...common,...sourceFlags,'--output']:phase==='plan'?[...common,...sourceFlags,...gateFlags,'--node-proof','--plan']:
   [...common,'--plan','--evidence',...(phase==='apply'?['--approved-plan-sha']:[])];
- requireValue(required.every(key=>typeof options[key]==='string')&&Object.keys(options).every(key=>required.includes(key)),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
+ const predecessorSHA=options['--predecessor-executor-sha'];
+ requireValue(predecessorSHA===undefined||phase==='status'&&/^[a-f0-9]{40}$/.test(predecessorSHA),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
+ requireValue(required.every(key=>typeof options[key]==='string')&&Object.keys(options).every(key=>required.includes(key)||key==='--predecessor-executor-sha'),'AUTHORITY_IMAGE_ARGUMENTS_REJECTED');
  const execute=(program,argv,input)=>{
   try{return (io.execFileSync??execFileSync)(program,argv,{input,encoding:'utf8',timeout:35000,maxBuffer:8<<20,stdio:['pipe','pipe','pipe'],
    env:Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]))});}
@@ -170,7 +180,13 @@ export async function main(args,io={}){
  const retained=['apply','status'].includes(phase)?readAuthorityPrivateJSON(options['--plan']):undefined;
  const executorPath=resolve(fileURLToPath(new URL('../..',import.meta.url)));
  const executorSource={path:executorPath,revision:(io.inspectSource??inspectSource)(executorPath).revision};
- requireValue(/^[a-f0-9]{40}$/.test(executorSource.revision??'')&&(!retained||same(executorSource,retained.executorSource)),'AUTHORITY_IMAGE_EXECUTOR_SOURCE_CHANGED');
+ requireValue(/^[a-f0-9]{40}$/.test(executorSource.revision??''),'AUTHORITY_IMAGE_EXECUTOR_SOURCE_CHANGED');
+ if(predecessorSHA){
+  // Только чтение старого intent новым проверенным executor. Plan и mutation
+  // authority сохраняют прежний source; оба checkout должны оставаться точными.
+  verifyPublisherReadbackExecutor(executorSource,retained?.executorSource,predecessorSHA,io.inspectSource??inspectSource,
+   (path,before,after)=>execute('git',['-C',path,'merge-base','--is-ancestor',before,after]));
+ }else requireValue(!retained||same(executorSource,retained.executorSource),'AUTHORITY_IMAGE_EXECUTOR_SOURCE_CHANGED');
  const sourcePath=retained?.source.path??options['--source'],sourceSHA=retained?.source.sourceSHA??options['--revision'];
  requireValue((io.inspectSource??inspectSource)(sourcePath).revision===sourceSHA,'AUTHORITY_IMAGE_SOURCE_REJECTED');
  const publicationPlanPath=retained?.publicationPlanPath??options['--publication-plan'],publicationEvidencePath=retained?.publicationEvidencePath??options['--publication-evidence'],buildPath=retained?.buildPath??options['--build'];
@@ -199,6 +215,7 @@ export async function main(args,io={}){
  requireValue(same(mainOnly,plan.afterSpec),'AUTHORITY_IMAGE_PLAN_CHANGED');
  const journal=privateJournal(options['--evidence'],header(plan),{readOnly:false});
  try {
+  if(predecessorSHA)journal.append({type:'READBACK_EXECUTOR',sourceSHA:executorSource.revision,predecessorExecutorSHA:predecessorSHA});
   const result=await publisherImageStep({phase,plan,journal,get:()=>get('deployment',name),
    resources:()=>readComponentServingInventory(kube,name,plan.deploymentUID),gate:async()=>{
     const current=readCatalogTarget(profile,context,get);requireValue(current.transition.targetSHA256===fingerprint(profile)&&same(nodeProof,freshNodes()),'AUTHORITY_IMAGE_TARGET_CHANGED');
