@@ -10,6 +10,8 @@ updated: 2026-11-10
 
 # Кодификация документов и задач
 
+- `OPS-DOC-GITHUB-SCOPE-2033` — [Личные репозитории GitHub и область подключения](../operations/github-repository-scope-2033.md).
+
 - `OPS-DOC-PERSONAL-CREDENTIALS-2033` — [Персональные подключения и допуск запуска](../operations/personal-credentials-2033.md) (draft).
 
 - `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).

@@ -28,6 +28,7 @@ type personalCredentialWorkJob struct {
 	version, generation                                                        int64
 	expiresAt                                                                  *time.Time
 	snapshot                                                                   entity.PersonalIntegrationCredentialTestSnapshot
+	githubDiscovery                                                            *integrationpackage.GitHubDiscoveryPage
 }
 
 // personalCredentialTestInput contains freshly resolved self metadata and a pinned published
@@ -67,7 +68,7 @@ func persistPersonalCredentialVerification(ctx context.Context, tx pgx.Tx, bindi
 	tag, err := tx.Exec(ctx, queryPersonalCredentialTestBindingState, pgx.StrictNamedArgs{
 		"organization_id": binding.OrganizationID, "binding_id": bindingID, "state": binding.State, "version": binding.Version, "expected_version": previousVersion,
 		"generation": binding.Generation, "definition_digest": binding.VerifiedDefinitionDigest, "configuration_digest": binding.VerifiedConfigurationDigest,
-		"confirmed": confirmed, "denied": denied, "profiles": append([]string{}, binding.ObservedPermissionProfiles...), "expires_at": binding.ExpiresAt})
+		"confirmed": confirmed, "denied": denied, "profiles": append([]string{}, binding.ObservedPermissionProfiles...), "expires_at": binding.ExpiresAt, "github_discovery": asJSON(binding.GitHubDiscovery)})
 	if err != nil {
 		return errs.ErrUnavailable
 	}
@@ -122,7 +123,7 @@ func (repository *Repository) queuePersonalCredentialTest(ctx context.Context, t
 	profiles, writeKeys := integrationpackage.CredentialObservationRequests(definition)
 	started, snapshot, err := platformservice.BeginPersonalIntegrationCredentialVerification(binding,
 		entity.IntegrationCredentialInitiator{OrganizationID: current.organizationID, SubjectID: current.actorID, SubjectKind: "USER"}, *input.Mutation.ExpectedVersion,
-		entity.PersonalIntegrationCredentialTestSpec{Ref: ref, ConnectionVersion: connection.Version, DefinitionDigest: definition.Digest,
+		entity.PersonalIntegrationCredentialTestSpec{Ref: ref, ConnectionVersion: connection.Version, DefinitionDigest: definition.Digest, GitHubDiscoveryPage: payload.GitHubDiscoveryPage,
 			ConfigurationDigest: hex.EncodeToString(sum[:]), HealthCapabilityKey: health.Key, AllowedReadCapabilityKeys: probeKeys, AllowedObservationProfiles: profiles, AllowedDeniedWriteCapabilityKeys: writeKeys})
 	if err != nil {
 		return commandOutcome{}, err
@@ -250,7 +251,7 @@ func personalCredentialReadProbeKeys(definition integrationpackage.Package) []st
 // finishPersonalCredentialTest fences exactly one locked nonterminal job and retains its snapshot.
 // finishPersonalCredentialTest ограждает ровно одно заблокированное незавершённое задание, сохраняя snapshot.
 func finishPersonalCredentialTest(ctx context.Context, tx pgx.Tx, organizationID string, job personalCredentialWorkJob, state, outcome string) error {
-	tag, err := tx.Exec(ctx, queryPersonalCredentialTestFinish, pgx.StrictNamedArgs{"organization_id": organizationID, "id": job.id, "version": job.version, "state": state, "outcome": outcome})
+	tag, err := tx.Exec(ctx, queryPersonalCredentialTestFinish, pgx.StrictNamedArgs{"organization_id": organizationID, "id": job.id, "version": job.version, "state": state, "outcome": outcome, "github_discovery": asJSON(job.githubDiscovery)})
 	if err != nil {
 		return errs.ErrUnavailable
 	}

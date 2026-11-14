@@ -2,9 +2,10 @@ package platform
 
 import (
 	"context"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"strings"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -31,6 +32,7 @@ func newConfiguredAssistantComponentRepository(t *testing.T, pool *pgxpool.Pool,
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinHistoricalGitHubComponent(t, repository)
 	profile := runtimecontract.ModelProviderConfiguration{Schema: runtimecontract.ModelProviderConfigurationSchema, ManagedBy: "git", SourceRevision: strings.Repeat("a", 40), Engine: "opencode", EngineVersion: runtimecontract.OpenCodeVersion, ToolMode: "managed_mcp", ProviderID: "synthetic", BaseURL: "https://model.example.invalid/v1", AddressCIDRs: []string{"192.0.2.1/32"}, Models: []runtimecontract.ModelProviderModel{{ID: model, ContextWindowTokens: 32768, MaximumOutputTokens: 1024}}}
 	if err := repository.ConfigureModelProvider(profile, model); err != nil {
 		t.Fatal(err)

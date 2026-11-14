@@ -3768,6 +3768,8 @@ export type RepositoryBundleFile = {
 };
 
 export type RepositoryBundlePublication = {
+    repositoryId?: number;
+    repositoryFullName?: string;
     ref: OpaqueRef;
     projectRef: OpaqueRef;
     originRunRef: OpaqueRef;
@@ -4549,7 +4551,7 @@ export type IntegrationCapability = {
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
     approvalScope?: IntegrationApprovalScopeContract;
-    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
     inputSchemaSha256?: string;
@@ -4602,7 +4604,7 @@ export type IntegrationDefinition = {
 };
 
 export type IntegrationResourceScope = {
-    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
+    kind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'GITHUB_SCOPE' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'GITLAB_SCOPE' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE' | 'SSH_TARGET';
     values: {
         [key: string]: string;
     };
@@ -4852,7 +4854,31 @@ export type PersonalIntegrationCredential = {
     credentialConfigured: boolean;
     expiresAt?: Timestamp;
     verifiedCapabilityKeys: Array<string>;
+    githubDiscovery?: GitHubRepositoryDiscoveryPage;
     deniedCapabilityKeys: Array<string>;
+};
+
+export type GitHubDiscoveredRepository = {
+    id: number;
+    fullName: string;
+    ownerKind: 'User' | 'Organization';
+    private: boolean;
+    archived: boolean;
+    canRead: boolean;
+    canPush: boolean;
+};
+
+export type GitHubRepositoryDiscoveryPage = {
+    identityId: number;
+    login: string;
+    page: number;
+    nextPage: number;
+    items: Array<GitHubDiscoveredRepository>;
+};
+
+export type PersonalIntegrationCredentialTestInput = {
+    expectedConnectionVersion: number;
+    githubDiscoveryPage?: number;
 };
 
 export type PersonalIntegrationCredentialCreateInput = {
@@ -12337,7 +12363,7 @@ export type ConfigurePersonalIntegrationCredentialResponses = {
 export type ConfigurePersonalIntegrationCredentialResponse = ConfigurePersonalIntegrationCredentialResponses[keyof ConfigurePersonalIntegrationCredentialResponses];
 
 export type TestPersonalIntegrationCredentialData = {
-    body: PersonalIntegrationCredentialCreateInput;
+    body: PersonalIntegrationCredentialTestInput;
     headers: {
         'Idempotency-Key': string;
         'If-Match': string;

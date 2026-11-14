@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -156,7 +157,7 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 	if err != nil {
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CONNECTION", err, errs.ErrForbidden)
 	}
-	if connection.CredentialRevision == nil || !connection.Enabled || connection.State != "CONNECTED" {
+	if !connection.Enabled || connection.CredentialPolicy == entity.IntegrationCredentialProjectShared && (connection.CredentialRevision == nil || connection.State != "CONNECTED") {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, connection.Ref, connection.DefinitionKey, connection.DefinitionVersion, connection.DefinitionDigest)
@@ -167,15 +168,40 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 	if !valid || definition.ValidateConfiguration(configuration) != nil || connection.DefinitionKey != "github" {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
-	var connectionID, credentialID string
-	if err := tx.QueryRow(ctx, queryConfigurationSourceCredential, current.organizationID, connection.Ref, connection.CredentialRevision.Ref).Scan(&connectionID, &credentialID); err != nil {
-		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("CREDENTIAL", err, errs.ErrForbidden)
+	var connectionID, credentialID, personalCredentialID, personalBindingRef string
+	var personalBindingGeneration int64
+	var selectedCredential *entity.IntegrationCredentialRevision
+	if connection.CredentialPolicy == entity.IntegrationCredentialProjectShared {
+		selectedCredential = connection.CredentialRevision
+		if err := tx.QueryRow(ctx, queryConfigurationSourceCredential, current.organizationID, connection.Ref, selectedCredential.Ref).Scan(&connectionID, &credentialID); err != nil || connectionID != origin.connectionID {
+			return entity.RepositoryBundlePublication{}, errs.ErrForbidden
+		}
+	} else if connection.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
+		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
-	if connectionID != origin.connectionID {
+	capability, capabilityExists := definition.Capability(repositoryBundleOperation)
+	repositoryName := configuration["owner"] + "/" + configuration["repository"]
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		scope, parseErr := integrationpackage.ParseGitHubResourceScope(configuration)
+		if parseErr != nil || !scope.AllowsRepository(input.RepositoryID, input.RepositoryFullName) {
+			return entity.RepositoryBundlePublication{}, errs.ErrForbidden
+		}
+		repositoryName = input.RepositoryFullName
+	} else if input.RepositoryID != 0 || input.RepositoryFullName != "" {
+		return entity.RepositoryBundlePublication{}, errs.ErrInvalid
+	}
+	if !capabilityExists {
 		return entity.RepositoryBundlePublication{}, errs.ErrForbidden
 	}
 	bounded := repositorybundle.InvocationInput(input.Archive, input.Manifest, input.BaseCommitSHA)
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		bounded["repository_id"] = input.RepositoryID
+		bounded["repository_full_name"] = input.RepositoryFullName
+	}
 	semanticInput := asJSON([]any{"kodex.workflow-bundle-content.v1", repositoryBundleContentPolicy, input.BaseCommitSHA, manifest})
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		semanticInput = asJSON([]any{"kodex.workflow-bundle-content.v2", repositoryBundleContentPolicy, input.BaseCommitSHA, manifest, input.RepositoryID, input.RepositoryFullName})
+	}
 	resolved, err := repository.resolveIntegrationInvocationTx(ctx, tx, current, map[string]string{"run_ref": origin.runRef, "node_ref": origin.nodeRef, "connection_ref": origin.connectionRef, "capability_key": repositoryBundleOperation, "idempotency_key": input.IdempotencyKey}, bounded, true, semanticInput)
 	if err != nil {
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("NATIVE_INTENT", err, err)
@@ -197,6 +223,21 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		}
 		return row.proposal, nil
 	}
+	if connection.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired {
+		choice, choiceErr := repository.selectPersonalInvocationCredentialTx(ctx, tx, current.organizationID, stringMap(resolved, "invocationRef"))
+		if choiceErr != nil {
+			return entity.RepositoryBundlePublication{}, choiceErr
+		}
+		selectedCredential = choice.selection.Credential
+		personalBindingRef = choice.selection.PersonalBindingRef
+		personalBindingGeneration = choice.selection.BindingGeneration
+		if selectedCredential == nil || personalBindingRef == "" {
+			return entity.RepositoryBundlePublication{}, errs.ErrForbidden
+		}
+		if err := tx.QueryRow(ctx, queryRepositoryBundlePersonalCredential, pgx.StrictNamedArgs{"organization_id": current.organizationID, "invocation_ref": stringMap(resolved, "invocationRef"), "credential_ref": selectedCredential.Ref}).Scan(&personalCredentialID); err != nil {
+			return entity.RepositoryBundlePublication{}, errs.ErrForbidden
+		}
+	}
 	ref, err := newRef("rbp")
 	if err != nil {
 		return entity.RepositoryBundlePublication{}, errs.ErrUnavailable
@@ -211,7 +252,7 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 	}
 	proposal := entity.RepositoryBundlePublication{Ref: ref, Version: 1, ProjectRef: origin.projectRef, OriginRunRef: origin.runRef, OriginRuntimeRevisionRef: origin.revisionRef,
 		InvocationRef: stringMap(resolved, "invocationRef"), GateRef: stringMap(resolved, "gateRef"), ConnectionRef: connection.Ref, ConnectionVersion: connection.Version, GrantRef: input.GrantRef, GrantVersion: origin.grantVersion,
-		RepositoryRef: strings.ToLower(configuration["owner"] + "/" + configuration["repository"]), BaseCommitSHA: input.BaseCommitSHA, ProposalBranch: "kodex/bundle/" + ref,
+		RepositoryRef: strings.ToLower(repositoryName), RepositoryID: input.RepositoryID, RepositoryFullName: input.RepositoryFullName, BaseCommitSHA: input.BaseCommitSHA, ProposalBranch: "kodex/bundle/" + ref,
 		Archive: input.Archive, Manifest: input.Manifest, FileCount: int32(len(manifest.Files)), TotalBytes: manifest.TotalBytes, State: "WAITING_APPROVAL", CreatedAt: now, ExpiresAt: now.Add(24 * time.Hour)}
 	proposal.ApprovalDigest = repositorybundle.Digest(asJSON(proposal))
 	capability, ok := definition.Capability(repositoryBundleOperation)
@@ -232,9 +273,9 @@ func (repository *Repository) prepareRepositoryBundleTx(ctx context.Context, pri
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("SOURCE_PIN", err, err)
 	}
 	snapshot := repositoryBundleSnapshot{SourcePolicy: repositoryBundleContentPolicy, FileReceipts: receipts, ArchiveSource: archiveSource, ManifestSource: manifestSource, ResourceScope: resourceScope, ResourceScopeDigest: origin.resourceDigest, Proposal: proposal, DefinitionKey: definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version, DefinitionDigest: definition.Digest,
-		DefinitionPackage: asJSON(definition), PublicConfiguration: connection.PublicConfiguration, Credential: *connection.CredentialRevision, InputDigest: nativeDigest, EffectKey: effectKey}
+		DefinitionPackage: asJSON(definition), PublicConfiguration: connection.PublicConfiguration, Credential: *selectedCredential, PersonalBindingRef: personalBindingRef, PersonalBindingGeneration: personalBindingGeneration, InputDigest: nativeDigest, EffectKey: effectKey}
 	if _, err := tx.Exec(ctx, queryRepositoryBundleInsert, pgx.StrictNamedArgs{"ref": ref, "organization_id": current.organizationID, "project_id": origin.projectID, "actor_id": origin.actorID, "root_run_id": origin.rootRunID, "run_id": origin.runID, "node_id": origin.nodeID,
-		"runtime_revision_id": origin.revisionID, "lease_ref": input.LeaseRef, "generation": input.Generation, "connection_id": origin.connectionID, "grant_id": origin.grantID, "credential_id": credentialID, "gate_id": gateID, "invocation_id": invocationID,
+		"runtime_revision_id": origin.revisionID, "lease_ref": input.LeaseRef, "generation": input.Generation, "connection_id": origin.connectionID, "grant_id": origin.grantID, "credential_id": nullableBundleCredentialID(credentialID), "personal_credential_id": nullableBundleCredentialID(personalCredentialID), "gate_id": gateID, "invocation_id": invocationID,
 		"idempotency_key": input.IdempotencyKey, "input_sha256": inputDigest, "snapshot_sha256": repositorybundle.Digest(asJSON(snapshot)), "approval_digest": proposal.ApprovalDigest, "snapshot": asJSON(snapshot), "manifest_metadata": asJSON(manifest), "manifest_sha256": input.Manifest.SHA256,
 		"archive_revision_ref": archiveSource.RevisionRef, "manifest_revision_ref": manifestSource.RevisionRef, "archive_sha256": input.Archive.SHA256, "base_commit_sha": input.BaseCommitSHA, "repository_ref": proposal.RepositoryRef, "proposal_branch": proposal.ProposalBranch, "created_at": proposal.CreatedAt, "expires_at": proposal.ExpiresAt}); err != nil {
 		return entity.RepositoryBundlePublication{}, repositoryBundlePrepareFailure("INSERT", err, serializableTransactionError(err, mapWriteError(err)))

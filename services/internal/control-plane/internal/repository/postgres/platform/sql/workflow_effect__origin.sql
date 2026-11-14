@@ -26,7 +26,7 @@ JOIN control_plane.runtime_revisions revision ON revision.node_id=node.id AND re
 JOIN control_plane.runtime_leases lease ON lease.runtime_revision_id=revision.id AND lease.node_id=node.id AND lease.run_id=node.run_id
     AND lease.organization_id=node.organization_id AND lease.generation=revision.generation AND lease.input_digest=revision.input_digest AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
 JOIN control_plane.integration_connections connection ON connection.organization_id=root.organization_id AND connection.ref=@connection_ref
-    AND connection.enabled AND connection.state='CONNECTED'
+    AND connection.enabled AND ((connection.credential_policy='PROJECT_SHARED' AND connection.state='CONNECTED') OR (connection.credential_policy='INITIATOR_REQUIRED' AND control_plane.integration_connection_configuration_ready(connection.id)))
 WHERE root.organization_id=@organization_id::uuid AND root.id=@root_run_id::uuid
     AND root.state IN ('RUNNING','WAITING_HUMAN') AND physical.ref=@run_ref AND node.ref=@node_ref
     AND node.state='RUNNING' AND node.materialization_state='MATERIALIZED' AND node.type='AGENT_EXECUTION'

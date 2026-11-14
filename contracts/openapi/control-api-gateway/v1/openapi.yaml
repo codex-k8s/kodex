@@ -5127,7 +5127,7 @@ paths:
           application/json:
             schema:
               {
-                $ref: "#/components/schemas/PersonalIntegrationCredentialCreateInput",
+                $ref: "#/components/schemas/PersonalIntegrationCredentialTestInput",
               }
       responses:
         "200":
@@ -17677,6 +17677,8 @@ components:
           expiresAt,
         ]
       properties:
+        repositoryId: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
+        repositoryFullName: {type: string, minLength: 3, maxLength: 201}
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         originRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -19501,6 +19503,7 @@ components:
               [
                 SYNTHETIC_JOURNAL,
                 GITHUB_REPOSITORY,
+                GITHUB_SCOPE,
                 MATTERMOST_CHANNEL,
                 GITLAB_PROJECT,
                 GITLAB_SCOPE,
@@ -19682,6 +19685,7 @@ components:
               [
                 SYNTHETIC_JOURNAL,
                 GITHUB_REPOSITORY,
+                GITHUB_SCOPE,
                 MATTERMOST_CHANNEL,
                 GITLAB_PROJECT,
                 GITLAB_SCOPE,
@@ -20286,10 +20290,43 @@ components:
           type: array
           maxItems: 256
           items: { type: string, minLength: 1, maxLength: 100 }
+        githubDiscovery: {$ref: "#/components/schemas/GitHubRepositoryDiscoveryPage"}
         deniedCapabilityKeys:
           type: array
           maxItems: 256
           items: { type: string, minLength: 1, maxLength: 100 }
+    GitHubDiscoveredRepository:
+      type: object
+      additionalProperties: false
+      required: [id, fullName, ownerKind, private, archived, canRead, canPush]
+      properties:
+        id: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
+        fullName: {type: string, minLength: 3, maxLength: 201}
+        ownerKind: {type: string, enum: [User, Organization]}
+        private: {type: boolean}
+        archived: {type: boolean}
+        canRead: {type: boolean}
+        canPush: {type: boolean}
+    GitHubRepositoryDiscoveryPage:
+      type: object
+      additionalProperties: false
+      required: [identityId, login, page, nextPage, items]
+      properties:
+        identityId: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
+        login: {type: string, minLength: 1, maxLength: 100}
+        page: {type: integer, minimum: 1, maximum: 10000}
+        nextPage: {type: integer, minimum: 0, maximum: 10000}
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: "#/components/schemas/GitHubDiscoveredRepository"}
+    PersonalIntegrationCredentialTestInput:
+      type: object
+      additionalProperties: false
+      required: [expectedConnectionVersion]
+      properties:
+        expectedConnectionVersion: {type: integer, format: int64, minimum: 1}
+        githubDiscoveryPage: {type: integer, minimum: 1, maximum: 10000}
     PersonalIntegrationCredentialCreateInput:
       type: object
       additionalProperties: false

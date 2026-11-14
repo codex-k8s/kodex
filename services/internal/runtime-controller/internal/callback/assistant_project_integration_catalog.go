@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"google.golang.org/protobuf/proto"
 )
@@ -169,15 +170,27 @@ func projectCatalogCandidateMessageValid(candidate *controlplanev1.SystemAssista
 	return validAssistantCurrentReadMessage(copy.ProtoReflect(), 0)
 }
 
-// projectCatalogPublicGitHubScope accepts only a GitHub repository capability with exactly owner/repository public values and their canonical JSON SHA256.
-// Rejects unknown protobuf fields, unexpected keys, dot/path components and mismatched kind/hash without exposing rejected contents.
-// This verifies scope representation, not GitHub existence, repository membership or execution authority.
-// projectCatalogPublicGitHubScope принимает только операцию репозитория GitHub с ровно двумя публичными значениями owner/repository и SHA256 канонического JSON.
-// Отклоняет неизвестные поля protobuf, лишние ключи, точечные компоненты пути и несовпадающие вид либо хеш без раскрытия отклонённых данных.
-// Проверяется представление области, а не существование в GitHub, членство в репозитории или право выполнения.
+// projectCatalogPublicGitHubScope verifies the exact typed GitHub scope and canonical JSON hash for frozen repository coordinates or successor repository modes. Unknown fields and malformed selectors fail closed; representation does not prove provider membership or permission.
+// projectCatalogPublicGitHubScope сверяет точную типизированную область GitHub и canonical JSON hash для frozen координат либо successor режимов. Unknown fields и неверные selectors закрыто отклоняются; представление не доказывает доступ либо права провайдера.
 func projectCatalogPublicGitHubScope(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) (map[string]any, error) {
 	invalid := errors.New("project assistant public resource scope is invalid")
 	scope := candidate.GetResourceScope()
+	if scope != nil && len(scope.ProtoReflect().GetUnknown()) == 0 && strings.HasPrefix(candidate.GetCapability().GetKey(), "github.") && candidate.GetCapability().GetResourceKind() == controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE && scope.GetKind() == controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_SCOPE && validAssistantCatalogDigest(scope.GetDigest()) {
+		values := scope.GetValues()
+		parsed, err := integrationpackage.ParseGitHubResourceScope(values)
+		if err != nil || len(values) != 1 && (parsed.Kind != "SELECTED" || len(values) != 2) {
+			return nil, invalid
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, invalid
+		}
+		digest := sha256.Sum256(encoded)
+		if hex.EncodeToString(digest[:]) != scope.GetDigest() {
+			return nil, invalid
+		}
+		return map[string]any{"kind": "GITHUB_SCOPE", "values": values, "digest": scope.GetDigest()}, nil
+	}
 	if scope == nil || len(scope.ProtoReflect().GetUnknown()) != 0 || !strings.HasPrefix(candidate.GetCapability().GetKey(), "github.") ||
 		candidate.GetCapability().GetResourceKind() != controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY ||
 		scope.GetKind() != controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY || len(scope.GetValues()) != 2 || !validAssistantCatalogDigest(scope.GetDigest()) {

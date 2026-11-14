@@ -218,3 +218,37 @@ func TestPersonalCredentialHTTPRejectsOwnerSelectorsAndIncompleteMetadata(t *tes
 		t.Fatal("missing personal metadata became HTTP success")
 	}
 }
+
+// TestPersonalGitHubDiscoveryPublicDefaults preserves empty pages and explicit false permission flags through the real ProtoJSON boundary without exposing credential descriptors.
+// TestPersonalGitHubDiscoveryPublicDefaults сохраняет пустые страницы и явные false permission flags через настоящую ProtoJSON boundary без credential descriptors.
+func TestPersonalGitHubDiscoveryPublicDefaults(t *testing.T) {
+	view := personalCredentialHTTPFixture()
+	view.State = cp.PersonalIntegrationCredentialState_PERSONAL_INTEGRATION_CREDENTIAL_STATE_READY
+	view.CredentialConfigured = true
+	view.VerifiedCapabilityKeys = []string{"github.identity.read"}
+	view.GithubDiscovery = &cp.GitHubRepositoryDiscoveryPage{IdentityId: 7, Login: "synthetic", Page: 1, Items: []*cp.GitHubDiscoveredRepository{{Id: 17, FullName: "team/repo", OwnerKind: "Organization", CanRead: true}}}
+	result, err := messageMap(&cp.GetPersonalIntegrationCredentialResponse{Credential: view})
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := result["credential"].(map[string]any)
+	page := credential["githubDiscovery"].(map[string]any)
+	if page["nextPage"] != float64(0) || page["identityId"] != float64(7) {
+		t.Fatal("safe numeric discovery fields were lost")
+	}
+	repo := page["items"].([]any)[0].(map[string]any)
+	for _, key := range []string{"private", "archived", "canPush"} {
+		if repo[key] != false {
+			t.Fatalf("false %s observation disappeared", key)
+		}
+	}
+	view.GithubDiscovery.Items = nil
+	result, err = messageMap(&cp.GetPersonalIntegrationCredentialResponse{Credential: view})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page = result["credential"].(map[string]any)["githubDiscovery"].(map[string]any)
+	if items, ok := page["items"].([]any); !ok || len(items) != 0 {
+		t.Fatal("empty authoritative discovery page disappeared")
+	}
+}

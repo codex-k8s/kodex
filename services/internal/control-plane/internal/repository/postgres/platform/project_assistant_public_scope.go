@@ -19,19 +19,26 @@ import (
 // имена перехода из точек и совпадения с ключом секрета.
 var projectGitHubScopeIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
-// projectAssistantPublicResourceScope returns no scope for non-GitHub packages; GitHub requires
-// the exact adapter, capability prefix, repository scope fields and validated public
-// configuration. It rejects duplicate/unknown fields, invalid owner/repository names and
-// credential-key collisions, then hashes canonical JSON values. The scope describes connection
-// purpose and grants no execution authority.
-// projectAssistantPublicResourceScope не возвращает область для пакетов кроме GitHub; GitHub
-// требует точные adapter, префикс capability, поля области репозитория и проверенную публичную
-// конфигурацию. Отклоняет повторные или неизвестные поля, неверные owner/repository и совпадения с
-// credential key, затем хеширует канонический JSON значений. Область описывает назначение
-// подключения и не даёт права исполнения.
+// projectAssistantPublicResourceScope hashes only a validated public GitHub boundary: frozen owner/repository coordinates or the successor ALL_ACCESSIBLE/SELECTED scope. It rejects malformed modes and extra selector fields; metadata never grants execution authority.
+// projectAssistantPublicResourceScope хеширует только проверенную публичную область GitHub: frozen owner/repository либо successor ALL_ACCESSIBLE/SELECTED. Отклоняет неверные режимы и лишние поля селектора; metadata не выдают право исполнения.
 func projectAssistantPublicResourceScope(definition integrationpackage.Package, capability integrationpackage.Capability, configuration map[string]string) (map[string]string, string, error) {
 	if definition.Metadata.Key != "github" {
 		return nil, "", nil
+	}
+	if definition.Spec.Adapter == "GITHUB" && strings.HasPrefix(capability.Key, "github.") && capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		if definition.ValidateConfiguration(configuration) != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		values, err := capability.ResourceScopeValues(configuration)
+		if err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		digest := sha256.Sum256(encoded)
+		return values, hex.EncodeToString(digest[:]), nil
 	}
 	if definition.Spec.Adapter != "GITHUB" || !strings.HasPrefix(capability.Key, "github.") || capability.ResourceScope.Kind != "GITHUB_REPOSITORY" ||
 		len(capability.ResourceScope.ConnectionFields) != 2 || definition.ValidateConfiguration(configuration) != nil {

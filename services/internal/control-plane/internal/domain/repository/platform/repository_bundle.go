@@ -12,6 +12,8 @@ import (
 type RepositoryBundlePrepare struct {
 	LeaseRef, Fence, GrantRef, BaseCommitSHA, IdempotencyKey string
 	Generation                                               int64
+	RepositoryID                                             int64  `json:",omitempty"`
+	RepositoryFullName                                       string `json:",omitempty"`
 	Archive, Manifest                                        entity.RepositoryBundleArtifactPin
 }
 

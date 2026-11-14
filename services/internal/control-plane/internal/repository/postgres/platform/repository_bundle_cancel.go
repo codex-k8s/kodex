@@ -19,7 +19,7 @@ var queryRepositoryBundleDependency string
 // cancelRepositoryBundleDependency joins the existing authorized dependency mutation transaction. Pre-Begin work is known cancelled; every begun effect remains UNKNOWN and only its old lease is revoked. More than 256 consumers fails before any closure and rolls back the source mutation.
 // cancelRepositoryBundleDependency участвует в прежней authorized dependency mutation transaction. Pre-Begin work отменяется как known no-effect; begun effect остаётся UNKNOWN с отзывом лишь старой lease. Более256 consumers отклоняются до closure с rollback source mutation.
 func (repository *Repository) cancelRepositoryBundleDependency(ctx context.Context, tx pgx.Tx, current scope, kind, ref string) error {
-	if kind != "CONNECTION" && kind != "AGENT" && kind != "ARTIFACT" || ref == "" {
+	if kind != "CONNECTION" && kind != "AGENT" && kind != "ARTIFACT" && kind != "PERSONAL_CREDENTIAL" || ref == "" {
 		return errs.ErrInvalid
 	}
 	rows, err := tx.Query(ctx, queryRepositoryBundleDependency, pgx.StrictNamedArgs{"organization_id": current.organizationID, "source_kind": kind, "source_ref": ref})

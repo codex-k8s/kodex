@@ -152,7 +152,7 @@ func (repository *Repository) writeBackSource(ctx context.Context, tx pgx.Tx, cu
 	}
 	for _, operation := range operations {
 		capability, ok := definition.Capability(operation)
-		if !ok || capability.Operation != operation || capability.Risk == "READ" || capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
+		if !ok || capability.Operation != operation || capability.Risk == "READ" || !capability.AllowsApprovalPolicy("HUMAN_EACH_EFFECT") {
 			return source, work, "", "", errs.ErrForbidden
 		}
 	}

@@ -1,3 +1,4 @@
+import { githubDiscoveryView } from "./github-repository-scope";
 import { isRecord } from "@/shared/lib/exact-object";
 import {
   configurePersonalIntegrationCredential,
@@ -64,6 +65,9 @@ export function personalCredentialView(
     verifiedCapabilityKeys: [...value.verifiedCapabilityKeys],
     deniedCapabilityKeys: [...value.deniedCapabilityKeys],
     ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}),
+    ...(value.githubDiscovery
+      ? { githubDiscovery: githubDiscoveryView(value.githubDiscovery) }
+      : {}),
   };
 }
 

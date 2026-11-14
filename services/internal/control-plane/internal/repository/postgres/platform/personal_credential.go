@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -116,9 +118,10 @@ func readPersonalCredentialTx(ctx context.Context, tx pgx.Tx, current scope, con
 // personalCredentialRow объединяет точную descriptor-проекцию адресного и каталожного чтения.
 // Содержит только metadata, не вводит иной owner selector либо чтение plaintext.
 type personalCredentialRow struct {
-	value     entity.PersonalIntegrationCredential
-	revision  entity.IntegrationCredentialRevision
-	createdAt *time.Time
+	value           entity.PersonalIntegrationCredential
+	revision        entity.IntegrationCredentialRevision
+	createdAt       *time.Time
+	githubDiscovery []byte
 }
 
 // targets returns stable scan addresses in the same order as the two named SQL projections.
@@ -129,7 +132,7 @@ func (row *personalCredentialRow) targets() []any {
 		&binding.Version, &binding.Generation, &binding.State, &credential.Ref, &credential.Revision,
 		&credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion, &credential.ContentSHA256, &row.createdAt,
 		&binding.VerifiedCredentialRef, &binding.VerifiedDefinitionDigest, &binding.VerifiedConfigurationDigest,
-		&binding.VerifiedCapabilities, &binding.DeniedCapabilities, &binding.ObservedPermissionProfiles, &binding.ExpiresAt}
+		&binding.VerifiedCapabilities, &binding.DeniedCapabilities, &binding.ObservedPermissionProfiles, &binding.ExpiresAt, &row.githubDiscovery}
 }
 
 // decode rejects partial or malformed immutable descriptors before attaching metadata to the
@@ -138,6 +141,11 @@ func (row *personalCredentialRow) targets() []any {
 // результат владельца. Отсутствие descriptor допустимо лишь при отсутствии всех его полей.
 func (row *personalCredentialRow) decode() (entity.PersonalIntegrationCredential, error) {
 	binding, credential := row.value, row.revision
+	discovery, parseErr := integrationpackage.ParseGitHubDiscoveryPage(row.githubDiscovery)
+	if parseErr != nil {
+		return entity.PersonalIntegrationCredential{}, errs.ErrUnavailable
+	}
+	binding.GitHubDiscovery = discovery
 	if credential.Ref != "" {
 		if row.createdAt == nil || !credential.ValidDescriptor() || credential.Revision < 1 {
 			return entity.PersonalIntegrationCredential{}, errs.ErrUnavailable
@@ -276,6 +284,9 @@ func (repository *Repository) changePersonalCredential(ctx context.Context, tx p
 			return commandOutcome{}, err
 		}
 		if revoked.Version != binding.Version {
+			if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "PERSONAL_CREDENTIAL", binding.Ref); err != nil {
+				return commandOutcome{}, err
+			}
 			if err := cancelPersonalCredentialTests(ctx, tx, current.organizationID, bindingID); err != nil {
 				return commandOutcome{}, err
 			}
@@ -292,6 +303,9 @@ func (repository *Repository) changePersonalCredential(ctx context.Context, tx p
 	if input.Kind != command.ConfigurePersonalIntegrationCredential || policy != entity.IntegrationCredentialInitiatorRequired ||
 		connectionVersion != payload.ExpectedConnectionVersion || binding.Version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "PERSONAL_CREDENTIAL", binding.Ref); err != nil {
+		return commandOutcome{}, err
 	}
 	if err := cancelPersonalCredentialTests(ctx, tx, current.organizationID, bindingID); err != nil {
 		return commandOutcome{}, err

@@ -3,12 +3,12 @@ module github.com/codex-k8s/kodex/services/internal/runtime-controller
 go 1.26.10
 
 require (
-	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/codex-k8s/kodex/libs/go/controlplaneapi v0.0.0
 	github.com/codex-k8s/kodex/libs/go/controlplaneclient v0.0.0
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
+	github.com/codex-k8s/kodex/libs/go/modelmeasurementwire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/providerfinancewire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/repositorybundle v0.0.0
@@ -28,6 +28,14 @@ require (
 require k8s.io/component-helpers v0.36.3
 
 require (
+	github.com/getkin/kin-openapi v0.149.0 // indirect
+	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
+	github.com/oasdiff/yaml v0.1.1 // indirect
+	github.com/oasdiff/yaml3 v0.0.14 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+)
+
+require (
 	cel.dev/expr v0.25.2 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
@@ -35,6 +43,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/codex-k8s/kodex/libs/go/grpcserver v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/integrationpackage v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimepolicywire v0.0.0
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -43,7 +52,7 @@ require (
 	github.com/getsentry/sentry-go v0.48.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/go-openapi/jsonpointer v0.21.0 // indirect
+	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
 	github.com/go-openapi/swag v0.23.0 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
@@ -121,3 +130,5 @@ replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/secure
 replace github.com/codex-k8s/kodex/libs/go/runtimepolicywire => ../../../libs/go/runtimepolicywire
 
 replace github.com/codex-k8s/kodex/libs/go/modelmeasurementwire => ../../../libs/go/modelmeasurementwire
+
+replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage

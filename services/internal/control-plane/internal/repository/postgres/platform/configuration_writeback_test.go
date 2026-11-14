@@ -40,11 +40,23 @@ func TestWriteBackEffectUsesActualNarrowedPackageAndExactPins(t *testing.T) {
 		}
 	}
 	raw, _ = json.Marshal(definition)
-	row := writeBackRow{effect: entity.WriteBackBranch, proposal: entity.ConfigurationWriteBack{Ref: "mcwb_fixture01", RepositoryRef: "example/config", ProposalBranch: "kodex/writeback/mcwb_fixture01", SourceRefName: "main", Path: "config.yaml", BaseCommitSHA: strings.Repeat("a", 40), ProposedContentSHA256: strings.Repeat("b", 64)}, snapshot: writeBackSnapshot{ProposedContent: "small", Source: entity.ManagedConfigurationSourceWork{DefinitionKey: "github", DefinitionPackage: raw}}}
+	row := writeBackRow{effect: entity.WriteBackBranch, proposal: entity.ConfigurationWriteBack{Ref: "mcwb_fixture01", RepositoryRef: "example/config", ProposalBranch: "kodex/writeback/mcwb_fixture01", SourceRefName: "main", Path: "config.yaml", BaseCommitSHA: strings.Repeat("a", 40), ProposedContentSHA256: strings.Repeat("b", 64)}, snapshot: writeBackSnapshot{ProposedContent: "small", Source: entity.ManagedConfigurationSourceWork{DefinitionKey: "github", DefinitionPackage: raw, RepositoryRef: "example/config", PublicConfiguration: map[string]any{"scope_kind": "SELECTED", "repositories": `[{"id":7,"full_name":"example/config"}]`, "service_identity": "synthetic-service"}}}}
 	input := port.ConfigurationWriteBackEffectInput{Effect: entity.WriteBackBranch, ParentCommitSHA: row.proposal.BaseCommitSHA, ContentSHA256: row.proposal.ProposedContentSHA256, CandidateCommitSHA: strings.Repeat("c", 40), CandidateTreeSHA: strings.Repeat("d", 40), CandidateBlobSHA: strings.Repeat("e", 40), BaseBlobSHA: strings.Repeat("f", 40)}
 	if err := validateWriteBackEffectInput(row, input); err != nil {
 		t.Fatalf("exact narrowed package: %v", err)
 	}
+	originalRepository := row.proposal.RepositoryRef
+	row.proposal.RepositoryRef = "foreign/config"
+	if validateWriteBackEffectInput(row, input) == nil {
+		t.Fatal("unselected repository reached native scoped writeback")
+	}
+	row.proposal.RepositoryRef = originalRepository
+	originalIdentity := row.snapshot.Source.PublicConfiguration["service_identity"]
+	delete(row.snapshot.Source.PublicConfiguration, "service_identity")
+	if validateWriteBackEffectInput(row, input) == nil {
+		t.Fatal("implicit service identity reached scoped writeback")
+	}
+	row.snapshot.Source.PublicConfiguration["service_identity"] = originalIdentity
 	row.snapshot.ProposedContent = "too long for the actual package"
 	if validateWriteBackEffectInput(row, input) == nil {
 		t.Fatal("shipped input bound replaced actual package")

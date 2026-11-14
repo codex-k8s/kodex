@@ -33,6 +33,7 @@ func newSyntheticRuntimeComponentRepository(t *testing.T, ctx context.Context, p
 	if err != nil {
 		t.Fatal(err)
 	}
+	pinHistoricalGitHubComponent(t, r)
 	configureSyntheticRuntimeComponentRepository(t, r)
 	for _, customize := range configure {
 		customize(r)

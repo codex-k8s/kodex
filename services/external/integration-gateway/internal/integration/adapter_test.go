@@ -475,6 +475,13 @@ func testAdapter(t *testing.T) *Adapter {
 // RU: Grant, lease и execution идентификаторы — синтетические тестовые данные, а не owner-авторизация либо замена одобренного живого вызова.
 func invocationRequest(t *testing.T, definition integrationpackage.Package, capabilityKey string, input map[string]any, credential *CredentialRevision) Request {
 	t.Helper()
+	if definition.Metadata.Key == "github" && definition.Metadata.Version == "6.5.0" && capabilityKey != "github.identity.read" && capabilityKey != "github.repository.list" {
+		previous, ok := integrationpackage.ResolveShippedRevision(definition, "6.4.0", "bd6d504e4fc1d19d5c083f8585115c04ec75852b7879ad19ed54dc41cbe9a1da")
+		if !ok {
+			t.Fatal("historical repository protocol unavailable")
+		}
+		definition = previous
+	}
 	capability, ok := definition.Capability(capabilityKey)
 	if !ok {
 		t.Fatal("capability is missing")
@@ -482,6 +489,9 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 	configuration := map[string]string{"journal": "main"}
 	if definition.Metadata.Key == "github" {
 		configuration = map[string]string{"owner": "acme", "repository": "repo"}
+		if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+			configuration = map[string]string{"scope_kind": "ALL_ACCESSIBLE"}
+		}
 	}
 	switch definition.Metadata.Key {
 	case "gitlab":

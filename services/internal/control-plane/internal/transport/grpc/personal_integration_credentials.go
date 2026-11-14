@@ -203,7 +203,7 @@ func castPersonalIntegrationCredential(binding entity.PersonalIntegrationCredent
 	}
 	view := &controlplanev1.PersonalIntegrationCredentialView{ConnectionRef: binding.ConnectionRef, BindingRef: binding.Ref,
 		Version: binding.Version, ConnectionVersion: binding.ConnectionVersion, Policy: controlplanev1.IntegrationCredentialPolicy(policy),
-		State: controlplanev1.PersonalIntegrationCredentialState(state), CredentialConfigured: binding.Credential != nil,
+		State: controlplanev1.PersonalIntegrationCredentialState(state), CredentialConfigured: binding.Credential != nil, GithubDiscovery: castGitHubDiscovery(binding.GitHubDiscovery),
 		VerifiedCapabilityKeys: append([]string(nil), binding.VerifiedCapabilities...), DeniedCapabilityKeys: append([]string(nil), binding.DeniedCapabilities...)}
 	if binding.ExpiresAt != nil {
 		view.ExpiresAt = timestamppb.New(*binding.ExpiresAt)

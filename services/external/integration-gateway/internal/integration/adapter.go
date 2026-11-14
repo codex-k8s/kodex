@@ -79,6 +79,7 @@ type Request struct {
 	healthCheck                                                       bool
 	permissionEffect                                                  *permissionEffectObservation
 	PersonalCredentialAdmission                                       bool
+	GitHubDiscoveryPage                                               int
 	ResourcePermissionProfile                                         string
 	DefinitionPackage                                                 []byte
 	EmailExecution                                                    *emailapi.ExecutionBinding
@@ -289,7 +290,7 @@ func RequestFromTest(claim *controlplanev1.IntegrationConnectionTestClaim) Reque
 	if claim.GetPublicConfiguration() != nil {
 		configuration = claim.GetPublicConfiguration().AsMap()
 	}
-	return Request{
+	return Request{GitHubDiscoveryPage: int(claim.GetGithubDiscoveryPage()),
 		DefinitionPackage: append([]byte(nil), claim.GetDefinitionPackage()...),
 		EmailExecution:    emailExecutionBinding("", claim.GetTestRef(), claim.GetLease()),
 		DefinitionKey:     claim.GetDefinitionKey(), DefinitionVersion: claim.GetDefinitionVersion(),
@@ -446,7 +447,7 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(capability.Execution.TimeoutSeconds)*time.Second)
 	defer cancel()
 	request.permissionEffect = nil
-	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || capability.ResourceScope.Kind == "GITLAB_SCOPE" {
+	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != "" || (capability.ResourceScope.Kind == "GITLAB_SCOPE" || capability.ResourceScope.Kind == "GITHUB_SCOPE") {
 		request.permissionEffect = &permissionEffectObservation{}
 	}
 	var result Result
@@ -770,11 +771,21 @@ func (adapter *Adapter) callSynthetic(ctx context.Context, method, path, effectK
 // Metadata must identify the selected repository; deferred cleanup clears the loaded credential byte slice after every dispatch outcome.
 // RU: Метаданные обязаны обозначать выбранный репозиторий; отложенная очистка обнуляет загруженный срез credential при любом исходе.
 func (adapter *Adapter) executeGitHub(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, canonicalInput []byte) (Result, error) {
+	ctx = context.WithValue(ctx, githubPermissionEffectContextKey{}, request.permissionEffect)
 	client, cleanup, err := adapter.githubClient(ctx, request.Credential)
 	if err != nil {
 		return Result{}, err
 	}
 	defer cleanup()
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		if request.Operation == "github.identity.read" || request.Operation == "github.repository.list" {
+			return executeGitHubScopeCatalog(ctx, client, request, capability, configuration, canonicalInput)
+		}
+		configuration, canonicalInput, err = resolveGitHubScopedRepository(ctx, client, request, capability, configuration, canonicalInput)
+		if err != nil {
+			return Result{}, err
+		}
+	}
 	owner, repository := configuration["owner"], configuration["repository"]
 	switch request.Operation {
 	case "github.repository.metadata.read":
@@ -921,7 +932,7 @@ func (adapter *Adapter) githubClient(ctx context.Context, credential *Credential
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	httpClient.Transport = githubBoundedTransport{next: transport}
+	httpClient.Transport = githubBoundedTransport{next: transport, observation: githubPermissionEffectFromContext(ctx)}
 	client := github.NewClient(&httpClient).WithAuthToken(string(value))
 	client.BaseURL = adapter.githubBaseURL
 	return client, func() { clear(value) }, nil

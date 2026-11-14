@@ -69,7 +69,15 @@ func repositoryBundleWork(row repositoryBundleRow) entity.RepositoryBundlePublic
 		deadline = *row.deadline
 	}
 	snapshot := row.snapshot
-	return entity.RepositoryBundlePublicationWork{Lease: row.lease, Proposal: row.proposal, Mode: mode, DefinitionKey: snapshot.DefinitionKey, DefinitionVersion: snapshot.DefinitionVersion,
+	resourceKind := "GITHUB_REPOSITORY"
+	profile := ""
+	if _, scoped := snapshot.ResourceScope["scope_kind"]; scoped {
+		resourceKind = "GITHUB_SCOPE"
+		if snapshot.PersonalBindingRef != "" {
+			profile = "GITHUB_SCOPED_RESOURCE_V1"
+		}
+	}
+	return entity.RepositoryBundlePublicationWork{PersonalCredential: snapshot.PersonalBindingRef != "", ResourceKind: resourceKind, ResourcePermissionProfile: profile, Lease: row.lease, Proposal: row.proposal, Mode: mode, DefinitionKey: snapshot.DefinitionKey, DefinitionVersion: snapshot.DefinitionVersion,
 		DefinitionDigest: snapshot.DefinitionDigest, DefinitionPackage: snapshot.DefinitionPackage, PublicConfiguration: snapshot.PublicConfiguration, Credential: snapshot.Credential,
 		ResourceScope: snapshot.ResourceScope, ResourceScopeDigest: snapshot.ResourceScopeDigest, EffectKey: snapshot.EffectKey, InputDigest: snapshot.InputDigest, Manifest: append([]byte(nil), row.manifest...), CommitTime: row.proposal.CreatedAt, Deadline: deadline, EffectStartedAt: row.started}
 }

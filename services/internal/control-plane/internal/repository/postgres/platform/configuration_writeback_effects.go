@@ -113,6 +113,17 @@ func validateWriteBackEffectInput(row writeBackRow, input platformrepo.Configura
 		if !ok {
 			return errs.ErrForbidden
 		}
+		if row.snapshot.Source.DefinitionKey == "github" && capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+			configuration, valid := integrationStringConfiguration(row.snapshot.Source.PublicConfiguration)
+			if !valid || configuration["service_identity"] == "" {
+				return errs.ErrForbidden
+			}
+			selected, selectionErr := integrationpackage.NativeGitHubRepository(configuration, p.RepositoryRef)
+			if selectionErr != nil {
+				return errs.ErrForbidden
+			}
+			values["repository_id"], values["repository_full_name"] = selected.ID, selected.FullName
+		}
 		if _, err := capability.ValidateInput(asJSON(values)); err != nil {
 			return errs.ErrForbidden
 		}

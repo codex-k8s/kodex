@@ -2,6 +2,7 @@ package integration
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 )
@@ -12,7 +13,21 @@ const maximumGitHubProviderResponseBytes = 2 << 20
 
 // githubBoundedTransport enforces request-specific raw-body limits before SDK decoding, including the smaller error-response budget.
 // RU: githubBoundedTransport ограничивает сырое тело по типу запроса до SDK-декодирования, включая меньший бюджет ошибочного ответа.
-type githubBoundedTransport struct{ next http.RoundTripper }
+type githubBoundedTransport struct {
+	next        http.RoundTripper
+	observation *permissionEffectObservation
+}
+
+// githubPermissionEffectContextKey keeps an invocation-local mutation observation out of serialized provider payloads.
+// githubPermissionEffectContextKey исключает invocation-local наблюдение изменения из сериализованных provider payloads.
+type githubPermissionEffectContextKey struct{}
+
+// githubPermissionEffectFromContext reads only the private observation established by typed scoped dispatch.
+// githubPermissionEffectFromContext читает лишь закрытое наблюдение, назначенное typed scoped dispatch.
+func githubPermissionEffectFromContext(ctx context.Context) *permissionEffectObservation {
+	observation, _ := ctx.Value(githubPermissionEffectContextKey{}).(*permissionEffectObservation)
+	return observation
+}
 
 // RoundTrip clones the request, validates its raw-response budget and disables automatic mutation replay without changing the caller's request object.
 // RU: RoundTrip клонирует запрос, проверяет бюджет сырого ответа и отключает автоматический replay изменения, не меняя исходный объект запроса.
@@ -30,6 +45,9 @@ func (transport githubBoundedTransport) RoundTrip(request *http.Request) (*http.
 			request.Body = io.NopCloser(bytes.NewReader(nil))
 			request.ContentLength = -1
 		}
+	}
+	if transport.observation != nil && request.Method != http.MethodGet && request.Method != http.MethodHead {
+		transport.observation.mutationAttempted = true
 	}
 	response, err := transport.next.RoundTrip(request)
 	if err != nil {

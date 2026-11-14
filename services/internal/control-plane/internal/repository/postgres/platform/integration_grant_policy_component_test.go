@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -49,7 +50,17 @@ func TestIntegrationGrantApprovalPoliciesComponent(t *testing.T) {
 		t.Fatal("open isolated grant-policy PostgreSQL")
 	}
 	defer pool.Close()
-	r := newSyntheticRuntimeComponentRepository(t, ctx, pool)
+	r := newSyntheticRuntimeComponentRepository(t, ctx, pool, func(r *Repository) {
+		definitions, err := integrationpackage.LoadShipped()
+		if err != nil {
+			t.Fatal(err)
+		}
+		previous, ok := integrationpackage.ResolveShippedRevision(definitions["github"], "6.0.0", "537a92f2e304a5d670bf0bacc5dfae7d805b981aba5b262d2eb423b1afaaf44e")
+		if !ok {
+			t.Fatal("frozen COMMENT-only GitHub policy fixture is unavailable")
+		}
+		r.integrationDefinitions["github"] = previous
+	})
 	seedObservedCatalogFixture(t, ctx, r)
 	principal := func(workload, operation, actor, tenant string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, r, port.ProofPrincipalInput{ExternalActorID: actor, ExternalTenantID: tenant, CallerWorkload: workload, Operation: operation}, workload)

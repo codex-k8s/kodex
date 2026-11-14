@@ -19,6 +19,7 @@ import (
 // catalogInputs задаёт корректные синтетические входы каждой объявленной операции управляемого MCP, позволяя тестам каталога обнаружить операцию без собственного положительного сценария.
 func catalogInputs() map[string]string {
 	return map[string]string{
+		"github.identity.read": `{}`, "github.repository.list": `{"limit":1,"cursor":2}`,
 		"gitlab.scope.health.read":             `{}`,
 		"gitlab.project.list":                  `{}`,
 		"gitlab.repository.search":             `{"ref":"main","search":"synthetic","limit":1,"cursor":2}`,
@@ -271,6 +272,13 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 // catalogResponse dispatches synthetic provider replies and verifies scoped routes, pagination and mailbox command/binding serialization; unsupported providers fail the test instead of returning a generic success.
 // catalogResponse выбирает синтетические ответы провайдеров и проверяет ограниченные маршруты, страницы и сериализацию почтовой команды с привязкой; неподдерживаемый провайдер завершает тест ошибкой вместо общего успеха.
 func catalogResponse(t *testing.T, provider, operation string, r *http.Request) string {
+	if provider == "github" && r.URL.Path == "/user" {
+		return `{"id":7,"login":"synthetic"}`
+	}
+	if provider == "github" && r.URL.Path == "/user/repos" {
+		return `[{"id":17,"name":"repo","full_name":"acme/repo","owner":{"id":9,"login":"acme","type":"Organization"},"permissions":{"pull":true,"push":true}}]`
+	}
+
 	t.Helper()
 	if provider == "gitlab" {
 		if r.URL.Path == "/api/v4/user" && r.Method == http.MethodGet {
@@ -594,6 +602,9 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				return
 			}
 			expectedCalls := 2
+			if operation == "github.repository.list" {
+				expectedCalls = 3
+			}
 			if capability.ResourceScope.Kind == "GITLAB_SCOPE" && operation != "gitlab.project.list" {
 				expectedCalls = 3
 			}

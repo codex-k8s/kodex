@@ -1948,6 +1948,24 @@ func (e GateResolutionDecision) Valid() bool {
 	}
 }
 
+// Defines values for GitHubDiscoveredRepositoryOwnerKind.
+const (
+	Organization GitHubDiscoveredRepositoryOwnerKind = "Organization"
+	User         GitHubDiscoveredRepositoryOwnerKind = "User"
+)
+
+// Valid indicates whether the value is a known member of the GitHubDiscoveredRepositoryOwnerKind enum.
+func (e GitHubDiscoveredRepositoryOwnerKind) Valid() bool {
+	switch e {
+	case Organization:
+		return true
+	case User:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImageAdmissionAttemptState.
 const (
 	ImageAdmissionAttemptStateACCEPTED  ImageAdmissionAttemptState = "ACCEPTED"
@@ -2595,6 +2613,7 @@ const (
 	IntegrationCapabilityResourceKindCONFLUENCESPACE   IntegrationCapabilityResourceKind = "CONFLUENCE_SPACE"
 	IntegrationCapabilityResourceKindEMAILSENDER       IntegrationCapabilityResourceKind = "EMAIL_SENDER"
 	IntegrationCapabilityResourceKindGITHUBREPOSITORY  IntegrationCapabilityResourceKind = "GITHUB_REPOSITORY"
+	IntegrationCapabilityResourceKindGITHUBSCOPE       IntegrationCapabilityResourceKind = "GITHUB_SCOPE"
 	IntegrationCapabilityResourceKindGITLABPROJECT     IntegrationCapabilityResourceKind = "GITLAB_PROJECT"
 	IntegrationCapabilityResourceKindGITLABSCOPE       IntegrationCapabilityResourceKind = "GITLAB_SCOPE"
 	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
@@ -2612,6 +2631,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindEMAILSENDER:
 		return true
 	case IntegrationCapabilityResourceKindGITHUBREPOSITORY:
+		return true
+	case IntegrationCapabilityResourceKindGITHUBSCOPE:
 		return true
 	case IntegrationCapabilityResourceKindGITLABPROJECT:
 		return true
@@ -3099,6 +3120,7 @@ const (
 	IntegrationResourceScopeKindCONFLUENCESPACE   IntegrationResourceScopeKind = "CONFLUENCE_SPACE"
 	IntegrationResourceScopeKindEMAILSENDER       IntegrationResourceScopeKind = "EMAIL_SENDER"
 	IntegrationResourceScopeKindGITHUBREPOSITORY  IntegrationResourceScopeKind = "GITHUB_REPOSITORY"
+	IntegrationResourceScopeKindGITHUBSCOPE       IntegrationResourceScopeKind = "GITHUB_SCOPE"
 	IntegrationResourceScopeKindGITLABPROJECT     IntegrationResourceScopeKind = "GITLAB_PROJECT"
 	IntegrationResourceScopeKindGITLABSCOPE       IntegrationResourceScopeKind = "GITLAB_SCOPE"
 	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
@@ -3116,6 +3138,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindEMAILSENDER:
 		return true
 	case IntegrationResourceScopeKindGITHUBREPOSITORY:
+		return true
+	case IntegrationResourceScopeKindGITHUBSCOPE:
 		return true
 	case IntegrationResourceScopeKindGITLABPROJECT:
 		return true
@@ -12740,6 +12764,29 @@ type GateResolutionReceipt struct {
 	Run   Run       `json:"run"`
 }
 
+// GitHubDiscoveredRepository defines model for GitHubDiscoveredRepository.
+type GitHubDiscoveredRepository struct {
+	Archived  bool                                `json:"archived"`
+	CanPush   bool                                `json:"canPush"`
+	CanRead   bool                                `json:"canRead"`
+	FullName  string                              `json:"fullName"`
+	Id        int64                               `json:"id"`
+	OwnerKind GitHubDiscoveredRepositoryOwnerKind `json:"ownerKind"`
+	Private   bool                                `json:"private"`
+}
+
+// GitHubDiscoveredRepositoryOwnerKind defines model for GitHubDiscoveredRepository.OwnerKind.
+type GitHubDiscoveredRepositoryOwnerKind string
+
+// GitHubRepositoryDiscoveryPage defines model for GitHubRepositoryDiscoveryPage.
+type GitHubRepositoryDiscoveryPage struct {
+	IdentityId int64                        `json:"identityId"`
+	Items      []GitHubDiscoveredRepository `json:"items"`
+	Login      string                       `json:"login"`
+	NextPage   int                          `json:"nextPage"`
+	Page       int                          `json:"page"`
+}
+
 // ImageAdmissionAttempt Безопасная типизированная owner projection.
 type ImageAdmissionAttempt struct {
 	AdmissionReceiptSha256 string    `json:"admissionReceiptSha256"`
@@ -14430,6 +14477,7 @@ type PersonalIntegrationCredential struct {
 	CredentialConfigured   bool                                `json:"credentialConfigured"`
 	DeniedCapabilityKeys   []string                            `json:"deniedCapabilityKeys"`
 	ExpiresAt              *Timestamp                          `json:"expiresAt,omitempty"`
+	GithubDiscovery        *GitHubRepositoryDiscoveryPage      `json:"githubDiscovery,omitempty"`
 	Policy                 PersonalIntegrationCredentialPolicy `json:"policy"`
 	State                  PersonalIntegrationCredentialState  `json:"state"`
 	VerifiedCapabilityKeys []string                            `json:"verifiedCapabilityKeys"`
@@ -14455,6 +14503,12 @@ type PersonalIntegrationCredentialCreateInput struct {
 
 // PersonalIntegrationCredentialRevokeInput defines model for PersonalIntegrationCredentialRevokeInput.
 type PersonalIntegrationCredentialRevokeInput = map[string]interface{}
+
+// PersonalIntegrationCredentialTestInput defines model for PersonalIntegrationCredentialTestInput.
+type PersonalIntegrationCredentialTestInput struct {
+	ExpectedConnectionVersion int64 `json:"expectedConnectionVersion"`
+	GithubDiscoveryPage       *int  `json:"githubDiscoveryPage,omitempty"`
+}
 
 // PlatformCapability defines model for PlatformCapability.
 type PlatformCapability struct {
@@ -15301,6 +15355,8 @@ type RepositoryBundlePublication struct {
 	ProjectRef               OpaqueRef                                     `json:"projectRef"`
 	ProposalBranch           string                                        `json:"proposalBranch"`
 	Ref                      OpaqueRef                                     `json:"ref"`
+	RepositoryFullName       *string                                       `json:"repositoryFullName,omitempty"`
+	RepositoryId             *int64                                        `json:"repositoryId,omitempty"`
 	RepositoryRef            string                                        `json:"repositoryRef"`
 	State                    RepositoryBundlePublicationState              `json:"state"`
 	TotalBytes               int64                                         `json:"totalBytes"`
@@ -20716,7 +20772,7 @@ type ConfigurePersonalIntegrationCredentialJSONRequestBody = PersonalIntegration
 type RevokePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialRevokeInput
 
 // TestPersonalIntegrationCredentialJSONRequestBody defines body for TestPersonalIntegrationCredential for application/json ContentType.
-type TestPersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialCreateInput
+type TestPersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialTestInput
 
 // ReviseMemoryRecordJSONRequestBody defines body for ReviseMemoryRecord for application/json ContentType.
 type ReviseMemoryRecordJSONRequestBody = MemoryRecordSpecification

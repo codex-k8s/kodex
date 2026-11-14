@@ -4,8 +4,8 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.7
-updated: 2026-11-13
+version: 1.6.8
+updated: 2026-11-14
 ---
 
 # Опциональный профиль внешней инфраструктуры
@@ -870,6 +870,58 @@ Gateway/admission возобновляет внешний maintenance lifecycle
 после подтверждения всей пары. `schemaPostcondition: PASS` означает только
 миграцию; итог пары подтверждают `pairReady: true`, `cpStage: UPGRADED` и
 `forwardOnly: true`. Это не полная продуктовая приёмка релиза.
+
+### GitHub scope: согласованный cohort и forward migration 044
+
+Профили `github-repository-scope` и `github-repository-scope-backup` требуют
+`kodex.portable-component-migration/v2`: пять компонентов одного source SHA в
+точном порядке `control-plane`, `runtime-controller`, `integration-gateway`,
+`control-api-gateway`, `staff-control-center`. Прежний normal/backup путь без
+component publication закрыто отклоняется: terminal migration Job не разрешает
+вернуть CP043 поверх схемы044. Для каждого компонента нужны настоящий immutable
+lock, node pull proof и проверенный cohort `GITHUB_REPOSITORY_SCOPE_UPGRADE`.
+RunnerInput v10 и ABI5 не меняются. Secret broker и runner этим профилем не
+пересобираются и не заменяются.
+
+`baseSchemaHeads` точно совпадает с неизменяемым seal исходной полной установки
+042 либо043. `schemaHeadsBefore` отдельно требует043, `schemaHeadsAfter` —044;
+их контрольные версии CP равны `20261113000100` и `20261114120000`.
+Полный фактический predecessor catalog PostgreSQL проверяется до DDL;
+исторический seal042 не доказывает прохождение043. Schema heads других сервисов
+сохраняются. Профиль backup имеет отдельные ACL/catalog proofs и не получает
+fallback к normal. Исходные source/lock/installation pins не переписываются под
+видом нового полного релиза: новый cohort хранится в publication и journal.
+
+Target закрепляет UID всех пяти Deployment. До планирования API уже должен
+быть в maintenance с нулём replicas и положительным join. `stop` сначала
+останавливает CP, затем остальные consumers и проверяет Pod descendants
+каждого компонента. Перед DDL обязательны join всех writers и новый полный
+owner drain. После DDL `handoff` требует terminal writer join, полный
+postcondition044 и новый read-only owner drain; predecessor043 SQL повторно
+не используется как postcondition. Drain SQL закреплён хешем accepted source и
+включает integration effects, credential tests, repository bundles и config work.
+При неизвестном исходе patch сначала выполняется `inspect`; UID/resourceVersion/
+spec CAS и сохранённый journal предотвращают слепой повтор.
+
+`resume` восстанавливает исходные replicas остальных четырёх компонентов, но
+сохраняет API на нуле и выдаёт `gatewayMaintenance: true`. Это не готовность
+пользовательского стенда: maintenance снимается отдельным штатным operator
+переходом после проверки нового cohort и сохранённого preimage. Число replicas
+API не угадывается. Во все фазы CLI можно передать явные `--kubeconfig` и
+`--context`; пример выше сохраняет остальные exact inputs.
+При повторном `resume` после запуска нового CP его outbox claim sessions
+допускаются лишь при сохранённом resume intent, exact новом image и readiness
+всех CP Pods. Первый запуск и `handoff` требуют нуля claims; остальные проверки
+активной работы не ослабляются. Потерянный ACK запуска CP не вызывает второй patch.
+
+Публичная проверка — `make test-control-plane-migration`: closed pins/cohort,
+сохранение maintenance, full postcondition/drain, positive join, потерянный ACK,
+подмена UID/source и регрессия043. Локальная оснастка не заменяет установленный
+readback настоящих images, schema и пользовательского сценария.
+Общий бюджет полного исторического набора CLI ограничен 1500 секундами; прежние
+600 секунд исчерпывались до portable-проверок при продолжающемся последовательном
+исполнении исторических профилей. Лимиты отдельных CLI-вызовов и production
+maintenance не изменяются; таймаут набора по-прежнему означает неуспешную проверку.
 
 ### Следующий исправленный component profile
 

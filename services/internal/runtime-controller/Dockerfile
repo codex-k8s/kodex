@@ -10,6 +10,7 @@ COPY libs/go/eventing/ libs/go/eventing/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
+COPY libs/go/integrationpackage/ libs/go/integrationpackage/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/modelmeasurementwire/ libs/go/modelmeasurementwire/
 COPY libs/go/providerfinancewire/ libs/go/providerfinancewire/

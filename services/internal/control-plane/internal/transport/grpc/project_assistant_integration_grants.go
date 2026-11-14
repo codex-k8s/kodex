@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -20,12 +21,8 @@ import (
 // ASCII-набором и длиной; запрет одиночной и двойной точки проверяется отдельно.
 var assistantGrantScopeIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 
-// castAssistantIntegrationGrantCandidate checks the closed reason and optional exact GitHub
-// repository scope shape, identifier grammar and JSON digest before projecting candidate and
-// current-grant metadata.
-// castAssistantIntegrationGrantCandidate проверяет закрытую причину и необязательные точные форму
-// GitHub repository scope, грамматику идентификаторов и JSON digest до преобразования кандидата и
-// текущего grant.
+// castAssistantIntegrationGrantCandidate validates the closed candidate reason and optional frozen or scoped GitHub boundary before projecting its exact kind, safe fields and digest to typed output.
+// castAssistantIntegrationGrantCandidate проверяет закрытую причину candidate и optional frozen либо scoped GitHub boundary перед передачей точных kind, безопасных полей и digest в typed output.
 func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrationGrantCandidate) (*cp.SystemAssistantIntegrationGrantCandidate, error) {
 	reason, err := integrationCandidateReason(item.Reason)
 	if err != nil {
@@ -35,13 +32,23 @@ func castAssistantIntegrationGrantCandidate(item entity.SystemAssistantIntegrati
 		CurrentGrantRef: item.CurrentGrantRef, CurrentGrantVersion: item.CurrentGrantVersion, CurrentApprovalPolicy: integrationApprovalPolicy(item.CurrentApprovalPolicy),
 		CurrentApprovalScopePaths: append([]string{}, item.CurrentApprovalScopePaths...), CurrentGrantEnabled: item.CurrentGrantEnabled}
 	if item.ResourceScope != nil {
-		if !strings.HasPrefix(item.Capability.Key, "github.") || item.Capability.ResourceKind != "GITHUB_REPOSITORY" || len(item.ResourceScope) != 2 {
+		if !strings.HasPrefix(item.Capability.Key, "github.") {
 			return nil, errs.ErrUnavailable
 		}
-		for _, key := range []string{"owner", "repository"} {
-			v := item.ResourceScope[key]
-			if !assistantGrantScopeIdentifier.MatchString(v) || v == "." || v == ".." {
+		if item.Capability.ResourceKind == "GITHUB_SCOPE" {
+			parsed, err := integrationpackage.ParseGitHubResourceScope(item.ResourceScope)
+			if err != nil || len(item.ResourceScope) != 1 && (parsed.Kind != "SELECTED" || len(item.ResourceScope) != 2) {
 				return nil, errs.ErrUnavailable
+			}
+		} else {
+			if !strings.HasPrefix(item.Capability.Key, "github.") || item.Capability.ResourceKind != "GITHUB_REPOSITORY" || len(item.ResourceScope) != 2 {
+				return nil, errs.ErrUnavailable
+			}
+			for _, key := range []string{"owner", "repository"} {
+				v := item.ResourceScope[key]
+				if !assistantGrantScopeIdentifier.MatchString(v) || v == "." || v == ".." {
+					return nil, errs.ErrUnavailable
+				}
 			}
 		}
 		encoded, err := json.Marshal(item.ResourceScope)

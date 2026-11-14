@@ -174,17 +174,19 @@ func (x *RepositoryBundleArtifactPin) GetSizeBytes() int64 {
 }
 
 type PrepareRepositoryBundlePublicationRequest struct {
-	state          protoimpl.MessageState       `protogen:"open.v1"`
-	LeaseRef       string                       `protobuf:"bytes,1,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
-	Fence          string                       `protobuf:"bytes,2,opt,name=fence,proto3" json:"fence,omitempty"`
-	Generation     int64                        `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
-	GrantRef       string                       `protobuf:"bytes,4,opt,name=grant_ref,json=grantRef,proto3" json:"grant_ref,omitempty"`
-	Archive        *RepositoryBundleArtifactPin `protobuf:"bytes,5,opt,name=archive,proto3" json:"archive,omitempty"`
-	Manifest       *RepositoryBundleArtifactPin `protobuf:"bytes,6,opt,name=manifest,proto3" json:"manifest,omitempty"`
-	BaseCommitSha  string                       `protobuf:"bytes,7,opt,name=base_commit_sha,json=baseCommitSha,proto3" json:"base_commit_sha,omitempty"`
-	IdempotencyKey string                       `protobuf:"bytes,8,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state              protoimpl.MessageState       `protogen:"open.v1"`
+	LeaseRef           string                       `protobuf:"bytes,1,opt,name=lease_ref,json=leaseRef,proto3" json:"lease_ref,omitempty"`
+	Fence              string                       `protobuf:"bytes,2,opt,name=fence,proto3" json:"fence,omitempty"`
+	Generation         int64                        `protobuf:"varint,3,opt,name=generation,proto3" json:"generation,omitempty"`
+	GrantRef           string                       `protobuf:"bytes,4,opt,name=grant_ref,json=grantRef,proto3" json:"grant_ref,omitempty"`
+	Archive            *RepositoryBundleArtifactPin `protobuf:"bytes,5,opt,name=archive,proto3" json:"archive,omitempty"`
+	Manifest           *RepositoryBundleArtifactPin `protobuf:"bytes,6,opt,name=manifest,proto3" json:"manifest,omitempty"`
+	BaseCommitSha      string                       `protobuf:"bytes,7,opt,name=base_commit_sha,json=baseCommitSha,proto3" json:"base_commit_sha,omitempty"`
+	IdempotencyKey     string                       `protobuf:"bytes,8,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	RepositoryId       int64                        `protobuf:"varint,9,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryFullName string                       `protobuf:"bytes,10,opt,name=repository_full_name,json=repositoryFullName,proto3" json:"repository_full_name,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PrepareRepositoryBundlePublicationRequest) Reset() {
@@ -273,6 +275,20 @@ func (x *PrepareRepositoryBundlePublicationRequest) GetIdempotencyKey() string {
 	return ""
 }
 
+func (x *PrepareRepositoryBundlePublicationRequest) GetRepositoryId() int64 {
+	if x != nil {
+		return x.RepositoryId
+	}
+	return 0
+}
+
+func (x *PrepareRepositoryBundlePublicationRequest) GetRepositoryFullName() string {
+	if x != nil {
+		return x.RepositoryFullName
+	}
+	return ""
+}
+
 type RepositoryBundlePublication struct {
 	state                    protoimpl.MessageState           `protogen:"open.v1"`
 	Ref                      string                           `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
@@ -305,6 +321,8 @@ type RepositoryBundlePublication struct {
 	ContinuationState   string `protobuf:"bytes,27,opt,name=continuation_state,json=continuationState,proto3" json:"continuation_state,omitempty"`
 	ContinuationCode    string `protobuf:"bytes,28,opt,name=continuation_code,json=continuationCode,proto3" json:"continuation_code,omitempty"`
 	ContinuationNodeRef string `protobuf:"bytes,29,opt,name=continuation_node_ref,json=continuationNodeRef,proto3" json:"continuation_node_ref,omitempty"`
+	RepositoryId        int64  `protobuf:"varint,30,opt,name=repository_id,json=repositoryId,proto3" json:"repository_id,omitempty"`
+	RepositoryFullName  string `protobuf:"bytes,31,opt,name=repository_full_name,json=repositoryFullName,proto3" json:"repository_full_name,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -538,6 +556,20 @@ func (x *RepositoryBundlePublication) GetContinuationCode() string {
 func (x *RepositoryBundlePublication) GetContinuationNodeRef() string {
 	if x != nil {
 		return x.ContinuationNodeRef
+	}
+	return ""
+}
+
+func (x *RepositoryBundlePublication) GetRepositoryId() int64 {
+	if x != nil {
+		return x.RepositoryId
+	}
+	return 0
+}
+
+func (x *RepositoryBundlePublication) GetRepositoryFullName() string {
+	if x != nil {
+		return x.RepositoryFullName
 	}
 	return ""
 }
@@ -1853,7 +1885,7 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\aversion\x18\x03 \x01(\x03R\aversion\x12\x16\n" +
 	"\x06sha256\x18\x04 \x01(\tR\x06sha256\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\"\xfe\x02\n" +
+	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\"\xd5\x03\n" +
 	")PrepareRepositoryBundlePublicationRequest\x12\x1b\n" +
 	"\tlease_ref\x18\x01 \x01(\tR\bleaseRef\x12\x14\n" +
 	"\x05fence\x18\x02 \x01(\tR\x05fence\x12\x1e\n" +
@@ -1864,8 +1896,10 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\aarchive\x18\x05 \x01(\v2,.controlplane.v1.RepositoryBundleArtifactPinR\aarchive\x12H\n" +
 	"\bmanifest\x18\x06 \x01(\v2,.controlplane.v1.RepositoryBundleArtifactPinR\bmanifest\x12&\n" +
 	"\x0fbase_commit_sha\x18\a \x01(\tR\rbaseCommitSha\x12'\n" +
-	"\x0fidempotency_key\x18\b \x01(\tR\x0eidempotencyKey\"\xad\n" +
-	"\n" +
+	"\x0fidempotency_key\x18\b \x01(\tR\x0eidempotencyKey\x12#\n" +
+	"\rrepository_id\x18\t \x01(\x03R\frepositoryId\x120\n" +
+	"\x14repository_full_name\x18\n" +
+	" \x01(\tR\x12repositoryFullName\"\x84\v\n" +
 	"\x1bRepositoryBundlePublication\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x1f\n" +
@@ -1901,7 +1935,9 @@ const file_controlplane_v1_repository_bundle_proto_rawDesc = "" +
 	"\ffailure_code\x18\x1a \x01(\tR\vfailureCode\x12-\n" +
 	"\x12continuation_state\x18\x1b \x01(\tR\x11continuationState\x12+\n" +
 	"\x11continuation_code\x18\x1c \x01(\tR\x10continuationCode\x122\n" +
-	"\x15continuation_node_ref\x18\x1d \x01(\tR\x13continuationNodeRef\"\xc2\x01\n" +
+	"\x15continuation_node_ref\x18\x1d \x01(\tR\x13continuationNodeRef\x12#\n" +
+	"\rrepository_id\x18\x1e \x01(\x03R\frepositoryId\x120\n" +
+	"\x14repository_full_name\x18\x1f \x01(\tR\x12repositoryFullName\"\xc2\x01\n" +
 	"*PrepareRepositoryBundlePublicationResponse\x12H\n" +
 	"\bproposal\x18\x01 \x01(\v2,.controlplane.v1.RepositoryBundlePublicationR\bproposal\x12J\n" +
 	"\x06rejoin\x18\x02 \x01(\v22.controlplane.v1.RepositoryBundlePublicationRejoinR\x06rejoin\"\xe9\x06\n" +

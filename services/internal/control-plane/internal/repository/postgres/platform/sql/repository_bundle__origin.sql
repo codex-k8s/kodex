@@ -28,7 +28,7 @@ JOIN control_plane.integration_grants grant_binding
  AND grant_binding.risk='WRITE' AND grant_binding.approval_policy='HUMAN_EACH_EFFECT'
 JOIN control_plane.integration_connections connection
   ON connection.id=grant_binding.connection_id AND connection.organization_id=grant_binding.organization_id
- AND connection.enabled AND connection.state='CONNECTED' AND connection.definition_key='github'
+ AND connection.enabled AND ((connection.credential_policy='PROJECT_SHARED' AND connection.state='CONNECTED') OR (connection.credential_policy='INITIATOR_REQUIRED' AND control_plane.integration_connection_configuration_ready(connection.id))) AND connection.definition_key='github'
  AND connection.definition_version=grant_binding.definition_version AND connection.definition_digest=grant_binding.definition_digest
 WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
   AND agent.system_key IS NULL

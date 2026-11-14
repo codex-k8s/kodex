@@ -76,6 +76,22 @@ func (repository *Repository) setIntegrationCredentialPolicy(ctx context.Context
 	if err := platformservice.ValidateIntegrationCredentialPolicyChange(policy, payload.Policy, locked.enabled, locked.state, effects, grants, roots); err != nil {
 		return commandOutcome{}, err
 	}
+	if payload.Policy == entity.IntegrationCredentialProjectShared {
+		definition, definitionErr := repository.integrationPackage(ctx, tx, current.organizationID, payload.ConnectionRef, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
+		if definitionErr != nil {
+			return commandOutcome{}, definitionErr
+		}
+		if githubScopedDefinition(definition) {
+			connection, readErr := readConnection(ctx, tx, current, payload.ConnectionRef)
+			if readErr != nil {
+				return commandOutcome{}, readErr
+			}
+			identity, ok := connection.PublicConfiguration["service_identity"].(string)
+			if !ok || identity == "" {
+				return commandOutcome{}, errs.ErrInvalid
+			}
+		}
+	}
 	if policy != payload.Policy {
 		definition, err := repository.integrationPackage(ctx, tx, current.organizationID, payload.ConnectionRef, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
 		if err != nil {

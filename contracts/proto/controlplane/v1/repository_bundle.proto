@@ -39,6 +39,8 @@ message PrepareRepositoryBundlePublicationRequest {
   RepositoryBundleArtifactPin manifest = 6;
   string base_commit_sha = 7;
   string idempotency_key = 8;
+  int64 repository_id = 9;
+  string repository_full_name = 10;
 }
 
 enum RepositoryBundlePublicationState {
@@ -86,6 +88,8 @@ message RepositoryBundlePublication {
   string continuation_state = 27;
   string continuation_code = 28;
   string continuation_node_ref = 29;
+  int64 repository_id = 30;
+  string repository_full_name = 31;
 }
 
 message PrepareRepositoryBundlePublicationResponse {

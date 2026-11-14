@@ -2,13 +2,14 @@ package grpc
 
 import (
 	"context"
-	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"io"
 	"log/slog"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -981,6 +982,9 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		TestRef: mapString(item, "testRef"), ConnectionRef: mapString(item, "connectionRef"),
 		DefinitionKey: mapString(item, "definitionKey"), PublicConfiguration: structure(configuration), Lease: castLease(item),
 		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
+	}
+	if page, ok := item["githubDiscoveryPage"].(int); ok {
+		claim.GithubDiscoveryPage = int32(page)
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
 	keys, _ := item["personalReadProbeCapabilityKeys"].([]string)

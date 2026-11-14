@@ -97,6 +97,11 @@ func (adapter *Adapter) ReadConfigurationSource(ctx context.Context, work *cp.Ma
 	if ctx.Err() != nil {
 		return ConfigurationSourceResult{}, ctx.Err()
 	}
+	if definition.Spec.Adapter == "GITHUB" {
+		if err := adapter.requireNativeGitHubPermission(ctx, request, definition, configuration, work.GetRepositoryRef(), "github.repository.content.read"); err != nil {
+			return ConfigurationSourceResult{}, err
+		}
+	}
 	credential, err := adapter.readCredential(ctx, request.Credential)
 	if err != nil {
 		return ConfigurationSourceResult{}, sourceFailure(cp.ManagedConfigurationSourceFailure_MANAGED_CONFIGURATION_SOURCE_FAILURE_CREDENTIAL_REJECTED)
@@ -166,6 +171,10 @@ func (adapter *Adapter) validateConfigurationSource(work *cp.ManagedConfiguratio
 	operation := ""
 	switch definition.Spec.Adapter {
 	case "GITHUB":
+		configuration, err = nativeGitHubConfiguration(configuration, work.GetRepositoryRef())
+		if err != nil {
+			return invalid()
+		}
 		if work.GetRepositoryRef() != configuration["owner"]+"/"+configuration["repository"] {
 			return invalid()
 		}

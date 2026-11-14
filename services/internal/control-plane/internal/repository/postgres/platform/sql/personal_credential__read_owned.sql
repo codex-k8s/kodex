@@ -6,7 +6,7 @@ SELECT binding.ref, binding.organization_id::text, binding.subject_id::text,
        COALESCE(revision.content_sha256, ''), revision.created_at,
        COALESCE(verified.ref, ''), COALESCE(binding.verified_definition_digest, ''),
        COALESCE(binding.verified_configuration_digest, ''), binding.verified_capabilities,
-       binding.denied_capabilities, binding.observed_permission_profiles, binding.expires_at
+       binding.denied_capabilities, binding.observed_permission_profiles, binding.expires_at, binding.github_discovery
 FROM control_plane.integration_personal_credentials binding
 JOIN control_plane.integration_connections connection
   ON connection.id = binding.connection_id AND connection.organization_id = binding.organization_id

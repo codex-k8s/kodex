@@ -6,6 +6,7 @@ import {
   personalConnectionAllows,
   usePersonalConnections,
 } from "../personal-connections";
+import GitHubRepositoryScopeSelector from "./GitHubRepositoryScopeSelector.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 
 const { t } = useI18n();
@@ -128,6 +129,17 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
           }}
         </p>
       </template>
+      <GitHubRepositoryScopeSelector
+        v-if="
+          connection.definitionKey === 'github' &&
+          connection.policy === 'INITIATOR_REQUIRED' &&
+          connection.credential?.verifiedCapabilityKeys.includes(
+            'github.identity.read',
+          )
+        "
+        :connection="connection"
+        @changed="model.load()"
+      />
       <p class="muted">{{ t("personalConnections.permissionsHelp") }}</p>
       <p
         v-if="

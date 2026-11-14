@@ -102,6 +102,11 @@ func resolveWorkflowRepositoryFileTx(ctx context.Context, tx pgx.Tx, current sco
 // workflowPDLCProofScope проверяет immutable proof bytes и точный repository до разбора semantics.
 // Вызывающий отдельно разрешает producing lineage и хронологию чтений.
 func workflowPDLCProofScope(proof workflowIntegrationResult, repository string) bool {
+	var validScope bool
+	proof, validScope = workflowGitHubProof(proof)
+	if !validScope {
+		return false
+	}
 	_, valid := workflowResultObject(proof.Scope, []string{"owner", "repository"}, []string{"owner", "repository"})
 	var scope map[string]string
 	return valid && proof.LineageFailure == "" && json.Unmarshal(proof.Scope, &scope) == nil &&

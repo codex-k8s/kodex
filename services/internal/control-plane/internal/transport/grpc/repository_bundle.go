@@ -30,7 +30,7 @@ func castBundlePin(pin entity.RepositoryBundleArtifactPin) *cp.RepositoryBundleA
 func castRepositoryBundle(p entity.RepositoryBundlePublication) *cp.RepositoryBundlePublication {
 	r := &cp.RepositoryBundlePublication{Ref: p.Ref, Version: p.Version, ProjectRef: p.ProjectRef, OriginRunRef: p.OriginRunRef, OriginRuntimeRevisionRef: p.OriginRuntimeRevisionRef,
 		InvocationRef: p.InvocationRef, GateRef: p.GateRef, ConnectionRef: p.ConnectionRef, ConnectionVersion: p.ConnectionVersion, GrantRef: p.GrantRef, GrantVersion: p.GrantVersion,
-		RepositoryRef: p.RepositoryRef, BaseCommitSha: p.BaseCommitSHA, ProposalBranch: p.ProposalBranch, Archive: castBundlePin(p.Archive), Manifest: castBundlePin(p.Manifest), ApprovalDigest: p.ApprovalDigest,
+		RepositoryRef: p.RepositoryRef, RepositoryId: p.RepositoryID, RepositoryFullName: p.RepositoryFullName, BaseCommitSha: p.BaseCommitSHA, ProposalBranch: p.ProposalBranch, Archive: castBundlePin(p.Archive), Manifest: castBundlePin(p.Manifest), ApprovalDigest: p.ApprovalDigest,
 		FileCount: p.FileCount, TotalBytes: p.TotalBytes, State: cp.RepositoryBundlePublicationState(cp.RepositoryBundlePublicationState_value["REPOSITORY_BUNDLE_PUBLICATION_STATE_"+p.State]),
 		CandidateCommitSha: p.CandidateCommitSHA, CandidateTreeSha: p.CandidateTreeSHA, FailureCode: p.FailureCode, CreatedAt: timestamp(p.CreatedAt), ExpiresAt: timestamp(p.ExpiresAt),
 		ContinuationState: p.ContinuationState, ContinuationCode: p.ContinuationCode, ContinuationNodeRef: p.ContinuationNodeRef}
@@ -84,7 +84,7 @@ func (server *Server) PrepareRepositoryBundlePublication(ctx context.Context, r 
 	if err != nil {
 		return nil, err
 	}
-	result, err := server.service.PrepareRepositoryBundle(ctx, p, port.RepositoryBundlePrepare{LeaseRef: r.GetLeaseRef(), Fence: r.GetFence(), Generation: r.GetGeneration(), GrantRef: r.GetGrantRef(), BaseCommitSHA: r.GetBaseCommitSha(), IdempotencyKey: r.GetIdempotencyKey(), Archive: bundlePin(r.GetArchive()), Manifest: bundlePin(r.GetManifest())})
+	result, err := server.service.PrepareRepositoryBundle(ctx, p, port.RepositoryBundlePrepare{LeaseRef: r.GetLeaseRef(), Fence: r.GetFence(), Generation: r.GetGeneration(), GrantRef: r.GetGrantRef(), BaseCommitSHA: r.GetBaseCommitSha(), RepositoryID: r.GetRepositoryId(), RepositoryFullName: r.GetRepositoryFullName(), IdempotencyKey: r.GetIdempotencyKey(), Archive: bundlePin(r.GetArchive()), Manifest: bundlePin(r.GetManifest())})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -129,7 +129,12 @@ func (server *Server) ClaimRepositoryBundlePublications(ctx context.Context, r *
 		if err != nil {
 			return nil, transportError(errs.ErrUnavailable)
 		}
-		input, err := structpb.NewStruct(repositorybundle.InvocationInput(w.Proposal.Archive, w.Proposal.Manifest, w.Proposal.BaseCommitSHA))
+		boundedInput := repositorybundle.InvocationInput(w.Proposal.Archive, w.Proposal.Manifest, w.Proposal.BaseCommitSHA)
+		if w.ResourceKind == "GITHUB_SCOPE" {
+			boundedInput["repository_id"] = w.Proposal.RepositoryID
+			boundedInput["repository_full_name"] = w.Proposal.RepositoryFullName
+		}
+		input, err := structpb.NewStruct(boundedInput)
 		if err != nil {
 			return nil, transportError(errs.ErrUnavailable)
 		}
@@ -138,7 +143,8 @@ func (server *Server) ClaimRepositoryBundlePublications(ctx context.Context, r *
 			DefinitionKey: w.DefinitionKey, DefinitionVersion: w.DefinitionVersion, DefinitionDigest: w.DefinitionDigest, DefinitionPackage: w.DefinitionPackage,
 			CapabilityKey: repositorybundle.Operation, Operation: repositorybundle.Operation, Risk: cp.IntegrationRisk_INTEGRATION_RISK_WRITE, ApprovalPolicy: cp.IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_HUMAN_EACH_EFFECT,
 			PublicConfiguration: configuration, BoundedInput: input, CredentialRevision: castIntegrationCredential(w.Credential), EffectKey: w.EffectKey, InputDigest: w.InputDigest, WorkMode: mode,
-			ResourceScope: &cp.IntegrationResourceScope{Kind: integrationResourceKind("GITHUB_REPOSITORY"), Values: w.ResourceScope, Digest: w.ResourceScopeDigest}}
+			CredentialAdmissionRequired: w.PersonalCredential, ResourcePermissionProfile: castIntegrationResourcePermissionProfile(w.ResourcePermissionProfile),
+			ResourceScope: &cp.IntegrationResourceScope{Kind: integrationResourceKind(w.ResourceKind), Values: w.ResourceScope, Digest: w.ResourceScopeDigest}}
 		item := &cp.RepositoryBundlePublicationWork{Lease: castBundleLease(w.Lease), Proposal: castRepositoryBundle(w.Proposal), Invocation: invocation, Mode: mode, Manifest: w.Manifest, CommitTime: timestamp(w.CommitTime), Deadline: timestamp(w.Deadline)}
 		if w.EffectStartedAt != nil {
 			item.EffectStartedAt = timestamp(*w.EffectStartedAt)

@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.65
-updated: 2026-11-12
+version: 1.7.68
+updated: 2026-11-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -992,6 +992,16 @@ Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SS
 temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
 
 ## Наблюдение внешних возможностей с credential
+
+При расширении Git-области discovery хранит только координаты ресурса. ID,
+canonical name и успешный публичный GET не заменяют текущую принадлежность
+аутентифицированной области ключа. Каждый эффект повторяет её проверку;
+rename, ID mismatch и stale discovery закрываются. Specialized native workers
+используют ту же personal revision/root lineage, что обычный invocation, либо
+явную service identity для фоновой работы без интерактивного инициатора.
+Замена либо отзыв personal binding атомарно закрывают её pre-effect consumers;
+начатый эффект сохраняет прежний UNKNOWN/read-only reconciliation и не
+получает shared fallback. Классификация personal/service и discovery boundary выводится из проверенного adapter/resource contract, а не из названия версии; managed сужение сохраняет эти ограничения. Это не заменяет обязательные exact version/digest pins. Специализированный consumer выводит selectors из owner snapshot и проверяет фактическую pinned schema. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
 
 Список возможностей SDK, встроенный fallback и успешный локальный запуск не
 доказывают доступность provider для конкретной учётной записи. Наблюдение
@@ -2183,6 +2193,16 @@ UID/spec/resourceVersion/OCC, immutable опубликованные image/polic
 grants и внешних effects. Неизвестное состояние, неполное чтение или изменение
 pins закрыто останавливают обслуживание; history/receipts не удаляются для
 получения искусственного idle.
+
+Готовность нового writer после обслуживания подтверждается полным согласованным
+набором ordinary/init containers и их фактических CRI image IDs, а не только
+наличием ожидаемого основного контейнера. Фактические container specs совпадают
+с закреплённым Deployment template; дополнительные sidecars, изменённые
+commands/env, лишние либо дублированные statuses и ephemeral debug containers
+не дают доказательства готовности. Исключение из запрета старых claim sessions
+после запуска новой версии допустимо лишь при таком readback, положительной
+готовности всех owned Pods и durable resume intent именно этого компонента.
+Первый запуск и schema handoff требуют полного отсутствия прежних claims.
 
 Счётчик ожидающих публикаций образов отличает исторический snapshot от
 достижимой работы только по строгому read-only доказательству владельца.

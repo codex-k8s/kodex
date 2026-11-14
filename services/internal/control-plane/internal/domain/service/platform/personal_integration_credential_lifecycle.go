@@ -86,6 +86,7 @@ func personalIntegrationCredentialMutationAuthority(binding entity.PersonalInteg
 // clearPersonalIntegrationCredentialVerification удаляет только текущие наблюдения eligibility;
 // исторические test/effect records, Secret и сохранённый credential descriptor не удаляются.
 func clearPersonalIntegrationCredentialVerification(binding *entity.PersonalIntegrationCredential) {
+	binding.GitHubDiscovery = nil
 	binding.VerifiedCredentialRef = ""
 	binding.VerifiedDefinitionDigest = ""
 	binding.VerifiedConfigurationDigest = ""

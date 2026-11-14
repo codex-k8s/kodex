@@ -331,6 +331,15 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 		}
 	}
 	for _, capability := range definition.Spec.Capabilities {
+		if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+			if definition.Metadata.Key != "github" || definition.Spec.Adapter != string(AdapterGitHub) {
+				return errGitHubResourceScope
+			}
+			if _, err := capability.githubScopeValues(configuration); err != nil {
+				return err
+			}
+			break
+		}
 		if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
 			if definition.Metadata.Key != "gitlab" || definition.Spec.Adapter != string(AdapterGitLab) {
 				return errGitLabResourceScope
@@ -359,6 +368,9 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 // отсутствующее или пустое поле закрывает операцию, не расширяя её область.
 // ResourceScope строит exact scope только из проверенной connection configuration.
 func (capability Capability) ResourceScopeValues(configuration map[string]string) (map[string]string, error) {
+	if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+		return capability.githubScopeValues(configuration)
+	}
 	if capability.ResourceScope.Kind == "GITLAB_SCOPE" {
 		return capability.gitLabScopeValues(configuration)
 	}
@@ -701,7 +713,7 @@ func validate(result *Package) error {
 		len(result.Spec.Name) == 0 || len(result.Spec.Name) > 120 || len(result.Spec.Description) == 0 || len(result.Spec.Description) > 500 ||
 		!validKey(result.Spec.Category) || !validAdapter(result.Spec.Adapter) || ValidateAdapterBinding(*result) != nil ||
 		len(result.Spec.ConfigurationFields) > 24 || len(result.Spec.NetworkDestinations) == 0 || len(result.Spec.NetworkDestinations) > 16 ||
-		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 48 {
+		len(result.Spec.Capabilities) == 0 || len(result.Spec.Capabilities) > 64 {
 		return errors.New("integration package metadata or bounds are invalid")
 	}
 	if result.Spec.Credential != nil && (!validKey(result.Spec.Credential.SecretKey) || !oneOf(result.Spec.Credential.Kind, "TOKEN", "PASSWORD")) {

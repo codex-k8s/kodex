@@ -38,7 +38,7 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 		{"6.1.0", "057959121df2b88db45d9b0dba438a7ff39824992fcf1c13120a44162071c79f"},
 		{"6.2.0", "96809e1f78320bc5788eb0e39c672818d8b37d03efbf91f1f083936161eb7a13"},
 		{"6.3.0", "72833e586647539dc1b33bbefa80605c22c6847cc7689fe0a626e28d64c55af5"},
-		{current.Metadata.Version, current.Digest},
+		{"6.4.0", "bd6d504e4fc1d19d5c083f8585115c04ec75852b7879ad19ed54dc41cbe9a1da"},
 	} {
 		t.Run(historical.version, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -67,6 +67,10 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 				t.Fatal(err)
 			}
 			agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "historical-agent", "Historical operator")
+			currentGitHubComponent(t)(r)
+			if err := r.Bootstrap(ctx); err != nil {
+				t.Fatal("upgrade synthetic GitHub registry to current scoped contract", err)
+			}
 			if _, err := pool.Exec(ctx, queryIntegrationGitHubHistoricalFixture, connection.Connection.Ref, historical.version, historical.digest); err != nil {
 				t.Fatal("prepare exact historical package pins")
 			}
@@ -82,7 +86,11 @@ func TestIntegrationGitHubHistoricalAdmissionComponent(t *testing.T) {
 				var actual []map[string]any
 				expected := make([]map[string]any, 0, len(previous.Spec.Capabilities))
 				for _, capability := range previous.Spec.Capabilities {
-					expected = append(expected, map[string]any{"key": capability.Key, "name": capability.Name, "operation": capability.Operation, "risk": capability.Risk, "approvalPolicy": capability.ApprovalPolicy, "allowedApprovalPolicies": capability.AllowedApprovalPolicies, "resourceKind": capability.ResourceScope.Kind})
+					projection := map[string]any{"key": capability.Key, "name": capability.Name, "operation": capability.Operation, "risk": capability.Risk, "approvalPolicy": capability.ApprovalPolicy, "allowedApprovalPolicies": capability.AllowedApprovalPolicies, "resourceKind": capability.ResourceScope.Kind}
+					if capability.ApprovalScope != nil {
+						projection["approvalScope"] = capability.ApprovalScope
+					}
+					expected = append(expected, projection)
 				}
 				encodedExpected, _ := json.Marshal(expected)
 				var canonicalExpected []map[string]any

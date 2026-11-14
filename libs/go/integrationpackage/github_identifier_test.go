@@ -16,6 +16,7 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	definition := definitions["github"]
 	if definition.Metadata.Version != "6.4.0" {
 		t.Fatal("unexpected GitHub package version")
@@ -77,6 +78,7 @@ func TestGitHubReviewIdentifiersRemainClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	read, _ := definitions["github"].Capability("github.pull_request.review.read")
 	create, _ := definitions["github"].Capability("github.pull_request.review.create")
 	schema, err := read.InputSchema()

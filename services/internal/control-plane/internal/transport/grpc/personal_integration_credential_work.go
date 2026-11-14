@@ -3,8 +3,9 @@ package grpc
 import (
 	"context"
 	"errors"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -24,7 +25,7 @@ func (server *Server) TestPersonalIntegrationCredential(ctx context.Context, req
 		return nil, err
 	}
 	result, err := server.service.Execute(ctx, command.Command{Kind: command.TestPersonalIntegrationCredential, Principal: p, Mutation: mutation(request.GetMutation()),
-		Payload: command.PersonalIntegrationCredentialInput{ConnectionRef: request.GetConnectionRef(), ExpectedConnectionVersion: request.GetExpectedConnectionVersion()}})
+		Payload: command.PersonalIntegrationCredentialInput{ConnectionRef: request.GetConnectionRef(), ExpectedConnectionVersion: request.GetExpectedConnectionVersion(), GitHubDiscoveryPage: int(request.GetGithubDiscoveryPage())}})
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -115,8 +116,12 @@ func (server *Server) CompletePersonalIntegrationCredentialTest(ctx context.Cont
 		value := request.GetExpiresAt().AsTime()
 		expiry = &value
 	}
+	discovery, valid := parseGitHubDiscovery(request.GetGithubDiscovery())
+	if !valid {
+		return nil, status.Error(codes.InvalidArgument, "GitHub discovery result is invalid")
+	}
 	result, err := server.service.Execute(ctx, command.Command{Kind: command.CompletePersonalIntegrationCredentialTest, Principal: p, Mutation: mutation(request.GetMutation()), Payload: command.PersonalIntegrationCredentialTestCompletion{
-		TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Outcome: outcome, ConfirmedCapabilityKeys: append([]string(nil), request.GetConfirmedCapabilityKeys()...), DeniedCapabilityKeys: append([]string(nil), request.GetDeniedCapabilityKeys()...), ObservedPermissionProfiles: profiles, ExpiresAt: expiry}})
+		TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Outcome: outcome, ConfirmedCapabilityKeys: append([]string(nil), request.GetConfirmedCapabilityKeys()...), DeniedCapabilityKeys: append([]string(nil), request.GetDeniedCapabilityKeys()...), ObservedPermissionProfiles: profiles, ExpiresAt: expiry, GitHubDiscovery: discovery}})
 	if err != nil {
 		return nil, transportError(err)
 	}

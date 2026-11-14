@@ -174,7 +174,10 @@ func readWorkflowIntegrationResultTx(ctx context.Context, tx pgx.Tx, current sco
 	}
 	switch result.LineageFailure {
 	case "":
-		return result, "", nil
+		if normalized, valid := workflowGitHubProof(result); valid {
+			return normalized, "", nil
+		}
+		return workflowIntegrationResult{}, workflowReceiptScopeMismatch, nil
 	case workflowReceiptLineageInvalid, workflowReceiptLineageAmbiguous, workflowReceiptScopeMismatch:
 		return workflowIntegrationResult{}, result.LineageFailure, nil
 	default:
@@ -282,6 +285,11 @@ func workflowResultSubject(inputs []workflowResultDependency, key string) (entit
 // acceptWorkflowIntegrationResult проверяет operation-specific predicates по owner-read receipt
 // bytes; provider URL или narrative success не принимаются как PR/merge fact.
 func acceptWorkflowIntegrationResult(requirement entity.WorkflowResultRequirement, declaration entity.WorkflowDeclaredResult, proof workflowIntegrationResult, inputs []workflowResultDependency) (entity.WorkflowAcceptedResult, string) {
+	var validScope bool
+	proof, validScope = workflowGitHubProof(proof)
+	if !validScope {
+		return entity.WorkflowAcceptedResult{}, workflowReceiptScopeMismatch
+	}
 	var resource map[string]string
 	if json.Unmarshal(proof.Scope, &resource) != nil || resource["owner"]+"/"+resource["repository"] != requirement.Repository {
 		return entity.WorkflowAcceptedResult{}, workflowReceiptScopeMismatch

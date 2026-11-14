@@ -14,6 +14,7 @@ func TestGitHubPullRequestDraftInputIsOptionalAndClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	definitions["github"] = legacyPolicyPackage(t, "github", "6.4.0")
 	create, ok := definitions["github"].Capability("github.pull_request.create")
 	if !ok {
 		t.Fatal("pull request create capability is missing")
