@@ -115,6 +115,16 @@ turn Pods не удаляются: проверяется их полный term
 повторяются по одному отсутствующему ACK. После PASS выполняется отдельный
 `default-runner-transition.mjs`; он заново проверяет согласованность проекции.
 
+Stop/ready читают lineage по исходному UID Deployment. Замена объекта до bridge
+или между CAS и readback закрывает операцию без перепривязки inventory.
+Создание новой проекции связывает UID API-ответа с последующим GET; потерянный
+ответ по-прежнему требует reconciliation. Plan также dry-run проверяет оба
+остановленных состояния controller. PostgreSQL18 metadata сериализует database
+OID явно как `bigint`, а system identifier — как строку без потери точности;
+форма и совпадение identity внутри fence проверяются на настоящей БД.
+Проверена документация PostgreSQL18 через Context7:
+[JSON creation functions](https://www.postgresql.org/docs/18/functions-json.html).
+
 Закрытая схема `kodex.portable-runner-target/v1` содержит `context`, `clusterUID`,
 `namespaceUID`, `installationUID`, `installationSHA256` и `resources`.
 SHA256 закрепляет canonical JSON `data` существующего ConfigMap

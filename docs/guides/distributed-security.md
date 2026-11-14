@@ -83,6 +83,12 @@ join старого producer и согласованного возврата co
 Неизвестный исход stop/create требует readback прежнего журнала; новый render
 или state directory не заменяет доказательство завершения прежнего перехода.
 
+UID producer закрепляется по исходному inventory и передаётся во все stop/ready
+проверки; свежий GET не назначает заменённый Deployment новым владельцем старой
+lineage. Readback после CAS обязан сохранить UID preimage, а после create — UID
+ответа API. При несовпадении approved inventory не обновляется и следующие
+policy writes запрещены. Одинаковые имя, spec и Ready не доказывают continuity.
+
 Свежий профиль с несколькими репликами signed worker использует grant v2 с
 `metadata.uid` из Downward API. Общий v1 revision watermark не разделяет
 экземпляры: ротация одной реплики может отклонять действующий credential другой.

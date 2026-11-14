@@ -473,9 +473,14 @@ class State:
             if actual is not None:
                 return
         desired = api_write_resource(resource, actual)
+        write_uid = actual['metadata']['uid'] if actual is not None else None
         if actual is None:
             # Create, а не SSA upsert: появившийся после inventory объект не перезапишется.
-            self.call(['create', '--field-manager=kodex-install', '-f', '-'], desired)
+            acknowledged = json.loads(self.call(['create', '--field-manager=kodex-install', '-o', 'json', '-f', '-'], desired))
+            require(key(acknowledged) == key(resource) and owner(acknowledged) and
+                    isinstance(acknowledged['metadata'].get('uid'), str) and acknowledged['metadata']['uid'],
+                    'WRITE_ACK_IDENTITY_REQUIRED')
+            write_uid = acknowledged['metadata']['uid']
         elif supports_cas(desired, actual):
             self.cas_update(desired, actual)
         else:
@@ -483,6 +488,7 @@ class State:
             self.call(['apply', '--server-side', '--field-manager=kodex-install', '-f', '-'], desired)
         current = self.get(resource)
         require(current is not None and owner(current), 'WRITE_READBACK_REQUIRED')
+        require(current['metadata'].get('uid') == write_uid, 'WRITE_READBACK_UID_DRIFT')
         if resource['kind'] == 'ImageAdmissionPolicyParameters' or (actual is not None and (supports_cas(resource, actual) or (resource['apiVersion'], resource['kind']) == ('apps/v1', 'StatefulSet'))):
             verify_resource(resource, current)
         inventory[key(resource)] = {'uid': current['metadata']['uid'], 'seal': seal(current)}

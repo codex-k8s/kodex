@@ -248,7 +248,10 @@ def runtime_guard(state, previous, reconcile=False):
 def controller_stopped(state, deployment):
     """Общий Node readback проверяет UID/lineage и каждый контейнер старого producer."""
     current=state.get(deployment)
+    require(current is not None and deployment['metadata'].get('uid') and
+            current['metadata']['uid'] == deployment['metadata']['uid'], 'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
     require(current is not None and current['spec']['replicas'] == 0, 'PROVIDER_PROFILE_PRODUCER_STOP_REQUIRED')
+    verify_resource(deployment,current)
     return controller_serving_readback(state,current,'stopped')
 
 
@@ -275,7 +278,10 @@ def desired_observed(state, resources):
 
 
 def controller_ready(state, deployment):
-    current=state.get(deployment);verify_resource(deployment,current)
+    current=state.get(deployment)
+    require(current is not None and deployment['metadata'].get('uid') and
+            current['metadata']['uid'] == deployment['metadata']['uid'], 'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
+    verify_resource(deployment,current)
     status=current.get('status',{});desired=deployment['spec'].get('replicas',1)
     if not (current['metadata']['generation'] == status.get('observedGeneration') and
             all(status.get(name,0) == desired for name in ('updatedReplicas','readyReplicas','replicas','availableReplicas'))):return False
@@ -291,7 +297,7 @@ def postgres_command(state):
         'psql','-XqAt','--no-password','-h','/var/run/postgresql','-p','5432','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1']
 
 
-POSTGRES_IDENTITY_SQL = "SELECT json_build_object('system',system_identifier::text,'database',(SELECT oid FROM pg_database WHERE datname=current_database())) FROM pg_control_system();\n"
+POSTGRES_IDENTITY_SQL = "SELECT json_build_object('system',system_identifier::text,'database',(SELECT oid::bigint FROM pg_database WHERE datname=current_database())) FROM pg_control_system();\n"
 
 
 def postgres_binding(state):
@@ -361,10 +367,14 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
         for resource in touched:
             saved=prior.get('inventory',{}).get(key(resource));current=state.get(resource)
             if saved is not None:require(current is not None and current['metadata']['uid'] == saved['uid'],'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
+    controller_current=state.get(touched[-1])
+    require(controller_current is not None,'PROVIDER_PROFILE_PRODUCER_REQUIRED')
+    controller_uid=(prior['inventory'][key(touched[-1])]['uid'] if prior else controller_current['metadata']['uid'])
+    expected_controller=copy.deepcopy(touched[-1]);expected_controller['metadata']['uid']=controller_uid
     changed={key(touched[1]),key(touched[2])}
     unchanged=[r for r in previous if key(r) not in changed]
     verify_resource_set(state,unchanged,completion,schema_heads)
-    all_desired=desired_observed(state,touched) and ready_checker(state,touched[-1])
+    all_desired=desired_observed(state,touched) and ready_checker(state,expected_controller)
     if all_desired and not (prior and mode == 'apply' and resume and prior.get('phase') != 'PROVIDER_PROFILE_APPLIED'):
         result={'phase':'PROVIDER_PROFILE_ALREADY_OBSERVED','identity':identity,'effects_repeated':False}
         if prior:
@@ -376,6 +386,7 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
         return {'phase':'PROVIDER_PROFILE_NOT_READY_RECONCILIATION_REQUIRED','identity':identity,'effects_repeated':False}
     require(mode in ('plan','apply'),'PROVIDER_PROFILE_MODE_REJECTED')
     inventory=state.inventory(touched)
+    require(inventory[key(touched[-1])]['uid'] == controller_uid,'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
     if prior:
         require(resume and prior['phase'] != 'PROVIDER_PROFILE_APPLIED','EXPLICIT_PROVIDER_PROFILE_RESUME_REQUIRED')
         readback=directory/'readback.json'
@@ -403,7 +414,7 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
             before=next(r for r in previous if key(r) == key(resource))
             verify_resource(before,state.get(resource))
     runtime_guard(state,previous,reconcile)
-    for resource in touched:state.preflight_apply(resource)
+    for resource in touched+([stopped_before,stopped_after] if reconcile else []):state.preflight_apply(resource)
     if mode == 'plan':
         result={'phase':'PROVIDER_PROFILE_PLAN','identity':identity,'server_dry_run':'PASS','resources':[key(r) for r in touched],'maintenance_required':True}
         private_json(directory/'plan.json',{'identity':identity,'inventory':inventory})
@@ -427,6 +438,7 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
             sequence=touched
             if reconcile and not already_desired:
                 current=state.get(touched[-1])
+                require(current is not None and current['metadata']['uid'] == controller_uid,'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
                 stopped=copy.deepcopy(current);stopped.pop('status',None);stopped['spec']['replicas']=0
                 for field in ('uid','resourceVersion','generation','creationTimestamp','managedFields'):
                     stopped['metadata'].pop(field,None)
@@ -436,7 +448,8 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
                     record['effects'].append({'resource':key(stopped),'uid':inventory[key(stopped)]['uid'],'phase':'PRODUCER_STOP'})
                     record['inventory']=inventory;record['phase']='PROVIDER_PROFILE_STOP_OBSERVED';record.pop('writing',None);private_json(operation,record)
                 deadline=time.monotonic()+90
-                while not joined_checker(state,stopped):
+                expected_stopped=copy.deepcopy(stopped);expected_stopped['metadata']['uid']=controller_uid
+                while not joined_checker(state,expected_stopped):
                     fence.ping();require(time.monotonic()<deadline,'PROVIDER_PROFILE_PRODUCER_JOIN_TIMEOUT');time.sleep(1)
                 fence.ping();attempt['producer_join']='VERIFIED';private_json(operation,record)
                 sequence=[touched[0],touched[1],stopped_after,touched[-1]]
@@ -444,6 +457,8 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
                 fence.ping()
                 current=state.get(resource)
                 if current is not None:
+                    expected=inventory.get(key(resource))
+                    require(expected is not None and current['metadata']['uid'] == expected['uid'],'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
                     try:verify_resource(resource,current)
                     except Rejected:pass
                     else:continue
@@ -452,9 +467,13 @@ def execute(state, previous, desired, directory, mode, identity, completion=None
                 record['effects'].append({'resource':key(resource),'uid':inventory[key(resource)]['uid']})
                 record['inventory']=inventory;record['phase']='PROVIDER_PROFILE_WRITE_OBSERVED';record.pop('writing',None);private_json(operation,record)
             deadline=time.monotonic()+120
-            while not ready_checker(state,touched[-1]):
+            while not ready_checker(state,expected_controller):
                 fence.ping();require(time.monotonic() < deadline,'PROVIDER_PROFILE_ROLLOUT_TIMEOUT');time.sleep(1)
             fence.ping()
+            for resource in touched:
+                current=state.get(resource)
+                require(current is not None and current['metadata']['uid'] == inventory[key(resource)]['uid'],'PROVIDER_PROFILE_RESOURCE_UID_DRIFT')
+                verify_resource(resource,current)
             verify_resource(profile.source_policy(previous),state.get(profile.source_policy(previous)))
             verify_schemas(state,previous,schema_heads)
             fence.ping()

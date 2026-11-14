@@ -6,7 +6,7 @@ import time
 import unittest
 from unittest.mock import patch
 from deployment_profile import Rejected
-from provider_sandbox_transition import Fence
+from provider_sandbox_transition import Fence, POSTGRES_IDENTITY_SQL
 
 IMAGE='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
 
@@ -37,6 +37,18 @@ class Native(unittest.TestCase):
 
     def setUp(self):
         self.sql('TRUNCATE control_plane.runs, control_plane.run_nodes, control_plane.runtime_leases, control_plane.session_workspace_volume_attempts;')
+
+    def test_native_backend_identity_keeps_database_numeric_and_system_exact(self):
+        backend=json.loads(self.sql(POSTGRES_IDENTITY_SQL).stdout)
+        self.assertEqual(set(backend),{'system','database'})
+        self.assertIs(type(backend['system']),str)
+        self.assertRegex(backend['system'],r'^[1-9][0-9]{0,19}$')
+        self.assertIs(type(backend['database']),int)
+        self.assertGreater(backend['database'],0)
+        with Fence(self.command,reconcile=True) as fence:
+            with fence.io_lock:
+                fence.send(POSTGRES_IDENTITY_SQL)
+                self.assertEqual(json.loads(fence.line()),backend)
 
     def test_reconciliation_rejects_existing_volume_grant_and_blocks_new_grants(self):
         self.sql("INSERT INTO control_plane.session_workspace_volume_attempts VALUES ('ACTIVE');")

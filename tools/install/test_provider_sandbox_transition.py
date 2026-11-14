@@ -79,6 +79,7 @@ class FakeState(State):
             self.store(current);self.writes.append(key(current))
         else:raise AssertionError(args)
         if self.lost == self.writes[-1]:self.lost=None;raise Rejected('SYNTHETIC_LOST_ACK')
+        if args[0]=='create':return json.dumps(self.values[key(value)]).encode()
         return b'{}'
 
 
@@ -94,6 +95,38 @@ class FakeFence:
 
 
 class Tests(unittest.TestCase):
+    def test_controller_replacement_before_bridge_rejects_old_lineage_loss(self):
+        before,target=self.reconciliation();state=FakeState(before)
+        expected=state.get(before[1])
+        for mode in ('ready','stopped'):
+            with self.subTest(mode=mode):
+                expected['spec']['replicas']=0 if mode=='stopped' else 2
+                state.store(expected)
+                state.values[key(expected)]['metadata']['uid']='replacement'
+                with patch.object(delivery,'controller_serving_readback') as bridge:
+                    with self.assertRaisesRegex(Rejected,'PROVIDER_PROFILE_RESOURCE_UID_DRIFT'):
+                        getattr(delivery,'controller_'+mode)(state,expected)
+                    bridge.assert_not_called()
+
+    def test_controller_replacement_after_stop_ack_never_changes_binding(self):
+        before,target=self.reconciliation();state=FakeState(before)
+        original=state.call
+        def replace_after_write(args,value=None):
+            result=original(args,value)
+            if 'patch' in args and '--dry-run=server' not in args:
+                state.values[key(before[1])]['metadata']['uid']='replacement'
+            return result
+        state.call=replace_after_write
+        with tempfile.TemporaryDirectory() as directory:
+            self.execute(state,before,target,directory,'plan',reconcile=True)
+            with self.assertRaisesRegex(Rejected,'WRITE_READBACK_UID_DRIFT'):
+                self.execute(state,before,target,directory,reconcile=True)
+            self.assertEqual(state.writes,[key(before[1])])
+            self.assertEqual(state.get(before[2])['spec'],before[2]['spec'])
+            receipt=json.loads((Path(directory)/'operation.json').read_text())
+            self.assertEqual(receipt['phase'],'PROVIDER_PROFILE_RECONCILIATION_REQUIRED')
+            self.assertNotEqual(receipt['inventory'][key(before[1])]['uid'],'replacement')
+
     def test_explicit_kubeconfig_is_used_by_each_state_call_and_database_transport(self):
         with tempfile.TemporaryDirectory()as directory:
             kubeconfig=Path(directory)/'kubeconfig';kubeconfig.write_text('synthetic')
