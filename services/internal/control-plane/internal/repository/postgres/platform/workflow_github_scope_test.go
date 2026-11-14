@@ -2,8 +2,9 @@ package platform
 
 import (
 	"encoding/json"
-	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 	"testing"
+
+	workflowservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/workflow"
 )
 
 // TestWorkflowGitHubScopeReceiptProjection keeps personal scoped evidence parsers strict while rejecting repository substitution and missing immutable IDs.

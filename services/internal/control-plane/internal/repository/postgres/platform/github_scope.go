@@ -3,10 +3,11 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"time"
+
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/jackc/pgx/v5"
-	"time"
 )
 
 // queryPersonalGitHubSelectionProof checks finite owner-qualified discovery history on the same current credential and configuration pins.

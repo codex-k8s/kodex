@@ -128,7 +128,7 @@ func resolveGitHubScopedRepository(ctx context.Context, client *github.Client, r
 	if !valid || observed.ID != id || observed.FullName != name {
 		return nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
-	if capability.Risk != "READ" && (!observed.CanPush || observed.Archived) {
+	if !gitHubScopedOperationAccess(capability, observed) {
 		return nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	if request.PersonalCredentialAdmission && request.ResourcePermissionProfile != integrationpackage.CredentialResourcePermissionGitHubScopedV1 {
@@ -147,4 +147,27 @@ func resolveGitHubScopedRepository(ctx context.Context, client *github.Client, r
 		return nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	return selected, providerInput, nil
+}
+
+// gitHubScopedOperationAccess separates collaboration endpoints, whose author/triage permissions are enforced by their exact GitHub API, from code/branch/merge/actions endpoints requiring repository push. Unknown operations or mismatched risks never inherit a write profile.
+// gitHubScopedOperationAccess отделяет collaboration endpoints с author/triage проверкой точным GitHub API от code/branch/merge/actions, требующих repository push. Неизвестные операции либо неверные risk не наследуют write profile.
+func gitHubScopedOperationAccess(capability integrationpackage.Capability, repository githubScopedRepository) bool {
+	contract, known := integrationpackage.CredentialResourcePermissionContractForProfile("github", capability.Operation, integrationpackage.CredentialResourcePermissionGitHubScopedV1)
+	if !known || contract.Risk != capability.Risk || !repository.CanRead {
+		return false
+	}
+	if capability.Risk == "READ" {
+		return true
+	}
+	if repository.Archived {
+		return false
+	}
+	switch capability.Operation {
+	case "github.issue.create", "github.issue.update", "github.issue.comment.create", "github.issue.comment.update", "github.issue.comment.delete", "github.pull_request.create", "github.pull_request.update", "github.pull_request.review.create", "github.pull_request.comment.create", "github.pull_request.comment.update", "github.pull_request.ready":
+		return true
+	case "github.repository.bundle.publish", "github.repository.content.create", "github.repository.content.update", "github.repository.content.delete", "github.branch.create", "github.branch.delete", "github.pull_request.merge", "github.actions.workflow.dispatch", "github.actions.run.rerun", "github.actions.run.cancel":
+		return repository.CanPush
+	default:
+		return false
+	}
 }

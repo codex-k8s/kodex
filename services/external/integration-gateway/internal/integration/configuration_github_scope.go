@@ -3,8 +3,9 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"strings"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
 // nativeGitHubConfiguration derives private legacy handler coordinates only from the stored selected repository, without accepting caller credentials or changing the frozen work snapshot.

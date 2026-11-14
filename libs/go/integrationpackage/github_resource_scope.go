@@ -62,6 +62,20 @@ func ParseGitHubResourceScope(configuration map[string]string) (GitHubResourceSc
 			return GitHubResourceScope{}, errGitHubResourceScope
 		}
 		decoder := json.NewDecoder(bytes.NewBufferString(raw))
+		decoder.UseNumber()
+		if uniqueJSONValueWithKeyFold(decoder, 0, true, true) != nil || decoder.Decode(new(any)) != io.EOF {
+			return GitHubResourceScope{}, errGitHubResourceScope
+		}
+		var objects []map[string]json.RawMessage
+		if json.Unmarshal([]byte(raw), &objects) != nil {
+			return GitHubResourceScope{}, errGitHubResourceScope
+		}
+		for _, object := range objects {
+			if len(object) != 2 || object["id"] == nil || object["full_name"] == nil {
+				return GitHubResourceScope{}, errGitHubResourceScope
+			}
+		}
+		decoder = json.NewDecoder(bytes.NewBufferString(raw))
 		decoder.DisallowUnknownFields()
 		if decoder.Decode(&scope.Repositories) != nil || decoder.Decode(new(any)) != io.EOF || len(scope.Repositories) < 1 || len(scope.Repositories) > 100 {
 			return GitHubResourceScope{}, errGitHubResourceScope

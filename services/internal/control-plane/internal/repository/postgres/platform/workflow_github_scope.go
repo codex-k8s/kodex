@@ -2,8 +2,9 @@ package platform
 
 import (
 	"encoding/json"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"strings"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
 // workflowGitHubScopeInput resolves only the exact repository locator inside a sealed invocation scope and removes its transport fields for historical semantic parsers. Provider authority remains in the producing invocation and owner receipt.

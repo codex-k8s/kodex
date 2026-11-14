@@ -2,13 +2,14 @@ package grpc
 
 import (
 	"context"
-	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 	"io"
 	"log/slog"
 	"math"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/modelmeasurementwire"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"

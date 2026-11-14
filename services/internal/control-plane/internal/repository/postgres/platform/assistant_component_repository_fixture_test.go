@@ -2,9 +2,10 @@ package platform
 
 import (
 	"context"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"strings"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"

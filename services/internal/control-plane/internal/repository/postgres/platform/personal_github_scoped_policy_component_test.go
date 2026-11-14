@@ -3,6 +3,9 @@ package platform
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -12,8 +15,6 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"testing"
-	"time"
 )
 
 // TestPersonalGitHubScopedPolicyComponent proves each resource mode and selected policy through owner verification, launch, immutable personal pin, optional human gate, claim and one-time Begin; provider effects remain synthetic and unexecuted.

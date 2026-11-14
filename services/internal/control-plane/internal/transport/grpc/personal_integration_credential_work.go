@@ -3,8 +3,9 @@ package grpc
 import (
 	"context"
 	"errors"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"

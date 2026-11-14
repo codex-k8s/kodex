@@ -1,8 +1,9 @@
 package entity
 
 import (
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
 // PersonalIntegrationCredentialTestSpec is resolved from the published definition/configuration

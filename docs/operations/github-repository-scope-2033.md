@@ -35,7 +35,7 @@ updated: 2026-11-14
 Каждый resource input содержит `repository_id` и `repository_full_name`;
 эти поля являются адресом требуемого ресурса, а не источником authority.
 Gateway сверяет ID, canonical name, владельца, актуальное членство и read
-permission. Для записи дополнительно проверяются наблюдаемые push/archived;
+permission. Для записи применяется закрытая матрица классов операций и archived;
 сам endpoint провайдера остаётся обязательной границей точного права PAT.
 Успешный health/discovery не помещает WRITE в verified capabilities.
 
@@ -76,6 +76,10 @@ Shared-режим нового пакета требует явно указан
 Фоновые source/writeback не получают личный PAT пользователя, настроившего
 расписание. Эти операции не имеют интерактивного инициатора и используют
 отдельную разрешённую service identity по #2033.
+
+Пакет исходников `github.repository.bundle.publish` сохраняет прежний protected contract: только HUMAN_EACH_EFFECT с exact server-derived proposal/branch/manifest и отдельным Gate. Обычные branch/PR/comment/review WRITE допускают scoped consent по опубликованной матрице; это не распространяется на bundle либо merge. READ не создаёт Gate.
+
+Проверка GitHub прав разделена по операциям. Code/content/branch/bundle/merge/actions требуют текущего repository push; issue/comment/review/PR collaboration используют текущую authenticated membership и окончательную проверку author/triage permissions точным provider endpoint. Наблюдаемый CanPush не объявляется универсальным правом записи. Архивный репозиторий закрыт для новых WRITE.
 
 ## Ручная проверка
 

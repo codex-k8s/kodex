@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"

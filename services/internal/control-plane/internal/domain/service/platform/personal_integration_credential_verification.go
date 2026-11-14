@@ -2,9 +2,10 @@ package platform
 
 import (
 	"encoding/json"
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"math"
 	"strings"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"

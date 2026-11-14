@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/pressly/goose/v3"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pressly/goose/v3"
 )
 
 // TestGitHubRepositoryScopeUpgrade applies the exact predecessor and forward-only GitHub scope migration in an isolated database, surfacing native schema failures without contacting GitHub.

@@ -1,9 +1,10 @@
 package platform
 
 import (
+	"testing"
+
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
-	"testing"
 )
 
 // TestPersonalGitHubDiscoveryIsFencedAndCleared proves an exact requested page is immutable, cannot inflate write authority, and disappears on revoke or rotation.

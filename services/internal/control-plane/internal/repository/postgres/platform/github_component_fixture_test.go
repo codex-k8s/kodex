@@ -1,8 +1,9 @@
 package platform
 
 import (
-	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
 // pinHistoricalGitHubComponent preserves the preexisting shared owner/repository fixture contract under its exact frozen6.4 version/digest. It never changes production defaults or introduces a second runtime implementation.

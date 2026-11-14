@@ -99,3 +99,13 @@ func TestNativeGitHubScopePreservesCanonicalCase(t *testing.T) {
 		t.Fatal("native name normalization widened invocation selector authority", err)
 	}
 }
+
+// TestGitHubScopeRejectsAmbiguousNestedJSON refuses duplicate or case-aliased selection keys before typed decoding can apply a last-value rule.
+// TestGitHubScopeRejectsAmbiguousNestedJSON отклоняет повторные либо case-aliased ключи выбора до last-value правила typed decode.
+func TestGitHubScopeRejectsAmbiguousNestedJSON(t *testing.T) {
+	for _, raw := range []string{`[{"id":1,"id":2,"full_name":"owner/repo"}]`, `[{"id":1,"full_name":"owner/repo","full_name":"other/repo"}]`, `[{"id":1,"ID":2,"full_name":"owner/repo"}]`, `[{"ID":1,"full_name":"owner/repo"}]`, `[{"id":1,"Full_Name":"owner/repo"}]`} {
+		if _, err := ParseGitHubResourceScope(map[string]string{"scope_kind": "SELECTED", "repositories": raw}); err == nil {
+			t.Fatal("ambiguous nested repository JSON was accepted")
+		}
+	}
+}
