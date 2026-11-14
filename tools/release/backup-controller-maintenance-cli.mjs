@@ -128,9 +128,10 @@ export async function readBackupCleanupTerminal({kube,closed,migration,events,in
 
 async function main(args){
  const phase=args.shift(),options={};
- while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence'].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
+ while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha'].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
  ensure(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
+ ensure(!options['--stopped-source-sha']||phase==='plan'&&options['--action']==='resume'&&/^[a-f0-9]{40}$/.test(options['--stopped-source-sha']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  const env=Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]));
  const run=(cmd,argv,input,timeout=35000)=>{try{return execFileSync(cmd,argv,{cwd:root,env,input,encoding:'utf8',timeout,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch{throw Error('BACKUP_MAINTENANCE_OPERATION_FAILED_OR_UNKNOWN');}};
  const kube=(argv,input)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input);
@@ -152,7 +153,9 @@ async function main(args){
   const configuration=backupMigrationProfile(closed?closed.plan.migrationProfile:options['--migration-profile']);
   ensure(!options['--migration-profile']||options['--migration-profile']===configuration.profile,'BACKUP_MAINTENANCE_PROFILE_CHANGED');
   const target=await readPrivateJSON(resolve(options['--target']));
-  const plan={...planBackupControllerMaintenance(deployment,target,{...observed,resources:resources()},sourceSHA,options['--action'],closed,readBackupProducerInventory(kube)),...await ownerPins(configuration),planPath:resolve(options['--plan']),evidencePath:resolve(options['--evidence'])};
+  const plan={...planBackupControllerMaintenance(deployment,target,{...observed,resources:resources()},sourceSHA,options['--action'],closed,readBackupProducerInventory(kube),options['--stopped-source-sha']),...await ownerPins(configuration),planPath:resolve(options['--plan']),evidencePath:resolve(options['--evidence'])};
+  // Исправленный executor не переопределяет прежний migration source или owner SQL.
+  if(plan.executorSHA)ensure(same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256),'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
   if(closed){ensure(same(plan.postgres,closed.plan.postgres)&&same(plan.postgresBackend,closed.plan.postgresBackend),'BACKUP_MAINTENANCE_DATABASE_CHANGED');}
   if(closed){ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');plan.resumeReferences=Object.fromEntries(['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence'].map(key=>[key,resolve(options[key])]));}
   createPrivatePrettyJSONSync(resolve(options['--plan']),plan);console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
@@ -163,7 +166,7 @@ async function main(args){
  ensure(!options['--migration-profile']||options['--migration-profile']===configuration.profile,'BACKUP_MAINTENANCE_PROFILE_CHANGED');
  ensure(plan.planPath===resolve(options['--plan'])&&plan.evidencePath===resolve(options['--evidence']),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');
  if(plan.action==='resume'){for(const key of ['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence']){const path=plan.resumeReferences?.[key];ensure(path?.startsWith('/')&&(!options[key]||resolve(options[key])===path),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');options[key]=path;}}
- ensure(plan.sourceSHA===sourceSHA&&portableRunnerTarget(plan.target,observed).allows(deployment)&&same(plan.postgres,observed.postgres),'BACKUP_MAINTENANCE_TARGET_CHANGED');
+ ensure((plan.executorSHA??plan.sourceSHA)===sourceSHA&&portableRunnerTarget(plan.target,observed).allows(deployment)&&same(plan.postgres,observed.postgres),'BACKUP_MAINTENANCE_TARGET_CHANGED');
  ensure(phase==='apply'?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha'],'BACKUP_MAINTENANCE_EXACT_PLAN_REQUIRED');
  let stopJournal,migrationJournal,journal;
  try{
@@ -181,6 +184,7 @@ async function main(args){
    ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');
    const migration=await readPrivateJSON(resolve(options['--migration-plan']));
    verifyBackupMigrationScope(migration,closed);
+   ensure(plan.sourceSHA===closed.plan.sourceSHA&&same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256),'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
    const migrationHeader={version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256:fingerprint(migration)};
    requireOpenBackupBoundary(stopJournal.events,fingerprint(migration),fingerprint(plan));
    migrationJournal??=privateJournal(options['--migration-evidence'],migrationHeader);
