@@ -76,7 +76,7 @@ export function sameCatalogAuthorityBaseline(before,after){
 export function readCatalogAuthorityBaseline({plan,events,expected,now=Date.now},kube,io={}){
  const original=validateCatalogAuthorityEvidence(plan,events);
  ensure(plan.action==='rotate'&&original.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
-  events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART')&&events.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus==='RETIRED'),
+  events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART'),
   'CATALOG_BASELINE_ROTATION_RECEIPT_REQUIRED');
  ensure((io.inspectSource??inspectSource)(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
  const get=(kind,name)=>JSON.parse(kube(['-n','kodex-system','get',kind,name,'-o','json']));

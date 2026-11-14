@@ -82,6 +82,15 @@ test('baseline rejects unknown owner fields, wrong operation/snapshot, stale and
  }
 });
 
+test('timeout watcher RUNNING remains immutable while fresh owner RETIRED completes baseline proof',()=>{
+ const f=baselineFixture();
+ f.events.at(-1).status='RUNNING';delete f.events.at(-1).rotationStatus;
+ const before=JSON.stringify(f.events),proof=f.read();
+ assert.equal(proof.operationID,f.plan.ownerOperationID);assert.equal(JSON.stringify(f.events),before);
+ f.owner.status='WAITING_RETIRE';f.owner.operationStatus='WAITING_RETIRE';
+ assert.throws(()=>f.read(),/OWNER_REJECTED/);assert.equal(JSON.stringify(f.events),before);
+});
+
 test('baseline binds actual PostgreSQL Pod/STS, local backend and complete selected container spec',()=>{
  for(const mutate of [f=>f.pg.metadata.ownerReferences[0].uid=uid(99),f=>f.set.metadata.uid=uid(99),
   f=>f.pg.spec.ephemeralContainers=[{name:'debug'}],f=>f.pg.spec.containers[0].command=['foreign'],
