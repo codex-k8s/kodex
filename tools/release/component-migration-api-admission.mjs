@@ -23,7 +23,7 @@ const commonTarget=target=>Object.fromEntries(Object.entries(target??{}).filter(
 export function migrationAPIRestorationExecutor(migration,explicitSourceSHA){
  ensure(isRoutineMigrationAPIRestoreProfile(migration.profile)&&/^[a-f0-9]{40}$/.test(explicitSourceSHA??'')&&
   explicitSourceSHA===migration.source?.revision,'COMPONENT_MIGRATION_API_SOURCE_REQUIRED');
- const root=fileURLToPath(new URL('../../',import.meta.url));
+ const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
  const executor=inspectSource(root);
  try{execFileSync('git',sourceGitArguments(root,'merge-base','--is-ancestor',explicitSourceSHA,executor.revision),
   {encoding:'utf8',timeout:10000,maxBuffer:65536,stdio:['ignore','pipe','pipe']});}
