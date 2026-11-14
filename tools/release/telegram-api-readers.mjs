@@ -1,3 +1,4 @@
+import {readTelegramPortRepair,telegramPortRepairCodes} from './telegram-port-repair.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {requireAuthorityAPIScope} from './authority-api-scope.mjs';
 import {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
@@ -63,7 +64,7 @@ export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvent
 
 // Только приватные canonical inputs и свежие GET. Запуск/patch API остаётся
 // отдельным штатным maintenance protocol; данный consumer не выдаёт effects.
-export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvidencePath,restorePlanPath,restoreEvidencePath},kube){
+export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvidencePath,restorePlanPath,restoreEvidencePath,repairPlanPath},kube){
  const openPlan=readAuthorityPrivateJSON(openPlanPath),readEvents=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
  const maintenance=authority.maintenance;
  fail(maintenance?.trafficPlanPath&&maintenance.trafficEvidencePath,'TELEGRAM_API_READERS_ISOLATION_REQUIRED');
@@ -75,6 +76,8 @@ export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvi
   slices:parseAuthorityPrivateJSON(kube(['-n',namespace,'get','endpointslices','-l',`kubernetes.io/service-name=${name}`,'-o','json'])),
   pods:parseAuthorityPrivateJSON(kube(['-n',namespace,'get','pods','-l',`kodex.dev/component-traffic-isolation=${trafficPlan.maintenanceID}`,'-o','json']))};
  fail(!restorePlanPath&&!restoreEvidencePath||restorePlanPath&&restoreEvidencePath,'TELEGRAM_API_RESTORE_JOURNAL_REQUIRED');
+ const repair=repairPlanPath?readTelegramPortRepair(repairPlanPath,{migration}):undefined;
  const restored=restorePlanPath?{plan:readAuthorityPrivateJSON(restorePlanPath),events:readEvents(restoreEvidencePath)}:undefined;
+ fail(!restored||restored.plan.sourceCompatibility?.telegramPortRepair?.planSHA256===repair?.sha256,telegramPortRepairCodes.pinRequired);
  return verifyTelegramAPIReaders({migration,authority,openPlan,openEvents:readEvents(openEvidencePath),closed,traffic,deployment,resources,restored});
 }

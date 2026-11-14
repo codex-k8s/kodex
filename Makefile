@@ -666,11 +666,11 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
-	@timeout 180s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+	@timeout 360s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
 
 # Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
 test-telegram-authority-delivery:
-	@timeout 180s node --test tools/release/authority-rotation-transition.test.mjs tools/release/authority-api-scope.test.mjs tools/release/telegram-executor-source.test.mjs tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs tools/release/telegram-api-readers.test.mjs tools/release/telegram-cp-policy.test.mjs tools/release/telegram-runtime-inputs.test.mjs tools/release/telegram-introduction-inventory.test.mjs
+	@timeout 180s node --test tools/release/kubernetes-port-names.test.mjs tools/release/telegram-port-repair.test.mjs tools/release/authority-rotation-transition.test.mjs tools/release/authority-api-scope.test.mjs tools/release/telegram-executor-source.test.mjs tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs tools/release/telegram-api-readers.test.mjs tools/release/telegram-cp-policy.test.mjs tools/release/telegram-runtime-inputs.test.mjs tools/release/telegram-introduction-inventory.test.mjs
 
 .PHONY: test-telegram-notifications-upgrade-postgres test-telegram-notifications-backup-upgrade-postgres
 test-telegram-notifications-upgrade-postgres: check-go-toolchain
@@ -686,6 +686,16 @@ test-telegram-deployment:
 .PHONY: test-telegram-frozen-delivery
 test-telegram-frozen-delivery:
 	@timeout 900s node --test --test-name-pattern='^real CLI046/107 frozen:' tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-port-repair-backup
+test-telegram-port-repair-backup:
+	@timeout 60s node --test tools/release/telegram-backup-inventory.test.mjs
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107 backup-port-repair:' tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-port-repair
+test-telegram-port-repair:
+	@timeout 90s node --test tools/release/kubernetes-port-names.test.mjs tools/release/telegram-port-repair.test.mjs
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107 (port-repair|invalid-port):' tools/release/telegram-deployment.cli.test.mjs
 
 .PHONY: test-telegram-native-egress
 test-telegram-native-egress: check-go-toolchain

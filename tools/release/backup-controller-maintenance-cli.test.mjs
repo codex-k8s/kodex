@@ -17,7 +17,7 @@ import {githubRepositoryScopeCatalog} from './github-repository-scope-catalog.ge
 import {sentryObservabilityCatalog} from './sentry-observability-catalog.gen.mjs';
 import {backupMigrationProfile} from './backup-migration-registry.mjs';
 import {backupMaintenanceFixture,backupMaintenanceKube} from './fixtures/backup-controller-maintenance-synthetic.mjs';
-import {backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance} from './backup-controller-maintenance-cli.mjs';
+import {backupMigrationInspectReferences,backupMigrationInspectArguments,backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance} from './backup-controller-maintenance-cli.mjs';
 
 const cli=fileURLToPath(new URL('./backup-controller-maintenance-cli.mjs',import.meta.url));
 const hash=raw=>createHash('sha256').update(raw).digest('hex');
@@ -282,4 +282,50 @@ test('real CLI rejects ReplicationController awaiting its first Pod by exact tem
   assert.notEqual(planned.status,0,'existing RC was omitted from plan discovery');
   assert.match(planned.stderr,/BACKUP_MAINTENANCE_OTHER_PRODUCER_PRESENT/);
  }
+});
+
+// Самый поздний consumer107 обязан не потерять exact receipts своего resume plan.
+const telegramFinalFlags=['--cp-projection-plan','--cp-projection-evidence','--authority-plan','--authority-evidence',
+ '--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--api-restore-plan','--api-restore-evidence'];
+
+test('backup107 child inspect получает закрытый полный набор receipts; иные profiles/argv отказаны',()=>{
+ const references=Object.fromEntries(telegramFinalFlags.map((key,index)=>[key,`/private/synthetic-${index}.json`]));
+ references['--telegram-port-repair-plan']='/private/port-repair.json';
+ const args=backupMigrationInspectArguments({profile:'telegram-notifications-backup',context:'synthetic',kubeconfig:'/private/kubeconfig',
+  migrationPlanPath:'/private/migration.json',migrationEvidencePath:'/private/migration.jsonl',references});
+ assert.equal(args[1],'inspect');
+ for(const [key,path] of Object.entries(references))assert.equal(args[args.indexOf(key)+1],path);
+ assert.equal(args.filter(value=>value==='--profile').length,1);
+ assert.deepEqual(backupMigrationInspectReferences('github-repository-scope-backup'),{});
+ for(const profile of ['github-repository-scope-backup','sentry-observability-backup','telegram-notifications'])
+  assert.throws(()=>backupMigrationInspectReferences(profile,references),/INSPECT_INPUT_INVALID/);
+ for(const mutate of [r=>delete r['--api-restore-plan'],r=>r['--source']='/foreign',r=>r['--context']='foreign',
+  r=>r['--authority-plan']='relative.json',r=>r['--authority-plan']='/private/../foreign',r=>r['--authority-plan']='/private/line\nsecret']){
+  const changed={...references};mutate(changed);assert.throws(()=>backupMigrationInspectReferences('telegram-notifications-backup',changed),/INSPECT_INPUT_INVALID/);
+ }
+});
+
+test('real CLI backup107 resume закрепляет receipts и отвергает смену refs до effect/lock',t=>{
+ const f=setup(t,'telegram-notifications-backup');let result=f.prepare();assert.equal(result.status,0,result.stderr);
+ result=f.apply();assert.equal(result.status,0,result.stderr);
+ const resumePath=join(f.directory,'resume.json'),resumeEvidence=join(f.directory,'resume.jsonl');
+ const refs=Object.fromEntries([...telegramFinalFlags,'--telegram-port-repair-plan'].map((key,index)=>[key,join(f.directory,`proof-${index}.json`)]));
+ const base=['--context',f.f.target.context,'--kubeconfig','/synthetic/explicit config','--plan',resumePath,
+  '--stopped-plan',join(f.directory,'plan.json'),'--stopped-evidence',join(f.directory,'evidence.jsonl'),
+  '--migration-plan',join(f.directory,'migration.json'),'--migration-evidence',join(f.directory,'migration.jsonl')];
+ const run=(phase,extra)=>spawnSync(process.execPath,[cli,phase,...base,...extra],{encoding:'utf8',timeout:20000,
+  env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
+ const planning=['--action','resume','--target',join(f.directory,'target.json'),'--evidence',resumeEvidence];
+ result=run('plan',[...planning,...Object.entries(refs).filter(([key])=>key!=='--api-restore-plan').flat()]);
+ assert.notEqual(result.status,0);assert.match(result.stderr,/INSPECT_INPUT_INVALID/);assert.equal(existsSync(resumePath),false);
+ result=run('plan',[...planning,...Object.entries(refs).flat()]);assert.equal(result.status,0,result.stderr);
+ const resume=JSON.parse(readFileSync(resumePath));assert.deepEqual(resume.migrationInspectReferences,refs);
+ const before=f.read().effects;
+ result=run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(resume),'--telegram-port-repair-plan',join(f.directory,'foreign.json')]);
+ assert.notEqual(result.status,0);assert.match(result.stderr,/INSPECT_INPUT_CHANGED/);assert.equal(f.read().effects,before);
+ for(const path of [resumeEvidence,join(f.directory,'evidence.jsonl'),join(f.directory,'migration.jsonl')])assert.equal(existsSync(path+'.lock'),false);
+ const stopAttempt=setup(t,'telegram-notifications-backup');
+ result=stopAttempt.run('plan',['--action','stop','--target',join(stopAttempt.directory,'target.json'),'--evidence',join(stopAttempt.directory,'evidence.jsonl'),
+  '--migration-profile','telegram-notifications-backup',...Object.entries(refs).flat()]);
+ assert.notEqual(result.status,0);assert.match(result.stderr,/INSPECT_INPUT_INVALID/);assert.equal(stopAttempt.read().effects,0);
 });

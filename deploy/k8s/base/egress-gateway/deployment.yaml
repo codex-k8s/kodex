@@ -66,7 +66,7 @@ spec:
           ports:
             - {name: connect, containerPort: 8080, protocol: TCP}
             - {name: stt-connect, containerPort: 8081, protocol: TCP}
-            - {name: telegram-connect, containerPort: 8086, protocol: TCP}
+            - {name: tg-connect, containerPort: 8086, protocol: TCP}
             - {name: mail-connect, containerPort: 8082, protocol: TCP}
             - {name: openapi-connect, containerPort: 8083, protocol: TCP}
             - {name: runtime-connect, containerPort: 8084, protocol: TCP}

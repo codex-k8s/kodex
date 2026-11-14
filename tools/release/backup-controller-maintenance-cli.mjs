@@ -21,6 +21,31 @@ const ensure=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
 const digest=raw=>createHash('sha256').update(raw).digest('hex');
 const sharedTarget=target=>Object.fromEntries(Object.entries(target).filter(([key])=>key!=='resources'));
+const telegramInspectFlags=Object.freeze(['--cp-projection-plan','--cp-projection-evidence','--authority-plan','--authority-evidence',
+ '--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--api-restore-plan','--api-restore-evidence']);
+const telegramRepairFlag='--telegram-port-repair-plan';
+const telegramInspectTimeoutMs=300000;
+
+// Только полный набор final107 receipts. Scope и owner proof проверяет сам
+// migration inspect; backup consumer не заменяет его сохранённым ready boolean.
+export function backupMigrationInspectReferences(profile,references={}){
+ ensure(references&&typeof references==='object'&&!Array.isArray(references),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+ const keys=Object.keys(references);
+ if(!keys.length)return {};
+ ensure(profile==='telegram-notifications-backup'&&keys.every(key=>telegramInspectFlags.includes(key)||key===telegramRepairFlag)&&
+  telegramInspectFlags.every(key=>Object.hasOwn(references,key))&&keys.every(key=>typeof references[key]==='string'&&
+   references[key].startsWith('/')&&references[key]===resolve(references[key])&&!/[\r\n\0]/.test(references[key])),
+  'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+ return Object.fromEntries([...telegramInspectFlags,...(Object.hasOwn(references,telegramRepairFlag)?[telegramRepairFlag]:[])].map(key=>[key,references[key]]));
+}
+
+// Последний consumer передаёт immutable ссылки тому же закрытому CLI. Никакие
+// произвольные argv, source override либо иной profile через plan не разрешаются.
+export function backupMigrationInspectArguments({profile,context,kubeconfig,migrationPlanPath,migrationEvidencePath,references}){
+ const pinned=backupMigrationInspectReferences(profile,references);
+ return [new URL('./control-plane-migration.mjs',import.meta.url).pathname,'inspect','--profile',profile,'--context',context,
+  '--kubeconfig',kubeconfig,'--plan',migrationPlanPath,'--evidence',migrationEvidencePath,...Object.entries(pinned).flat()];
+}
 
 // PostgreSQL identity не читает env, DSN либо credential values. Точный Pod и
 // его StatefulSet owner дополняют Unix socket/backend proof общего adapter.
@@ -128,10 +153,11 @@ export async function readBackupCleanupTerminal({kube,closed,migration,events,in
 
 async function main(args){
  const phase=args.shift(),options={};
- while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha'].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
+ while(args.length){const key=args.shift();ensure(['--action','--migration-profile','--context','--kubeconfig','--target','--plan','--evidence','--approved-plan-sha','--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence','--stopped-source-sha',...telegramInspectFlags,telegramRepairFlag].includes(key)&&!Object.hasOwn(options,key)&&args.length,'BACKUP_MAINTENANCE_ARGUMENT_INVALID');options[key]=args.shift();}
  ensure(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  ensure(!options['--stopped-source-sha']||phase==='plan'&&options['--action']==='resume'&&/^[a-f0-9]{40}$/.test(options['--stopped-source-sha']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
+ const suppliedInspect=Object.fromEntries([...telegramInspectFlags,telegramRepairFlag].filter(key=>Object.hasOwn(options,key)).map(key=>{ensure(typeof options[key]==='string'&&options[key].length>0&&!/[\r\n\0]/.test(options[key]),'BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');return [key,resolve(options[key])];}));
  const env=Object.fromEntries(['HOME','PATH','LANG'].filter(key=>process.env[key]).map(key=>[key,process.env[key]]));
  const run=(cmd,argv,input,timeout=35000)=>{try{return execFileSync(cmd,argv,{cwd:root,env,input,encoding:'utf8',timeout,maxBuffer:4<<20,stdio:['pipe','pipe','pipe']});}catch{throw Error('BACKUP_MAINTENANCE_OPERATION_FAILED_OR_UNKNOWN');}};
  const kube=(argv,input)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input);
@@ -158,11 +184,18 @@ async function main(args){
   if(plan.executorSHA)ensure(same(plan.ownerSQLSHA256,closed.plan.ownerSQLSHA256),'BACKUP_MAINTENANCE_OWNER_SOURCE_CHANGED');
   if(closed){ensure(same(plan.postgres,closed.plan.postgres)&&same(plan.postgresBackend,closed.plan.postgresBackend),'BACKUP_MAINTENANCE_DATABASE_CHANGED');}
   if(closed){ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');plan.resumeReferences=Object.fromEntries(['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence'].map(key=>[key,resolve(options[key])]));}
+  if(Object.keys(suppliedInspect).length){
+   ensure(plan.action==='resume','BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+   plan.migrationInspectReferences=backupMigrationInspectReferences(configuration.profile,suppliedInspect);
+  }
   createPrivatePrettyJSONSync(resolve(options['--plan']),plan);console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
  }
  ensure(options['--evidence']&&!options['--action']&&!options['--target'],'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  const plan=await readPrivateJSON(resolve(options['--plan']));
  const configuration=backupMigrationProfile(plan.migrationProfile);
+ const inspectReferences=backupMigrationInspectReferences(configuration.profile,plan.migrationInspectReferences);
+ ensure(!Object.keys(inspectReferences).length||plan.action==='resume','BACKUP_MAINTENANCE_INSPECT_INPUT_INVALID');
+ ensure(Object.entries(suppliedInspect).every(([key,value])=>inspectReferences[key]===value),'BACKUP_MAINTENANCE_INSPECT_INPUT_CHANGED');
  ensure(!options['--migration-profile']||options['--migration-profile']===configuration.profile,'BACKUP_MAINTENANCE_PROFILE_CHANGED');
  ensure(plan.planPath===resolve(options['--plan'])&&plan.evidencePath===resolve(options['--evidence']),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');
  if(plan.action==='resume'){for(const key of ['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence']){const path=plan.resumeReferences?.[key];ensure(path?.startsWith('/')&&(!options[key]||resolve(options[key])===path),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');options[key]=path;}}
@@ -191,10 +224,10 @@ async function main(args){
    const events=migrationJournal.events;
    ensure(events.filter(event=>event.type==='BACKUP_RESUME_INTENT').every(event=>event.backupResumePlanSHA256===fingerprint(plan)),
     'BACKUP_MAINTENANCE_MIGRATION_ALREADY_CLOSED');
-   const inspectArgs=[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'inspect','--profile',configuration.profile,
-    '--context',options['--context'],'--kubeconfig',options['--kubeconfig'],'--plan',resolve(options['--migration-plan']),'--evidence',resolve(options['--migration-evidence'])];
+   const inspectArgs=backupMigrationInspectArguments({profile:configuration.profile,context:options['--context'],kubeconfig:options['--kubeconfig'],
+    migrationPlanPath:resolve(options['--migration-plan']),migrationEvidencePath:resolve(options['--migration-evidence']),references:inspectReferences});
    let result;
-   try { result=JSON.parse(execFileSync(process.execPath,inspectArgs,{cwd:root,env,encoding:'utf8',timeout:120000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']})); }
+   try { result=JSON.parse(execFileSync(process.execPath,inspectArgs,{cwd:root,env,encoding:'utf8',timeout:configuration.profile==='telegram-notifications-backup'?telegramInspectTimeoutMs:120000,maxBuffer:4<<20,stdio:['ignore','pipe','pipe']})); }
    catch(error){
     try { ensure(error.status===1,'BACKUP_MAINTENANCE_INSPECT_UNKNOWN');result=JSON.parse(String(error.stdout??''));ensure(result.status==='FAIL','BACKUP_MAINTENANCE_INSPECT_UNKNOWN'); }
     catch{throw Error('BACKUP_MAINTENANCE_INSPECT_UNKNOWN');}

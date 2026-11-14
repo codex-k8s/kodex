@@ -4,11 +4,21 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.94
-updated: 2026-11-14
+version: 1.1.95
+updated: 2026-11-15
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Исправление конфигурации после успешного DDL не переписывает исходный migration
+plan либо уже записанный префикс журнала. Узкий repair задаёт отдельные source,
+config и plan hashes, допустимую точную дельту и fresh terminal/owner/join proof.
+Каждый handoff, повторное чтение, projection и финальный consumer использует
+один и тот же repair pin; отсутствие pin не означает возврат к прежнему spec.
+Новый intent записывается и fsync-ится до эффекта, а потерянный ACK допускает
+только штатное чтение исхода. Успешный YAML render не доказывает допустимость
+Kubernetes spec: имена ContainerPort и строкового Service.targetPort проверяются
+по IANA port-name boundary до нового migration plan и DDL.
 
 Custom RoundTripper fixtures не заменяют проверку production HTTP/TLS transport.
 Provider path с CONNECT доказывается отдельным bounded native loop через

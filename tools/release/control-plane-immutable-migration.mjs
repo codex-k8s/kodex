@@ -1,3 +1,5 @@
+import {readTelegramPortRepair,telegramPortRepairCodes,telegramPortRepairBound} from './telegram-port-repair.mjs';
+import {validateKubernetesPortNames} from './kubernetes-port-names.mjs';
 import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
 import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
@@ -406,7 +408,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   };
   const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
     openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
-    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence']},kube);
+    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan']},kube);
   const readAuthorityDelivery = async () => {
     const authority=activationAuthority();
     ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
@@ -594,7 +596,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const source = {path:options['--source'],revision:options['--revision']};
     const imageEvidence = componentPublication ?? {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
     const nsUID = namespaceUID(); ensure(nsUID, 'MIGRATION_NAMESPACE_INVALID'); imageScope(imageEvidence,nsUID);
-    if(componentPublication?.introducedReceiver)await readIntroduction(componentPublication,source);
+    if(componentPublication?.introducedReceiver){
+      ensure(inspectSource(source.path).revision===source.revision,'EXACT_SOURCE_REQUIRED');
+      validateKubernetesPortNames(readRuntimeSource(source));await readIntroduction(componentPublication,source);
+    }
     const previous = options['--predecessor-plan'] ? predecessor({planPath:resolve(options['--predecessor-plan']),
       evidencePath:resolve(options['--predecessor-evidence'])},anchor) : undefined;
     const plan = planImmutableControlPlaneMigration(before(render,anchor),source,inspectSource,randomUUID(),imageEvidence,previous ? 2 : 1,profile);
@@ -647,9 +652,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return;
   }
   const plan = retainedPlan;
+  const portRepair=options['--telegram-port-repair-plan']?readTelegramPortRepair(options['--telegram-port-repair-plan'],{migration:plan,phase}):undefined;
+  ensure(!portRepair||portRepair.repair.migrationPlanPath===resolve(options['--plan'])&&portRepair.repair.migrationEvidencePath===resolve(options['--evidence']),'TELEGRAM_PORT_REPAIR_SCOPE_CHANGED');
+  const effectiveInputs=portRepair?.inputs??plan.telegramInputs;
   const readCPProjection=(required=true)=>{
     if(!options['--cp-projection-plan']&&!required)return undefined;
-    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence']},kube);
+    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence'],repairPlanPath:options['--telegram-port-repair-plan']},kube);
   };
   if(componentPublication?.introducedReceiver)ensure(plan.kubeconfig===resolve(options['--kubeconfig']),'MIGRATION_KUBECONFIG_CHANGED');
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
@@ -685,6 +693,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
 
   let revalidation;
   try {
+    const repairBound=journal.events.filter(e=>e.type===telegramPortRepairBound);
+    ensure(repairBound.length<=1&&(!repairBound.length||portRepair&&repairBound[0].repairSHA256===portRepair.sha256&&repairBound[0].jobUID===portRepair.repair.jobUID),telegramPortRepairCodes.pinRequired);
+
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
     const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
     ensure(attempts.length <= 1 && checks.length <= 1, 'MIGRATION_JOURNAL_INVALID');
@@ -725,6 +736,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const readJob = (terminalOnly = false) => {
       const actual = optionalJob(plan.job.metadata.name);
       ensure(actual, 'MIGRATION_JOB_MISSING_AFTER_INTENT');
+      ensure(!portRepair||actual.metadata.uid===portRepair.repair.jobUID,telegramPortRepairCodes.jobChanged);
       const observed = journal.events.find(e => ['CREATE_ACK','READBACK','TERMINAL_READBACK'].includes(e.type) && e.jobUID);
       ensure(!observed || observed.jobUID === actual.metadata.uid, 'MIGRATION_JOB_REPLACED');
       const pods = migrationPods();
@@ -763,12 +775,13 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(jobs.every(job => job.status?.conditions?.some(c => ['Complete','Failed'].includes(c.type) && c.status === 'True')), 'MIGRATION_ALREADY_RUNNING');
     };
     const verifyRuntimeInputs = (staged=false) => {
+      if(portRepair)ensure(readTelegramPortRepair(portRepair.path,{migration:plan,phase}).sha256===portRepair.sha256,telegramPortRepairCodes.pinRequired);
       if(!plan.imageEvidence.introducedReceiver)return;
       ensure(plan.telegramInputs?.sourceSHA===plan.source.revision&&plan.telegramInputs.migrationID===plan.id&&
         fingerprint(metadata('secret','control-plane-interaction-grant-trust'))===fingerprint(plan.telegramTrustDependency),
         'TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
       verifyTelegramRuntimeInputs(plan.telegramInputs,readRuntimeSource(plan.source),get('configmap','kodex-installation-profile'),get('configmap','kodex-platform-endpoints'));
-      if(staged)applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,readOnly:true,
+      if(staged)applyTelegramRuntimeInputs({plan:effectiveInputs,journal,kube,readOnly:true,
         gate:()=>{throw Error('TELEGRAM_RUNTIME_INPUTS_READ_ONLY_REQUIRED');}});
     };
     const verifyInputs = anchor => {
@@ -818,16 +831,22 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
-    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
+    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
       activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
-      prepareRuntimeInputs:()=>applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,gate:()=>{
+      prepareRuntimeInputs:()=>{
+        if(portRepair&&!journal.events.some(e=>e.type===telegramPortRepairBound)){
+          ensure(!journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'||e.type==='PAIR_HANDOFF_ACK'||e.type==='TELEGRAM_INPUT_PATCH_INTENT'&&e.resource==='v1|Service|egress-gateway'),telegramPortRepairCodes.lifecycleRejected);
+          ensure(pair.inspect().every(p=>p.stage==='stoppedSpec'&&p.joined&&!p.ready),telegramPortRepairCodes.stoppedJoinRequired);
+          journal.append({type:telegramPortRepairBound,repairSHA256:portRepair.sha256,configurationRevision:portRepair.repair.configuration.revision,jobUID:portRepair.repair.jobUID});
+        }
+        return applyTelegramRuntimeInputs({plan:effectiveInputs,journal,kube,gate:()=>{
         ensure(sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         verifyRuntimeInputs();imageScope(plan.imageEvidence,plan.namespaceUID);
         const state=observeCP();ensure(['STOPPED','STAGED'].includes(state.stage)&&state.joined,'MIGRATION_STOP_JOIN_REQUIRED');
         ensure(pair.inspect().every(part=>part.joined&&['stoppedSpec','stagedSpec'].includes(part.stage)),
           'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
-      }}),validateInputs:() => {
+      }});},validateInputs:() => {
         ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         imageScope(plan.imageEvidence,plan.namespaceUID);
         verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
@@ -835,7 +854,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if (phase === 'inspect') {
       verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
       if(plan.telegramInputs&&!journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK')&&journal.events.some(e=>e.type==='TELEGRAM_INPUT_CREATE_INTENT'))
-        applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,readOnly:true,requireStaged:false,
+        applyTelegramRuntimeInputs({plan:effectiveInputs,journal,kube,readOnly:true,requireStaged:false,
           gate:()=>{throw Error('TELEGRAM_RUNTIME_INPUTS_READ_ONLY_REQUIRED');}});
       // Running exact Job ещё может писать schema/ACL. Возвращается лишь RUNNING;
       // serving inventory и terminal exclusion не используются до его terminal proof.
@@ -888,7 +907,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         finally {currentJournal.close();}
       }
       return output({...result,
-        cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
+        cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,...(portRepair?{telegramPortRepairSHA256:portRepair.sha256}:{}),
         ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || ['isolatedReadersSpec','restoredReadersSpec'].includes(s.stage)&&s.ready || s.maintenance === true && (s.stage === 'stagedSpec' && s.joined || restoration && s.stage === 'apiOpenedSpec' && s.ready)),forwardOnly:true} : {}),
         ...(apiRestoration?{apiRestoration:apiRestoration.proof,sourceCompatibility:restorationExecutor}:{})});
     }
