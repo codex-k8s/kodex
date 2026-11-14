@@ -440,7 +440,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if storedVersion != definition.Metadata.Version || storedDigest != definition.Digest {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+		configuration, valid := integrationConfigurationValues(definition, payload.PublicConfiguration)
 		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -708,7 +708,7 @@ func (repository *Repository) updateIntegrationConnection(
 	}
 	payload.Name = strings.TrimSpace(payload.Name)
 	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
-	configuration, valid := integrationStringConfiguration(payload.PublicConfiguration)
+	configuration, valid := integrationConfigurationValues(definition, payload.PublicConfiguration)
 	if payload.Name == "" || len(payload.Name) > 160 || packageErr != nil || !valid ||
 		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
