@@ -1,7 +1,45 @@
 -- Generated: generate-github-repository-scope-proof.py; полный закрытый schema catalog.
 BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;
 SET LOCAL statement_timeout='15s';SET LOCAL lock_timeout='500ms';SET LOCAL search_path=pg_catalog;
-DO $catalog_guard$ DECLARE actual jsonb;BEGIN SELECT (-- name: github_repository_scope_catalog :one
+DO $catalog_guard$ DECLARE actual jsonb;BEGIN IF (-- Закрытая identity sequence канонического bootstrap. Public foreign sequences
+-- не получают backup grants при GRANT ON ALL SEQUENCES. Table-only и canonical
+-- допускают только отсутствие backup ACL либо точные SELECT+USAGE.
+WITH registered AS (
+ SELECT c.oid,c.relowner,c.relacl
+ FROM pg_catalog.pg_class c
+ JOIN pg_catalog.pg_sequence s ON s.seqrelid=c.oid
+ WHERE c.relnamespace='public'::regnamespace AND c.relname='goose_db_version_id_seq'
+ AND c.relkind='S' AND c.relowner='control_plane_owner'::regrole
+ AND c.relpersistence='p' AND c.reloptions IS NULL
+ AND s.seqtypid='integer'::regtype AND s.seqstart=1 AND s.seqincrement=1
+ AND s.seqmin=1 AND s.seqmax=2147483647 AND s.seqcache=1 AND NOT s.seqcycle
+ AND EXISTS(SELECT 1 FROM pg_catalog.pg_depend d JOIN pg_catalog.pg_attribute a
+  ON a.attrelid=d.refobjid AND a.attnum=d.refobjsubid
+  WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.objsubid=0
+   AND d.refclassid='pg_class'::regclass AND d.refobjid='public.goose_db_version'::regclass
+   AND d.deptype='i' AND a.attname='id' AND a.atttypid='integer'::regtype AND a.attidentity='d' AND NOT a.attisdropped)
+), acl AS (
+ SELECT a.* FROM registered r CROSS JOIN LATERAL pg_catalog.aclexplode(coalesce(r.relacl,pg_catalog.acldefault('S',r.relowner))) a
+)
+SELECT (SELECT count(*) FROM pg_catalog.pg_class WHERE relnamespace='public'::regnamespace AND relkind='S')=1
+ AND (SELECT count(*) FROM registered)=1
+ AND NOT EXISTS(SELECT 1 FROM acl WHERE grantor<>'control_plane_owner'::regrole OR is_grantable
+  OR grantee NOT IN('control_plane_owner'::regrole,'control_plane_migrator'::regrole,'kodex_backup_reader'::regrole)
+  OR grantee='kodex_backup_reader'::regrole AND privilege_type NOT IN('SELECT','USAGE'))
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_owner'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='control_plane_migrator'::regrole AND privilege_type IN('SELECT','USAGE','UPDATE'))=3
+ AND (SELECT count(*) FROM acl WHERE grantee='kodex_backup_reader'::regrole) IN(0,2)) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub public sequence boundary changed';END IF;
+IF (-- ACL-only maintenance не меняет workspace rows, filesystem, writer custody
+-- или quiescence. Historical BLOCKED/PENDING records сохраняются без трактовки
+-- как released. Закрывается только реально активный owner work/grant graph.
+SELECT NOT EXISTS(SELECT 1 FROM control_plane.runs WHERE state NOT IN('SUCCEEDED','FAILED','CANCELLED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.run_nodes WHERE state IN('QUEUED','RUNNING','WAITING'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.runtime_leases WHERE state='CLAIMED')
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_archive_tasks WHERE state IN('READY','CLAIMED'))
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_tasks WHERE state IN('READY','CLAIMED'))
+ -- Даже expired ACTIVE grant не считается CLOSED по времени.
+ AND NOT EXISTS(SELECT 1 FROM control_plane.session_workspace_volume_attempts WHERE grant_state='ACTIVE')) IS DISTINCT FROM true THEN RAISE EXCEPTION 'GitHub backup workspace owner is not idle';END IF;
+SELECT (-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
 WITH RECURSIVE relations AS (
@@ -115,7 +153,7 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected${"authorityDigest":"7c9c625617acd100ce4d5fe8c29722854d1083bf30f65aef0043a490f3dec03c","catalogDigest":"2e7e1464e0470461172e4abf77e773e933ad32668e117b69f291efdeb732e27d","functionCount":224,"functionsDigest":"9f80e737b658516ce1c6854916a642d9fbebfc8367805aebe2555fa4b5c77864","purgeEdgeCount":310,"purgeEdgeFingerprint":"2f32d3b42715f0a7c905ddc9f6957e71","purgeGraphDigest":"3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84","purgeNodeCount":112,"purgeNodeFingerprint":"97039cc15f63901977000dabe1167d5d","tableCount":168,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"],"tablesDigest":"78305c44dde2a65bf9aa71e7f2b5c3b847d23874f28ef789de8117485c2ed6be","triggerCount":178,"triggersDigest":"59f763ccc389521692e8989e0d03cf4308576488851a669c618ededd61113342"}$expected$::jsonb THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog) INTO actual;IF actual IS DISTINCT FROM $expected0${"authorityDigest":"dbbc0b0fa31f980c0d6f63654f3830a268f596f4e39790b86fca5e58ff0e8583","catalogDigest":"55932e1ce9ecc491a8f1203f3f041968fd8c05357abaccbd4add2d16c2d6a417","functionCount":224,"functionsDigest":"9f80e737b658516ce1c6854916a642d9fbebfc8367805aebe2555fa4b5c77864","purgeEdgeCount":310,"purgeEdgeFingerprint":"2f32d3b42715f0a7c905ddc9f6957e71","purgeGraphDigest":"3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84","purgeNodeCount":112,"purgeNodeFingerprint":"97039cc15f63901977000dabe1167d5d","tableCount":168,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"],"tablesDigest":"78305c44dde2a65bf9aa71e7f2b5c3b847d23874f28ef789de8117485c2ed6be","triggerCount":178,"triggersDigest":"59f763ccc389521692e8989e0d03cf4308576488851a669c618ededd61113342"}$expected0$::jsonb AND actual IS DISTINCT FROM $expected1${"authorityDigest":"7c9c625617acd100ce4d5fe8c29722854d1083bf30f65aef0043a490f3dec03c","catalogDigest":"2e7e1464e0470461172e4abf77e773e933ad32668e117b69f291efdeb732e27d","functionCount":224,"functionsDigest":"9f80e737b658516ce1c6854916a642d9fbebfc8367805aebe2555fa4b5c77864","purgeEdgeCount":310,"purgeEdgeFingerprint":"2f32d3b42715f0a7c905ddc9f6957e71","purgeGraphDigest":"3bb0a85fbf658cf7cdb6af06a76f2e0c6328560bcdc63c459d5185cb174aba84","purgeNodeCount":112,"purgeNodeFingerprint":"97039cc15f63901977000dabe1167d5d","tableCount":168,"tableDefaultACL":["{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"],"tablesDigest":"78305c44dde2a65bf9aa71e7f2b5c3b847d23874f28ef789de8117485c2ed6be","triggerCount":178,"triggersDigest":"59f763ccc389521692e8989e0d03cf4308576488851a669c618ededd61113342"}$expected1$::jsonb THEN RAISE EXCEPTION 'GitHub repository scope schema catalog changed';END IF;END $catalog_guard$;
 SELECT jsonb_build_object('profile', 'GITHUB_REPOSITORY_SCOPE_BACKUP_PREDECESSOR_V1', 'database',current_database(),'readOnly',current_setting('transaction_read_only'),'gooseVersion',(SELECT max(version_id) FROM public.goose_db_version WHERE is_applied),'schemaCatalog',(-- name: github_repository_scope_catalog :one
 -- Только schema metadata синтетического либо явно выбранного control-plane schema.
 -- Business rows, LOGIN identities, credential descriptors и значения не читаются.
@@ -230,7 +268,7 @@ SELECT jsonb_build_object(
 'purgeNodeCount',content#>'{purgeGraph,nodeCount}',
 'purgeEdgeCount',content#>'{purgeGraph,edgeCount}',
 'purgeNodeFingerprint',content#>'{purgeGraph,nodeFingerprint}',
-'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog),'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped), 'activeRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
+'purgeEdgeFingerprint',content#>'{purgeGraph,edgeFingerprint}') FROM complete_catalog), 'backupQualification',CASE WHEN EXISTS(SELECT 1 FROM pg_namespace n CROSS JOIN LATERAL aclexplode(n.nspacl) a WHERE n.oid='control_plane'::regnamespace AND a.grantee='kodex_backup_reader'::regrole AND a.privilege_type='USAGE') THEN 'CANONICAL_BACKUP' ELSE 'TABLE_ONLY_BACKUP' END, 'publicSequenceSafe',true,'workspaceOwnerIdle',true,'githubRepositoryScopeAbsent',NOT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid='control_plane.integration_personal_credentials'::regclass AND attname='github_discovery' AND NOT attisdropped), 'activeRuntimeLeases',(SELECT count(*) FROM control_plane.runtime_leases WHERE state='CLAIMED'),
  'activeArchiveTasks',(SELECT count(*) FROM control_plane.session_archive_tasks WHERE state IN ('READY','CLAIMED')),
  'activeRuntimeRuns',(SELECT count(*) FROM control_plane.runs WHERE state NOT IN ('SUCCEEDED','FAILED','CANCELLED')),
  'activeRunNodes',(SELECT count(*) FROM control_plane.run_nodes WHERE state IN ('QUEUED','RUNNING','WAITING')),
@@ -253,5 +291,6 @@ SELECT jsonb_build_object(
  'activePersonalCredentialTests',(SELECT count(*) FROM control_plane.integration_personal_credential_tests WHERE state IN ('DUE','CLAIMED','PROBING')),
  'activeRepositoryBundles',(SELECT count(*) FROM control_plane.repository_bundle_publications WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
  'activeConfigurationSources',(SELECT count(*) FROM control_plane.managed_configuration_source_work WHERE state IN ('QUEUED','CLAIMED')),
- 'activeConfigurationWritebacks',(SELECT count(*) FROM control_plane.managed_configuration_writebacks WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')))::text;
+ 'activeConfigurationWritebacks',(SELECT count(*) FROM control_plane.managed_configuration_writebacks WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
+ 'activeBackupSessions',(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND usesysid IN (WITH RECURSIVE backup_roles(oid) AS (SELECT oid FROM pg_roles WHERE rolname='kodex_backup_reader' UNION SELECT m.member FROM pg_auth_members m JOIN backup_roles r ON m.roleid=r.oid) SELECT oid FROM backup_roles)))::text;
 ROLLBACK;

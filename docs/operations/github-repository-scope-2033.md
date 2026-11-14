@@ -4,7 +4,7 @@ title: Личные репозитории GitHub и проверяемая об
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.2
 updated: 2026-11-14
 ---
 
@@ -111,3 +111,141 @@ GET /user/repos, affiliation и pagination, GET repository и permissions.
 [GitHub users](https://docs.github.com/en/rest/users/users),
 [Vue watchers](https://vuejs.org/guide/essentials/watchers),
 [Vue scope disposal](https://vuejs.org/api/reactivity-advanced#onscopedispose).
+
+## Точные backup ACL и неизменная миграция044
+
+Исправление #2033/#2139 не редактирует `20261114120000_github_repository_scope.sql`
+и не повторяет её для уже применённой044. Ошибка была в disposable capture:
+он воспроизводил table SELECT, но пропускал действующие schema USAGE,
+sequence SELECT/USAGE и sequence default ACL initializer
+`deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh`.
+Native fixture и генератор restore читают один отмеченный SQL-блок этого
+initializer; manifest закрепляет путь и SHA256 его SQL. Это не копия ACL
+произвольного установленного PostgreSQL.
+
+`github-repository-scope-backup` различает две полные schema qualifications:
+`TABLE_ONLY_BACKUP` (ранее закреплённый table-only catalog) и
+`CANONICAL_BACKUP` (полный действующий initializer). Обе сравниваются целиком;
+normal catalog, смесь этих вариантов, лишние права, grant option, посторонние
+roles/memberships, неизвестные relation/function/trigger и изменённый purge
+отклоняются. Это квалификации схемы, а не дополнительные runtime readers.
+Новый postcondition явно возвращает `backupQualification`; один discriminator
+без exact metadata не разрешает миграцию или resume.
+
+| Переход | Авторитетный результат и восстановление |
+| --- | --- |
+| Остановить backup producers | Отдельный адресный maintenance plan/journal сохраняет UID/spec/replicas; полный namespace lineage и PostgreSQL `activeBackupSessions=0` подтверждают границу до normalization |
+| Exact043 canonical/table-only → normalization | Зарегистрированная `up-github-repository-scope-backup-compatible` проверяет полный каталог и idle owner; одна transaction снимает только schema USAGE и sequence rU/default S до прежнего exact table-only043 |
+| Подтверждённый normalize commit → Goose | Один `UpTo044` применяет неизменную опубликованную миграцию; нормализация не открывает общий `up` и не допускает произвольную версию |
+| Goose PASS/FAIL/cancel | Независимый ограниченный cleanup читает фактически применённую043 либо044 и возвращает canonical ACL; исходная ошибка не превращается в PASS |
+| Потерян normalize ACK | Goose не вызывается при неизвестном commit; отдельный readback определяет exact043, затем зарегистрированный restore восстанавливает canonical без повторения DDL |
+| Потерян Goose ACK | Чтение версии и полного каталога различает043/044; explicit restore возвращает canonical, повтор команды на044 не исполняет Goose |
+| Restore FAIL/UNKNOWN | Не повторять effects автоматически; backup worker остаётся остановленным до свежего exact canonical proof и readback прежней попытки |
+| Уже установленная044 | Новый readback явно квалифицирует известный ACL-вариант; restore только переводит normal/table-only/canonical в canonical. Никакие другие установки не объявляются проверенными |
+
+Restore сохраняет sequence ACL и schema/default S в нормализованном полном
+каталоге. Исключены только отдельно проверенные table SELECT/default r;
+UPDATE, grant option, чужой grantor и неизвестный объект не скрываются этой
+нормализацией. Восстановление направлено только вперёд, не возвращает table-only
+состояние и не редактирует business rows либо историю goose.
+
+Полный namespace discovery встроенных producers включает Deployment,
+StatefulSet, DaemonSet, CronJob, Job, ReplicaSet, ReplicationController и Pod.
+Отсутствие Pod у ReplicationController не означает тишину: его `spec.template`
+уже содержит service account/Secret refs и позволяет создать writer. Чужой
+controller с backup identity либо credential закрыто отклоняется до stop/DDL,
+даже если текущий `status.replicas=0`. Исключение PostgreSQL и positive join
+собственного Deployment при этом не расширяются. CRD discovery не добавляется.
+
+Через Context7 `/websites/kubernetes_io` проверены
+[ReplicationController API](https://kubernetes.io/docs/reference/kubernetes-api/core/replication-controller-v1/)
+и [controller lifecycle](https://kubernetes.io/docs/concepts/workloads/controllers/replicationcontroller/):
+`spec.template` имеет тип PodTemplateSpec, controller создаёт недостающие replicas.
+
+Backup-controller останавливается только `backup-controller-maintenance-cli.mjs`
+с отдельным portable target, содержащим его exact Deployment UID и общие
+cluster/namespace/installation seals. CLI требует явные `--kubeconfig` и
+`--context`; фазы `plan --action stop|resume --evidence`, `apply --approved-plan-sha` и
+`status` сохраняют отдельные owned0600 plans/journals. Plan закрепляет единственные
+canonical plan/evidence paths; копия журнала по другому пути не создаёт новую
+boundary. Resume закрепляет пути следующих references и передаёт
+`--stopped-plan`, `--stopped-evidence`, `--migration-plan`, `--migration-evidence`.
+Новый migration plan профиля `github-repository-scope-backup` получает
+`--backup-maintenance-plan` и `--backup-maintenance-evidence`; эти пути и stop
+plan hash неизменно входят в migration plan. Resource sets backup и cohort
+различаются, поэтому сравниваются общие installation seals, не общий target hash.
+
+Первая mutating фаза связывает stop maintenanceID с единственным exact migration
+plan через `BACKUP_MIGRATION_BOUND`. Общий stop journal блокируется раньше
+migration journal. Backup resume удерживает оба locks и перед PATCH записывает
+`BACKUP_RESUME_INTENT` в оба журнала: даже поздний/неизвестный PATCH закрывает
+повторное использование boundary любым планом. Подготовленный read-only plan
+не даёт права обойти binding. Повторная попытка после resume требует новой
+фактической остановки и нового maintenanceID. Locks не снимаются автоматически
+после SIGKILL; read-only status/inspect остаются доступны, recovery не повторяет
+effects по отсутствию ответа.
+
+Успешный порядок044: stop backup → migration check/stop/apply → handoff/resume
+всего нового cohort → свежий canonical owner/terminal readback → backup resume.
+После `BACKUP_RESUME_INTENT` mutating фазы прежнего migration plan недоступны;
+поэтому backup не возобновляется между DDL и handoff/resume CP. Если044 не
+применена, bounded cleanup возвращает canonical043; это разрешает только
+явно проверенный backup resume. Обратное восстановление CP/cohort043 данным
+helper не реализовано и не объявляется готовым: API остаётся закрытым, дальнейшая
+доставка требует отдельного проверенного recovery path. Статус canonical ACL
+не является утверждением доступности CP либо пользовательского API.
+
+Public sequence guard отдельно закрепляет единственную штатную
+`public.goose_db_version_id_seq`: integer identity shape, dependency на
+`goose_db_version.id`, owner/migrator rUw и backup none/rU, без посторонних
+principals/grant options. Неизвестная public sequence отклоняется до первого
+GRANT. Native regression проверяет прежний failure и отсутствие нового grant
+после исправления. Применённая044 и её schema history при этом неизменны.
+
+Безопасная локальная проверка:
+
+```sh
+make test-github-repository-scope-upgrade-postgres
+make test-backup-controller-maintenance
+make test-component-publication
+make test-control-plane-migration
+```
+
+Capture выполняется только публичной disposable PostgreSQL-оснасткой с приватным
+каталогом0700: для каждого `KODEX_GITHUB_SCHEMA_CAPTURE_MODE=normal|backup|table-only-backup`
+задаются `KODEX_GITHUB_SCHEMA_CAPTURE_DIRECTORY` и
+`--github-repository-scope-upgrade`, затем генератор получает
+`--capture-directory` и проверяется `--check`. Ни captures, ни CLI tests
+не используют live credentials или Kubernetes. Обязательные PostgreSQL18
+GRANT/sequence/default-privilege semantics проверены через Context7
+`/websites/postgresql/18`: [GRANT](https://www.postgresql.org/docs/18/sql-grant.html),
+[ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html).
+
+Canonical PostgreSQL exception проверяется по Git-owned StatefulSet, включая
+контейнер/image/commands/args/env, probes/hooks, securityContext и точный состав
+volumes/mounts; дополнительные main/init/ephemeral containers запрещены.
+Discovery сохраняет только hash этого проверенного публичного профиля.
+YAML1.1 octal0400/0550 разбираются `python3 -I` с существующим PyYAML;
+Context7 `/yaml/pyyaml` проверяет `safe_load_all`/`SafeLoader`, не Python object
+constructors. Источник: [PyYAML constructor](https://github.com/yaml/pyyaml/blob/main/lib/yaml/constructor.py).
+
+## Сохранённые workspace при ACL-only maintenance
+
+043/044 backup restore не изменяет workspace metadata, byte storage, writer
+custody или native history. Требование пустой `session_workspace_storage`
+принадлежало старому переходу015–028 и не переносится на эту ACL-only операцию.
+Эти старые SQL и применённая044 сохраняются неизменными.
+
+Один shared read-only query `github-repository-scope-workspace-idle.sql`
+входит в precondition до первого effect и повторяется в normalization/restore:
+нет активных runs/run nodes/runtime leases/archive tasks, volume tasks в
+READY/CLAIMED и volume attempts с ACTIVE grant. Expired ACTIVE не считается
+CLOSED. Historical EMPTY/RESTORED/CHECKPOINT_READY/BLOCKED/WRITER_PENDING rows
+не удаляются, не переводятся в released и не объявляются quiescent по этому
+допуску. Full schema/ACL/retention/purge guard остаётся прежним.
+
+Disposable native regression сохраняет полный hash retained EMPTY+BLOCKED
+строк до/после canonical043 restore и перехода immutable044 с cleanup. Orphan
+ACTIVE expired grant и READY volume task создаются только в отдельной
+counterfactual rollback transaction; оба должны отклониться до effects.
+Никакие живые workspace rows, PVC или task receipts для этой проверки не нужны.

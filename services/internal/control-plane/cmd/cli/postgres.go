@@ -21,6 +21,9 @@ const (
 	// postgresCheckCompleted is the only successful check output and contains no connection metadata.
 	// postgresCheckCompleted является единственным успешным выводом check без метаданных соединения.
 	postgresCheckCompleted = "PostgreSQL connection check completed"
+	// githubBackupUpgradeCompleted confirms both the exact044 schema and successful canonical ACL cleanup; rejoin uses this receipt without replaying Goose.
+	// githubBackupUpgradeCompleted подтверждает точную044 и успешный canonical ACL cleanup; rejoin использует этот receipt без повторного Goose.
+	githubBackupUpgradeCompleted = "GitHub repository scope backup migration completed at version 20261114120000"
 )
 
 // postgresCLIDependencies separates database construction and Goose entry for offline lifecycle tests.
@@ -85,6 +88,11 @@ func runPostgres(ctx context.Context, command string, output io.Writer, dependen
 	if err := dependencies.migrate(ctx, database, command); err != nil {
 		return cliFailure(stageMigration, err)
 	}
+	if command == githubBackupUpgradeCommand {
+		if _, err := fmt.Fprintln(output, githubBackupUpgradeCompleted); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
 	return nil
 }
 
@@ -109,6 +117,9 @@ func applyPostgresMigrations(ctx context.Context, database *sql.DB, command stri
 	}
 	if command == "status" {
 		return goose.StatusContext(ctx, database, "migrations")
+	}
+	if command == githubBackupUpgradeCommand {
+		return upgradeGitHubWithBackupCompatibility(ctx, database)
 	}
 	if command == workspaceBackupUpgradeCommand {
 		return upgradeWorkspaceWithBackupCompatibility(ctx, database)

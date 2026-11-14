@@ -109,14 +109,14 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');
   const executed = !isImmutableMigrationProfile(plan.profile) || immutableMigrationExecution(job, plan, pods, expectedJob);
   const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
-    new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? ''));
+    (plan.profile==='github-repository-scope-backup' ? (logs ?? '').trim().split('\n').includes('GitHub repository scope backup migration completed at version 20261114120000') : new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '')));
   return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
     ...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
 }
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume','check','handoff'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect','stop','resume','check','handoff'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
@@ -126,6 +126,7 @@ async function main() {
   ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check','handoff'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
   ensure(phase === 'plan' && isImmutableMigrationProfile(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
     !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
+  ensure(profile==='github-repository-scope-backup' && phase==='plan' ? options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'] : !options['--backup-maintenance-plan'] && !options['--backup-maintenance-evidence'],'PHASE_ARGUMENT_INVALID');
   const componentInput = options['--component-publication'] || options['--portable-target'];
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');

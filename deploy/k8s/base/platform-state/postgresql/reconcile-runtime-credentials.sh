@@ -97,6 +97,7 @@ verified=$(psql --tuples-only --no-align --set ON_ERROR_STOP=1 --command "SELECT
 [ "$verified" -eq "$expected_role_count" ] || { echo 'PostgreSQL runtime credential readback failed' >&2; exit 1; }
 
 psql --dbname control_plane --set ON_ERROR_STOP=1 <<'SQL' >/dev/null
+-- BEGIN CANONICAL CONTROL PLANE BACKUP ACL
 GRANT CONNECT ON DATABASE control_plane TO kodex_backup_reader;
 GRANT USAGE ON SCHEMA public, control_plane TO kodex_backup_reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA public, control_plane TO kodex_backup_reader;
@@ -105,6 +106,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
   GRANT SELECT ON TABLES TO kodex_backup_reader;
 ALTER DEFAULT PRIVILEGES FOR ROLE control_plane_owner IN SCHEMA control_plane
   GRANT USAGE, SELECT ON SEQUENCES TO kodex_backup_reader;
+-- END CANONICAL CONTROL PLANE BACKUP ACL
 SQL
 
 if [ "$rpc_profile" = protected ] || [ "$credential_scope" = backup-reader ]; then
