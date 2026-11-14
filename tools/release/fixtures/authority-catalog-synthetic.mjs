@@ -61,4 +61,3 @@ export function prepareAdmission(f){
   const flags=['--maintenance-plan',paths.planPath,'--maintenance-evidence',paths.evidencePath,'--traffic-plan',paths.trafficPlanPath,'--traffic-evidence',paths.trafficEvidencePath];
   return {paths,flags,proof,closed,trafficPlan,trafficEvents};
 }
-

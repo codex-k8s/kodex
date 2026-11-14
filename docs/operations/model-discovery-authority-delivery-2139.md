@@ -271,3 +271,15 @@ Portable migration owner reads используют exact контейнер `po
 каждый owner SQL query сверяет их и Pod UID до и после исполнения. План без этого
 pin нужно подготовить заново; прежние исторические staging-планы сохраняют свой
 формат, но также используют закрытый local-socket transport.
+
+# Проверенные внешние источники
+
+Через Context7 проверены PostgreSQL18 (`/websites/postgresql/18`):
+[libpq environment](https://www.postgresql.org/docs/18/libpq-envars.html),
+[явный Unix socket host](https://www.postgresql.org/docs/18/libpq-connect.html),
+[pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html) и
+[pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html).
+Custom archive и TOC подтверждают формат снимка, но не выполненное восстановление.
+Для operator subprocess проверен Node.js24 (`/websites/nodejs_latest-v24_x_api`):
+[execFileSync, env, timeout и maxBuffer](https://nodejs.org/docs/latest-v24.x/api/child_process.html).
+Используются argument arrays без shell; stderr внешнего процесса не раскрывается.
