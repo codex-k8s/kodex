@@ -4,6 +4,42 @@ import {readFileSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {routineMigrationAPIFixture} from './fixtures/routine-migration-api-synthetic.mjs';
 
+test('native CLI synthetic squash authority: exact orphan source and immutable ancestor close receipt survive full restore',t=>{
+ const f=routineMigrationAPIFixture(t,{authoritySquashSource:true,predecessorSource:true});
+ const names=['authority.json','authority.jsonl','close.json','close.jsonl','migration.json','migration.jsonl','open.json','open.jsonl'];
+ const before=names.map(name=>readFileSync(join(f.directory,name),'utf8'));
+ assert.notEqual(f.authoritySHA,f.executorSHA);
+ assert.equal(f.pass('plan').status,'PLAN_ONLY');
+ assert.equal(f.read('restore.json').authoritySourceEquivalentSHA,f.authorityEquivalentSHA);
+ assert.equal(f.pass('apply').state,'RESTORED');assert.equal(f.pass('status').state,'RESTORED');assert.equal(f.pass('apply').state,'RESTORED');
+ assert.deepEqual(f.state().effects,['service']);
+ assert.deepEqual(names.map(name=>readFileSync(join(f.directory,name),'utf8')),before);
+});
+
+test('native CLI squash baseline capture preserves exact old close and rejects missing or mismatched equivalence before effects',t=>{
+ const f=routineMigrationAPIFixture(t,{authoritySquashSource:true});
+ f.edit(state=>{
+  const api=state.apps['control-api-gateway'];api.spec=structuredClone(f.closed.plan.afterSpec);api.metadata.annotations=structuredClone(f.closed.plan.afterAnnotations);
+  for(const key of ['replicas','readyReplicas','updatedReplicas','availableReplicas'])api.status[key]=0;
+  state.service.spec=structuredClone(f.isolation.plan.beforeSpec);state.service.metadata.annotations=structuredClone(f.isolation.plan.beforeAnnotations);
+ });
+ for(const change of ['missing-equivalence','wrong-tree','missing-original']){
+  const refused=f.runIsolation('plan',argv=>{
+   const index=argv.indexOf(change==='missing-original'?'--authority-executor-sha':'--authority-source-equivalent-sha');
+   if(change==='wrong-tree')argv[index+1]=f.executorSHA;else argv.splice(index,2);
+  });
+  assert.notEqual(refused.status,0,change);assert.deepEqual(f.state().effects,[]);
+  if(change==='wrong-tree')assert.match(refused.stderr,/EQUIVALENT_TREE_CHANGED/);
+  if(change==='missing-original')assert.match(refused.stderr,/EQUIVALENT_INVALID/);
+ }
+ const planned=f.runIsolation('plan');assert.equal(planned.status,0,planned.stderr);
+ assert.equal(f.read('new-isolate.json').authoritySourceEquivalentSHA,f.authorityEquivalentSHA);
+ const applied=f.runIsolation('apply');assert.equal(applied.status,0,applied.stderr);
+ assert.equal(JSON.parse(applied.stdout).state,'ISOLATED');
+ assert.equal(f.runIsolation('status').status,0);assert.equal(f.runIsolation('apply').status,0);
+ assert.deepEqual(f.state().effects,['service']);
+});
+
 test('native CLI routine045: exact owner/cohort terminal restores Service without rotation or input rewrites',t=>{
  const f=routineMigrationAPIFixture(t);
  const names=['authority.json','authority.jsonl','migration.json','migration.jsonl','open.json','open.jsonl'];
