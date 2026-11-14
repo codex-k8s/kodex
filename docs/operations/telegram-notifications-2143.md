@@ -4,11 +4,19 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.13
+version: 1.0.14
 updated: 2026-11-14
 ---
 
 # Уведомления проекта через Telegram
+
+`make test-telegram-native-egress` с бюджетом360s запускает actual adapter
+defaultTransport → отдельный CONNECT gateway → TLS provider `api.telegram.org`
+с ephemeral CA. Только test DNS/literal dial отображаются в loopback; production
+policy, CONNECT/SNI parser, TLS verification и token path сохраняются. Проверяются
+health/send при deployed30s, wrongCA/SNI, запрет redirect и отсутствие второго
+send после потерянного либо неверного ответа. Child binary не получает launcher
+credentials. Это disposable qualification, не installed/live приёмка Telegram.
 
 Ответ `sendMessage` связывается со свежими bot/chat observations и точными
 chat/type/text/topic. В channel допустим отсутствующий `from`, только когда

@@ -682,3 +682,7 @@ test-telegram-notifications-backup-upgrade-postgres: check-go-toolchain
 .PHONY: test-telegram-deployment
 test-telegram-deployment:
 	@timeout 900s node --test tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-native-egress
+test-telegram-native-egress: check-go-toolchain
+	@timeout 360s bash scripts/tests/telegram-native-egress-test.sh

@@ -4,11 +4,17 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.92
+version: 1.1.93
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Custom RoundTripper fixtures не заменяют проверку production HTTP/TLS transport.
+Provider path с CONNECT доказывается отдельным bounded native loop через
+настоящий gateway и TLS server: ephemeral CA, exact SNI, redirect rejection,
+credential redaction и отсутствие replay после неопределённого ответа.
+Test-only DNS/dial mapping не появляется в поставляемом binary либо API config.
 
 Наличие provider response field проверяется отдельно от его нулевого значения.
 Explicit `null` у используемых координат не превращается в отсутствие optional
