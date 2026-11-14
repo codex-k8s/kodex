@@ -378,7 +378,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     journal.append({type:'PAIR_INSPECT',name,stage:state.stage,resourceVersion:state.actual.metadata.resourceVersion});
     return {name,stage:state.stage,joined:state.joined,ready:state.ready,...(part(name).maintenance?{maintenance:true}:{})};
   });
-  const transition = (name,stage,type) => {
+  const transition = async (name,stage,type) => {
     requireValue(!apiRestoration,'COMPONENT_MIGRATION_API_RESTORATION_READ_ONLY');
     const state=observe(name), expected=part(name), wanted=expected[stage];
     const last=journal.events.findLastIndex(e => e.type === type && e.name === name);
@@ -398,7 +398,9 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       try { kube(args); }
       catch(error) {journal.append({type:'UNKNOWN',step:type,name,code:error.message});throw error;}
     });
-    requireValue(observe(name).stage === stage,'COMPONENT_MIGRATION_HANDOFF_UNCONFIRMED');
+    // PATCH уже принят. Исчезновение Pod во время полного READ не повторяет
+    // эффект: общий bounded wait заново читает inventory и сохраняет UID/spec guards.
+    await wait(() => observe(name),s => s.stage === stage,'COMPONENT_MIGRATION_HANDOFF_UNCONFIRMED',clock);
   };
   const schemaReady = (resuming = false) => {
     readJob(true); // Полный terminal Job/Pod writer join перед schema postcondition.
@@ -441,7 +443,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       for(const name of workers) {
         // Внешний API уже закрыт проверенным maintenance target. Его нулевые
         // replicas сохраняются; ACK подтверждает join, не выдуманный patch.
-        if(!part(name).maintenance) transition(name,'stoppedSpec','PAIR_STOP_INTENT');
+        if(!part(name).maintenance) await transition(name,'stoppedSpec','PAIR_STOP_INTENT');
         await wait(() => observe(name),s => s.stage === 'stoppedSpec' && s.joined,'COMPONENT_MIGRATION_CONTROLLER_STOP_TIMEOUT',clock);
         journal.append({type:'PAIR_STOP_ACK',name});
       }
@@ -452,9 +454,9 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       requireValue(['STOPPED','STAGED'].includes(cp.stage) && cp.joined && journal.events.some(e => e.type === 'STOP_ACK'),'MIGRATION_STOP_JOIN_REQUIRED');
       for(const name of workers) {
         requireValue(observe(name).joined && journal.events.some(e => e.type === 'PAIR_STOP_ACK' && e.name === name),'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
-        transition(name,'stagedSpec','PAIR_HANDOFF_INTENT');
+        await transition(name,'stagedSpec','PAIR_HANDOFF_INTENT');
       }
-      transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT');
+      await transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT');
       journal.append({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};
     },
@@ -466,7 +468,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
           requireValue(state.stage === 'stagedSpec' && state.joined,'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
           continue;
         }
-        transition(name,'resumedSpec',name === 'control-plane' ? 'RESUME_INTENT' : 'PAIR_RESUME_INTENT');
+        await transition(name,'resumedSpec',name === 'control-plane' ? 'RESUME_INTENT' : 'PAIR_RESUME_INTENT');
         await wait(() => observe(name),s => s.stage === 'resumedSpec' && s.ready,'COMPONENT_MIGRATION_RESUME_TIMEOUT',clock);
         journal.append({type:name === 'control-plane' ? 'RESUME_ACK' : 'PAIR_RESUME_ACK',name});
       }
