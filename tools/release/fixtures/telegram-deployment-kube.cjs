@@ -59,6 +59,13 @@ const backupRequest=()=>{
  if(args.includes('exec')&&input().includes("json_build_object('version'"))return {bytes:input()};
 };
 const run=request=>{
+ // Реальная aggregate inventory latency распределена между bounded READs;
+ // ни один kubectl request/SQL не выходит за свой штатный deadline.
+ if(args.includes('get')&&s.ownerPreflightDelayMS){
+  const duration=Math.min(5000,s.ownerPreflightDelayMS);s.ownerPreflightDelayMS-=duration;
+  s.ownerPreflightDelayEvidence??=[];const startedAt=Date.now();save();Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,duration);
+  s.ownerPreflightDelayEvidence.push({startedAt,completedAt:Date.now(),durationMS:duration});
+ }
  if(request)return backupRun(args,request.bytes);
  if(s.backup){const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
   if(kind==='pod'&&s.backup.pods.some(p=>p.metadata.name===name))return out(s.backup.pods.find(p=>p.metadata.name===name));
@@ -110,7 +117,6 @@ const run=request=>{
    oldClaimSessions:get('deployment','control-plane').spec.replicas?3:0,...s.drainOverrides});
   if(sql.includes('TELEGRAM_NOTIFICATIONS_PREDECESSOR_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_PREDECESSOR_V1'))return out({...s.precondition,...s.preconditionOverrides});
   if(sql.includes('TELEGRAM_NOTIFICATIONS_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_V1')){
-   if(s.ownerPreflightDelayMS){const duration=s.ownerPreflightDelayMS;delete s.ownerPreflightDelayMS;save();Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,duration);}
    return out({...s.postcondition,...s.postconditionOverrides});
   }
   throw Error('SYNTHETIC_SQL_NOT_REGISTERED');

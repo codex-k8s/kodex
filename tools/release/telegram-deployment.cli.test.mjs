@@ -264,7 +264,11 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);
  checked('control-plane-policy-projection.mjs',['resume',...flags,'--plan',projection,'--evidence',projectionEvidence,...delayedProjectionStatus]);
  assert.deepEqual(f.read().ownerLogs,projectionHistory);
- if(scenario.repair)assert.ok(f.read().ownerReadEvidence.at(-1).ageMS<30000);
+ if(scenario.repair){
+  const current=f.read(),statusPlan=read(delayedProjectionStatus[1]),job=Object.values(current.jobs).find(job=>job.metadata.annotations?.['kodex.dev/rotation-intent']===statusPlan.intentID);
+  assert.equal(current.ownerPreflightDelayMS,0);assert.ok(Date.now()-Date.parse(JSON.parse(projectionHistory[job.metadata.name]).observedAt)>=35000);
+  assert.ok(Date.parse(current.ownerReadEvidence.at(-1).observedAt)>=current.ownerPreflightDelayEvidence.at(-1).completedAt);
+ }
  assert.equal(f.read().effects.filter(effect=>effect==='POLICY_PROJECTION_CREATE').length,1);
  const projected=f.read();assert.equal(projected.resources['deployment/control-plane'].spec.replicas,0);
  const cpProjection=['--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence];
@@ -288,6 +292,11 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  const restoreStatus=fresh(),restoreHistory=structuredClone(f.read().ownerLogs);if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);
  checked('component-api-traffic.mjs',['apply',...flags,'--plan',restored,'--evidence',restoredEvidence,'--approved-plan-sha',fingerprint(read(restored)),...closed,...isolated,...authority,...restoreStatus]);
  assert.deepEqual(f.read().ownerLogs,restoreHistory);
+ if(scenario.repair){
+  const current=f.read(),statusPlan=read(restoreStatus[1]),job=Object.values(current.jobs).find(job=>job.metadata.annotations?.['kodex.dev/rotation-intent']===statusPlan.intentID);
+  assert.equal(current.ownerPreflightDelayMS,0);assert.ok(Date.now()-Date.parse(JSON.parse(restoreHistory[job.metadata.name]).observedAt)>=35000);
+  assert.ok(Date.parse(current.ownerReadEvidence.at(-1).observedAt)>=current.ownerPreflightDelayEvidence.at(-1).completedAt);
+ }
  assert.equal(Object.hasOwn(f.read().resources['service/control-api-gateway'].spec.selector,'kodex.dev/component-traffic-isolation'),false);
  const restoredState=f.read(),selector=restoredState.resources['service/control-api-gateway'].spec.selector,labels=restoredState.resources['deployment/control-api-gateway'].spec.template.metadata.labels;
  assert.ok(Object.entries(selector).every(([key,value])=>labels[key]===value));
