@@ -51,22 +51,6 @@ patches:
       group: networking.k8s.io
       version: v1
       kind: NetworkPolicy
-      name: egress-gateway-exact-runtime-paths
-    patch: |-
-      - op: add
-        path: /spec/ingress/0/from/-
-        value:
-          namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kodex-system
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: interaction-gateway
-              app.kubernetes.io/component: interaction-adapter
-  - target:
-      group: networking.k8s.io
-      version: v1
-      kind: NetworkPolicy
       name: internal-rpc-authority-readback-attestor-exact-paths
     patch: |-
       - op: add

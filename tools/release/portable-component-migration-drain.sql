@@ -28,5 +28,6 @@ SELECT jsonb_build_object('profile','PORTABLE_COMPONENT_DRAIN_V1','database',cur
  'activePersonalCredentialTests',(SELECT count(*) FROM control_plane.integration_personal_credential_tests WHERE state IN ('DUE','CLAIMED','PROBING')),
  'activeRepositoryBundles',(SELECT count(*) FROM control_plane.repository_bundle_publications WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
  'activeConfigurationSources',(SELECT count(*) FROM control_plane.managed_configuration_source_work WHERE state IN ('QUEUED','CLAIMED')),
- 'activeConfigurationWritebacks',(SELECT count(*) FROM control_plane.managed_configuration_writebacks WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')))::text;
+ 'activeConfigurationWritebacks',(SELECT count(*) FROM control_plane.managed_configuration_writebacks WHERE state IN ('WAITING_APPROVAL','QUEUED','CLAIMED','EFFECT_STARTED','UNKNOWN_OUTCOME')),
+ 'activeInteractionDeliveries',(SELECT count(*) FROM control_plane.interaction_deliveries WHERE state IN ('WAITING_APPROVAL','DUE','CLAIMED') OR (state='FAILED' AND completed_at IS NULL)))::text;
 ROLLBACK;

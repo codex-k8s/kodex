@@ -1,3 +1,4 @@
+import {telegramDeploymentInputs} from './telegram-runtime-inputs.mjs';
 import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import { createHash } from 'node:crypto';
@@ -187,9 +188,12 @@ export function componentMigrationTarget(target, publication, observed) {
 
 // Предыдущие env/volumes/sidecars остаются точными; только source/image пары
 // изменяются между stopped template и возобновлением исходного числа реплик.
-export function planComponentMigrationHandoff(publication, deployments, source) {
+export function planComponentMigrationHandoff(publication, deployments, source, runtimeInputs) {
   const validated = componentMigrationPublication(publication,source,publication.profile);
+  requireValue(!runtimeInputs||profiles[publication.profile].introduced&&runtimeInputs.sourceSHA===source.revision&&
+    runtimeInputs.schema==='kodex.telegram-runtime-inputs/v1','TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
   return {schema:'kodex.component-migration-handoff/v1',publicationSHA256:validated.digest,
+    ...(runtimeInputs?{runtimeInputsSHA256:fingerprint(runtimeInputs)}:{}),
     components:validated.components.map(part => {
       const matches = deployments.filter(d => d.kind === 'Deployment' && d.metadata.name === part.component && d.metadata.namespace === 'kodex-system');
       requireValue(matches.length === 1,'COMPONENT_MIGRATION_HANDOFF_SCOPE_INVALID');
@@ -211,6 +215,7 @@ export function planComponentMigrationHandoff(publication, deployments, source) 
       if(!introduced)delete values['kodex.dev/component-image-profile-sha256'];
       if(!introduced)Object.assign(values,{'kodex.dev/component-source-sha':source.revision,'kodex.dev/component-base-lock-sha256':publication.baseReleaseLockSHA256,
         'kodex.dev/component-upgrade-sha256':validated.digest});
+      if(runtimeInputs&&['control-plane','egress-gateway'].includes(part.component))Object.assign(staged,telegramDeploymentInputs(staged,part.component,runtimeInputs.projection));
       const resumed=structuredClone(staged);resumed.replicas=introduced?proof.intendedReplicas:count;
       return {name:part.component,uid:before.metadata.uid,replicas:introduced?proof.intendedReplicas:count,...(maintenance?{maintenance:true}:{}),...(introduced?{introduced:true}:{}),beforeSpec:structuredClone(before.spec),stoppedSpec:stopped,stagedSpec:staged,resumedSpec:resumed};
     })};
@@ -359,12 +364,12 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
     spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
-  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
   const part = name => plan.componentHandoff.components.find(c => c.name === name);
   const observe = name => {
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
@@ -444,6 +449,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       (currentClaims || proof.oldClaimSessions === 0) &&
       ['activeRuntimeLeases','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests',
         'activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(k=>proof[k]===0),'MIGRATION_OWNER_PRECONDITION_FAILED');
+    if(profiles[plan.imageEvidence.profile].introduced)requireValue(proof.activeInteractionDeliveries===0,'MIGRATION_OWNER_PRECONDITION_FAILED');
     requireValue(fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     validateInputs();
   };
@@ -468,10 +474,10 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       schemaReady();
       const cp=observeCP();
       requireValue(['STOPPED','STAGED'].includes(cp.stage) && cp.joined && journal.events.some(e => e.type === 'STOP_ACK'),'MIGRATION_STOP_JOIN_REQUIRED');
-      for(const name of workers) {
-        requireValue(observe(name).joined && journal.events.some(e => e.type === 'PAIR_STOP_ACK' && e.name === name),'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
-        transition(name,'stagedSpec','PAIR_HANDOFF_INTENT');
-      }
+      for(const name of workers)requireValue(observe(name).joined&&journal.events.some(e=>e.type==='PAIR_STOP_ACK'&&e.name===name),
+        'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+      if(plan.telegramInputs){requireValue(typeof prepareRuntimeInputs==='function','TELEGRAM_RUNTIME_INPUT_PREPARATION_REQUIRED');prepareRuntimeInputs();}
+      for(const name of workers)transition(name,'stagedSpec','PAIR_HANDOFF_INTENT');
       transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT');
       journal.append({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};

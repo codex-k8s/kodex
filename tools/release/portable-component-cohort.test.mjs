@@ -67,7 +67,7 @@ function lifecycleFixture(profile='github-repository-scope') {
   const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null,activeInteractionDeliveries:0};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -90,7 +90,7 @@ function lifecycleFixture(profile='github-repository-scope') {
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
-        activeIntegrationInvocations:faults.activeEffects,oldClaimSessions:faults.claimSessions});
+        activeInteractionDeliveries:faults.activeInteractionDeliveries,activeIntegrationInvocations:faults.activeEffects,oldClaimSessions:faults.claimSessions});
     }
     if(args.includes('patch')) {
       const name=args[args.indexOf('deployment')+1],app=apps.get(name);
@@ -282,6 +282,7 @@ test('046 activation требует fresh107 DELIVER, lostACK rejoin не пов
  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/API_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
  f.faults.apiReaders={state:'ISOLATED_READERS_READY',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/DELIVERY_REQUIRED/);assert.equal(f.patches.length,writes);
+ f.faults.activeInteractionDeliveries=1;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/OWNER_PRECONDITION_FAILED/);assert.equal(f.patches.length,writes);f.faults.activeInteractionDeliveries=0;
  const target=f.plan.portableTarget,body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
   introducedReceiverSHA256:fingerprint(f.plan.imageEvidence.introducedReceiver),clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
   installationUID:target.installationUID,installationSHA256:target.installationSHA256,observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};

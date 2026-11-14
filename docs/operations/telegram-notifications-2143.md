@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.7
+version: 1.0.8
 updated: 2026-11-14
 ---
 
@@ -184,6 +184,36 @@ UID или Service allocation требуют отдельной диагност
 Следующая materialization/schema046/policy107 волна отдельно доказывает все
 семнадцать registered targets и обязательный subset readers, node pull, startup/readiness, bounded shutdown и сохранение
 изоляции API. Сам create receipt не разрешает обход этого barrier.
+
+## Адресная доставка runtime inputs
+
+Schema046 planner сам получает strict source Kustomize и сохраняет в приватном
+плане закрытый набор inputs. Handoff после положительного join всех старых
+writers создаёт отдельный immutable Telegram policy ConfigMap, добавляет8086
+в существующий egress Service, точные peers в пять NetworkPolicy и семь
+именованных Secret в publisher Role с прежними `get/update`. Прежние
+ports/IP, base policy, mail/integration projections, RBAC verbs и прочие поля
+сохраняются. CP получает только публичный origin reference и существующий
+worker grant trust mount; egress — отдельный policy mount/digest/listener.
+Никакие Secret values не читаются и не записываются этим протоколом.
+
+Каждый create/patch имеет UID/version/spec pins и свой fsync INTENT общего
+migration journal. Foreign/replaced/missing ConfigMap, расширенный source,
+конфликтующий input и изменённый target закрыты. Lost ACK после выполненного
+PATCH восстанавливается чтением exact body без второго эффекта; неизвестный
+исход с прежним BEFORE допускает повтор только после отдельного inspect с тем
+же resourceVersion. Отсутствие ConfigMap после create intent не разрешает
+автоматическое повторное создание. Read-only partial status не объявляет
+inputs установленными. Перед каждым новым effect снова подтверждается join;
+после handoff inputs и все переданные references перечитываются до допуска
+resume/activation. Terminal UNKNOWN Telegram history не считается активным
+writer, незавершённая interaction delivery блокирует schema/activation drain.
+
+Проверены Context7 `/websites/kubernetes_io`,
+[immutable ConfigMap](https://kubernetes.io/docs/concepts/configuration/configmap/)
+и [обновление ссылки Pod template](https://kubernetes.io/docs/tutorials/configuration/updating-configuration-via-a-configmap/).
+Старый immutable ConfigMap не изменяется; отдельная ссылка участвует в новом
+Pod template полного cohort.
 
 ## Порядок authority107
 
