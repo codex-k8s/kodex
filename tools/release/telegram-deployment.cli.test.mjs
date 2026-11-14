@@ -177,7 +177,16 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   let callCount;try{callCount=read(state).calls.length-beforeCalls;}catch{}
   const observation={phase,elapsedMs:Date.now()-started,status:result.status,signal:result.signal,error:result.error?.code,callCount};
   if(backup&&phase==='handoff')console.log(JSON.stringify({code:'SYNTHETIC_MIGRATION_PHASE_OBSERVED',...observation}));
-  if(result.status!==0)result.stderr=JSON.stringify({code:'SYNTHETIC_MIGRATION_PHASE_FAILED',...observation})+'\n'+String(result.stderr??'');
+  if(result.status!==0){
+   if(String(result.stderr??'').includes('TELEGRAM_AUTHORITY_DELIVERY_OWNER_REJECTED')){
+    const current=read(state),path=extra[extra.indexOf('--authority-status-plan')+1],statusPlan=path?read(path):undefined;
+    const selected=Object.values(current.jobs).find(job=>job.metadata.annotations?.['kodex.dev/rotation-intent']===statusPlan?.intentID);
+    const raw=selected?JSON.parse(current.ownerLogs[selected.metadata.name]):undefined;
+    observation.owner={jobStatus:selected?.status,status:raw?.status,operationStatus:raw?.operationStatus,phase:raw?.phase,
+     observedAt:raw?.observedAt,ageMs:Date.now()-Date.parse(raw?.observedAt),expectedReadbackCount:raw?.expectedReadbackCount,actualReadbackCount:raw?.actualReadbackCount};
+   }
+   result.stderr=JSON.stringify({code:'SYNTHETIC_MIGRATION_PHASE_FAILED',...observation})+'\n'+String(result.stderr??'');
+  }
   return result;};
  const authorityTarget=join(directory,'authority-target.json');write(authorityTarget,authorityProfile);
  const apiTarget=join(directory,'api-target.json');write(apiTarget,apiProfile);

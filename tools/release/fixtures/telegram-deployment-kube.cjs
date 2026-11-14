@@ -44,14 +44,22 @@ const backupRun=(args,bytes='')=>{
  b.foreignControllers=Object.values(s.resources);const effects=b.effects;
  const result=backupMaintenanceKube(b,args,bytes);if(b.effects!==effects)s.effects.push('BACKUP_PATCH');return out(result);
 };
-const run=()=>{
- if(s.backup){
-  const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
-  if(args.includes('patch')&&args[args.indexOf('patch')+2]==='backup-controller'){const p=args.find(v=>v.startsWith('--patch-file='))?.slice(13)??args[args.indexOf('--patch-file')+1];return backupRun(args,fs.readFileSync(p,'utf8'));}
-  if(kind==='deployment'&&name==='backup-controller'||kind==='pod'&&name==='kodex-postgresql-0'||kind==='statefulset'&&name==='kodex-postgresql'||
-   kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods')return backupRun(args);
+// Один закрытый routing predicate управляет и импортом, и исполнением.
+// Unrelated GET/logs/kustomize остаются тем же лёгким CJS transport, что normal.
+const backupRequest=()=>{
+ if(!s.backup)return;
+ const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
+ if(args.includes('patch')&&args[args.indexOf('patch')+2]==='backup-controller'){
+  const p=args.find(v=>v.startsWith('--patch-file='))?.slice(13)??args[args.indexOf('--patch-file')+1];return {bytes:fs.readFileSync(p,'utf8')};
+ }
+ if(kind==='deployment'&&name==='backup-controller'||kind==='pod'&&name==='kodex-postgresql-0'||kind==='statefulset'&&name==='kodex-postgresql'||
+  kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,replicationcontrollers,pods')return {bytes:''};
+ if(args.includes('exec')&&input().includes("json_build_object('version'"))return {bytes:input()};
+};
+const run=request=>{
+ if(request)return backupRun(args,request.bytes);
+ if(s.backup){const at=args.indexOf('get'),kind=args[at+1],name=args[at+2];
   if(kind==='pod'&&s.backup.pods.some(p=>p.metadata.name===name))return out(s.backup.pods.find(p=>p.metadata.name===name));
-  if(args.includes('exec')&&input().includes("json_build_object('version'"))return backupRun(args,input());
  }
  if(args[0]==='auth')return out('yes\n');
  if(args[0]==='kustomize'){assert.equal(args[1],s.source+'/deploy/k8s/profiles/web-only');return out(JSON.parse(fs.readFileSync(s.sourceRenderPath,'utf8')).map(r=>JSON.stringify(r)).join('\n---\n'));}
@@ -151,4 +159,4 @@ const run=()=>{
  }
  throw Error('SYNTHETIC_COMMAND_NOT_REGISTERED');
 };
-(async()=>{try{if(s.backup)({backupMaintenanceKube}=await import('./backup-controller-maintenance-synthetic.mjs'));run();}catch(error){save();process.stderr.write(error.code??error.message);process.exitCode=1;}})();
+(async()=>{try{const request=backupRequest();if(request)({backupMaintenanceKube}=await import('./backup-controller-maintenance-synthetic.mjs'));run(request);}catch(error){save();process.stderr.write(error.code??error.message);process.exitCode=1;}})();
