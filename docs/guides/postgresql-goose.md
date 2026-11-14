@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.19
+version: 1.2.20
 updated: 2026-11-13
 ---
 
@@ -346,6 +346,15 @@ upgrade/fresh/repeat и функциональные регрессии затр
 Необязательные поля producer проверяются в положительных сквозных fixtures:
 default без поля не доказывает совместимость фактически отправляемого поля.
 Пример: `maximum_bytes` в миграции032 и `OPS-DOC-WORKFLOW-REVIEW-QA-1949`.
+
+Schema capture использует тот же утверждённый SQL initializer, что установленная
+среда, с закреплённым source hash. Table SELECT не заменяет schema USAGE,
+sequence ACL либо sequence default privileges. Полная schema qualification
+не удаляет эти sections ради совпадения hash; известные варианты сравниваются
+целиком, а восстановление переводит только известный каталог в canonical.
+Split maintenance требует stopped producer proof и независимый bounded cleanup;
+отсутствие текущих PostgreSQL sessions не запрещает новую попытку worker.
+Матрица: [backup044](../operations/github-repository-scope-2033.md#точные-backup-acl-и-неизменная-миграция044).
 
 Native upgrade повторяет фактический bootstrap, включая применённые
 `ALTER DEFAULT PRIVILEGES` backup reader. Создание только owner/runtime ролей

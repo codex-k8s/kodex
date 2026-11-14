@@ -637,3 +637,10 @@ test-component-api-maintenance:
 test-evicted-pod-metadata-recovery:
 	@timeout 120s python3 -B tools/release/test_evicted_pod_metadata_recovery.py
 	@cd tools/dev && timeout 60s python3 -B -m unittest test_deploy_local_cutover.EvictedProofTest test_deploy_local_cutover.CutoverTest
+
+.PHONY: test-github-repository-scope-upgrade-postgres
+test-github-repository-scope-upgrade-postgres: check-go-toolchain
+	@python3 tools/release/generate-github-repository-scope-proof.py --check
+	@timeout 60s node --test tools/release/github-repository-scope-proof.test.mjs
+	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-upgrade
+	@./scripts/tests/control-plane-postgres-test.sh --github-repository-scope-backup-upgrade

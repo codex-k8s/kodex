@@ -4,7 +4,7 @@ title: Личные репозитории GitHub и проверяемая об
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-14
 ---
 
@@ -111,3 +111,58 @@ GET /user/repos, affiliation и pagination, GET repository и permissions.
 [GitHub users](https://docs.github.com/en/rest/users/users),
 [Vue watchers](https://vuejs.org/guide/essentials/watchers),
 [Vue scope disposal](https://vuejs.org/api/reactivity-advanced#onscopedispose).
+
+## Точные backup ACL и неизменная миграция044
+
+Исправление #2033/#2139 не редактирует `20261114120000_github_repository_scope.sql`
+и не повторяет её для уже применённой044. Ошибка была в disposable capture:
+он воспроизводил table SELECT, но пропускал действующие schema USAGE,
+sequence SELECT/USAGE и sequence default ACL initializer
+`deploy/k8s/base/platform-state/postgresql/reconcile-runtime-credentials.sh`.
+Native fixture и генератор restore читают один отмеченный SQL-блок этого
+initializer; manifest закрепляет путь и SHA256 его SQL. Это не копия ACL
+произвольного установленного PostgreSQL.
+
+`github-repository-scope-backup` различает две полные schema qualifications:
+`TABLE_ONLY_BACKUP` (ранее закреплённый table-only catalog) и
+`CANONICAL_BACKUP` (полный действующий initializer). Обе сравниваются целиком;
+normal catalog, смесь этих вариантов, лишние права, grant option, посторонние
+roles/memberships, неизвестные relation/function/trigger и изменённый purge
+отклоняются. Это квалификации схемы, а не дополнительные runtime readers.
+Новый postcondition явно возвращает `backupQualification`; один discriminator
+без exact metadata не разрешает миграцию или resume.
+
+| Переход | Авторитетный результат и восстановление |
+| --- | --- |
+| Остановить backup producers | Отдельный адресный maintenance plan/journal сохраняет UID/spec/replicas; полный namespace lineage и PostgreSQL `activeBackupSessions=0` подтверждают границу до normalization |
+| Exact043 canonical/table-only → normalization | Зарегистрированная `up-github-repository-scope-backup-compatible` проверяет полный каталог и idle owner; одна transaction снимает только schema USAGE и sequence rU/default S до прежнего exact table-only043 |
+| Подтверждённый normalize commit → Goose | Один `UpTo044` применяет неизменную опубликованную миграцию; нормализация не открывает общий `up` и не допускает произвольную версию |
+| Goose PASS/FAIL/cancel | Независимый ограниченный cleanup читает фактически применённую043 либо044 и возвращает canonical ACL; исходная ошибка не превращается в PASS |
+| Потерян normalize ACK | Goose не вызывается при неизвестном commit; отдельный readback определяет exact043, затем зарегистрированный restore восстанавливает canonical без повторения DDL |
+| Потерян Goose ACK | Чтение версии и полного каталога различает043/044; explicit restore возвращает canonical, повтор команды на044 не исполняет Goose |
+| Restore FAIL/UNKNOWN | Не повторять effects автоматически; backup worker остаётся остановленным до свежего exact canonical proof и readback прежней попытки |
+| Уже установленная044 | Новый readback явно квалифицирует известный ACL-вариант; restore только переводит normal/table-only/canonical в canonical. Никакие другие установки не объявляются проверенными |
+
+Restore сохраняет sequence ACL и schema/default S в нормализованном полном
+каталоге. Исключены только отдельно проверенные table SELECT/default r;
+UPDATE, grant option, чужой grantor и неизвестный объект не скрываются этой
+нормализацией. Восстановление направлено только вперёд, не возвращает table-only
+состояние и не редактирует business rows либо историю goose.
+
+Безопасная локальная проверка:
+
+```sh
+make test-github-repository-scope-upgrade-postgres
+make test-component-publication
+make test-control-plane-migration
+```
+
+Capture выполняется только публичной disposable PostgreSQL-оснасткой с приватным
+каталогом0700: для каждого `KODEX_GITHUB_SCHEMA_CAPTURE_MODE=normal|backup|table-only-backup`
+задаются `KODEX_GITHUB_SCHEMA_CAPTURE_DIRECTORY` и
+`--github-repository-scope-upgrade`, затем генератор получает
+`--capture-directory` и проверяется `--check`. Ни captures, ни CLI tests
+не используют live credentials или Kubernetes. Обязательные PostgreSQL18
+GRANT/sequence/default-privilege semantics проверены через Context7
+`/websites/postgresql/18`: [GRANT](https://www.postgresql.org/docs/18/sql-grant.html),
+[ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html).

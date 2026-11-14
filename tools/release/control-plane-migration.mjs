@@ -109,7 +109,7 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
   ensure(!(completed && failed), 'MIGRATION_STATUS_INVALID');
   const executed = !isImmutableMigrationProfile(plan.profile) || immutableMigrationExecution(job, plan, pods, expectedJob);
   const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
-    new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? ''));
+    (plan.profile==='github-repository-scope-backup' ? (logs ?? '').trim().split('\n').includes('GitHub repository scope backup migration completed at version 20261114120000') : new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '')));
   return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
     ...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
 }

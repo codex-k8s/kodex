@@ -114,7 +114,7 @@ function setup(profile='workspace-unbound-stop'){
   };
   return {directory,config:f.config,run,state,change,store,prepared:()=>JSON.parse(readFileSync(join(directory,'prepared.json')))};
 }
-for(const profile of ['workspace-unbound-stop','github-repository-scope'])test(`real CLI prepares locks then proves actual CRI and readback does not pull: ${profile}`,()=>{
+for(const profile of ['workspace-unbound-stop','github-repository-scope','github-repository-scope-backup'])test(`real CLI prepares locks then proves actual CRI and readback does not pull: ${profile}`,()=>{
   const f=setup(profile);
   try{
     const p=f.run('prepare','prepared.json');assert.equal(p.code,0,p.out);

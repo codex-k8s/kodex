@@ -18,10 +18,10 @@ const roots={'control-plane':'services/internal/control-plane/','runtime-control
 
 // Пять настоящих форматов component-lock с синтетическими pins; ни кластер,
 // ни registry, ни пользовательские credentials тест не открывает.
-function fixture() {
-  const names=componentMigrationNames('github-repository-scope');
+function fixture(migrationProfile='github-repository-scope') {
+  const names=componentMigrationNames(migrationProfile);
   const baseHeads={'control-plane':20261112000100,'internal-rpc-authority':2,'email-bridge':3};
-  const value={schema:'kodex.portable-component-migration/v2',profile:'github-repository-scope',context:'portable-fixture',
+  const value={schema:'kodex.portable-component-migration/v2',profile:migrationProfile,context:'portable-fixture',
     clusterUID:uuid(1),namespaceUID:uuid(2),baseSourceSHA:'b'.repeat(40),baseReleaseLockSHA256:'c'.repeat(64),
     baseSchemaHeads:baseHeads,schemaHeadsBefore:{...baseHeads,'control-plane':20261113000100},
     schemaHeadsAfter:{...baseHeads,'control-plane':20261114120000},runtimeABI:5,runnerInput:'v10',
@@ -265,4 +265,13 @@ test('public CLI044 normal/backup запрещает прежний путь б�
   const calls=readFileSync(log,'utf8').trim().split('\n').map(line=>JSON.parse(line));
   assert.equal(calls.length,2);
   for(const args of calls)assert.deepEqual(args,['--kubeconfig','/synthetic/kubeconfig','--context','portable-fixture','--request-timeout=30s','get','namespace','kube-system','-o','json']);
+});
+
+// Backup-публикация сохраняет собственный discriminator; normal receipt не переименовывается при plan.
+test('044 backup: producer profile, полный cohort и handoff имеют одинаковый discriminator',()=>{
+ const f=fixture('github-repository-scope-backup');
+ assert.equal(componentMigrationPublication(f.value,{revision},'github-repository-scope-backup').components.length,5);
+ assert.ok(componentMigrationTarget(f.target,f.value,f.observed));
+ assert.throws(()=>componentMigrationPublication(f.value,{revision},'github-repository-scope'));
+ const normal=fixture();assert.throws(()=>componentMigrationPublication(normal.value,{revision},'github-repository-scope-backup'));
 });
