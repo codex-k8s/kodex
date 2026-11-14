@@ -18,7 +18,7 @@ export function backupMaintenanceFixture(){
  const pod=()=>({kind:'Pod',metadata:{...metadata('backup-controller-pod',serial++),ownerReferences:[{kind:'ReplicaSet',uid:rs.metadata.uid,controller:true}]},
   spec:{...structuredClone(deployment.spec.template.spec),nodeName:'synthetic-node',enableServiceLinks:true},status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:deployment.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}});
  const state={pods:[pod()],extra:[],effects:0,loseACK:false,gateValid:true};
- const projected=item=>({kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:item.kind==='Deployment'||item.kind==='Pod'?['backup-controller']:[],secretRefs:[],replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration});
+ const projected=item=>{const spec=item.kind==='Pod'?item.spec:item.spec?.template?.spec;return {kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:spec?.serviceAccountName?[spec.serviceAccountName]:[],secretRefs:(spec?.volumes??[]).filter(v=>v.secret).map(v=>v.secret.secretName),replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration};};
  const inventory=()=>({schema:'kodex.backup-producer-inventory/v1',namespace:'kodex-system',kinds:['Deployment','StatefulSet','DaemonSet','CronJob','Job','ReplicaSet','Pod'],items:[deployment,rs,...state.pods].map(projected).concat(state.extra)});
  const resources=()=>({items:[rs,...state.pods]});
  const stop=planBackupControllerMaintenance(deployment,target,observed,sourceSHA,'stop',undefined,inventory());
@@ -46,7 +46,7 @@ export function backupMaintenanceKube(state,args,input){
  const out=value=>JSON.stringify(value),namespace='kodex-system';
  const replicaCount=state.deployment.spec.replicas;
  const resources=[state.rs,...state.pods];
- const projected=item=>({kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:item.kind==='Deployment'||item.kind==='Pod'?['backup-controller']:[],secretRefs:[],replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration});
+ const projected=item=>{const spec=item.kind==='Pod'?item.spec:item.spec?.template?.spec;return {kind:item.kind,metadata:structuredClone(item.metadata),serviceAccounts:spec?.serviceAccountName?[spec.serviceAccountName]:[],secretRefs:(spec?.volumes??[]).filter(v=>v.secret).map(v=>v.secret.secretName),replicas:item.spec?.replicas,statusReplicas:item.status?.replicas,observedGeneration:item.status?.observedGeneration};};
  if(args.includes('patch')){
   const patch=JSON.parse(input);for(const op of patch.filter(v=>v.op==='test')){let value=state.deployment;for(const key of op.path.slice(1).split('/'))value=value[key];assert.deepEqual(value,op.value);}
   if(args.includes('--dry-run=server'))return 'deployment.apps/backup-controller\n';
@@ -65,14 +65,19 @@ export function backupMaintenanceKube(state,args,input){
  }
  const get=args.indexOf('get');assert.ok(get>=0);
  const [kind,name]=args.slice(get+1),format=args.at(-1);
- if(kind==='namespace')return out({metadata:{uid:name==='kube-system'?state.clusterUID:state.namespaceUID}});
+ if(kind==='namespace'){const uid=name==='kube-system'?state.clusterUID:state.namespaceUID;return format.startsWith('jsonpath=')?uid:out({metadata:{uid}});}
  if(kind==='configmap'&&name==='kodex-installation-profile')return out(state.installation);
  if(kind==='deployment'&&name==='backup-controller')return out(state.deployment);
+ if(kind==='deployment'&&state.cohort)return out(state.cohort.deployments.find(item=>item.metadata.name===name));
+ if(kind==='nodes'&&state.cohort)return out({items:state.cohort.nodes});
+ if(kind==='job')return '';
+ if(kind==='statefulset'&&name==='kodex-postgresql')return out(state.pgStatefulSet);
+ if(kind==='pod'&&name==='kodex-postgresql-0'&&format==='json')return out(state.pgPod);
  if(kind==='pod'&&name==='kodex-postgresql-0')return `${state.postgres.uid}|StatefulSet|kodex-postgresql|${state.postgres.ownerUID}|kodex-postgresql|Running|`;
  if(kind==='pod')return out(state.pods.find(p=>p.metadata.name===name));
  if(kind==='replicasets,pods,jobs')return resources.map(item=>[item.kind,item.metadata.name,item.metadata.uid,item.metadata.labels?.['app.kubernetes.io/name']??'',namespace,JSON.stringify(item.metadata.ownerReferences??[])].join('\t')).join('\n')+'\n';
  if(kind==='deployments,statefulsets,daemonsets,cronjobs,jobs,replicasets,pods'){
-  const items=[state.deployment,...resources].map(projected).concat(state.extra);
+  const items=[state.deployment,...resources,...(state.pgPod?[state.pgStatefulSet,state.pgPod]:[])].map(projected).concat(state.extra);
   return items.map(item=>[item.kind,item.metadata.name,item.metadata.uid,namespace,item.metadata.labels?.['app.kubernetes.io/name']??'',JSON.stringify(item.metadata.ownerReferences??[]),item.serviceAccounts?.join(' ')??'',item.secretRefs?.join(' ')??'','','','',item.replicas??'',item.statusReplicas??'',item.metadata.generation??'',item.observedGeneration??''].join('\t')).join('\n')+'\n';
  }
  throw Error('UNREGISTERED_SYNTHETIC_COMMAND');

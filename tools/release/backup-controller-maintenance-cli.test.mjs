@@ -5,10 +5,14 @@ import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {spawnSync} from 'node:child_process';
+import {spawnSync,execFileSync} from 'node:child_process';
+import {componentCohortFixture} from './fixtures/component-cohort-synthetic.mjs';
+import {planImmutableControlPlaneMigration} from './control-plane-immutable-migration.mjs';
+import {planComponentMigrationHandoff} from './portable-component-migration.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
+import {canonicalPostgresBackupSpec} from './backup-postgres-boundary.mjs';
 import {githubRepositoryScopeCatalog} from './github-repository-scope-catalog.gen.mjs';
 import {backupMaintenanceFixture,backupMaintenanceKube} from './fixtures/backup-controller-maintenance-synthetic.mjs';
 import {backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance} from './backup-controller-maintenance-cli.mjs';
@@ -21,6 +25,10 @@ function setup(t){
  const state={sourceSHA:f.sourceSHA,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,
   deployment:f.deployment,postgres:f.postgres,installation:f.observed.installation,rs:f.rs,pods:f.state.pods,originalPods:f.state.pods,extra:[],effects:0,
   backend:{systemIdentifier:'9007199254740993',databaseOID:'16384',database:'control_plane',port:'5432',serverAddress:null,serverPort:null}};
+ const pgSpec=canonicalPostgresBackupSpec();
+ state.pgStatefulSet={kind:'StatefulSet',metadata:{name:'kodex-postgresql',namespace:'kodex-system',uid:state.postgres.ownerUID,labels:{'app.kubernetes.io/name':'kodex-postgresql'}},spec:{template:{spec:pgSpec}}};
+ state.pgPod={kind:'Pod',metadata:{name:'kodex-postgresql-0',namespace:'kodex-system',uid:state.postgres.uid,labels:{'app.kubernetes.io/name':'kodex-postgresql'},ownerReferences:[{kind:'StatefulSet',uid:state.postgres.ownerUID,controller:true}]},
+  spec:{...structuredClone(pgSpec),volumes:[...pgSpec.volumes,{name:'data',persistentVolumeClaim:{claimName:'data-kodex-postgresql-0'}}]}};
  const store=value=>writeFileSync(join(directory,'state.json'),JSON.stringify(value),{mode:0o600});store(state);
  const mock=`#!${process.execPath}\nimport {readFileSync,writeFileSync} from 'node:fs';import {backupMaintenanceKube} from ${JSON.stringify(new URL('./fixtures/backup-controller-maintenance-synthetic.mjs',import.meta.url).href)};
  const file=${JSON.stringify(join(directory,'state.json'))},state=JSON.parse(readFileSync(file)),args=process.argv.slice(2);
@@ -32,7 +40,7 @@ function setup(t){
  const run=(phase,extra=[])=>spawnSync(process.execPath,[cli,phase,'--context',f.target.context,'--kubeconfig','/synthetic/explicit config','--plan',join(directory,'plan.json'),...extra],
   {encoding:'utf8',timeout:20000,env:{PATH:join(directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:directory,LANG:'C.UTF-8'}});
  const read=()=>JSON.parse(readFileSync(join(directory,'state.json'))),plan=()=>JSON.parse(readFileSync(join(directory,'plan.json')));
- const prepare=()=>run('plan',['--action','stop','--target',join(directory,'target.json')]);
+ const prepare=()=>run('plan',['--action','stop','--target',join(directory,'target.json'),'--evidence',join(directory,'evidence.jsonl')]);
  const apply=()=>run('apply',['--evidence',join(directory,'evidence.jsonl'),'--approved-plan-sha',fingerprint(plan())]);
  const status=()=>run('status',['--evidence',join(directory,'evidence.jsonl')]);
  return {f,directory,store,read,plan,run,prepare,apply,status};
@@ -140,4 +148,50 @@ test('terminal gate composes canonical043 cancellation and fully resumed044; UNK
  pod.status.containerStatuses=[];
  await assert.rejects(readBackupCleanupTerminal({kube:terminalKube,closed,migration,events:[header,{type:'CREATE_INTENT'}],owner,now,inspect:async()=>({...terminal,status:'FAIL'})}),/NOT_JOINED/);
  assert.throws(()=>verifyBackupMigrationScope({...migration,source:{revision:'b'.repeat(40)}},closed),/SCOPE_CHANGED/);
+});
+
+test('real CLI resume before DDL composes authoritative readonly inspect and permanently closes the shared migration boundary',t=>{
+ const f=setup(t),c=componentCohortFixture('github-repository-scope-backup'),state=f.read();
+ c.value.context=state.context;c.target.context=state.context;
+ state.clusterUID=c.value.clusterUID;state.namespaceUID=c.value.namespaceUID;state.installation=c.observed.installation;
+ state.cohort={deployments:c.deployments,nodes:c.observed.nodes};
+ state.ownerProof={profile:'GITHUB_REPOSITORY_SCOPE_BACKUP_PREDECESSOR_V1',database:'control_plane',readOnly:'on',gooseVersion:20261113000100,
+  backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,activeBackupSessions:0,schemaCatalog:githubRepositoryScopeCatalog.backup.before};
+ const target={...c.target,resources:[{apiVersion:'apps/v1',kind:'Deployment',name:'backup-controller',uid:state.deployment.metadata.uid}]};
+ f.store(state);writeFileSync(join(f.directory,'target.json'),JSON.stringify(target),{mode:0o600});
+ let result=f.prepare();assert.equal(result.status,0,result.stderr);result=f.apply();assert.equal(result.status,0,result.stderr);
+ const stop=f.plan(),stopPath=join(f.directory,'plan.json'),stopEvidence=join(f.directory,'evidence.jsonl');
+ const before=JSON.parse(execFileSync('yq',['-o=json','.',new URL('../../deploy/k8s/base/control-plane/migration-job.yaml',import.meta.url).pathname],{encoding:'utf8'}));
+ before.metadata={...before.metadata,uid:c.deployments[0].metadata.uid,resourceVersion:'1',namespace:'kodex-system',labels:{...before.metadata.labels,
+  'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}};
+ const source={path:fileURLToPath(new URL('../../',import.meta.url)),revision:state.sourceSHA};
+ const migration=planImmutableControlPlaneMigration(before,source,()=>({revision:source.revision}),'10000000-0000-4000-8000-000000009001',c.value,1,'github-repository-scope-backup');
+ Object.assign(migration,{clusterUID:state.clusterUID,namespaceUID:state.namespaceUID,context:state.context,portableTarget:c.target,
+  componentHandoff:planComponentMigrationHandoff(c.value,c.deployments,source),postgres:stop.postgres,postgresBackend:stop.postgresBackend,
+  anchor:{kind:'Deployment',name:'control-plane',uid:c.deployments[0].metadata.uid,resourceVersion:'1',specSHA256:fingerprint(c.deployments[0].spec),
+   stoppedSpecSHA256:fingerprint({...c.deployments[0].spec,replicas:0}),previousImage:c.deployments[0].spec.template.spec.containers[0].image},
+  backupMaintenance:{planPath:stopPath,evidencePath:stopEvidence,planSHA256:fingerprint(stop)}});
+ const migrationPath=join(f.directory,'migration.json'),migrationEvidence=join(f.directory,'migration.jsonl'),resumePath=join(f.directory,'resume.json'),resumeEvidence=join(f.directory,'resume.jsonl');
+ writeFileSync(migrationPath,JSON.stringify(migration),{mode:0o600});
+ const resumeExtra=['--plan',resumePath,'--stopped-plan',stopPath,'--stopped-evidence',stopEvidence,'--migration-plan',migrationPath,'--migration-evidence',migrationEvidence];
+ const run=(phase,extra)=>spawnSync(process.execPath,[cli,phase,'--context',state.context,'--kubeconfig','/synthetic/explicit config',...resumeExtra,...extra],
+  {encoding:'utf8',timeout:30000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
+ result=run('plan',['--action','resume','--target',join(f.directory,'target.json'),'--evidence',resumeEvidence]);assert.equal(result.status,0,result.stderr);
+ const resume=JSON.parse(readFileSync(resumePath));result=run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(resume)]);
+ assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).state,'RESUMED');assert.equal(f.read().effects,2);
+ const events=readFileSync(stopEvidence,'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(events.filter(e=>e.type==='BACKUP_MIGRATION_BOUND').length,1);assert.equal(events.filter(e=>e.type==='BACKUP_RESUME_INTENT').length,1);
+ const late=spawnSync(process.execPath,[new URL('./control-plane-migration.mjs',import.meta.url).pathname,'apply','--profile','github-repository-scope-backup',
+  '--context',state.context,'--kubeconfig','/synthetic/explicit config','--plan',migrationPath,'--evidence',migrationEvidence,'--confirm','APPLY-STAGING-CP-MIGRATION'],
+  {encoding:'utf8',timeout:15000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
+ assert.notEqual(late.status,0);assert.match(late.stderr,/BOUNDARY_CLOSED/);assert.equal(f.read().effects,2);
+});
+
+test('real CLI refuses a copied stop journal as a second maintenance boundary',t=>{
+ const f=setup(t);assert.equal(f.prepare().status,0);assert.equal(f.apply().status,0);
+ const copied=join(f.directory,'copy.jsonl');writeFileSync(copied,readFileSync(join(f.directory,'evidence.jsonl')),{mode:0o600});
+ let result=f.run('status',['--evidence',copied]);assert.notEqual(result.status,0);assert.match(result.stderr,/JOURNAL_PATH_CHANGED/);
+ result=f.run('plan',['--action','resume','--target',join(f.directory,'target.json'),'--evidence',join(f.directory,'new.jsonl'),
+  '--stopped-plan',join(f.directory,'plan.json'),'--stopped-evidence',copied,'--migration-plan',join(f.directory,'migration.json'),'--migration-evidence',join(f.directory,'migration.jsonl')]);
+ assert.notEqual(result.status,0);assert.match(result.stderr,/JOURNAL_PATH_CHANGED/);assert.equal(f.read().effects,1);
 });

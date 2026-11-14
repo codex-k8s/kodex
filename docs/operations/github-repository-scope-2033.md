@@ -152,8 +152,10 @@ UPDATE, grant option, чужой grantor и неизвестный объект 
 Backup-controller останавливается только `backup-controller-maintenance-cli.mjs`
 с отдельным portable target, содержащим его exact Deployment UID и общие
 cluster/namespace/installation seals. CLI требует явные `--kubeconfig` и
-`--context`; фазы `plan --action stop|resume`, `apply --approved-plan-sha` и
-`status` сохраняют отдельные owned0600 plans/journals. Resume передаёт
+`--context`; фазы `plan --action stop|resume --evidence`, `apply --approved-plan-sha` и
+`status` сохраняют отдельные owned0600 plans/journals. Plan закрепляет единственные
+canonical plan/evidence paths; копия журнала по другому пути не создаёт новую
+boundary. Resume закрепляет пути следующих references и передаёт
 `--stopped-plan`, `--stopped-evidence`, `--migration-plan`, `--migration-evidence`.
 Новый migration plan профиля `github-repository-scope-backup` получает
 `--backup-maintenance-plan` и `--backup-maintenance-evidence`; эти пути и stop
@@ -205,3 +207,11 @@ Capture выполняется только публичной disposable Postgr
 GRANT/sequence/default-privilege semantics проверены через Context7
 `/websites/postgresql/18`: [GRANT](https://www.postgresql.org/docs/18/sql-grant.html),
 [ALTER DEFAULT PRIVILEGES](https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html).
+
+Canonical PostgreSQL exception проверяется по Git-owned StatefulSet, включая
+контейнер/image/commands/args/env, probes/hooks, securityContext и точный состав
+volumes/mounts; дополнительные main/init/ephemeral containers запрещены.
+Discovery сохраняет только hash этого проверенного публичного профиля.
+YAML1.1 octal0400/0550 разбираются `python3 -I` с существующим PyYAML;
+Context7 `/yaml/pyyaml` проверяет `safe_load_all`/`SafeLoader`, не Python object
+constructors. Источник: [PyYAML constructor](https://github.com/yaml/pyyaml/blob/main/lib/yaml/constructor.py).

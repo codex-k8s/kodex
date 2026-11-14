@@ -139,21 +139,24 @@ async function main(args){
  const observed=freshObserved();
  const deployment=get('deployment',name),resources=()=>readComponentServingInventory(kube,name,deployment.metadata.uid);
  const readEvents=(path,header)=>{const journal=privateJournal(path,header,{readOnly:true});try{return structuredClone(journal.events);}finally{journal.close();}};
- const stopped=async()=>{ensure(options['--stopped-plan']&&options['--stopped-evidence'],'BACKUP_MAINTENANCE_STOP_PROOF_REQUIRED');const plan=await readPrivateJSON(resolve(options['--stopped-plan']));return {plan,events:readEvents(options['--stopped-evidence'],backupControllerMaintenanceHeader(plan))};};
+ const stopped=async()=>{ensure(options['--stopped-plan']&&options['--stopped-evidence'],'BACKUP_MAINTENANCE_STOP_PROOF_REQUIRED');const plan=await readPrivateJSON(resolve(options['--stopped-plan']));ensure(plan.planPath===resolve(options['--stopped-plan'])&&plan.evidencePath===resolve(options['--stopped-evidence']),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');return {plan,events:readEvents(options['--stopped-evidence'],backupControllerMaintenanceHeader(plan))};};
  const readSQL=file=>readFileSync(new URL(file,import.meta.url));
  const ownerPins=async()=>({postgres:observed.postgres,postgresBackend:migrationOwnerDatabase(kube,()=>backupPostgresIdentity(kube)).identity(observed.postgres),
   ownerSQLSHA256:Object.fromEntries(await Promise.all(Object.entries(sqlFiles).map(async([key,file])=>[key,digest(await readSQL(file))])))});
  let closed;
  if(phase==='plan'){
-  ensure(options['--target']&&!options['--evidence']&&!options['--approved-plan-sha']&&['stop','resume'].includes(options['--action']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
-  if(options['--action']==='resume')closed=await stopped();
+  ensure(options['--target']&&options['--evidence']&&!options['--approved-plan-sha']&&['stop','resume'].includes(options['--action']),'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
+  if(options['--action']==='resume'){closed=await stopped();requireOpenBackupBoundary(closed.events);}
   const target=await readPrivateJSON(resolve(options['--target']));
-  const plan={...planBackupControllerMaintenance(deployment,target,{...observed,resources:resources()},sourceSHA,options['--action'],closed,readBackupProducerInventory(kube)),...await ownerPins()};
+  const plan={...planBackupControllerMaintenance(deployment,target,{...observed,resources:resources()},sourceSHA,options['--action'],closed,readBackupProducerInventory(kube)),...await ownerPins(),planPath:resolve(options['--plan']),evidencePath:resolve(options['--evidence'])};
   if(closed){ensure(same(plan.postgres,closed.plan.postgres)&&same(plan.postgresBackend,closed.plan.postgresBackend),'BACKUP_MAINTENANCE_DATABASE_CHANGED');}
+  if(closed){ensure(options['--migration-plan']&&options['--migration-evidence'],'BACKUP_MAINTENANCE_MIGRATION_PROOF_REQUIRED');plan.resumeReferences=Object.fromEntries(['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence'].map(key=>[key,resolve(options[key])]));}
   createPrivatePrettyJSONSync(resolve(options['--plan']),plan);console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
  }
  ensure(options['--evidence']&&!options['--action']&&!options['--target'],'BACKUP_MAINTENANCE_ARGUMENT_INVALID');
  const plan=await readPrivateJSON(resolve(options['--plan']));
+ ensure(plan.planPath===resolve(options['--plan'])&&plan.evidencePath===resolve(options['--evidence']),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');
+ if(plan.action==='resume'){for(const key of ['--stopped-plan','--stopped-evidence','--migration-plan','--migration-evidence']){const path=plan.resumeReferences?.[key];ensure(path?.startsWith('/')&&(!options[key]||resolve(options[key])===path),'BACKUP_MAINTENANCE_JOURNAL_PATH_CHANGED');options[key]=path;}}
  ensure(plan.sourceSHA===sourceSHA&&portableRunnerTarget(plan.target,observed).allows(deployment)&&same(plan.postgres,observed.postgres),'BACKUP_MAINTENANCE_TARGET_CHANGED');
  ensure(phase==='apply'?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha'],'BACKUP_MAINTENANCE_EXACT_PLAN_REQUIRED');
  let stopJournal,migrationJournal,journal;
@@ -197,8 +200,9 @@ async function main(args){
   };
   const result=await backupControllerMaintenanceStep({phase,plan,journal,get:()=>get('deployment',name),resources,producerInventory:()=>readBackupProducerInventory(kube),gate,
    patch:(operations,dryRun)=>withPrivatePatchFile(operations,path=>kube(['-n',namespace,'patch','deployment',name,'--type=json','--patch-file',path,...(dryRun?['--dry-run=server']:[]),'-o','name']))});
-  console.log(JSON.stringify({...result,boundaryClosed:journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT'),
-   ...(journal.events.some(event=>event.type==='BACKUP_MIGRATION_BOUND')?{boundMigrationPlanSHA256:journal.events.find(event=>event.type==='BACKUP_MIGRATION_BOUND').migrationPlanSHA256}:{})}));
+  const boundaryEvents=plan.action==='stop'?journal.events:stopJournal?.events??(await stopped()).events;
+  console.log(JSON.stringify({...result,boundaryClosed:boundaryEvents.some(event=>event.type==='BACKUP_RESUME_INTENT'),
+   ...(boundaryEvents.some(event=>event.type==='BACKUP_MIGRATION_BOUND')?{boundMigrationPlanSHA256:boundaryEvents.find(event=>event.type==='BACKUP_MIGRATION_BOUND').migrationPlanSHA256}:{})}));
  }finally{migrationJournal?.close();journal?.close();stopJournal?.close();}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main(process.argv.slice(2)).catch(error=>{console.error(JSON.stringify({status:'FAIL_OR_UNKNOWN',code:/^[A-Z_]+$/.test(error.message??'')?error.message:'BACKUP_MAINTENANCE_FAILED'}));process.exitCode=1;});

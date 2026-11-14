@@ -311,6 +311,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(migration.backupMaintenance?.planPath && migration.backupMaintenance?.evidencePath,'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
     const closed={plan:privateJSON(migration.backupMaintenance.planPath)};
     ensure(fingerprint(closed.plan)===migration.backupMaintenance.planSHA256,'MIGRATION_BACKUP_STOP_PLAN_CHANGED');
+    ensure(closed.plan.planPath===migration.backupMaintenance.planPath&&closed.plan.evidencePath===migration.backupMaintenance.evidencePath,'MIGRATION_BACKUP_JOURNAL_PATH_CHANGED');
     const proofJournal=privateJournal(migration.backupMaintenance.evidencePath,backupControllerMaintenanceHeader(closed.plan),{readOnly:true});
     try {
       closed.events=structuredClone(proofJournal.events);
