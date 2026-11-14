@@ -4,8 +4,8 @@ title: Ограниченная выкладка runner и admission policy
 type: runbook
 status: approved
 owner: manager
-version: 1.1.0
-updated: 2026-11-12
+version: 1.1.1
+updated: 2026-11-14
 ---
 
 # Ограниченная выкладка runner и admission policy
@@ -20,6 +20,16 @@ updated: 2026-11-12
 точной trusted base для следующей сборки. Полный пользовательский build,
 scan, SBOM, provenance, admission, promotion, публикация и выбранный rebind
 остаются обязательными. Импорт OCI archive сам по себе не доказывает эту цепочку.
+
+Каждая команда `runner-policy-transition.mjs` и `default-runner-transition.mjs` требует абсолютный
+`--kubeconfig "$KUBECONFIG_PATH"` вместе с `--context`. Путь закрепляется в
+bundle и плане. `prepare` также закрепляет UID PostgreSQL Pod/StatefulSet,
+system identifier и OID базы; каждый owner read сверяет их до и после SQL.
+Используется только контейнер `postgresql`, локальный socket, порт5432,
+очищенное окружение и `psql -X --no-password`. Для portable публикации OCI `seed-local-image-supply-chain.sh` также требует
+`--kubeconfig`; выбранный context может отличаться от `current-context` файла.
+Старый bundle без этих pins
+нужно заново подготовить чтением; он не допускается к apply.
 
 ## Границы и жизненный цикл
 
@@ -136,7 +146,7 @@ authority, builder, tools и registry images эта команда не заме
 `agent-runner-image` и exact OCI archive.
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
+tools/dev/seed-local-image-supply-chain.sh --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --evidence "$NEW_PUBLICATION_EVIDENCE"
 ```
@@ -153,7 +163,7 @@ control-plane helper, frontend или role-input и не требует ново
 При UNKNOWN сначала выполняется точный readback без import:
 
 ```bash
-tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
+tools/dev/seed-local-image-supply-chain.sh --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" --k3s-sudo \
   --state-directory "$RUNNER_STATE" --tool-state-directory "$TOOLS_STATE" \
   --component runner --readback-only --evidence "$NEW_READBACK_EVIDENCE"
 ```
@@ -163,7 +173,7 @@ tools/dev/seed-local-image-supply-chain.sh --context "$CONTEXT" --k3s-sudo \
 Bundle готовится read-only по фактически выбранной controller policy и CP catalog:
 
 ```bash
-node tools/release/runner-policy-transition.mjs prepare --context "$CONTEXT" \
+node tools/release/runner-policy-transition.mjs prepare --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" \
   --runner-digest "$RUNNER_DIGEST" \
   --node-readback-image "$PUBLISHED_RUNNER_REFERENCE" \
   --output "$NEW_PRIVATE_BUNDLE"
@@ -183,10 +193,10 @@ Bundle/plan/evidence хранятся вне source с правами 0600 в pr
 Для каждой фазы сначала отдельный read-only plan, затем его exact apply:
 
 ```bash
-node tools/release/runner-policy-transition.mjs plan --context "$CONTEXT" \
+node tools/release/runner-policy-transition.mjs plan --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" \
   --bundle "$NEW_PRIVATE_BUNDLE" --reader-image "$READER_IMAGE" \
   --phase "$PHASE" --output "$NEW_PRIVATE_PLAN"
-node tools/release/runner-policy-transition.mjs apply --context "$CONTEXT" \
+node tools/release/runner-policy-transition.mjs apply --kubeconfig "$KUBECONFIG_PATH" --context "$CONTEXT" \
   --bundle "$NEW_PRIVATE_BUNDLE" --reader-image "$READER_IMAGE" \
   --plan "$NEW_PRIVATE_PLAN" --evidence "$NEW_PRIVATE_EVIDENCE" \
   --confirm APPLY-STAGING-RUNNER-POLICY
@@ -207,12 +217,12 @@ spec, меняет только application image, ждёт Ready и сохра�
 readback переход планируется заново с восстановленным reader image:
 
 ```bash
-node tools/release/runner-policy-transition.mjs recovery-plan \
+node tools/release/runner-policy-transition.mjs recovery-plan --kubeconfig "$KUBECONFIG_PATH" \
   --context "$CONTEXT" --failed-plan "$FAILED_READER_PLAN" \
   --failed-evidence "$FAILED_READER_EVIDENCE" \
   --reader-image "$LAST_READY_READER_IMAGE" --incident "$BUG_URL" \
   --output "$NEW_RECOVERY_PLAN"
-node tools/release/runner-policy-transition.mjs recovery-apply \
+node tools/release/runner-policy-transition.mjs recovery-apply --kubeconfig "$KUBECONFIG_PATH" \
   --context "$CONTEXT" --plan "$NEW_RECOVERY_PLAN" \
   --reader-image "$LAST_READY_READER_IMAGE" --incident "$BUG_URL" \
   --evidence "$NEW_RECOVERY_EVIDENCE" \
@@ -281,3 +291,10 @@ Go tests проверяют продолжение прежних фаз при 
 Актуальные документы проверены через Context7: Kubernetes ValidatingAdmissionPolicy
 и RBAC (Deny при отсутствии Parameters, exact resourceNames), Docker buildx
 OCI output и выбор build target. Секретные значения не входят в bundle или отчёт.
+
+Проверенные контракты транспорта: Context7 `/websites/kubernetes_io`
+([выбор одного kubeconfig и context](https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/))
+и `/websites/postgresql/18`
+([Unix socket и параметры libpq](https://www.postgresql.org/docs/18/libpq-connect.html),
+[psql startup/password options](https://www.postgresql.org/docs/18/app-psql.html)).
+Документация не заменяет проверку actual context/UID/backend на целевой установке.

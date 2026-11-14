@@ -10,11 +10,12 @@ usage() {
   printf '%s\n' \
     'Usage: seed-local-image-supply-chain.sh --context <exact-context>' \
     '  --state-directory <path> [--render <path>] [--component all|runner|session-archive|role-image-builder]' \
-    '  [--portable-target <private-json>; explicit approved portable target]' \
+    '  [--portable-target <private-json>; requires --kubeconfig <absolute-path>]' \
     '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>] [--k3s-sudo]' >&2
 }
 
 context=""
+kubeconfig=""
 portable_target=""
 state_directory=""
 render=""
@@ -26,6 +27,7 @@ kubectl_command=(kubectl)
 while (($# > 0)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
+    --kubeconfig) [[ -z "$kubeconfig" && $# -ge 2 ]] || fail 'kubeconfig argument is duplicated or missing'; kubeconfig=$2; shift 2 ;;
     --portable-target) portable_target=${2:-}; shift 2 ;;
     --state-directory) state_directory=${2:-}; shift 2 ;;
     --render) render=${2:-}; shift 2 ;;
@@ -39,7 +41,14 @@ while (($# > 0)); do
   esac
 done
 
-[[ -n "$context" && "$("${kubectl_command[@]}" --context "$context" config current-context)" == "$context" ]] ||
+[[ -z "$portable_target" || -n "$kubeconfig" ]] || fail 'portable publication requires exact kubeconfig'
+if [[ -n "$kubeconfig" ]]; then
+  [[ "$kubeconfig" == /* && -f "$kubeconfig" && ! -L "$kubeconfig" &&
+    "$kubeconfig" != *$'\n'* && "$kubeconfig" != *$'\r'* && "$(realpath -e -- "$kubeconfig")" == "$kubeconfig" ]] || fail 'exact kubeconfig is invalid'
+  kubectl_command+=(--kubeconfig "$kubeconfig")
+fi
+# Проверяем именованный context; current-context оператора менять не нужно.
+[[ -n "$context" && "$("${kubectl_command[@]}" --context "$context" config get-contexts "$context" -o name)" == "$context" ]] ||
   fail 'Kubernetes context mismatch'
 [[ "${context,,}" != *prod* && "${context,,}" != *production* ]] ||
   fail 'production context is forbidden'

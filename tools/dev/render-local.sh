@@ -602,6 +602,8 @@ admission_policy_json=$(yq -o=json -I=0 '
 ' "$render")
 [[ -n "$admission_policy_json" && "$admission_policy_json" != null ]] ||
   fail 'local image admission policy projection is absent'
+# Переменная $policy принадлежит yq, а не shell.
+# shellcheck disable=SC2016
 ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
   (strenv(ADMISSION_POLICY_JSON) | from_json) as $policy |
   with(select(.apiVersion == "supplychain.kodex.dev/v1alpha1" and
@@ -760,6 +762,8 @@ patch_go_container() {
   build_cache_path="$go_build_cache/$cache_key"
   install -d -m "$cache_directory_mode" "$build_cache_path"
   add_development_volumes "$kind" "$workload"
+  # Shell-переменные внутри args раскрывает контейнер при запуске, а не renderer.
+  # shellcheck disable=SC2016
   KIND="$kind" WORKLOAD="$workload" CONTAINER="$container" MODULE="$module" PACKAGE="$package" \
   COMMAND_ARGS="$command_args" BUILD_VOLUME="$build_volume" BUILD_CACHE_PATH="$build_cache_path" \
   AIR_DIGEST="$air_digest" \
@@ -896,6 +900,8 @@ patch_go_container Deployment clamav-egress-gateway clamav-egress-gateway servic
 patch_go_container Deployment runtime-controller runtime-controller services/internal/runtime-controller ./cmd/runtime-controller
 patch_go_container Deployment runtime-controller artifact-spool-init services/internal/runtime-controller ./cmd/runtime-controller
 # Init должен завершиться до subPath mount основного контейнера, без Air/retry.
+# Переменные args раскрывает init-контейнер при запуске.
+# shellcheck disable=SC2016
 yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "runtime-controller");
     (.spec.template.spec.initContainers[] | select(.name == "artifact-spool-init")) |= (
@@ -1334,15 +1340,19 @@ RENDER_DIGEST="$render_digest" yq -i '
   )
 ' "$output"
 
-if ! python3 - "$output" "$model_provider_configuration" <<'PY'
-import json, re, sys
+if ! python3 - "$output" "$model_provider_configuration" "$repository_root" <<'PY'
+import importlib.util, re, sys
 from pathlib import Path
 from urllib.parse import urlsplit
 raw = Path(sys.argv[1]).read_text()
 allowed = set()
 if sys.argv[2]:
-    # Явно настроенный synthetic endpoint допустим; остальные placeholders нет.
-    allowed.add(urlsplit(json.loads(Path(sys.argv[2]).read_text())['base_url']).hostname)
+    # Только endpoints проверенного каталога допустимы; остальные placeholders нет.
+    spec = importlib.util.spec_from_file_location('model_provider', Path(sys.argv[3]) / 'tools/install/model-provider.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    catalog = module.configuration(sys.argv[2])
+    allowed.update(urlsplit(provider['base_url']).hostname for provider in catalog['providers'])
 unresolved = re.search(r'__KODEX_[A-Z0-9_]+__', raw)
 hosts = set(re.findall(r'[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.invalid\b', raw))
 sys.exit(1 if unresolved or hosts - allowed else 0)
