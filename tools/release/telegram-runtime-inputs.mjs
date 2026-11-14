@@ -14,7 +14,7 @@ const policyNames=Object.freeze(['egress-gateway-exact-runtime-paths','platform-
  'control-plane-exact-runtime-paths','internal-rpc-authority-readback-attestor-exact-paths','internal-rpc-authority-restore-controller-exact-paths']);
 const secretNames=Object.freeze(['issuer-readback-credential','issuer-readback-possession','issuer-restore-credential','issuer-restore-ack',
  'issuer-key','manifest-trust','proof-trust'].map(suffix=>`internal-rpc-authority-${workload}-${suffix}`));
-const port={name:'telegram-connect',port:8086,targetPort:'telegram-connect',protocol:'TCP'};
+const servicePort=name=>({name,port:8086,targetPort:name,protocol:'TCP'});
 const peer={namespaceSelector:{matchLabels:{'kubernetes.io/metadata.name':namespace}},podSelector:{matchLabels:{
  'app.kubernetes.io/name':workload,'app.kubernetes.io/component':'interaction-adapter'}}};
 const ingress={from:[peer],ports:[{protocol:'TCP',port:8086}]};
@@ -50,8 +50,11 @@ export function telegramRuntimeInputProjection(resources){
  const policy=copy(asset(resources,'ConfigMap',egVolume.configMap.name));
  fail(policy.immutable===true&&Object.keys(policy.data??{}).join(',')==='policy.json'&&!policy.binaryData&&
   createHash('sha256').update(policy.data['policy.json']).digest('hex')===policyRawSHA256,'TELEGRAM_RUNTIME_POLICY_SOURCE_INVALID');
- fail(same(named(eg.ports,'telegram-connect'),{name:'telegram-connect',containerPort:8086,protocol:'TCP'})&&
-  same(named(asset(resources,'Service','egress-gateway').spec.ports,'telegram-connect'),port),
+ const selected=eg.ports?.filter(value=>['tg-connect','telegram-connect'].includes(value.name));
+ fail(selected?.length===1,'TELEGRAM_RUNTIME_PORT_INVALID');
+ const selectedName=selected[0].name;
+ fail(same(named(eg.ports,selectedName),{name:selectedName,containerPort:8086,protocol:'TCP'})&&
+  same(named(asset(resources,'Service','egress-gateway').spec.ports,selectedName),servicePort(selectedName)),
   'TELEGRAM_RUNTIME_PORT_INVALID');
  const egPolicy=asset(resources,'NetworkPolicy',policyNames[0]);
  fail(egPolicy.spec.ingress.some(rule=>same(rule,ingress)),'TELEGRAM_RUNTIME_NETWORK_SOURCE_INVALID');
@@ -60,7 +63,7 @@ export function telegramRuntimeInputProjection(resources){
   same(sourceRole.rules[0].verbs,['get','update'])&&secretNames.every(name=>sourceRole.rules[0].resourceNames.includes(name)),
   'TELEGRAM_RUNTIME_PUBLISHER_SOURCE_INVALID');
  return {cp:{env:cpEnv,volumeMount:cpMount,volume:cpVolume},egress:{env:egEnv,volumeMount:egMount,volume:egVolume,
-  port:copy(named(eg.ports,'telegram-connect'))},policy,networkSources:policyNames.map(name=>copy(asset(resources,'NetworkPolicy',name)))};
+  port:copy(named(eg.ports,selectedName))},policy,networkSources:policyNames.map(name=>copy(asset(resources,'NetworkPolicy',name)))};
 }
 
 function append(values,value,key){
@@ -118,7 +121,7 @@ export function planTelegramRuntimeInputs({resources,get,installation,sourceSHA,
   return {before,field:'spec',after:networkSpec(before.spec,name,projection)};});
  const service=copy(owned(get('Service','egress-gateway'),'Service','egress-gateway'));
  const serviceSpec=copy(service.spec);fail(serviceSpec.type==='ClusterIP'&&!serviceSpec.externalName&&!serviceSpec.externalIPs?.length,
-  'TELEGRAM_RUNTIME_SERVICE_TARGET_INVALID');append(serviceSpec.ports,port,'name');patches.push({before:service,field:'spec',after:serviceSpec});
+  'TELEGRAM_RUNTIME_SERVICE_TARGET_INVALID');append(serviceSpec.ports,servicePort(projection.egress.port.name),'name');patches.push({before:service,field:'spec',after:serviceSpec});
  const role=copy(owned(get('Role','internal-rpc-authority-publisher'),'Role','internal-rpc-authority-publisher')),rules=copy(role.rules);
  fail(rules.length===1&&same(rules[0].apiGroups,[''])&&same(rules[0].resources,['secrets'])&&same(rules[0].verbs,['get','update'])&&
   Array.isArray(rules[0].resourceNames)&&rules[0].resourceNames.every(name=>typeof name==='string'&&name!=='*'),

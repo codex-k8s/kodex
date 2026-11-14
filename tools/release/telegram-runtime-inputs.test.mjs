@@ -27,7 +27,7 @@ function fixture(){
    for(const peer of rule.from)for(const expression of peer.podSelector?.matchExpressions??[])expression.values=expression.values?.filter(value=>value!=='interaction-gateway');
   }
  }
- const service=stored.get(key('Service','egress-gateway'));service.spec.ports=service.spec.ports.filter(port=>port.name!=='telegram-connect');
+ const service=stored.get(key('Service','egress-gateway'));service.spec.ports=service.spec.ports.filter(port=>port.name!=='tg-connect');
  Object.assign(service.spec,{clusterIP:'192.0.2.1',clusterIPs:['192.0.2.1'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});
  const role=stored.get(key('Role','internal-rpc-authority-publisher'));role.rules[0].resourceNames=role.rules[0].resourceNames.filter(name=>!name.includes('interaction-gateway'));
  const get=(kind,name)=>structuredClone(stored.get(key(kind,name))??null),state={lostACK:'',lostBefore:'',effects:[],gateDenied:false};
@@ -61,7 +61,7 @@ test('runtime inputs берутся из полного source render; суще�
   const unchanged=telegramDeploymentInputs(before,name,f.projection);assert.deepEqual(unchanged,spec);
   const container=before.template.spec.containers.find(c=>c.name===name),selected=name==='control-plane'?f.projection.cp:f.projection.egress;
   container.env=container.env.filter(e=>!selected.env.some(value=>e.name===value.name));container.volumeMounts=container.volumeMounts.filter(v=>v.name!==selected.volumeMount.name);before.template.spec.volumes=before.template.spec.volumes.filter(v=>v.name!==selected.volume.name);
-  if(name==='egress-gateway')container.ports=container.ports.filter(p=>p.name!=='telegram-connect');
+  if(name==='egress-gateway')container.ports=container.ports.filter(p=>p.name!=='tg-connect');
   const after=telegramDeploymentInputs(before,name,f.projection),wanted=after.template.spec.containers.find(c=>c.name===name);
   for(const env of container.env)assert.deepEqual(wanted.env.find(e=>e.name===env.name),env);
   if(name==='egress-gateway')assert.equal(wanted.env.find(e=>e.name==='EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST').value,'8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218');

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {telegramPortRepairCodes} from './telegram-port-repair.mjs';
 import { isComponentMigrationProfile } from './portable-component-migration.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -118,7 +119,7 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha','--telegram-port-repair-plan'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
@@ -133,6 +134,7 @@ async function main() {
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
   const telegramProfile=['telegram-notifications','telegram-notifications-backup'].includes(profile);
+  ensure(!options['--telegram-port-repair-plan']||telegramProfile&&['handoff','resume','inspect','activate'].includes(phase),telegramPortRepairCodes.phaseRejected);
   const activationInputs=['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'];
   const activationProvided=activationInputs.some(key=>options[key]);
   ensure((phase!=='activate'&&!activationProvided)||telegramProfile&&['activate','inspect','resume'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');

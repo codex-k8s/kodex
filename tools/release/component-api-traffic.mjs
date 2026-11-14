@@ -201,7 +201,7 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--policy-transition','--authority-executor-sha','--authority-source-equivalent-sha','--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence','--application-source','--application-revision'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--policy-transition','--authority-executor-sha','--authority-source-equivalent-sha','--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence','--application-source','--application-revision','--telegram-port-repair-plan'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
@@ -227,11 +227,12 @@ async function main(args){
   const retained=phase==='plan'?undefined:await readPrivateJSON(resolve(options['--plan']));
   if(retained)validate(retained);
   const selected=options['--application-source']!==undefined||options['--application-revision']!==undefined;
+  requireValue(!options['--telegram-port-repair-plan']||selected||options['--telegram-port-repair-plan']===retained?.sourceCompatibility?.telegramPortRepair?.planPath,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   const profile=options['--policy-transition']??retained?.authorityTransition;
   requireValue(!selected||phase==='plan'&&options['--action']==='restore'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   requireValue(!retained?.sourceCompatibility||retained.action==='restore'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   const sourceCompatibility=selected||retained?.sourceCompatibility?resolveTelegramExecutorSource(root,
-    retained?.sourceCompatibility?{saved:retained.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision']}):undefined;
+    retained?.sourceCompatibility?{saved:retained.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision'],repairPlanPath:options['--telegram-port-repair-plan']}):undefined;
   const sourceSHA=sourceCompatibility?.revision??run('git',['rev-parse','HEAD']).trim();requireValue(!run('git',['status','--porcelain','--untracked-files=normal']).trim(),
     'COMPONENT_API_TRAFFIC_CLEAN_SOURCE_REQUIRED');
   const readEvidence=(path,expected)=>{const j=privateJournal(path,expected,{readOnly:true});try{return structuredClone(j.events);}finally{j.close();}};

@@ -4,8 +4,8 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.16
-updated: 2026-11-14
+version: 1.0.17
+updated: 2026-11-15
 ---
 
 # Уведомления проекта через Telegram
@@ -403,3 +403,58 @@ retry_after и ограничения sendMessage. Источник:
 и [garbage collection](https://kubernetes.io/docs/concepts/architecture/garbage-collection/):
 server-side dry-run не сохраняет объект, назначаемые UID/resourceVersion/Service
 адреса могут отличаться, owner reference относится к той же namespace boundary.
+
+
+## Восстановление frozen046 после ошибки имени порта
+
+Canonical имя Telegram listener — `tg-connect` (8086/TCP). Старое
+`telegram-connect` имеет16 символов: это допустимый Service port name, но
+недопустимый ContainerPort name и строковый Service targetPort. До нового
+migration plan проверяется полный rendered source, включая init containers.
+Правила проверены через Context7 `/kubernetes/kubernetes` и официальный
+[IsValidPortName](https://github.com/kubernetes/kubernetes/blob/v1.35.5/staging/src/k8s.io/apimachinery/pkg/util/validation/validation.go#L283-L309).
+Существующий historical plan остаётся доступен для строгого readback.
+
+Если046 уже успешно выполнена, повторять DDL либо редактировать старый plan
+нельзя. `telegram-port-repair.mjs plan` вызывает полный original migration
+inspect (Job/Pod, exact PostgreSQL identity и postcondition), затем свежий
+Job/Pod join и exact Service-before. Допускаются только все5 stopped0/joined
+до любого `PAIR_HANDOFF_INTENT`, Service PATCH intent, resume либо прежнего
+repair bind. Выполненные ранее network/ConfigMap/RBAC inputs сохраняются.
+
+```sh
+node tools/release/telegram-port-repair.mjs plan \
+  --context "$CONTEXT" --kubeconfig "$KUBECONFIG_FILE" \
+  --migration-plan "$MIGRATION_PLAN" --migration-evidence "$MIGRATION_EVIDENCE" \
+  --output "$PORT_REPAIR_PLAN"
+```
+
+Repair plan закрепляет original plan/input/handoff hashes, JobUID, installation,
+PostgreSQL/postcondition pins, exact application и новый config/executor SHA,
+а также hash/длину неизменяемого префикса журнала. Разрешены только три alias
+поля в двух egress manifests; image, env, policy, RBAC, endpoint, port number
+и DDL остаются исходными. Новый executor должен быть реальным потомком
+application source, оба checkout — чистыми. Текущий config повторно проверяется
+до runtime effects.
+
+| Переход | Авторитетное доказательство и эффект |
+| --- | --- |
+| Repair plan | Полный fresh046 postcondition, exact terminal Job и все5 stopped/joined; Kubernetes writes отсутствуют |
+| Handoff | `--telegram-port-repair-plan` → fresh owner/schema/join → append/fsync `TELEGRAM_PORT_REPAIR_BOUND` → штатные typed runtime inputs и staged specs |
+| Resume/inspect/activate | Тот же repair pin; отдельные effective inputs/handoff не заменяют original planSHA; DDL/check/stop/retry с repair запрещены |
+| Projection107 | Frozen application flags плюс repair pin разрешают только проверенные два manifest deltas; child migration inspect получает тот же repair path |
+| API restore/final readback | Отдельный executor/source proof хранит repairPlanSHA; API readers и final migration inspection проверяют тот же pin |
+| Потеря ACK | Durable bind/intent сохраняется; exact readback и штатный rejoin без повторного подтверждённого effect |
+
+Для каждого postDDL migration вызова передаётся `--telegram-port-repair-plan`.
+Projection/traffic планирование использует `--application-source`,
+`--application-revision` и тот же `--telegram-port-repair-plan`; saved plans
+закрепляют эти pins для apply/readback. Новый canonical API OPEN сохраняет
+прежний application source: его spec данным исправлением не меняется.
+
+`make test-telegram-port-repair` проверяет validators, negative lifecycle/source
+и полный CLI046/107 с synthetic frozen application и отдельным новым executor.
+Это disposable qualification; installed repair выполняет только уполномоченный
+оператор в выбранном target. Прежний префикс журнала не меняется, новый bind и
+обычные recovery receipts добавляются в append-only журнал. Rollback DDL и
+возврат к недопустимому alias отсутствуют.

@@ -148,7 +148,7 @@ export function withPrivatePatchFile(patch,apply){
 
 export function main(argv=process.argv.slice(2),io={}){
   const [command,...args]=argv,options={};
-  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo","--migration-plan","--migration-evidence","--authority-plan","--authority-evidence","--authority-status-plan","--authority-status-evidence","--application-source","--application-revision"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
+  for(let i=0;i<args.length;i++){const key=args[i];requireValue(["--context","--kubeconfig","--portable-target","--policy-transition","--maintenance-plan","--maintenance-evidence","--traffic-plan","--traffic-evidence","--evidence","--output","--plan","--confirm","--k3s-sudo","--migration-plan","--migration-evidence","--authority-plan","--authority-evidence","--authority-status-plan","--authority-status-evidence","--application-source","--application-revision","--telegram-port-repair-plan"].includes(key)&&options[key]===undefined,"INVALID_ARGUMENTS");options[key]=key==="--k3s-sudo"?true:args[++i];}
   const saved=options['--plan']?readAuthorityPrivateJSON(options['--plan']):undefined;
   const profile=options['--policy-transition']??saved?.policyTransition?.profile;
   requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
@@ -165,10 +165,11 @@ export function main(argv=process.argv.slice(2),io={}){
   const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
   const executorSource=resolve(fileURLToPath(new URL("../..",import.meta.url)));
   const selected=options['--application-source']!==undefined||options['--application-revision']!==undefined;
+  requireValue(!options['--telegram-port-repair-plan']||selected||options['--telegram-port-repair-plan']===saved?.sourceCompatibility?.telegramPortRepair?.planPath,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   requireValue(!selected||command==='plan'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   requireValue(!saved?.sourceCompatibility||profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   const sourceCompatibility=selected||saved?.sourceCompatibility?resolveTelegramExecutorSource(executorSource,
-    saved?.sourceCompatibility?{saved:saved.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision']}):undefined;
+    saved?.sourceCompatibility?{saved:saved.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision'],repairPlanPath:options['--telegram-port-repair-plan']}):undefined;
   const source=sourceCompatibility?.source??executorSource,revision=sourceCompatibility?.revision??(io.inspectSource??inspectSource)(source).revision;
   const kube=(args,input)=>{try{return (io.execFileSync??execFileSync)(options["--k3s-sudo"]?"sudo":"kubectl",[...(options["--k3s-sudo"]?["-n","k3s","kubectl"]:[]),...(kubeconfig?['--kubeconfig',kubeconfig]:[]),"--context",options["--context"],"--request-timeout=30s",...args],{input,encoding:"utf8",stdio:["pipe","pipe","pipe"],timeout:35000,maxBuffer:8<<20});}catch{throw new Error("KUBERNETES_OPERATION_FAILED_READBACK_REQUIRED");}};
   const get=(kind,name)=>JSON.parse(kube(["-n",namespace,"get",kind,name,"-o","json"]));
@@ -235,7 +236,7 @@ async function catalogProjectionMain(command,options,{source,revision,kubeconfig
   }
   const stagePaths=command==='plan'&&options['--migration-plan']?{planPath:options['--migration-plan'],evidencePath:options['--migration-evidence']}:saved?.telegramStage;
   requireValue(!options['--migration-evidence']||stagePaths?.planPath,'TELEGRAM_CP_STAGE_INPUTS_REQUIRED');
-  const readStage=()=>readTelegramStagedPolicyMigration({planPath:stagePaths?.planPath,evidencePath:stagePaths?.evidencePath},
+  const readStage=()=>readTelegramStagedPolicyMigration({planPath:stagePaths?.planPath,evidencePath:stagePaths?.evidencePath,...(sourceCompatibility?.telegramPortRepair?{repairPlanPath:sourceCompatibility.telegramPortRepair.planPath}:{})},
     {source,revision,context:options['--context'],kubeconfig,transition:current.transition});
   let telegramStage;
   if(stagePaths){

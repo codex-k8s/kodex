@@ -1,3 +1,4 @@
+import {readTelegramPortRepair,telegramPortRepairCodes} from './telegram-port-repair.mjs';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
@@ -29,7 +30,7 @@ export function telegramStagedPolicyProof(migration,rows,inspection,{source,revi
   'TELEGRAM_CP_STAGE_JOIN_REQUIRED');
  return {protocol:telegramStagedPolicyProtocol,migrationPlanSHA256:fingerprint(migration),migrationID:migration.id,
   sourceSHA:revision,introducedReceiverSHA256:fingerprint(migration.imageEvidence.introducedReceiver),deploymentUID:cp.uid,stagedSpecSHA256:fingerprint(cp.stagedSpec),
-  publicationSHA256:migration.componentHandoff.publicationSHA256,postconditionSQLSHA256:migration.postconditionSQLSHA256,jobUID:inspection.jobUID};
+  publicationSHA256:migration.componentHandoff.publicationSHA256,postconditionSQLSHA256:migration.postconditionSQLSHA256,jobUID:inspection.jobUID,...(inspection.telegramPortRepairSHA256?{telegramPortRepairSHA256:inspection.telegramPortRepairSHA256}:{})};
 }
 
 // Public owner inspect исполняет полный Job/Pod и PostgreSQL postcondition;
@@ -39,8 +40,10 @@ export function readTelegramStagedPolicyMigration(paths,scope,{inspect}={}){
  const migration=readAuthorityPrivateJSON(paths.planPath);
  const inspection=(inspect??(()=>parseAuthorityPrivateJSON(execFileSync(process.execPath,
   [fileURLToPath(new URL('./control-plane-migration.mjs',import.meta.url)),'inspect','--context',scope.context,'--kubeconfig',scope.kubeconfig,
-   '--profile',migration.profile,'--plan',paths.planPath,'--evidence',paths.evidencePath],
+   '--profile',migration.profile,'--plan',paths.planPath,'--evidence',paths.evidencePath,...(paths.repairPlanPath?['--telegram-port-repair-plan',paths.repairPlanPath]:[])],
   {encoding:'utf8',timeout:180000,maxBuffer:8<<20,stdio:['ignore','pipe','pipe']}))))();
+ const repair=paths.repairPlanPath?readTelegramPortRepair(paths.repairPlanPath,{migration}):undefined;
+ fail(inspection.telegramPortRepairSHA256===(repair?.sha256),telegramPortRepairCodes.pinRequired);
  return {...paths,proof:telegramStagedPolicyProof(migration,events(paths.evidencePath),inspection,scope)};
 }
 
@@ -53,10 +56,12 @@ export function telegramProjectedCPSpec(before,projection){
 
 // Только ACK собственного projection journal и текущий API object разрешают
 // новый CP spec. Реплики меняет исключительно исходный migration lifecycle.
-export function readTelegramCPProjection({migration,planPath,evidencePath},kube){
+export function readTelegramCPProjection({migration,planPath,evidencePath,repairPlanPath},kube){
  fail(planPath&&evidencePath,'TELEGRAM_CP_PROJECTION_REQUIRED');
  const projection=readAuthorityPrivateJSON(planPath),rows=events(evidencePath),cp=migration.componentHandoff.components.find(c=>c.name==='control-plane');
  const proof=projection.telegramStage?.proof;
+ const repair=repairPlanPath?readTelegramPortRepair(repairPlanPath,{migration}):undefined;
+ fail(proof?.telegramPortRepairSHA256===repair?.sha256&&(!repair||projection.sourceCompatibility?.telegramPortRepair?.planSHA256===repair.sha256),telegramPortRepairCodes.pinRequired);
  fail(migration.componentHandoff.introducedReadiness===telegramStagedPolicyProtocol&&projection.version===2&&projection.kind==='CP_CATALOG_POLICY_PROJECTION'&&
   projection.policyTransition?.profile===telegramPolicyTransition&&projection.source===migration.source.path&&projection.revision===migration.source.revision&&
   projection.context===migration.context&&projection.kubeconfig===migration.kubeconfig&&scopeKeys.every(key=>migration.portableTarget[key]===projection.policyTransition[key])&&

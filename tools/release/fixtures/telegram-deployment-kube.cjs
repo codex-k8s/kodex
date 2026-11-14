@@ -119,6 +119,10 @@ const run=()=>{
   const candidate=structuredClone(resource);
   for(const operation of patch){const keys=operation.path.slice(1).split('/');let parent=candidate;for(const key of keys.slice(0,-1))parent=parent[key];
    if(operation.op==='test')assert.deepEqual(parent[keys.at(-1)],operation.value);else parent[keys.at(-1)]=operation.value;}
+  // API dry-run обязан отвергать именно тот named port, который отверг installed apiserver.
+  const validName=value=>typeof value==='string'&&value.length>0&&value.length<=15&&/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)&&/[a-z]/.test(value);
+  if(candidate.kind==='Service')for(const port of candidate.spec.ports??[])if(typeof port.targetPort==='string'&&!validName(port.targetPort))fail();
+  for(const container of candidate.spec?.template?.spec?.containers??[])for(const port of container.ports??[])if(port.name!==undefined&&!validName(port.name))fail();
   if(!args.includes('--dry-run=server')){
    const intent=events().at(-1);assert.ok(['TELEGRAM_INPUT_PATCH_INTENT','STOP_INTENT','PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT','PAIR_ACTIVATE_INTENT','INTENT'].includes(intent.type)||intent.operation==='CP_POINTER_CAS');
    if(s.lostBefore===name)fail();
