@@ -2371,9 +2371,7 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 	}
 	digest := sha256.Sum256([]byte(runtimeToolMutationKey(input, callID)))
 	callRef := "tcl_" + hex.EncodeToString(digest[:16])
-	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
-	defer cancel()
-	response, err := server.control.Runtime.RecordRunToolCall(requestContext, &controlplanev1.RecordRunToolCallRequest{
+	response, err := server.recordToolProjection(ctx, &controlplanev1.RecordRunToolCallRequest{
 		Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, string(callID)+":activity:"+strconv.FormatInt(revision, 10))},
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration,
 		CallRef: callRef, Tool: tool, SafeParameters: structure, CapabilityRef: capabilityRef, GrantRef: grantRef,

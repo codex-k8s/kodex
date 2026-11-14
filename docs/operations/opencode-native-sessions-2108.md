@@ -1839,3 +1839,37 @@ KODEX_TEST_OPENCODE_BINARY=/absolute/path/to/qualified/opencode \
 qualification с exact pinned executable, без платной модели и внешних writes.
 Она не доказывает installed provider-language/task-count acceptance и не
 приписывает конкретное отклонение бизнес-результата только compaction.
+
+## Потеря ACK terminal tool activity — #2142
+
+Завершённый инструмент и запись его activity — разные операции. Если owner
+временно недоступен при записи второй ревизии, controller повторяет только
+тот же `RecordRunToolCallRequest`: одинаковые idempotency key, lease/fence,
+generation, call ref, status, redacted result и duration. Owner receipt
+разрешает восстановить потерянный ACK; это не новый execution grant.
+Tool dispatch, внешний API и файловая операция находятся вне retry loop.
+
+| Условие | Поведение |
+|---|---|
+| Terminal revision2, `Unavailable`/`DeadlineExceeded` | Максимум один повтор после100мс в исходном caller context |
+| Initial authorizing revision1 | Повтора нет: прежний закрытый отказ сохраняется |
+| Permission/auth/conflict/rate-limit/прочий отказ | Не повторяется; новый доступ не выдаётся |
+| Caller canceled/deadline expired | Новый RPC не открывается, срок не продлевается |
+| Две неудачные попытки | Ошибка сохраняется; успех инструмента либо rollback внешнего effect не выдумываются |
+| RPC200 без event ref | По-прежнему отказ; пустой receipt не повторяется и не становится PASS |
+
+Это transport recovery только terminal metadata, без positive auth cache,
+повторного model/tool вызова либо ослабления Human Gate. Каждый новый tool
+request проходит прежнюю начальную owner-проверку. Неизвестный исход реальной
+записи требует существующего receipt/readback/reconciliation, а не повторения
+внешнего действия после ошибки activity.
+
+Проверки `TestTerminalProjectionRetryReusesExactReceipt`,
+`TestProjectionRetryNeverReplaysAdmissionOrPermanentFailure`,
+`TestProjectionRetryHonorsCallerCancellation`,
+`TestMCPProjectionRetryNeverRedispatchesIntegration` и
+`TestProjectionStillRejectsMissingOwnerEvent` исполняют callback-код с
+синтетическим owner. Полный MCP path отдельно считает один invocation при
+повторе terminal projection. Это не доказательство exactly-once произвольного
+внешнего API и не приёмка установленного image: она фиксируется отдельно по
+source SHA/digest и живому readback.
