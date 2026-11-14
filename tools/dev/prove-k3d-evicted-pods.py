@@ -129,11 +129,18 @@ def terminal_jobs(workload, pods, jobs):
 
 
 class BoundedCommands:
-    def __init__(self, cache):
-        self.deadline = time.monotonic() + 30
+    def __init__(self, cache, *, kubeconfig=None, budget=30):
+        require(type(budget) is int and 1 <= budget <= 180)
+        self.deadline = time.monotonic() + budget
+        self.kubeconfig = kubeconfig
         self.cache = str(cache)
         self.environment = {key: os.environ[key] for key in ("PATH", "HOME", "KUBECONFIG") if key in os.environ}
-        require(self.environment.get("HOME") == "/home/s" and self.environment.get("KUBECONFIG") == "/home/s/.kube/config")
+        if kubeconfig is None:
+            require(self.environment.get("HOME") == "/home/s" and self.environment.get("KUBECONFIG") == "/home/s/.kube/config")
+        else:
+            path = Path(kubeconfig)
+            require(path.is_absolute() and path.resolve() == path and path.is_file() and not path.is_symlink())
+            self.environment.pop("KUBECONFIG", None)
         cache = Path(cache)
         require(cache.is_absolute() and cache.parent.resolve() == cache.parent)
         parent = cache.parent.stat()
@@ -144,23 +151,40 @@ class BoundedCommands:
         require(not cache.is_symlink() and cache.is_dir())
         require(cache.stat().st_uid == os.getuid() and cache.stat().st_mode & 0o077 == 0)
 
-    def __call__(self, arguments):
+    def __call__(self, arguments, input=None):
         require(time.monotonic() < self.deadline)
         if arguments[0] == "kubectl":
-            arguments = ["kubectl", "--context=" + CONTEXT, "--cache-dir=" + self.cache,
+            arguments = ["kubectl", *(["--kubeconfig", self.kubeconfig] if self.kubeconfig is not None else []), "--context=" + CONTEXT, "--cache-dir=" + self.cache,
                          "--request-timeout=5s", *arguments[1:]]
-        process = subprocess.Popen(arguments, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+        require(input is None or isinstance(input, str) and len(input.encode("utf-8")) <= 65536)
+        process = subprocess.Popen(arguments, stdin=subprocess.DEVNULL if input is None else subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, env=self.environment, start_new_session=True)
         buffers = {process.stdout: bytearray(), process.stderr: bytearray()}
         deadline = min(self.deadline, time.monotonic() + 5)
         try:
+            pending = input.encode("utf-8") if input is not None else b""
+            offset = 0
             with selectors.DefaultSelector() as selected:
+                if process.stdin is not None:
+                    if pending:
+                        os.set_blocking(process.stdin.fileno(), False)
+                        selected.register(process.stdin, selectors.EVENT_WRITE)
+                    else:
+                        process.stdin.close()
                 for stream in buffers:
                     os.set_blocking(stream.fileno(), False)
                     selected.register(stream, selectors.EVENT_READ)
                 while selected.get_map():
                     require(time.monotonic() < deadline)
-                    for key, _ in selected.select(min(0.1, deadline - time.monotonic())):
+                    for key, events in selected.select(min(0.1, deadline - time.monotonic())):
+                        if events & selectors.EVENT_WRITE:
+                            count = os.write(key.fileobj.fileno(), pending[offset:])
+                            require(count > 0)
+                            offset += count
+                            if offset == len(pending):
+                                selected.unregister(key.fileobj)
+                                key.fileobj.close()
+                            continue
                         chunk = os.read(key.fileobj.fileno(), 65536)
                         if not chunk:
                             selected.unregister(key.fileobj)
@@ -178,6 +202,8 @@ class BoundedCommands:
                 process.wait(timeout=1)
             process.stdout.close()
             process.stderr.close()
+            if process.stdin is not None and not process.stdin.closed:
+                process.stdin.close()
 
 
 def runtime_absence(sandboxes, containers, task_text, targets):
