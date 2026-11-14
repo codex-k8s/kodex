@@ -221,6 +221,8 @@ FROM control_plane.integration_personal_invocation_credentials pin JOIN control_
 				shared = execute(command.SetConnectionEnabled, owner, "explicit-service-disable", &shared.Version, command.ConnectionInput{Ref: shared.Ref, Enabled: false}).Connection
 				owner.Permission = "platform.integrations.credential-policy.set"
 				shared = execute(command.SetIntegrationCredentialPolicy, owner, "explicit-service-policy", &shared.Version, command.IntegrationCredentialPolicyInput{ConnectionRef: shared.Ref, Policy: entity.IntegrationCredentialProjectShared}).Connection
+				owner.Permission = "platform.command.integrations.enable"
+				shared = execute(command.SetConnectionEnabled, owner, "explicit-service-enable", &shared.Version, command.ConnectionInput{Ref: shared.Ref, Enabled: true}).Connection
 				owner.Permission = "platform.command.integrations.configure-credential"
 				calls := materializer.calls
 				configured, err := service.ConfigureIntegrationCredential(ctx, owner, value.Mutation{IdempotencyKey: "explicit-service-key", ExpectedVersion: &shared.Version}, shared.Ref, []byte("synthetic-explicit-service-key"))

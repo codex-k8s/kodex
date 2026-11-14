@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -3846,7 +3847,7 @@ func testIntegrationConfigurationAndGrants(t *testing.T, ctx context.Context, re
 		t.Fatalf("construct integration service: %v", err)
 	}
 	definitions, _, actions, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{})
-	if err != nil || len(definitions) != 13 {
+	if err != nil || len(definitions) != len(repository.integrationDefinitions) {
 		t.Fatalf("list integration definitions: definitions=%d err=%v", len(definitions), err)
 	}
 	if !contains(actions, "CREATE_CONNECTION") {
@@ -8016,17 +8017,21 @@ func resolvedTestPrincipal(t *testing.T, ctx context.Context, repository *Reposi
 // assertBootstrapReadback reads the shared bootstrap aggregate and requires the initial fixture
 // cardinalities: one organization, pending owner contract, ready system assistant, published core
 // prompt, starting runtime, provider definition/account/first credential revision and completed
-// installation, plus nine capabilities and ten enabled optional integration definitions. Query
+// installation, plus nine capabilities and the exact current closed shipped catalog size of enabled optional integration definitions. Query
 // errors or any count mismatch fail the test. Database READY/STARTING rows do not prove a running
 // assistant or external provider readiness.
 // assertBootstrapReadback читает общий bootstrap aggregate и требует начальные cardinalities
 // оснастки: по одной organization, pending owner contract, ready system assistant, published core
 // prompt, starting runtime, provider definition/account/first credential revision и completed
-// installation, плюс девять capabilities и десять включённых optional integration definitions.
+// installation, плюс девять capabilities и точный текущий размер закрытого shipped каталога включённых optional integration definitions.
 // Ошибка запроса или несовпадение любого счётчика завершает тест. Строки READY/STARTING в БД не
 // доказывают работу ассистента или готовность внешнего provider.
 func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
+	shipped, err := integrationpackage.LoadShipped()
+	if err != nil {
+		t.Fatal("load exact shipped bootstrap catalog", err)
+	}
 	var organizationCount, ownerContractCount, systemAssistantCount, corePromptCount int
 	var assistantRuntimeCount, capabilityCount, integrationDefinitionCount int
 	var providerDefinitionCount, providerAccountCount, providerCredentialRevisionCount, completedBootstrapCount int
@@ -8040,7 +8045,7 @@ func assertBootstrapReadback(t *testing.T, ctx context.Context, pool *pgxpool.Po
 	}
 	if organizationCount != 1 || ownerContractCount != 1 || systemAssistantCount != 1 ||
 		corePromptCount != 1 || assistantRuntimeCount != 1 || capabilityCount != 9 ||
-		integrationDefinitionCount != 13 || providerDefinitionCount != 1 || providerAccountCount != 1 ||
+		integrationDefinitionCount != len(shipped) || providerDefinitionCount != 1 || providerAccountCount != 1 ||
 		providerCredentialRevisionCount != 1 || completedBootstrapCount != 1 {
 		t.Fatalf("unexpected bootstrap state: organization=%d owner_contract=%d assistant=%d core_prompt=%d runtime=%d capabilities=%d integrations=%d provider_definitions=%d provider_accounts=%d provider_credentials=%d completed=%d",
 			organizationCount, ownerContractCount, systemAssistantCount, corePromptCount,
