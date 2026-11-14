@@ -66,7 +66,8 @@ function run(state,args,input){
   if(kind==='configmap')return JSON.stringify(state.configMaps[name]);
   throw Error('unexpected synthetic GET');
  }
- if(args.includes('logs'))return 'Sentry observability backup migration completed at version 20261114130000\n';
+ if(args.includes('logs'))return state.migration.profile==='sentry-observability-backup'?
+  'Sentry observability backup migration completed at version 20261114130000\n':'migrated database to version: 20261114130000\n';
  const patch=args.indexOf('patch');
  if(patch>=0){
   assert.equal(args[patch+1],'service');assert.equal(args[patch+2],'control-api-gateway');

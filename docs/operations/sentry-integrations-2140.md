@@ -4,7 +4,7 @@ title: Управляемая интеграция Sentry Cloud и Self-hosted
 type: operations
 status: approved
 owner: backend
-version: 1.1.2
+version: 1.1.3
 updated: 2026-11-14
 ---
 
@@ -252,7 +252,87 @@ join; foreign UID/scope, PATCH и DDL не повторяются. Manifest comp
 не обрезается ради размера: согласованные producer/consumer bounds128KiB
 на компонент и2MiB на prepared/publication сохраняют полный source seal.
 
-Публичные локальные точки входа, без обращения к установленной среде:
+### Возврат API Service после045 без новой authority rotation
+
+Рутинная поставка045 сохраняет действующие policy106, registry, publisher и
+retired owner operation. Старый rotation restore остаётся связан со своей
+исходной изоляцией106; использовать его proof для новой maintenance нельзя.
+Явный режим `sentry-observability[-backup]` в `component-api-traffic.mjs`
+имеет отдельный terminal consumer. Профили046/047 и произвольная schema здесь
+не допускаются.
+
+До новой изоляции `traffic plan --action isolate --migration-profile
+sentry-observability-backup` получает `--authority-plan` и
+`--authority-evidence` прежней106. При другом source нужен явный
+`--authority-executor-sha` с ревизией исходного authority plan. Новый baseline
+связывает immutable owner/registry/publisher/snapshot pins, обязательные
+`workload/role/generation` bindings, installation и exact PostgreSQL
+Pod/StatefulSet/system identifier/database OID. В отдельной фиксированной БД
+`internal_rpc_authority` исполняется только source-hashed `BEGIN READ ONLY`
+вокруг штатной `authority_rotation_status()`, через очищенное окружение и
+локальный Unix socket. TTL30s проверяется по последнему actual owner READ,
+повторённому перед Service PATCH. Исторический watcher с `RUNNING` после
+таймаута сохраняется: original INTENT, registry CAS, publisher restart и один
+Job UID дополняются свежим canonical owner `RETIRED`, без переписывания журнала
+либо новой ротации.
+
+Закрытый API, новый isolation plan и их журналы передаются при создании045
+migration plan через `--api-isolation-plan` и `--api-isolation-evidence`.
+Migration plan сохраняет exact refs/hashes, maintenance ID, API/Service UID и
+baseline seal. Прежние source/image/component-lock/publication bytes не
+переписываются. Дальше выполняются fresh044 preimage, backup stop/join,
+check/drain, единственный DDL, handoff и resume cohort. Канонический backup
+resume выполняется при API0; затем существующий API maintenance open создаёт
+отдельный exact open plan/journal для нового шаблона API, пока Service изолирован.
+
+`traffic plan --action restore` требует тот же `--migration-profile`, явный
+`--migration-source-sha`, пары `--migration-plan/--migration-evidence` и
+`--api-open-plan/--api-open-evidence`, а также прежние closed/isolation и
+authority plan/evidence. Новый delivery executor обязан быть clean descendant
+выбранного migration source и иметь тот же exact045 postcondition SQL.
+Provider images, locks и receipts остаются на исходной ревизии. Restore plan
+фиксирует оба source pins; apply использует exact executor и approved plan hash,
+не получает повторно action/profile/source selectors. Ссылки на migration/open
+и authority inputs передаются снова и проверяются по sealed proof.
+
+Внутренний публичный READ-путь `control-plane-migration.mjs inspect` использует
+явные `--api-restoration-open-plan`, `--api-restoration-open-evidence` и
+`--api-restoration-source-sha` только для этих045 profiles. Он не создаёт Job,
+не повторяет DDL, не меняет journal и не включает mutation methods. Проверяются
+exact Job UID/input/image, positive join каждого Job-owned процесса, fresh
+полный PG postcondition и все пять компонентов. API stage выводится из exact
+нового open journal и staged spec, а не из произвольного количества реплик.
+PG observation имеет budget120s; свежий authority READ выполняется после
+тяжёлого inspect. Непосредственно final Service gate ещё раз связывает current
+API UID и полный spec с sealed open receipt. Собственная готовность изменённого
+API template не является допуском. Между объектами Kubernetes нет атомарного
+snapshot: внешний drift приводит к закрытому отказу/readback, а не к заявлению
+непрерывной готовности всех компонентов.
+
+Возвращается только selector/annotation своей изоляции. Потерянный PATCH ACK
+даёт UNKNOWN и требует `traffic status`; подтверждённый RESTORED допускает
+повторный apply без второго PATCH. Смена Job/API/Service UID, source/SQL,
+migration/open journal либо baseline, неполный owner/cohort и просроченный
+fresh proof не открывают Service. Status уже завершённого restore читает
+собственный Service/journal и не выдаёт исторический proof за fresh admission.
+
+Публичная проверка нового delivery consumer:
+
+```sh
+make test-component-migration-api-restore
+```
+
+Budget420s, не более двух test files одновременно. Нужен локально доступный
+exact PostgreSQL18.3 fixture image из native test; автоматического pull нет.
+Проверяются оба045 profile, настоящие CLI subprocesses, predecessor source с
+отдельным detached checkout, сохранность всех исходных artifacts, lost ACK,
+подмена готового API после terminal READ, stale owner, Job replacement,
+journal/source/SQL drift. Native PostgreSQL исполняет canonical bootstrap и все
+authority migrations; READ ONLY проверяется контрфактической функцией, которая
+сначала действительно пишет в обычной транзакции. Эти fixtures не являются
+живой доставкой045 либо приёмкой внешних providers.
+
+Публичные локальные точки входа schema, без обращения к установленной среде:
 
 ```sh
 python3 tools/release/generate-sentry-observability-proof.py --check
