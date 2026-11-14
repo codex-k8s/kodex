@@ -62,7 +62,7 @@ const unknown: InteractionDeliveryView = {
 
 for (const width of [1440, 390]) {
   for (const ambiguous of [false, true]) {
-    test(`synthetic: Telegram project subscription ${width}px ${ambiguous ? "unknown write" : "configure and revoke"}`, async ({
+    test(`synthetic: Telegram project subscription ${String(width)}px ${ambiguous ? "unknown write" : "configure and revoke"}`, async ({
       page,
       context,
     }) => {
@@ -117,7 +117,7 @@ for (const width of [1440, 390]) {
           await route.fulfill({
             json: value,
             headers: {
-              ETag: `"${value.version}"`,
+              ETag: `"${String(value.version)}"`,
               "Cache-Control": "no-store",
             },
           });
@@ -160,7 +160,7 @@ for (const width of [1440, 390]) {
       ).toBeVisible();
       await expect(
         page.getByText(
-            "Доставка могла произойти. Автоматического повтора нет, чтобы не создать дубликат. Изменение настройки не отменяет прежнюю отправку.",
+          "Доставка могла произойти. Автоматического повтора нет, чтобы не создать дубликат. Изменение настройки не отменяет прежнюю отправку.",
         ),
       ).toBeVisible();
       expect(writes).toHaveLength(0);

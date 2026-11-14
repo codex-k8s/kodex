@@ -118,7 +118,7 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
@@ -133,9 +133,13 @@ async function main() {
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
   const telegramProfile=['telegram-notifications','telegram-notifications-backup'].includes(profile);
-  const activationInputs=['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence'];
+  const activationInputs=['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'];
   const activationProvided=activationInputs.some(key=>options[key]);
   ensure((phase!=='activate'&&!activationProvided)||telegramProfile&&['activate','inspect','resume'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+  for(const group of [['--api-open-plan','--api-open-evidence'],['--cp-projection-plan','--cp-projection-evidence'],['--api-restore-plan','--api-restore-evidence']]){
+    ensure(!group.some(key=>options[key])||telegramProfile&&['activate','inspect','resume'].includes(phase)&&group.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+  }
+  ensure(phase!=='activate'||options['--api-open-plan']&&options['--cp-projection-plan'],'PHASE_ARGUMENT_INVALID');
 
   ensure(isImmutableMigrationProfile(profile) && phase === 'plan'
     ? options['--base-render'] && (componentInput ? !options['--publication-plan'] && !options['--publication-evidence'] : options['--publication-plan'] && options['--publication-evidence'])

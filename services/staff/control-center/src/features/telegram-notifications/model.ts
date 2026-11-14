@@ -47,7 +47,7 @@ export function validEvents(value: unknown): value is NotificationEvent[] {
 
 // Ответ заново проверяется перед сохранением UI state. Будущие private поля не копируются.
 export function subscriptionView(
-  value: TelegramSubscription,
+  value: TelegramSubscription | null | undefined,
   project: string,
 ): TelegramSubscription {
   if (
@@ -97,7 +97,7 @@ export function subscriptionView(
 }
 
 export function deliveryView(
-  value: InteractionDeliveryView,
+  value: InteractionDeliveryView | null | undefined,
 ): InteractionDeliveryView {
   if (
     !value ||

@@ -67,7 +67,7 @@ function lifecycleFixture(profile='github-repository-scope') {
   const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
-  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null,activeInteractionDeliveries:0};
+  const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null,activeInteractionDeliveries:0,cpProjection:null,policyReady:false};
   const status=app=>{app.metadata.generation++;app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);
     app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(k=>[k,app.spec.replicas]))};};
   const inventory=()=>[...apps.values()].flatMap(app=>{
@@ -78,7 +78,7 @@ function lifecycleFixture(profile='github-repository-scope') {
     return [set,...Array.from({length:count},(_,index)=>({kind:'Pod',metadata:{name:name+'-'+index,uid:rsUID+'-'+index,namespace:'kodex-system',
       labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rsUID,name:set.metadata.name,controller:true}]},
       spec:structuredClone(app.spec.template.spec),status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],
-        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image,state:{running:{}}}))}})).map(p=>{
+        containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:name!=='control-plane'||!profile.startsWith('telegram')||app.spec.template.spec.containers[0].image===f.value.components[0].expectedImageRef||faults.policyReady,imageID:c.image,state:{running:{}}}))}})).map(p=>{
           if(name==='control-plane')faults.mutatePod?.(p);
           return p;
         })];
@@ -95,6 +95,7 @@ function lifecycleFixture(profile='github-repository-scope') {
     if(args.includes('patch')) {
       const name=args[args.indexOf('deployment')+1],app=apps.get(name);
       const patch=JSON.parse(readFileSync(args.find(a=>a.startsWith('--patch-file=')).slice('--patch-file='.length)));
+      if(args.includes('--dry-run=server'))faults.beforePatch?.(name);
       assert.equal(patch[0].value,app.metadata.uid);assert.equal(patch[1].value,app.metadata.resourceVersion);assert.deepEqual(patch[2].value,app.spec);
       if(!args.includes('--dry-run=server')) {
         app.spec=structuredClone(patch[3].value);status(app);patches.push(name);
@@ -113,10 +114,17 @@ function lifecycleFixture(profile='github-repository-scope') {
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},clock:{}});
-  return {lifecycle,apps,events,patches,faults,plan,
+  return {lifecycle,apps,events,patches,faults,plan,projectCP:()=>{
+      const part=handoff.components[0];faults.cpProjection={stagedSpec:structuredClone(part.stagedSpec),resumedSpec:structuredClone(part.resumedSpec)};
+      for(const spec of [faults.cpProjection.stagedSpec,faults.cpProjection.resumedSpec])spec.template.spec.containers[0].env.push({name:'POLICY_REVISION',value:'107'});
+      apps.get('control-plane').spec=structuredClone(faults.cpProjection.stagedSpec);status(apps.get('control-plane'));faults.policyReady=true;
+      const body={state:'PENDING_AUTHORITY',policyRevision:107,...telegramAuthorityReadbackContract(),sourceSHA:revision,
+       introducedReceiverSHA256:fingerprint(plan.imageEvidence.introducedReceiver),...Object.fromEntries(['clusterUID','namespaceUID','installationUID','installationSHA256'].map(key=>[key,plan.portableTarget[key]])),
+       observedAt:new Date().toISOString(),operationID:uuid(200),snapshotRevision:5};faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};
+    },
     stopCP:()=>{apps.get('control-plane').spec=structuredClone(handoff.components[0].stoppedSpec);status(apps.get('control-plane'));events.push({type:'STOP_ACK'});}};
 }
 
@@ -264,10 +272,11 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
   assert.equal(introduced.introduced,true);assert.equal(introduced.replicas,3);assert.equal(introduced.beforeSpec.replicas,0);
   await f.lifecycle.handoff();assert.deepEqual(f.apps.get('interaction-gateway').spec,introduced.beforeSpec);
   assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,0);
-  const result=await f.lifecycle.resume();assert.equal(result.status,'PENDING_AUTHORITY');assert.equal(result.pairReady,false);
+  const result=await f.lifecycle.resume();assert.equal(result.status,'STAGED_PENDING_AUTHORITY');assert.equal(result.pairReady,false);
   assert.equal(f.apps.get('interaction-gateway').spec.replicas,0);assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);
-  assert.equal(f.apps.get('control-plane').spec.replicas,3);assert.equal(f.apps.get('egress-gateway').spec.replicas,2);
-  const writes=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,writes);
+  assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.apps.get('egress-gateway').spec.replicas,0);
+  const writes=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'STAGED_PENDING_AUTHORITY');assert.equal(f.patches.length,writes);
+  f.projectCP();await f.lifecycle.resume();assert.equal(f.apps.get('control-plane').spec.replicas,3);assert.equal(f.apps.get('egress-gateway').spec.replicas,2);
  }
  const f=fixture('telegram-notifications');f.deployments.at(-1).metadata.uid=uuid(999);
  assert.throws(()=>planComponentMigrationHandoff(f.value,f.deployments,{revision}),/INTRODUCTION_HANDOFF_CHANGED/);
@@ -276,7 +285,7 @@ test('046 handoff сохраняет назначенный UID/spec dormant0, s
 });
 
 test('046 activation требует fresh107 DELIVER, lostACK rejoin не повторяет start и не открывает API',async()=>{
- const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();await f.lifecycle.resume();
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();await f.lifecycle.resume();f.faults.authorityDelivery=null;
  const writes=f.patches.length;await assert.rejects(()=>f.lifecycle.activateIntroduced(),/COHORT_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
  const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/API_READERS_REQUIRED/);assert.equal(f.patches.length,writes);
@@ -299,6 +308,31 @@ test('046 activation требует fresh107 DELIVER, lostACK rejoin не пов
  f.faults.authorityDelivery=null;f.lifecycle.inspect();const result=await f.lifecycle.activateIntroduced();
  assert.equal(result.status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,started);assert.equal(f.apps.get('control-api-gateway').spec.replicas,3);assert.equal(result.apiReadersIsolated,true);
  assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');assert.equal(f.patches.length,started);
+ f.faults.apiReaders.state='RESTORED_READERS_READY';f.faults.activeEffects=1;f.faults.activeInteractionDeliveries=1;
+ const terminal=await f.lifecycle.resume();assert.equal(terminal.status,'RESUMED');assert.equal(terminal.serviceRestored,true);assert.equal(f.patches.length,started);
+ f.faults.apiReaders.state='ISOLATED_READERS_READY';f.faults.activeEffects=0;f.faults.activeInteractionDeliveries=0;
  const intent=f.events.find(e=>e.type==='PAIR_ACTIVATE_INTENT');intent.type='FOREIGN';
  await assert.rejects(()=>f.lifecycle.activateIntroduced(),/UNOWNED_HANDOFF/);
+});
+
+test('046 CP не запускается со106projection; full Pod readiness остаётся обязательной после107pointer',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();
+ const initial=f.patches.length;assert.equal((await f.lifecycle.resume()).status,'STAGED_PENDING_AUTHORITY');assert.equal(f.patches.length,initial);
+ f.projectCP();const valid=f.faults.authorityDelivery;f.faults.authorityDelivery={...valid,sourceSHA:'f'.repeat(40)};
+ await assert.rejects(()=>f.lifecycle.resume(),/AUTHORITY_DELIVERY_REQUIRED/);assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.patches.length,initial);
+ f.faults.authorityDelivery=valid;f.faults.policyReady=false;
+ await assert.rejects(()=>f.lifecycle.resume(),/RESUME_TIMEOUT/);assert.equal(f.apps.get('control-plane').spec.replicas,3);
+ assert.equal(f.apps.get('staff-control-center').spec.replicas,0);assert.equal(f.apps.get('egress-gateway').spec.replicas,0);
+ const started=f.patches.length;f.faults.policyReady=true;f.lifecycle.inspect();assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,2);assert.equal(f.patches.length,started+2);
+});
+
+
+test('046 DELIVER TTL проверяется после dry-run прямо перед start intent; expiry не оставляет writer intent',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const now=Date.now,before=f.patches.length;f.faults.beforePatch=name=>{if(name==='control-plane')Date.now=()=>now()+40000;};
+ try{await assert.rejects(()=>f.lifecycle.resume(),/AUTHORITY_DELIVERY_REQUIRED/);}finally{Date.now=now;}
+ assert.equal(f.apps.get('control-plane').spec.replicas,0);assert.equal(f.patches.length,before);
+ assert.equal(f.events.some(row=>row.type==='RESUME_INTENT'),false);
+ f.faults.beforePatch=undefined;assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
 });

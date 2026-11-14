@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.10
+version: 1.0.11
 updated: 2026-11-14
 ---
 
@@ -238,15 +238,16 @@ Metadata-only TSV содержит только имена refs, не env/comman
 `TELEGRAM_NOTIFICATIONS_106_107` — отдельный закрытый профиль. Его source
 policy107 добавляет ровно четыре operation profiles к106; registry сохраняет
 все прежние16 entries и добавляет только issuer нового gateway. Старые106
-receipts и terminal proof16 не разрешают открыть Service, изолированный для107.
+receipts (required14/registered16) и terminal proof106 не разрешают открыть Service, изолированный для107.
 
 | Этап | Авторитетное доказательство и допустимый результат |
 | --- | --- |
 | Dormant create | Свежие source/publication receipt и10 actual objects с назначенными UID/spec; Deployment0, плановые replicas3. Только `PENDING_AUTHORITY` |
 | Schema046 и cohort | Закрытый predecessor045, полный normal/backup catalog, node proof и неизменные UID старых компонентов. Новый receiver сохраняется0; весь cohort ещё не READY |
 | Registry/key DELIVER | Fresh isolated Service и прежний API join; перед первым CAS снова читаются все dormant objects и private create lineage. Registry revision увеличивается от actual, publisher остаётся exact owned image |
+| CP projection107 | Public046 inspect подтверждает полный schema postcondition, terminal Job/Pod и положительный join всех5 writers. `control-plane-policy-projection.mjs` принимает `--migration-plan/evidence` только для staged107; pointer CAS сохраняет CP0 и требует свежий owner DELIVER |
 | Запуск readers | Fresh owner status Job подтверждает exact107 operation/registry, `DISTRIBUTE`, protocol2, опубликованный snapshot `base+1` и `deliveredAt`. Это `PENDING_AUTHORITY`, без требования выдуманных17 readbacks до запуска |
-| Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP получает107 projection, точный startup-required subset из17 registered targets даёт свежие readbacks. Exact owner RETIRE с required-set hash относится к `base+3` и той же operation |
+| Readbacks и RETIRE | Новый issuer реально запускается после barrier; CP уже обслуживает107 projection, точный startup-required subset15 из17 registered targets даёт свежие readbacks. Exact owner RETIRE с required-set hash относится к `base+3` и той же operation |
 | Service restore | Только отдельный fresh terminal107 proof с точным required subset и registered17 и полный ready serving inventory открывают прежний selector. Dormant/DELIVER receipt не является terminal admission |
 
 Для нового receiver schema handoff является устойчивым принятием уже
@@ -258,9 +259,20 @@ DELIVER; lostACK восстанавливается по intent и полном�
 остаётся изолированным. Результат `READERS_STARTED_PENDING_RETIRE` подтверждает
 лишь запуск readers за этой boundary, без открытия пользовательского трафика.
 
+Первый schema `resume` возвращает `STAGED_PENDING_AUTHORITY`: CP, PWA и egress
+также остаются0, без ложной readiness нового image со старой106projection.
+Handoff фиксирует протокол `STAGED_POLICY_107_V1`, несовместимый со старым executor,
+который запускал CP раньше projection. После DELIVER и успешного pointer CAS
+`resume` получает `--cp-projection-plan`, `--cp-projection-evidence` и свежие
+authority status paths. Проверяются exact own ACK UID/body, source policy107,
+исходный migration plan и единственное разрешённое изменение policy pointer.
+Только после полного Pod ready CP возобновляются PWA/egress; API и новый issuer
+остаются0. Привязка projection передаётся во все последующие inspect/resume/activate.
+
 Публичная фаза `control-plane-migration.mjs activate` принимает приватные
 `--authority-plan`, `--authority-evidence`, `--authority-status-plan`,
-`--authority-status-evidence`, `--api-open-plan`, `--api-open-evidence` только
+`--authority-status-evidence`, `--api-open-plan`, `--api-open-evidence`,
+`--cp-projection-plan`, `--cp-projection-evidence` только
 для046. GET/logs перечитывают исходный owner operation, свежий status Job,
 OPEN journal и Service/EndpointSlices. Чужой source/UID, незавершённый OPEN,
 неполный Pod inventory либо потерянная изоляция не дают start. Та же привязка
@@ -287,7 +299,15 @@ Terminal UNKNOWN с `completed_at` и всеми закрытыми lease fields
 полный045→046 metadata proof, check/stop/join/DDL, адресные input effects,
 lost ACK, image/config cohort и повторный resume без второго DDL. Синтетические
 Kubernetes/PostgreSQL transports не заменяют native SQL либо installed proof;
-результат остаётся `PENDING_AUTHORITY` до107 owner acceptance.
+После DDL результат остаётся `STAGED_PENDING_AUTHORITY`, пока CP не получил
+собственную projection107; mock не подтверждает ready нового CP со106policy.
+Далее тот же contour выполняет реальные отдельные CLI-процессы
+rotation/status→projection107→CP resume→API OPEN за изоляцией→issuer activation→
+RETIRE/status→Service restore→повторный final inspect/resume без effects.
+История RESTORED не разрешает первый start нового issuer: activation требует
+ещё изолированного Service. Для последующего read/rejoin требуются exact own
+`--api-restore-plan/evidence`, terminal107 той же operation и текущий полный
+serving inventory; это не выдаёт нового права открыть Service.
 
 ## Квалификация
 

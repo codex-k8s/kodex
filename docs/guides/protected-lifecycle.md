@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.89
+version: 1.1.90
 updated: 2026-11-14
 ---
 
@@ -82,6 +82,16 @@ exact spec и полному ready inventory без повторного ста�
 открытие API остаются отдельным допуском. Сохранённый boolean или caller proof
 не заменяет authoritative read path. Для уже существующих cohorts их прежние
 counts, join и terminal guards сохраняются.
+
+Если новый CP image требует новую policy projection, прежний schema resume не
+запускает его со старой policy. После DDL весь cohort остаётся положительно
+joined на нуле (`STAGED_PENDING_AUTHORITY`). Отдельный pointer CAS допускается
+только полным свежим owner inspect schema/Job/Pod/join, связанным с исходным
+migration plan. Установка новой immutable projection сохраняет replicas0.
+Последующий start принимает только exact spec из ACK этого же projection journal
+и свежий owner DELIVER; положительная readiness всех Pods остаётся обязательной.
+Чужой pointer, устаревший source, дополнительный env и неподтверждённый ACK
+не являются основанием менять ожидаемый migration spec.
 
 Открытие пользовательского API после обновления требует подтверждённой readiness
 всего serving inventory: owner lineage, полный набор containers/init/ephemeral,

@@ -1,3 +1,4 @@
+import {telegramStagedPolicyProtocol} from './telegram-cp-policy.mjs';
 import {telegramDeploymentInputs} from './telegram-runtime-inputs.mjs';
 import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
@@ -180,7 +181,7 @@ export function componentMigrationTarget(target, publication, observed) {
       !actual.metadata.deletionTimestamp && actual.status?.conditions?.some(v => v.type === 'Ready' && v.status === 'True')))), 'COMPONENT_MIGRATION_TARGET_MISMATCH');
   const gateway = observed.deployments.find(d => d.metadata.name === 'control-api-gateway');
   const readers=observed.maintenanceReaders;
-  requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&readers?.state==='ISOLATED_READERS_READY'&&
+  requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&['ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&
     readers.sourceSHA===observed.sourceRevision&&readers.deploymentUID===gateway.metadata.uid&&
     fingerprint(readers.spec)===fingerprint(gateway.spec),'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
   return {...validated,targetSHA256:scope.digest};
@@ -193,6 +194,7 @@ export function planComponentMigrationHandoff(publication, deployments, source, 
   requireValue(!runtimeInputs||profiles[publication.profile].introduced&&runtimeInputs.sourceSHA===source.revision&&
     runtimeInputs.schema==='kodex.telegram-runtime-inputs/v1','TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
   return {schema:'kodex.component-migration-handoff/v1',publicationSHA256:validated.digest,
+    ...(profiles[publication.profile].introduced?{introducedReadiness:telegramStagedPolicyProtocol}:{}),
     ...(runtimeInputs?{runtimeInputsSHA256:fingerprint(runtimeInputs)}:{}),
     components:validated.components.map(part => {
       const matches = deployments.filter(d => d.kind === 'Deployment' && d.metadata.name === part.component && d.metadata.namespace === 'kodex-system');
@@ -364,7 +366,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -377,11 +379,14 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const stages=expected.maintenance?['stoppedSpec','stagedSpec']:expected.introduced?['stoppedSpec','stagedSpec','resumedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
     let stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
     let readers;
+    if(!stage&&name==='control-plane'&&profiles[plan.imageEvidence.profile].introduced&&typeof readCPProjection==='function'){
+      const admitted=readCPProjection();stage=['stagedSpec','resumedSpec'].find(key=>fingerprint(admitted[key])===fingerprint(actual.spec));
+    }
     if(!stage&&expected.maintenance&&profiles[plan.imageEvidence.profile].introduced&&typeof readMaintenanceReaders==='function'){
       readers=readMaintenanceReaders();
-      requireValue(readers?.state==='ISOLATED_READERS_READY'&&readers.sourceSHA===plan.source.revision&&
+      requireValue(['ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&readers.sourceSHA===plan.source.revision&&
         readers.deploymentUID===expected.uid&&fingerprint(readers.spec)===fingerprint(actual.spec),'TELEGRAM_API_READERS_REQUIRED');
-      stage='isolatedReadersSpec';
+      stage=readers.state==='RESTORED_READERS_READY'?'restoredReadersSpec':'isolatedReadersSpec';
     }
     if(expected.introduced&&stage==='stoppedSpec'&&journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'&&e.name===name))stage='stagedSpec';
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
@@ -395,8 +400,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     journal.append({type:'PAIR_INSPECT',name,stage:state.stage,resourceVersion:state.actual.metadata.resourceVersion});
     return {name,stage:state.stage,joined:state.joined,ready:state.ready,...(part(name).maintenance?{maintenance:true}:{})};
   });
-  const transition = (name,stage,type) => {
-    const state=observe(name), expected=part(name), wanted=expected[stage];
+  const transition = (name,stage,type,gate=()=>{}) => {
+    const state=observe(name), expected=part(name), wanted=name==='control-plane'&&profiles[plan.imageEvidence.profile].introduced&&stage==='resumedSpec'?readCPProjection().resumedSpec:expected[stage];
     const last=journal.events.findLastIndex(e => e.type === type && e.name === name);
     if (state.stage === stage) {
       requireValue(last >= 0,'COMPONENT_MIGRATION_UNOWNED_HANDOFF');return;
@@ -417,7 +422,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     withPrivatePatchFile(patch, path => {
       const args=['-n',namespace,'patch','deployment',name,'--type=json',`--patch-file=${path}`];
       kube([...args,'--dry-run=server']);
-      journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion});
+      gate();journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion});
       try { kube(args); }
       catch(error) {journal.append({type:'UNKNOWN',step:type,name,code:error.message});throw error;}
     });
@@ -452,6 +457,19 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     if(profiles[plan.imageEvidence.profile].introduced)requireValue(proof.activeInteractionDeliveries===0,'MIGRATION_OWNER_PRECONDITION_FAILED');
     requireValue(fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     validateInputs();
+  };
+  const deliveryFresh=proof=>{const now=Date.now(),observed=Date.parse(proof?.observedAt);
+    requireValue(Number.isFinite(observed)&&observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');};
+  const delivered=async()=>{
+    const proof=await readAuthorityDelivery(),{deliverySHA256,...body}=proof??{};
+    const observed=Date.parse(proof?.observedAt),now=Date.now(),target=plan.portableTarget;
+    const readers=telegramAuthorityReadbackContract();
+    requireValue(proof?.state==='PENDING_AUTHORITY'&&proof.policyRevision===107&&Object.entries(readers).every(([key,value])=>proof[key]===value)&&
+      proof.sourceSHA===plan.source.revision&&proof.introducedReceiverSHA256===fingerprint(plan.imageEvidence.introducedReceiver)&&
+      proof.clusterUID===target?.clusterUID&&proof.namespaceUID===target.namespaceUID&&proof.installationUID===target.installationUID&&
+      proof.installationSHA256===target.installationSHA256&&sha(deliverySHA256)&&deliverySHA256===fingerprint(body)&&
+      observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+    return proof;
   };
   return {
     inspect,
@@ -488,26 +506,20 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       const introduced=profiles[plan.imageEvidence.profile].introduced;
       requireValue(introduced&&typeof readAuthorityDelivery==='function','TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
       schemaReady(true);requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      let apiReaders;
       for(const name of names.filter(name=>name!==introduced)){
         const state=observe(name);
+        if(name==='control-api-gateway')apiReaders=state;
         requireValue(part(name).maintenance?state.stage==='isolatedReadersSpec'&&state.ready:state.stage==='resumedSpec'&&state.ready,
           'TELEGRAM_COHORT_READERS_REQUIRED');
       }
       const current=observe(introduced);
       if(current.stage==='stagedSpec'){
         requireValue(current.joined,'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
-        const proof=await readAuthorityDelivery(),{deliverySHA256,...body}=proof??{};
-        const observed=Date.parse(proof?.observedAt),now=Date.now(),target=plan.portableTarget;
-        const readers=telegramAuthorityReadbackContract();
-        requireValue(proof?.state==='PENDING_AUTHORITY'&&proof.policyRevision===107&&Object.entries(readers).every(([key,value])=>proof[key]===value)&&
-          proof.sourceSHA===plan.source.revision&&proof.introducedReceiverSHA256===fingerprint(plan.imageEvidence.introducedReceiver)&&
-          proof.clusterUID===target?.clusterUID&&proof.namespaceUID===target.namespaceUID&&proof.installationUID===target.installationUID&&
-          proof.installationSHA256===target.installationSHA256&&sha(deliverySHA256)&&deliverySHA256===fingerprint(body)&&
-          observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
-        const api=observe('control-api-gateway');
-        requireValue(api.stage==='isolatedReadersSpec'&&api.ready&&api.readers.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
+        const proof=await delivered(),{deliverySHA256}=proof;
+        requireValue(apiReaders.stage==='isolatedReadersSpec'&&apiReaders.ready&&apiReaders.readers.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
         journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',operationID:proof.operationID,deliverySHA256,snapshotRevision:proof.snapshotRevision});
-        transition(introduced,'resumedSpec','PAIR_ACTIVATE_INTENT');
+        transition(introduced,'resumedSpec','PAIR_ACTIVATE_INTENT',()=>deliveryFresh(proof));
       }else requireValue(current.stage==='resumedSpec'&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===introduced)&&
         journal.events.some(e=>e.type==='TELEGRAM_AUTHORITY_DELIVERY_VERIFIED'&&e.operationID===observe('control-api-gateway').readers?.operationID),
         'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
@@ -516,24 +528,51 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       return {status:'READERS_STARTED_PENDING_RETIRE',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:true,apiReadersIsolated:true,forwardOnly:true};
     },
     async resume() {
+      // После terminal107 и собственного RESTORED новые writers уже обслуживают
+      // пользователей. Read/rejoin не требует остановки их обычной работы и
+      // не выдаёт ни одного patch; все owned spec/Pod и schema proofs сохраняются.
+      if(profiles[plan.imageEvidence.profile].introduced&&observe('control-api-gateway').stage==='restoredReadersSpec'){
+        requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK')&&journal.events.some(e=>e.type==='RESUME_INTENT'&&e.name==='control-plane')&&
+          journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===profiles[plan.imageEvidence.profile].introduced),
+          'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+        requireValue(names.every(name=>{const state=observe(name);return ['resumedSpec','restoredReadersSpec'].includes(state.stage)&&state.ready;}),
+          'TELEGRAM_COHORT_READERS_REQUIRED');
+        readJob(true);const result=readJob();requireValue(result.status==='PASS'&&result.schemaPostcondition==='PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
+        validateInputs();return {status:'RESUMED',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:false,serviceRestored:true,forwardOnly:true};
+      }
       schemaReady(true);requireValue(journal.events.some(e => e.type === 'PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      let cpDelivery;
+      if(profiles[plan.imageEvidence.profile].introduced){
+        if(typeof readCPProjection!=='function'||!readCPProjection(false)){
+          requireValue(names.every(name=>observe(name).stage==='stagedSpec'&&observe(name).joined),'TELEGRAM_CP_STAGE_JOIN_REQUIRED');
+          return {status:'STAGED_PENDING_AUTHORITY',cpStage:'STAGED',schemaPostcondition:'PASS',pairReady:false,forwardOnly:true,projectionRequired:true,gatewayMaintenance:true};
+        }
+        const cp=observe('control-plane');
+        if(cp.stage==='stagedSpec'){
+          requireValue(typeof readAuthorityDelivery==='function','TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+          const proof=await delivered();cpDelivery=proof;
+          journal.append({type:'TELEGRAM_CP_AUTHORITY_VERIFIED',operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+        }
+      }
       for (const name of names) {
         if(part(name).maintenance||part(name).introduced) {
           const state=observe(name);
           if(part(name).introduced&&state.stage==='resumedSpec'){
             requireValue(state.ready&&journal.events.some(e=>e.type==='PAIR_ACTIVATE_INTENT'&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');continue;
           }
-          if(part(name).maintenance&&state.stage==='isolatedReadersSpec'&&state.ready)continue;
+          if(part(name).maintenance&&['isolatedReadersSpec','restoredReadersSpec'].includes(state.stage)&&state.ready)continue;
           requireValue(state.stage === 'stagedSpec' && state.joined,'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
           continue;
         }
-        transition(name,'resumedSpec',name === 'control-plane' ? 'RESUME_INTENT' : 'PAIR_RESUME_INTENT');
+        transition(name,'resumedSpec',name === 'control-plane' ? 'RESUME_INTENT' : 'PAIR_RESUME_INTENT',()=>{if(name==='control-plane'&&cpDelivery)deliveryFresh(cpDelivery);});
         await wait(() => observe(name),s => s.stage === 'resumedSpec' && s.ready,'COMPONENT_MIGRATION_RESUME_TIMEOUT',clock);
         journal.append({type:name === 'control-plane' ? 'RESUME_ACK' : 'PAIR_RESUME_ACK',name});
       }
-      const pending=names.some(name=>part(name).introduced);
+      const restored=profiles[plan.imageEvidence.profile].introduced&&observe('control-api-gateway').stage==='restoredReadersSpec';
+      const pending=names.some(name=>part(name).introduced)&&!restored;
+      if(restored)requireValue(names.every(name=>['resumedSpec','restoredReadersSpec'].includes(observe(name).stage)&&observe(name).ready),'TELEGRAM_COHORT_READERS_REQUIRED');
       return {status:pending?'PENDING_AUTHORITY':'RESUMED',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:!pending,forwardOnly:true,
-        ...(names.some(name=>part(name).maintenance)?{gatewayMaintenance:true}:{})};
+        ...(names.some(name=>part(name).maintenance)?{gatewayMaintenance:!restored,...(restored?{serviceRestored:true}:{})}:{})};
     },
   };
 }

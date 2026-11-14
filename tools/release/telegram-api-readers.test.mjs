@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
 import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
 import {planComponentAPITraffic,requireClosedAPIAdmission} from './component-api-traffic.mjs';
-import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
+import {telegramPolicyTransition,telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
 import {verifyTelegramAPIReaders} from './telegram-api-readers.mjs';
 
 const uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`,source='a'.repeat(40),name='control-api-gateway';
@@ -36,7 +36,7 @@ function fixture(){
  const rs={kind:'ReplicaSet',metadata:{name:'owned-rs',namespace:'kodex-system',uid:uid(7),ownerReferences:[{kind:'Deployment',uid:uid(1),controller:true}]}};
  const resources={items:[rs,...[8,9,10].map(n=>({kind:'Pod',metadata:{name:'api-'+n,namespace:'kodex-system',uid:uid(n),labels,ownerReferences:[{kind:'ReplicaSet',uid:uid(7),controller:true}]},
   spec:same(deployment.spec.template.spec),status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:[{name,ready:true,state:{running:{}},imageID:deployment.spec.template.spec.containers[0].image}]}}))]};
- const authority={revision:source,ownerOperationID:uid(20),policyTransition:{...target,profile:telegramPolicyTransition},maintenance:{proof:admission}};
+ const authority={revision:source,ownerOperationID:uid(20),policyTransition:{...target,targetProfile:target,profile:telegramPolicyTransition},maintenance:{proof:admission}};
  const openEvents=[header(openPlan),{type:'INTENT',step:'apply'},{type:'OBSERVED',state:'OPEN',deploymentUID:uid(1),maintenanceID:openPlan.maintenanceID}];
  return {migration,authority,openPlan,openEvents,closed,traffic,deployment,resources};
 }
@@ -53,5 +53,26 @@ test('107 API readers требуют реальные OPEN history, exact spec/C
   x=>x.traffic.service.spec.ports[0].port=8080,x=>delete x.traffic.service.spec.selector['kodex.dev/component-traffic-isolation'],
   x=>x.traffic.slices.items.push({kind:'EndpointSlice',apiVersion:'discovery.k8s.io/v1',metadata:{namespace:'kodex-system'},endpoints:[{addresses:['192.0.2.5']}]})]){
   const broken=fixture();mutate(broken);assert.throws(()=>verifyTelegramAPIReaders(broken));
+ }
+});
+
+
+test('107 final inspect принимает own terminal RESTORED history, сохраняя full current API ready и107operation',()=>{
+ const f=fixture(),target=f.closed.plan.target,body={policyRevision:107,operationID:f.authority.ownerOperationID,targetSHA256:fingerprint(target),
+  trafficPlanSHA256:fingerprint(f.traffic.plan),serviceUID:f.traffic.service.metadata.uid,...telegramAuthorityReadbackContract(),actualReadbackCount:17,
+  registryRevision:3,snapshotRevision:7,policySHA256:'a'.repeat(64),registrySHA256:'b'.repeat(64),snapshotSHA256:'c'.repeat(64),
+  planSHA256:fingerprint(f.authority),freshPlanSHA256:'d'.repeat(64),observedAt:new Date().toISOString()};
+ const terminal={...body,terminalSHA256:fingerprint(body)},observed={context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,
+  installation:{apiVersion:'v1',kind:'ConfigMap',metadata:{name:'kodex-installation-profile',namespace:'kodex-system',uid:uid(5),labels:{'app.kubernetes.io/part-of':'kodex','app.kubernetes.io/managed-by':'kodex-install'}},data:{synthetic:'installation'}}};
+ const plan=planComponentAPITraffic({service:f.traffic.service,deployment:f.deployment,resources:f.resources,target,observed,sourceSHA:source,action:'restore',closed:f.closed,previous:f.traffic,terminal});
+ f.restored={plan,events:[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID},
+  {type:'AUTHORITY_CONFIRMED',plannedTerminalSHA256:terminal.terminalSHA256,authority:terminal},{type:'INTENT',step:'apply'},
+  {type:'OBSERVED',state:'RESTORED',serviceUID:plan.serviceUID,maintenanceID:plan.maintenanceID}]};
+ f.traffic.service.spec=same(plan.afterSpec);f.traffic.service.metadata.annotations=same(plan.afterAnnotations);
+ assert.equal(verifyTelegramAPIReaders(f).state,'RESTORED_READERS_READY');
+ for(const mutate of [x=>x.restored.events.splice(1,1),x=>x.restored.events[3].state='BEFORE',x=>x.restored.plan.authority.operationID=uid(999),
+  x=>x.traffic.service.metadata.uid=uid(999),x=>x.traffic.service.spec.ports[0].port=8080,x=>x.resources.items.splice(1),
+  x=>x.restored.plan.authority.policyRevision=106,x=>x.restored.events[1].authority.terminalSHA256='f'.repeat(64)]){
+  const broken=same(f);mutate(broken);assert.throws(()=>verifyTelegramAPIReaders(broken));
  }
 });

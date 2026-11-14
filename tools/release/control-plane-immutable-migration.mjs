@@ -1,3 +1,4 @@
+import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
 import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
 import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
@@ -385,7 +386,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
   const activationAuthority = () => {
-    ensure(componentPublication?.introducedReceiver&&options['--authority-plan']&&options['--api-open-plan']&&options['--api-open-evidence'],
+    ensure(componentPublication?.introducedReceiver&&options['--authority-plan'],
       'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
     const authority=privateJSON(options['--authority-plan']);
     ensure(authority.source===retainedPlan.source.path&&authority.revision===retainedPlan.source.revision&&
@@ -394,7 +395,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return authority;
   };
   const readMaintenanceReaders = () => readTelegramAPIReaders({migration:retainedPlan,authority:activationAuthority(),
-    openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence']},kube);
+    openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
+    restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence']},kube);
   const readAuthorityDelivery = async () => {
     const authority=activationAuthority();
     ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
@@ -602,6 +604,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if (componentPublication) {
       plan.portableTarget = structuredClone(portableTarget);
       if(componentPublication.introducedReceiver){
+        plan.kubeconfig=resolve(options['--kubeconfig']);
         plan.telegramInputs=planTelegramRuntimeInputs({resources:readRuntimeSource(source),
           get:(kind,name)=>{const raw=kube(['-n',namespace,'get',kind.toLowerCase(),name,'--ignore-not-found=true','-o','json']);return raw.trim()?JSON.parse(raw):null;},
           installation:get('configmap','kodex-installation-profile'),sourceSHA:source.revision,migrationID:plan.id});
@@ -629,6 +632,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return;
   }
   const plan = retainedPlan;
+  const readCPProjection=(required=true)=>{
+    if(!options['--cp-projection-plan']&&!required)return undefined;
+    return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence']},kube);
+  };
+  if(componentPublication?.introducedReceiver)ensure(plan.kubeconfig===resolve(options['--kubeconfig']),'MIGRATION_KUBECONFIG_CHANGED');
   ensure([1,2].includes(plan.version) && plan.kind === 'CONTROL_PLANE_MIGRATION' && plan.profile === profile &&
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
@@ -680,6 +688,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       const cpHandoff = plan.componentHandoff?.components.find(c => c.name === 'control-plane');
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.stagedSpec)) stage = 'STAGED';
       if (cpHandoff && marker === planSHA256 && hash === fingerprint(cpHandoff.resumedSpec) && resumed) stage = 'UPGRADED';
+      if(!stage&&cpHandoff&&componentPublication?.introducedReceiver&&marker===planSHA256){
+        const admitted=readCPProjection();
+        if(hash===fingerprint(admitted.stagedSpec))stage='STAGED';
+        if(hash===fingerprint(admitted.resumedSpec)&&resumed)stage='UPGRADED';
+      }
       ensure(stage, 'MIGRATION_CP_SPEC_CHANGED');
       const pods = activeDeploymentPods(readComponentServingInventory(kube,'control-plane',plan.anchor.uid),plan.anchor.uid);
       const joined = actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
@@ -788,7 +801,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,readAuthorityDelivery,readMaintenanceReaders,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
       prepareRuntimeInputs:()=>applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,gate:()=>{
         ensure(sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         verifyRuntimeInputs();imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -857,7 +870,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       }
       return output({...result,
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
-        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || s.maintenance === true && s.stage === 'stagedSpec' && s.joined),forwardOnly:true} : {})});
+        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || ['isolatedReadersSpec','restoredReadersSpec'].includes(s.stage)&&s.ready || s.maintenance === true && s.stage === 'stagedSpec' && s.joined),forwardOnly:true} : {})});
     }
     if(componentPublication?.introducedReceiver&&['check','stop','apply'].includes(phase))await readIntroduction(plan.imageEvidence,plan.source);
     if (phase === 'check') {
