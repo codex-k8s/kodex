@@ -171,7 +171,7 @@ node tools/release/control-plane-policy-projection.mjs apply \
 read-only CLI Job должен завершиться, а owner `observedAt` быть не старше30секунд.
 `readCatalogAuthorityTerminal` проверяет exact operation UUID, registry/policy
 hashes, все16 required readbacks, `RETIRED`, phase deadlines и source snapshot.
-Job/Pоd связываются по UID, полным container/init/ephemeral arrays и CRI digests.
+Job/Pod связываются по UID, полным container/init/ephemeral arrays и CRI digests.
 Старый успешный watch Job не считается свежим DB query. Getter сам только
 читает; создание status Job остаётся явной операторской операцией.
 
@@ -262,3 +262,12 @@ images `control-plane`, `control-api-gateway`, `control-center`; прочие im
 rotations требует отдельно описанного нового `internal-rpc-authority` image;
 sidecar ABI2 и DB schema от этого не меняются. Пересборка authority без причины
 не подменяет source publication,16 receipts или фактическую готовность RPC.
+
+Portable migration owner reads используют exact контейнер `postgresql`, очищенное
+`env -i`, `psql -X`, локальный socket `/var/run/postgresql:5432` и явные database/user
+без password prompt. `PGHOST`, `PGSERVICE`, startup environment и `.psqlrc` не
+могут перенаправить precondition, drain или postcondition на другой backend.
+Новый portable plan хранит строковые PostgreSQL system identifier/database OID;
+каждый owner SQL query сверяет их и Pod UID до и после исполнения. План без этого
+pin нужно подготовить заново; прежние исторические staging-планы сохраняют свой
+формат, но также используют закрытый local-socket transport.

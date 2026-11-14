@@ -328,7 +328,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,validateInputs,activePods,wait,clock}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -381,7 +381,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const sql=extended?drainSQL(plan.source):preconditionSQL(plan.source);
     requireValue(createHash('sha256').update(sql).digest('hex') === (extended?plan.componentDrainSQLSHA256:plan.preconditionSQLSHA256) &&
       fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_PRECONDITION_SOURCE_CHANGED');
-    const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+    requireValue(typeof readOwnerSQL === 'function','COMPONENT_MIGRATION_DATABASE_READER_REQUIRED');
+    const proof=readOwnerSQL(sql);
     requireValue(proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === Number(plan.migrationVersion) &&
       ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
         'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].every(k => proof[k] === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');

@@ -2,6 +2,7 @@ import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.
 import { validatedStablePublication } from './stable-image-publication.mjs';
 import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
+import { migrationOwnerDatabase, validateMigrationDatabaseIdentity } from './migration-owner-database.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
@@ -375,16 +376,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       phase === 'Running' && !deleting && !extra.length, 'MIGRATION_POSTGRES_IDENTITY_INVALID');
     return {pod:'kodex-postgresql-0',uid,ownerUID};
   };
+  const ownerDatabase = migrationOwnerDatabase(kube,postgresIdentity);
   const preconditionSQL = source => readFileSync(`${source.path}/tools/release/${configuration.preconditionFile}`);
   const drainSQL = source => readFileSync(`${source.path}/tools/release/portable-component-migration-drain.sql`);
-  const precondition = (source, expectedPostgres, expectedSQL, requireStopped = false) => {
+  const precondition = (source, expectedPostgres, expectedSQL, requireStopped = false, expectedBackend) => {
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const sql = preconditionSQL(source);
     ensure(createHash('sha256').update(sql).digest('hex') === expectedSQL, 'MIGRATION_PRECONDITION_SOURCE_CHANGED');
-    // Тот же закрытый Operator.sql transport: local psql без env/DSN/Secret values,
-    // SQL только из accepted clean source; BEGIN READ ONLY ограничивает серверную сессию.
-    const result = JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--',
-      'psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+    const result = ownerDatabase.read(sql,expectedPostgres,expectedBackend);
     ensure(fingerprint(postgresIdentity()) === fingerprint(expectedPostgres), 'MIGRATION_POSTGRES_IDENTITY_CHANGED');
     const fields = ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
       'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'];
@@ -528,10 +527,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         plan.componentDrainSQLSHA256=createHash('sha256').update(drainSQL(source)).digest('hex');
     }
     if (previous) plan.predecessor = previous;
-    plan.postgres = postgresIdentity();plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
+    plan.postgres = postgresIdentity();
+    if(configuration.anchorProfile === 'portable') plan.postgresBackend = ownerDatabase.identity(plan.postgres);
+    plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
     if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
-    precondition(source,plan.postgres,plan.preconditionSQLSHA256);
+    precondition(source,plan.postgres,plan.preconditionSQLSHA256,false,plan.postgresBackend);
     writePrivate(options['--plan'],plan);
     process.stdout.write(`${JSON.stringify({status:'PLANNED',jobName:plan.job.metadata.name,sourceRevision:source.revision,planSHA256:fingerprint(plan)})}\n`);
     return;
@@ -541,6 +542,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.migrationVersion === migrationVersion && plan.context === context && plan.clusterUID === clusterUID &&
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   validateCheckIdentity(plan);
+  if(configuration.anchorProfile === 'portable') validateMigrationDatabaseIdentity(plan.postgresBackend);
   imageScope(plan.imageEvidence,plan.namespaceUID);
   const planSHA256 = fingerprint(plan);
   const revalidationRevision = options['--revalidate-postcondition-revision'];
@@ -609,7 +611,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         const sql=readFileSync(`${plan.source.path}/tools/release/${configuration.postconditionFile}`);
         ensure(createHash('sha256').update(sql).digest('hex')===(revalidation?.sqlSHA256 ?? plan.postconditionSQLSHA256),'MIGRATION_POSTCONDITION_SOURCE_CHANGED');
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+        const proof=ownerDatabase.read(sql,plan.postgres,plan.postgresBackend);
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
@@ -669,6 +671,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
+      readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
       activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,validateInputs:() => {
         ensure(sourceDigest(plan.source) === plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -722,7 +725,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (!checks.length) {
         const state = observeCP();ensure(state.stage === 'BEFORE' && state.ready && !attempts.length, 'MIGRATION_CHECK_BEFORE_STOP_REQUIRED');
         verifyInputs(state.actual);noActiveMigrations();
-        precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256);
+        precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,false,plan.postgresBackend);
         ensure(!optionalJob(plan.checkJob.metadata.name), 'MIGRATION_CHECK_ALREADY_EXISTS');
         const job = structuredClone(plan.checkJob);job.metadata.annotations = {[annotation]:planSHA256};
         journal.append({type:'CHECK_CREATE_INTENT',jobName:job.metadata.name});
@@ -742,7 +745,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ensure(state.actual.metadata.resourceVersion === plan.anchor.resourceVersion, 'MIGRATION_PLAN_DRIFT');
         verifyInputs(state.actual);noActiveMigrations();ensure(!optionalJob(plan.job.metadata.name), 'MIGRATION_JOB_ALREADY_EXISTS');
         readCheck(true);
-        const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256);
+        const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,false,plan.postgresBackend);
         journal.append({type:'OWNER_PREFLIGHT',...proof});
         transition('STOP',state,0);
       } else ensure(journal.events.some(e => e.type === 'STOP_INTENT'), 'MIGRATION_UNOWNED_STOP');
@@ -774,7 +777,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         } else if(profile==='workspace-backup') {
           const sql=readFileSync(`${plan.source.path}/tools/release/workspace-backup-acl-readback.sql`);
           ensure(createHash('sha256').update(sql).digest('hex')===plan.backupACLReadbackSQLSHA256,'MIGRATION_BACKUP_READBACK_SOURCE_CHANGED');
-          const proof=JSON.parse(kube(['-n',namespace,'exec','-i','kodex-postgresql-0','--','psql','-XqAt','-U','postgres','-d','control_plane','-v','ON_ERROR_STOP=1'],sql));
+          const proof=ownerDatabase.read(sql,plan.postgres,plan.postgresBackend);
           ensure(validWorkspaceBackupACLReadback(proof),'MIGRATION_BACKUP_ACL_RESTORE_REQUIRED');
           journal.append({type:'BACKUP_ACL_RESTORED',gooseVersion:proof.gooseVersion,sqlSHA256:plan.backupACLReadbackSQLSHA256});
         }
@@ -791,7 +794,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (pair) pair.requireStopped();
       ensure(journal.events.some(e => e.type === 'STOP_ACK' || (e.type === 'INSPECT' && e.stage === 'STOPPED' && e.podsGone)), 'MIGRATION_STOP_READBACK_REQUIRED');
       verifyInputs(state.actual);noActiveMigrations();
-      const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true);
+      const proof = precondition(plan.source,plan.postgres,plan.preconditionSQLSHA256,true,plan.postgresBackend);
       journal.append({type:'OWNER_PREFLIGHT',...proof});
       const bootstrap = optionalJob('control-plane-migrate');
       if (bootstrap && configuration.anchorProfile === 'portable') {

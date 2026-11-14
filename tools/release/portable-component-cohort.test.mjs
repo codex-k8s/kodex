@@ -168,6 +168,7 @@ function lifecycleFixture() {
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},clock:{}});
   return {lifecycle,apps,events,patches,faults,plan,
