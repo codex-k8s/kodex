@@ -129,7 +129,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},
     clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}});
@@ -476,4 +476,17 @@ test('046 bootstrap pending API не разрешает смену operation, ac
   await assert.rejects(()=>f.lifecycle.startReaders(),/READERS_REQUIRED|OWNER_PRECONDITION_FAILED|UNOWNED_HANDOFF|DELIVERY_REQUIRED/);
   assert.equal(f.events.some(e=>e.type==='PAIR_ACTIVATE_ACK'),false);
  }
+});
+
+
+test('046 bootstrap повторно проверяет DELIVER TTL после медленного API isolation read перед CAS',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ const now=Date.now,before=f.patches.length;let afterDryRun=false;
+ f.faults.beforePatch=name=>{if(name==='control-plane')afterDryRun=true;};
+ f.faults.beforeAPIRead=()=>{if(afterDryRun)Date.now=()=>now()+40000;};
+ try{await assert.rejects(()=>f.lifecycle.startReaders(),/AUTHORITY_DELIVERY_REQUIRED/);}finally{Date.now=now;}
+ assert.equal(afterDryRun,true);assert.equal(f.patches.length,before);assert.equal(f.apps.get('control-plane').spec.replicas,0);
+ assert.equal(f.events.some(e=>e.type==='RESUME_INTENT'),false);
 });

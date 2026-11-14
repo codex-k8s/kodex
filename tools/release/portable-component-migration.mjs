@@ -552,10 +552,10 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
         if(name==='control-plane'&&current.stage==='stagedSpec')journal.append({type:'TELEGRAM_CP_AUTHORITY_VERIFIED',
           operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
         await transition(name,'resumedSpec',type,()=>{
-          deliveryFresh(proof);
           const currentAPI=observe('control-api-gateway');
           requireValue(currentAPI.stage==='isolatedReadersSpec'&&currentAPI.readers?.operationID===proof.operationID,
             'TELEGRAM_API_READERS_REQUIRED');
+          deliveryFresh(proof);
         });
       }
       requireValue(observe('control-api-gateway').stage==='isolatedReadersSpec','TELEGRAM_API_READERS_REQUIRED');
