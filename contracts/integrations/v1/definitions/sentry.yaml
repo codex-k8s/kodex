@@ -29,21 +29,27 @@
           "https://sentry.io",
           "https://us.sentry.io",
           "https://de.sentry.io"
-        ]
+        ],
+        "label": "Адрес Sentry API",
+        "help": "Точный HTTPS-адрес выбранной установки или региона; перенаправления запрещены."
       },
       {
         "key": "organization_slug",
         "type": "STRING",
         "format": "IDENTIFIER",
         "required": true,
-        "maximumLength": 100
+        "maximumLength": 100,
+        "label": "Организация Sentry",
+        "help": "Короткое имя организации из её адреса в Sentry."
       },
       {
         "key": "project_slug",
         "type": "STRING",
         "format": "IDENTIFIER",
         "required": true,
-        "maximumLength": 100
+        "maximumLength": 100,
+        "label": "Проект Sentry",
+        "help": "Короткое имя проекта внутри выбранной организации."
       }
     ],
     "networkDestinations": [
@@ -86,7 +92,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -120,21 +128,27 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": false,
-            "maximumLength": 1000
+            "maximumLength": 1000,
+            "label": "Поиск",
+            "help": "Ограниченный запрос поиска ошибок в выбранном проекте."
           },
           {
             "key": "cursor",
             "type": "STRING",
             "format": "PLAIN",
             "required": false,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
           },
           {
             "key": "limit",
             "type": "INTEGER",
             "required": false,
             "minimum": 1,
-            "maximum": 50
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
           }
         ],
         "outputFields": [
@@ -143,7 +157,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -177,7 +193,9 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           }
         ],
         "outputFields": [
@@ -186,7 +204,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -220,7 +240,9 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Событие",
+            "help": "Точный32-значный идентификатор события."
           }
         ],
         "outputFields": [
@@ -229,7 +251,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -264,7 +288,9 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           },
           {
             "key": "status",
@@ -276,7 +302,9 @@
               "resolved",
               "unresolved",
               "ignored"
-            ]
+            ],
+            "label": "Статус",
+            "help": "Точный новый статус выбранной ошибки или релиза."
           }
         ],
         "outputFields": [
@@ -285,7 +313,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -334,21 +364,27 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           },
           {
             "key": "cursor",
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": false,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
           },
           {
             "key": "limit",
             "type": "INTEGER",
             "required": false,
             "minimum": 1,
-            "maximum": 50
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
           }
         ],
         "outputFields": [
@@ -357,7 +393,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -391,21 +429,27 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           },
           {
             "key": "cursor",
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": false,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
           },
           {
             "key": "limit",
             "type": "INTEGER",
             "required": false,
             "minimum": 1,
-            "maximum": 50
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
           }
         ],
         "outputFields": [
@@ -414,7 +458,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -449,14 +495,18 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           },
           {
             "key": "text",
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 5000
+            "maximumLength": 5000,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "outputFields": [
@@ -465,7 +515,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -515,14 +567,18 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Номер ошибки",
+            "help": "Идентификатор ошибки в выбранном проекте; принадлежность проверяется сервером."
           },
           {
             "key": "assignee",
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 40
+            "maximumLength": 40,
+            "label": "Ответственный",
+            "help": "user:<номер>, team:<номер> либо unassigned для снятия назначения."
           }
         ],
         "outputFields": [
@@ -531,7 +587,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -580,14 +638,18 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": false,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
           },
           {
             "key": "limit",
             "type": "INTEGER",
             "required": false,
             "minimum": 1,
-            "maximum": 50
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
           }
         ],
         "outputFields": [
@@ -596,7 +658,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -630,7 +694,9 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Версия релиза",
+            "help": "Точная версия общего релиза организации."
           }
         ],
         "outputFields": [
@@ -639,7 +705,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -673,14 +741,18 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": false,
-            "maximumLength": 128
+            "maximumLength": 128,
+            "label": "Продолжение списка",
+            "help": "Курсор предыдущего ответа; не URL."
           },
           {
             "key": "limit",
             "type": "INTEGER",
             "required": false,
             "minimum": 1,
-            "maximum": 50
+            "maximum": 50,
+            "label": "Размер страницы",
+            "help": "От1до50записей на страницу."
           }
         ],
         "outputFields": [
@@ -689,7 +761,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {
@@ -723,7 +797,9 @@
             "type": "STRING",
             "format": "IDENTIFIER",
             "required": true,
-            "maximumLength": 32
+            "maximumLength": 32,
+            "label": "Оповещение",
+            "help": "Числовой идентификатор оповещения в выбранной организации."
           }
         ],
         "outputFields": [
@@ -732,7 +808,9 @@
             "type": "STRING",
             "format": "PLAIN",
             "required": true,
-            "maximumLength": 32768
+            "maximumLength": 32768,
+            "label": "Текст",
+            "help": "Текст комментария либо безопасная проекция ответа."
           }
         ],
         "execution": {

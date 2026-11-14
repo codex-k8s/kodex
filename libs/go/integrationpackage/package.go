@@ -104,6 +104,8 @@ type Credential struct {
 // Field ограничивает именованное скалярное значение конфигурации, ввода или вывода до вызова адаптера.
 type Field struct {
 	Key           string   `yaml:"key" json:"key"`
+	Label         string   `yaml:"label,omitempty" json:"label,omitempty"`
+	Help          string   `yaml:"help,omitempty" json:"help,omitempty"`
 	Type          string   `yaml:"type" json:"type"`
 	Format        string   `yaml:"format,omitempty" json:"format,omitempty"`
 	Required      bool     `yaml:"required" json:"required"`
@@ -840,7 +842,7 @@ func validate(result *Package) error {
 func validateFields(fields []Field) (map[string]struct{}, error) {
 	keys := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
-		if !validKey(field.Key) || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
+		if !validKey(field.Key) || len(field.Label) > 120 || len(field.Help) > 500 || strings.ContainsAny(field.Label+field.Help, "\x00\r\n") || !validFieldType(field.Type) || !validFieldFormat(field.Format) ||
 			(field.AllowEmpty && (field.Type != "STRING" || field.Format != "PLAIN" || len(field.AllowedValues) > 0)) ||
 			field.MaximumLength < 0 || field.MaximumLength > maxFieldLength || field.Minimum < 0 || field.Maximum < 0 ||
 			(field.Maximum != 0 && field.Maximum < field.Minimum) ||

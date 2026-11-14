@@ -58,7 +58,10 @@ Loki logs и выбранные alerts/silences/configuration. Пока для �
 одноразовый `BeginPersonalIntegrationInvocation`, согласования, owner leases,
 audit и completion остаются единственным путём исполнения. Generic Control
 Center строит поля, список capabilities, ввод личного ключа и выбор политики
-из переданной Definition; отдельная provider-форма не нужна.
+из переданной Definition; отдельная provider-форма не нужна. Неисполняемые
+optional `label/help` дают русские подписи и пояснения, а owner projection
+сохраняет реальные INTEGER/BOOLEAN types. Отсутствующие metadata пропускаются
+при canonical marshal, поэтому дайджесты прежних definitions не меняются.
 
 ## Настройка и доставка
 

@@ -277,6 +277,12 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 	method := http.MethodGet
 	var payload any
 	mutation := capability.Risk != "READ"
+	if mutation {
+		ref, _ := request.Input["ref"].(string)
+		if !sentryVersion(ref) {
+			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+	}
 	if request.Operation == "sentry.organization.release.create" {
 		project, _ := request.Input["project_slug"].(string)
 		if !integrationpackage.ValidSentrySlug(project) {
