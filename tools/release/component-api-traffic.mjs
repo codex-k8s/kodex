@@ -116,6 +116,8 @@ export function planComponentAPITraffic({service,deployment,resources,target,obs
   if(action==='isolate')requireClosedAPIMaintenance(deployment,resources,closed);
   else{
     requireClosedAPIAdmission(deployment,resources,closed,{...previous,service});
+    if(migrationRestoreProfile)requireValue(terminal?.deploymentUID===deployment.metadata.uid&&terminal.apiSpecSHA256===fingerprint(deployment.spec),
+      'COMPONENT_API_TRAFFIC_MIGRATION_API_SPEC_CHANGED');
     requireValue(componentServingReady(deployment,
       activeDeploymentPods(componentServingInventory(resources,name,deployment.metadata.uid),deployment.metadata.uid),deployment.spec?.replicas),
       'COMPONENT_API_TRAFFIC_READY_API_REQUIRED');

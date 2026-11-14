@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
 import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
 import {verifyAuthorityObserverSource,planComponentAPITraffic,componentAPITrafficStep,requireClosedAPIAdmission,requireIsolatedAPIService} from './component-api-traffic.mjs';
+import {syntheticMigrationBaseline,syntheticMigrationTerminal} from './fixtures/migration-api-terminal-synthetic.mjs';
+import {componentServingReady} from './portable-component-migration.mjs';
 
 const uid='11111111-1111-4111-8111-111111111111',serviceUID='22222222-2222-4222-8222-222222222222',source='a'.repeat(40),name='control-api-gateway';
 function fixture(){
@@ -100,6 +102,34 @@ test('restore требует ready API и снимает только собст
   ready(f);
   const plan=planComponentAPITraffic({...f,action:'restore',previous,terminal:terminal(f)});assert.deepEqual(plan.afterSpec,f.plan.beforeSpec);
   assert.deepEqual(plan.afterAnnotations,f.plan.beforeAnnotations);assert.equal(plan.previousIsolationSHA256,fingerprint(f.plan));
+});
+
+test('routine045 final gate binds fresh ready API to exact sealed open spec and UID',()=>{
+ for(const change of ['none','image','env','replicas','uid']){
+  const f=fixture();f.step();
+  f.plan.migrationRestore={profile:'sentry-observability-backup',closedPlanPath:'/tmp/synthetic-close.json',closedEvidencePath:'/tmp/synthetic-close.jsonl',
+   authority:syntheticMigrationBaseline(f.target)};
+  f.journal.events[0].planSHA256=fingerprint(f.plan);ready(f);
+  const cached=syntheticMigrationTerminal({isolation:f.plan,closed:f.closed.plan,deployment:f.deployment,sourceSHA:f.sourceSHA});
+  const input=()=>({...f,action:'restore',previous:f.traffic(),terminal:cached,migrationRestoreProfile:'sentry-observability-backup',migrationSourceSHA:'a'.repeat(40)});
+  const planned=planComponentAPITraffic(input());
+  if(change==='image')f.deployment.spec.template.spec.containers[0].image='example.invalid/new@sha256:'+'f'.repeat(64);
+  if(change==='env')f.deployment.spec.template.spec.containers[0].env=[{name:'FOREIGN',value:'changed'}];
+  if(change==='uid')f.deployment.metadata.uid='33333333-3333-4333-8333-333333333333';
+  ready(f);
+  if(change==='replicas'){
+   f.deployment.spec.replicas=2;
+   for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])f.deployment.status[key]=2;
+   f.resources.items.pop();
+  }
+  assert.ok(componentServingReady(f.deployment,f.resources.items.filter(r=>r.kind==='Pod'),f.deployment.spec.replicas),'counterfactual must be ready by its own current template');
+  const journal={events:[{type:'HEADER'}],append(row){this.events.push(row);}};
+  let writes=0;
+  const step=()=>componentAPITrafficStep({phase:'apply',plan:planned,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,
+   gate:()=>{planComponentAPITraffic(input());return cached;},patch:(_operations,dryRun)=>{if(!dryRun)writes++;}});
+  if(change==='none'){step();assert.equal(writes,1);}
+  else{assert.throws(step,/MIGRATION_API_SPEC_CHANGED|SCOPE_INVALID/);assert.equal(writes,0);}
+ }
 });
 test('план не может заменить clusterIP/ports и isolate не допускается без фактического join',()=>{
   const f=fixture();f.plan.afterSpec.ports[0].port=80;assert.throws(()=>f.step(),/PLAN_INVALID/);assert.equal(f.effects,0);

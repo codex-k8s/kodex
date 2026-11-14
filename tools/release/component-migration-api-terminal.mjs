@@ -21,7 +21,7 @@ export function validateMigrationAPITerminal(proof,plan,now=Date.now()){
   proof.serviceUID===plan.serviceUID&&proof.closePlanSHA256===plan.closePlanSHA256&&proof.maintenanceID===plan.maintenanceID&&
   proof.sourceCompatibility?.executorSHA===plan.sourceSHA&&proof.sourceCompatibility.profile===proof.profile&&
   proof.sourceCompatibility.migrationSourceSHA===plan.migrationSourceSHA&&revision(plan.migrationSourceSHA)&&
-  ['migrationPlanSHA256','migrationEvidenceSHA256','migrationTargetSHA256','publicationSHA256','handoffSHA256','openPlanSHA256','openEvidenceSHA256','executionSHA256','cohortSHA256'].every(key=>sha(proof[key]))&&
+  ['migrationPlanSHA256','migrationEvidenceSHA256','migrationTargetSHA256','publicationSHA256','handoffSHA256','openPlanSHA256','openEvidenceSHA256','apiSpecSHA256','executionSHA256','cohortSHA256'].every(key=>sha(proof[key]))&&
   uuid(proof.deploymentUID)&&uuid(proof.jobUID)&&uuid(proof.podUID)&&/^control-plane-migrate-20261114130000(?:-attempt2)?$/.test(proof.jobName??'')&&
   proof.postcondition?.profile===proof.profile&&proof.postcondition.sqlSHA256===proof.sourceCompatibility.postconditionSQLSHA256&&
   ['sqlSHA256','postgresSHA256','backendSHA256','schemaCatalogSHA256'].every(key=>sha(proof.postcondition[key]))&&
@@ -92,6 +92,7 @@ export async function readMigrationAPITerminal({migration,migrationEvidencePath,
   publicationSHA256:fingerprint(migration.imageEvidence),handoffSHA256:fingerprint(migration.componentHandoff),
   targetSHA256:fingerprint(isolation.target),trafficPlanSHA256:fingerprint(isolation),closePlanSHA256:fingerprint(closed),
   maintenanceID:isolation.maintenanceID,deploymentUID:current.proof.deploymentUID,serviceUID:isolation.serviceUID,
+  apiSpecSHA256:current.proof.specSHA256,
   openPlanSHA256:current.proof.openPlanSHA256,openEvidenceSHA256:current.proof.openEvidenceSHA256,
   jobName:result.jobName,jobUID:result.jobUID,podUID:pods[0].metadata.uid,executionSHA256:fingerprint(pods),
   cohortSHA256:fingerprint(result.componentPair),sourceCompatibility:result.sourceCompatibility,
