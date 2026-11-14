@@ -3,18 +3,22 @@ package entity
 // ModelDiscoverySource binds the imported artifact and schema independently; source revision identifies inspected source, not an account observation or a reproduced upstream build.
 // ModelDiscoverySource раздельно закрепляет импортированный артефакт и схему; source revision обозначает проверенный исходник, а не наблюдение аккаунта или воспроизведённую сборку upstream.
 type ModelDiscoverySource struct {
-	Schema         string `json:"schema"`
-	Source         string `json:"source"`
-	License        string `json:"license"`
-	SourceRevision string `json:"source_revision"`
-	UpstreamSchema string `json:"upstream_schema"`
-	SchemaSHA256   string `json:"schema_sha256"`
-	UpstreamSHA256 string `json:"upstream_sha256"`
-	SnapshotSHA256 string `json:"snapshot_sha256"`
-	SourceURL      string `json:"source_url"`
-	ModelCount     int    `json:"model_count"`
-	OverlaySHA256  string `json:"overlay_sha256"`
-	CatalogSHA256  string `json:"catalog_sha256"`
+	Schema                   string `json:"schema"`
+	Source                   string `json:"source"`
+	License                  string `json:"license"`
+	SourceRevision           string `json:"source_revision"`
+	UpstreamSchema           string `json:"upstream_schema"`
+	SchemaSHA256             string `json:"schema_sha256"`
+	UpstreamSHA256           string `json:"upstream_sha256"`
+	SnapshotSHA256           string `json:"snapshot_sha256"`
+	SourceURL                string `json:"source_url"`
+	ModelCount               int    `json:"model_count"`
+	OverlaySHA256            string `json:"overlay_sha256"`
+	CatalogSHA256            string `json:"catalog_sha256"`
+	RetrievedAt              string `json:"retrieved_at"`
+	ProjectionSchema         string `json:"projection_schema"`
+	ProjectionSchemaSHA256   string `json:"projection_schema_sha256"`
+	UpstreamSchemaValidation string `json:"upstream_schema_validation"`
 }
 
 // ModelDiscoveryAPI is inert upstream metadata used only to compare an independently configured exact route; SDK names never cause package installation.
@@ -36,8 +40,14 @@ type ModelDiscoveryRecord struct {
 	Type                                     string              `json:"type"`
 	ContextTokens                            int64               `json:"context_tokens"`
 	OutputTokens                             int64               `json:"output_tokens"`
-	Tools                                    bool                `json:"tools"`
-	Reasoning                                bool                `json:"reasoning"`
+	Tools                                    string              `json:"tools"`
+	Reasoning                                string              `json:"reasoning"`
+	Family                                   string              `json:"family"`
+	Cache                                    string              `json:"cache"`
+	CacheImplicit                            string              `json:"cache_implicit"`
+	CacheExplicit                            string              `json:"cache_explicit"`
+	ContextKnown                             bool                `json:"context_known"`
+	OutputKnown                              bool                `json:"output_known"`
 	ReasoningEfforts                         []string            `json:"reasoning_efforts"`
 	InputModalities                          []string            `json:"input_modalities"`
 	OutputModalities                         []string            `json:"output_modalities"`
@@ -54,4 +64,5 @@ type ModelDiscoveryPage struct {
 	Source        ModelDiscoverySource
 	Total         int64
 	NextPageToken string
+	GroupBy       string
 }

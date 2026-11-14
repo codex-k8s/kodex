@@ -9834,6 +9834,10 @@ message ModelDiscoverySource {
   int32 model_count = 10;
   string overlay_sha256 = 11;
   string catalog_sha256 = 12;
+  string retrieved_at = 13;
+  string projection_schema = 14;
+  string projection_schema_sha256 = 15;
+  string upstream_schema_validation = 16;
 }
 message ModelDiscoveryModel {
   string provider_id = 1;
@@ -9843,8 +9847,8 @@ message ModelDiscoveryModel {
   string type = 5;
   int64 context_tokens = 6;
   int64 output_tokens = 7;
-  bool tools = 8;
-  bool reasoning = 9;
+  string tools = 8;
+  string reasoning = 9;
   repeated string reasoning_efforts = 10;
   repeated string input_modalities = 11;
   repeated string output_modalities = 12;
@@ -9855,15 +9859,30 @@ message ModelDiscoveryModel {
   string allowed = 17;
   string tested = 18;
   bool route_configured = 19;
+  string family = 20;
+  string cache = 21;
+  string cache_implicit = 22;
+  string cache_explicit = 23;
+  bool context_known = 24;
+  bool output_known = 25;
 }
 message ListModelDiscoveryRequest {
   PageRequest page = 1;
   string query = 2;
   string provider_id = 3;
+  string family = 4;
+  int64 minimum_context_tokens = 5;
+  string input_modality = 6;
+  string output_modality = 7;
+  string tools = 8;
+  string reasoning = 9;
+  string cache = 10;
+  string group_by = 11;
 }
 message ListModelDiscoveryResponse {
   repeated ModelDiscoveryModel models = 1;
   PageInfo page = 2;
   ModelDiscoverySource source = 3;
   int64 total = 4;
+  string group_by = 5;
 }

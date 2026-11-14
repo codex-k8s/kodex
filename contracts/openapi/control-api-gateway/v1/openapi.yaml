@@ -1473,6 +1473,30 @@ paths:
         - name: providerId
           in: query
           schema: { type: string, maxLength: 128 }
+        - name: family
+          in: query
+          schema: { type: string, maxLength: 128 }
+        - name: minimumContextTokens
+          in: query
+          schema: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+        - name: inputModality
+          in: query
+          schema: { type: string, maxLength: 128 }
+        - name: outputModality
+          in: query
+          schema: { type: string, maxLength: 128 }
+        - name: tools
+          in: query
+          schema: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        - name: reasoning
+          in: query
+          schema: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        - name: cache
+          in: query
+          schema: { type: string, enum: [NONE, IMPLICIT, EXPLICIT, BOTH, UNKNOWN] }
+        - name: groupBy
+          in: query
+          schema: { type: string, enum: [PROVIDER, FAMILY] }
       responses:
         "200":
           description: Страница справочного каталога с независимыми статусами
@@ -14440,6 +14464,10 @@ components:
           modelCount,
           overlaySha256,
           catalogSha256,
+          retrievedAt,
+          projectionSchema,
+          projectionSchemaSha256,
+          upstreamSchemaValidation,
         ]
       properties:
         schema: { type: string, enum: [kodex.model-provider-discovery/v1] }
@@ -14458,6 +14486,10 @@ components:
         modelCount: { type: integer, minimum: 1, maximum: 50000 }
         overlaySha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         catalogSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        retrievedAt: { type: string, format: date-time, maxLength: 40 }
+        projectionSchema: { type: string, enum: ['urn:kodex:contract:model-provider-discovery:v1'] }
+        projectionSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        upstreamSchemaValidation: { type: string, enum: [NOT_PERFORMED] }
     ModelDiscoveryModel:
       type: object
       additionalProperties: false
@@ -14482,6 +14514,12 @@ components:
           allowed,
           tested,
           routeConfigured,
+          family,
+          cache,
+          cacheImplicit,
+          cacheExplicit,
+          contextKnown,
+          outputKnown,
         ]
       properties:
         providerId: { type: string, minLength: 1, maxLength: 128 }
@@ -14491,8 +14529,8 @@ components:
         type: { type: string, minLength: 1, maxLength: 64 }
         contextTokens: { type: string, pattern: "^[0-9]{1,13}$" }
         outputTokens: { type: string, pattern: "^[0-9]{1,13}$" }
-        tools: { type: boolean }
-        reasoning: { type: boolean }
+        tools: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        reasoning: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
         reasoningEfforts:
           { type: array, maxItems: 16, items: { type: string, maxLength: 32 } }
         inputModalities:
@@ -14506,10 +14544,16 @@ components:
         allowed: { type: string, enum: [UNKNOWN, UNAVAILABLE] }
         tested: { type: string, enum: [NOT_RUN] }
         routeConfigured: { type: boolean }
+        family: { type: string, minLength: 1, maxLength: 128 }
+        cache: { type: string, enum: [NONE, IMPLICIT, EXPLICIT, BOTH, UNKNOWN] }
+        cacheImplicit: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        cacheExplicit: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
+        contextKnown: { type: boolean }
+        outputKnown: { type: boolean }
     ModelDiscoveryPage:
       type: object
       additionalProperties: false
-      required: [items, nextPageToken, source, total]
+      required: [items, nextPageToken, source, total, groupBy]
       properties:
         items:
           {
@@ -14520,6 +14564,7 @@ components:
         nextPageToken: { type: string, maxLength: 512 }
         source: { $ref: "#/components/schemas/ModelDiscoverySource" }
         total: { type: string, pattern: "^[0-9]{1,6}$" }
+        groupBy: { type: string, enum: [PROVIDER, FAMILY] }
     ProviderDefinitionPage:
       type: object
       additionalProperties: false

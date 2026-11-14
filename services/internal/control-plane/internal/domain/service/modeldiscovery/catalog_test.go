@@ -6,6 +6,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
 // TestPinnedCatalogSearchAndCursor proves broad discovery, provider separation, exact pagination and cross-query rejection without fetching any remote service.
@@ -32,6 +33,43 @@ func TestPinnedCatalogSearchAndCursor(t *testing.T) {
 	for _, model := range zai.Items {
 		if model.ProviderID != "zai-coding-plan" || model.Adapter != "BUNDLED" || model.Account != "UNKNOWN" || model.Allowed != "UNAVAILABLE" || model.Tested != "NOT_RUN" || model.RouteConfigured {
 			t.Fatal("catalog metadata granted execution eligibility")
+		}
+	}
+}
+
+// TestDiscoveryTypedFiltersAndGrouping binds all selectors to cursors and verifies family, context, media, tools, reasoning and declared cache filtering without promoting UNKNOWN to false.
+// TestDiscoveryTypedFiltersAndGrouping связывает все selectors с cursors и проверяет family, context, media, tools, reasoning и declared cache, не превращая UNKNOWN в false.
+func TestDiscoveryTypedFiltersAndGrouping(t *testing.T) {
+	first, err := SearchFiltered("", "", 1, query.ModelDiscoveryFilter{}, nil)
+	if err != nil || first.NextPageToken == "" {
+		t.Fatal("base filtered page unavailable")
+	}
+	for _, filter := range []query.ModelDiscoveryFilter{{ProviderID: "zai-coding-plan"}, {Family: "glm"}, {MinimumContextTokens: 1000000}, {InputModality: "image"}, {OutputModality: "text"}, {Tools: "SUPPORTED"}, {Reasoning: "SUPPORTED"}, {Cache: "UNKNOWN"}, {GroupBy: "FAMILY"}} {
+		if _, err := SearchFiltered("", first.NextPageToken, 1, filter, nil); err == nil {
+			t.Fatal("changed filter reused another cursor")
+		}
+	}
+	filter := query.ModelDiscoveryFilter{ProviderID: "zai-coding-plan", Family: "glm", MinimumContextTokens: 1000000, InputModality: "text", OutputModality: "text", Tools: "SUPPORTED", Reasoning: "SUPPORTED", Cache: "IMPLICIT", GroupBy: "FAMILY"}
+	page, err := SearchFiltered("glm-5.3", "", 20, filter, nil)
+	if err != nil || page.Total < 1 || page.GroupBy != "FAMILY" {
+		t.Fatalf("typed filter unavailable: %v", err)
+	}
+	for _, model := range page.Items {
+		if model.ProviderID != filter.ProviderID || model.Family != "glm" || !model.ContextKnown || model.ContextTokens < 1000000 || model.Tools != "SUPPORTED" || model.Reasoning != "SUPPORTED" || model.CacheImplicit != "SUPPORTED" {
+			t.Fatal("filter widened result")
+		}
+	}
+	unknown := entity.ModelDiscoveryRecord{Tools: "UNKNOWN", Reasoning: "UNKNOWN", Cache: "UNKNOWN"}
+	if matchesFilters(unknown, query.ModelDiscoveryFilter{Tools: "UNSUPPORTED"}) || matchesFilters(unknown, query.ModelDiscoveryFilter{Reasoning: "SUPPORTED"}) || matchesFilters(unknown, query.ModelDiscoveryFilter{MinimumContextTokens: 1}) || !matchesFilters(unknown, query.ModelDiscoveryFilter{Cache: "UNKNOWN"}) {
+		t.Fatal("unknown metadata became false or supported")
+	}
+	grouped, err := SearchFiltered("", "", 100, query.ModelDiscoveryFilter{GroupBy: "FAMILY"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := 1; index < len(grouped.Items); index++ {
+		if grouped.Items[index].Family < grouped.Items[index-1].Family {
+			t.Fatal("family grouping is not globally ordered")
 		}
 	}
 }

@@ -89499,21 +89499,25 @@ func (x *ModelCacheResolution) GetPhysicalIsolation() string {
 
 // Закреплённые provenance и статусы поиска; не являются account observation.
 type ModelDiscoverySource struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Schema         string                 `protobuf:"bytes,1,opt,name=schema,proto3" json:"schema,omitempty"`
-	Source         string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
-	License        string                 `protobuf:"bytes,3,opt,name=license,proto3" json:"license,omitempty"`
-	SourceRevision string                 `protobuf:"bytes,4,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
-	UpstreamSchema string                 `protobuf:"bytes,5,opt,name=upstream_schema,json=upstreamSchema,proto3" json:"upstream_schema,omitempty"`
-	SchemaSha256   string                 `protobuf:"bytes,6,opt,name=schema_sha256,json=schemaSha256,proto3" json:"schema_sha256,omitempty"`
-	UpstreamSha256 string                 `protobuf:"bytes,7,opt,name=upstream_sha256,json=upstreamSha256,proto3" json:"upstream_sha256,omitempty"`
-	SnapshotSha256 string                 `protobuf:"bytes,8,opt,name=snapshot_sha256,json=snapshotSha256,proto3" json:"snapshot_sha256,omitempty"`
-	SourceUrl      string                 `protobuf:"bytes,9,opt,name=source_url,json=sourceUrl,proto3" json:"source_url,omitempty"`
-	ModelCount     int32                  `protobuf:"varint,10,opt,name=model_count,json=modelCount,proto3" json:"model_count,omitempty"`
-	OverlaySha256  string                 `protobuf:"bytes,11,opt,name=overlay_sha256,json=overlaySha256,proto3" json:"overlay_sha256,omitempty"`
-	CatalogSha256  string                 `protobuf:"bytes,12,opt,name=catalog_sha256,json=catalogSha256,proto3" json:"catalog_sha256,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state                    protoimpl.MessageState `protogen:"open.v1"`
+	Schema                   string                 `protobuf:"bytes,1,opt,name=schema,proto3" json:"schema,omitempty"`
+	Source                   string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	License                  string                 `protobuf:"bytes,3,opt,name=license,proto3" json:"license,omitempty"`
+	SourceRevision           string                 `protobuf:"bytes,4,opt,name=source_revision,json=sourceRevision,proto3" json:"source_revision,omitempty"`
+	UpstreamSchema           string                 `protobuf:"bytes,5,opt,name=upstream_schema,json=upstreamSchema,proto3" json:"upstream_schema,omitempty"`
+	SchemaSha256             string                 `protobuf:"bytes,6,opt,name=schema_sha256,json=schemaSha256,proto3" json:"schema_sha256,omitempty"`
+	UpstreamSha256           string                 `protobuf:"bytes,7,opt,name=upstream_sha256,json=upstreamSha256,proto3" json:"upstream_sha256,omitempty"`
+	SnapshotSha256           string                 `protobuf:"bytes,8,opt,name=snapshot_sha256,json=snapshotSha256,proto3" json:"snapshot_sha256,omitempty"`
+	SourceUrl                string                 `protobuf:"bytes,9,opt,name=source_url,json=sourceUrl,proto3" json:"source_url,omitempty"`
+	ModelCount               int32                  `protobuf:"varint,10,opt,name=model_count,json=modelCount,proto3" json:"model_count,omitempty"`
+	OverlaySha256            string                 `protobuf:"bytes,11,opt,name=overlay_sha256,json=overlaySha256,proto3" json:"overlay_sha256,omitempty"`
+	CatalogSha256            string                 `protobuf:"bytes,12,opt,name=catalog_sha256,json=catalogSha256,proto3" json:"catalog_sha256,omitempty"`
+	RetrievedAt              string                 `protobuf:"bytes,13,opt,name=retrieved_at,json=retrievedAt,proto3" json:"retrieved_at,omitempty"`
+	ProjectionSchema         string                 `protobuf:"bytes,14,opt,name=projection_schema,json=projectionSchema,proto3" json:"projection_schema,omitempty"`
+	ProjectionSchemaSha256   string                 `protobuf:"bytes,15,opt,name=projection_schema_sha256,json=projectionSchemaSha256,proto3" json:"projection_schema_sha256,omitempty"`
+	UpstreamSchemaValidation string                 `protobuf:"bytes,16,opt,name=upstream_schema_validation,json=upstreamSchemaValidation,proto3" json:"upstream_schema_validation,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *ModelDiscoverySource) Reset() {
@@ -89630,6 +89634,34 @@ func (x *ModelDiscoverySource) GetCatalogSha256() string {
 	return ""
 }
 
+func (x *ModelDiscoverySource) GetRetrievedAt() string {
+	if x != nil {
+		return x.RetrievedAt
+	}
+	return ""
+}
+
+func (x *ModelDiscoverySource) GetProjectionSchema() string {
+	if x != nil {
+		return x.ProjectionSchema
+	}
+	return ""
+}
+
+func (x *ModelDiscoverySource) GetProjectionSchemaSha256() string {
+	if x != nil {
+		return x.ProjectionSchemaSha256
+	}
+	return ""
+}
+
+func (x *ModelDiscoverySource) GetUpstreamSchemaValidation() string {
+	if x != nil {
+		return x.UpstreamSchemaValidation
+	}
+	return ""
+}
+
 type ModelDiscoveryModel struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	ProviderId       string                 `protobuf:"bytes,1,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
@@ -89639,8 +89671,8 @@ type ModelDiscoveryModel struct {
 	Type             string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`
 	ContextTokens    int64                  `protobuf:"varint,6,opt,name=context_tokens,json=contextTokens,proto3" json:"context_tokens,omitempty"`
 	OutputTokens     int64                  `protobuf:"varint,7,opt,name=output_tokens,json=outputTokens,proto3" json:"output_tokens,omitempty"`
-	Tools            bool                   `protobuf:"varint,8,opt,name=tools,proto3" json:"tools,omitempty"`
-	Reasoning        bool                   `protobuf:"varint,9,opt,name=reasoning,proto3" json:"reasoning,omitempty"`
+	Tools            string                 `protobuf:"bytes,8,opt,name=tools,proto3" json:"tools,omitempty"`
+	Reasoning        string                 `protobuf:"bytes,9,opt,name=reasoning,proto3" json:"reasoning,omitempty"`
 	ReasoningEfforts []string               `protobuf:"bytes,10,rep,name=reasoning_efforts,json=reasoningEfforts,proto3" json:"reasoning_efforts,omitempty"`
 	InputModalities  []string               `protobuf:"bytes,11,rep,name=input_modalities,json=inputModalities,proto3" json:"input_modalities,omitempty"`
 	OutputModalities []string               `protobuf:"bytes,12,rep,name=output_modalities,json=outputModalities,proto3" json:"output_modalities,omitempty"`
@@ -89651,6 +89683,12 @@ type ModelDiscoveryModel struct {
 	Allowed          string                 `protobuf:"bytes,17,opt,name=allowed,proto3" json:"allowed,omitempty"`
 	Tested           string                 `protobuf:"bytes,18,opt,name=tested,proto3" json:"tested,omitempty"`
 	RouteConfigured  bool                   `protobuf:"varint,19,opt,name=route_configured,json=routeConfigured,proto3" json:"route_configured,omitempty"`
+	Family           string                 `protobuf:"bytes,20,opt,name=family,proto3" json:"family,omitempty"`
+	Cache            string                 `protobuf:"bytes,21,opt,name=cache,proto3" json:"cache,omitempty"`
+	CacheImplicit    string                 `protobuf:"bytes,22,opt,name=cache_implicit,json=cacheImplicit,proto3" json:"cache_implicit,omitempty"`
+	CacheExplicit    string                 `protobuf:"bytes,23,opt,name=cache_explicit,json=cacheExplicit,proto3" json:"cache_explicit,omitempty"`
+	ContextKnown     bool                   `protobuf:"varint,24,opt,name=context_known,json=contextKnown,proto3" json:"context_known,omitempty"`
+	OutputKnown      bool                   `protobuf:"varint,25,opt,name=output_known,json=outputKnown,proto3" json:"output_known,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -89734,18 +89772,18 @@ func (x *ModelDiscoveryModel) GetOutputTokens() int64 {
 	return 0
 }
 
-func (x *ModelDiscoveryModel) GetTools() bool {
+func (x *ModelDiscoveryModel) GetTools() string {
 	if x != nil {
 		return x.Tools
 	}
-	return false
+	return ""
 }
 
-func (x *ModelDiscoveryModel) GetReasoning() bool {
+func (x *ModelDiscoveryModel) GetReasoning() string {
 	if x != nil {
 		return x.Reasoning
 	}
-	return false
+	return ""
 }
 
 func (x *ModelDiscoveryModel) GetReasoningEfforts() []string {
@@ -89818,13 +89856,63 @@ func (x *ModelDiscoveryModel) GetRouteConfigured() bool {
 	return false
 }
 
+func (x *ModelDiscoveryModel) GetFamily() string {
+	if x != nil {
+		return x.Family
+	}
+	return ""
+}
+
+func (x *ModelDiscoveryModel) GetCache() string {
+	if x != nil {
+		return x.Cache
+	}
+	return ""
+}
+
+func (x *ModelDiscoveryModel) GetCacheImplicit() string {
+	if x != nil {
+		return x.CacheImplicit
+	}
+	return ""
+}
+
+func (x *ModelDiscoveryModel) GetCacheExplicit() string {
+	if x != nil {
+		return x.CacheExplicit
+	}
+	return ""
+}
+
+func (x *ModelDiscoveryModel) GetContextKnown() bool {
+	if x != nil {
+		return x.ContextKnown
+	}
+	return false
+}
+
+func (x *ModelDiscoveryModel) GetOutputKnown() bool {
+	if x != nil {
+		return x.OutputKnown
+	}
+	return false
+}
+
 type ListModelDiscoveryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Page          *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
-	Query         string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
-	ProviderId    string                 `protobuf:"bytes,3,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	Page                 *PageRequest           `protobuf:"bytes,1,opt,name=page,proto3" json:"page,omitempty"`
+	Query                string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	ProviderId           string                 `protobuf:"bytes,3,opt,name=provider_id,json=providerId,proto3" json:"provider_id,omitempty"`
+	Family               string                 `protobuf:"bytes,4,opt,name=family,proto3" json:"family,omitempty"`
+	MinimumContextTokens int64                  `protobuf:"varint,5,opt,name=minimum_context_tokens,json=minimumContextTokens,proto3" json:"minimum_context_tokens,omitempty"`
+	InputModality        string                 `protobuf:"bytes,6,opt,name=input_modality,json=inputModality,proto3" json:"input_modality,omitempty"`
+	OutputModality       string                 `protobuf:"bytes,7,opt,name=output_modality,json=outputModality,proto3" json:"output_modality,omitempty"`
+	Tools                string                 `protobuf:"bytes,8,opt,name=tools,proto3" json:"tools,omitempty"`
+	Reasoning            string                 `protobuf:"bytes,9,opt,name=reasoning,proto3" json:"reasoning,omitempty"`
+	Cache                string                 `protobuf:"bytes,10,opt,name=cache,proto3" json:"cache,omitempty"`
+	GroupBy              string                 `protobuf:"bytes,11,opt,name=group_by,json=groupBy,proto3" json:"group_by,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *ListModelDiscoveryRequest) Reset() {
@@ -89878,12 +89966,69 @@ func (x *ListModelDiscoveryRequest) GetProviderId() string {
 	return ""
 }
 
+func (x *ListModelDiscoveryRequest) GetFamily() string {
+	if x != nil {
+		return x.Family
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetMinimumContextTokens() int64 {
+	if x != nil {
+		return x.MinimumContextTokens
+	}
+	return 0
+}
+
+func (x *ListModelDiscoveryRequest) GetInputModality() string {
+	if x != nil {
+		return x.InputModality
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetOutputModality() string {
+	if x != nil {
+		return x.OutputModality
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetTools() string {
+	if x != nil {
+		return x.Tools
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetReasoning() string {
+	if x != nil {
+		return x.Reasoning
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetCache() string {
+	if x != nil {
+		return x.Cache
+	}
+	return ""
+}
+
+func (x *ListModelDiscoveryRequest) GetGroupBy() string {
+	if x != nil {
+		return x.GroupBy
+	}
+	return ""
+}
+
 type ListModelDiscoveryResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Models        []*ModelDiscoveryModel `protobuf:"bytes,1,rep,name=models,proto3" json:"models,omitempty"`
 	Page          *PageInfo              `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	Source        *ModelDiscoverySource  `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
 	Total         int64                  `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	GroupBy       string                 `protobuf:"bytes,5,opt,name=group_by,json=groupBy,proto3" json:"group_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89944,6 +90089,13 @@ func (x *ListModelDiscoveryResponse) GetTotal() int64 {
 		return x.Total
 	}
 	return 0
+}
+
+func (x *ListModelDiscoveryResponse) GetGroupBy() string {
+	if x != nil {
+		return x.GroupBy
+	}
+	return ""
 }
 
 var File_controlplane_v1_control_plane_proto protoreflect.FileDescriptor
@@ -97070,7 +97222,7 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\bno_reuse\x18\x06 \x01(\bR\anoReuse\x12\x19\n" +
 	"\bno_store\x18\a \x01(\bR\anoStore\x120\n" +
 	"\x14proxy_response_cache\x18\b \x01(\tR\x12proxyResponseCache\x12-\n" +
-	"\x12physical_isolation\x18\t \x01(\tR\x11physicalIsolation\"\xb7\x03\n" +
+	"\x12physical_isolation\x18\t \x01(\tR\x11physicalIsolation\"\xff\x04\n" +
 	"\x14ModelDiscoverySource\x12\x16\n" +
 	"\x06schema\x18\x01 \x01(\tR\x06schema\x12\x16\n" +
 	"\x06source\x18\x02 \x01(\tR\x06source\x12\x18\n" +
@@ -97086,7 +97238,11 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	" \x01(\x05R\n" +
 	"modelCount\x12%\n" +
 	"\x0eoverlay_sha256\x18\v \x01(\tR\roverlaySha256\x12%\n" +
-	"\x0ecatalog_sha256\x18\f \x01(\tR\rcatalogSha256\"\xf3\x04\n" +
+	"\x0ecatalog_sha256\x18\f \x01(\tR\rcatalogSha256\x12!\n" +
+	"\fretrieved_at\x18\r \x01(\tR\vretrievedAt\x12+\n" +
+	"\x11projection_schema\x18\x0e \x01(\tR\x10projectionSchema\x128\n" +
+	"\x18projection_schema_sha256\x18\x0f \x01(\tR\x16projectionSchemaSha256\x12<\n" +
+	"\x1aupstream_schema_validation\x18\x10 \x01(\tR\x18upstreamSchemaValidation\"\xb7\x06\n" +
 	"\x13ModelDiscoveryModel\x12\x1f\n" +
 	"\vprovider_id\x18\x01 \x01(\tR\n" +
 	"providerId\x12#\n" +
@@ -97096,8 +97252,8 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\x04type\x18\x05 \x01(\tR\x04type\x12%\n" +
 	"\x0econtext_tokens\x18\x06 \x01(\x03R\rcontextTokens\x12#\n" +
 	"\routput_tokens\x18\a \x01(\x03R\foutputTokens\x12\x14\n" +
-	"\x05tools\x18\b \x01(\bR\x05tools\x12\x1c\n" +
-	"\treasoning\x18\t \x01(\bR\treasoning\x12+\n" +
+	"\x05tools\x18\b \x01(\tR\x05tools\x12\x1c\n" +
+	"\treasoning\x18\t \x01(\tR\treasoning\x12+\n" +
 	"\x11reasoning_efforts\x18\n" +
 	" \x03(\tR\x10reasoningEfforts\x12)\n" +
 	"\x10input_modalities\x18\v \x03(\tR\x0finputModalities\x12+\n" +
@@ -97108,17 +97264,33 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\aaccount\x18\x10 \x01(\tR\aaccount\x12\x18\n" +
 	"\aallowed\x18\x11 \x01(\tR\aallowed\x12\x16\n" +
 	"\x06tested\x18\x12 \x01(\tR\x06tested\x12)\n" +
-	"\x10route_configured\x18\x13 \x01(\bR\x0frouteConfigured\"\x84\x01\n" +
+	"\x10route_configured\x18\x13 \x01(\bR\x0frouteConfigured\x12\x16\n" +
+	"\x06family\x18\x14 \x01(\tR\x06family\x12\x14\n" +
+	"\x05cache\x18\x15 \x01(\tR\x05cache\x12%\n" +
+	"\x0ecache_implicit\x18\x16 \x01(\tR\rcacheImplicit\x12%\n" +
+	"\x0ecache_explicit\x18\x17 \x01(\tR\rcacheExplicit\x12#\n" +
+	"\rcontext_known\x18\x18 \x01(\bR\fcontextKnown\x12!\n" +
+	"\foutput_known\x18\x19 \x01(\bR\voutputKnown\"\x87\x03\n" +
 	"\x19ListModelDiscoveryRequest\x120\n" +
 	"\x04page\x18\x01 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\x1f\n" +
 	"\vprovider_id\x18\x03 \x01(\tR\n" +
-	"providerId\"\xde\x01\n" +
+	"providerId\x12\x16\n" +
+	"\x06family\x18\x04 \x01(\tR\x06family\x124\n" +
+	"\x16minimum_context_tokens\x18\x05 \x01(\x03R\x14minimumContextTokens\x12%\n" +
+	"\x0einput_modality\x18\x06 \x01(\tR\rinputModality\x12'\n" +
+	"\x0foutput_modality\x18\a \x01(\tR\x0eoutputModality\x12\x14\n" +
+	"\x05tools\x18\b \x01(\tR\x05tools\x12\x1c\n" +
+	"\treasoning\x18\t \x01(\tR\treasoning\x12\x14\n" +
+	"\x05cache\x18\n" +
+	" \x01(\tR\x05cache\x12\x19\n" +
+	"\bgroup_by\x18\v \x01(\tR\agroupBy\"\xf9\x01\n" +
 	"\x1aListModelDiscoveryResponse\x12<\n" +
 	"\x06models\x18\x01 \x03(\v2$.controlplane.v1.ModelDiscoveryModelR\x06models\x12-\n" +
 	"\x04page\x18\x02 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\x12=\n" +
 	"\x06source\x18\x03 \x01(\v2%.controlplane.v1.ModelDiscoverySourceR\x06source\x12\x14\n" +
-	"\x05total\x18\x04 \x01(\x03R\x05total*\x9e\x01\n" +
+	"\x05total\x18\x04 \x01(\x03R\x05total\x12\x19\n" +
+	"\bgroup_by\x18\x05 \x01(\tR\agroupBy*\x9e\x01\n" +
 	"\x18RuntimeResourceScopeKind\x12+\n" +
 	"'RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED\x10\x00\x12,\n" +
 	"(RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION\x10\x01\x12'\n" +

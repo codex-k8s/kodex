@@ -2252,6 +2252,10 @@ export type ModelDiscoverySource = {
     modelCount: number;
     overlaySha256: string;
     catalogSha256: string;
+    retrievedAt: string;
+    projectionSchema: 'urn:kodex:contract:model-provider-discovery:v1';
+    projectionSchemaSha256: string;
+    upstreamSchemaValidation: 'NOT_PERFORMED';
 };
 
 export type ModelDiscoveryModel = {
@@ -2262,8 +2266,8 @@ export type ModelDiscoveryModel = {
     type: string;
     contextTokens: string;
     outputTokens: string;
-    tools: boolean;
-    reasoning: boolean;
+    tools: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    reasoning: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
     reasoningEfforts: Array<string>;
     inputModalities: Array<string>;
     outputModalities: Array<string>;
@@ -2274,6 +2278,12 @@ export type ModelDiscoveryModel = {
     allowed: 'UNKNOWN' | 'UNAVAILABLE';
     tested: 'NOT_RUN';
     routeConfigured: boolean;
+    family: string;
+    cache: 'NONE' | 'IMPLICIT' | 'EXPLICIT' | 'BOTH' | 'UNKNOWN';
+    cacheImplicit: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    cacheExplicit: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+    contextKnown: boolean;
+    outputKnown: boolean;
 };
 
 export type ModelDiscoveryPage = {
@@ -2281,6 +2291,7 @@ export type ModelDiscoveryPage = {
     nextPageToken: string;
     source: ModelDiscoverySource;
     total: string;
+    groupBy: 'PROVIDER' | 'FAMILY';
 };
 
 export type ProviderDefinitionPage = {
@@ -7577,6 +7588,14 @@ export type ListModelDiscoveryData = {
         pageSize?: number;
         pageToken?: string;
         providerId?: string;
+        family?: string;
+        minimumContextTokens?: number;
+        inputModality?: string;
+        outputModality?: string;
+        tools?: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+        reasoning?: 'SUPPORTED' | 'UNSUPPORTED' | 'UNKNOWN';
+        cache?: 'NONE' | 'IMPLICIT' | 'EXPLICIT' | 'BOTH' | 'UNKNOWN';
+        groupBy?: 'PROVIDER' | 'FAMILY';
     };
     url: '/api/v1/model-discovery';
 };

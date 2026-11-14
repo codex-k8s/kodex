@@ -13,7 +13,7 @@ import (
 
 // ListModelDiscovery resolves the transport principal and reuses authoritative organization-view eligibility before searching static metadata; no model provider is contacted.
 // ListModelDiscovery разрешает transport principal и повторно использует авторитетный organization-view допуск до поиска статических metadata; обращения к model provider нет.
-func (service *Service) ListModelDiscovery(ctx context.Context, principal value.Principal, filter query.Filter, provider string) (entity.ModelDiscoveryPage, error) {
+func (service *Service) ListModelDiscovery(ctx context.Context, principal value.Principal, filter query.Filter, selectors query.ModelDiscoveryFilter) (entity.ModelDiscoveryPage, error) {
 	principal, err := service.principal(ctx, principal)
 	if err != nil {
 		return entity.ModelDiscoveryPage{}, err
@@ -29,7 +29,7 @@ func (service *Service) ListModelDiscovery(ctx context.Context, principal value.
 	if size == 0 {
 		size = 20
 	}
-	result, err := modeldiscovery.Search(filter.Query, provider, filter.Page.Token, size, definitions)
+	result, err := modeldiscovery.SearchFiltered(filter.Query, filter.Page.Token, size, selectors, definitions)
 	if errors.Is(err, modeldiscovery.ErrQuery) {
 		return entity.ModelDiscoveryPage{}, errs.ErrInvalid
 	}

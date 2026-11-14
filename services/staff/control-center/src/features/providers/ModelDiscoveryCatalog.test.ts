@@ -4,36 +4,58 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./model-discovery", () => ({
-  useModelDiscovery: () => ({
-    query: ref("glm"),
-    items: ref([
-      {
-        providerId: "zai-coding-plan",
-        providerName: "Z.AI Coding Plan",
-        modelId: "glm-5.3",
-        name: "GLM-5.3",
-        contextTokens: "1000000",
-        outputTokens: "131072",
-        known: "KNOWN",
-        adapter: "BUNDLED",
-        account: "UNKNOWN",
-        allowed: "UNAVAILABLE",
-        tested: "NOT_RUN",
-        routeConfigured: false,
+  useModelDiscovery: () => {
+    const model = {
+      providerId: "zai-coding-plan",
+      providerName: "Z.AI Coding Plan",
+      modelId: "glm-5.3",
+      name: "GLM-5.3",
+      family: "glm",
+      contextTokens: "1000000",
+      outputTokens: "131072",
+      contextKnown: true,
+      outputKnown: true,
+      tools: "UNKNOWN",
+      reasoning: "SUPPORTED",
+      cache: "IMPLICIT",
+      inputModalities: ["text"],
+      outputModalities: ["text"],
+      known: "KNOWN",
+      adapter: "BUNDLED",
+      account: "UNKNOWN",
+      allowed: "UNAVAILABLE",
+      tested: "NOT_RUN",
+      routeConfigured: false,
+    };
+    return {
+      query: ref("glm"),
+      filters: {
+        providerId: "",
+        family: "",
+        minimumContextTokens: 0,
+        inputModality: "",
+        outputModality: "",
+        tools: "",
+        reasoning: "",
+        cache: "",
+        groupBy: "PROVIDER",
       },
-    ]),
-    source: ref({
-      upstreamSchema: "models.dev/experimental-v2.0",
-      sourceRevision: "a".repeat(40),
-      catalogSha256: "b".repeat(64),
-    }),
-    total: ref("1"),
-    nextPageToken: ref(""),
-    loading: ref(false),
-    failed: ref(false),
-    loaded: ref(true),
-    search: vi.fn(),
-  }),
+      groups: ref([{ id: "glm", label: "glm", items: [model] }]),
+      items: ref([model]),
+      source: ref({
+        upstreamSchema: "models.dev/experimental-v2.0",
+        sourceRevision: "a".repeat(40),
+        catalogSha256: "b".repeat(64),
+        retrievedAt: "2026-11-14T04:03:01Z",
+      }),
+      total: ref("1"),
+      nextPageToken: ref(""),
+      loading: ref(false),
+      failed: ref(false),
+      loaded: ref(true),
+      search: vi.fn(),
+    };
+  },
 }));
 import ModelDiscoveryCatalog from "./ModelDiscoveryCatalog.vue";
 

@@ -10,6 +10,7 @@ vi.mock("./model-discovery-api", () => api);
 function page(): ModelDiscoveryPage {
   return {
     items: [],
+    groupBy: "PROVIDER",
     nextPageToken: "",
     total: "0",
     source: {
@@ -23,6 +24,10 @@ function page(): ModelDiscoveryPage {
       snapshotSha256: "d".repeat(64),
       sourceUrl: "https://models.dev/_experimental_v2.0_api.json",
       modelCount: 9726,
+      retrievedAt: "2026-11-14T04:03:01Z",
+      projectionSchema: "urn:kodex:contract:model-provider-discovery:v1",
+      projectionSchemaSha256: "e".repeat(64),
+      upstreamSchemaValidation: "NOT_PERFORMED",
       overlaySha256: "e".repeat(64),
       catalogSha256: "f".repeat(64),
     },
@@ -91,9 +96,17 @@ describe("справочный каталог моделей", () => {
     const state = scope.run(() => useModelDiscovery());
     if (!state) throw new Error("Synthetic scope unavailable");
     state.query.value = "glm";
+    state.filters.family = "glm";
+    state.filters.groupBy = "FAMILY";
     await state.search();
     state.query.value = "other";
+    state.filters.family = "gpt";
+    state.filters.groupBy = "PROVIDER";
     await state.search(true);
+    expect(api.loadModelDiscovery.mock.calls[1]?.[3]).toMatchObject({
+      family: "glm",
+      groupBy: "FAMILY",
+    });
     expect(api.loadModelDiscovery.mock.calls[1]?.slice(0, 2)).toEqual([
       "glm",
       "pinned-next",

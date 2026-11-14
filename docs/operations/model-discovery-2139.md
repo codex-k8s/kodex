@@ -4,7 +4,7 @@ title: Поисковый каталог моделей и Z.ai Coding Plan
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-11-14
 ---
 
@@ -20,8 +20,8 @@ runtime profiles или grants и не меняет выбранные моде�
 
 | Сценарий | Полномочия и путь | Состояние и результат |
 | --- | --- | --- |
-| Найти модель | Авторизованный пользователь → `GET /api/v1/model-discovery` → `PlatformQueryService.ListModelDiscovery` → server-resolved principal → прежнее `organization.view` в repository `ListProviderDefinitions` → закреплённый локальный снимок | Фильтры query/providerId/pageSize/pageToken не несут authority. Возвращаются безопасные metadata и пять отдельных измерений. Credentials и внешний model API не читаются |
-| Следующая страница | Тот же путь с новым transport context; cursor связан с query/provider, source snapshot, custom/retired bytes и exact configured route digests | Изменение любой привязки закрыто отклоняет прежний cursor. Current organization eligibility проверяется заново |
+| Найти модель | Авторизованный пользователь → `GET /api/v1/model-discovery` → `PlatformQueryService.ListModelDiscovery` → server-resolved principal → прежнее `organization.view` в repository `ListProviderDefinitions` → закреплённый локальный снимок | Фильтры query/providerId/family/minimumContextTokens/inputModality/outputModality/tools/reasoning/cache, grouping PROVIDER/FAMILY и pageSize/pageToken не несут authority. Возвращаются безопасные metadata и пять отдельных измерений. Credentials и внешний model API не читаются |
+| Следующая страница | Тот же путь с новым transport context; cursor связан со всеми фильтрами и grouping, source snapshot, custom/retired bytes и exact configured route digests | Изменение любой привязки закрыто отклоняет прежний cursor. Current organization eligibility проверяется заново |
 | Обновить импорт | Developer в ветке Issue получает bounded public artifact и проверенный schema source, передаёт exact SHA-256 и source revision утилите обновления | Перезаписываются только snapshot, manifest и список удалённых upstream записей. Custom overrides и сохранённые selections остаются. Обновление поставляется обычным PR/immutable image |
 | Удалённая upstream модель | Обновление сохраняет прежние metadata в retired-models; поиск выдаёт `REMOVED`/`UNAVAILABLE` | Новый alias или provider не подставляется. Сохранённая owner configuration не переписывается импортом. Любая смена исполняемой конфигурации проходит прежние команды |
 | Пользовательская модель | Отдельный Git-owned `custom-overrides.json` либо точный действующий owner descriptor отсутствующей в upstream модели | `CUSTOM` отделён от upstream; произвольные SDK не устанавливаются. Выбор маршрута и допуск аккаунта остаются прежними |
@@ -47,7 +47,7 @@ Assets входят в прежний Docker input `services/internal/control-pl
 | --- | --- |
 | Известна | `KNOWN` — есть в pinned artifact; `CUSTOM` — отдельно сопровождаемая запись; `REMOVED` — сохранена после удаления upstream |
 | Адаптер | `BUNDLED` означает наличие одного из трёх закреплённых SDK/протоколов. Это не квалификация конкретной модели. Другие SDK — `UNSUPPORTED`; npm из каталога не исполняется |
-| Аккаунт | `AVAILABLE` только после exact endpoint/protocol/model join с текущим owner model catalog. Отсутствие наблюдения — `UNKNOWN`. Сам import не подтверждает подписку |
+| Аккаунт | `AVAILABLE` означает наличие хотя бы одного текущего eligible account этого exact endpoint/protocol/model route, а не проверку выбранного пользователем account или успешного turn. Отсутствие наблюдения — `UNKNOWN`. Сам import не подтверждает подписку |
 | Разрешено | Без настроенного exact route либо для retired записи — `UNAVAILABLE`; при наличии маршрута — `UNKNOWN`, поскольку поиск не имеет контекста agent/grant/Run |
 | Проверено | `NOT_RUN`: эта read projection не извлекает model execution attestation. Synthetic adapter tests не превращаются в подтверждение живого аккаунта |
 
@@ -67,12 +67,18 @@ MIT. Проверенная source revision
 этого Git tree локально не воспроизводилась. Exact artifact и schema имеют
 собственные hashes; так связь не выдаётся за воспроизведённую сборку.
 
+Семейство, входные/выходные MIME modalities, known flags для размеров контекста и ответа, три состояния tools/reasoning, отдельные implicit/explicit cache states и summary cache kind импортируются явно. Отсутствующие сведения остаются `UNKNOWN`, а отсутствующий limit — `contextKnown=false` либо `outputKnown=false`. Фильтр UNSUPPORTED не включает UNKNOWN; cache metadata не включает кеш Kodex.
+
+Группировка FAMILY упорядочивает весь результат сервером, включая переходы страниц; интерфейс объединяет загруженные модели по семействам без смешения provider/model identities. Форма хранит отдельно применённые фильтры, поэтому редактирование полей не меняет scope уже выданного cursor.
+
 `data/manifest.json` хранит `schema_sha256`, `upstream_sha256` и
-`snapshot_sha256`; последний проверяется перед использованием metadata.
+`snapshot_sha256`; последний проверяется перед использованием metadata. `retrieved_at` фиксирует время получения exact artifact; текущий import получен `2026-11-14T04:03:01.859067Z`. Время не является live account observation.
 API также выдаёт `overlaySha256` от custom/retired bytes и `catalogSha256`
-от пары snapshot/overlay hashes; интерфейс показывает этот итоговый digest.
+от пары exact manifest/overlay hashes (manifest закрепляет snapshot, schema и provenance); интерфейс показывает этот итоговый digest.
 Проекция намеренно не исполняет upstream SDK/body/headers/experimental options.
-Её закрытая схема — `contracts/model-provider-discovery/v1/snapshot.schema.json`.
+Её закрытые схемы — `contracts/model-provider-discovery/v1/snapshot.schema.json` и `manifest.schema.json`. Их точные копии поставляются в assets; projection schema digest проверяется при загрузке. Все manifest/snapshot/custom/retired документы проходят duplicate-key rejection и полную local schema validation до typed decode, затем проверяются уникальность provider/model и protocol identities, semantic capability consistency и общий count. Один явный custom override может заменить upstream запись; повтор identity внутри одного overlay запрещён. Сетевой загрузчик схем отключён.
+
+`schema_sha256` относится к проверенному TypeScript исходнику upstream. Он закреплён в реестре поддержанных schema sources, но полный upstream JSON не валидируется через Zod: manifest/API явно содержат `upstream_schema_validation=NOT_PERFORMED`. Машинно проверяется только полная закрытая проекция Kodex, обозначенная `projection_schema` и `projection_schema_sha256`; менять проверенную upstream схему без отдельной квалификации нельзя.
 Текущая схема upstream не заменяет OpenCode1.19.5 ABI5/input10: SDK остаются
 `@ai-sdk/openai@3.0.88`, `@ai-sdk/anthropic@3.0.111`,
 `@ai-sdk/openai-compatible@2.0.41`.
@@ -86,7 +92,8 @@ python3 tools/dev/model-provider-catalog-refresh.py \
   --revision <проверенная-40-hex-ревизия> \
   --schema-input /absolute/path/schema-v2.ts \
   --expected-input-sha256 <64-hex> \
-  --expected-schema-sha256 <64-hex>
+  --expected-schema-sha256 <64-hex> \
+  --retrieved-at <UTC-RFC3339-время-получения-artifact>
 ```
 
 Размер каждого входа ограничен16MiB; duplicate JSON keys, неверные identity,
@@ -142,15 +149,16 @@ Latest документация не является доказательств
 1. В авторизованной PWA открыть страницу аккаунтов моделей и каталог поиска.
    Найти `glm-5.3`, убедиться, что провайдеры разделены, оба Coding Plan aliases
    видны, все пять измерений показаны отдельно, source revision/hash доступны.
-2. Без настроенного маршрута проверить отсутствие готовности запуска.
+2. Выбрать family `glm`, минимум контекста1000000, input/output `text`, tools/reasoning `SUPPORTED`, cache `IMPLICIT`; проверить точный результат. Переключить grouping FAMILY и пройти следующую страницу. Отдельно найти cache `UNKNOWN`, убедиться, что UNKNOWN не выдан за UNSUPPORTED. Изменить поля фильтра до загрузки следующей страницы: пагинация использует прежний применённый набор; новый поиск применяет новые значения.
+3. Без настроенного маршрута проверить отсутствие готовности запуска.
    Поиск не вызывает `/models` или inference у upstream.
-3. Создать preset с тестовыми exact pins, выполнить безопасный render,
+4. Создать preset с тестовыми exact pins, выполнить безопасный render,
    сверить endpoint в CP/broker/egress; не применять его к неподтверждённому target.
-4. На отдельно разрешённой установке подключить собственный API key, дождаться
+5. На отдельно разрешённой установке подключить собственный API key, дождаться
    credential-bound catalog, явно назначить модели сотрудникам и выполнить
    ограниченный обычный tool turn. Живой результат записать отдельно по exact
    SHA/image/account generation; import и synthetic wire не заменяют эту проверку.
-5. Проверить поиск после обновления pinned source, сохранность custom override
+6. Проверить поиск после обновления pinned source, сохранность custom override
    и прежнего model selection; удалённая upstream модель остаётся видимой как
    недоступная, другая модель автоматически не выбирается.
 

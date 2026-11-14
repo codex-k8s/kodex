@@ -42,16 +42,16 @@ func TestModelDiscoveryAuthorizationPrecedesMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	principal := testInstructionPrincipal()
-	if _, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{}, ""); !errors.Is(err, errs.ErrForbidden) || repository.reads != 0 {
+	if _, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{}, query.ModelDiscoveryFilter{}); !errors.Is(err, errs.ErrForbidden) || repository.reads != 0 {
 		t.Fatal("principal rejection bypassed")
 	}
 	repository.principalError = nil
 	repository.readError = errs.ErrForbidden
-	if _, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{}, ""); !errors.Is(err, errs.ErrForbidden) || repository.reads != 1 {
+	if _, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{}, query.ModelDiscoveryFilter{}); !errors.Is(err, errs.ErrForbidden) || repository.reads != 1 {
 		t.Fatal("organization view rejection bypassed")
 	}
 	repository.readError = nil
-	page, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{Query: "glm-5.3"}, "zai-coding-plan")
+	page, err := service.ListModelDiscovery(t.Context(), principal, query.Filter{Query: "glm-5.3"}, query.ModelDiscoveryFilter{ProviderID: "zai-coding-plan"})
 	if err != nil || len(page.Items) < 2 {
 		t.Fatal("authorized discovery unavailable")
 	}

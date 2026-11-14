@@ -1890,16 +1890,16 @@ func (e EmailMailboxReceiveProtocol) Valid() bool {
 
 // Defines values for EmailMailboxTLSMode.
 const (
-	IMPLICIT EmailMailboxTLSMode = "IMPLICIT"
-	STARTTLS EmailMailboxTLSMode = "STARTTLS"
+	EmailMailboxTLSModeIMPLICIT EmailMailboxTLSMode = "IMPLICIT"
+	EmailMailboxTLSModeSTARTTLS EmailMailboxTLSMode = "STARTTLS"
 )
 
 // Valid indicates whether the value is a known member of the EmailMailboxTLSMode enum.
 func (e EmailMailboxTLSMode) Valid() bool {
 	switch e {
-	case IMPLICIT:
+	case EmailMailboxTLSModeIMPLICIT:
 		return true
-	case STARTTLS:
+	case EmailMailboxTLSModeSTARTTLS:
 		return true
 	default:
 		return false
@@ -4048,6 +4048,75 @@ func (e ModelDiscoveryModelAllowed) Valid() bool {
 	}
 }
 
+// Defines values for ModelDiscoveryModelCache.
+const (
+	ModelDiscoveryModelCacheBOTH     ModelDiscoveryModelCache = "BOTH"
+	ModelDiscoveryModelCacheEXPLICIT ModelDiscoveryModelCache = "EXPLICIT"
+	ModelDiscoveryModelCacheIMPLICIT ModelDiscoveryModelCache = "IMPLICIT"
+	ModelDiscoveryModelCacheNONE     ModelDiscoveryModelCache = "NONE"
+	ModelDiscoveryModelCacheUNKNOWN  ModelDiscoveryModelCache = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelCache enum.
+func (e ModelDiscoveryModelCache) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelCacheBOTH:
+		return true
+	case ModelDiscoveryModelCacheEXPLICIT:
+		return true
+	case ModelDiscoveryModelCacheIMPLICIT:
+		return true
+	case ModelDiscoveryModelCacheNONE:
+		return true
+	case ModelDiscoveryModelCacheUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelCacheExplicit.
+const (
+	ModelDiscoveryModelCacheExplicitSUPPORTED   ModelDiscoveryModelCacheExplicit = "SUPPORTED"
+	ModelDiscoveryModelCacheExplicitUNKNOWN     ModelDiscoveryModelCacheExplicit = "UNKNOWN"
+	ModelDiscoveryModelCacheExplicitUNSUPPORTED ModelDiscoveryModelCacheExplicit = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelCacheExplicit enum.
+func (e ModelDiscoveryModelCacheExplicit) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelCacheExplicitSUPPORTED:
+		return true
+	case ModelDiscoveryModelCacheExplicitUNKNOWN:
+		return true
+	case ModelDiscoveryModelCacheExplicitUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelCacheImplicit.
+const (
+	ModelDiscoveryModelCacheImplicitSUPPORTED   ModelDiscoveryModelCacheImplicit = "SUPPORTED"
+	ModelDiscoveryModelCacheImplicitUNKNOWN     ModelDiscoveryModelCacheImplicit = "UNKNOWN"
+	ModelDiscoveryModelCacheImplicitUNSUPPORTED ModelDiscoveryModelCacheImplicit = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelCacheImplicit enum.
+func (e ModelDiscoveryModelCacheImplicit) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelCacheImplicitSUPPORTED:
+		return true
+	case ModelDiscoveryModelCacheImplicitUNKNOWN:
+		return true
+	case ModelDiscoveryModelCacheImplicitUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelDiscoveryModelKnown.
 const (
 	ModelDiscoveryModelKnownCUSTOM  ModelDiscoveryModelKnown = "CUSTOM"
@@ -4069,6 +4138,27 @@ func (e ModelDiscoveryModelKnown) Valid() bool {
 	}
 }
 
+// Defines values for ModelDiscoveryModelReasoning.
+const (
+	ModelDiscoveryModelReasoningSUPPORTED   ModelDiscoveryModelReasoning = "SUPPORTED"
+	ModelDiscoveryModelReasoningUNKNOWN     ModelDiscoveryModelReasoning = "UNKNOWN"
+	ModelDiscoveryModelReasoningUNSUPPORTED ModelDiscoveryModelReasoning = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelReasoning enum.
+func (e ModelDiscoveryModelReasoning) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelReasoningSUPPORTED:
+		return true
+	case ModelDiscoveryModelReasoningUNKNOWN:
+		return true
+	case ModelDiscoveryModelReasoningUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelDiscoveryModelTested.
 const (
 	NOTRUN ModelDiscoveryModelTested = "NOT_RUN"
@@ -4084,6 +4174,45 @@ func (e ModelDiscoveryModelTested) Valid() bool {
 	}
 }
 
+// Defines values for ModelDiscoveryModelTools.
+const (
+	ModelDiscoveryModelToolsSUPPORTED   ModelDiscoveryModelTools = "SUPPORTED"
+	ModelDiscoveryModelToolsUNKNOWN     ModelDiscoveryModelTools = "UNKNOWN"
+	ModelDiscoveryModelToolsUNSUPPORTED ModelDiscoveryModelTools = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelTools enum.
+func (e ModelDiscoveryModelTools) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelToolsSUPPORTED:
+		return true
+	case ModelDiscoveryModelToolsUNKNOWN:
+		return true
+	case ModelDiscoveryModelToolsUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryPageGroupBy.
+const (
+	ModelDiscoveryPageGroupByFAMILY   ModelDiscoveryPageGroupBy = "FAMILY"
+	ModelDiscoveryPageGroupByPROVIDER ModelDiscoveryPageGroupBy = "PROVIDER"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryPageGroupBy enum.
+func (e ModelDiscoveryPageGroupBy) Valid() bool {
+	switch e {
+	case ModelDiscoveryPageGroupByFAMILY:
+		return true
+	case ModelDiscoveryPageGroupByPROVIDER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelDiscoverySourceLicense.
 const (
 	MIT ModelDiscoverySourceLicense = "MIT"
@@ -4093,6 +4222,21 @@ const (
 func (e ModelDiscoverySourceLicense) Valid() bool {
 	switch e {
 	case MIT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceProjectionSchema.
+const (
+	UrnKodexContractModelProviderDiscoveryV1 ModelDiscoverySourceProjectionSchema = "urn:kodex:contract:model-provider-discovery:v1"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceProjectionSchema enum.
+func (e ModelDiscoverySourceProjectionSchema) Valid() bool {
+	switch e {
+	case UrnKodexContractModelProviderDiscoveryV1:
 		return true
 	default:
 		return false
@@ -4153,6 +4297,21 @@ const (
 func (e ModelDiscoverySourceUpstreamSchema) Valid() bool {
 	switch e {
 	case ModelsDevexperimentalV20:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceUpstreamSchemaValidation.
+const (
+	NOTPERFORMED ModelDiscoverySourceUpstreamSchemaValidation = "NOT_PERFORMED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceUpstreamSchemaValidation enum.
+func (e ModelDiscoverySourceUpstreamSchemaValidation) Valid() bool {
+	switch e {
+	case NOTPERFORMED:
 		return true
 	default:
 		return false
@@ -10600,6 +10759,93 @@ func (e ListManagedConfigurationsParamsKind) Valid() bool {
 	}
 }
 
+// Defines values for ListModelDiscoveryParamsTools.
+const (
+	ListModelDiscoveryParamsToolsSUPPORTED   ListModelDiscoveryParamsTools = "SUPPORTED"
+	ListModelDiscoveryParamsToolsUNKNOWN     ListModelDiscoveryParamsTools = "UNKNOWN"
+	ListModelDiscoveryParamsToolsUNSUPPORTED ListModelDiscoveryParamsTools = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ListModelDiscoveryParamsTools enum.
+func (e ListModelDiscoveryParamsTools) Valid() bool {
+	switch e {
+	case ListModelDiscoveryParamsToolsSUPPORTED:
+		return true
+	case ListModelDiscoveryParamsToolsUNKNOWN:
+		return true
+	case ListModelDiscoveryParamsToolsUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListModelDiscoveryParamsReasoning.
+const (
+	ListModelDiscoveryParamsReasoningSUPPORTED   ListModelDiscoveryParamsReasoning = "SUPPORTED"
+	ListModelDiscoveryParamsReasoningUNKNOWN     ListModelDiscoveryParamsReasoning = "UNKNOWN"
+	ListModelDiscoveryParamsReasoningUNSUPPORTED ListModelDiscoveryParamsReasoning = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ListModelDiscoveryParamsReasoning enum.
+func (e ListModelDiscoveryParamsReasoning) Valid() bool {
+	switch e {
+	case ListModelDiscoveryParamsReasoningSUPPORTED:
+		return true
+	case ListModelDiscoveryParamsReasoningUNKNOWN:
+		return true
+	case ListModelDiscoveryParamsReasoningUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListModelDiscoveryParamsCache.
+const (
+	BOTH     ListModelDiscoveryParamsCache = "BOTH"
+	EXPLICIT ListModelDiscoveryParamsCache = "EXPLICIT"
+	IMPLICIT ListModelDiscoveryParamsCache = "IMPLICIT"
+	NONE     ListModelDiscoveryParamsCache = "NONE"
+	UNKNOWN  ListModelDiscoveryParamsCache = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ListModelDiscoveryParamsCache enum.
+func (e ListModelDiscoveryParamsCache) Valid() bool {
+	switch e {
+	case BOTH:
+		return true
+	case EXPLICIT:
+		return true
+	case IMPLICIT:
+		return true
+	case NONE:
+		return true
+	case UNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ListModelDiscoveryParamsGroupBy.
+const (
+	FAMILY   ListModelDiscoveryParamsGroupBy = "FAMILY"
+	PROVIDER ListModelDiscoveryParamsGroupBy = "PROVIDER"
+)
+
+// Valid indicates whether the value is a known member of the ListModelDiscoveryParamsGroupBy enum.
+func (e ListModelDiscoveryParamsGroupBy) Valid() bool {
+	switch e {
+	case FAMILY:
+		return true
+	case PROVIDER:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListSystemRoleImageRecipesParamsState.
 const (
 	ListSystemRoleImageRecipesParamsStateACTIVE   ListSystemRoleImageRecipesParamsState = "ACTIVE"
@@ -11139,16 +11385,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -13813,25 +14059,31 @@ type ModelContextPolicyRevision int
 
 // ModelDiscoveryModel defines model for ModelDiscoveryModel.
 type ModelDiscoveryModel struct {
-	Account          ModelDiscoveryModelAccount `json:"account"`
-	Adapter          ModelDiscoveryModelAdapter `json:"adapter"`
-	Allowed          ModelDiscoveryModelAllowed `json:"allowed"`
-	ContextTokens    string                     `json:"contextTokens"`
-	InputModalities  []string                   `json:"inputModalities"`
-	Known            ModelDiscoveryModelKnown   `json:"known"`
-	ModelId          string                     `json:"modelId"`
-	Name             string                     `json:"name"`
-	OutputModalities []string                   `json:"outputModalities"`
-	OutputTokens     string                     `json:"outputTokens"`
-	ProviderId       string                     `json:"providerId"`
-	ProviderName     string                     `json:"providerName"`
-	Reasoning        bool                       `json:"reasoning"`
-	ReasoningEfforts []string                   `json:"reasoningEfforts"`
-	RouteConfigured  bool                       `json:"routeConfigured"`
-	Tested           ModelDiscoveryModelTested  `json:"tested"`
-	Tools            bool                       `json:"tools"`
-	Type             string                     `json:"type"`
-	UpstreamStatus   string                     `json:"upstreamStatus"`
+	Account          ModelDiscoveryModelAccount       `json:"account"`
+	Adapter          ModelDiscoveryModelAdapter       `json:"adapter"`
+	Allowed          ModelDiscoveryModelAllowed       `json:"allowed"`
+	Cache            ModelDiscoveryModelCache         `json:"cache"`
+	CacheExplicit    ModelDiscoveryModelCacheExplicit `json:"cacheExplicit"`
+	CacheImplicit    ModelDiscoveryModelCacheImplicit `json:"cacheImplicit"`
+	ContextKnown     bool                             `json:"contextKnown"`
+	ContextTokens    string                           `json:"contextTokens"`
+	Family           string                           `json:"family"`
+	InputModalities  []string                         `json:"inputModalities"`
+	Known            ModelDiscoveryModelKnown         `json:"known"`
+	ModelId          string                           `json:"modelId"`
+	Name             string                           `json:"name"`
+	OutputKnown      bool                             `json:"outputKnown"`
+	OutputModalities []string                         `json:"outputModalities"`
+	OutputTokens     string                           `json:"outputTokens"`
+	ProviderId       string                           `json:"providerId"`
+	ProviderName     string                           `json:"providerName"`
+	Reasoning        ModelDiscoveryModelReasoning     `json:"reasoning"`
+	ReasoningEfforts []string                         `json:"reasoningEfforts"`
+	RouteConfigured  bool                             `json:"routeConfigured"`
+	Tested           ModelDiscoveryModelTested        `json:"tested"`
+	Tools            ModelDiscoveryModelTools         `json:"tools"`
+	Type             string                           `json:"type"`
+	UpstreamStatus   string                           `json:"upstreamStatus"`
 }
 
 // ModelDiscoveryModelAccount defines model for ModelDiscoveryModel.Account.
@@ -13843,38 +14095,64 @@ type ModelDiscoveryModelAdapter string
 // ModelDiscoveryModelAllowed defines model for ModelDiscoveryModel.Allowed.
 type ModelDiscoveryModelAllowed string
 
+// ModelDiscoveryModelCache defines model for ModelDiscoveryModel.Cache.
+type ModelDiscoveryModelCache string
+
+// ModelDiscoveryModelCacheExplicit defines model for ModelDiscoveryModel.CacheExplicit.
+type ModelDiscoveryModelCacheExplicit string
+
+// ModelDiscoveryModelCacheImplicit defines model for ModelDiscoveryModel.CacheImplicit.
+type ModelDiscoveryModelCacheImplicit string
+
 // ModelDiscoveryModelKnown defines model for ModelDiscoveryModel.Known.
 type ModelDiscoveryModelKnown string
+
+// ModelDiscoveryModelReasoning defines model for ModelDiscoveryModel.Reasoning.
+type ModelDiscoveryModelReasoning string
 
 // ModelDiscoveryModelTested defines model for ModelDiscoveryModel.Tested.
 type ModelDiscoveryModelTested string
 
+// ModelDiscoveryModelTools defines model for ModelDiscoveryModel.Tools.
+type ModelDiscoveryModelTools string
+
 // ModelDiscoveryPage defines model for ModelDiscoveryPage.
 type ModelDiscoveryPage struct {
-	Items         []ModelDiscoveryModel `json:"items"`
-	NextPageToken string                `json:"nextPageToken"`
-	Source        ModelDiscoverySource  `json:"source"`
-	Total         string                `json:"total"`
+	GroupBy       ModelDiscoveryPageGroupBy `json:"groupBy"`
+	Items         []ModelDiscoveryModel     `json:"items"`
+	NextPageToken string                    `json:"nextPageToken"`
+	Source        ModelDiscoverySource      `json:"source"`
+	Total         string                    `json:"total"`
 }
+
+// ModelDiscoveryPageGroupBy defines model for ModelDiscoveryPage.GroupBy.
+type ModelDiscoveryPageGroupBy string
 
 // ModelDiscoverySource defines model for ModelDiscoverySource.
 type ModelDiscoverySource struct {
-	CatalogSha256  string                             `json:"catalogSha256"`
-	License        ModelDiscoverySourceLicense        `json:"license"`
-	ModelCount     int                                `json:"modelCount"`
-	OverlaySha256  string                             `json:"overlaySha256"`
-	Schema         ModelDiscoverySourceSchema         `json:"schema"`
-	SchemaSha256   string                             `json:"schemaSha256"`
-	SnapshotSha256 string                             `json:"snapshotSha256"`
-	Source         ModelDiscoverySourceSource         `json:"source"`
-	SourceRevision string                             `json:"sourceRevision"`
-	SourceUrl      ModelDiscoverySourceSourceUrl      `json:"sourceUrl"`
-	UpstreamSchema ModelDiscoverySourceUpstreamSchema `json:"upstreamSchema"`
-	UpstreamSha256 string                             `json:"upstreamSha256"`
+	CatalogSha256            string                                       `json:"catalogSha256"`
+	License                  ModelDiscoverySourceLicense                  `json:"license"`
+	ModelCount               int                                          `json:"modelCount"`
+	OverlaySha256            string                                       `json:"overlaySha256"`
+	ProjectionSchema         ModelDiscoverySourceProjectionSchema         `json:"projectionSchema"`
+	ProjectionSchemaSha256   string                                       `json:"projectionSchemaSha256"`
+	RetrievedAt              time.Time                                    `json:"retrievedAt"`
+	Schema                   ModelDiscoverySourceSchema                   `json:"schema"`
+	SchemaSha256             string                                       `json:"schemaSha256"`
+	SnapshotSha256           string                                       `json:"snapshotSha256"`
+	Source                   ModelDiscoverySourceSource                   `json:"source"`
+	SourceRevision           string                                       `json:"sourceRevision"`
+	SourceUrl                ModelDiscoverySourceSourceUrl                `json:"sourceUrl"`
+	UpstreamSchema           ModelDiscoverySourceUpstreamSchema           `json:"upstreamSchema"`
+	UpstreamSchemaValidation ModelDiscoverySourceUpstreamSchemaValidation `json:"upstreamSchemaValidation"`
+	UpstreamSha256           string                                       `json:"upstreamSha256"`
 }
 
 // ModelDiscoverySourceLicense defines model for ModelDiscoverySource.License.
 type ModelDiscoverySourceLicense string
+
+// ModelDiscoverySourceProjectionSchema defines model for ModelDiscoverySource.ProjectionSchema.
+type ModelDiscoverySourceProjectionSchema string
 
 // ModelDiscoverySourceSchema defines model for ModelDiscoverySource.Schema.
 type ModelDiscoverySourceSchema string
@@ -13887,6 +14165,9 @@ type ModelDiscoverySourceSourceUrl string
 
 // ModelDiscoverySourceUpstreamSchema defines model for ModelDiscoverySource.UpstreamSchema.
 type ModelDiscoverySourceUpstreamSchema string
+
+// ModelDiscoverySourceUpstreamSchemaValidation defines model for ModelDiscoverySource.UpstreamSchemaValidation.
+type ModelDiscoverySourceUpstreamSchemaValidation string
 
 // ModelExecutionPolicy defines model for ModelExecutionPolicy.
 type ModelExecutionPolicy struct {
@@ -18875,11 +19156,31 @@ type ListModelCapabilitiesParams struct {
 
 // ListModelDiscoveryParams defines parameters for ListModelDiscovery.
 type ListModelDiscoveryParams struct {
-	Query      *Query     `form:"query,omitempty" json:"query,omitempty"`
-	PageSize   *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
-	PageToken  *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
-	ProviderId *string    `form:"providerId,omitempty" json:"providerId,omitempty"`
+	Query                *Query                             `form:"query,omitempty" json:"query,omitempty"`
+	PageSize             *PageSize                          `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken            *PageToken                         `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProviderId           *string                            `form:"providerId,omitempty" json:"providerId,omitempty"`
+	Family               *string                            `form:"family,omitempty" json:"family,omitempty"`
+	MinimumContextTokens *int64                             `form:"minimumContextTokens,omitempty" json:"minimumContextTokens,omitempty"`
+	InputModality        *string                            `form:"inputModality,omitempty" json:"inputModality,omitempty"`
+	OutputModality       *string                            `form:"outputModality,omitempty" json:"outputModality,omitempty"`
+	Tools                *ListModelDiscoveryParamsTools     `form:"tools,omitempty" json:"tools,omitempty"`
+	Reasoning            *ListModelDiscoveryParamsReasoning `form:"reasoning,omitempty" json:"reasoning,omitempty"`
+	Cache                *ListModelDiscoveryParamsCache     `form:"cache,omitempty" json:"cache,omitempty"`
+	GroupBy              *ListModelDiscoveryParamsGroupBy   `form:"groupBy,omitempty" json:"groupBy,omitempty"`
 }
+
+// ListModelDiscoveryParamsTools defines parameters for ListModelDiscovery.
+type ListModelDiscoveryParamsTools string
+
+// ListModelDiscoveryParamsReasoning defines parameters for ListModelDiscovery.
+type ListModelDiscoveryParamsReasoning string
+
+// ListModelDiscoveryParamsCache defines parameters for ListModelDiscovery.
+type ListModelDiscoveryParamsCache string
+
+// ListModelDiscoveryParamsGroupBy defines parameters for ListModelDiscovery.
+type ListModelDiscoveryParamsGroupBy string
 
 // CompleteOnboardingParams defines parameters for CompleteOnboarding.
 type CompleteOnboardingParams struct {
@@ -36150,6 +36451,110 @@ func (siw *ServerInterfaceWrapper) ListModelDiscovery(w http.ResponseWriter, r *
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "providerId"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "family" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "family", r.URL.Query(), &params.Family, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "family"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "family", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "minimumContextTokens" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "minimumContextTokens", r.URL.Query(), &params.MinimumContextTokens, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "minimumContextTokens"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "minimumContextTokens", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "inputModality" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "inputModality", r.URL.Query(), &params.InputModality, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "inputModality"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "inputModality", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "outputModality" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "outputModality", r.URL.Query(), &params.OutputModality, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "outputModality"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "outputModality", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "tools" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "tools", r.URL.Query(), &params.Tools, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "tools"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tools", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "reasoning" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "reasoning", r.URL.Query(), &params.Reasoning, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reasoning"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reasoning", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cache" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cache", r.URL.Query(), &params.Cache, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cache"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cache", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "groupBy" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "groupBy", r.URL.Query(), &params.GroupBy, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "groupBy"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "groupBy", Err: err})
 		}
 		return
 	}

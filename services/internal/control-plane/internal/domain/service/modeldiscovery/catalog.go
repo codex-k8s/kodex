@@ -4,14 +4,12 @@ package modeldiscovery
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"embed"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -20,6 +18,7 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	querytype "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 )
 
 // assets contains the reviewed compressed projection, provenance and separately maintained custom records; refreshing upstream never rewrites the latter.
@@ -49,82 +48,17 @@ var (
 	// catalogError makes asset loading failure durable for this immutable process image.
 	// catalogError сохраняет отказ загрузки assets на всё время работы immutable process image.
 	catalogError error
-	// catalogOverlayDigest invalidates cursors when custom records or retired upstream identities change.
-	// catalogOverlayDigest отменяет курсоры при изменении custom records или retired upstream identities.
-	catalogOverlayDigest string
 )
 
 // decodeAssets verifies exact decompressed bytes against provenance before any record is used; incomplete refreshes fail closed.
 // decodeAssets проверяет точные распакованные байты по provenance до использования записей; неполное обновление закрыто отклоняется.
 func decodeAssets() {
-	manifest, err := assets.ReadFile("data/manifest.json")
-	if err != nil || json.Unmarshal(manifest, &catalogSource) != nil || catalogSource.Schema != "kodex.model-provider-discovery/v1" || catalogSource.License != "MIT" {
-		catalogError = ErrCatalog
-		return
-	}
-	compressed, err := assets.Open("data/snapshot.json.gz")
+	records, source, err := loadCatalogAssets(assets)
 	if err != nil {
-		catalogError = ErrCatalog
+		catalogError = err
 		return
 	}
-	defer compressed.Close()
-	reader, err := gzip.NewReader(compressed)
-	if err != nil {
-		catalogError = ErrCatalog
-		return
-	}
-	defer reader.Close()
-	raw, err := io.ReadAll(io.LimitReader(reader, 16<<20+1))
-	digest := sha256.Sum256(raw)
-	if err != nil || len(raw) > 16<<20 || hex.EncodeToString(digest[:]) != catalogSource.SnapshotSHA256 || json.Unmarshal(raw, &catalogRecords) != nil || len(catalogRecords) != catalogSource.ModelCount {
-		catalogError = ErrCatalog
-		return
-	}
-	custom, err := assets.ReadFile("data/custom-overrides.json")
-	var overrides []entity.ModelDiscoveryRecord
-	if err != nil || json.Unmarshal(custom, &overrides) != nil {
-		catalogError = ErrCatalog
-		return
-	}
-	byIdentity := make(map[string]int, len(catalogRecords))
-	for index, record := range catalogRecords {
-		byIdentity[record.ProviderID+"\x00"+record.ModelID] = index
-	}
-	retired, err := assets.ReadFile("data/retired-models.json")
-	var tombstones []entity.ModelDiscoveryRecord
-	if err != nil || json.Unmarshal(retired, &tombstones) != nil {
-		catalogError = ErrCatalog
-		return
-	}
-	for _, record := range tombstones {
-		identity := record.ProviderID + "\x00" + record.ModelID
-		if _, found := byIdentity[identity]; found {
-			catalogError = ErrCatalog
-			return
-		}
-		record.Known = "REMOVED"
-		byIdentity[identity] = len(catalogRecords)
-		catalogRecords = append(catalogRecords, record)
-	}
-	for _, record := range overrides {
-		if record.ProviderID == "" || record.ModelID == "" || record.Name == "" {
-			catalogError = ErrCatalog
-			return
-		}
-		record.Known = "CUSTOM"
-		identity := record.ProviderID + "\x00" + record.ModelID
-		if index, found := byIdentity[identity]; found {
-			catalogRecords[index] = record
-		} else {
-			byIdentity[identity] = len(catalogRecords)
-			catalogRecords = append(catalogRecords, record)
-		}
-	}
-	digest = sha256.Sum256(append(append([]byte{}, custom...), retired...))
-	catalogOverlayDigest = hex.EncodeToString(digest[:])
-	catalogSource.OverlaySHA256 = catalogOverlayDigest
-	effective := sha256.Sum256([]byte(catalogSource.SnapshotSHA256 + ":" + catalogOverlayDigest))
-	catalogSource.CatalogSHA256 = hex.EncodeToString(effective[:])
+	catalogRecords, catalogSource = records, source
 }
 
 // Ready verifies the shipped assets through the same immutable loader used by search; it performs no remote calls or credential reads.
@@ -134,12 +68,21 @@ func Ready() error { catalogOnce.Do(decodeAssets); return catalogError }
 // Search applies bounded deterministic search and cursor binding to immutable metadata, then annotates only exact owner-configured endpoint/protocol/model matches.
 // Search выполняет ограниченный детерминированный поиск и связывает курсор с immutable metadata; статусы дополняются только по точным owner-configured endpoint/protocol/model.
 func Search(query, provider, cursor string, size int, definitions []entity.ProviderDefinition) (entity.ModelDiscoveryPage, error) {
+	return SearchFiltered(query, cursor, size, querytype.ModelDiscoveryFilter{ProviderID: provider}, definitions)
+}
+
+// SearchFiltered binds every typed filter and grouping choice into pagination before joining any configured-route evidence; unknown capability metadata never matches a supported-only filter.
+// SearchFiltered связывает каждый typed filter и grouping choice с пагинацией до добавления route evidence; неизвестные capabilities не проходят supported-only filter.
+func SearchFiltered(query, cursor string, size int, filter querytype.ModelDiscoveryFilter, definitions []entity.ProviderDefinition) (entity.ModelDiscoveryPage, error) {
 	catalogOnce.Do(decodeAssets)
 	if catalogError != nil {
 		return entity.ModelDiscoveryPage{}, catalogError
 	}
-	query, provider = strings.ToLower(strings.TrimSpace(query)), strings.TrimSpace(provider)
-	if !utf8.ValidString(query) || len(query) > 200 || len(provider) > 128 || size < 1 || size > 100 || len(cursor) > 512 {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if filter.GroupBy == "" {
+		filter.GroupBy = "PROVIDER"
+	}
+	if !utf8.ValidString(query) || utf8.RuneCountInString(query) > 200 || size < 1 || size > 100 || len(cursor) > 512 || validateFilter(filter) != nil {
 		return entity.ModelDiscoveryPage{}, ErrQuery
 	}
 	routePins := []string{}
@@ -153,7 +96,8 @@ func Search(query, provider, cursor string, size int, definitions []entity.Provi
 		}
 	}
 	slices.Sort(routePins)
-	queryDigest := sha256.Sum256([]byte(catalogSource.SnapshotSHA256 + "\x00" + catalogOverlayDigest + "\x00" + strings.Join(routePins, ",") + "\x00" + query + "\x00" + provider))
+	filterRaw, _ := json.Marshal(filter)
+	queryDigest := sha256.Sum256([]byte(catalogSource.CatalogSHA256 + "\x00" + strings.Join(routePins, ",") + "\x00" + query + "\x00" + string(filterRaw)))
 	prefix := hex.EncodeToString(queryDigest[:]) + ":"
 	offset := 0
 	if cursor != "" {
@@ -184,16 +128,16 @@ func Search(query, provider, cursor string, size int, definitions []entity.Provi
 		for _, model := range definition.ModelProvider.Models {
 			found := indexedRoutes[model.ID+"\x00"+protocol(*definition.ModelProvider)+"\x00"+definition.ModelProvider.BaseURL+"\x00"+definition.ModelProvider.AdapterPackage()]
 			if !found {
-				records = append(records, entity.ModelDiscoveryRecord{ProviderID: definition.Key, ProviderName: definition.Name, ModelID: model.ID, Name: model.ID, Type: "chat", ContextTokens: int64(model.ContextWindowTokens), OutputTokens: int64(model.MaximumOutputTokens), Known: "CUSTOM", UpstreamStatus: "custom", APIs: []entity.ModelDiscoveryAPI{{Protocol: protocol(*definition.ModelProvider), BaseURL: definition.ModelProvider.BaseURL, SDK: definition.ModelProvider.AdapterPackage()}}})
+				records = append(records, entity.ModelDiscoveryRecord{ProviderID: definition.Key, ProviderName: definition.Name, ModelID: model.ID, Name: model.ID, Family: "UNKNOWN", Type: "chat", ContextTokens: 0, OutputTokens: 0, ContextKnown: false, OutputKnown: false, Tools: "UNKNOWN", Reasoning: "UNKNOWN", Cache: "UNKNOWN", CacheImplicit: "UNKNOWN", CacheExplicit: "UNKNOWN", Known: "CUSTOM", UpstreamStatus: "custom", APIs: []entity.ModelDiscoveryAPI{{Protocol: protocol(*definition.ModelProvider), BaseURL: definition.ModelProvider.BaseURL, SDK: definition.ModelProvider.AdapterPackage()}}})
 			}
 		}
 	}
 	slices.SortFunc(records, func(a, b entity.ModelDiscoveryRecord) int {
-		return strings.Compare(a.ProviderID+"\x00"+a.ModelID, b.ProviderID+"\x00"+b.ModelID)
+		return strings.Compare(groupKey(a, filter.GroupBy), groupKey(b, filter.GroupBy))
 	})
-	result := entity.ModelDiscoveryPage{Items: []entity.ModelDiscoveryRecord{}, Source: catalogSource}
+	result := entity.ModelDiscoveryPage{Items: []entity.ModelDiscoveryRecord{}, Source: catalogSource, GroupBy: filter.GroupBy}
 	for _, record := range records {
-		if provider != "" && record.ProviderID != provider || query != "" && !strings.Contains(strings.ToLower(record.ProviderID+" "+record.ProviderName+" "+record.ModelID+" "+record.Name), query) {
+		if !matchesFilters(record, filter) || query != "" && !strings.Contains(strings.ToLower(record.ProviderID+" "+record.ProviderName+" "+record.ModelID+" "+record.Name+" "+record.Family), query) {
 			continue
 		}
 		index := result.Total
