@@ -82,6 +82,19 @@ class Tests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(Rejected):
                 profile.reconcile_policy(values)
 
+    def test_reconciliation_transition_rejects_other_profile_or_unrelated_delta(self):
+        before,_=self.changed_policy('')
+        desired=profile.reconcile_policy(before)
+        self.assertEqual(len(profile.transition(before,desired,reconcile=True)),3)
+        with self.assertRaises(Rejected):profile.transition(before,desired)
+        for change in ('profile','sidecar','history','admission'):
+            bad=copy.deepcopy(desired)
+            if change=='profile':bad=profile.transform(bad,profile.PROFILE)
+            elif change=='sidecar':bad[1]['spec']['template']['spec']['containers'][1]['image']='images.example.invalid/untrusted:latest'
+            elif change=='history':bad[3]['spec']['template']['spec']['containers'][0]['image']='images.example.invalid/changed:latest'
+            else:bad[2]['spec']['validationActions']=['Warn']
+            with self.subTest(change=change),self.assertRaises(Rejected):profile.transition(before,bad,reconcile=True)
+
     def test_default_is_unchanged_for_either_engine(self):
         for engine in ('codex','opencode'):
             values=fixture();values[0]['data']['nodeReadbackImage']=values[0]['data']['nodeReadbackImage'].replace('/runner@','/'+engine+'@')
