@@ -1000,6 +1000,18 @@ Bootstrap state browser E2E хранит только cookies OAuth2/Keycloak SS
 ограничением размера и закрытой schema; запись выполняется через exclusive
 temporary file `0600`, `fsync` и atomic rename внутри owner-каталога `0700`.
 
+## Отражение credential в ответе провайдера
+
+Типизированная проекция не делает произвольный upstream body доверенным.
+Общая HTTP boundary до передачи успешного ответа adapter проверяет raw body и
+декодированные JSON strings на точное отражение выданного ей credential и
+encoded HTTP authorization payload. Эти байты не попадают в model result,
+receipt summary или diagnostic. После начатой mutation отказ сохраняет
+UNKNOWN_OUTCOME без разрешения повтора; для READ это закрытый invalid response.
+HTTP401/403 сохраняют собственную auth-классификацию, их body не проецируется.
+Проверка ограничена бюджетом body и не считается общим DLP либо защитой от
+произвольных кодирований. Credential не используется в тексте ошибки или label.
+
 ## Наблюдение внешних возможностей с credential
 
 При расширении Git-области discovery хранит только координаты ресурса. ID,

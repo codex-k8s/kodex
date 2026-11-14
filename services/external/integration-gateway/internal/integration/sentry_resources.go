@@ -82,20 +82,20 @@ func sentryPageQuery(input map[string]any) (url.Values, int, error) {
 		case json.Number:
 			parsed, err := strconv.Atoi(string(value))
 			if err != nil {
-				return nil, 0, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+				return nil, 0, &SafeError{Code: providerRequestRejectedCode}
 			}
 			limit = parsed
 		default:
-			return nil, 0, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, 0, &SafeError{Code: providerRequestRejectedCode}
 		}
 	}
 	if limit < 1 || limit > 50 {
-		return nil, 0, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		return nil, 0, &SafeError{Code: providerRequestRejectedCode}
 	}
 	query := url.Values{"per_page": {strconv.Itoa(limit)}}
 	if cursor, present := input["cursor"].(string); present {
 		if !sentryCursor(cursor) {
-			return nil, 0, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, 0, &SafeError{Code: providerRequestRejectedCode}
 		}
 		query.Set("cursor", cursor)
 	}
@@ -107,7 +107,7 @@ func sentryPageQuery(input map[string]any) (url.Values, int, error) {
 func sentryListResult(response *providerResponse, origin, path string, query url.Values, items any) (any, error) {
 	cursor, err := sentryNextCursor(response.Header, origin, path)
 	if err != nil || cursor != "" && cursor == query.Get("cursor") {
-		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return map[string]any{"items": items, "next_cursor": cursor}, nil
 }
@@ -156,7 +156,7 @@ func (adapter *Adapter) sentryAlertProjectEligible(ctx context.Context, request 
 		IncludesAll *bool     `json:"includesAllProjects"`
 	}
 	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.IncludesAll == nil || len(*scope.ProjectIDs) > 100 {
-		return false, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return false, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return !*scope.IncludesAll && len(*scope.ProjectIDs) == 1 && (*scope.ProjectIDs)[0] == project.ID, nil
 }
@@ -171,7 +171,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 	case "sentry.issue.event.list", "sentry.issue.comment.list", "sentry.issue.comment.create", "sentry.issue.assignment.update":
 		id, _ := request.Input["issue_id"].(string)
 		if !sentryDecimal(id) {
-			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, "", &SafeError{Code: providerRequestRejectedCode}
 		}
 		issue, err := adapter.sentryReadIssue(ctx, request, capability, configuration, project, id)
 		if err != nil {
@@ -185,7 +185,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 				return nil, "", err
 			}
 			if !sentryScopeAllows(metadata, request.Operation) {
-				return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+				return nil, "", &SafeError{Code: providerRequestRejectedCode}
 			}
 			if request.Operation == "sentry.issue.assignment.update" {
 				assignee, _ := request.Input["assignee"].(string)
@@ -193,7 +193,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 				if assignee == "unassigned" {
 					kind, actorID = "", ""
 				} else if !valid || (kind != "user" && kind != "team") || !sentryDecimal(actorID) {
-					return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+					return nil, "", &SafeError{Code: providerRequestRejectedCode}
 				}
 				target := assignee
 				if assignee == "unassigned" {
@@ -234,7 +234,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 			return nil, "", err
 		}
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]string{}
 		seen := map[string]bool{}
@@ -245,11 +245,11 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 				Title     string `json:"title"`
 			}
 			if decodeProviderJSON(response.Body, &events) != nil || events == nil || len(events) > limit {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			for _, event := range events {
 				if len(event.EventID) != 32 || event.ProjectID != project.ID || event.Title == "" || len(event.Title) > 2000 || seen[event.EventID] {
-					return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+					return nil, "", &SafeError{Code: providerResponseInvalidCode}
 				}
 				seen[event.EventID] = true
 				items = append(items, map[string]string{"event_id": event.EventID, "title": event.Title})
@@ -257,11 +257,11 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		} else {
 			var comments []sentryComment
 			if decodeProviderJSON(response.Body, &comments) != nil || comments == nil || len(comments) > limit {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			for _, comment := range comments {
 				if !sentryDecimal(comment.ID) || len(comment.Data.Text) > 5000 || seen[comment.ID] {
-					return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+					return nil, "", &SafeError{Code: providerResponseInvalidCode}
 				}
 				seen[comment.ID] = true
 				items = append(items, map[string]string{"id": comment.ID, "text": comment.Data.Text})
@@ -279,7 +279,7 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		if request.Operation == "sentry.release.read" {
 			version, _ = request.Input["version"].(string)
 			if !sentryVersion(version) {
-				return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+				return nil, "", &SafeError{Code: providerRequestRejectedCode}
 			}
 			path += url.PathEscape(version) + "/"
 			query = nil
@@ -289,23 +289,23 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 			return nil, "", err
 		}
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		releases := []sentryRelease{}
 		if version != "" {
 			var release sentryRelease
 			if decodeProviderJSON(response.Body, &release) != nil {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			releases = append(releases, release)
 		} else if decodeProviderJSON(response.Body, &releases) != nil || releases == nil || len(releases) > limit {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]string{}
 		seen := map[string]bool{}
 		for _, release := range releases {
 			if !sentryReleaseMatches(release, project, version) || seen[release.Version] {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			seen[release.Version] = true
 			item := map[string]string{"version": release.Version, "status": release.Status}
@@ -330,14 +330,14 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		if request.Operation == "sentry.alert.read" {
 			id, _ = request.Input["alert_id"].(string)
 			if !sentryDecimal(id) {
-				return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+				return nil, "", &SafeError{Code: providerRequestRejectedCode}
 			}
 			eligible, err := adapter.sentryAlertProjectEligible(ctx, request, capability, configuration, project, id)
 			if err != nil {
 				return nil, "", err
 			}
 			if !eligible {
-				return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+				return nil, "", &SafeError{Code: providerRequestRejectedCode}
 			}
 			path += id + "/"
 			query = nil
@@ -347,23 +347,23 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 			return nil, "", err
 		}
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		alerts := []sentryAlert{}
 		if id != "" {
 			var alert sentryAlert
 			if decodeProviderJSON(response.Body, &alert) != nil || alert.ID != id {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			alerts = append(alerts, alert)
 		} else if decodeProviderJSON(response.Body, &alerts) != nil || alerts == nil || len(alerts) > limit {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}
 		seen := map[string]bool{}
 		for _, alert := range alerts {
 			if !sentryDecimal(alert.ID) || alert.OrganizationID != project.Organization.ID || alert.Name == "" || len(alert.Name) > 2000 || alert.Enabled == nil || seen[alert.ID] {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			seen[alert.ID] = true
 			if id == "" {
@@ -383,6 +383,6 @@ func (adapter *Adapter) sentryProjectResource(ctx context.Context, request Reque
 		result, err := sentryListResult(response, configuration["base_url"], path, query, items)
 		return result, providerRef, err
 	default:
-		return nil, "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return nil, "", &SafeError{Code: providerCapabilityUnsupportedCode}
 	}
 }

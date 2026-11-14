@@ -69,7 +69,7 @@ func (adapter *Adapter) sentryReadOrganization(ctx context.Context, request Requ
 	}
 	var organization sentryOrganization
 	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &organization) != nil || !sentryDecimal(organization.ID) || organization.Slug != configuration["organization_slug"] || organization.Name == "" || len(organization.Name) > 1000 {
-		return sentryOrganization{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return sentryOrganization{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return organization, nil
 }
@@ -86,12 +86,12 @@ func (adapter *Adapter) sentryWorkflowScope(ctx context.Context, request Request
 		All        *bool     `json:"includesAllProjects"`
 	}
 	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &scope) != nil || scope.ProjectIDs == nil || scope.All == nil || len(*scope.ProjectIDs) > 100 || *scope.All && len(*scope.ProjectIDs) != 0 {
-		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	seen := map[string]bool{}
 	for _, id := range *scope.ProjectIDs {
 		if !sentryDecimal(id) || seen[id] {
-			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, &SafeError{Code: providerResponseInvalidCode}
 		}
 		seen[id] = true
 	}
@@ -102,14 +102,14 @@ func (adapter *Adapter) sentryWorkflowScope(ctx context.Context, request Request
 // sentryOrganizationReleaseProjection проверяет полный ограниченный состав проектов release и выдаёт безопасные metadata только под явным full-organization grant.
 func sentryOrganizationReleaseProjection(release sentryRelease, version string) (map[string]any, error) {
 	if !sentryVersion(release.Version) || version != "" && release.Version != version || len(release.Projects) < 1 || len(release.Projects) > 100 || release.Status != "open" && release.Status != "archived" || release.Ref != nil && len(*release.Ref) > 500 {
-		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
 	projects := []map[string]string{}
 	seen := map[string]bool{}
 	for _, member := range release.Projects {
 		id := string(member.ID)
 		if !sentryDecimal(id) || !integrationpackage.ValidSentrySlug(member.Slug) || seen[id] {
-			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, &SafeError{Code: providerResponseInvalidCode}
 		}
 		seen[id] = true
 		projects = append(projects, map[string]string{"id": id, "slug": member.Slug})
@@ -151,7 +151,7 @@ func sentryWorkflowPayload(input map[string]any) (map[string]any, error) {
 	}
 	detectorID, parseErr := strconv.ParseInt(detector, 10, 64)
 	if !sentryDecimal(detector) || parseErr != nil || name == "" || len(name) > 256 || !enabledPresent || !valid || frequency < 1 || frequency > 10080 || (trigger != "first_seen_event" && trigger != "regression_event" && trigger != "reappeared_event") {
-		return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		return nil, &SafeError{Code: providerRequestRejectedCode}
 	}
 	config := map[string]any{"target_type": kind}
 	if id != "" {
@@ -190,7 +190,7 @@ func sentryWorkflowMatches(workflow sentryWorkflow, input map[string]any, organi
 func (adapter *Adapter) executeSentryOrganization(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (Result, error) {
 	contract, exists := integrationpackage.CredentialResourcePermissionContractFor(request.DefinitionKey, request.CapabilityKey)
 	if !exists || contract.Operation != request.Operation || request.PersonalCredentialAdmission && request.ResourcePermissionProfile != contract.Profile || !integrationpackage.ValidSentrySlug(configuration["organization_slug"]) || configuration["project_slug"] != "" {
-		return Result{}, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return Result{}, &SafeError{Code: providerCapabilityUnsupportedCode}
 	}
 	organization, err := adapter.sentryReadOrganization(ctx, request, capability, configuration)
 	if err != nil {
@@ -202,7 +202,7 @@ func (adapter *Adapter) executeSentryOrganization(ctx context.Context, request R
 			return Result{}, err
 		}
 		if !sentryScopeAllows(metadata, request.Operation) {
-			return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return Result{}, &SafeError{Code: providerRequestRejectedCode}
 		}
 	}
 	projection, providerRef, err := adapter.sentryOrganizationResource(ctx, request, capability, configuration, organization)
@@ -211,7 +211,7 @@ func (adapter *Adapter) executeSentryOrganization(ctx context.Context, request R
 	}
 	text, err := json.Marshal(projection)
 	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return providerResult(request, providerRef, map[string]string{"text": string(text)})
 }
@@ -240,13 +240,13 @@ func (adapter *Adapter) sentryOrganizationResource(ctx context.Context, request 
 			Name string `json:"name"`
 		}
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &projects) != nil || projects == nil || len(projects) > limit {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]string{}
 		seen := map[string]bool{}
 		for _, project := range projects {
 			if !sentryDecimal(project.ID) || !integrationpackage.ValidSentrySlug(project.Slug) || project.Name == "" || len(project.Name) > 1000 || seen[project.ID] {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			seen[project.ID] = true
 			items = append(items, map[string]string{"id": project.ID, "slug": project.Slug, "name": project.Name})
@@ -258,7 +258,7 @@ func (adapter *Adapter) sentryOrganizationResource(ctx context.Context, request 
 	case "sentry.organization.alert.list", "sentry.organization.alert.read", "sentry.organization.alert.create", "sentry.organization.alert.update", "sentry.organization.alert.delete", "sentry.organization.detector.list", "sentry.organization.detector.read":
 		return adapter.sentryOrganizationAlert(ctx, request, capability, configuration, organization)
 	default:
-		return nil, "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return nil, "", &SafeError{Code: providerCapabilityUnsupportedCode}
 	}
 }
 
@@ -272,7 +272,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 	}
 	version, _ := request.Input["version"].(string)
 	if request.Operation != "sentry.organization.release.list" && !sentryVersion(version) {
-		return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		return nil, "", &SafeError{Code: providerRequestRejectedCode}
 	}
 	method := http.MethodGet
 	var payload any
@@ -280,13 +280,13 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 	if mutation {
 		ref, _ := request.Input["ref"].(string)
 		if !sentryVersion(ref) {
-			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, "", &SafeError{Code: providerRequestRejectedCode}
 		}
 	}
 	if request.Operation == "sentry.organization.release.create" {
 		project, _ := request.Input["project_slug"].(string)
 		if !integrationpackage.ValidSentrySlug(project) {
-			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, "", &SafeError{Code: providerRequestRejectedCode}
 		}
 		projectConfig := map[string]string{"base_url": configuration["base_url"], "organization_slug": organization.Slug, "project_slug": project}
 		resolved, err := adapter.sentryReadProject(ctx, request, capability, projectConfig)
@@ -294,7 +294,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 			return nil, "", err
 		}
 		if resolved.Organization.ID != organization.ID {
-			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, "", &SafeError{Code: providerRequestRejectedCode}
 		}
 		method = http.MethodPost
 		payload = map[string]any{"version": version, "projects": []string{project}, "status": request.Input["status"], "ref": request.Input["ref"]}
@@ -309,7 +309,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 			}
 			var existing sentryRelease
 			if integrationpackage.ValidateCredentialPermissionJSON(before.Body) != nil || decodeProviderJSON(before.Body, &existing) != nil {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			if _, err := sentryOrganizationReleaseProjection(existing, version); err != nil {
 				return nil, "", err
@@ -326,7 +326,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 		if mutation {
 			return nil, "", &UnknownOutcomeError{stage: "response_body"}
 		}
-		return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return nil, "", &SafeError{Code: providerResponseInvalidCode}
 	}
 	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil {
 		return invalid()
@@ -378,7 +378,7 @@ func (adapter *Adapter) sentryOrganizationRelease(ctx context.Context, request R
 // sentryReadDetector разрешает monitor внутри текущей организации перед привязкой к workflow; caller IDs не доказывают provider ownership.
 func (adapter *Adapter) sentryReadDetector(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, id string) (sentryDetector, error) {
 	if !sentryDecimal(id) {
-		return sentryDetector{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		return sentryDetector{}, &SafeError{Code: providerRequestRejectedCode}
 	}
 	response, err := adapter.sentryJSON(ctx, request, capability, configuration, http.MethodGet, "/api/0/organizations/"+configuration["organization_slug"]+"/detectors/"+id+"/", nil, nil)
 	if err != nil {
@@ -386,7 +386,7 @@ func (adapter *Adapter) sentryReadDetector(ctx context.Context, request Request,
 	}
 	var detector sentryDetector
 	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &detector) != nil || detector.ID != id || detector.Name == "" || len(detector.Name) > 2000 || detector.Type == "" || len(detector.Type) > 100 || detector.ProjectID != nil && !sentryDecimal(*detector.ProjectID) {
-		return sentryDetector{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return sentryDetector{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return detector, nil
 }
@@ -416,13 +416,13 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 		}
 		var detectors []sentryDetector
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &detectors) != nil || detectors == nil || len(detectors) > limit {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}
 		seen := map[string]bool{}
 		for _, detector := range detectors {
 			if !sentryDecimal(detector.ID) || seen[detector.ID] || detector.Name == "" || len(detector.Name) > 2000 || detector.Type == "" || len(detector.Type) > 100 || detector.ProjectID != nil && !sentryDecimal(*detector.ProjectID) {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			seen[detector.ID] = true
 			items = append(items, map[string]any{"id": detector.ID, "name": detector.Name, "type": detector.Type, "project_id": detector.ProjectID, "includes_all_projects": detector.ProjectID == nil})
@@ -442,13 +442,13 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 		}
 		var workflows []sentryAlert
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &workflows) != nil || workflows == nil || len(workflows) > limit {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		items := []map[string]any{}
 		seen := map[string]bool{}
 		for _, workflow := range workflows {
 			if !sentryDecimal(workflow.ID) || seen[workflow.ID] || workflow.OrganizationID != organization.ID || workflow.Name == "" || len(workflow.Name) > 2000 || workflow.Enabled == nil {
-				return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+				return nil, "", &SafeError{Code: providerResponseInvalidCode}
 			}
 			seen[workflow.ID] = true
 			scope, err := adapter.sentryWorkflowScope(ctx, request, capability, configuration, workflow.ID)
@@ -464,7 +464,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 	var beforeScope map[string]any
 	if request.Operation != "sentry.organization.alert.create" {
 		if !sentryDecimal(id) {
-			return nil, "", &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, "", &SafeError{Code: providerRequestRejectedCode}
 		}
 		path += id + "/"
 		response, err := adapter.sentryJSON(ctx, request, capability, configuration, http.MethodGet, path, nil, nil)
@@ -473,7 +473,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 		}
 		var workflow sentryAlert
 		if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &workflow) != nil || workflow.ID != id || workflow.OrganizationID != organization.ID || workflow.Name == "" || len(workflow.Name) > 2000 || workflow.Enabled == nil {
-			return nil, "", &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			return nil, "", &SafeError{Code: providerResponseInvalidCode}
 		}
 		beforeScope, err = adapter.sentryWorkflowScope(ctx, request, capability, configuration, id)
 		if err != nil {
@@ -505,7 +505,7 @@ func (adapter *Adapter) sentryOrganizationAlert(ctx context.Context, request Req
 	if request.Operation == "sentry.organization.alert.update" {
 		method = http.MethodPut
 	} else if request.Operation != "sentry.organization.alert.create" {
-		return nil, "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return nil, "", &SafeError{Code: providerCapabilityUnsupportedCode}
 	}
 	response, err := adapter.sentryJSON(ctx, request, capability, configuration, method, path, nil, payload)
 	if err != nil {

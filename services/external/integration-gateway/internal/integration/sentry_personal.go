@@ -13,12 +13,12 @@ import (
 func (adapter *Adapter) observeSentryPersonalScopes(ctx context.Context, request Request, definition integrationpackage.Package, configuration map[string]string, result *CredentialProbeResult) error {
 	health, exists := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
 	if !exists || definition.Spec.Adapter != "SENTRY" {
-		return &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+		return &SafeError{Code: providerCapabilityUnsupportedCode}
 	}
 	metadata, err := adapter.sentryToken(ctx, request, health, configuration)
 	if err != nil {
 		var safe *SafeError
-		if errors.As(err, &safe) && safe.Code == "INTEGRATION_AUTH_REJECTED" && safe.AuthenticationHTTPStatus != http.StatusForbidden {
+		if errors.As(err, &safe) && safe.Code == providerAuthRejectedCode && safe.AuthenticationHTTPStatus != http.StatusForbidden {
 			return err
 		}
 		return nil

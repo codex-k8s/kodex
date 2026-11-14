@@ -61,17 +61,17 @@ type providerResponse struct {
 func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerCall) (*providerResponse, error) {
 	baseURL, err := parseProviderBaseURL(call.BaseURL)
 	if err != nil || call.Path == "" || !strings.HasPrefix(call.Path, "/") || strings.HasPrefix(call.Path, "//") {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
 	}
 	if binding := call.Capability.OpenAPI; binding != nil &&
 		(call.AuthScheme != binding.AuthScheme || call.AuthHeader != binding.AuthHeader ||
 			call.IdempotencyHeader != binding.IdempotencyHeader) {
-		return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
 	}
 	var credential []byte
 	if call.AuthScheme == "NONE" {
 		if call.Capability.OpenAPI == nil || call.Credential != nil {
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 	} else {
 		credential, err = adapter.readCredential(ctx, call.Credential)
@@ -85,12 +85,12 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 	if call.Body != nil {
 		body, err = json.Marshal(call.Body)
 		if err != nil || len(body) > maximumResponseBytes {
-			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, &SafeError{Code: providerRequestRejectedCode}
 		}
 	}
 	if call.MultipartBody != nil {
 		if call.Body != nil || len(call.MultipartBody) > maximumResponseBytes {
-			return nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+			return nil, &SafeError{Code: providerRequestRejectedCode}
 		}
 		body = call.MultipartBody
 	}
@@ -112,7 +112,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		escapedPath := strings.TrimSuffix(endpoint.EscapedPath(), "/") + call.Path
 		decodedPath, decodeErr := url.PathUnescape(escapedPath)
 		if decodeErr != nil || !strings.HasPrefix(decodedPath, "/") {
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		endpoint.Path = decodedPath
 		endpoint.RawPath = escapedPath
@@ -121,7 +121,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		request, requestErr := http.NewRequestWithContext(attemptContext, call.Method, endpoint.String(), bytes.NewReader(body))
 		if requestErr != nil {
 			cancel()
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		request.Header.Set("Accept", "application/json")
 		if len(body) > 0 {
@@ -139,18 +139,18 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		case "API_KEY_HEADER":
 			if call.Capability.OpenAPI == nil || !integrationpackage.ValidOpenAPIOutboundHeader(call.AuthHeader) {
 				cancel()
-				return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+				return nil, &SafeError{Code: providerConfigurationInvalidCode}
 			}
 			request.Header.Set(call.AuthHeader, string(credential))
 		case "BASIC":
 			if call.Username == "" {
 				cancel()
-				return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+				return nil, &SafeError{Code: providerConfigurationInvalidCode}
 			}
 			request.SetBasicAuth(call.Username, string(credential))
 		default:
 			cancel()
-			return nil, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		if call.EffectKey != "" {
 			if call.Capability.OpenAPI == nil {
@@ -184,7 +184,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			if attempt < attempts && waitProviderRetry(ctx, call.Capability, attempt, "") {
 				continue
 			}
-			return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+			return nil, &SafeError{Code: providerUnavailableCode}
 		}
 		responseBody, readErr := readBoundedResponse(response.Body)
 		_ = response.Body.Close()
@@ -196,6 +196,12 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
+			if providerCredentialEcho(responseBody, credential, request.Header.Get("Authorization")) {
+				if mutation {
+					return nil, &UnknownOutcomeError{stage: "response_body"}
+				}
+				return nil, &SafeError{Code: providerResponseInvalidCode}
+			}
 			return &providerResponse{Body: responseBody, Header: response.Header.Clone(), StatusCode: response.StatusCode}, nil
 		}
 		if mutation && response.StatusCode >= http.StatusInternalServerError {
@@ -207,7 +213,7 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 		return nil, statusError(response.StatusCode)
 	}
-	return nil, &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
+	return nil, &SafeError{Code: providerUnavailableCode}
 }
 
 // parseProviderBaseURL accepts an HTTPS hostname at the default or explicit 443 port, rejecting literal IPs, userinfo, query, fragment and paths beyond root.
@@ -276,7 +282,7 @@ func waitProviderRetry(ctx context.Context, capability integrationpackage.Capabi
 func decodeProviderJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	if err := decoder.Decode(target); err != nil || decoder.Decode(&struct{}{}) != io.EOF {
-		return &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return &SafeError{Code: providerResponseInvalidCode}
 	}
 	return nil
 }
@@ -287,11 +293,11 @@ func decodeProviderJSON(raw []byte, target any) error {
 // RU: Ошибка marshal возвращает пустой результат с безопасным кодом; итоговые размер и output schema проверяет validateExecutionResult.
 func providerResult(request Request, providerRef string, projection any) (Result, error) {
 	if providerRef == "" {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	summary, err := json.Marshal(projection)
 	if err != nil {
-		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return successfulResult(string(summary), request, providerRef), nil
 }
