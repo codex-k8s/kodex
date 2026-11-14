@@ -167,3 +167,34 @@ test('successor observer требует explicit exact ancestor без изме�
   const plan=planComponentAPITraffic({...f,sourceSHA:current,authorityExecutorSHA:old,action:'restore',previous:f.traffic(),terminal:terminal(f)});
   assert.equal(plan.sourceSHA,current);assert.equal(plan.authorityExecutorSHA,old);
 });
+
+
+test('новый status Job подтверждает прежний plan перед patch, оба proof остаются в audit',()=>{
+  const f=fixture();f.step();ready(f);
+  const planned=terminal(f,{observedAt:new Date(Date.now()-60000).toISOString()});
+  const plan=planComponentAPITraffic({...f,action:'restore',previous:f.traffic(),terminal:terminal(f)});
+  plan.authority=planned;
+  const fresh=terminal(f,{freshPlanSHA256:'f'.repeat(64),jobUID:uid,podUID:serviceUID,
+    actualReadbackCount:canonicalAuthorityReadbackContract().expectedReadbackCount});
+  const journal={events:[{type:'HEADER'}],append(event){this.events.push(event);}};let writes=0;
+  const result=componentAPITrafficStep({phase:'apply',plan,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,gate:()=>fresh,
+    patch:(operations,dryRun)=>{if(dryRun)return;writes++;f.service.spec=structuredClone(plan.afterSpec);f.service.metadata.annotations=structuredClone(plan.afterAnnotations);}});
+  assert.equal(result.state,'RESTORED');assert.equal(writes,1);
+  const receipt=journal.events.find(e=>e.type==='AUTHORITY_CONFIRMED');
+  assert.equal(receipt.plannedTerminalSHA256,planned.terminalSHA256);assert.deepEqual(receipt.authority,fresh);
+  assert.deepEqual(plan.authority,planned);
+});
+
+test('refresh не меняет authority outcome и не разрешает просроченный или неполный proof',()=>{
+  for(const override of [{operationID:serviceUID},{registrySHA256:'f'.repeat(64)},{snapshotSHA256:'f'.repeat(64)},
+    {policySHA256:'f'.repeat(64)},{planSHA256:'f'.repeat(64)},{targetSHA256:'f'.repeat(64)},
+    {requiredReadbackTargetsSHA256:'f'.repeat(64)},{actualReadbackCount:0},
+    {observedAt:new Date(Date.now()-31000).toISOString()}]){
+    const f=fixture();f.step();ready(f);
+    const plan=planComponentAPITraffic({...f,action:'restore',previous:f.traffic(),terminal:terminal(f)});
+    const journal={events:[{type:'HEADER'}],append(event){this.events.push(event);}};let writes=0;
+    assert.throws(()=>componentAPITrafficStep({phase:'apply',plan,journal,get:()=>f.service,slices:()=>f.slices,pods:()=>f.pods,
+      gate:()=>terminal(f,override),patch:(_,dryRun)=>{if(!dryRun)writes++;}}),/AUTHORITY_(CHANGED|TERMINAL_REQUIRED)/);
+    assert.equal(writes,0);assert.equal(journal.events.some(e=>e.type==='INTENT'),false);
+  }
+});

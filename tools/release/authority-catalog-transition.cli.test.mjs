@@ -316,8 +316,23 @@ else if(patch>=0){
   let result=run(['plan',...flags,'--target',f.profilePath,'--action','restore','--plan',restorePlan]);
   assert.equal(result.status,0,result.stderr);
   const plan=JSON.parse(readFileSync(restorePlan,'utf8'));
+  // Новый status Job подтверждает тот же outcome, исходный plan остаётся прежним.
+  const nextStatus=join(f.directory,'next-status-plan.json'),nextEvidence=join(f.directory,'next-status.jsonl');
+  const statusArgs=f.args();statusArgs[statusArgs.indexOf('--output')+1]=nextStatus;
+  f.state.ownerStatus.observedAt=new Date().toISOString();
+  await rotationMain(statusArgs,f.io);
+  await rotationMain(['apply','--kubeconfig',f.kubeconfig,'--context',f.profile.context,'--plan',nextStatus,
+    '--evidence',nextEvidence,'--confirm','APPLY-PORTABLE-CATALOG-AUTHORITY'],f.io);
+  flags[flags.indexOf('--authority-status-plan')+1]=nextStatus;flags[flags.indexOf('--authority-status-evidence')+1]=nextEvidence;
+  const refreshed=JSON.parse(readFileSync(statePath,'utf8'));
+  refreshed.jobs=Object.fromEntries(f.jobs);refreshed.jobPods=Object.fromEntries(f.jobPods);refreshed.logs=Object.fromEntries(f.jobLogs);
+  writeFileSync(statePath,JSON.stringify(refreshed));
   result=run(['apply',...flags,'--plan',restorePlan,'--evidence',restoreEvidence,'--approved-plan-sha',fingerprint(plan)]);
   assert.notEqual(result.status,0,'synthetic lost ACK must remain UNKNOWN');
+  const confirmation=readFileSync(restoreEvidence,'utf8').trim().split('\n').map(JSON.parse).find(row=>row.type==='AUTHORITY_CONFIRMED');
+  assert.equal(confirmation.plannedTerminalSHA256,plan.authority.terminalSHA256);
+  assert.notEqual(confirmation.authority.jobUID,plan.authority.jobUID);
+  assert.notEqual(confirmation.authority.freshPlanSHA256,plan.authority.freshPlanSHA256);
   let observed=JSON.parse(readFileSync(statePath,'utf8'));assert.equal(observed.effects,1);
   assert.deepEqual(observed.resources['service/control-api-gateway'].spec,f.admission.trafficPlan.beforeSpec);
   const priorLogs=observed.calls.filter(args=>args.includes('logs')).length;
