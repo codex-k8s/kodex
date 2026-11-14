@@ -4,7 +4,7 @@ title: Управляемая интеграция Sentry Cloud и Self-hosted
 type: operations
 status: approved
 owner: backend
-version: 1.1.1
+version: 1.1.2
 updated: 2026-11-14
 ---
 
@@ -220,6 +220,14 @@ canonical044 или уже canonical045. Normal/table-only не получают
 допуск автоматически. После подтверждённого preflight единственный Goose
 отделён от независимого bounded ACL cleanup: failure, cancel и потерянный ACK
 не разрешают второй DDL. Повтор при уже045 проверяет точный catalog без Goose.
+Успех backup Job требует отдельной точной квитанции о045 после canonical
+cleanup и одного подтверждённого исполнения с exact imageID. Одна строка Goose
+не подтверждает восстановление ACL. Пока зарегистрированная Job работает,
+inspect возвращает только RUNNING; serving inventory и готовность cohort
+проверяются после её terminal proof. Сохранённые terminal Job045 допускают
+только две зарегистрированные команды и имена factory base/attempt2;
+чужая версия, check-имя, произвольный retry и attempt3 не исключаются из
+foreign Pod guard. То же ограничение base/attempt2 действует для backup044.
 
 Для backup delivery выбирается явный
 `--migration-profile sentry-observability-backup` при создании backup-controller
@@ -241,8 +249,8 @@ attempt, lost ACK, read-only rejoin, repeat restore и запрет Down.
 `COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED` допускает не более трёх повторов
 полного READ snapshot в исходном бюджете. Предыдущий snapshot не становится
 join; foreign UID/scope, PATCH и DDL не повторяются. Manifest component-lock
-не обрезается ради размера: согласованные producer/consumer bounds и полный
-source seal должны пройти собственную квалификацию доставки.
+не обрезается ради размера: согласованные producer/consumer bounds128KiB
+на компонент и2MiB на prepared/publication сохраняют полный source seal.
 
 Публичные локальные точки входа, без обращения к установленной среде:
 

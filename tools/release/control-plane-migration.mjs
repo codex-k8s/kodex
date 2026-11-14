@@ -128,7 +128,7 @@ async function main() {
   ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check','handoff'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
   ensure(phase === 'plan' && isImmutableMigrationProfile(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
     !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
-  ensure(profile==='github-repository-scope-backup' && phase==='plan' ? options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'] : !options['--backup-maintenance-plan'] && !options['--backup-maintenance-evidence'],'PHASE_ARGUMENT_INVALID');
+  ensure(requiresBackupMaintenance(profile) && phase==='plan' ? options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'] : !options['--backup-maintenance-plan'] && !options['--backup-maintenance-evidence'],'PHASE_ARGUMENT_INVALID');
   const componentInput = options['--component-publication'] || options['--portable-target'];
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
