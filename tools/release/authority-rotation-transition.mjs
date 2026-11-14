@@ -23,7 +23,9 @@ const policySHA256='763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5
 const portableAuthorityImage=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(value)&&!value.includes('..');
 const planActionNeedsAdmission=action=>['rotate','abort'].includes(action);
 function requireValue(ok,code){if(!ok)throw new Error(code);}
-const run=(command,args,input)=>execFileSync(command,args,{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:30_000,maxBuffer:16<<20}).trim();
+// Структурированный вывод Kubernetes сохраняет пустые TSV columns и исходные bytes.
+const runRaw=(command,args,input,execute=execFileSync)=>execute(command,args,{input,encoding:'utf8',stdio:['pipe','pipe','pipe'],timeout:30_000,maxBuffer:16<<20});
+const run=(command,args,input)=>runRaw(command,args,input).trim();
 export function deriveRotationOperationID(sourceRevision,sourceDigestSHA256){
 	requireValue(revision.test(String(sourceRevision))&&Number(sourceRevision)<=9007199254740991&&sha.test(sourceDigestSHA256),'INVALID_ROTATION_REGISTRY_IDENTITY');
 	const digest=createHash('sha256').update(`authority-normal-rotation-v3\0${sourceRevision}\0${sourceDigestSHA256}`).digest();
@@ -341,7 +343,8 @@ function sourcePublisherExecutable(deployment,get,kube,k3sSudo){
 
 export async function main(args,io={}){
  args=[...args];
- const execute=io.run??run,inspect=io.inspectSource??inspectSource;
+ const inspect=io.inspectSource??inspectSource;
+ const executeKube=io.run??((command,argv,input)=>runRaw(command,argv,input,io.execFileSync??execFileSync));
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
  while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  const loadedPlan=command==='plan'?null:readAuthorityPrivateJSON(options['--plan']);
@@ -352,10 +355,10 @@ export async function main(args,io={}){
  const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
  requireValue(catalog||!options['--portable-target'],'CATALOG_POLICY_TRANSITION_REQUIRED');
  const kubeArgs=[...(kubeconfig?['--kubeconfig',kubeconfig]:[]),'--context',options['--context'],'--request-timeout=30s'];
- const kubeInput=(input,...argv)=>options['--k3s-sudo']?execute('sudo',['-n','k3s','kubectl',...kubeArgs,...argv],input):execute('kubectl',[...kubeArgs,...argv],input);
+ const kubeInput=(input,...argv)=>options['--k3s-sudo']?executeKube('sudo',['-n','k3s','kubectl',...kubeArgs,...argv],input):executeKube('kubectl',[...kubeArgs,...argv],input);
  const kube=(...argv)=>kubeInput(undefined,...argv);
  const replace=value=>kubeInput(JSON.stringify(value),'replace','-f','-');
- if(!catalog)requireValue(kube('config','current-context')===options['--context'],'CONTEXT_MISMATCH');
+ if(!catalog)requireValue(kube('config','current-context').trim()===options['--context'],'CONTEXT_MISMATCH');
  const get=(kind,name)=>JSON.parse(kube('get',kind,...(name?[name]:[]),'-n',namespace,'-o','json'));
  const ns=get('namespace',namespace);
  const targetProfile=catalog?(command==='plan'?readAuthorityPrivateJSON(options['--portable-target']):loadedPlan.policyTransition.targetProfile):undefined;
@@ -364,9 +367,9 @@ export async function main(args,io={}){
  if(catalog&&command!=='plan')verifyCatalogTransition(loadedPlan.policyTransition,catalogTarget.transition);
  requireValue(catalog||ns.metadata.labels?.['app.kubernetes.io/part-of']==='kodex'&&ns.metadata.labels?.['kodex.dev/environment']==='staging','STAGING_NAMESPACE_REQUIRED');
 	validateRotationPrerequisites(get('serviceaccount','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-migrator'),get('networkpolicy','internal-rpc-authority-postgresql-from-migrator'));
-	requireValue(kube('auth','can-i','create','jobs','-n',namespace)==='yes'&&
-	 kube('get','secret','internal-rpc-authority-postgres-migration','-n',namespace,'-o','name')==='secret/internal-rpc-authority-postgres-migration'&&
-	 kube('get','configmap','internal-rpc-authority-postgresql-ca','-n',namespace,'-o','name')==='configmap/internal-rpc-authority-postgresql-ca','ROTATION_JOB_API_PREREQUISITES_REJECTED');
+	requireValue(kube('auth','can-i','create','jobs','-n',namespace).trim()==='yes'&&
+	 kube('get','secret','internal-rpc-authority-postgres-migration','-n',namespace,'-o','name').trim()==='secret/internal-rpc-authority-postgres-migration'&&
+	 kube('get','configmap','internal-rpc-authority-postgresql-ca','-n',namespace,'-o','name').trim()==='configmap/internal-rpc-authority-postgresql-ca','ROTATION_JOB_API_PREREQUISITES_REJECTED');
  const livePublisher=get('deployment','internal-rpc-authority-publisher');
  const publisherContainer=livePublisher.spec.template.spec.containers.find(container=>container.name==='publisher');
  const sourceProfile=publisherContainer?.command?.includes('/workspace/tools/dev/run-go-hot-reload.sh');let sourceDelivery,sourceMigrationReceipt;
@@ -509,8 +512,8 @@ export async function main(args,io={}){
 	   if(planActionNeedsAdmission(plan.action))await requireAdmission();
 	   try{
 	   const argv=[...kubeArgs,'create','-f','-'];
-	   if(options['--k3s-sudo'])execute('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job));
-	   else execute('kubectl',argv,JSON.stringify(job));
+	   if(options['--k3s-sudo'])executeKube('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job));
+	   else executeKube('kubectl',argv,JSON.stringify(job));
 	   }catch{evidence({status:'UNKNOWN',operation:'CREATE'});}
 	  }
 	 }
