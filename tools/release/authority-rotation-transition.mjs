@@ -361,7 +361,8 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
  const proof={policyRevision:configuration.desiredRevision,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
   ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
-  planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:plan.policyTransition.targetSHA256,
+  planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:admissionProof.targetSHA256,
+  ...(admissionProof.targetSHA256!==plan.policyTransition.targetSHA256?{authorityTargetSHA256:plan.policyTransition.targetSHA256}:{}),
   trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
  return Object.freeze({...proof,terminalSHA256:fingerprint(proof)});
 }

@@ -1,4 +1,5 @@
 import {fingerprint} from './scoped-release.mjs';
+import {requireAuthorityAPIScope} from './authority-api-scope.mjs';
 import {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 import {componentAPIMaintenanceStep} from './component-api-maintenance.mjs';
 import {requireClosedAPIAdmission,componentAPITrafficStep,sameAuthorityOutcome} from './component-api-traffic.mjs';
@@ -13,6 +14,8 @@ const namespace='kodex-system',name='control-api-gateway';
 // прежний положительный join и текущая пустая Service boundary обязательны.
 // Счётчики Deployment и произвольные replicas3 не заменяют историю и Pod proof.
 export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvents,closed,traffic,deployment,resources,restored}){
+ requireAuthorityAPIScope(closed.plan.target,authority.policyTransition.targetProfile);
+ fail(fingerprint(closed.plan.target)===authority.maintenance?.proof?.targetSHA256,'TELEGRAM_API_READERS_SCOPE_CHANGED');
  const part=migration.componentHandoff?.components.find(c=>c.name===name);
  fail(part?.maintenance===true&&authority.policyTransition?.profile===telegramPolicyTransition&&
   authority.revision===migration.source.revision&&openPlan.sourceSHA===migration.source.revision&&openPlan.action==='open'&&
@@ -36,7 +39,9 @@ export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvent
   fail(plan.action==='restore'&&plan.authorityTransition===telegramPolicyTransition&&plan.sourceSHA===migration.source.revision&&
    plan.previousIsolationSHA256===fingerprint(traffic.plan)&&plan.closePlanSHA256===fingerprint(closed.plan)&&
    plan.authority?.operationID===authority.ownerOperationID&&plan.authority.planSHA256===fingerprint(authority)&&
-   same(plan.target,authority.policyTransition.targetProfile)&&same(plan.beforeSpec,traffic.plan.afterSpec)&&same(plan.afterSpec,traffic.plan.beforeSpec)&&
+   same(plan.target,closed.plan.target)&&plan.authority.targetSHA256===fingerprint(closed.plan.target)&&
+   (plan.authority.authorityTargetSHA256??plan.authority.targetSHA256)===authority.policyTransition.targetSHA256&&
+   same(plan.beforeSpec,traffic.plan.afterSpec)&&same(plan.afterSpec,traffic.plan.beforeSpec)&&
    rows[0]?.type==='HEADER'&&rows[0].schema==='kodex.component-api-traffic-evidence/v1'&&rows[0].planSHA256===fingerprint(plan)&&rows[0].maintenanceID===plan.maintenanceID&&
    intent>0&&confirmed?.plannedTerminalSHA256===plan.authority.terminalSHA256&&terminalSHA256===fingerprint(terminalBody)&&
    sameAuthorityOutcome(confirmed.authority,plan.authority)&&rows.some((e,index)=>index>intent&&e.type==='OBSERVED'&&e.state==='RESTORED'&&e.serviceUID===plan.serviceUID&&e.maintenanceID===plan.maintenanceID),

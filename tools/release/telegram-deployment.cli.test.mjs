@@ -28,7 +28,7 @@ const activities=['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','ac
 const write=(path,value)=>writeFileSync(path,JSON.stringify(value)+'\n',{mode:0o600});
 const read=path=>JSON.parse(readFileSync(path,'utf8'));
 
-async function fixture(t){
+async function fixture(t,{narrow=false,successor=false}={}){
  const directory=mkdtempSync('/tmp/kodex-telegram-deployment-');chmodSync(directory,0o700);t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const source=join(directory,'source'),bin=join(directory,'bin');mkdirSync(source,{mode:0o755});mkdirSync(bin,{mode:0o700});
  const tracked=execute('git',['ls-files','-z','--','tools','infra/public-ingress','deploy/k8s/base/internal-rpc-authority-data','deploy/k8s/base/internal-rpc-authority-publisher']).split('\0').filter(Boolean);
@@ -42,7 +42,16 @@ async function fixture(t){
  writeFileSync(join(source,'source-render.json'),JSON.stringify(sourceResources)+'\n',{mode:0o644});
  const git=(...args)=>execute('git',['-C',source,...args]).trim();git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');
  git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Синтетическая закрытая source fixture');
- const revision=git('rev-parse','HEAD'),f=componentCohortFixture('telegram-notifications'),resources={};
+ const revision=git('rev-parse','HEAD');
+ let executor=source;
+ if(successor){
+  executor=join(directory,'executor');git('worktree','add','-q','--detach',executor,revision);
+  writeFileSync(join(executor,'tools/release/synthetic-successor.txt'),'Synthetic qualified executor revision\n',{mode:0o644});
+  execute('git',['-C',executor,'add','.']);
+  execute('git',['-C',executor,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Синтетический successor executor']);
+ }
+ const applicationFlags=successor?['--application-source',source,'--application-revision',revision]:[];
+ const f=componentCohortFixture('telegram-notifications'),resources={};
  for(const [index,part] of f.value.components.entries()){
   const lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64'));lock.source_sha=revision;replaceComponentLock(part,lock);part.nodeProof.sourceSHA=revision;
   const app=f.deployments[index];app.spec.selector={matchLabels:{'app.kubernetes.io/name':app.metadata.name}};
@@ -89,7 +98,8 @@ async function fixture(t){
  const authorityProfile={...f.target,resources:[cp,publisher,registry,resources['deployment/control-api-gateway'],apiService].map(r=>({apiVersion:r.apiVersion,kind:r.kind,name:r.metadata.name,uid:r.metadata.uid}))};
  readCatalogTarget(authorityProfile,f.target.context,(kind,name)=>kind==='namespace'?{metadata:{uid:name==='kube-system'?f.target.clusterUID:f.target.namespaceUID}}:resources[kind+'/'+name],telegramPolicyTransition);
  const api=resources['deployment/control-api-gateway'];api.spec.replicas=3;api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
- const admission=prepareAdmission({directory,revision,profile:authorityProfile,installation,api,service:apiService,
+ const apiProfile=narrow?{...authorityProfile,resources:authorityProfile.resources.filter(r=>r.name==='control-api-gateway')}:authorityProfile;
+ const admission=prepareAdmission({directory,revision,profile:apiProfile,installation,api,service:apiService,
   state:{slices:{items:[]},isolationPods:{items:[]}},authorityTransition:telegramPolicyTransition});
  const kubeconfig=join(directory,'kubeconfig');writeFileSync(kubeconfig,'synthetic-unused',{mode:0o600});
  const createTarget={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:revision,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,
@@ -136,12 +146,15 @@ async function fixture(t){
   ...(['check','stop','apply','handoff','resume','activate'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
   {encoding:'utf8',timeout:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});};
  const authorityTarget=join(directory,'authority-target.json');write(authorityTarget,authorityProfile);
- const command=(file,args)=>{setEvidence(args.includes('--evidence')?args[args.indexOf('--evidence')+1]:evidence);return spawnSync(process.execPath,[join(source,'tools/release',file),...args],{encoding:'utf8',timeout:180000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});};
- return {run,command,directory,source,revision,kubeconfig,context:f.target.context,authorityTarget,admission,creator,publicationPath,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);},plan,evidence};
+ const apiTarget=join(directory,'api-target.json');write(apiTarget,apiProfile);
+ const command=(file,args)=>{setEvidence(args.includes('--evidence')?args[args.indexOf('--evidence')+1]:evidence);return spawnSync(process.execPath,[join(file==='component-api-maintenance.mjs'?source:executor,'tools/release',file),...args],{encoding:'utf8',timeout:180000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});};
+ return {run,command,directory,source,executor,applicationFlags,apiTarget,revision,kubeconfig,context:f.target.context,authorityTarget,admission,creator,publicationPath,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);},plan,evidence};
 }
 
-test('real CLI046/107: dormant→schema→stagedCP0→DELIVER→projection107→ready→APIreaders→activate→RETIRE→restore/rejoin',async t=>{
- const f=await fixture(t),pass=(phase,status)=>{const result=f.run(phase);assert.equal(result.status,0,result.stderr);const body=JSON.parse(result.stdout);if(status)assert.equal(body.status,status);return body;};
+for(const scenario of [{name:'real CLI046/107:',narrow:false,successor:false},{name:'real CLI046/107 frozen:',narrow:true,successor:true}])
+test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→ready→APIreaders→activate→RETIRE→restore/rejoin',async t=>{
+ const f=await fixture(t,scenario),frozenPaths=[f.admission.paths.planPath,f.admission.paths.evidencePath,f.admission.paths.trafficPlanPath,f.admission.paths.trafficEvidencePath],
+  frozenBytes=frozenPaths.map(path=>readFileSync(path)),pass=(phase,status)=>{const result=f.run(phase);assert.equal(result.status,0,result.stderr);const body=JSON.parse(result.stdout);if(status)assert.equal(body.status,status);return body;};
  pass('plan','PLANNED');const planned=read(f.plan);assert.equal(planned.telegramInputs.patches.length,7);
  pass('check','PASS');pass('stop','STOPPED');pass('apply','PASS');
  f.edit(s=>s.lostACK='internal-rpc-authority-publisher');const failed=f.run('handoff');assert.notEqual(failed.status,0);assert.match(failed.stderr,/KUBERNETES_OPERATION_UNKNOWN/);
@@ -174,7 +187,7 @@ test('real CLI046/107: dormant→schema→stagedCP0→DELIVER→projection107→
   checked('authority-rotation-transition.mjs',['apply',...flags,'--plan',plan,'--evidence',evidence,'--confirm','APPLY-PORTABLE-TELEGRAM-AUTHORITY']);
   return ['--authority-status-plan',plan,'--authority-status-evidence',evidence];};
  const authority=['--authority-plan',owner,'--authority-evidence',ownerEvidence],projection=join(f.directory,'cp-projection.json'),projectionEvidence=join(f.directory,'cp-projection.jsonl');
- checked('control-plane-policy-projection.mjs',['plan',...flags,'--policy-transition',telegramPolicyTransition,'--portable-target',f.authorityTarget,
+ checked('control-plane-policy-projection.mjs',['plan',...flags,...f.applicationFlags,'--policy-transition',telegramPolicyTransition,'--portable-target',f.authorityTarget,
   ...f.admission.flags,'--migration-plan',f.plan,'--migration-evidence',f.evidence,...authority,'--output',projection]);
  assert.equal(f.read().resources['deployment/control-plane'].spec.replicas,0);
  f.edit(s=>{s.ownerStatus.status=s.ownerStatus.operationStatus='DELIVERING';});
@@ -192,7 +205,7 @@ test('real CLI046/107: dormant→schema→stagedCP0→DELIVER→projection107→
  assert.equal(after.resources['deployment/control-api-gateway'].spec.replicas,0);assert.equal(after.resources['deployment/interaction-gateway'].spec.replicas,0);
  const again=f.run('resume',cpProjection);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,after.effects.length);
  const open=join(f.directory,'open.json'),openEvidence=join(f.directory,'open.jsonl'),closed=['--closed-plan',f.admission.paths.planPath,'--closed-evidence',f.admission.paths.evidencePath],isolated=['--isolation-plan',f.admission.paths.trafficPlanPath,'--isolation-evidence',f.admission.paths.trafficEvidencePath];
- checked('component-api-maintenance.mjs',['plan',...flags,'--action','open','--target',f.authorityTarget,'--plan',open,...closed,...isolated]);
+ checked('component-api-maintenance.mjs',['plan',...flags,'--action','open','--target',f.apiTarget,'--plan',open,...closed,...isolated]);
  checked('component-api-maintenance.mjs',['apply',...flags,'--plan',open,'--evidence',openEvidence,'--approved-plan-sha',fingerprint(read(open)),...closed,...isolated]);
  const apiOpen=['--api-open-plan',open,'--api-open-evidence',openEvidence];
  assert.equal(f.read().resources['service/control-api-gateway'].spec.selector['kodex.dev/component-traffic-isolation'],f.admission.closed.plan.maintenanceID);
@@ -203,7 +216,7 @@ test('real CLI046/107: dormant→schema→stagedCP0→DELIVER→projection107→
  f.edit(s=>{const now=Date.now();s.ownerStatus={...s.ownerStatus,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',sourceRevision:7,actualReadbackCount:17,
   switchNotBefore:new Date(now-10000).toISOString(),previousNotAfter:new Date(now-2000).toISOString(),completedAt:new Date(now-1000).toISOString()};});
  const restored=join(f.directory,'restored.json'),restoredEvidence=join(f.directory,'restored.jsonl');
- checked('component-api-traffic.mjs',['plan',...flags,'--action','restore','--target',f.authorityTarget,'--plan',restored,...closed,...isolated,...authority,...fresh()]);
+ checked('component-api-traffic.mjs',['plan',...flags,...f.applicationFlags,'--policy-transition',telegramPolicyTransition,'--action','restore','--target',f.apiTarget,'--plan',restored,...closed,...isolated,...authority,...fresh()]);
  const restoreStatus=fresh();
  checked('component-api-traffic.mjs',['apply',...flags,'--plan',restored,'--evidence',restoredEvidence,'--approved-plan-sha',fingerprint(read(restored)),...closed,...isolated,...authority,...restoreStatus]);
  assert.equal(Object.hasOwn(f.read().resources['service/control-api-gateway'].spec.selector,'kodex.dev/component-traffic-isolation'),false);
@@ -213,6 +226,12 @@ test('real CLI046/107: dormant→schema→stagedCP0→DELIVER→projection107→
  const finalInputs=[...cpProjection,...apiOpen,...authority,...restoreStatus,'--api-restore-plan',restored,'--api-restore-evidence',restoredEvidence];
  const finalCount=f.read().effects.length,inspected=f.run('inspect',finalInputs);assert.equal(inspected.status,0,inspected.stderr);assert.equal(JSON.parse(inspected.stdout).pairReady,true);
  const finalResume=f.run('resume',finalInputs);assert.equal(finalResume.status,0,finalResume.stderr);assert.equal(JSON.parse(finalResume.stdout).status,'RESUMED');assert.equal(f.read().effects.length,finalCount);
-
-
+ for(const [index,path] of frozenPaths.entries())assert.deepEqual(readFileSync(path),frozenBytes[index]);
+ assert.equal(read(f.plan).source.revision,f.revision);
+ if(scenario.successor){
+  const pin=read(projection).sourceCompatibility;assert.equal(pin.source,f.source);assert.equal(pin.executorSource,f.executor);
+  assert.equal(pin.revision,f.revision);assert.notEqual(pin.executorRevision,pin.revision);
+  assert.deepEqual(read(restored).sourceCompatibility,pin);
+  assert.notEqual(read(restored).authority.targetSHA256,read(restored).authority.authorityTargetSHA256);
+ }
 });

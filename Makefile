@@ -670,7 +670,7 @@ test-backup-controller-maintenance:
 
 # Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
 test-telegram-authority-delivery:
-	@timeout 180s node --test tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs tools/release/telegram-api-readers.test.mjs tools/release/telegram-cp-policy.test.mjs tools/release/telegram-runtime-inputs.test.mjs tools/release/telegram-introduction-inventory.test.mjs
+	@timeout 180s node --test tools/release/authority-rotation-transition.test.mjs tools/release/authority-api-scope.test.mjs tools/release/telegram-executor-source.test.mjs tools/release/authority-telegram-transition.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/component-publication.test.mjs tools/release/authority-catalog-transition.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/control-plane-policy-projection.test.mjs tools/release/component-api-traffic.test.mjs tools/release/telegram-resource-create.test.mjs tools/release/telegram-api-readers.test.mjs tools/release/telegram-cp-policy.test.mjs tools/release/telegram-runtime-inputs.test.mjs tools/release/telegram-introduction-inventory.test.mjs
 
 .PHONY: test-telegram-notifications-upgrade-postgres test-telegram-notifications-backup-upgrade-postgres
 test-telegram-notifications-upgrade-postgres: check-go-toolchain
@@ -681,7 +681,11 @@ test-telegram-notifications-backup-upgrade-postgres: check-go-toolchain
 
 .PHONY: test-telegram-deployment
 test-telegram-deployment:
-	@timeout 900s node --test tools/release/telegram-deployment.cli.test.mjs
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107:' tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-frozen-delivery
+test-telegram-frozen-delivery:
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107 frozen:' tools/release/telegram-deployment.cli.test.mjs
 
 .PHONY: test-telegram-native-egress
 test-telegram-native-egress: check-go-toolchain

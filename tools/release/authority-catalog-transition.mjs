@@ -1,4 +1,5 @@
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
+import {requireAuthorityAPIScope} from './authority-api-scope.mjs';
 import {telegramPolicyTransition,telegramPolicyTargets,telegramPolicySource,validateTelegramPolicy,telegramAuthorityReadbackContract,telegramRegistrySource} from './authority-telegram-transition.mjs';
 import { constants, openSync, closeSync, fstatSync, readFileSync, writeFileSync, fsyncSync, realpathSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -144,7 +145,16 @@ export function verifyCatalogAdmission(maintenance,transition) {
   const resources=transition.targetProfile.resources;
   const api=resources.find(resource=>resource.apiVersion==='apps/v1'&&resource.kind==='Deployment'&&resource.name==='control-api-gateway');
   const service=resources.find(resource=>resource.apiVersion==='v1'&&resource.kind==='Service'&&resource.name==='control-api-gateway');
-  requireValue(api&&service&&maintenance.proof?.targetSHA256===transition.targetSHA256&&maintenance.proof.deploymentUID===api.uid&&
+  if(maintenance.proof?.targetSHA256!==transition.targetSHA256){
+    // Frozen close bytes не расширяются и не получают новый target hash.
+    // Альтернативный узкий scope разрешён только новому107, не историческому106.
+    requireValue(configuration.profile===telegramPolicyTransition,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
+    const closed=readAuthorityPrivateJSON(maintenance.planPath);
+    requireValue(fingerprint(closed)===maintenance.proof?.planSHA256&&
+      fingerprint(closed.target)===maintenance.proof.targetSHA256,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
+    requireAuthorityAPIScope(closed.target,transition.targetProfile);
+  }
+  requireValue(api&&service&&maintenance.proof.deploymentUID===api.uid&&
     maintenance.proof.serviceUID===service.uid&&/^[a-f0-9]{64}$/.test(maintenance.proof.trafficPlanSHA256??'')&&
     typeof maintenance.trafficPlanPath==='string'&&typeof maintenance.trafficEvidencePath==='string','CATALOG_API_ADMISSION_PROOF_REQUIRED');
 }

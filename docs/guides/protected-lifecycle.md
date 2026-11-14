@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.93
+version: 1.1.94
 updated: 2026-11-14
 ---
 
@@ -63,6 +63,12 @@ resume удерживает общий journal lock и до внешнего PAT
 исходные source/target/backend и owner SQL pins. Apply/status проверяют текущий
 executor; terminal readback и общий одноразовый журнал остаются обязательными.
 Без явной привязки смена checkout закрыто отклоняется.
+Maintenance scope и полный authority scope могут отличаться только по закрытому
+профильному правилу: exact ресурсы/UID и installation seals сопоставляются
+отдельно, сохраняя оба исходных hashes. Узкий admission не расширяется переписью
+старого плана и не заменяет доказательство остальных authority ресурсов.
+Terminal и final rejoin проверяют обе границы. Матрица:
+[Telegram107](../operations/telegram-notifications-2143.md#узкая-api-boundary-и-исправленный-delivery-executor).
 
 Отказ workspace join может оставить закрытый диагностический этап в пустом
 termination file до completion callback. Отдельная failure schema не является

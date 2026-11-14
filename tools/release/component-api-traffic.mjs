@@ -5,6 +5,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {fingerprint,withPrivatePatchFile} from './scoped-release.mjs';
 import {catalogPolicyTransition,authorityPolicyTransitionConfiguration,authorityPolicyReadbackContract} from './authority-catalog-transition.mjs';
 import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
+import {resolveTelegramExecutorSource} from './telegram-executor-source.mjs';
 import {readPrivateJSON} from '../../infra/public-ingress/edge-plan.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 import {privateJournal} from '../dev/role-image-acceptance.mjs';
@@ -56,6 +57,9 @@ function validateTerminal(proof,plan,now=Date.now()){
   const digest=v=>/^[a-f0-9]{64}$/.test(v??''),uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(proof&&typeof proof==='object'&&!Array.isArray(proof),'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
   const {terminalSHA256,...body}=proof,observed=Date.parse(proof.observedAt),readers=authorityPolicyReadbackContract(plan.authorityTransition??catalogPolicyTransition);
+  requireValue(proof.authorityTargetSHA256===undefined||plan.authorityTransition===telegramPolicyTransition&&
+    digest(proof.authorityTargetSHA256)&&proof.authorityTargetSHA256!==proof.targetSHA256,
+    'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
   const configuration=authorityPolicyTransitionConfiguration(plan.authorityTransition??catalogPolicyTransition);
   requireValue(proof.policyRevision===configuration.desiredRevision&&uuid(proof.operationID)&&proof.targetSHA256===fingerprint(plan.target)&&
     proof.trafficPlanSHA256===plan.previousIsolationSHA256&&proof.serviceUID===plan.serviceUID&&
@@ -197,7 +201,7 @@ async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
     '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
-    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--policy-transition','--authority-executor-sha','--authority-source-equivalent-sha','--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--approved-plan-sha','--kubeconfig','--context','--predecessor-executor-sha','--policy-transition','--authority-executor-sha','--authority-source-equivalent-sha','--migration-profile','--migration-source-sha','--migration-plan','--migration-evidence','--api-open-plan','--api-open-evidence','--application-source','--application-revision'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
@@ -220,7 +224,15 @@ async function main(args){
     catch{throw Error('COMPONENT_API_TRAFFIC_OPERATION_FAILED_OR_UNKNOWN');}};
   const kube=(argv,input)=>run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',options['--context'],'--request-timeout=25s',...argv],input);
   const get=(kind,n)=>JSON.parse(kube(['-n','kodex-system','get',kind,n,'-o','json']));
-  const sourceSHA=run('git',['rev-parse','HEAD']).trim();requireValue(!run('git',['status','--porcelain','--untracked-files=normal']).trim(),
+  const retained=phase==='plan'?undefined:await readPrivateJSON(resolve(options['--plan']));
+  if(retained)validate(retained);
+  const selected=options['--application-source']!==undefined||options['--application-revision']!==undefined;
+  const profile=options['--policy-transition']??retained?.authorityTransition;
+  requireValue(!selected||phase==='plan'&&options['--action']==='restore'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
+  requireValue(!retained?.sourceCompatibility||retained.action==='restore'&&profile===telegramPolicyTransition,'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
+  const sourceCompatibility=selected||retained?.sourceCompatibility?resolveTelegramExecutorSource(root,
+    retained?.sourceCompatibility?{saved:retained.sourceCompatibility}:{source:options['--application-source'],revision:options['--application-revision']}):undefined;
+  const sourceSHA=sourceCompatibility?.revision??run('git',['rev-parse','HEAD']).trim();requireValue(!run('git',['status','--porcelain','--untracked-files=normal']).trim(),
     'COMPONENT_API_TRAFFIC_CLEAN_SOURCE_REQUIRED');
   const readEvidence=(path,expected)=>{const j=privateJournal(path,expected,{readOnly:true});try{return structuredClone(j.events);}finally{j.close();}};
   const closePlan=await readPrivateJSON(resolve(options['--closed-plan']));
@@ -284,9 +296,9 @@ async function main(args){
       admissionProof:plan.maintenance.proof},kube);
   };
   const build=(target,action)=>{
-    const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
-      target,observed,sourceSHA,action,closed,authorityTransition:options['--policy-transition'],previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,authoritySourceEquivalentSHA,
-      ...(action==='isolate'?{migrationRestore:routineIsolation}:migrationProfile?{migrationRestoreProfile:migrationProfile,migrationSourceSHA}:{})});
+    const d=deployment();return {...planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
+      target,observed,sourceSHA,action,closed,authorityTransition:profile,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal,authorityExecutorSHA,authoritySourceEquivalentSHA,
+      ...(action==='isolate'?{migrationRestore:routineIsolation}:migrationProfile?{migrationRestoreProfile:migrationProfile,migrationSourceSHA}:{})}),...(sourceCompatibility?{sourceCompatibility}:{})};
   };
   if(phase==='plan'){
     requireValue(options['--target']&&!options['--evidence']&&!options['--approved-plan-sha'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
@@ -301,7 +313,7 @@ async function main(args){
     console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
   }
   requireValue(options['--evidence']&&!options['--action']&&!options['--target'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
-  const plan=await readPrivateJSON(resolve(options['--plan']));validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;authoritySourceEquivalentSHA=plan.authoritySourceEquivalentSHA;
+  const plan=retained;validate(plan);authorityExecutorSHA=plan.authorityExecutorSHA;authoritySourceEquivalentSHA=plan.authoritySourceEquivalentSHA;
   requireValue(!options['--policy-transition']||options['--policy-transition']===(plan.authorityTransition??catalogPolicyTransition),'COMPONENT_API_TRAFFIC_AUTHORITY_PROFILE_INVALID');
   migrationProfile=plan.migrationRestore?.profile??plan.migrationRestoreProfile;migrationSourceSHA=plan.migrationSourceSHA;
   routineIsolation=plan.migrationRestore;
