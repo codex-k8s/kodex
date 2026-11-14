@@ -67,6 +67,13 @@ func RunSandboxedTool(args []string) error {
 	if !probeStandardDescriptorsSafe() {
 		return errProbeSandboxDescriptors
 	}
+	home := "/nonexistent"
+	if probeNeedsHome(args[0]) {
+		home = os.Getenv("HOME")
+		if !probeHomeValid(home, 0) || os.Getenv("TMPDIR") != home+"/tmp" {
+			return errProbeSandboxFilesystem
+		}
+	}
 	if restrictProbeFilesystem() != nil {
 		return errProbeSandboxFilesystem
 	}
@@ -77,9 +84,12 @@ func RunSandboxedTool(args []string) error {
 	if unix.Chdir("/") != nil {
 		return errProbeSandboxFilesystem
 	}
-	environment := []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=/nonexistent",
+	environment := []string{"PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin", "HOME=" + home,
 		"LANG=C", "LC_ALL=C", "NO_COLOR=1", "COREPACK_ENABLE_NETWORK=0", "GOTOOLCHAIN=local",
 		"GOROOT=/usr/local/go", "GOENV=off", "GOWORK=off"}
+	if probeNeedsHome(args[0]) {
+		environment = append(environment, "TMPDIR="+home+"/tmp")
+	}
 	if unix.Exec(args[0], args, environment) != nil {
 		return errProbeSandboxExec
 	}
