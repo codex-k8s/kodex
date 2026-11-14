@@ -11,8 +11,9 @@ import {readAuthorityExecutable} from './authority-executable-readback.mjs';
 import {authorityGoImage,createSourceMigrationJob,validateRenderedSourceMigration,validateSourceDeliveryPlan,validateSourceMigrationReceipt,validateSourcePublisher,verifySourceMigrationReadback} from './authority-rotation-source-delivery-model.mjs';
 import {readSourceMigrationReceipt} from './authority-source-migration-receipt.mjs';
 import {workloadPods} from '../dev/component-manifest.mjs';
-import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory} from './authority-catalog-transition.mjs';
+import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
+import {isProvenStoppedPod} from './stable-archive-transition.mjs';
 
 const namespace='kodex-system';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -209,6 +210,117 @@ export function classifyRotationStatus(job,log){
  if(state.operationId&&state.status==='RETIRED')requireValue(Number.isFinite(Date.parse(state.completedAt)),'ROTATION_OPERATION_DEADLINE_REJECTED');
  if(!state.operationId&&state.status!=='EMPTY')requireValue(uuid.test(state.intentId)&&[1,2].includes(state.protocolVersion)&&Number.isSafeInteger(state.sourceRevision)&&state.sourceRevision>0&&sha.test(state.sourceDigestSHA256),'ROTATION_READBACK_REJECTED');
  return {phase,state};
+}
+
+// Evidence связывает один plan/nonce с exact Job UID; resolved/старый stdout не
+// заменяют новый owner query. Старый staging77 parser остаётся без изменений.
+export function validateCatalogAuthorityEvidence(plan,events) {
+ requireValue(plan?.policyTransition?.profile===catalogPolicyTransition&&Array.isArray(events)&&events.length>0&&events.length<=16384&&
+  events[0].status==='INTENT'&&events[0].action===plan.action&&events[0].planSHA256===fingerprint(plan),'CATALOG_AUTHORITY_JOURNAL_REJECTED');
+ const jobUIDs=new Set();
+ for(const row of events) {
+  requireValue(row.intentID===plan.intentID&&row.ownerOperationID===plan.ownerOperationID&&Number.isFinite(Date.parse(row.at))&&
+   ['INTENT','RESUME','UNKNOWN','APPLIED','RUNNING','SUCCEEDED','FAILED'].includes(row.status)&&
+   (!row.operation||['REGISTRY_CAS','PUBLISHER_RESTART','CREATE'].includes(row.operation))&&
+   (!row.planSHA256||row.planSHA256===fingerprint(plan))&&
+   Object.keys(row).every(key=>['at','intentID','ownerOperationID','status','action','planSHA256','operation','resourceVersion','jobUID','rotationStatus'].includes(key)),
+   'CATALOG_AUTHORITY_JOURNAL_REJECTED');
+  if(row.jobUID!==undefined){requireValue(uuid.test(row.jobUID),'CATALOG_AUTHORITY_JOURNAL_REJECTED');jobUIDs.add(row.jobUID);}
+ }
+ requireValue(jobUIDs.size<=1,'CATALOG_AUTHORITY_JOB_REPLACED');
+ return {jobUID:[...jobUIDs][0]};
+}
+
+// Только canonical read-only CLI Pod может подтвердить fresh owner result.
+// Полные массивы containers/init/ephemeral, credentials mounts и status cardinality
+// проверяются до доверия logs; чужой/debug Pod не становится источником readback.
+export function verifyCatalogAuthorityJobPod(job,list) {
+ requireValue(job?.status?.succeeded===1&&!job.status.active&&!job.status.failed&&!job.metadata.deletionTimestamp&&
+  Array.isArray(list?.items)&&!list.metadata?.continue&&list.items.length===1,'CATALOG_AUTHORITY_JOB_POD_REJECTED');
+ const pod=list.items[0],wanted=job.spec.template.spec;
+ const owners=pod.metadata?.ownerReferences?.filter(owner=>owner.controller===true)??[];
+ requireValue(pod.kind==='Pod'&&pod.metadata?.namespace===namespace&&uuid.test(pod.metadata.uid??'')&&!pod.metadata.deletionTimestamp&&
+  owners.length===1&&owners[0].kind==='Job'&&owners[0].uid===job.metadata.uid&&owners[0].name===job.metadata.name&&
+  pod.status?.phase==='Succeeded'&&isProvenStoppedPod(pod)&&!['Unknown','NodeLost'].includes(pod.status.reason)&&
+  !pod.status.conditions?.some(condition=>condition.status==='Unknown')&&
+  wanted.automountServiceAccountToken===false&&pod.spec.automountServiceAccountToken===false&&
+  pod.spec.serviceAccountName===wanted.serviceAccountName&&!pod.spec.hostNetwork&&!pod.spec.hostPID&&!pod.spec.hostIPC,
+  'CATALOG_AUTHORITY_JOB_POD_REJECTED');
+ for(const [field,expected] of Object.entries(wanted)) {
+  requireValue(fingerprint(pod.spec[field])===fingerprint(expected),'CATALOG_AUTHORITY_JOB_POD_REJECTED');
+ }
+ for(const field of ['containers','initContainers','ephemeralContainers']) {
+  const expected=wanted[field]??[],actual=pod.spec[field]??[];
+  requireValue(fingerprint(actual)===fingerprint(expected),'CATALOG_AUTHORITY_JOB_POD_REJECTED');
+  const statusField=field==='containers'?'containerStatuses':field==='initContainers'?'initContainerStatuses':'ephemeralContainerStatuses';
+  const statuses=pod.status[statusField]??[];
+  requireValue(statuses.length===expected.length&&new Set(statuses.map(status=>status.name)).size===expected.length&&
+   expected.every(container=>{
+    const status=statuses.find(item=>item.name===container.name),digest=container.image.split('@')[1];
+    return /^sha256:[a-f0-9]{64}$/.test(digest??'')&&status?.state?.terminated?.exitCode===0&&status.restartCount===0&&
+     /^(?:(?:docker-pullable|containerd):\/\/)?(?:[a-z0-9][a-z0-9./:_-]*@)?sha256:[a-f0-9]{64}$/.test(status.imageID??'')&&status.imageID.endsWith(digest);
+   }),'CATALOG_AUTHORITY_JOB_POD_REJECTED');
+ }
+ return {podUID:pod.metadata.uid,jobUID:job.metadata.uid};
+}
+
+// Fresh getter создаёт только GET/logs: status Job заранее запускается обычным
+// plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
+// SQL owner сохраняет exact membership всех16 readers на трёх promotion phases;
+// числовой counter здесь является дополнительной проверкой, не заменой membership.
+export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube) {
+ requireValue(plan?.action==='rotate'&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===catalogPolicyTransition&&
+  freshPlan.context===plan.context&&freshPlan.kubeconfig===plan.kubeconfig&&freshPlan.source===plan.source&&freshPlan.revision===plan.revision&&
+  freshPlan.cliImage===plan.cliImage&&Number.isFinite(now),'CATALOG_AUTHORITY_TERMINAL_INPUT_REJECTED');
+ const original=validateCatalogAuthorityEvidence(plan,events),fresh=validateCatalogAuthorityEvidence(freshPlan,freshEvents);
+ requireValue(original.jobUID&&fresh.jobUID&&events.some(row=>row.status==='APPLIED'&&row.operation==='REGISTRY_CAS')&&
+  events.some(row=>row.status==='APPLIED'&&row.operation==='PUBLISHER_RESTART')&&
+  freshEvents.some(row=>row.status==='SUCCEEDED'&&row.rotationStatus==='RETIRED'),'CATALOG_AUTHORITY_TERMINAL_RECEIPT_REQUIRED');
+ requireValue(inspectSource(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');
+ const get=(kind,name)=>parseAuthorityPrivateJSON(kube(['-n',namespace,'get',kind,name,'-o','json']));
+ const target=readCatalogTarget(plan.policyTransition.targetProfile,plan.context,get);
+ verifyCatalogTransition(plan.policyTransition,target.transition);verifyCatalogTransition(plan.policyTransition,freshPlan.policyTransition);
+ const maintenance=await readCatalogMaintenance(plan.maintenance.planPath,plan.maintenance.evidencePath,kube,plan.maintenance);
+ verifyCatalogAdmission(maintenance,plan.policyTransition);
+ requireValue(fingerprint(maintenance)===fingerprint(plan.maintenance)&&fingerprint(maintenance.proof)===fingerprint(admissionProof),
+  'CATALOG_API_ADMISSION_DRIFT');
+ const registry=target.registry,publisher=target.publisher;
+ requireValue(registry.metadata.uid===plan.registry.uid&&fingerprint(registry.data)===plan.registry.desiredDataSHA256&&
+  registry.metadata.annotations?.['kodex.dev/rotation-intent']===plan.intentID&&registry.metadata.annotations?.['kodex.dev/rotation-operation']===plan.ownerOperationID&&
+  publisher.metadata.uid===plan.publisher.uid&&fingerprint(publisher.spec)===plan.publisher.desiredSpecSHA256&&
+  publisher.spec.template.metadata.annotations?.['kodex.dev/authority-rotation-operation']===plan.ownerOperationID,'CATALOG_AUTHORITY_TERMINAL_TARGET_DRIFT');
+ const policy=validateCatalogPolicy(registry.data['authority-policy.json'],'desired',plan.policyTransition);
+ const identity=deriveRegistryRotationIdentity(registry.data['key-delivery-targets.yaml']);
+ requireValue(identity.ownerOperationID===plan.ownerOperationID&&identity.sourceRevision===plan.registry.sourceRevision&&
+  identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256&&canonicalRegistryMatches(registry.data['key-delivery-targets.yaml'],
+   readFileSync(`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8')),
+  'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
+ const canonical=createCanonicalRotationTemplate(freshPlan.source,freshPlan.cliImage,true),expected=createRotationJob(canonical,freshPlan);
+ const job=get('job',expected.metadata.name);
+ verifyRotationJobReadback(job,expected);
+ requireValue(job.metadata.uid===fresh.jobUID,'CATALOG_AUTHORITY_JOB_REPLACED');
+ const pods=parseAuthorityPrivateJSON(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${expected.metadata.name}`,'-o','json']));
+ const podProof=verifyCatalogAuthorityJobPod(job,pods);
+ const log=kube(['-n',namespace,'logs',`job/${expected.metadata.name}`,'-c','migrate']);
+ requireValue(Buffer.byteLength(log)<=1<<20,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
+ const rows=log.trim().split('\n').filter(Boolean);
+ requireValue(rows.length===1,'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
+ const state=parseAuthorityPrivateJSON(rows[0]);
+ const classified=classifyRotationStatus(job,JSON.stringify(state));
+ const observed=Date.parse(state.observedAt),completed=Date.parse(state.completedAt),previous=Date.parse(state.previousNotAfter),switched=Date.parse(state.switchNotBefore);
+ requireValue(classified.phase==='SUCCEEDED'&&state.status==='RETIRED'&&state.operationStatus==='RETIRED'&&state.operationId===plan.ownerOperationID&&
+  state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
+  Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+3&&
+  sha.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&uuid.test(state.intentId??'')&&
+  state.expectedReadbackCount===16&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=16&&state.actualReadbackCount<=384&&
+  observed<=now+5000&&now-observed<=30000&&completed<=observed&&previous<=completed&&switched<=previous,
+  'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
+ const proof={policyRevision:106,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
+  registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
+  expectedReadbackCount:16,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
+  planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:plan.policyTransition.targetSHA256,
+  trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
+ return Object.freeze({...proof,terminalSHA256:fingerprint(proof)});
 }
 function sourcePublisherExecutable(deployment,get,kube,k3sSudo){
  const resources=get('replicasets,pods',null).items,pods=workloadPods(deployment,resources).filter(p=>!p.metadata.deletionTimestamp);
