@@ -275,6 +275,77 @@ func TestSentryClosedConsumer(t *testing.T) {
 	}
 }
 
+// TestSentryNullableProviderObjects exercises real unassigned reads/updates and nullable token/comment identities; missing required author authority fails before a write, while an ambiguous post-write author preserves UNKNOWN without replay.
+// TestSentryNullableProviderObjects проверяет реальные unassigned read/update и nullable token/comment identities; отсутствие обязательной author authority закрывается до write, неоднозначный author после write сохраняет UNKNOWN без replay.
+func TestSentryNullableProviderObjects(t *testing.T) {
+	for _, scenario := range []string{"issue-read", "unassign", "application-comment-denied", "comment-read", "comment-create-unknown", "required-project-null"} {
+		t.Run(scenario, func(t *testing.T) {
+			adapter := testAdapter(t)
+			operation := "sentry.issue.read"
+			input := map[string]any{"issue_id": "17"}
+			switch scenario {
+			case "unassign":
+				operation, input = "sentry.issue.assignment.update", map[string]any{"issue_id": "17", "assignee": "unassigned"}
+			case "application-comment-denied", "comment-create-unknown":
+				operation, input = "sentry.issue.comment.create", map[string]any{"issue_id": "17", "text": "Synthetic comment"}
+			case "comment-read":
+				operation = "sentry.issue.comment.list"
+			}
+			request := sentryInvocation(t, adapter, "sentry", operation, input)
+			effects := 0
+			adapter.openAPIHTTPClient = &http.Client{Transport: roundTripFunc(func(wire *http.Request) (*http.Response, error) {
+				body := ""
+				if wire.Method != http.MethodGet {
+					effects++
+				}
+				if wire.URL.Path == "/api/0/organizations/fixture-org/issues/17/" {
+					body = `{"id":"17","title":"Synthetic error","status":"unresolved","project":{"id":"3","slug":"fixture-project"},"assignedTo":null}`
+					if wire.Method == http.MethodPut {
+						raw, _ := io.ReadAll(wire.Body)
+						if string(raw) != `{"assignedTo":""}` {
+							t.Fatal("unassignment changed its fixed provider command")
+						}
+					}
+					if scenario == "required-project-null" {
+						body = strings.Replace(body, `{"id":"3","slug":"fixture-project"}`, "null", 1)
+					}
+				} else if wire.URL.Path == "/api/0/" && (scenario == "unassign" || scenario == "application-comment-denied") {
+					body = `{"auth":{"scopes":["event:write","project:read"]},"user":null}`
+				} else if strings.HasSuffix(wire.URL.Path, "/comments/") {
+					body = `{"id":"21","data":{"text":"Synthetic comment"},"user":null}`
+					if wire.Method == http.MethodGet {
+						body = "[" + body + "]"
+					}
+				}
+				if body == "" {
+					return sentryWireFixture(t, wire), nil
+				}
+				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: wire}, nil
+			})}
+			_, err := adapter.Execute(t.Context(), request)
+			switch scenario {
+			case "application-comment-denied", "required-project-null":
+				if err == nil || effects != 0 {
+					t.Fatal("missing required identity/object reached a mutation", err)
+				}
+			case "comment-create-unknown":
+				var unknown *UnknownOutcomeError
+				if !errors.As(err, &unknown) || effects != 1 {
+					t.Fatal("nullable mutation author fabricated a confirmed effect", err)
+				}
+			default:
+				expectedEffects := 0
+				if scenario == "unassign" {
+					expectedEffects = 1
+				}
+				if err != nil || effects != expectedEffects {
+					t.Fatal("legal nullable Sentry response rejected", err)
+				}
+			}
+		})
+	}
+}
+
 // TestSentryRejectsForeignProjectBeforeMutation proves that issue IDs never grant cross-project writes, and transport loss after PUT remains UNKNOWN with no replay or recovery mutation.
 // TestSentryRejectsForeignProjectBeforeMutation доказывает запрет межпроектной записи по issue ID; потеря ответа PUT остаётся UNKNOWN без повтора или recovery mutation.
 func TestSentryRejectsForeignProjectBeforeMutation(t *testing.T) {

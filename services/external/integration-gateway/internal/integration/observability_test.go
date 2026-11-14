@@ -311,6 +311,7 @@ func TestObservabilityProjectionRejectsAmbiguity(t *testing.T) {
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{"job":"a","job":"b"},"value":[1,"1"]}]}}`,
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":["1","1"]}]}}`,
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"histogram":[1,{"count":"1","sum":"2","buckets":[[4,"0","1","1"]]}]}]}}`,
+		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"histogram":[1,{"count":"1","sum":"2","buckets":[[null,"0","1","2"]]}]}]}}`,
 	} {
 		if _, err := observabilityProjection("query.instant", []byte(data)); err == nil {
 			t.Fatal("ambiguous/partial metrics response accepted")
