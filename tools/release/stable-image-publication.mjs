@@ -20,8 +20,8 @@ const components = new Set(["control-plane", "internal-rpc-authority", "secret-b
   "artifact-retention", "session-archive", "backup-controller", "registry-pull-authorizer", "image-admission-controller"]);
 function requireValue(value, code) { if (!value) throw Error(code); }
 const env = () => Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
-async function run(program, args, timeout = 35000) {
-  try { return (await execute(program, args, { cwd: root, env: env(), timeout, maxBuffer: 8 << 20 })).stdout.trim(); }
+async function run(program, args, timeout = 35000, cwd = root) {
+  try { return (await execute(program, args, { cwd, env: env(), timeout, maxBuffer: 8 << 20 })).stdout.trim(); }
   catch { throw Error("STABLE_PUBLICATION_OPERATION_FAILED_OR_UNKNOWN"); }
 }
 
@@ -34,6 +34,24 @@ export function validateStableReceipt(receipt) {
     "STABLE_BUILD_RECEIPT_INVALID");
   return { component: receipt.component, sourceSHA: receipt.sourceSHA, digest: receipt.imageDigest,
     tag: `stable-${receipt.sourceSHA}-${receipt.imageDigest.slice(-12)}` };
+}
+
+// Связывает фактический build с завершённым журналом этого publisher.
+// Registry publication не доказывает node pull, admission или совместимость кода.
+export function validatedStablePublication(sourceSHA, evidence, component) {
+  const {publicationPlan: plan, publicationEvidence: records} = evidence ?? {};
+  const image = validateStableReceipt(plan?.receipt);
+  requireValue(plan.schema === "kodex.stable-image-publication/v2" && plan.artifactProfile === "built" &&
+    image.component === component && image.sourceSHA === sourceSHA &&
+    fingerprint(image) === fingerprint(plan.image) && plan.archiveSHA256 === plan.receipt.archiveSHA256,
+    "MIGRATION_IMAGE_PROVENANCE_INVALID");
+  requireValue(Array.isArray(records) && records.length === 2 &&
+    records[0].schema === "kodex.stable-image-publication-attempt/v1" && records[0].status === "INTENT" &&
+    ["apply", "readback"].includes(records[0].mode) && records[0].planSHA256 === fingerprint(plan) &&
+    records[0].component === image.component && records[0].digest === image.digest &&
+    records[1].status === "PASS" && records[1].phase === "REGISTRY_PUBLICATION_ONLY" && records[1].nodePull === "NOT_RUN",
+    "MIGRATION_IMAGE_PUBLICATION_UNCONFIRMED");
+  return `registry.local.kodex/kodex/${component}@${image.digest}`;
 }
 
 export async function privateArchiveHash(path) {
@@ -51,8 +69,8 @@ export async function privateArchiveHash(path) {
   } finally { await file.close(); }
 }
 
-async function sourceArchiveHash(sourceSHA) {
-  const child = spawn("git", ["archive", sourceSHA], { cwd: root, env: env(), stdio: ["ignore", "pipe", "ignore"] });
+export async function sourceArchiveHash(sourceSHA, sourceRoot = root) {
+  const child = spawn("git", ["archive", sourceSHA], { cwd: sourceRoot, env: env(), stdio: ["ignore", "pipe", "ignore"] });
   const done = new Promise(resolve => { child.once("error", () => resolve(false)); child.once("close", code => resolve(code === 0)); });
   const timer = setTimeout(() => child.kill("SIGKILL"), 120000);
   try {
@@ -67,14 +85,21 @@ async function main(args) {
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--component", "--receipt", "--archive", "--tool-state-directory", "--output", "--plan", "--approved-plan-sha"].includes(key) &&
+    requireValue(["--context", "--kubeconfig", "--source-checkout", "--component", "--receipt", "--archive", "--tool-state-directory", "--output", "--plan", "--approved-plan-sha"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "STABLE_PUBLICATION_ARGUMENTS_INVALID");
     options[key] = args.shift();
   }
   const context = options["--context"];
   requireValue(["plan", "retained-plan", "apply", "readback"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
     !/prod(?:uction)?/i.test(context) && options["--output"], "STABLE_PUBLICATION_ARGUMENTS_INVALID");
-  const kube = args => run("kubectl", ["--context", context, "--request-timeout=30s", ...args]);
+  const kubeconfig = options["--kubeconfig"];
+  requireValue(kubeconfig === undefined || (kubeconfig.startsWith("/") && !/[\r\n\0]/.test(kubeconfig)), "STABLE_PUBLICATION_ARGUMENTS_INVALID");
+  const kubeconfigArgs = kubeconfig === undefined ? [] : ["--kubeconfig", kubeconfig];
+  const sourceCheckout = options["--source-checkout"];
+  requireValue(sourceCheckout === undefined || (sourceCheckout.startsWith("/") && !/[\r\n\0]/.test(sourceCheckout)), "STABLE_PUBLICATION_ARGUMENTS_INVALID");
+  const sourceRoot = sourceCheckout === undefined ? root : resolve(sourceCheckout);
+  const sourceGit = args => run("git", args, 35000, sourceRoot);
+  const kube = args => run("kubectl", [...kubeconfigArgs, "--context", context, "--request-timeout=30s", ...args]);
   const get = async args => JSON.parse(await kube([...args, "-o", "json"]));
   const snapshot = async () => {
     const cluster = await get(["get", "namespace", "kube-system"]), ns = await get(["get", "namespace", namespace]);
@@ -100,13 +125,15 @@ async function main(args) {
     const receipt = built ? await readPrivateJSON(resolve(options["--receipt"])) : undefined;
     const retained = built ? undefined : await retainedEvidence(options["--component"]);
     const image = built ? validateStableReceipt(receipt) : retainedPublicationImage(retained);
-    const source = await run("git", ["rev-parse", "HEAD"]);
-    requireValue(await run("git", ["status", "--porcelain", "--untracked-files=no"]) === "", "STABLE_CLEAN_SOURCE_REQUIRED");
+    const source = await sourceGit(["rev-parse", "HEAD"]);
+    const executorSource = await run("git", ["rev-parse", "HEAD"]);
+    requireValue(await sourceGit(["status", "--porcelain", "--untracked-files=no"]) === "" &&
+      await run("git", ["status", "--porcelain", "--untracked-files=no"]) === "", "STABLE_CLEAN_SOURCE_REQUIRED");
     if (built) {
-      await run("git", ["merge-base", "--is-ancestor", image.sourceSHA, source]);
-      requireValue(await sourceArchiveHash(image.sourceSHA) === receipt.contextSHA256, "STABLE_BUILD_CONTEXT_MISMATCH");
+      await sourceGit(["merge-base", "--is-ancestor", image.sourceSHA, source]);
+      requireValue(await sourceArchiveHash(image.sourceSHA, sourceRoot) === receipt.contextSHA256, "STABLE_BUILD_CONTEXT_MISMATCH");
       // Разные source commits разрешены лишь при неизменных build inputs компонента.
-      await run("git", ["diff", "--quiet", image.sourceSHA, source, "--", dirname(receipt.dockerfile), "libs", "contracts",
+      await sourceGit(["diff", "--quiet", image.sourceSHA, source, "--", dirname(receipt.dockerfile), "libs", "contracts",
         "go.mod", "go.sum", "go.work", "go.work.sum"]);
     }
     const toolState = resolve(options["--tool-state-directory"]);
@@ -129,7 +156,8 @@ async function main(args) {
     const archiveSHA256 = await privateArchiveHash(join(output, "image.oci.tar"));
     requireValue(!built || archiveSHA256 === receipt.archiveSHA256, "STABLE_ARCHIVE_MISMATCH");
     const plan = { schema: "kodex.stable-image-publication/v2", artifactProfile: built ? "built" : "retained", context,
-      ...bound, source, ...(built ? { receipt } : { retained }), image, toolsImageID, archiveSHA256 };
+      ...bound, source, ...(sourceCheckout === undefined ? {} : {sourceCheckout: {path: sourceRoot, executorSource}}),
+      ...(built ? { receipt } : { retained }), image, toolsImageID, archiveSHA256 };
     await createPrivate(join(output, "plan.json"), plan);
     process.stdout.write(JSON.stringify({ status: "PASS", phase: "PLAN_ONLY", component: image.component,
       digest: image.digest, planSHA256: fingerprint(plan) }) + "\n");
@@ -146,7 +174,11 @@ async function main(args) {
     fingerprint(plan.image), "STABLE_PUBLICATION_PLAN_INVALID");
   requireValue(mode === "readback" ? !options["--approved-plan-sha"] : options["--approved-plan-sha"] === hash,
     "STABLE_EXACT_OWNER_CONFIRMATION_REQUIRED");
-  requireValue(await run("git", ["rev-parse", "HEAD"]) === plan.source &&
+  requireValue(sourceCheckout === undefined ? !Object.hasOwn(plan,"sourceCheckout") :
+    plan.sourceCheckout?.path === sourceRoot && plan.sourceCheckout?.executorSource === await run("git", ["rev-parse", "HEAD"]),
+    "STABLE_EXECUTOR_SOURCE_DRIFT");
+  requireValue(await sourceGit(["rev-parse", "HEAD"]) === plan.source &&
+    await sourceGit(["status", "--porcelain", "--untracked-files=no"]) === "" &&
     await run("git", ["status", "--porcelain", "--untracked-files=no"]) === "", "STABLE_EXECUTOR_SOURCE_DRIFT");
   requireValue(await privateArchiveHash(join(dirname(planPath), "image.oci.tar")) === plan.archiveSHA256 &&
     (plan.artifactProfile !== "built" || plan.archiveSHA256 === plan.receipt.archiveSHA256), "STABLE_ARCHIVE_MISMATCH");
@@ -164,7 +196,7 @@ async function main(args) {
   try {
     await record({ schema: "kodex.stable-image-publication-attempt/v1", status: "INTENT", mode, planSHA256: hash,
       component: plan.image.component, digest: plan.image.digest });
-    await run("bash", [join(root, "tools/release/publish-stable-image-worker.sh"), "--context", context,
+    await run("bash", [join(root, "tools/release/publish-stable-image-worker.sh"), ...kubeconfigArgs, "--context", context,
       "--plan", planPath, "--mode", mode], 180000);
     await retainedCurrent();
     requireValue(fingerprint(await snapshot()) === fingerprint(bound), "STABLE_REGISTRY_DRIFT");

@@ -4,7 +4,7 @@ title: Опциональный профиль внешней инфрастру
 type: runbook
 status: approved
 owner: sre
-version: 1.6.8
+version: 1.6.9
 updated: 2026-11-14
 ---
 
@@ -789,6 +789,79 @@ component image profile; произвольные комбинации не пр
 остаётся пустым, пять bootstrap Jobs проверяются, не переигрываются, schema и
 опубликованная authority history сохраняют прежние проверки. Без опции новый
 image отклоняется. `--check` у profile CLI проверяет render без его изменения.
+
+### Подготовка component locks из штатной публикации
+
+`tools/release/component-publication.mjs` соединяет существующие
+`build-stable-local.sh` и `stable-image-publication.mjs` с component migration.
+Он не строит образы, не меняет registry/CA/RBAC и не объявляет admission или
+совместимость кода доказанными по успешной публикации. Operator review exact
+cohort, установка native registry transport и разрешение на target обязательны.
+Полные source SHA, base release lock, schema и существующие Deployment images
+берутся из readback; installation seal не переписывается.
+
+Сборка выполняется в чистом checkout нужной ревизии. Для последовательного
+обновления042→043→044 нужны разные совместимые source revisions: бинарник,
+требующий044, нельзя возобновить на043. Publisher принимает отдельный
+`--source-checkout /private/source`: он закрепляет build source и source своего
+executor отдельно, проверяет оба при apply/readback. Этот параметр повторяют
+во всех фазах. Если его нет, сохраняется прежняя работа из текущего checkout.
+Все обращения к выбранному кластеру выполняют с явными `--kubeconfig` и
+`--context`, в том числе внутренний worker publisher.
+
+Приватный JSON config имеет schema `kodex.component-publication-config/v1`:
+`profile`, `sourceSHA`, `sourceCheckout`, `context`, `clusterUID`, `namespaceUID`,
+`baseSourceSHA`, `baseReleaseLockSHA256`, путь `baseReleaseLock`, три map
+`baseSchemaHeads`, `schemaHeadsBefore`, `schemaHeadsAfter`, все узлы `nodes`
+с полями `name`/`uid` и ordered `components` закрытого профиля. Для каждого
+компонента нужны `name`, прежний `expectedImageRef`, изменённый source `anchor`
+в корне этого компонента и пути `buildReceipt`, `publicationPlan`,
+`publicationEvidence` к настоящим результатам штатного publisher. Последний —
+JSONL с подтверждёнными INTENT/PASS. Inputs — owned regular0600 без ссылок,
+canonical compact либо pretty JSON с LF; duplicate keys отклоняются.
+Registry этого producer фиксирован штатным publisher:
+`registry.local.kodex/kodex`. Другой registry нельзя объявить опубликованным
+путём изменения строки в config.
+
+```bash
+node tools/release/component-publication.mjs prepare \
+  --configuration "$private_dir/component-config.json" \
+  --output "$private_dir/component-prepared.json"
+node tools/release/component-publication.mjs qualify \
+  --prepared "$private_dir/component-prepared.json" \
+  --kubeconfig "$kubeconfig" --context "$context" \
+  --approved-plan-sha "$prepared_sha256" \
+  --output "$private_dir/component-publication.json"
+```
+
+`prepare` не обращается к кластеру. Он сверяет actual build archive context,
+receipt bytes, journal hash, base lock bytes и Git binary diff. Production
+manifest консервативно содержит все changed files разрешённых корней, включая
+тесты; SHA256 связывает полный binary diff, удаления и file modes. Это
+provenance, а не автоматическое заключение о совместимости. Raw component-lock
+bytes/hash находятся в prepared artifact; node proof там отсутствует.
+
+`qualify` сейчас поддерживает только k3d: проверяет точные cluster/namespace UID,
+полный список Ready узлов без DiskPressure и соответствующие Docker container
+ID/labels. Он вызывает native CRI pull только для объявленных immutable images
+и проверяет `inspecti.status.repoDigests` на каждом узле. Credentials остаются
+в существующем node registry transport. Конфигурацию containerd, кластер и
+workloads этот шаг не изменяет. Совпадение digest в локальном кеше не является
+новой проверкой сетевого TLS/CA либо image admission.
+
+При потерянном ответе нет итогового publication/PASS. Повторный `readback`
+использует те же `--prepared`, `--kubeconfig`, `--context` и новый `--output`,
+без `--approved-plan-sha`: он только читает CRI и не повторяет pull. Только
+после полной проверки source/receipts и всех node digests появляется формат,
+принимаемый `control-plane-migration.mjs --component-publication`. Статус
+`NODE_QUALIFIED_NOT_DEPLOYED` не означает readiness обновлённой платформы.
+
+Локальная проверка `make test-component-publication` исполняет настоящие CLI и
+worker со synthetic Git/Kubernetes/CRI/registry boundaries: разные source и
+executor, target drift, неверный digest, потерянный ответ и отсутствие повторного
+pull/import. Live node readback выполняется отдельно. Проверены Context7 K3s
+private registry/default endpoint fallback и actual CLI `crictl inspecti`;
+используется установленный CRI client, а не неподдержанный `k3s crictl` alias.
 
 ### Согласованная пара компонентов и forward migration 043
 
