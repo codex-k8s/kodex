@@ -24,6 +24,9 @@ const (
 	// githubBackupUpgradeCompleted confirms both the exact044 schema and successful canonical ACL cleanup; rejoin uses this receipt without replaying Goose.
 	// githubBackupUpgradeCompleted подтверждает точную044 и успешный canonical ACL cleanup; rejoin использует этот receipt без повторного Goose.
 	githubBackupUpgradeCompleted = "GitHub repository scope backup migration completed at version 20261114120000"
+	// sentryBackupUpgradeCompleted confirms exact045 and successful canonical ACL cleanup, including a read-only rejoin after a lost acknowledgement.
+	// sentryBackupUpgradeCompleted подтверждает exact045 и успешный canonical ACL cleanup, включая read-only rejoin после потерянного acknowledgement.
+	sentryBackupUpgradeCompleted = "Sentry observability backup migration completed at version 20261114130000"
 )
 
 // postgresCLIDependencies separates database construction and Goose entry for offline lifecycle tests.
@@ -93,6 +96,11 @@ func runPostgres(ctx context.Context, command string, output io.Writer, dependen
 			return cliFailure(stageOutput, err)
 		}
 	}
+	if command == sentryBackupUpgradeCommand {
+		if _, err := fmt.Fprintln(output, sentryBackupUpgradeCompleted); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
 	return nil
 }
 
@@ -120,6 +128,12 @@ func applyPostgresMigrations(ctx context.Context, database *sql.DB, command stri
 	}
 	if command == githubBackupUpgradeCommand {
 		return upgradeGitHubWithBackupCompatibility(ctx, database)
+	}
+	if command == sentryBackupUpgradeCommand {
+		return upgradeSentryWithCanonicalBackup(ctx, database)
+	}
+	if command == sentryUpgradeCommand {
+		return goose.UpToContext(ctx, database, "migrations", 20261114130000)
 	}
 	if command == workspaceBackupUpgradeCommand {
 		return upgradeWorkspaceWithBackupCompatibility(ctx, database)

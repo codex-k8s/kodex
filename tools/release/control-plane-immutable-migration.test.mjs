@@ -429,6 +429,26 @@ test('PASS needs exact goose version and one exact Job-owned non-restarted execu
   assert.throws(()=>migrationReadback(changed,plan,logs,[pod]),/LIFECYCLE_CHANGED/);
 });
 
+test('registered backup readback requires exact canonical cleanup receipt and exact execution, never a goose line alone',()=>{
+ for(const profile of ['github-repository-scope-backup','sentry-observability-backup']){
+  const config=immutableMigrationProfile(profile),plan=makePlan();
+  // Изолированная readback fixture не заменяет полный builder/maintenance/SQL consumer suite.
+  plan.profile=profile;plan.migrationVersion=config.version;
+  plan.checkJob.metadata.name=`control-plane-migration-check-${config.version}-${fingerprint({purpose:'readonly-check/v1',profile,id:plan.id}).slice(0,12)}`;
+  plan.job.metadata.name=`control-plane-migrate-${config.version}`;
+  plan.job.spec.template.spec.containers[0].args=[config.executionCommand];
+  const {job,pod}=execution(plan);job.metadata.annotations={[config.annotation]:fingerprint(plan)};
+  const receipt=(profile==='sentry-observability-backup'?'Sentry observability':'GitHub repository scope')+
+   ` backup migration completed at version ${config.version}`;
+  assert.equal(migrationReadback(job,plan,receipt+'\n',[pod]).status,'PASS');
+  for(const logs of ['',`goose: current version: ${config.version}`,receipt.replace(config.version,'20261114150000'),receipt+' extra'])
+   assert.equal(migrationReadback(job,plan,logs,[pod]).status,'READBACK_UNCONFIRMED');
+  assert.equal(migrationReadback(job,plan,receipt,[]).status,'READBACK_UNCONFIRMED');
+  const changed=structuredClone(pod);changed.status.containerStatuses[0].imageID='sha256:'+'e'.repeat(64);
+  assert.equal(migrationReadback(job,plan,receipt,[changed]).status,'READBACK_UNCONFIRMED');
+ }
+});
+
 // Runtime получает только явно readable synthetic source subtree; private outer directory остаётся0700 при любом inherited umask.
 // Chmod ограничен свежесозданным source subtree ДОgit init: real worktree/credentials не затрагиваются.
 function readableSourceFixture(directory) {
@@ -821,12 +841,54 @@ test('resume denies active or unjoined migrator; failed terminal migration still
   f.edit(s=>{s.pod.status.phase='Failed';s.pod.status.containerStatuses[0].state={terminated:{exitCode:1}};});
   pass(f,'resume','RESUMED');assert.equal(f.read().calls.filter(a=>a.includes('patch')).length,2);
 });
+
+test('inspect waits for exact registered running Job before serving inventory and preserves terminal foreign guard',t=>{
+ const f=cli(t,'workspace-unbound-stop','',true);
+ pass(f,'plan','PLANNED');pass(f,'check');pass(f,'stop','STOPPED');pass(f,'apply');
+ f.edit(s=>{
+  s.job.status={active:1};s.pod.status.phase='Running';s.pod.status.containerStatuses[0].state={running:{}};
+  const foreign=retainedCLIJobFixture();
+  foreign.job.spec.template.spec.containers[0].args=foreign.pod.spec.containers[0].args=['unregistered-command'];
+  s.extraServingInventory=[foreign.job,foreign.pod];
+ });
+ const before=f.read().calls.filter(a=>a.includes('patch')||a.includes('create')).length;
+ const result=JSON.parse(pass(f,'inspect','RUNNING').stdout);
+ assert.equal(result.cohortObservation,'WAITING_REGISTERED_JOB_TERMINAL');
+ assert.equal(result.cpReady,undefined);assert.equal(result.pairReady,undefined);
+ assert.equal(f.read().calls.filter(a=>a.includes('patch')||a.includes('create')).length,before);
+ f.edit(s=>{s.job.metadata.uid='replacement';s.pod.metadata.ownerReferences[0].uid='replacement';});
+ assert.match(f.run('inspect').stderr,/MIGRATION_JOB_REPLACED/);
+ f.edit(s=>{
+  s.job.metadata.uid='created';s.pod.metadata.ownerReferences[0].uid='created';
+  s.job.status={succeeded:1,conditions:[{type:'Complete',status:'True'}]};s.pod.status.phase='Succeeded';
+  s.pod.status.containerStatuses[0].state={terminated:{exitCode:0}};
+ });
+ assert.match(f.run('inspect').stderr,/STABLE_FOREIGN_SERVING_POD/);
+});
 test('bounded maintenance timeout leaves no implied success and readback recovery repeats no effect',async()=>{
   let ticks=0,calls=0;
   const clock={now:()=>ticks,sleep:async ms=>{ticks+=ms;},budget:500};
   await assert.rejects(waitMigrationMaintenance(()=>{calls++;return false;},v=>v,'MIGRATION_CP_STOP_TIMEOUT',clock),/STOP_TIMEOUT/);
   assert.equal(calls,3);assert.equal(ticks,500);
   assert.equal(await waitMigrationMaintenance(()=>true,v=>v,'MIGRATION_CP_STOP_TIMEOUT',clock),true);
+});
+test('maintenance retries only a bounded fresh POD discovery snapshot race and never foreign scope or mutations',async()=>{
+ const race=()=>Error('COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+ let ticks=0,calls=0,readyCalls=0;
+ const clock={now:()=>ticks,sleep:async ms=>{ticks+=ms;},budget:2000};
+ const actual=await waitMigrationMaintenance(()=>{if(++calls<=2)throw race();return {joined:true};},value=>{readyCalls++;return value.joined;},'MIGRATION_CP_STOP_TIMEOUT',clock);
+ assert.equal(actual.joined,true);assert.equal(calls,3);assert.equal(readyCalls,1);assert.equal(ticks,500);
+ calls=0;ticks=0;
+ await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw race();},()=>{throw Error('STALE_READ_ACCEPTED');},'MIGRATION_CP_STOP_TIMEOUT',clock),/POD_DISCOVERY_CHANGED/);
+ assert.equal(calls,4);assert.equal(ticks,750);
+ calls=0;ticks=0;
+ await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw race();},()=>true,'MIGRATION_CP_STOP_TIMEOUT',{...clock,budget:250}),/STOP_TIMEOUT/);
+ assert.equal(calls,1);assert.equal(ticks,250);
+ for(const message of ['COMPONENT_MIGRATION_POD_SCOPE_CHANGED','COMPONENT_MIGRATION_POD_INVALID','MIGRATION_PATCH_OUTCOME_UNKNOWN','COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED extra']){
+  calls=0;ticks=0;
+  await assert.rejects(waitMigrationMaintenance(()=>{calls++;throw Error(message);},()=>true,'MIGRATION_CP_STOP_TIMEOUT',clock),error=>error.message===message);
+  assert.equal(calls,1);assert.equal(ticks,0);
+ }
 });
 test('SIGKILL after stop permits read-only inspect; mutations remain fenced by the original journal lock',t=>{
   const f=cli(t);pass(f,'plan','PLANNED');pass(f,'check');f.edit(s=>s.mode='stop-crash');
@@ -1929,6 +1991,26 @@ test('canonical backup terminal command связывается только с e
  const items=[original.job,original.pod];
  const kube=args=>args.includes('replicasets,pods,jobs')?servingMetadata(items):JSON.stringify(items.find(r=>r.kind===(args.includes('pod')?'Pod':'Job')));
  assert.deepEqual(activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),[]);
+});
+
+test('registered044/045 terminal commands accept only their exact factory versions and bounded attempt2',()=>{
+ for(const [version,commands] of [['20261114120000',['up-github-repository-scope-backup-compatible']],
+  ['20261114130000',['up-sentry-observability','up-sentry-observability-backup-maintenance']]]){
+  for(const command of commands)for(const suffix of ['', '-attempt2']){
+   const original=retainedCLIJobFixture(false,true);
+   const name=`control-plane-migrate-${version}${suffix}`;
+   original.job.metadata.name=original.pod.metadata.ownerReferences[0].name=name;
+   original.job.spec.template.spec.containers[0].args=original.pod.spec.containers[0].args=[command];
+   const items=[original.job,original.pod];
+   const kube=args=>args.includes('replicasets,pods,jobs')?servingMetadata(items):JSON.stringify(items.find(r=>r.kind===(args.includes('pod')?'Pod':'Job')));
+   assert.deepEqual(activeDeploymentPods(readComponentServingInventory(kube,'control-plane','deployment'),'deployment'),[]);
+   for(const foreignName of [`control-plane-migration-check-${version}`,`control-plane-migrate-${version}-retry`,
+    `control-plane-migrate-${version}-attempt3`,`control-plane-migrate-${version==='20261114120000'?'20261114130000':'20261114120000'}`]){
+    const {job,pod}=structuredClone(original);job.metadata.name=pod.metadata.ownerReferences[0].name=foreignName;
+    assert.throws(()=>activeDeploymentPods(componentServingInventory({items:[job,pod]},'control-plane','deployment'),'deployment'),/STABLE_FOREIGN_SERVING_POD/);
+   }
+  }
+ }
 });
 
 test('namespace inventory не прячет Deployment descendants при дрейфе serving labels',()=>{

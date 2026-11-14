@@ -544,7 +544,7 @@ test-telegram-notifications-owner:
 	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-owner
 
 test-control-plane-migration:
-	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs
+	@timeout 1500s node --test tools/release/control-plane-migration.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/github-repository-scope-proof.test.mjs tools/release/sentry-observability-proof.test.mjs
 
 .PHONY: test-control-api-nats-startup
 test-control-api-nats-startup:
@@ -658,7 +658,7 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
-	@timeout 90s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+	@timeout 180s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
 
 # Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
 test-telegram-authority-delivery:
