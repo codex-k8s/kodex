@@ -4,11 +4,17 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.79
+version: 1.1.80
 updated: 2026-11-14
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Отказ workspace join может оставить закрытый диагностический этап в пустом
+termination file до completion callback. Отдельная failure schema не является
+положительным quiescence record, не перезаписывает прежние bytes и не разрешает
+recovery. Ошибка её записи сохраняет исходный failure и не повторяет effect.
+Матрица: [#2149](../operations/opencode-native-sessions-2108.md#сохраняемый-этап-отказа-workspace-join--2149).
 
 Native compaction и история сессии не являются источником текущих полномочий.
 Каждый business request OpenCode получает актуальные owner instructions через

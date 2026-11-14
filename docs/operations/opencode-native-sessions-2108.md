@@ -4,7 +4,7 @@ title: OpenCode native adapter и границы квалификации
 type: runbook
 status: approved
 owner: developer
-version: 1.4.33
+version: 1.4.34
 updated: 2026-11-14
 ---
 
@@ -1873,3 +1873,38 @@ request проходит прежнюю начальную owner-проверк�
 повторе terminal projection. Это не доказательство exactly-once произвольного
 внешнего API и не приёмка установленного image: она фиксируется отдельно по
 source SHA/digest и живому readback.
+
+
+## Сохраняемый этап отказа workspace join — #2149
+
+Agent-runner сохраняет закрытую диагностику до completion callback, если executor
+не подтвердил остановку либо публикация positive quiescence record отклонена.
+Это best-effort запись только в пустой принадлежащий kubelet `/dev/termination-log`:
+`{"schema":"kodex.workspace-quiescence-failure.v1","stage":"EXECUTOR_JOIN"}`.
+Другие допустимые этапы: `EXECUTOR_UNAVAILABLE`, `WRITER_ACK`, `PROVIDER_JOIN`,
+`RECORD_ENCODE`, `RECORD_WRITE`; неизвестная причина обозначается `UNKNOWN`.
+Исходная ошибка, prompt, tool output, файловый путь и credentials не копируются.
+
+Failure schema намеренно не проходит `DecodeWorkspaceQuiescence`. Непустая
+termination-запись, включая уже опубликованный positive record и неизвестный
+частичный результат, не перезаписывается. Missing path, symlink/hardlink и
+nonregular descriptor закрыто отклоняются. Не создаются файлы, каталоги и
+параллельное workspace-хранилище диагностики. Отказ записи не меняет первоначальный
+`RUNTIME_UNAVAILABLE`, measured usage и отсутствие публикуемых artifacts.
+
+| Lifecycle | Результат и граница |
+| --- | --- |
+| Create / BIND / claim | Исходные проверки и owner ACK сохраняются; failure marker не даёт admission. |
+| Renew / исполнение | Инструменты, lease и effect receipts не меняются; диагностических retries нет. |
+| Complete с positive join | Публикуется прежний record; failure marker отсутствует. |
+| Executor / provider join failure | Сохраняется закрытый этап до callback; workspace остаётся закрытым. |
+| Stop / cancel / timeout | Прежний независимый cleanup budget; неизвестная остановка остаётся отказом. |
+| Lease expiry / stale writer | Маркер не восстанавливает lease, fence либо полномочия. |
+| Retry / continuation | Только прежний owner-протокол; по failure marker продолжать нельзя. |
+| Pod loss / restart / delete | Запись best-effort; отсутствие сообщения не доказывает остановку. Старые blocked workspace не меняются. |
+
+Проверка unit использует реальный descriptor и callback sequencing: stored и
+write-denied исходы, один запуск broker, сохранённый measured failure, отсутствие
+artifacts и отклонение diagnostic schema положительным decoder. Сборка и живая
+доставка фиксируются отдельно. Эта доработка сохраняет причину будущего отказа,
+а не исправляет пока не установленную причину прошлой ошибки writer join.

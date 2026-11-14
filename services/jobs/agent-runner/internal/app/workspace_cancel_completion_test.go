@@ -6,9 +6,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -47,6 +50,22 @@ func (proxy *stoppedExecutorProxy) QuiesceWorkspace(ctx context.Context) error {
 // подтверждённый measured failure возвращает nil без публикации quiescence. Сохранность native
 // capture проверяется отдельно на настоящей native-границе, не подменяется полями Result.
 func TestCancelledTurnMissingExecutorJoinDoesNotPublishQuiescence(t *testing.T) {
+	for _, store := range []bool{true, false} {
+		t.Run(fmt.Sprint(store), func(t *testing.T) { checkCancelledWorkspaceDiagnostic(t, store) })
+	}
+}
+
+// checkCancelledWorkspaceDiagnostic checks persistence precedes completion and a failed diagnostic
+// write cannot change measured failure, publish artifacts or repeat the model execution.
+// checkCancelledWorkspaceDiagnostic проверяет запись до completion и сохранение measured failure
+// без artifacts либо повтора исполнения при отказе диагностического writer.
+func checkCancelledWorkspaceDiagnostic(t *testing.T, store bool) {
+	t.Helper()
+	termination := filepath.Join(t.TempDir(), "termination")
+	if err := os.WriteFile(termination, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, executions := 0, 0
 	input := acceptanceTurnFixture(t, "agent")
 	input.Provider = "opencode"
 	input.EnvironmentPolicy.ManagedWorkspace = true
@@ -58,6 +77,10 @@ func TestCancelledTurnMissingExecutorJoinDoesNotPublishQuiescence(t *testing.T) 
 		case "/v1/executions/lease_fixture/progress":
 			progress++
 		case "/v1/executions/lease_fixture/complete":
+			raw, err := os.ReadFile(termination)
+			if err != nil || diagnostics != 1 || store && !bytes.Contains(raw, []byte(`"stage":"EXECUTOR_JOIN"`)) || !store && len(raw) != 0 {
+				t.Error("diagnostic did not precede completion or changed on failed write")
+			}
 			var payload runtimecontract.RunnerCompletionRequest
 			if json.NewDecoder(request.Body).Decode(&payload) != nil || payload.Validate() != nil || payload.Success || payload.SafeErrorCode != "RUNTIME_UNAVAILABLE" || payload.Usage != usage || len(payload.Artifacts) != 0 {
 				t.Error("cancelled executor failure changed measured completion or published an artifact")
@@ -84,14 +107,22 @@ func TestCancelledTurnMissingExecutorJoinDoesNotPublishQuiescence(t *testing.T) 
 			return preparedTurn{ctx: ctx, proxy: proxy, cancel: func() {}}, "", nil
 		},
 		execute: func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
+			executions++
 			cancel()
 			return codex.Result{Outcome: "FAILED", Usage: usage}, context.Canceled
+		},
+		workspaceFailure: func(cause error) error {
+			diagnostics++
+			if !store {
+				return os.ErrPermission
+			}
+			return writeWorkspaceQuiescenceFailure(termination, cause)
 		},
 	}
 	if err := runTurn(ctx, input, client, nil, runtime); err != nil {
 		t.Fatal("acknowledged failure was not delivered after cancellation", err)
 	}
-	if !proxy.quiesced || !proxy.closed || progress != 1 || completed != 1 || !strings.Contains(logs.String(), `"quiescence_stage":"EXECUTOR_JOIN"`) || strings.Contains(logs.String(), `"quiescence_stage":"WRITER_ACK"`) {
+	if !proxy.quiesced || !proxy.closed || progress != 1 || completed != 1 || executions != 1 || !strings.Contains(logs.String(), `"quiescence_stage":"EXECUTOR_JOIN"`) || strings.Contains(logs.String(), `"quiescence_stage":"WRITER_ACK"`) {
 		t.Fatal("executor denial did not stop before positive-record publication or lost its closed stage")
 	}
 }
