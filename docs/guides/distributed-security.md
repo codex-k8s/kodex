@@ -4,11 +4,27 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.70
+version: 1.7.72
 updated: 2026-11-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+При проверке ротации число всех получателей delivery и обязательный startup
+набор — разные величины. Обязательные `(workload, role, generation)` выводятся
+из exact pinned registry; owner проверяет membership, consumer связывает его
+count и digest с тем же registry. Дополнительные receipts от optional jobs не
+меняют обязательный набор и не заменяют отсутствующий required reader.
+Timeout наблюдающего Job не отменяет продолжающуюся owner operation: свежий
+status связывается с исходным operation ID без повторной ротации.
+Исправленный restore executor допускается только явно указанным exact ancestor,
+закреплённым в новом плане. Исходные rotation/status plans и image pins не меняются.
+План восстановления и свежее подтверждение — разные записи. Перед effect новый
+status Job может подтвердить тот же operation/policy/snapshot/registry/target и
+required набор; меняются только observedAt, provenance status Job и фактический
+count optional receipts. Исходный proof остаётся в плане, новый — в fsync audit
+до INTENT. Окно свежести30s проверяется у нового proof непосредственно
+перед effect; подготовка плана не продлевает срок старого readback.
 
 Transport сохраняет исходные bytes структурированного stdout до строгого
 декодирования. Общий `trim()` недопустим для TSV/JSONPath inventory: завершающий

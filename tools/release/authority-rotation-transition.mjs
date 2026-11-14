@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {authorityReadbackContract} from './authority-readback-targets.mjs';
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
@@ -274,7 +275,7 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 
 // Fresh getter создаёт только GET/logs: status Job заранее запускается обычным
 // plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
-// SQL owner сохраняет exact membership всех16 readers на трёх promotion phases;
+// SQL owner сохраняет exact membership обязательных readers из pinned registry;
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
 export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io={}) {
  requireValue(plan?.action==='rotate'&&freshPlan?.action==='status'&&freshPlan.policyTransition?.profile===catalogPolicyTransition&&
@@ -303,6 +304,7 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
   identity.sourceDigestSHA256===plan.registry.sourceDigestSHA256&&canonicalRegistryMatches(registry.data['key-delivery-targets.yaml'],
    readFileSync(`${plan.source}/deploy/k8s/base/internal-rpc-authority-publisher/key-delivery-targets.yaml`,'utf8')),
   'CATALOG_AUTHORITY_TERMINAL_REGISTRY_REJECTED');
+ const readers=authorityReadbackContract(registry.data['key-delivery-targets.yaml']);
  const canonical=createCanonicalRotationTemplate(freshPlan.source,freshPlan.cliImage,true),expected=createRotationJob(canonical,freshPlan);
  const job=get('job',expected.metadata.name);
  verifyRotationJobReadback(job,expected);
@@ -324,12 +326,12 @@ export async function readCatalogAuthorityTerminal({plan,events,freshPlan,freshE
   state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
   Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+3&&
   sha.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&uuid.test(state.intentId??'')&&
-  state.expectedReadbackCount===16&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=16&&state.actualReadbackCount<=384&&
+  state.expectedReadbackCount===readers.expectedReadbackCount&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=readers.expectedReadbackCount&&state.actualReadbackCount<=384&&
   observed<=now+5000&&now-observed<=30000&&completed<=observed&&previous<=completed&&switched<=previous,
   'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
  const proof={policyRevision:106,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
-  expectedReadbackCount:16,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
+  ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,
   planSHA256:fingerprint(plan),freshPlanSHA256:fingerprint(freshPlan),targetSHA256:plan.policyTransition.targetSHA256,
   trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
  return Object.freeze({...proof,terminalSHA256:fingerprint(proof)});
