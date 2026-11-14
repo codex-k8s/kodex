@@ -19,6 +19,18 @@ const apiHeader=plan=>({schema:'kodex.component-api-maintenance-evidence/v1',pla
 const marker=plan=>JSON.stringify({maintenanceID:plan.maintenanceID,closePlanSHA256:plan.closePlanSHA256});
 const identity=(service,plan)=>service?.apiVersion==='v1'&&service.kind==='Service'&&service.metadata?.name===name&&
   service.metadata.namespace==='kodex-system'&&service.metadata.uid===plan.serviceUID&&!service.metadata.deletionTimestamp;
+function validateTerminal(proof,plan,now=Date.now()){
+  const digest=v=>/^[a-f0-9]{64}$/.test(v??''),uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
+  requireValue(proof&&typeof proof==='object'&&!Array.isArray(proof),'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
+  const {terminalSHA256,...body}=proof,observed=Date.parse(proof.observedAt);
+  requireValue(proof.policyRevision===106&&uuid(proof.operationID)&&proof.targetSHA256===fingerprint(plan.target)&&
+    proof.trafficPlanSHA256===plan.previousIsolationSHA256&&proof.serviceUID===plan.serviceUID&&
+    proof.expectedReadbackCount===16&&Number.isSafeInteger(proof.actualReadbackCount)&&proof.actualReadbackCount>=16&&proof.actualReadbackCount<=384&&
+    Number.isSafeInteger(proof.registryRevision)&&proof.registryRevision>0&&Number.isSafeInteger(proof.snapshotRevision)&&proof.snapshotRevision>0&&
+    ['policySHA256','registrySHA256','snapshotSHA256','planSHA256','freshPlanSHA256'].every(k=>digest(proof[k]))&&
+    observed<=now+5000&&now-observed<=30000&&digest(terminalSHA256)&&terminalSHA256===fingerprint(body),
+    'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
+}
 function validate(plan){
   const uuid=v=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(v??'');
   requireValue(plan?.schema==='kodex.component-api-traffic-plan/v1'&&['isolate','restore'].includes(plan.action)&&
@@ -35,6 +47,10 @@ function validate(plan){
   requireValue(!Object.hasOwn(originalAnnotations,key)&&same(expectedSpec,isolate?plan.afterSpec:plan.beforeSpec)&&
     same({...originalAnnotations,[key]:marker(plan)},isolate?plan.afterAnnotations:plan.beforeAnnotations)&&
     (isolate||/^[a-f0-9]{64}$/.test(plan.previousIsolationSHA256??'')), 'COMPONENT_API_TRAFFIC_PLAN_INVALID');
+  // Старый план остаётся читаемым после TTL; fresh bound проверяется перед
+  // restore intent. Исторический readback не открывает admission повторно.
+  if(!isolate)validateTerminal(plan.authority,plan,Date.parse(plan.authority?.observedAt));
+  else requireValue(!Object.hasOwn(plan,'authority'),'COMPONENT_API_TRAFFIC_PLAN_INVALID');
 }
 
 // Проверяется отсутствие любых адресов, включая not-ready и terminating.
@@ -66,7 +82,7 @@ export function requireClosedAPIAdmission(deployment,resources,closed,traffic){
   confirmedIsolation(plan,events);requireIsolatedAPIService(service,slices,pods,plan);
   return {...proof,trafficPlanSHA256:fingerprint(plan),serviceUID:plan.serviceUID};
 }
-export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous}){
+export function planComponentAPITraffic({service,deployment,resources,target,observed,sourceSHA,action,closed,previous,terminal}){
   const scope=portableRunnerTarget(target,observed),proof=confirmedAPIMaintenance(closed);
   requireValue(scope.allows(service)&&scope.allows(deployment)&&same(target,closed.plan.target)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&
     ['isolate','restore'].includes(action),'COMPONENT_API_TRAFFIC_SCOPE_INVALID');
@@ -80,11 +96,11 @@ export function planComponentAPITraffic({service,deployment,resources,target,obs
   const plan={schema:'kodex.component-api-traffic-plan/v1',action,sourceSHA,target,maintenanceID:proof.maintenanceID,closePlanSHA256:proof.planSHA256,
     serviceUID:service.metadata.uid,beforeResourceVersion:service.metadata.resourceVersion,beforeSpec:structuredClone(service.spec),afterSpec:structuredClone(service.spec),
     beforeAnnotations:{...service.metadata.annotations},afterAnnotations:{...service.metadata.annotations},
-    ...(action==='restore'?{previousIsolationSHA256:fingerprint(previous.plan)}:{})};
+    ...(action==='restore'?{previousIsolationSHA256:fingerprint(previous.plan),authority:terminal}:{})};
   if(action==='isolate'){
     plan.afterSpec.selector[key]=proof.maintenanceID;plan.afterAnnotations[key]=marker(plan);
   }else{delete plan.afterSpec.selector[key];delete plan.afterAnnotations[key];}
-  validate(plan);return plan;
+  validate(plan);if(action==='restore')validateTerminal(terminal,plan);return plan;
 }
 export function componentAPITrafficStep({phase,plan,journal,get,slices,pods,gate,patch}){
   validate(plan);requireValue(['apply','status'].includes(phase),'COMPONENT_API_TRAFFIC_PHASE_INVALID');
@@ -106,7 +122,11 @@ export function componentAPITrafficStep({phase,plan,journal,get,slices,pods,gate
   else requireValue(service.metadata.resourceVersion===plan.beforeResourceVersion,'COMPONENT_API_TRAFFIC_VERSION_CHANGED');
   const operations=[{op:'test',path:'/metadata/uid',value:plan.serviceUID},{op:'test',path:'/metadata/resourceVersion',value:service.metadata.resourceVersion},
     {op:'test',path:'/spec',value:plan.beforeSpec},{op:'add',path:'/metadata/annotations',value:plan.afterAnnotations},{op:'replace',path:'/spec',value:plan.afterSpec}];
-  patch(operations,true);gate();journal.append({type:'INTENT',step:'apply'});
+  patch(operations,true);const terminal=gate();
+  if(plan.action==='restore'){
+    validateTerminal(terminal,plan);requireValue(same(terminal,plan.authority),'COMPONENT_API_TRAFFIC_AUTHORITY_CHANGED');
+  }
+  journal.append({type:'INTENT',step:'apply'});
   try{patch(operations,false);}catch(error){journal.append({type:'UNKNOWN',step:'apply'});throw error;}
   return componentAPITrafficStep({phase:'status',plan,journal,get,slices,pods,gate,patch});
 }
@@ -114,7 +134,8 @@ export function componentAPITrafficStep({phase,plan,journal,get,slices,pods,gate
 async function main(args){
   const phase=args.shift(),options={};
   while(args.length){const k=args.shift();requireValue(['--action','--target','--plan','--evidence','--closed-plan','--closed-evidence',
-    '--isolation-plan','--isolation-evidence','--approved-plan-sha','--kubeconfig','--context'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
+    '--isolation-plan','--isolation-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence',
+    '--approved-plan-sha','--kubeconfig','--context'].includes(k)&&!Object.hasOwn(options,k)&&args.length,
     'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');options[k]=args.shift();}
   requireValue(['plan','apply','status'].includes(phase)&&options['--plan']&&options['--closed-plan']&&options['--closed-evidence']&&
     options['--kubeconfig']?.startsWith('/')&&!/[\r\n\0]/.test(options['--kubeconfig'])&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context']??''),
@@ -139,12 +160,29 @@ async function main(args){
     requireValue(options['--isolation-evidence'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
     const plan=await readPrivateJSON(resolve(options['--isolation-plan']));previous={plan,events:readEvidence(options['--isolation-evidence'],header(plan))};
   }else requireValue(!options['--isolation-evidence'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
+  let terminal;
+  const readTerminal=async()=>{
+    requireValue(['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'].every(k=>options[k]),
+      'COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
+    const {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON}=await import('./authority-catalog-transition.mjs');
+    const {readCatalogAuthorityTerminal}=await import('./authority-rotation-transition.mjs');
+    requireValue(typeof readCatalogAuthorityTerminal==='function','COMPONENT_API_TRAFFIC_AUTHORITY_TERMINAL_REQUIRED');
+    const plan=readAuthorityPrivateJSON(options['--authority-plan']),freshPlan=readAuthorityPrivateJSON(options['--authority-status-plan']);
+    requireValue(plan.context===options['--context']&&plan.kubeconfig===options['--kubeconfig']&&plan.revision===sourceSHA,
+      'COMPONENT_API_TRAFFIC_AUTHORITY_SOURCE_CHANGED');
+    const d=deployment(),resources=readComponentServingInventory(kube,name,d.metadata.uid);
+    return readCatalogAuthorityTerminal({plan,freshPlan,
+      events:readAuthorityPrivateText(options['--authority-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
+      freshEvents:readAuthorityPrivateText(options['--authority-status-evidence']).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON),
+      admissionProof:requireClosedAPIAdmission(d,resources,closed,{...previous,service:service(),slices:slices(),pods:pods()})},kube);
+  };
   const build=(target,action)=>{
     const d=deployment();return planComponentAPITraffic({service:service(),deployment:d,resources:readComponentServingInventory(kube,name,d.metadata.uid),
-      target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined});
+      target,observed,sourceSHA,action,closed,previous:previous?{...previous,slices:slices(),pods:pods()}:undefined,terminal});
   };
   if(phase==='plan'){
     requireValue(options['--target']&&!options['--evidence']&&!options['--approved-plan-sha'],'COMPONENT_API_TRAFFIC_ARGUMENTS_INVALID');
+    if(options['--action']==='restore')terminal=await readTerminal();
     const plan=build(await readPrivateJSON(resolve(options['--target'])),options['--action']);createPrivatePrettyJSONSync(resolve(options['--plan']),plan);
     console.log(JSON.stringify({status:'PLAN_ONLY',action:plan.action,planSHA256:fingerprint(plan)}));return;
   }
@@ -155,8 +193,10 @@ async function main(args){
     (phase==='apply'?options['--approved-plan-sha']===fingerprint(plan):!options['--approved-plan-sha']),'COMPONENT_API_TRAFFIC_TARGET_CHANGED');
   const journal=privateJournal(options['--evidence'],header(plan));
   try{
+    if(phase==='apply'&&plan.action==='restore'&&same(service().spec,plan.beforeSpec))terminal=await readTerminal();
     const result=componentAPITrafficStep({phase,plan,journal,get:service,slices,pods,gate:()=>{
       const fresh=build(plan.target,plan.action);requireValue(same(fresh,plan),'COMPONENT_API_TRAFFIC_GATE_CHANGED');
+      return terminal;
     },patch:(operations,dryRun)=>withPrivatePatchFile(operations,path=>kube(['-n','kodex-system','patch','service',name,'--type=json','--patch-file',path,
       ...(dryRun?['--dry-run=server']:[]),'-o','name']))});console.log(JSON.stringify(result));
   }finally{journal.close();}

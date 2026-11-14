@@ -70,7 +70,7 @@ if(g>=0){
   const isolated=['--isolation-plan',join(directory,'isolate.json'),'--isolation-evidence',join(directory,'isolate.jsonl')];
   return {directory,read,state,edit,run,pass,closed,isolated};
 }
-test('настоящие CLI: close → isolate → новое приложение → open readers → restore Service',t=>{
+test('настоящие CLI: close → isolate → новое приложение → open readers; restore закрыт без owner retirement',t=>{
   const f=setup(t);
   f.pass('maintenance','plan','close',['--action','close']);assert.equal(f.state().effects.length,0);
   assert.equal(f.pass('maintenance','apply','close').state,'CLOSED');
@@ -78,9 +78,9 @@ test('настоящие CLI: close → isolate → новое приложен�
   f.edit(s=>{s.deployment.spec.template.spec.containers[0].image='example.invalid/api@sha256:'+'2'.repeat(64);});
   f.pass('maintenance','plan','open',['--action','open',...f.closed,...f.isolated]);assert.equal(f.pass('maintenance','apply','open',[...f.closed,...f.isolated]).state,'OPEN');
   assert.equal(f.pass('traffic','status','isolate').state,'ISOLATED');
-  f.pass('traffic','plan','restore',['--action','restore',...f.isolated]);assert.equal(f.pass('traffic','apply','restore',f.isolated).state,'RESTORED');
-  assert.equal(f.pass('traffic','apply','restore',f.isolated).state,'RESTORED');
-  assert.deepEqual(f.state().effects,['deployment','service','deployment','service']);
+  const blocked=f.run('traffic','plan','restore',['--action','restore',...f.isolated]);assert.notEqual(blocked.status,0);
+  assert.match(blocked.stderr,/AUTHORITY_TERMINAL_REQUIRED/);
+  assert.deepEqual(f.state().effects,['deployment','service','deployment']);
   assert.equal(f.state().deployment.spec.template.spec.containers[0].image,'example.invalid/api@sha256:'+'2'.repeat(64));
   assert.ok(f.state().patchPaths.every(p=>!existsSync(p)));
 });
