@@ -223,7 +223,7 @@ test("saved plan cannot survive another resourceVersion, operation, cluster or p
   const plan = { version: 1, context: "default", clusterUID: "cluster", namespaceUID: "namespace", bundleSHA256: "a".repeat(64), phase: "resources", readerImage,
     operations: [{ type: "patch", resourceVersion: "7" }], guards: { promotedPinsSHA256: "b".repeat(64) } };
   samePlan(plan, structuredClone(plan));
-  for (const mutate of [(p) => { p.clusterUID = "other"; }, (p) => { p.operations[0].resourceVersion = "8"; }, (p) => { p.guards.promotedPinsSHA256 = "c".repeat(64); }]) {
+  for (const mutate of [(p) => { p.kubeconfig = "/other/config"; }, (p) => { p.clusterUID = "other"; }, (p) => { p.operations[0].resourceVersion = "8"; }, (p) => { p.guards.promotedPinsSHA256 = "c".repeat(64); }]) {
     const changed = structuredClone(plan); mutate(changed); assert.throws(() => samePlan(plan, changed));
   }
 });
@@ -267,6 +267,7 @@ for (const [issuerOnly, portable] of [[false,false],[true,false],[false,true]]) 
     const statePath = join(directory, "state.json"), callsPath = join(directory, "calls.jsonl");
     const f = fixtures(), objects = [f.policy, f.parameters, f.catalog,
       ...["control-plane", "role-image-builder", "image-admission-controller", "control-api-gateway"].map(deployment),
+      {kind:"Pod",metadata:{...metadata("kodex-postgresql-0"),labels:{"app.kubernetes.io/name":"kodex-postgresql"},ownerReferences:[{kind:"StatefulSet",name:"kodex-postgresql",uid:"33333333-3333-4333-8333-333333333333",controller:true}]},status:{phase:"Running"}},
       ...["kube-system", "kodex-system"].map((name) => ({ kind: "Namespace", metadata: metadata(name) })),
       { kind: "ValidatingAdmissionPolicy", metadata: metadata("kodex-image-admission-controller-jobs"), spec: { failurePolicy: "Fail", validations:[{expression:"variables.pod.initContainers[1].image == params.spec.authorityImage"}] } },
       {kind:"CustomResourceDefinition",metadata:metadata("imageadmissionpolicyparameters.supplychain.kodex.dev"),spec:{versions:[{schema:{openAPIV3Schema:{properties:{spec:{properties:{authorityImage:{type:"string",minLength:1}}}}}}}]}},
@@ -299,7 +300,9 @@ for (const [issuerOnly, portable] of [[false,false],[true,false],[false,true]]) 
     writeFileSync(statePath, JSON.stringify(objects));
     writeFileSync(join(bin, "kubectl"), `#!/usr/bin/env node
 const fs=require('node:fs');
-const args=process.argv.slice(2); args.splice(0,4);
+const args=process.argv.slice(2);
+if(args[0]!=='--kubeconfig'||args[1]!==process.env.FIXTURE_KUBECONFIG||args[2]!=='--context'||args[3]!=='default'||args[4]!=='--namespace'||args[5]!=='kodex-system')process.exit(90);
+args.splice(0,6);if(args[0]==='-n'){if(args[1]!=='kodex-system')process.exit(91);args.splice(0,2);}
 const state=JSON.parse(fs.readFileSync(process.env.FIXTURE_STATE));
 const key=(x)=>x.toLowerCase();
 const find=(kind,name)=>state.find(x=>key(x.kind)===key(kind)&&x.metadata.name===name);
@@ -310,7 +313,11 @@ if(args[0]==='get') {
     output({items:[]});
   } else { const value=find(args[1],args[2]); if(value)output(value); else if(!args.includes('--ignore-not-found'))process.exit(3); }
 } else if(args[0]==='exec') {
-  fs.readFileSync(0); output({at:new Date().toISOString(),openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:4,promotedPinsSHA256:'a'.repeat(64)});
+  const sql=fs.readFileSync(0,'utf8');
+  const expected=['exec','-i','kodex-postgresql-0','-c','postgresql','--','env','-i','PATH=/usr/local/bin:/usr/bin:/bin','psql','-XqAt','--host=/var/run/postgresql','--port=5432','--username=postgres','--dbname=control_plane','--no-password','-v','ON_ERROR_STOP=1'];
+  if(JSON.stringify(args)!==JSON.stringify(expected))process.exit(92);
+  if(sql.includes('pg_catalog.pg_control_system()'))output({systemIdentifier:'18446744073709551615',databaseOID:process.env.FIXTURE_DATABASE_MISMATCH==='true'?'999':'16384',database:'control_plane',port:'5432',serverAddress:null,serverPort:null});
+  else output({at:new Date().toISOString(),openBuilds:0,pendingAdmissions:0,pendingPromotions:0,activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:4,promotedPinsSHA256:'a'.repeat(64)});
 } else if(args[0]==='create') {
   const value=JSON.parse(fs.readFileSync(0)); if(find(value.kind,value.metadata.name))process.exit(4);
   value.metadata.uid='22222222-2222-4222-8222-222222222222';value.metadata.resourceVersion='1';state.push(value);
@@ -335,8 +342,9 @@ if(JSON.stringify(a.slice(0,3))!==JSON.stringify(['-n','k3s','kubectl']))process
 const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(3),{stdio:'inherit'});process.exit(r.status??99);
 `,{mode:0o755});
     const cli = fileURLToPath(new URL("./runner-policy-transition.mjs", import.meta.url));
-    const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath };
-    const run = (args) => execFileSync(process.execPath, [cli, ...args, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
+    const kubeconfig=join(directory,"kubeconfig");writeFileSync(kubeconfig,"synthetic config",{mode:0o600});
+    const environment = { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_STATE: statePath, FIXTURE_CALLS: callsPath, FIXTURE_KUBECONFIG:kubeconfig };
+    const run = (args) => execFileSync(process.execPath, [cli, ...args, "--kubeconfig",kubeconfig, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: environment, stdio: "pipe" });
     const bundle = join(directory, "bundle.json");
     run(["prepare", "--context", "default", "--runner-digest", issuerOnly?oldDigest:newDigest,
       ...(issuerOnly?["--authority-issuer-image",`registry.example.test/kodex/authority@sha256:${"c".repeat(64)}`]:["--node-readback-image",`pull.kodex.works/kodex/agent-runner@${newDigest}`]), "--output", bundle]);
@@ -345,6 +353,15 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
     for (const phase of phases) {
       const plan = join(directory, `${phase}.json`), evidence = join(directory, `${phase}.jsonl`);
       run(["plan", ...common, "--phase", phase, "--output", plan]);
+      if(phase==="maintenance") {
+        const changed=spawnSync(process.execPath,[cli,"apply",...common,"--kubeconfig",kubeconfig,"--plan",plan,"--evidence",evidence,"--confirm",confirmation,...portableArgs],
+          {env:{...environment,FIXTURE_DATABASE_MISMATCH:"true"},encoding:"utf8"});
+        assert.equal(changed.status,1);assert.match(changed.stderr,/MIGRATION_DATABASE_INSTANCE_CHANGED/);
+        const alternate=join(directory,"alternate-kubeconfig");writeFileSync(alternate,"other synthetic",{mode:0o600});
+        const other=spawnSync(process.execPath,[cli,"inspect",...common,"--kubeconfig",alternate,"--output",join(directory,"foreign.json"),...portableArgs],
+          {env:{...environment,FIXTURE_KUBECONFIG:alternate},encoding:"utf8"});
+        assert.equal(other.status,1);assert.match(other.stderr,/CLUSTER_IDENTITY_CHANGED/);
+      }
       run(["apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", confirmation]);
       assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "PASS");
     }
@@ -357,7 +374,7 @@ const r=cp.spawnSync(path.join(path.dirname(process.argv[1]),'kubectl'),a.slice(
     const plan = join(directory, "lost.json"), evidence = join(directory, "lost.jsonl");
     run(["plan", ...common, "--phase", "maintenance", "--output", plan]);
     const before = readFileSync(callsPath, "utf8").trim().split("\n").length;
-    const result = spawnSync(process.execPath, [cli, "apply", ...common, "--plan", plan, "--evidence", evidence, "--confirm", confirmation, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [cli, "apply", ...common,"--kubeconfig",kubeconfig, "--plan", plan, "--evidence", evidence, "--confirm", confirmation, ...portableArgs, ...(issuerOnly?["--k3s-sudo"]:[])], { env: { ...environment, FIXTURE_LOST_ACK: "true" }, encoding: "utf8" });
     assert.equal(result.status, 1);
     assert.equal(JSON.parse(readFileSync(evidence, "utf8").trim().split("\n").at(-1)).status, "UNKNOWN");
     assert.equal(readFileSync(callsPath, "utf8").trim().split("\n").length, before + 1);
