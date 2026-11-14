@@ -4,7 +4,7 @@ module.exports=(items,requested)=>{
  const names={deployments:'Deployment',statefulsets:'StatefulSet',daemonsets:'DaemonSet',replicasets:'ReplicaSet',replicationcontrollers:'ReplicationController',jobs:'Job',cronjobs:'CronJob',pods:'Pod'};
  const kinds=new Set(requested.split(',').map(name=>names[name]));
  const refs=spec=>{
-  const values=[[],[],[],[],[]];
+  const values=[[],[],[],[],[],[]];
   const visit=node=>{if(!node||typeof node!=='object')return;
    for(const [key,value] of Object.entries(node)){
     if(key==='secretName'&&typeof value==='string')values[0].push(value);
@@ -12,6 +12,7 @@ module.exports=(items,requested)=>{
     if(key==='secretRef'&&value?.name)values[2].push(value.name);
     if(key==='secret'&&value?.name)values[3].push(value.name);
     if(key==='imagePullSecrets'&&Array.isArray(value))values[4].push(...value.map(item=>item.name));
+    if(key==='nodePublishSecretRef'&&value?.name)values[5].push(value.name);
     visit(value);
    }
   };visit(spec);return values.map(names=>names.join(' '));

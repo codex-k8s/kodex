@@ -99,3 +99,24 @@ test('UNKNOWN до patch требует отдельный BEFORE inspect, read-
  f.stored.get(f.key('ConfigMap',f.plan.policy.metadata.name)).binaryData={injected:'YQ=='};
  assert.throws(f.step,/FOREIGN/);
 });
+
+test('immutable policy create ACK UID не заменяется новым UID между ACK и первым GET',()=>{
+ const f=fixture();let acknowledgementUID;
+ const kube=(args,input)=>{const raw=f.kube(args,input);if(args[0]==='create'&&!args.includes('--dry-run=server')){
+  const ack=JSON.parse(raw);acknowledgementUID=ack.metadata.uid;
+  f.stored.get(f.key('ConfigMap',f.plan.policy.metadata.name)).metadata.uid=uid(990);
+ }return raw;};
+ const step=()=>applyTelegramRuntimeInputs({plan:f.plan,journal:f.journal,kube,gate:()=>{}});
+ assert.throws(step,/POLICY_REPLACED_OR_FOREIGN/);assert.equal(f.state.effects.length,1);
+ assert.equal(f.journal.events.find(e=>e.type==='TELEGRAM_INPUT_CREATE_ACK').uid,acknowledgementUID);
+ assert.throws(step,/POLICY_REPLACED_OR_FOREIGN/);assert.equal(f.state.effects.length,1);
+});
+
+test('invalid successful immutable policy ACK не превращается в lostACK с adoption последующим GET',()=>{
+ for(const mode of ['missing-uid','expanded-body']){
+  const f=fixture();const kube=(args,input)=>{const raw=f.kube(args,input);if(args[0]!=='create'||args.includes('--dry-run=server'))return raw;
+   const ack=JSON.parse(raw);if(mode==='missing-uid')delete ack.metadata.uid;else ack.binaryData={injected:'YQ=='};return JSON.stringify(ack);};
+  const step=()=>applyTelegramRuntimeInputs({plan:f.plan,journal:f.journal,kube,gate:()=>{}});
+  assert.throws(step,/POLICY_ACK_INVALID/);assert.equal(f.state.effects.length,1);assert.throws(step,/POLICY_ACK_INVALID/);assert.equal(f.state.effects.length,1);
+ }
+});

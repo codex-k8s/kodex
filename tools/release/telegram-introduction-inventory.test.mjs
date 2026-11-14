@@ -45,7 +45,7 @@ test('assigned Deployment0 и собственный RS0 требуют exact UI
 test('metadata wire сохраняет пустые TSV columns; неизвестные/дублированные/повреждённые строки закрыты',()=>{
  const pod={kind:'Pod',metadata:{name:'unrelated',uid:uid(2),namespace:'kodex-system'},spec:{}};
  const raw=producerMetadata([pod],telegramIntroductionResources);
- assert.equal(raw.split('\n')[0].split('\t').length,20);assert.equal(parseTelegramIntroductionInventory(raw).items.length,1);
+ assert.equal(raw.split('\n')[0].split('\t').length,21);assert.equal(parseTelegramIntroductionInventory(raw).items.length,1);
  assert.throws(()=>parseTelegramIntroductionInventory(raw.trim()),/INVENTORY_INVALID/);
  for(const invalid of [raw+raw,raw.replace('kodex-system','foreign'),raw.replace('Pod','ForeignKind'),raw+'\r',raw.replace('[]','{bad')])
   assert.throws(()=>parseTelegramIntroductionInventory(invalid),/INVENTORY_INVALID/);
@@ -65,7 +65,8 @@ test('чужие pending templates с прямыми Secret refs отклоня�
   {volumes:[{name:'x',projected:{sources:[{secret:{name:telegramIdentitySecretNames[0]}}]}}]},
   {initContainers:[{name:'init',envFrom:[{secretRef:{name:telegramIdentitySecretNames[0]}}]}]},
   {ephemeralContainers:[{name:'debug',envFrom:[{secretRef:{name:telegramIdentitySecretNames[0]}}]}]},
-  {imagePullSecrets:[{name:telegramIdentitySecretNames[0]}]}]){
+  {imagePullSecrets:[{name:telegramIdentitySecretNames[0]}]},
+  {volumes:[{name:'inline',csi:{driver:'synthetic.example.invalid',nodePublishSecretRef:{name:telegramIdentitySecretNames[0]}}}]}]){
   const pod={kind:'Pod',metadata:{name:'foreign',namespace:'kodex-system',uid:uid(90)},spec:ref};
   assert.throws(()=>requireTelegramDormantInventory(parseTelegramIntroductionInventory(producerMetadata([pod],telegramIntroductionResources)),uid(1)),/ORPHAN_WORKLOAD_PRESENT/);
  }

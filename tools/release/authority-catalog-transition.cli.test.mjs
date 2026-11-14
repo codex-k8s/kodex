@@ -448,7 +448,7 @@ test('107 registry CAS fresh-check закрывает replaced UID, ранний
   [f=>f.resources.get('deployment/interaction-gateway').metadata.uid=uid(999),/UID_OR_ALLOCATION_CHANGED/],
   [f=>f.resources.get('deployment/interaction-gateway').spec.replicas=1,/FOREIGN_OR_DRIFTED_RESOURCE/],
   [f=>f.resources.get('service/interaction-gateway').spec.clusterIP='10.43.1.3',/ALLOCATION_INVALID/],
-  [f=>f.state.introduction.inventory.push({kind:'Pod',metadata:{name:'interaction-gateway-debug'},spec:{serviceAccountName:'interaction-gateway'}}),/ORPHAN_WORKLOAD_PRESENT/],
+  [f=>f.state.introduction.inventory.push({kind:'Pod',metadata:{name:'interaction-gateway-debug',uid:uid(900),namespace:'kodex-system'},spec:{serviceAccountName:'interaction-gateway'}}),/ORPHAN_WORKLOAD_PRESENT/],
  ]){
   const f=cliFixture(t,{authorityTransition:telegramPolicyTransition}),flags=await prepareTelegramIntroduction(f),admission=prepareAdmission(f),args=f.args();
   args[args.indexOf('--action')+1]='rotate';args.push(...admission.flags,...flags);await rotationMain(args,f.io);const before=fingerprint(f.registry.data);mutate(f);

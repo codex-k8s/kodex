@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.88
+version: 1.1.89
 updated: 2026-11-14
 ---
 
@@ -12,12 +12,18 @@ updated: 2026-11-14
 
 Допуск нового workload/issuer проверяет все встроенные producers namespace,
 включая pending Deployment/StatefulSet/DaemonSet/ReplicationController/Job/CronJob
-без созданного Pod. Проверяются SA, labels и Secret refs identity полного Pod template, включая
-вложенный CronJob jobTemplate. Имя или label selector не заменяет полный scan.
+без созданного Pod. Проверяются SA, labels и Secret refs identity полного Pod
+template, включая вложенный CronJob jobTemplate и typed inline CSI
+nodePublishSecretRef. Имя или label selector не заменяет полный scan.
 Исключаются только assigned собственный Deployment0 и его ReplicaSet0 с exact
 UID, положительным observedGeneration и без Pods. Namespace metadata projection
 не читает env/commands/Secret values и сохраняет пустые TSV columns; неизвестная
-или повреждённая строка закрывает admission. Матрица:
+или повреждённая строка закрывает admission. Успешный create ACK закрепляет API UID,
+полную безопасную projection и Service allocation в durable journal до первого
+GET; replacement между ACK и GET не может быть усыновлён по тому же nonce.
+Повреждённый успешный ACK не переименовывается в lost ACK и закрывает последующий
+status. При настоящем lost ACK новый create после intent по-прежнему запрещён.
+Матрица:
 [ввод Telegram receiver](../operations/telegram-notifications-2143.md#порядок-authority107).
 
 Подтверждение тишины сканирует все встроенные Kubernetes workload producers,

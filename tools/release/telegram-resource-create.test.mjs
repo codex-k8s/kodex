@@ -263,3 +263,30 @@ test('real CLI metadata scan отказывает pending foreign builtin contro
   }finally{await rm(f.directory,{recursive:true,force:true});}
  }
 });
+
+test('create ACK UID закрепляется до GET и запрещает adoption replacement с тем же nonce/spec',async()=>{
+ const f=fixture(),plan=f.plan(),journal=f.journal(plan);let acknowledgementUID,changed=false;
+ const create=request=>{const ack=f.create(request);if(!changed){changed=true;acknowledgementUID=ack.metadata.uid;
+  const replacement=structuredClone(ack);replacement.metadata.uid=uid(990);f.stored.set(request.kind+'/'+request.metadata.name,replacement);}return ack;};
+ await assert.rejects(f.step('apply',plan,journal,{create}),/UID_OR_ALLOCATION_CHANGED/);
+ assert.equal(f.state.effects,1);assert.equal(journal.events.find(e=>e.type==='CREATE_ACK').uid,acknowledgementUID);
+ assert.equal(journal.events.some(e=>e.type==='OBSERVED'&&e.uid===uid(990)),false);
+ for(const phase of ['status','apply'])await assert.rejects(f.step(phase,plan,journal),/UID_OR_ALLOCATION_CHANGED/);
+ assert.equal(f.state.effects,1);
+});
+
+test('invalid successful create ACK закрывает последующий status, allocation также закрепляется до GET',async()=>{
+ for(const response of ['missing','expanded']){
+  const f=fixture(),plan=f.plan(),journal=f.journal(plan);
+  const create=request=>{const ack=f.create(request);if(response==='missing')return undefined;ack.metadata.labels={...ack.metadata.labels,injected:'foreign'};return ack;};
+  await assert.rejects(f.step('apply',plan,journal,{create}),/CREATE_ACK_INVALID/);assert.equal(f.state.effects,1);
+  await assert.rejects(f.step('status',plan,journal),/CREATE_ACK_INVALID/);assert.equal(f.state.effects,1);
+ }
+ const f=fixture(),plan=f.plan(),journal=f.journal(plan);
+ const create=request=>{const ack=f.create(request);if(request.kind==='Service'){
+  const replacement=structuredClone(ack);replacement.spec.clusterIP='10.43.1.99';replacement.spec.clusterIPs=['10.43.1.99'];f.stored.set(request.kind+'/'+request.metadata.name,replacement);
+ }return ack;};
+ await assert.rejects(f.step('apply',plan,journal,{create}),/UID_OR_ALLOCATION_CHANGED/);
+ const ack=journal.events.find(e=>e.type==='CREATE_ACK'&&e.resource==='v1|Service|interaction-gateway');assert.equal(ack.assigned.clusterIP,'10.43.1.2');
+ assert.equal(journal.events.some(e=>e.type==='OBSERVED'&&e.resource===ack.resource),false);
+});

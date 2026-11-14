@@ -13,7 +13,7 @@ const paths=['.kind','.metadata.name','.metadata.uid','.metadata.namespace','.me
  '.spec.template.spec.serviceAccountName','.spec.jobTemplate.spec.template.spec.serviceAccountName',
  '.spec.template.metadata.labels.app\\.kubernetes\\.io/name','.spec.jobTemplate.spec.template.metadata.labels.app\\.kubernetes\\.io/name',
  '.spec.replicas','.status.replicas','.status.observedGeneration',
- '.spec..secretName','.spec..secretKeyRef.name','.spec..secretRef.name','.spec..secret.name','.spec..imagePullSecrets[*].name'];
+ '.spec..secretName','.spec..secretKeyRef.name','.spec..secretRef.name','.spec..secret.name','.spec..imagePullSecrets[*].name','.spec..nodePublishSecretRef.name'];
 export const telegramIntroductionMetadataQuery='jsonpath={range .items[*]}'+paths.map(path=>`{${path}}`).join('{"\\t"}')+'{"\\n"}{end}';
 const fail=ok=>{if(!ok)throw Error('TELEGRAM_INTRODUCTION_INVENTORY_INVALID');};
 const number=value=>{if(value==='')return undefined;fail(/^(0|[1-9][0-9]*)$/.test(value)&&Number.isSafeInteger(Number(value)));return Number(value);};
@@ -47,7 +47,7 @@ export function telegramProducerSecretReferences(spec){
   if(!node||typeof node!=='object')return;
   for(const [key,value] of Object.entries(node)){
    if(key==='secretName'&&typeof value==='string')names.push(value);
-   if(['secretKeyRef','secretRef','secret'].includes(key)&&typeof value?.name==='string')names.push(value.name);
+   if(['secretKeyRef','secretRef','secret','nodePublishSecretRef'].includes(key)&&typeof value?.name==='string')names.push(value.name);
    if(key==='imagePullSecrets'&&Array.isArray(value))for(const item of value)if(typeof item?.name==='string')names.push(item.name);
    visit(value);
   }

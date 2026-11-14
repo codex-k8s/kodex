@@ -203,10 +203,25 @@ export async function telegramResourceCreateStep({phase,plan,journal,observe,inv
  validatePlan(plan);fail(['apply','status'].includes(phase),'TELEGRAM_CREATE_PHASE_INVALID');
  fail(Array.isArray(journal?.events)&&journal.events[0]?.type==='HEADER'&&Object.entries(telegramResourceCreateHeader(plan)).every(([k,v])=>journal.events[0][k]===v),
   'TELEGRAM_CREATE_JOURNAL_INVALID');
+ // Повреждённый успешный ACK не становится потерянным ACK: такое создание
+ // закрывается до любого дальнейшего readback/adoption этого batch.
+ fail(!journal.events.some(e=>e.type==='CREATE_ACK_INVALID'),'TELEGRAM_CREATE_ACK_INVALID');
+ const receiptOf=(part,current)=>{
+  const projection=telegramResourceCreateProjection(current);
+  fail(uuid(current.metadata?.uid)&&/^\d+$/.test(current.metadata.resourceVersion??'')&&same(projection.value,part.expected),
+   'TELEGRAM_CREATE_FOREIGN_OR_DRIFTED_RESOURCE');
+  return {resource:key(part.request),state:'CREATED_DORMANT',uid:current.metadata.uid,
+   resourceSHA256:fingerprint(projection.value),...(projection.assigned?{assigned:projection.assigned}:{})};
+ };
+ const sameIdentity=(pin,receipt)=>!pin||pin.uid===receipt.uid&&pin.resourceSHA256===receipt.resourceSHA256&&same(pin.assigned??{},receipt.assigned??{});
  const dormant=()=>{
   const part=plan.objects.find(p=>p.request.kind==='Deployment'),current=get(part.request);
   const intent=journal.events.some(e=>e.type==='INTENT'&&e.resource===key(part.request));
-  if(current!==null)fail(intent&&uuid(current.metadata?.uid)&&same(telegramResourceCreateProjection(current).value,part.expected),'TELEGRAM_CREATE_FOREIGN_OR_DRIFTED_RESOURCE');
+  if(current!==null){
+   fail(intent&&uuid(current.metadata?.uid)&&same(telegramResourceCreateProjection(current).value,part.expected),'TELEGRAM_CREATE_FOREIGN_OR_DRIFTED_RESOURCE');
+   const pin=journal.events.findLast(e=>['CREATE_ACK','OBSERVED'].includes(e.type)&&e.resource===key(part.request));
+   fail(sameIdentity(pin,receiptOf(part,current)),'TELEGRAM_CREATE_UID_OR_ALLOCATION_CHANGED');
+  }
   requireTelegramDormantInventory(inventory(),current?.metadata.uid);
  };
  requireTelegramResourceCreateTarget(plan.target,await observe());dormant();
@@ -224,15 +239,20 @@ export async function telegramResourceCreateStep({phase,plan,journal,observe,inv
    requireTelegramResourceCreateTarget(plan.target,await observe());dormant();
    fail(get(part.request)===null,'TELEGRAM_CREATE_FOREIGN_RESOURCE_PRESENT');
    journal.append({type:'INTENT',resource:identity,requestSHA256:fingerprint(part.request)});
-   try{create(part.request);}catch{journal.append({type:'UNKNOWN',resource:identity});throw Error('TELEGRAM_CREATE_OPERATION_FAILED_OR_UNKNOWN');}
+   let acknowledged;
+   try{acknowledged=await create(part.request);}catch{journal.append({type:'UNKNOWN',resource:identity});throw Error('TELEGRAM_CREATE_OPERATION_FAILED_OR_UNKNOWN');}
+   let acknowledgement;
+   try{acknowledgement=receiptOf(part,acknowledged);}catch{journal.append({type:'CREATE_ACK_INVALID',resource:identity});throw Error('TELEGRAM_CREATE_ACK_INVALID');}
+   // Успешный API ACK назначает UID/allocation до первого GET. Замена объекта
+   // после ACK не может быть усыновлена даже с теми же nonce/annotation/spec.
+   journal.append({type:'CREATE_ACK',...acknowledgement});
    current=get(part.request);fail(current!==null,'TELEGRAM_CREATE_READBACK_REQUIRED');
   }
   fail((intent||journal.events.some(e=>e.type==='INTENT'&&e.resource===identity))&&uuid(current.metadata?.uid)&&
    /^\d+$/.test(current.metadata.resourceVersion??'')&&same(telegramResourceCreateProjection(current).value,part.expected),
    'TELEGRAM_CREATE_FOREIGN_OR_DRIFTED_RESOURCE');
-  const projection=telegramResourceCreateProjection(current),receipt={resource:identity,state:'CREATED_DORMANT',uid:current.metadata.uid,
-   resourceSHA256:fingerprint(projection.value),...(projection.assigned?{assigned:projection.assigned}:{})};
-  fail(!prior||prior.uid===receipt.uid&&same(prior.assigned??{},receipt.assigned??{}),'TELEGRAM_CREATE_UID_OR_ALLOCATION_CHANGED');
+  const receipt=receiptOf(part,current),ack=journal.events.findLast(e=>e.type==='CREATE_ACK'&&e.resource===identity);
+  fail(sameIdentity(prior,receipt)&&sameIdentity(ack,receipt),'TELEGRAM_CREATE_UID_OR_ALLOCATION_CHANGED');
   requireTelegramResourceCreateTarget(plan.target,await observe());
   journal.append({type:'OBSERVED',...receipt});receipts.push(receipt);
  }

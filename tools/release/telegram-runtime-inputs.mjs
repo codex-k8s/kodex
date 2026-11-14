@@ -150,6 +150,7 @@ export function verifyTelegramRuntimeInputs(plan,resources,installation,endpoint
 // Journal общий с schema handoff. Каждый network/RBAC effect имеет собственный
 // fsync INTENT; lost ACK rejoin читает exact UID/body и не повторяет PATCH/create.
 export function applyTelegramRuntimeInputs({plan,journal,kube,gate,readOnly=false,requireStaged=true}){
+ fail(!journal.events.some(e=>e.type==='TELEGRAM_INPUT_CREATE_ACK_INVALID'),'TELEGRAM_RUNTIME_POLICY_ACK_INVALID');
  const get=(kind,name)=>{const raw=kube(['-n',namespace,'get',kind.toLowerCase(),name,'--ignore-not-found=true','-o','json']);return raw.trim()?JSON.parse(raw):null;};
  const policy=plan.policy,key=identity(policy),existing=get('ConfigMap',policy.metadata.name);
  const intent=journal.events.some(e=>e.type==='TELEGRAM_INPUT_CREATE_INTENT'&&e.resource===key);
@@ -161,19 +162,30 @@ export function applyTelegramRuntimeInputs({plan,journal,kube,gate,readOnly=fals
  if(existing){
   fail(intent&&uid(existing.metadata.uid)&&!existing.metadata.deletionTimestamp&&same(projection(existing),projection(policy)),
    'TELEGRAM_RUNTIME_POLICY_REPLACED_OR_FOREIGN');
-  const assigned=journal.events.find(e=>e.type==='TELEGRAM_INPUT_CREATED'&&e.resource===key);
-  fail(!assigned||assigned.uid===existing.metadata.uid,'TELEGRAM_RUNTIME_POLICY_REPLACED_OR_FOREIGN');
+  const assigned=journal.events.find(e=>e.type==='TELEGRAM_INPUT_CREATED'&&e.resource===key),ack=journal.events.findLast(e=>e.type==='TELEGRAM_INPUT_CREATE_ACK'&&e.resource===key);
+  fail((!assigned||assigned.uid===existing.metadata.uid)&&(!ack||ack.uid===existing.metadata.uid&&ack.resourceSHA256===fingerprint(projection(existing))),
+   'TELEGRAM_RUNTIME_POLICY_REPLACED_OR_FOREIGN');
  }else{
   fail(!readOnly,'TELEGRAM_RUNTIME_INPUTS_NOT_STAGED');
   fail(!intent,'TELEGRAM_RUNTIME_POLICY_MISSING_AFTER_INTENT');gate();
   const dry=JSON.parse(kube(['create','--dry-run=server','-f','-','-o','json'],JSON.stringify(policy)));
   fail(same(projection(dry),projection(policy)),'TELEGRAM_RUNTIME_POLICY_ADMISSION_CHANGED');
   journal.append({type:'TELEGRAM_INPUT_CREATE_INTENT',resource:key});
-  try{kube(['create','-f','-','-o','json'],JSON.stringify(policy));}catch(error){journal.append({type:'UNKNOWN',step:'TELEGRAM_INPUT_CREATE'});throw error;}
+  let acknowledged;
+  try{acknowledged=kube(['create','-f','-','-o','json'],JSON.stringify(policy));}catch(error){journal.append({type:'UNKNOWN',step:'TELEGRAM_INPUT_CREATE'});throw error;}
+  let acknowledgement;
+  try{
+   acknowledgement=JSON.parse(acknowledged);
+   fail(uid(acknowledgement?.metadata?.uid)&&/^\d+$/.test(acknowledgement.metadata.resourceVersion??'')&&
+    !acknowledgement.metadata.deletionTimestamp&&same(projection(acknowledgement),projection(policy)),'TELEGRAM_RUNTIME_POLICY_ACK_INVALID');
+  }catch{journal.append({type:'TELEGRAM_INPUT_CREATE_ACK_INVALID',resource:key});throw Error('TELEGRAM_RUNTIME_POLICY_ACK_INVALID');}
+  journal.append({type:'TELEGRAM_INPUT_CREATE_ACK',resource:key,uid:acknowledgement.metadata.uid,resourceSHA256:fingerprint(projection(acknowledgement))});
  }
  const created=get('ConfigMap',policy.metadata.name);
  fail(created&&uid(created.metadata.uid)&&!created.metadata.deletionTimestamp&&same(projection(created),projection(policy)),
   'TELEGRAM_RUNTIME_POLICY_UNCONFIRMED');
+ const ack=journal.events.findLast(e=>e.type==='TELEGRAM_INPUT_CREATE_ACK'&&e.resource===key);
+ fail(!ack||ack.uid===created.metadata.uid&&ack.resourceSHA256===fingerprint(projection(created)),'TELEGRAM_RUNTIME_POLICY_REPLACED_OR_FOREIGN');
  if(!readOnly||!requireStaged)journal.append({type:'TELEGRAM_INPUT_CREATED',resource:key,uid:created.metadata.uid});
  let pending=false;
  for(const part of plan.patches){

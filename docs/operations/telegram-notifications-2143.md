@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.9
+version: 1.0.10
 updated: 2026-11-14
 ---
 
@@ -198,7 +198,11 @@ worker grant trust mount; egress — отдельный policy mount/digest/list
 Никакие Secret values не читаются и не записываются этим протоколом.
 
 Каждый create/patch имеет UID/version/spec pins и свой fsync INTENT общего
-migration journal. Foreign/replaced/missing ConfigMap, расширенный source,
+migration journal. Успешный create ACK immutable ConfigMap и dormant
+objects отдельно сохраняет assigned UID/body/allocation до первого GET.
+Замена после ACK закрывает и текущий шаг, и последующий status; неизвестный
+либо расширенный ACK не становится разрешением lost-ACK adoption.
+Foreign/replaced/missing ConfigMap, расширенный source,
 конфликтующий input и изменённый target закрыты. Lost ACK после выполненного
 PATCH восстанавливается чтением exact body без второго эффекта; неизвестный
 исход с прежним BEFORE допускает повтор только после отдельного inspect с тем
@@ -218,14 +222,16 @@ Pod template полного cohort.
 Admission перед create и первым107 CAS сканирует все восемь встроенных
 Kubernetes producer kinds, включая controllers с ещё не созданным Pod. Только
 assigned Deployment0 и собственный ReplicaSet0 допускаются по exact UID и
-положительному observedGeneration. Чужие SA/template labels либо прямые refs десяти identity Secrets, даже у suspended
-CronJob либо нулевого ReplicationController, не дают право усыновить workload.
-Metadata-only TSV содержит только имена refs, не env/commands/Secret values; пустые trailing
-columns сохраняются. Негативные fixtures фильтруют именно запрошенные kinds,
+положительному observedGeneration. Чужие SA/template labels либо прямые refs
+десяти identity Secrets, даже у suspended CronJob либо нулевого ReplicationController, не дают право усыновить workload.
+Учитывается также typed inline CSI `nodePublishSecretRef.name`.
+Metadata-only TSV содержит только имена refs, не env/commands/Secret values;
+пустые trailing columns сохраняются. Негативные fixtures фильтруют именно запрошенные kinds,
 чтобы старый неполный scan не получил лишний ответ fake API.
 Проверены Context7 `/websites/kubernetes_io`,
 [Pod templates](https://kubernetes.io/docs/concepts/workloads/pods/) и
-[service account Pod template](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_set/kubectl_set_serviceaccount/).
+[service account Pod template](https://kubernetes.io/docs/reference/kubectl/generated/kubectl_set/kubectl_set_serviceaccount/) и
+[CSIVolumeSource](https://kubernetes.io/docs/reference/kubernetes-api/core/pod-v1/).
 
 ## Порядок authority107
 
