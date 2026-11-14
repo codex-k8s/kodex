@@ -176,6 +176,8 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 			t.Run(key, func(t *testing.T) {
 				if strings.HasPrefix(key, "grafana-") {
 					testGrafanaCapabilities(t, key)
+				} else if strings.HasPrefix(key, "loki") {
+					testLokiCapabilities(t, key)
 				} else {
 					testObservabilityCapabilities(t, key)
 				}

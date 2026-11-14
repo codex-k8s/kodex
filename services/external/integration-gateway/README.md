@@ -313,3 +313,14 @@ credentials, owner gates, lease/UNKNOWN и no-fallback сохраняются. �
 контракт и текущие ограничения: [наблюдаемость](../../../docs/operations/observability-integrations-2140.md).
 Это описание source-кандидата; live target qualification и schema045 proof
 не подтверждаются наличием registry entries.
+
+Optional operator qualification для узких Grafana annotations, отдельного
+rule DELETE и Loki API-managed ruler namespace описана в
+[OPS-DOC-OBSERVABILITY-INTEGRATIONS-2140](../../../docs/operations/observability-integrations-2140.md).
+Пара `INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_FILE` /
+`INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_SHA256` задаётся только
+installer render/check, exact immutable file монтируется read-only.
+Missing/expired evidence закрывает соответствующее подключение до effect;
+обычные READ и organization create/update не требуют этого optional режима.
+Публичные проверки: `python3 tools/release/verify-observability-parser-profile.py`,
+`python3 -B tools/install/test_observability_qualification.py`.

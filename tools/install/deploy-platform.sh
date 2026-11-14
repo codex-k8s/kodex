@@ -128,6 +128,7 @@ fi
 python3 "$repository_root/tools/install/provider_sandbox_profile.py" --check --render "$render_file" "${provider_profile_arguments[@]}"
 python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile" --render "$render_file"
 python3 "$repository_root/tools/install/native_integration_egress.py" --check --render "$render_file"
+python3 "$repository_root/tools/install/observability_qualification.py" --check --render "$render_file"
 profile_mode=$(yq -r 'select(.kind == "ConfigMap" and .metadata.name == "kodex-installation-profile") | .data."profile.json"' "$render_file" | jq -r '.public_tls.mode' 2>/dev/null || true)
 if [[ "$profile_mode" == external || "$public_tls_mode" == external ]]; then
   [[ "$profile_mode" == external && "$public_tls_mode" == external ]] || fail 'public TLS profile input conflict'

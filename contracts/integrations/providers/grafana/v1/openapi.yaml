@@ -557,6 +557,157 @@
             "description": "Provider permission отклонён"
           }
         }
+      },
+      "post": {
+        "operationId": "grafana.rule.create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Типизированный native receipt; consumer проверяет identity и readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "uid",
+                  "orgID",
+                  "folderUID",
+                  "ruleGroup",
+                  "title",
+                  "condition",
+                  "data",
+                  "noDataState",
+                  "execErrState",
+                  "for",
+                  "isPaused"
+                ],
+                "properties": {
+                  "uid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "orgID": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "folderUID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "ruleGroup": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "B"
+                    ]
+                  },
+                  "data": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "refId",
+                        "datasourceUid",
+                        "relativeTimeRange",
+                        "model"
+                      ],
+                      "properties": {
+                        "refId": {
+                          "type": "string",
+                          "enum": [
+                            "A",
+                            "B"
+                          ]
+                        },
+                        "datasourceUid": {
+                          "type": "string"
+                        },
+                        "relativeTimeRange": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 300
+                            },
+                            "to": {
+                              "type": "integer",
+                              "enum": [
+                                0
+                              ]
+                            }
+                          }
+                        },
+                        "model": {
+                          "type": "object",
+                          "description": "Две server-built модели A=Prometheus instant, B=classic_conditions; поля independently проверяет wire fixture."
+                        }
+                      }
+                    }
+                  },
+                  "noDataState": {
+                    "type": "string",
+                    "enum": [
+                      "NoData"
+                    ]
+                  },
+                  "execErrState": {
+                    "type": "string",
+                    "enum": [
+                      "Error"
+                    ]
+                  },
+                  "for": {
+                    "type": "string"
+                  },
+                  "isPaused": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/provisioning/alert-rules/{uid}": {
@@ -588,6 +739,197 @@
           },
           "403": {
             "description": "Provider permission отклонён"
+          }
+        }
+      },
+      "put": {
+        "operationId": "grafana.rule.update",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Типизированный native receipt; consumer проверяет identity и readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "uid",
+                  "orgID",
+                  "folderUID",
+                  "ruleGroup",
+                  "title",
+                  "condition",
+                  "data",
+                  "noDataState",
+                  "execErrState",
+                  "for",
+                  "isPaused"
+                ],
+                "properties": {
+                  "uid": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "orgID": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "folderUID": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "ruleGroup": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 190
+                  },
+                  "condition": {
+                    "type": "string",
+                    "enum": [
+                      "B"
+                    ]
+                  },
+                  "data": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "refId",
+                        "datasourceUid",
+                        "relativeTimeRange",
+                        "model"
+                      ],
+                      "properties": {
+                        "refId": {
+                          "type": "string",
+                          "enum": [
+                            "A",
+                            "B"
+                          ]
+                        },
+                        "datasourceUid": {
+                          "type": "string"
+                        },
+                        "relativeTimeRange": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "from",
+                            "to"
+                          ],
+                          "properties": {
+                            "from": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 300
+                            },
+                            "to": {
+                              "type": "integer",
+                              "enum": [
+                                0
+                              ]
+                            }
+                          }
+                        },
+                        "model": {
+                          "type": "object",
+                          "description": "Две server-built модели A=Prometheus instant, B=classic_conditions; поля independently проверяет wire fixture."
+                        }
+                      }
+                    }
+                  },
+                  "noDataState": {
+                    "type": "string",
+                    "enum": [
+                      "NoData"
+                    ]
+                  },
+                  "execErrState": {
+                    "type": "string",
+                    "enum": [
+                      "Error"
+                    ]
+                  },
+                  "for": {
+                    "type": "string"
+                  },
+                  "isPaused": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "grafana.rule.delete",
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Native deletion accepted; no replay or terminal event is inferred."
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "403": {
+            "description": "Permission/provenance denied"
+          },
+          "409": {
+            "description": "Native version conflict; no automatic retry"
           }
         }
       }

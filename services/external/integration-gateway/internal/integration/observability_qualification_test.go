@@ -182,3 +182,26 @@ func TestOperatorQualificationProcessInput(t *testing.T) {
 		}
 	}
 }
+
+// TestOperatorQualificationCrossLanguageGolden consumes the same immutable synthetic bytes as the installer and validates all three native profiles at an explicit fixture clock; it does not claim current/live operator evidence.
+// TestOperatorQualificationCrossLanguageGolden читает те же immutable synthetic bytes, что installer, и проверяет три native profiles при explicit fixture clock; current/live operator evidence не утверждается.
+func TestOperatorQualificationCrossLanguageGolden(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "contracts", "integrations", "observability-qualifications", "v1", "synthetic-golden.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(raw)
+	if hex.EncodeToString(digest[:]) != "3a0e8c4c753e05d5bb19319db428b5abbc1be64bef52e815d131204bdafd6e67" {
+		t.Fatal("operator cross-language bytes changed")
+	}
+	var document operatorQualificationDocument
+	if json.Unmarshal(raw, &document) != nil || document.Schema != "kodex-observability-qualifications/v1" || len(document.Profiles) != 3 {
+		t.Fatal("operator golden shape changed")
+	}
+	now := time.Date(2026, time.November, 14, 12, 0, 0, 0, time.UTC)
+	for _, profile := range document.Profiles {
+		if !validOperatorQualification(profile, now) {
+			t.Fatal("installer golden is incompatible with native profile", profile.Kind)
+		}
+	}
+}

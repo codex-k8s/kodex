@@ -27,7 +27,7 @@ func (adapter *Adapter) grafanaAnnotations(ctx context.Context, request Request,
 		}
 		query := url.Values{"from": {strconv.FormatInt(start.UnixMilli(), 10)}, "to": {strconv.FormatInt(end.UnixMilli(), 10)}, "limit": {"50"}}
 		dashboard := ""
-		if request.DefinitionKey == "grafana-dashboard" {
+		if request.DefinitionKey == "grafana-dashboard" || request.DefinitionKey == "grafana-dashboard-annotations" {
 			dashboard = configuration["dashboard_uid"]
 			query.Set("dashboardUID", dashboard)
 		}
@@ -66,6 +66,9 @@ func (adapter *Adapter) grafanaAnnotations(ctx context.Context, request Request,
 	}
 	if request.Operation == "grafana.annotation.create" {
 		dashboard, _ := request.Input["dashboard_uid"].(string)
+		if request.DefinitionKey == "grafana-dashboard-annotations" {
+			dashboard = configuration["dashboard_uid"]
+		}
 		if _, err := adapter.grafanaDashboard(ctx, request, capability, configuration, dashboard); err != nil {
 			return nil, "", err
 		}

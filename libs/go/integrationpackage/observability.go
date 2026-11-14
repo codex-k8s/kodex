@@ -12,6 +12,9 @@ const CredentialResourcePermissionObservabilityReadV1 = "OBSERVABILITY_TYPED_RES
 // observabilityCredentialContract closes the supported provider operation registry and keeps whole-endpoint authority explicit in the owner-derived resource scope.
 // observabilityCredentialContract замыкает реестр операций провайдеров и сохраняет явную whole-endpoint authority в owner-derived resource scope.
 func observabilityCredentialContract(key, operation string) (CredentialResourcePermissionContract, bool) {
+	if key == "loki" || key == "loki-ruler-namespace" || key == "loki-ruler-namespace-read" {
+		return lokiCredentialContract(key, operation)
+	}
 	if strings.HasPrefix(key, "grafana-") {
 		return grafanaCredentialContract(key, operation)
 	}
@@ -32,6 +35,9 @@ func observabilityCredentialContract(key, operation string) (CredentialResourceP
 // validateObservabilityConfiguration prevents mutable package constraints from silently narrowing the description while expanding endpoint authority or tenant-header syntax.
 // validateObservabilityConfiguration не позволяет изменяемым package constraints скрыто расширить endpoint authority либо синтаксис tenant header.
 func validateObservabilityConfiguration(definition Package, configuration map[string]string) error {
+	if definition.Metadata.Key == "loki" || definition.Metadata.Key == "loki-ruler-namespace" || definition.Metadata.Key == "loki-ruler-namespace-read" {
+		return validateLokiConfiguration(definition, configuration)
+	}
 	if strings.HasPrefix(definition.Metadata.Key, "grafana-") {
 		return validateGrafanaConfiguration(definition, configuration)
 	}

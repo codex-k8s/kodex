@@ -46,12 +46,10 @@ email recipient `user:<id>` / `team:<id>` / `issue_owners` и частотой.
 Fallback recipient закреплён в `NoOne`; webhooks, plugin actions, произвольный
 JSON, organization administration и неизвестные action/condition не допускаются.
 
-Это законченный конечный набор текущего Sentry contract, но не полный Sentry API
-и не закрытие #2140. Следующий обязательный объём наблюдаемости:
-Grafana dashboards/queries/annotations, Prometheus/Thanos bounded metrics,
-Loki logs и выбранные alerts/silences/configuration. Пока для них нет
-исполняемых capabilities; наличие библиотек или telemetry-поставки #776/#254
-не является поставкой агентских инструментов.
+Это конечный набор Sentry contract выбранного unit, а не полный Sentry API.
+Наблюдаемость реализована в тех же Definition/Connection/Grant и gateway;
+границы и квалификация описаны в [операционном контракте](observability-integrations-2140.md).
+Локальный candidate и отсутствие live credentials сами по себе не закрывают #2140.
 
 Новый движок, универсальный HTTP tool и shell с токеном не создаются.
 Существующие `Definition/Connection/Capability/Grant`, личный root initiator,

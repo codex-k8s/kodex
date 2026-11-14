@@ -184,6 +184,10 @@ func observabilityStep(raw any) int {
 	switch value := raw.(type) {
 	case int:
 		return value
+	case int64:
+		if value >= 1 && value <= 3600 {
+			return int(value)
+		}
 	case float64:
 		if value >= 1 && value <= 3600 && value == math.Trunc(value) {
 			return int(value)
@@ -221,6 +225,9 @@ func observabilityLabels(labels map[string]string) bool {
 // executeObservability consumes one closed endpoint-scoped metrics operation with exact personal profile and bounded projections; no provider URL or raw config enters the dispatcher.
 // executeObservability исполняет одну закрытую endpoint-scoped metrics operation с точным personal profile и ограниченной проекцией; provider URL и raw config в dispatcher не поступают.
 func (adapter *Adapter) executeObservability(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (Result, error) {
+	if request.DefinitionKey == "loki" || request.DefinitionKey == "loki-ruler-namespace" || request.DefinitionKey == "loki-ruler-namespace-read" {
+		return adapter.executeLoki(ctx, request, capability, configuration)
+	}
 	if strings.HasPrefix(request.DefinitionKey, "grafana-") {
 		return adapter.executeGrafana(ctx, request, capability, configuration)
 	}

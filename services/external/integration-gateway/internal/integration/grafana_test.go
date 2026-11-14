@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -27,7 +28,12 @@ func grafanaFixtureInput(t *testing.T, operation string) map[string]any {
 	case "grafana.connection.read", "grafana.dashboard.read", "grafana.datasource.read", "grafana.rule.list":
 	case "grafana.datasource.query":
 		return observabilityFixtureInput(t, "query.range")
-	case "grafana.rule.read":
+	case "grafana.rule.create", "grafana.rule.update":
+		input = map[string]any{"title": "Fixture rule", "folder_uid": "fixture-folder", "rule_group": "fixture-group", "query": "up", "comparator": "gt", "threshold": "0.5", "for_seconds": 60, "paused": false}
+		if operation == "grafana.rule.update" {
+			input["rule_uid"] = "fixture-rule"
+		}
+	case "grafana.rule.read", "grafana.rule.delete":
 		input["rule_uid"] = "fixture-rule"
 	case "grafana.annotation.list":
 		input["start"] = "2026-11-14T00:00:00Z"
@@ -66,7 +72,7 @@ func grafanaFixtureInput(t *testing.T, operation string) map[string]any {
 // grafanaFixturePermissions returns an independent current-token metadata profile including authentic scopeless general-silence actions, without returning any live credential.
 // grafanaFixturePermissions возвращает independent current-token metadata profile с настоящими scopeless general-silence actions без выдачи live credential.
 func grafanaFixturePermissions() string {
-	return `{"annotations:create":["dashboards:*"],"annotations:write":["dashboards:*"],"annotations:delete":["dashboards:*"],"alert.instances:create":[""],"alert.instances:write":[""],"alert.instances:read":[""]}`
+	return `{"alert.rules:create":["folders:*"],"alert.rules:write":["folders:*"],"alert.rules:delete":["folders:*"],"annotations:create":["dashboards:*"],"annotations:write":["dashboards:*"],"annotations:delete":["dashboards:*"],"alert.instances:create":[""],"alert.instances:write":[""],"alert.instances:read":[""]}`
 }
 
 // grafanaFixture keeps only synthetic remote state and one forced failure; it validates actual methods, paths, bodies and replay behavior independently of the adapter implementation.
@@ -77,6 +83,8 @@ type grafanaFixture struct {
 	mutated        bool
 	scenario       string
 	operation      string
+	rulePayload    []byte
+	beforeEffect   func()
 }
 
 // roundTrip serves exact-version documented provider shapes and safe state readback, refusing every unexpected target/header/path instead of acting as an arbitrary HTTP fixture.
@@ -102,6 +110,9 @@ func (f *grafanaFixture) roundTrip(r *http.Request) (*http.Response, error) {
 		if r.GetBody != nil || r.Header.Get("Idempotency-Key") != "" {
 			f.t.Fatal("Grafana mutation permits unproven replay")
 		}
+		if f.scenario == "native-conflict" {
+			return &http.Response{Request: r, StatusCode: 409, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"message":"version conflict"}`))}, nil
+		}
 		if f.scenario == "transport-loss" {
 			return nil, errors.New("synthetic transport loss")
 		}
@@ -120,6 +131,37 @@ func (f *grafanaFixture) roundTrip(r *http.Request) (*http.Response, error) {
 			}
 		}
 		switch r.Method + " " + r.URL.Path {
+		case "POST /api/v1/provisioning/alert-rules", "PUT /api/v1/provisioning/alert-rules/fixture-rule":
+			if len(payload) != 11 || string(payload["orgID"]) != "1" || string(payload["folderUID"]) != `"fixture-folder"` || string(payload["condition"]) != `"B"` || string(payload["for"]) != `"60s"` || r.Header.Get("X-Disable-Provenance") != "" {
+				f.t.Fatal("rule write lost closed model or manager")
+			}
+			var data []struct {
+				RefID         string         `json:"refId"`
+				DatasourceUID string         `json:"datasourceUid"`
+				Model         map[string]any `json:"model"`
+			}
+			if json.Unmarshal(payload["data"], &data) != nil || len(data) != 2 || data[0].RefID != "A" || data[0].DatasourceUID != "fixture-prometheus" || data[0].Model["expr"] != "up" || data[0].Model["instant"] != true || data[1].RefID != "B" || data[1].DatasourceUID != "__expr__" || data[1].Model["type"] != "classic_conditions" {
+				f.t.Fatal("rule query escaped fixed datasource/condition")
+			}
+			var uid string
+			_ = json.Unmarshal(payload["uid"], &uid)
+			if r.Method == http.MethodPost && (!strings.HasPrefix(uid, "kodex-") || len(uid) != 38) || r.Method == http.MethodPut && uid != "fixture-rule" {
+				f.t.Fatal("rule UID not effect-bound")
+			}
+			payload["provenance"] = json.RawMessage(`"api"`)
+			f.rulePayload, _ = json.Marshal(payload)
+			body = string(f.rulePayload)
+			f.mutated = true
+			if r.Method == http.MethodPost {
+				status = 201
+			}
+		case "DELETE /api/v1/provisioning/alert-rules/fixture-rule":
+			if len(payload) != 0 {
+				f.t.Fatal("rule delete gained input body")
+			}
+			status = 204
+			body = ""
+			f.mutated = true
 		case "POST /api/annotations", "PATCH /api/annotations/17":
 			expected := `{"text":"Synthetic annotation","time":1794614400000,"timeEnd":1794614460000}`
 			if r.Method == http.MethodPost {
@@ -231,6 +273,15 @@ func (f *grafanaFixture) roundTrip(r *http.Request) (*http.Response, error) {
 			}
 		case "/api/v1/provisioning/alert-rules", "/api/v1/provisioning/alert-rules/fixture-rule":
 			body = `{"uid":"fixture-rule","orgID":1,"title":"Fixture rule","folderUID":"fixture-folder","ruleGroup":"fixture-group","provenance":"file","isPaused":false,"data":[{"model":{"secret":"must-drop"}}]}`
+			if strings.HasPrefix(f.operation, "grafana.rule.") && f.operation != "grafana.rule.list" && f.operation != "grafana.rule.read" && f.scenario != "file-managed" {
+				body = strings.Replace(body, `"provenance":"file"`, `"provenance":"api"`, 1)
+			}
+			if f.mutated && len(f.rulePayload) > 0 {
+				body = string(f.rulePayload)
+			}
+			if f.mutated && f.scenario == "readback-denied" {
+				status = 403
+			}
 			if r.URL.Path == "/api/v1/provisioning/alert-rules" {
 				body = "[" + body + "]"
 			}
@@ -250,8 +301,19 @@ func (f *grafanaFixture) roundTrip(r *http.Request) (*http.Response, error) {
 				status = 403
 			}
 		default:
-			f.t.Fatal("Grafana read escaped finite registry")
+			if strings.HasPrefix(r.URL.Path, "/api/v1/provisioning/alert-rules/kodex-") && f.mutated && len(f.rulePayload) > 0 {
+				body = string(f.rulePayload)
+				if f.scenario == "readback-denied" {
+					status = 403
+				}
+			} else {
+				f.t.Fatal("Grafana read escaped finite registry")
+			}
 		}
+	}
+	if f.beforeEffect != nil && r.URL.Path == "/api/access-control/user/permissions" {
+		f.beforeEffect()
+		f.beforeEffect = nil
 	}
 	validateDocumentedMetricsWire(f.t, "grafana", r, status, body)
 	return &http.Response{Request: r, StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body))}, nil
@@ -267,7 +329,14 @@ func testGrafanaCapabilities(t *testing.T, key string) {
 			adapter := testAdapter(t)
 			fixture := &grafanaFixture{t: t, operation: capability.Operation}
 			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(fixture.roundTrip)}
-			request := observabilityInvocation(t, adapter, key, capability.Operation, grafanaFixtureInput(t, capability.Operation))
+			input := grafanaFixtureInput(t, capability.Operation)
+			if key == "grafana-dashboard-annotations" && capability.Operation == "grafana.annotation.create" {
+				delete(input, "dashboard_uid")
+			}
+			request := observabilityInvocation(t, adapter, key, capability.Operation, input)
+			if kind := grafanaQualificationKind(key); kind != "" {
+				installQualificationFixture(t, adapter, qualificationFixture(kind, request.Credential.ContentSHA256))
+			}
 			request.PersonalCredentialAdmission = true
 			request.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionProfile(adapter.definitions[key], capability)
 			result, err := adapter.Execute(t.Context(), request)
@@ -285,7 +354,7 @@ func testGrafanaCapabilities(t *testing.T, key string) {
 // TestGrafanaClosedConsumer covers all dashboard/organization operations and ensures file-managed rule reads do not imply writable provenance.
 // TestGrafanaClosedConsumer покрывает все dashboard/organization operations и не позволяет file-managed rule reads означать writable provenance.
 func TestGrafanaClosedConsumer(t *testing.T) {
-	for _, key := range []string{"grafana-dashboard", "grafana-organization"} {
+	for _, key := range []string{"grafana-dashboard", "grafana-organization", "grafana-dashboard-annotations", "grafana-organization-rule-delete"} {
 		t.Run(key, func(t *testing.T) { testGrafanaCapabilities(t, key) })
 	}
 }
@@ -293,7 +362,7 @@ func TestGrafanaClosedConsumer(t *testing.T) {
 // TestGrafanaMutationNeverReplays preserves UNKNOWN after lost/malformed effects or denied readback and never reissues a mutation through Recover.
 // TestGrafanaMutationNeverReplays сохраняет UNKNOWN после lost/malformed effects либо denied readback и не повторяет mutation через Recover.
 func TestGrafanaMutationNeverReplays(t *testing.T) {
-	for _, operation := range []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete", "grafana.silence.create", "grafana.silence.update", "grafana.silence.delete"} {
+	for _, operation := range []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete", "grafana.silence.create", "grafana.silence.update", "grafana.silence.delete", "grafana.rule.create", "grafana.rule.update"} {
 		for _, scenario := range []string{"transport-loss", "server-loss", "malformed", "readback-denied"} {
 			if strings.HasSuffix(operation, ".delete") && scenario == "readback-denied" {
 				continue
@@ -353,7 +422,7 @@ func TestGrafanaPersonalMetadataPreflight(t *testing.T) {
 			if err != nil || fixture.effects != 0 {
 				t.Fatal("Grafana personal metadata probe failed or mutated provider", err)
 			}
-			if (scenario == "ambiguous-permissions") != (len(result.ObservedPermissionProfiles) == 0) || scenario == "readonly" && len(result.DeniedCapabilityKeys) != 6 || scenario != "readonly" && len(result.DeniedCapabilityKeys) != 0 {
+			if (scenario == "ambiguous-permissions") != (len(result.ObservedPermissionProfiles) == 0) || scenario == "readonly" && len(result.DeniedCapabilityKeys) != 8 || scenario != "readonly" && len(result.DeniedCapabilityKeys) != 0 {
 				t.Fatal("unknown/current provider metadata became false WRITE evidence")
 			}
 			for _, key := range result.ConfirmedCapabilityKeys {
@@ -362,5 +431,60 @@ func TestGrafanaPersonalMetadataPreflight(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestGrafanaNativeRuleProvenanceAndVersion preserves file/Git read-only behavior and the native optimistic-lock failure; a conflicting write is never silently retried or represented as an accepted rule update.
+// TestGrafanaNativeRuleProvenanceAndVersion сохраняет file/Git read-only behavior и native optimistic-lock failure; конфликтная запись не повторяется и не выдаётся за accepted rule update.
+func TestGrafanaNativeRuleProvenanceAndVersion(t *testing.T) {
+	for _, scenario := range []string{"file-managed", "native-conflict"} {
+		t.Run(scenario, func(t *testing.T) {
+			adapter := testAdapter(t)
+			fixture := &grafanaFixture{t: t, scenario: scenario, operation: "grafana.rule.update"}
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(fixture.roundTrip)}
+			request := observabilityInvocation(t, adapter, "grafana-organization", "grafana.rule.update", grafanaFixtureInput(t, "grafana.rule.update"))
+			_, err := adapter.Execute(t.Context(), request)
+			wanted := 0
+			if scenario == "native-conflict" {
+				wanted = 1
+			}
+			if err == nil || IsUnknownOutcome(err) || fixture.effects != wanted {
+				t.Fatal("native file/version boundary failed", err, fixture.effects)
+			}
+		})
+	}
+}
+
+// TestGrafanaQualifiedMutationWithdrawal requires exact operator evidence at send time and refuses missing/withdrawn or foreign-key profiles without performing a mutation or substituting a broader organization connection.
+// TestGrafanaQualifiedMutationWithdrawal требует exact operator evidence при отправке и отвергает missing/withdrawn/foreign-key profile без mutation либо подстановки более широкой organization connection.
+func TestGrafanaQualifiedMutationWithdrawal(t *testing.T) {
+	for _, key := range []string{"grafana-dashboard-annotations", "grafana-organization-rule-delete"} {
+		for _, scenario := range []string{"missing", "withdrawn", "foreign-key"} {
+			t.Run(key+"/"+scenario, func(t *testing.T) {
+				adapter := testAdapter(t)
+				operation := "grafana.annotation.update"
+				if key == "grafana-organization-rule-delete" {
+					operation = "grafana.rule.delete"
+				}
+				fixture := &grafanaFixture{t: t, operation: operation}
+				adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(fixture.roundTrip)}
+				request := observabilityInvocation(t, adapter, key, operation, grafanaFixtureInput(t, operation))
+				if scenario != "missing" {
+					proof := qualificationFixture(grafanaQualificationKind(key), request.Credential.ContentSHA256)
+					if scenario == "foreign-key" {
+						proof.CredentialSHA256 = strings.Repeat("9", 64)
+					}
+					path := installQualificationFixture(t, adapter, proof)
+					if scenario == "withdrawn" {
+						fixture.beforeEffect = func() { _ = os.Remove(path) }
+					}
+				}
+				_, err := adapter.Execute(t.Context(), request)
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != providerCapabilityUnsupportedCode || safe.HealthSummary != operatorQualificationRequiredSummary || fixture.effects != 0 {
+					t.Fatal("unqualified Grafana mutation escaped before-send boundary", err, fixture.effects)
+				}
+			})
+		}
 	}
 }

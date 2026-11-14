@@ -51,7 +51,7 @@
         "type": "STRING",
         "format": "IDENTIFIER",
         "required": true,
-        "maximumLength": 32,
+        "maximumLength": 48,
         "label": "Область доступа",
         "help": "Grant охватывает всю выбранную организацию, включая annotation/silence effects.",
         "allowedValues": [
@@ -924,6 +924,241 @@
             "maximumLength": 36,
             "label": "Подавление",
             "help": "Точный UUID внутри выбранной организации."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.rule.create",
+        "name": "Создать правило",
+        "description": "Типизированное правило Prometheus с фиксированным threshold model. API-managed объект; настройка заменяется целиком, file/Git-owned запись запрещена.",
+        "operation": "grafana.rule.create",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "title",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Название правила",
+            "help": "Название правила; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 190
+          },
+          {
+            "key": "folder_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "label": "UID папки",
+            "help": "UID папки; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 40
+          },
+          {
+            "key": "rule_group",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Группа правил",
+            "help": "Группа правил; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 190
+          },
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "PromQL выражение",
+            "help": "PromQL выражение; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 4096
+          },
+          {
+            "key": "comparator",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Сравнение",
+            "help": "Сравнение; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 200,
+            "allowedValues": [
+              "gt",
+              "lt"
+            ]
+          },
+          {
+            "key": "threshold",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Порог",
+            "help": "Порог; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 32
+          },
+          {
+            "key": "for_seconds",
+            "type": "INTEGER",
+            "required": true,
+            "label": "Период ожидания",
+            "help": "Период ожидания; значение проверяется закрытым типизированным consumer.",
+            "minimum": 1,
+            "maximum": 3600
+          },
+          {
+            "key": "paused",
+            "type": "BOOLEAN",
+            "required": true,
+            "label": "Приостановлено",
+            "help": "Приостановлено; значение проверяется закрытым типизированным consumer."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "EFFECT_KEY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "grafana.rule.update",
+        "name": "Заменить правило",
+        "description": "Типизированное правило Prometheus с фиксированным threshold model. API-managed объект; настройка заменяется целиком, file/Git-owned запись запрещена.",
+        "operation": "grafana.rule.update",
+        "risk": "WRITE",
+        "approvalPolicy": "HUMAN_EACH_EFFECT",
+        "allowedApprovalPolicies": [
+          "HUMAN_EACH_EFFECT"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "organization_id",
+            "datasource_uid",
+            "scope_mode"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "rule_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "label": "UID правила",
+            "help": "UID правила; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 40
+          },
+          {
+            "key": "title",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Название правила",
+            "help": "Название правила; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 190
+          },
+          {
+            "key": "folder_uid",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "label": "UID папки",
+            "help": "UID папки; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 40
+          },
+          {
+            "key": "rule_group",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Группа правил",
+            "help": "Группа правил; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 190
+          },
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "PromQL выражение",
+            "help": "PromQL выражение; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 4096
+          },
+          {
+            "key": "comparator",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Сравнение",
+            "help": "Сравнение; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 200,
+            "allowedValues": [
+              "gt",
+              "lt"
+            ]
+          },
+          {
+            "key": "threshold",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "label": "Порог",
+            "help": "Порог; значение проверяется закрытым типизированным consumer.",
+            "maximumLength": 32
+          },
+          {
+            "key": "for_seconds",
+            "type": "INTEGER",
+            "required": true,
+            "label": "Период ожидания",
+            "help": "Период ожидания; значение проверяется закрытым типизированным consumer.",
+            "minimum": 1,
+            "maximum": 3600
+          },
+          {
+            "key": "paused",
+            "type": "BOOLEAN",
+            "required": true,
+            "label": "Приостановлено",
+            "help": "Приостановлено; значение проверяется закрытым типизированным consumer."
           }
         ],
         "outputFields": [

@@ -27,6 +27,17 @@ func observabilityInvocation(t *testing.T, adapter *Adapter, key, operation stri
 		t.Fatal("missing observability capability")
 	}
 	configuration := map[string]string{"base_url": "https://" + key + ".example.invalid", "scope_mode": "WHOLE_ENDPOINT"}
+	if strings.HasPrefix(key, "loki") {
+		configuration["base_url"] = "https://loki.example.invalid"
+		configuration["tenant_id"] = "fixture-tenant"
+		if key != "loki" {
+			configuration["rule_namespace"] = "fixture-rules"
+			configuration["scope_mode"] = "API_MANAGED_NAMESPACE"
+			if key == "loki-ruler-namespace-read" {
+				configuration["scope_mode"] = "RULER_NAMESPACE_READ"
+			}
+		}
+	}
 	if key == "thanos" {
 		configuration["tenant_id"] = "fixture-tenant"
 	}
@@ -36,6 +47,16 @@ func observabilityInvocation(t *testing.T, adapter *Adapter, key, operation stri
 			configuration["scope_mode"] = "DASHBOARD_READ"
 			configuration["dashboard_uid"] = "fixture-dashboard"
 		}
+		if key == "grafana-dashboard-annotations" {
+			delete(configuration, "datasource_uid")
+			configuration["scope_mode"] = "DASHBOARD_ANNOTATIONS"
+			configuration["dashboard_uid"] = "fixture-dashboard"
+		}
+		if key == "grafana-organization-rule-delete" {
+			delete(configuration, "datasource_uid")
+			configuration["scope_mode"] = "API_ONLY_ORGANIZATION_RULE_DELETE"
+		}
+
 	}
 
 	request.DefinitionPackage, _ = json.Marshal(definition)
@@ -142,7 +163,7 @@ func observabilityValidateWire(t *testing.T, r *http.Request, status int, body s
 
 // validateDocumentedMetricsWire checks only repository-owned finite provider documents with references disabled.
 // validateDocumentedMetricsWire проверяет только repo-owned finite provider documents с отключёнными внешними references.
-func validateDocumentedMetricsWire(t *testing.T, key string, r *http.Request, status int, body string) {
+func validateDocumentedMetricsWire(t *testing.T, key string, r *http.Request, status int, body string, contentTypes ...string) {
 	t.Helper()
 	_, document := documentedProviderContract(t, key)
 	document.Servers = openapi3.Servers{{URL: r.URL.Scheme + "://" + r.URL.Host}}
@@ -158,7 +179,11 @@ func validateDocumentedMetricsWire(t *testing.T, key string, r *http.Request, st
 	if err := openapi3filter.ValidateRequest(t.Context(), input); err != nil {
 		t.Fatal(err)
 	}
-	output := &openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: status, Header: http.Header{"Content-Type": {"application/json"}}}
+	contentType := "application/json"
+	if len(contentTypes) > 0 {
+		contentType = contentTypes[0]
+	}
+	output := &openapi3filter.ResponseValidationInput{RequestValidationInput: input, Status: status, Header: http.Header{"Content-Type": {contentType}}}
 	output.SetBodyBytes([]byte(body))
 	if err := openapi3filter.ValidateResponse(t.Context(), output); err != nil {
 		t.Fatal(err)

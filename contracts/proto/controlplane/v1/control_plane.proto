@@ -5003,6 +5003,8 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_OBSERVABILITY_TYPED_RESOURCE_READ_V1 = 18;
   // Явная organization scope, свежие permissions и typed exact-object checks перед EACH effect.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_GRAFANA_TYPED_WRITE_V1 = 19;
+  // Отдельный API-only namespace с operator qualification, текущим key и EACH effect.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_LOKI_RULER_MUTATION_V1 = 20;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;

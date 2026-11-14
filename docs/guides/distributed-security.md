@@ -1014,6 +1014,17 @@ HTTP401/403 сохраняют собственную auth-классифика�
 
 ## Наблюдение внешних возможностей с credential
 
+Pre-read mutable provider object не является atomic ownership/provenance proof
+для следующего эффекта. Узкий scope требует native immutable binding/version
+либо отдельного доверенного operator-qualified backend/writer profile.
+Последний не создаётся ordinary Connection checkbox/JSON: он связан с exact
+target/version/key/resource, immutable deployment evidence, expiry и рабочим
+readiness path. Перед изменением writer/backend оператор отзывает connections,
+выполняет drain/join и только затем меняет профиль. Gateway проверяет withdrawal
+и expiry непосредственно перед effect; lost response остаётся UNKNOWN.
+Operator attestation и independently observed evidence различаются в результате.
+
+
 При расширении Git-области discovery хранит только координаты ресурса. ID,
 canonical name и успешный публичный GET не заменяют текущую принадлежность
 аутентифицированной области ключа. Каждый эффект повторяет её проверку;

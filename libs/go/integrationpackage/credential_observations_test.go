@@ -20,8 +20,18 @@ func TestCredentialObservationRequests(t *testing.T) {
 		}
 		profiles, keys := CredentialObservationRequests(definition)
 		if key == "grafana-organization" {
-			if !slices.Equal(profiles, []string{CredentialObservationGrafanaPermissionsV1}) || !slices.Equal(keys, []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete", "grafana.silence.create", "grafana.silence.update", "grafana.silence.delete"}) {
+			if !slices.Equal(profiles, []string{CredentialObservationGrafanaPermissionsV1}) || !slices.Equal(keys, []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete", "grafana.silence.create", "grafana.silence.update", "grafana.silence.delete", "grafana.rule.create", "grafana.rule.update"}) {
 				t.Fatal("Grafana metadata request changed")
+			}
+			continue
+		}
+		if key == "grafana-dashboard-annotations" || key == "grafana-organization-rule-delete" {
+			wanted := []string{"grafana.annotation.create", "grafana.annotation.update", "grafana.annotation.delete"}
+			if key == "grafana-organization-rule-delete" {
+				wanted = []string{"grafana.rule.delete"}
+			}
+			if !slices.Equal(profiles, []string{CredentialObservationGrafanaPermissionsV1}) || !slices.Equal(keys, wanted) {
+				t.Fatal("qualified Grafana metadata request changed")
 			}
 			continue
 		}

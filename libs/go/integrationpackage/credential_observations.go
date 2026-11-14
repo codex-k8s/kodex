@@ -31,6 +31,9 @@ func CredentialObservationRequests(definition Package) (profiles, deniedWriteKey
 func CredentialObservationMayDeny(profile, key string) bool {
 	if profile == CredentialObservationGrafanaPermissionsV1 {
 		contract, exists := grafanaCredentialContract("grafana-organization", key)
+		if !exists {
+			contract, exists = grafanaCredentialContract("grafana-organization-rule-delete", key)
+		}
 		return exists && contract.RequiredObservationProfile == profile
 	}
 	if profile == CredentialObservationSentryScopesV1 {

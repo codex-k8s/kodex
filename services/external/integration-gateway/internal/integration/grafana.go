@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
@@ -17,6 +18,16 @@ import (
 func (adapter *Adapter) grafanaJSON(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string, method, path string, query url.Values, body any, probe bool) (*providerResponse, error) {
 	if adapter.nativeHTTPClient == nil {
 		return nil, &SafeError{Code: providerUnavailableCode}
+	}
+	if kind := grafanaQualificationKind(request.DefinitionKey); kind != "" {
+		profile, err := adapter.operatorQualificationFor(request, configuration, kind)
+		if err != nil {
+			return nil, err
+		}
+		expiry, _ := time.Parse(time.RFC3339, profile.ValidUntil)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithDeadline(ctx, expiry)
+		defer cancel()
 	}
 	return adapter.callProviderResponse(ctx, providerCall{BaseURL: configuration["base_url"], Method: method, Path: path, Query: query, Body: body, AuthScheme: "BEARER", Credential: request.Credential, Capability: capability, Client: adapter.nativeHTTPClient, permissionEffect: request.permissionEffect, invalidCredentialProbe: probe})
 }
@@ -111,6 +122,12 @@ func (adapter *Adapter) grafanaPermissions(ctx context.Context, request Request,
 // grafanaWriteAction сопоставляет только registered mutations с exact provider actions; request field либо raw permission string не выбирает новую команду.
 func grafanaWriteAction(operation string) string {
 	switch operation {
+	case "grafana.rule.create":
+		return "alert.rules:create"
+	case "grafana.rule.update":
+		return "alert.rules:write"
+	case "grafana.rule.delete":
+		return "alert.rules:delete"
 	case "grafana.annotation.create":
 		return "annotations:create"
 	case "grafana.annotation.update":
@@ -183,7 +200,7 @@ func (adapter *Adapter) executeGrafana(ctx context.Context, request Request, cap
 	}
 	var permissions map[string][]string
 	if capability.Risk != "READ" {
-		if request.DefinitionKey != "grafana-organization" || configuration["scope_mode"] != "WHOLE_ORGANIZATION" {
+		if request.DefinitionKey != "grafana-organization" && request.DefinitionKey != "grafana-dashboard-annotations" && request.DefinitionKey != "grafana-organization-rule-delete" {
 			return Result{}, &SafeError{Code: providerCapabilityUnsupportedCode}
 		}
 		permissions, err = adapter.grafanaPermissions(ctx, request, capability, configuration)
@@ -198,13 +215,15 @@ func (adapter *Adapter) executeGrafana(ctx context.Context, request Request, cap
 	reference := "grafana-organization:" + configuration["organization_id"]
 	switch request.Operation {
 	case "grafana.connection.read":
-		if request.DefinitionKey == "grafana-dashboard" {
+		if request.DefinitionKey == "grafana-dashboard" || request.DefinitionKey == "grafana-dashboard-annotations" {
 			if _, err := adapter.grafanaDashboard(ctx, request, capability, configuration, configuration["dashboard_uid"]); err != nil {
 				return Result{}, err
 			}
 		}
-		if _, err := adapter.grafanaDatasource(ctx, request, capability, configuration); err != nil {
-			return Result{}, err
+		if configuration["datasource_uid"] != "" {
+			if _, err := adapter.grafanaDatasource(ctx, request, capability, configuration); err != nil {
+				return Result{}, err
+			}
 		}
 	case "grafana.dashboard.read":
 		projection, err = adapter.grafanaDashboard(ctx, request, capability, configuration, configuration["dashboard_uid"])
@@ -217,6 +236,8 @@ func (adapter *Adapter) executeGrafana(ctx context.Context, request Request, cap
 			projection, reference, err = adapter.grafanaAnnotations(ctx, request, capability, configuration, permissions)
 		} else if strings.HasPrefix(request.Operation, "grafana.silence.") {
 			projection, reference, err = adapter.grafanaSilences(ctx, request, capability, configuration, permissions)
+		} else if capability.Risk != "READ" {
+			projection, reference, err = adapter.grafanaRuleMutation(ctx, request, capability, configuration, permissions)
 		} else {
 			projection, reference, err = adapter.grafanaRulesRead(ctx, request, capability, configuration)
 		}
@@ -229,4 +250,16 @@ func (adapter *Adapter) executeGrafana(ctx context.Context, request Request, cap
 		return Result{}, &SafeError{Code: providerResponseInvalidCode}
 	}
 	return providerResult(request, reference, map[string]string{"text": string(raw)})
+}
+
+// grafanaQualificationKind binds optional risky storage modes to exact shipped definitions, never to caller supplied capability/profile names.
+// grafanaQualificationKind связывает дополнительные risky storage modes с exact shipped definitions, а не caller supplied capability/profile names.
+func grafanaQualificationKind(key string) string {
+	switch key {
+	case "grafana-dashboard-annotations":
+		return qualificationGrafanaAnnotations
+	case "grafana-organization-rule-delete":
+		return qualificationGrafanaRuleDelete
+	}
+	return ""
 }

@@ -26,6 +26,9 @@ type providerCall struct {
 	// invalidCredentialProbe is private to the typed observability authentication probe; it never contains caller-supplied material.
 	// invalidCredentialProbe доступен только typed observability authentication probe и не содержит caller-supplied данных.
 	invalidCredentialProbe bool
+	// lokiRulerYAML carries only the server-built fixed single-alert model; it is unavailable to request/configuration fields or generic OpenAPI transport.
+	// lokiRulerYAML содержит только server-built fixed single-alert model; request/configuration fields и generic OpenAPI transport его не принимают.
+	lokiRulerYAML []byte
 	// tenantHeader/tenantID carry only server-selected routing context, never evidence of tenant isolation.
 	// tenantHeader/tenantID содержат только выбранный сервером routing context, не доказательство tenant isolation.
 	tenantHeader, tenantID                                                                string
@@ -118,6 +121,16 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 		body = call.MultipartBody
 	}
+	if call.lokiRulerYAML != nil {
+		namespace := strings.TrimPrefix(call.Path, "/loki/api/v1/rules/")
+		if call.Method != http.MethodPost || call.Capability.Operation != "loki.ruler.group.replace" || call.Capability.Risk != "WRITE" || call.Capability.ApprovalPolicy != "HUMAN_EACH_EFFECT" || call.Capability.OpenAPI != nil || !strings.HasPrefix(call.Path, "/loki/api/v1/rules/") || !integrationpackage.ValidSentrySlug(namespace) || call.Body != nil || call.MultipartBody != nil || len(call.lokiRulerYAML) > 8192 {
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
+		}
+		if _, ok := boundedProviderYAML(call.lokiRulerYAML, nil); !ok {
+			return nil, &SafeError{Code: providerRequestRejectedCode}
+		}
+		body = call.lokiRulerYAML
+	}
 	attempts := call.Capability.Execution.MaxAttempts
 	if attempts < 1 {
 		attempts = 1
@@ -153,6 +166,9 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
+		}
+		if call.lokiRulerYAML != nil {
+			request.Header.Set("Content-Type", "application/yaml")
 		}
 		if call.MultipartBody != nil {
 			request.Header.Set("Content-Type", call.MultipartType)
@@ -223,7 +239,13 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, readErr
 		}
 		if response.StatusCode >= http.StatusOK && response.StatusCode < http.StatusMultipleChoices {
-			if providerCredentialEcho(responseBody, credential, request.Header.Get("Authorization")) {
+			yamlSafe := true
+			if strings.HasPrefix(call.Capability.Operation, "loki.") && strings.HasPrefix(call.Path, "/loki/api/v1/rules/") {
+				_, yamlSafe = boundedProviderYAML(responseBody, func(value string) bool {
+					return providerCredentialEcho([]byte(value), credential, request.Header.Get("Authorization"))
+				})
+			}
+			if !yamlSafe || providerCredentialEcho(responseBody, credential, request.Header.Get("Authorization")) {
 				if mutation {
 					return nil, &UnknownOutcomeError{stage: "response_body"}
 				}

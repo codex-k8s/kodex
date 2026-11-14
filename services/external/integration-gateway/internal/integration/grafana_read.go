@@ -157,7 +157,7 @@ func (adapter *Adapter) grafanaAnnotationRead(ctx context.Context, request Reque
 	}
 	var item grafanaAnnotation
 	dashboard := ""
-	if request.DefinitionKey == "grafana-dashboard" {
+	if request.DefinitionKey == "grafana-dashboard" || request.DefinitionKey == "grafana-dashboard-annotations" {
 		dashboard = configuration["dashboard_uid"]
 	}
 	if grafanaDecode(response.Body, &item) != nil || !grafanaAnnotationValid(item, dashboard, id) {

@@ -12,12 +12,15 @@ import (
 // TestGrafanaPersonalCredentialPreflight preserves root-user ownership, current key/configuration pins and known-deny metadata for each explicit organization connection; a valid shared key never repairs a missing personal key.
 // TestGrafanaPersonalCredentialPreflight сохраняет root-user ownership, текущие key/configuration pins и known-deny metadata каждого явного organization подключения; пригодный общий ключ не заменяет отсутствующий личный.
 func TestGrafanaPersonalCredentialPreflight(t *testing.T) {
-	for _, key := range []string{"grafana-organization"} {
+	for _, key := range []string{"grafana-organization", "grafana-dashboard-annotations", "grafana-organization-rule-delete"} {
 		t.Run(key, func(t *testing.T) {
 			for _, scenario := range []string{"ready", "no-scope-observation", "known-readonly", "foreign-user", "foreign-project", "revoked", "expired", "rotated", "changed-host", "missing-personal", "missing-profile"} {
 				t.Run(scenario, func(t *testing.T) {
 					requirement, initiator, binding, now := personalCredentialFixture()
 					requirement.DefinitionKey, requirement.CapabilityKey, requirement.ResourcePermissionProfile = key, "grafana.annotation.update", integrationpackage.CredentialResourcePermissionGrafanaWriteV1
+					if key == "grafana-organization-rule-delete" {
+						requirement.CapabilityKey = "grafana.rule.delete"
+					}
 					binding.VerifiedCapabilities = []string{"grafana.connection.read"}
 					binding.ObservedPermissionProfiles = []string{integrationpackage.CredentialObservationGrafanaPermissionsV1}
 					shared := *binding.Credential
