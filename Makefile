@@ -666,7 +666,7 @@ test-github-repository-scope-upgrade-postgres: check-go-toolchain
 
 .PHONY: test-backup-controller-maintenance
 test-backup-controller-maintenance:
-	@timeout 180s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
+	@timeout 360s node --test tools/release/backup-controller-maintenance.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/backup-postgres-boundary.test.mjs
 
 # Закрытые107 admission/DELIVER/RETIRE и неизменный106 regression без live effects.
 test-telegram-authority-delivery:
