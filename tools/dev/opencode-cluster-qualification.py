@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 LITELLM = 'docker.io/litellm/litellm@sha256:3d88bd757134a00e8c00237b85a021ab1f6d54abb9c1df750f411dbe7256a500'
 REDIS = 'docker.io/library/redis@sha256:82403a0812a51faf6779f8d0dbe25ea85279ec7d49d24a3c78a65e9d8a87fa5f'
 LABEL = 'qualification.kodex.dev/scope'
-TESTS = '^(TestNativeLongHistoryCheckpointAndFreshContext|TestNativeLiteLLMRedisBypass|TestNativeBundledProtocolAdapters|TestNativeImageHookBindsActualToolCalls|TestNativeCachePolicyControlsEveryRequest|TestNativePruningRetainsOriginalToolOutputs|TestNativeAbortClosesInterruptedToolBeforeExport|TestNativeRejectedKeyHasNoFallback|TestNativeFailureRecoveryBounds|TestNativeMaterializedTemplatesOnWire|TestNativeCheckpointStorageFailures|TestNativeWorkspaceCatalogReachesModel)$'
+TESTS = '^(TestNativeLongHistoryCheckpointAndFreshContext|TestNativeLiteLLMRedisBypass|TestNativeBundledProtocolAdapters|TestNativeImageHookBindsActualToolCalls|TestNativeCachePolicyControlsEveryRequest|TestNativePruningRetainsOriginalToolOutputs|TestNativeAbortClosesInterruptedToolBeforeExport|TestNativeRejectedKeyHasNoFallback|TestNativeFailureRecoveryBounds|TestNativeMaterializedTemplatesOnWire|TestNativeCheckpointStorageFailures|TestNativeWorkspaceCatalogReachesModel|TestNativeCurrentInstructionsSurviveCompaction)$'
 
 
 def require(condition):
@@ -30,6 +30,47 @@ def encoded(value):
 
 def sha(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def target_context(value):
+    """Context выбирает оператор; полномочия доказываются отдельным cluster UID."""
+    require(isinstance(value, str) and 0 < len(value) <= 1024 and value == value.strip()
+            and not value.startswith('-') and all(ord(char) >= 32 and ord(char) != 127 for char in value))
+    return value
+
+
+def runner_reference(value):
+    """Только полный OCI reference с digest, без URL, credentials и mutable tag."""
+    label = r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?'
+    host = r'(?:localhost|' + label + r'(?:\.' + label + r')+)'
+    component = r'[a-z0-9]+(?:(?:[._]|__|[-]+)[a-z0-9]+)*'
+    pattern = host + r'(?::([0-9]{1,5}))?/' + component + r'(?:/' + component + r')*@sha256:[a-f0-9]{64}'
+    require(isinstance(value, str) and len(value) <= 2048)
+    match = re.fullmatch(pattern, value)
+    require(match is not None and (match.group(1) is None or 0 < int(match.group(1)) < 65536))
+    return value
+
+
+def node_identities(items):
+    """Закрепляет все текущие Ready amd64 узлы, независимо от схемы их имён."""
+    require(isinstance(items, list) and items)
+    result = {}
+    for node in items:
+        metadata, status = node['metadata'], node['status']
+        require(metadata.get('name') and metadata.get('uid') and not metadata.get('deletionTimestamp')
+                and status['nodeInfo']['architecture'] == 'amd64'
+                and any(c.get('type') == 'Ready' and c.get('status') == 'True' for c in status.get('conditions', []))
+                and metadata['name'] not in result and metadata['uid'] not in result.values())
+        result[metadata['name']] = metadata['uid']
+    return result
+
+
+def build_environment(environ):
+    """Синтетическая Go-сборка не наследует credentials и настройки чужих профилей."""
+    allowed = ('PATH', 'HOME', 'TMPDIR', 'XDG_CACHE_HOME', 'GOPATH', 'GOMODCACHE', 'GOCACHE')
+    result = {key: environ[key] for key in allowed if key in environ}
+    result.update(GOENV='off', GOWORK='off', GOTOOLCHAIN='go1.26.10', CGO_ENABLED='0', GOOS='linux', GOARCH='amd64')
+    return result
 
 
 def regular(path, maximum):
@@ -112,7 +153,7 @@ class Client:
 def verify_target(client, plan):
     require(client.get('namespace', 'kube-system')['metadata']['uid'] == plan['clusterUID'])
     actual = json.loads(client.call(['get', 'nodes', '-o', 'json']))
-    require({x['metadata']['name']: x['metadata']['uid'] for x in actual['items']} == plan['nodes'])
+    require(node_identities(actual['items']) == plan['nodes'])
 
 
 def verify_owned(client, plan, record):
@@ -166,22 +207,21 @@ def main():
     parser.add_argument('--runner-image')
     parser.add_argument('--plan-sha256')
     args = parser.parse_args()
-    require(args.context == 'k3d-kodex' and args.kubectl.is_absolute() and args.kubeconfig.is_absolute())
+    target_context(args.context)
+    require(args.kubectl.is_absolute() and args.kubeconfig.is_absolute())
     client, state = Client(args), args.state
     require(state.is_absolute() and not state.is_symlink())
     if args.mode == 'plan':
         require(not state.exists() and args.runner_image is not None)
-        require(re.fullmatch(r'registry\.local\.kodex/kodex/agent-runner@sha256:[a-f0-9]{64}', args.runner_image))
+        runner_reference(args.runner_image)
         source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         require(not subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT))
         require(client.get('namespace', 'kube-system')['metadata']['uid'] == args.cluster_uid)
         nodes = json.loads(client.call(['get', 'nodes', '-o', 'json']))['items']
-        require(nodes and all(x['status']['nodeInfo']['architecture'] == 'amd64' and x['metadata']['name'].startswith('k3d-kodex-') for x in nodes))
+        identities = node_identities(nodes)
         state.mkdir(mode=0o700)
         binary_path = state / 'native.test'
-        environment = os.environ.copy()
-        environment.pop('GOFLAGS', None)
-        environment.update(GOENV='off', GOWORK='off', GOTOOLCHAIN='go1.26.10', CGO_ENABLED='0')
+        environment = build_environment(os.environ)
         fixture_path = state / 'materializations.json'
         environment['KODEX_TEST_TEMPLATE_WIRE_FIXTURE'] = str(fixture_path)
         produced = subprocess.run(['go', 'test', '-count=1', '-timeout=90s', '-run', '^TestNativeWireMaterializations$', './internal/domain/service/prompt'],
@@ -201,7 +241,7 @@ def main():
         scope = uuid.uuid4().hex
         namespace = 'kodex-native-' + scope[:12]
         plan = {'schema': 'kodex.native-cluster-qualification/v1', 'context': args.context, 'clusterUID': args.cluster_uid,
-                'nodes': {x['metadata']['name']: x['metadata']['uid'] for x in nodes}, 'sourceSHA': source,
+                'nodes': identities, 'sourceSHA': source,
                 'scope': scope, 'namespace': namespace, 'binaryPath': str(binary_path), 'binarySHA256': sha(binary),
                 'templateFixturesSHA256': sha(template_fixtures),
                 'resources': resources(namespace, scope, args.runner_image, sha(binary), template_fixtures)}

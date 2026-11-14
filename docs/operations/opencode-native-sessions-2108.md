@@ -892,12 +892,20 @@ root немедленно превращался в `Unavailable`. Извест�
 
 `tools/dev/opencode-cluster-qualification.py` переносит существующую native
 оснастку в отдельный новый namespace, не подменяя OpenCode, LiteLLM или Redis.
-Она принимает exact `--kubectl`, `--kubeconfig`, `--context k3d-kodex`,
+Она принимает exact `--kubectl`, `--kubeconfig`, `--context`,
 `--cluster-uid` и новый приватный `--state`. Режим `plan` требует чистый commit,
 собирает тестовый executable из этого SHA и закрепляет его digest вместе с
-`--runner-image registry.local.kodex/kodex/agent-runner@sha256:...`. Режимы
+`--runner-image registry.example.invalid/team/agent-runner@sha256:<64 hex>`. Режимы
 `apply`, `readback`, `cleanup` требуют тот же `--plan-sha256`. Они не читают
 проектный dotenv, платформенные Secrets или пользовательский workspace.
+
+Context и registry выбираются явно; их имена не заменяют проверку cluster UID.
+План закрепляет точный набор Node UID, Ready и amd64, а следующие команды
+перечитывают эту границу. Mutable tags, URL/credentials в image reference и
+управляющие символы отклоняются. Go-сборка получает только необходимые пути
+инструментов/cache и закреплённые параметры, без credentials и Go overrides
+окружения оператора. Набор включает текущие owner instructions после compaction
+и export/import; переименование context не является способом сменить target.
 
 План содержит только новый Namespace, запрет ingress/egress, immutable ConfigMap
 с синтетическим relay и один Pod с тремя закреплёнными образами. Нет Service,
