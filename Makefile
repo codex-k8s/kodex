@@ -632,3 +632,8 @@ test-component-publication:
 .PHONY: test-component-api-maintenance
 test-component-api-maintenance:
 	@timeout 120s node --test tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-api-maintenance-cli.test.mjs tools/release/portable-runner-target.test.mjs
+
+.PHONY: test-evicted-pod-metadata-recovery
+test-evicted-pod-metadata-recovery:
+	@timeout 120s python3 -B tools/release/test_evicted_pod_metadata_recovery.py
+	@cd tools/dev && timeout 60s python3 -B -m unittest test_deploy_local_cutover.EvictedProofTest test_deploy_local_cutover.CutoverTest
