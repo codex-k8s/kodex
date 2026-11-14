@@ -60,4 +60,3 @@ export function replaceComponentLock(part,lock) {
   part.componentLockSHA256=createHash('sha256').update(raw).digest('hex');
   if(part.nodeProof)part.nodeProof.componentLockSHA256=part.componentLockSHA256;
 }
-
