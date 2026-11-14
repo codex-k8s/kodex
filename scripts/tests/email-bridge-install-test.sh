@@ -63,8 +63,13 @@ writeFileSync(join(dir, 'init/bootstrap.sh'), source['bootstrap.sh']);
 const installer = readFileSync(join(root, 'tools/install/deploy-platform.sh'), 'utf8');
 const wait = installer.indexOf('  wait_statefulset email-bridge-postgresql');
 const migrate = installer.indexOf('  apply_job email-bridge-migration');
-const workloads = installer.indexOf('apply_render workloads-before-role-image-builder');
+// Проверяем первый вызов, а не определение функции: ранний запуск consumers
+// до миграции должен по-прежнему закрыто останавливать проверку.
+const workloads = installer.indexOf('\n  apply_workloads_after_authority\n');
 require(wait > 0 && migrate > wait && workloads > migrate, 'Email startup order is not enforced');
+const workloadFunction = installer.indexOf('apply_workloads_after_authority() {');
+const workloadBody = installer.slice(workloadFunction, installer.indexOf('\n}', workloadFunction));
+require(workloadFunction >= 0 && workloadBody.includes('apply_render workloads '), 'Email workload renderer is absent');
 require(installer.slice(installer.indexOf('for job_name in')).includes('email-bridge-migration'), 'Email migration readback is absent');
 JS
 
