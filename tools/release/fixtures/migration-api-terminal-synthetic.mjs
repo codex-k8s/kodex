@@ -1,5 +1,6 @@
 import {fingerprint} from '../scoped-release.mjs';
-import {canonicalAuthorityReadbackContract} from '../authority-readback-targets.mjs';
+import {authorityReadbackContract} from '../authority-readback-targets.mjs';
+import {readFileSync} from 'node:fs';
 import {catalogAuthorityBaselineSchema,catalogAuthorityBaselineSQLSHA256} from '../catalog-authority-baseline.mjs';
 import {componentMigrationAPITerminalSchema} from '../component-migration-api-terminal.mjs';
 
@@ -10,7 +11,7 @@ export function syntheticMigrationBaseline(target){
  const body={schema:catalogAuthorityBaselineSchema,policyRevision:106,operationID:uid,registryUID:uid,publisherUID:uid,
   policySHA256:'a'.repeat(64),registryDataSHA256:'b'.repeat(64),registrySHA256:'c'.repeat(64),publisherSpecSHA256:'d'.repeat(64),
   registryRevision:2,snapshotRevision:4,snapshotSHA256:'e'.repeat(64),rotationPlanSHA256:'f'.repeat(64),rotationEvidenceSHA256:'1'.repeat(64),
-  targetSHA256:fingerprint(target),...canonicalAuthorityReadbackContract(),actualReadbackCount:16,sqlSHA256:catalogAuthorityBaselineSQLSHA256,
+  targetSHA256:fingerprint(target),...authorityReadbackContract(readFileSync(new URL('./authority106-key-delivery-targets.yaml',import.meta.url),'utf8')),actualReadbackCount:16,sqlSHA256:catalogAuthorityBaselineSQLSHA256,
   observedAt:now,scope:Object.fromEntries(['context','clusterUID','namespaceUID','installationUID','installationSHA256'].map(key=>[key,target[key]])),
   postgres:{pod:'kodex-postgresql-0',uid,ownerUID:uid},postgresBackend:{systemIdentifier:'18446744073709551615',databaseOID:'20000',database:'internal_rpc_authority',port:'5432',serverAddress:null,serverPort:null}};
  return {...body,baselineSHA256:fingerprint(body)};

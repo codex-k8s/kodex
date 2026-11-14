@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRequire} from 'node:module';
-import {baselineFixture} from './catalog-authority-baseline-synthetic.mjs';
+import {baselineFixture,historicalCatalog106Source,catalog106SourceSHA,catalog106PredecessorSHA} from './catalog-authority-baseline-synthetic.mjs';
 import {componentCohortFixture,replaceComponentLock} from './component-cohort-synthetic.mjs';
 import {uid} from './authority-catalog-synthetic.mjs';
 import {fingerprint} from '../scoped-release.mjs';
@@ -27,19 +27,14 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
  assert.ok(['sentry-observability','sentry-observability-backup'].includes(profile));
  const backup=profile.endsWith('-backup');
  const executorSHA=execFileSync('git',['-C',root,'rev-parse','HEAD'],{encoding:'utf8'}).trim();
- const sourceSHA=predecessorSource?execFileSync('git',['-C',root,'rev-parse','HEAD^'],{encoding:'utf8'}).trim():executorSHA;
+ const selected=historicalCatalog106Source(t,predecessorSource?catalog106PredecessorSHA:catalog106SourceSHA),sourceSHA=selected.revision,sourceRoot=selected.path;
  const directory=mkdtempSync(join(tmpdir(),'kodex-routine-api-'));
- let sourceRoot=root;
- t.after(()=>{if(sourceRoot!==root)execFileSync('git',['-C',root,'worktree','remove','--force',sourceRoot],{stdio:'pipe',timeout:30000});rmSync(directory,{recursive:true,force:true});});
- if(predecessorSource){
-  const selected=join(directory,'selected-source');
-  execFileSync('git',['-C',root,'worktree','add','--detach',selected,sourceSHA],{stdio:'pipe',timeout:30000});sourceRoot=selected;
- }
+ t.after(()=>rmSync(directory,{recursive:true,force:true}));
  const bin=join(directory,'bin');mkdirSync(bin,{mode:0o700});
  const kubeconfig=join(directory,'explicit config');writeFileSync(kubeconfig,'synthetic',{mode:0o600});
  const save=(name,value)=>writeFileSync(join(directory,name),JSON.stringify(value,null,2)+'\n',{mode:0o600});
  const journal=(name,events)=>writeFileSync(join(directory,name),events.map(row=>JSON.stringify(row)+'\n').join(''),{mode:0o600});
- const baseline=baselineFixture(),cohort=componentCohortFixture(profile),apps=Object.fromEntries(cohort.deployments.map(app=>[app.metadata.name,app]));
+ const baseline=baselineFixture(t,{revision:sourceSHA}),cohort=componentCohortFixture(profile),apps=Object.fromEntries(cohort.deployments.map(app=>[app.metadata.name,app]));
  for(const part of cohort.value.components){
   const lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64'));lock.source_sha=sourceSHA;replaceComponentLock(part,lock);part.nodeProof.sourceSHA=sourceSHA;
  }
@@ -55,7 +50,7 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
  baseline.resources.set('configmap/kodex-installation-profile',cohort.observed.installation);
  for(const app of Object.values(apps))baseline.resources.set('deployment/'+app.metadata.name,app);
  baseline.plan.policyTransition=readCatalogTarget(baseline.profile,baseline.profile.context,baseline.get).transition;
- baseline.plan.context=cohort.target.context;baseline.plan.revision=executorSHA;baseline.plan.kubeconfig=kubeconfig;
+ baseline.plan.context=cohort.target.context;baseline.plan.revision=sourceSHA;baseline.plan.kubeconfig=kubeconfig;
  baseline.events.at(-1).status='RUNNING';delete baseline.events.at(-1).rotationStatus;
  baseline.events[0].planSHA256=fingerprint(baseline.plan);
  const authority=baseline.read();
@@ -66,7 +61,7 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
  api.spec=structuredClone(closedPlan.afterSpec);api.metadata.annotations=structuredClone(closedPlan.afterAnnotations);
  for(const key of ['replicas','updatedReplicas','readyReplicas','availableReplicas'])api.status[key]=0;
  save('close.json',closedPlan);journal('close.jsonl',closed.events);
- const isolationPlan=planComponentAPITraffic({service:baseline.service,deployment:api,resources:{items:[]},target:baseline.profile,observed,sourceSHA:executorSHA,action:'isolate',closed,
+ const isolationPlan=planComponentAPITraffic({service:baseline.service,deployment:api,resources:{items:[]},target:baseline.profile,observed,sourceSHA:executorSHA,action:'isolate',closed,authorityExecutorSHA:sourceSHA,
   migrationRestore:{profile,closedPlanPath:join(directory,'close.json'),closedEvidencePath:join(directory,'close.jsonl'),authority}});
  const isolation={plan:isolationPlan,events:[{type:'HEADER',schema:'kodex.component-api-traffic-evidence/v1',planSHA256:fingerprint(isolationPlan),maintenanceID:isolationPlan.maintenanceID},
   {type:'INTENT',step:'apply'},{type:'OBSERVED',state:'ISOLATED',serviceUID:baseline.service.metadata.uid,maintenanceID:isolationPlan.maintenanceID}],
@@ -138,13 +133,13 @@ export function routineMigrationAPIFixture(t,{predecessorSource=false,profile='s
  const run=(phase,extra=[],changeArguments)=>{
   const argv=[fileURLToPath(new URL('../component-api-traffic.mjs',import.meta.url)),phase,
   '--plan',join(directory,'restore.json'),...common,...(phase==='plan'?['--action','restore','--target',join(directory,'target.json'),
-   '--migration-profile',profile,'--migration-source-sha',sourceSHA,...inputs]:['--evidence',join(directory,'restore.jsonl'),
+   '--migration-profile',profile,'--migration-source-sha',sourceSHA,'--authority-executor-sha',sourceSHA,...inputs]:['--evidence',join(directory,'restore.jsonl'),
    ...(phase==='apply'?['--approved-plan-sha',fingerprint(read('restore.json')),...inputs]:[])]),...extra];
   changeArguments?.(argv);
   return spawnSync(process.execPath,argv,{encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});
  };
  const runIsolation=phase=>spawnSync(process.execPath,[fileURLToPath(new URL('../component-api-traffic.mjs',import.meta.url)),phase,
-  '--plan',join(directory,'new-isolate.json'),...common,...(phase==='plan'?['--action','isolate','--target',join(directory,'target.json'),'--migration-profile',profile]:
+  '--plan',join(directory,'new-isolate.json'),...common,...(phase==='plan'?['--action','isolate','--target',join(directory,'target.json'),'--migration-profile',profile,'--authority-executor-sha',sourceSHA]:
    ['--evidence',join(directory,'new-isolate.jsonl'),...(phase==='apply'?['--approved-plan-sha',fingerprint(read('new-isolate.json'))]:[])]),
   ...(['plan','apply'].includes(phase)?['--authority-plan',join(directory,'authority.json'),'--authority-evidence',join(directory,'authority.jsonl')]:[])],
   {encoding:'utf8',env:{PATH:bin+':'+process.env.PATH,HOME:process.env.HOME,LANG:'C'},timeout:120000});
