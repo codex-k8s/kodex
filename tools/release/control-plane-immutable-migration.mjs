@@ -1,3 +1,4 @@
+import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validateStableReceipt } from './stable-image-publication.mjs';
 import { componentMigrationSchema, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
@@ -18,6 +19,8 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  'github-repository-scope': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-migration-precondition.sql',postconditionFile:'github-repository-scope-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
+  'github-repository-scope-backup': {anchorProfile:'portable',version:'20261114120000',file:'20261114120000_github_repository_scope.sql',annotation:'kodex.dev/cp-github-repository-scope-backup-migration-plan',previousVersion:20261113000100,emptyField:'githubRepositoryScopeAbsent',preconditionFile:'github-repository-scope-backup-migration-precondition.sql',postconditionFile:'github-repository-scope-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114120000_github_repository_scope.sql'])},
   'workspace-unbound-stop': {
     anchorProfile:'portable',version:'20261113000100',file:'20261113000100_workspace_unbound_stop.sql',
     annotation:'kodex.dev/cp-workspace-unbound-stop-migration-plan',previousVersion:20261112000100,
@@ -424,6 +427,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if (profile === 'github-repository-scope' || profile === 'github-repository-scope-backup') ensure(validGitHubRepositoryScopeMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-unbound-stop') ensure(validWorkspaceUnboundStopMigrationPrecondition(result),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'workspace-archive-abi')
       ensure(validWorkspaceArchiveABIMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
@@ -1138,6 +1142,8 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case 'github-repository-scope': return validGitHubRepositoryScopeMigrationPostcondition(proof);
+    case 'github-repository-scope-backup': return validGitHubRepositoryScopeBackupMigrationPostcondition(proof);
     case 'workspace-unbound-stop': return validWorkspaceUnboundStopMigrationPostcondition(proof);
     case 'workspace-archive-abi': return validWorkspaceArchiveABIMigrationPostcondition(proof);
     case 'opencode-native-sessions': return validOpenCodeNativeMigrationPostcondition(proof);
@@ -1430,3 +1436,18 @@ export function validWorkspaceUnboundStopMigrationPostcondition(proof) {
  return proof?.profile==='WORKSPACE_UNBOUND_STOP_V1' && proof.database==='control_plane' && proof.readOnly==='on' &&
   proof.gooseVersion===20261113000100 && ['workspaceGuardReady','receiptGuardReady','receiptTableReady','receiptTriggerReady','archiveGuardPreserved'].every(key=>proof[key]===true);
 }
+
+// Полный catalog044 включает owner/RLS/ACL/ABI, все таблицы/functions/triggers и неизменённый purge graph.
+export function validGitHubRepositoryScopeMigrationPostcondition(proof,backup=false) {
+  const expected=githubRepositoryScopeCatalog[backup?'backup':'normal'].after;
+  return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261114120000 && exactGitHubSchemaCatalog(proof.schemaCatalog,expected);
+}
+// Backup не получает fallback к normal: весь фактический SELECT/defaultACL закреплён отдельно.
+export function validGitHubRepositoryScopeBackupMigrationPostcondition(proof){return validGitHubRepositoryScopeMigrationPostcondition(proof,true);}
+// Precondition связывает exact043 catalog с тишиной каждого затронутого worker/effect lifecycle.
+export function validGitHubRepositoryScopeMigrationPrecondition(proof,backup=false,requireStopped=true){
+ return proof?.profile==='GITHUB_REPOSITORY_SCOPE_'+(backup?'BACKUP_':'')+'PREDECESSOR_V1' && proof.database==='control_plane' && proof.readOnly==='on' && proof.gooseVersion===20261113000100 && proof.githubRepositoryScopeAbsent===true && exactGitHubSchemaCatalog(proof.schemaCatalog,githubRepositoryScopeCatalog[backup?'backup':'normal'].before) && Number.isSafeInteger(proof.oldClaimSessions) && proof.oldClaimSessions>=0 && (!requireStopped||proof.oldClaimSessions===0) && ['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeIntegrationInvocations','activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].every(key=>proof[key]===0);
+}
+// Каноническое сравнение включает точный набор полей; extra/missing/drift закрыто отвергаются.
+function exactGitHubSchemaCatalog(actual,expected){return actual!==null && typeof actual==='object' && !Array.isArray(actual) && Object.keys(actual).length===Object.keys(expected).length && Object.entries(expected).every(([key,value])=>JSON.stringify(actual[key])===JSON.stringify(value));}
+export function validGitHubRepositoryScopeBackupMigrationPrecondition(proof){return validGitHubRepositoryScopeMigrationPrecondition(proof,true);}

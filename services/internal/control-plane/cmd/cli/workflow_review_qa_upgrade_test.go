@@ -100,6 +100,10 @@ func readControlPlaneMigrationProof(t *testing.T, ctx context.Context, observer 
 	}
 	var verifier string
 	switch profile {
+	case "github-repository-scope":
+		verifier = "validGitHubRepositoryScopeMigration"
+	case "github-repository-scope-backup":
+		verifier = "validGitHubRepositoryScopeBackupMigration"
 	case "workspace-unbound-stop":
 		verifier = "validWorkspaceUnboundStopMigration"
 	case "workspace-archive-abi":
