@@ -4,11 +4,23 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.72
+version: 1.7.73
 updated: 2026-11-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Возврат внешнего Service после рутинной schema migration имеет собственный
+terminal consumer и не переиспользует admission proof прежней authority
+rotation. Неизменная authority подтверждается baseline до изоляции и свежим
+owner READ после проверки migration/cohort; old watcher timeout не разрешает
+переписать original journal. Обязательные registry members, actual backend,
+owner operation, source/input/Job UID и новый API open receipt связываются явно.
+Final gate сравнивает fresh API UID и полный spec с этим receipt: готовность
+current workload относительно его же current template не назначает authority.
+Новый readonly executor требует явного source compatibility и сохраняет
+исходные images/locks/receipts. UNKNOWN после PATCH ACK loss разрешается через
+readback, без автоматического повторения эффекта.
 
 При проверке ротации число всех получателей delivery и обязательный startup
 набор — разные величины. Обязательные `(workload, role, generation)` выводятся

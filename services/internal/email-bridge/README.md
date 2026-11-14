@@ -4,8 +4,8 @@ title: Email bridge
 type: service
 status: approved
 owner: developer
-version: 1.2.0
-updated: 2026-09-05
+version: 1.2.1
+updated: 2026-11-14
 ---
 
 # Email bridge #1037
@@ -110,6 +110,10 @@ BODY.PEEK не выставляет read flag; UID EXPUNGE не удаляет �
   `bash scripts/tests/email-bridge-test.sh '^TestPostgresReceiptCompletionAfterCancellation$'`.
 - `make check-email-bridge-codegen`: воспроизводимый OpenAPI/JSON Schema codegen.
 - `make test-email-bridge-render`: isolated staging render с fixture digests.
+- `make test-email-bridge-install`: изолированная установка PostgreSQL с TLS,
+  миграциями и проверкой порядка запуска. До запуска выполнить readback
+  `tools/dev/install-user-material-tools.sh` для своего каталога инструментов
+  и добавить его `tools/bin` в PATH; команда не устанавливает инструменты сама.
 
 Реальные mailbox credentials и staging E2E #1031 проверяются root отдельно.
 Typed gRPC consumer использует checkpoint #1046 `d31cd4c70`; наличие generated

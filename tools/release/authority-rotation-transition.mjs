@@ -281,6 +281,22 @@ export function verifyCatalogAuthorityJobPod(job,list) {
 // plan/apply path. RETIRED приходит от DB owner не старше30s, а не из старого receipt.
 // SQL owner сохраняет exact membership обязательных readers из pinned registry;
 // числовой counter здесь является дополнительной проверкой, не заменой membership.
+export function validateRetiredCatalogOwnerState(state,plan,identity,readers,now=Date.now()) {
+ const ownerFields=new Set(['observedAt','operationId','operationStatus','phase','intentId','protocolVersion','sourceRevision','sourceDigestSHA256',
+  'registrySourceDigestSHA256','registryRevision','baseRevision','baseDigestSHA256','switchNotBefore','previousNotAfter','completedAt',
+  'predecessorRevision','predecessorDigestSHA256','deliveryStartedAt','deliveredAt','promotedAt','overlapUntil','retiredAt','abortedAt','status','expectedReadbackCount','actualReadbackCount']);
+ requireValue(state&&typeof state==='object'&&!Array.isArray(state)&&Object.keys(state).every(key=>ownerFields.has(key)),
+  'CATALOG_AUTHORITY_TERMINAL_LOG_REJECTED');
+ const observed=Date.parse(state.observedAt),completed=Date.parse(state.completedAt),previous=Date.parse(state.previousNotAfter),switched=Date.parse(state.switchNotBefore);
+ requireValue(Number.isFinite(now)&&state.status==='RETIRED'&&state.operationStatus==='RETIRED'&&state.operationId===plan.ownerOperationID&&
+  state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
+  Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+3&&
+  sha.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&uuid.test(state.intentId??'')&&
+  state.expectedReadbackCount===readers.expectedReadbackCount&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=readers.expectedReadbackCount&&state.actualReadbackCount<=384&&
+  observed<=now+5000&&now-observed<=30000&&completed<=observed&&previous<=completed&&switched<=previous,
+  'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
+ return state;
+}
 export async function readCatalogAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,catalogPolicyTransition);}
 export async function readTelegramAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition);}
 export async function readTelegramAuthorityDelivered(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition,'delivered');}
@@ -340,14 +356,8 @@ async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,
    targetSHA256:plan.policyTransition.targetSHA256,trafficPlanSHA256:admissionProof.trafficPlanSHA256,serviceUID:admissionProof.serviceUID,...podProof};
   return Object.freeze({...proof,deliverySHA256:fingerprint(proof)});
  }
- const observed=Date.parse(state.observedAt),completed=Date.parse(state.completedAt),previous=Date.parse(state.previousNotAfter),switched=Date.parse(state.switchNotBefore);
- requireValue(classified.phase==='SUCCEEDED'&&state.status==='RETIRED'&&state.operationStatus==='RETIRED'&&state.operationId===plan.ownerOperationID&&
-  state.phase==='RETIRE'&&state.registryRevision===identity.sourceRevision&&state.registrySourceDigestSHA256===identity.sourceDigestSHA256&&
-  Number.isSafeInteger(state.baseRevision)&&state.baseRevision>0&&state.baseRevision<=9007199254740988&&state.sourceRevision===state.baseRevision+3&&
-  sha.test(state.sourceDigestSHA256??'')&&state.protocolVersion===2&&uuid.test(state.intentId??'')&&
-  state.expectedReadbackCount===readers.expectedReadbackCount&&Number.isSafeInteger(state.actualReadbackCount)&&state.actualReadbackCount>=readers.expectedReadbackCount&&state.actualReadbackCount<=384&&
-  observed<=now+5000&&now-observed<=30000&&completed<=observed&&previous<=completed&&switched<=previous,
-  'CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
+ requireValue(classified.phase==='SUCCEEDED','CATALOG_AUTHORITY_TERMINAL_OWNER_REJECTED');
+ validateRetiredCatalogOwnerState(state,plan,identity,readers,now);
  const proof={policyRevision:configuration.desiredRevision,policySHA256:policy.sha256,operationID:state.operationId,registryRevision:identity.sourceRevision,
   registrySHA256:identity.sourceDigestSHA256,snapshotRevision:state.sourceRevision,snapshotSHA256:state.sourceDigestSHA256,
   ...readers,actualReadbackCount:state.actualReadbackCount,observedAt:state.observedAt,

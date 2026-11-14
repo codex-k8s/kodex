@@ -68,6 +68,29 @@ export function confirmedAPIMaintenance({plan,events}){
     e.maintenanceID===plan.maintenanceID),'COMPONENT_API_MAINTENANCE_UNCONFIRMED');
   return {planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID,deploymentUID:plan.deploymentUID,targetSHA256:fingerprint(plan.target)};
 }
+// Открытое состояние выводится из exact нового open plan и его собственного
+// INTENT/OPEN, а не из числа replicas либо исторического close receipt.
+export function requireOpenedAPIMaintenance(deployment,resources,closed,opened,traffic){
+  const proof=confirmedAPIMaintenance(closed),{plan,events}=opened;
+  validatePlan(plan);
+  requireValue(plan.action==='open'&&plan.maintenanceID===proof.maintenanceID&&plan.deploymentUID===proof.deploymentUID&&
+    same(plan.target,closed.plan.target)&&plan.previousClosePlanSHA256===proof.planSHA256&&
+    plan.trafficPlanSHA256===fingerprint(traffic.plan)&&plan.serviceUID===traffic.plan.serviceUID&&
+    plan.afterSpec.replicas===closed.plan.beforeSpec.replicas&&Array.isArray(events)&&events[0]?.type==='HEADER'&&
+    Object.entries(header(plan)).every(([key,value])=>events[0][key]===value),
+    'COMPONENT_API_MAINTENANCE_OPEN_RECEIPT_REQUIRED');
+  const intent=events.findLastIndex(row=>row.type==='INTENT'&&row.step==='apply');
+  requireValue(intent>0&&events.some((row,index)=>index>intent&&row.type==='OBSERVED'&&row.state==='OPEN'&&
+    row.deploymentUID===proof.deploymentUID&&row.maintenanceID===proof.maintenanceID),
+    'COMPONENT_API_MAINTENANCE_OPEN_UNCONFIRMED');
+  requireClosedAPIAdmission(deployment,resources,closed,traffic);
+  requireValue(deployment.apiVersion==='apps/v1'&&deployment.kind==='Deployment'&&deployment.metadata.uid===proof.deploymentUID&&
+    !deployment.metadata.deletionTimestamp&&same(deployment.spec,plan.afterSpec)&&same(deployment.metadata.annotations??{},plan.afterAnnotations)&&
+    componentServingReady(deployment,activeDeploymentPods(componentServingInventory(resources,'control-api-gateway',proof.deploymentUID),proof.deploymentUID),plan.afterSpec.replicas),
+    'COMPONENT_API_MAINTENANCE_OPEN_NOT_READY');
+  return {...proof,openPlanSHA256:fingerprint(plan),openEvidenceSHA256:fingerprint(events),trafficPlanSHA256:plan.trafficPlanSHA256,
+    serviceUID:plan.serviceUID,replicas:plan.afterSpec.replicas,specSHA256:fingerprint(plan.afterSpec)};
+}
 export function planComponentAPIMaintenance(deployment,target,observed,sourceSHA,action,previous,traffic){
   const scope=portableRunnerTarget(target,observed);
   requireValue(scope.allows(deployment)&&/^[a-f0-9]{40}$/.test(sourceSHA??'')&&['close','open'].includes(action),

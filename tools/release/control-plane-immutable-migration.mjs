@@ -12,9 +12,10 @@ import {backupControllerMaintenanceHeader} from './backup-controller-maintenance
 import {requiresBackupMaintenance} from './backup-migration-registry.mjs';
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validatedStablePublication } from './stable-image-publication.mjs';
-import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
+import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory,componentServingReady } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { migrationOwnerDatabase, validateMigrationDatabaseIdentity } from './migration-owner-database.mjs';
+import {isRoutineMigrationAPIRestoreProfile,readMigrationAPIAdmission,verifyMigrationAPIAdmission,readOpenedMigrationAPI,migrationAPIRestorationExecutor} from './component-migration-api-admission.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
@@ -292,6 +293,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
   const retainedPlan = phase === 'plan' ? undefined : privateJSON(options['--plan']);
+  const restoration=!!options['--api-restoration-open-plan'];
+  ensure(!!options['--api-isolation-plan']===!!options['--api-isolation-evidence']&&
+    (!options['--api-isolation-plan']||phase==='plan'&&isRoutineMigrationAPIRestoreProfile(profile)),
+    'MIGRATION_API_ISOLATION_ARGUMENT_INVALID');
+  ensure(restoration===!!options['--api-restoration-open-evidence']&&restoration===!!options['--api-restoration-source-sha']&&
+    (!restoration||phase==='inspect'&&isRoutineMigrationAPIRestoreProfile(profile)&&retainedPlan.apiMaintenance&&
+      options['--api-restoration-source-sha']===retainedPlan.source.revision),'MIGRATION_API_RESTORATION_ARGUMENT_INVALID');
+  const apiRestoration=restoration?readOpenedMigrationAPI(retainedPlan,{openPlanPath:resolve(options['--api-restoration-open-plan']),openEvidencePath:resolve(options['--api-restoration-open-evidence'])},kube):undefined;
+  const restorationExecutor=restoration?migrationAPIRestorationExecutor(retainedPlan,options['--api-restoration-source-sha']):undefined;
   const componentPublication = phase === 'plan'
     ? (options['--component-publication'] ? privateJSON(options['--component-publication']) : undefined)
     : (isComponentMigrationPublication(retainedPlan.imageEvidence) ? retainedPlan.imageEvidence : undefined);
@@ -414,10 +424,11 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ? readMaintenanceReaders():undefined;
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
         ...(readers?{maintenanceReaders:readers}:{}),
-        installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items});
+        installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items,apiRestoration});
       const gateway = apps.find(d => d.metadata.name === 'control-api-gateway');
       const children = readComponentServingInventory(kube,'control-api-gateway',gateway.metadata.uid);
-      ensure(readers || gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
+      if(apiRestoration)ensure(componentServingReady(gateway,activeDeploymentPods(children,gateway.metadata.uid),apiRestoration.replicas),'COMPONENT_MIGRATION_API_RESTORATION_NOT_READY');
+      else ensure(readers || gateway.spec.replicas === 0 && gateway.status?.observedGeneration >= gateway.metadata.generation && !(gateway.status.replicas ?? 0) &&
         activeDeploymentPods(children,gateway.metadata.uid).length === 0, 'COMPONENT_MIGRATION_MAINTENANCE_JOIN_REQUIRED');
       return target;
     }
@@ -619,6 +630,10 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if(configuration.anchorProfile === 'portable') plan.postgresBackend = ownerDatabase.identity(plan.postgres);
     plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
+    if(options['--api-isolation-plan']){
+      const current=readMigrationAPIAdmission({isolationPlanPath:resolve(options['--api-isolation-plan']),isolationEvidencePath:resolve(options['--api-isolation-evidence'])},kube,{stopped:true});
+      plan.apiMaintenance=current.admission;verifyMigrationAPIAdmission(plan,current);
+    }
     if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
     if(requiresBackupMaintenance(profile)) {
       ensure(options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'],'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
@@ -642,6 +657,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   validateCheckIdentity(plan);
   if(configuration.anchorProfile === 'portable') validateMigrationDatabaseIdentity(plan.postgresBackend);
+  if(plan.apiMaintenance)verifyMigrationAPIAdmission(plan,readMigrationAPIAdmission(plan.apiMaintenance,kube));
   imageScope(plan.imageEvidence,plan.namespaceUID);
   const planSHA256 = fingerprint(plan);
   const revalidationRevision = options['--revalidate-postcondition-revision'];
@@ -649,7 +665,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     'MIGRATION_REVALIDATION_PHASE_INVALID');
   // После SIGKILL lock сохраняется. Inspect всё равно доступен без записи/снятия lock;
   // mutations закрыты до ручной проверки завершения прежнего процесса владельцем.
-  const readOnly = !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
+  const readOnly = restoration || !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
   let backupBoundaryJournal,durable;
   try {
     if(requiresBackupMaintenance(profile) && phase!=='inspect'){
@@ -734,6 +750,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
         ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
+        if(restoration)result.restorationPostcondition={observedAt:new Date().toISOString(),profile,
+          sqlSHA256:plan.postconditionSQLSHA256,postgresSHA256:fingerprint(plan.postgres),backendSHA256:fingerprint(plan.postgresBackend),
+          schemaCatalogSHA256:fingerprint(proof.schemaCatalog)};
         if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
           execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
       }
@@ -801,7 +820,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
       prepareRuntimeInputs:()=>applyTelegramRuntimeInputs({plan:plan.telegramInputs,journal,kube,gate:()=>{
         ensure(sourceDigest(plan.source)===plan.migrationFileSHA256,'MIGRATION_PLAN_DRIFT');
         verifyRuntimeInputs();imageScope(plan.imageEvidence,plan.namespaceUID);
@@ -870,7 +889,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       }
       return output({...result,
         cpStage:state.stage,podsGone:state.joined,cpReady:state.ready,
-        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || ['isolatedReadersSpec','restoredReadersSpec'].includes(s.stage)&&s.ready || s.maintenance === true && s.stage === 'stagedSpec' && s.joined),forwardOnly:true} : {})});
+        ...(pairState ? {componentPair:pairState,pairReady:pairState.every(s => s.stage === 'resumedSpec' && s.ready || ['isolatedReadersSpec','restoredReadersSpec'].includes(s.stage)&&s.ready || s.maintenance === true && (s.stage === 'stagedSpec' && s.joined || restoration && s.stage === 'apiOpenedSpec' && s.ready)),forwardOnly:true} : {}),
+        ...(apiRestoration?{apiRestoration:apiRestoration.proof,sourceCompatibility:restorationExecutor}:{})});
     }
     if(componentPublication?.introducedReceiver&&['check','stop','apply'].includes(phase))await readIntroduction(plan.imageEvidence,plan.source);
     if (phase === 'check') {
