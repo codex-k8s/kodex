@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { planDefaultRunner as createDefaultRunnerPlan, requirePublishedNodeReadback, requireRuntimeBinding } from "./default-runner-transition.mjs";
 function publicPolicy(host="pull.kodex.works",digest=`sha256:${"b".repeat(64)}`){return{apiVersion:"v1",kind:"ConfigMap",metadata:{name:"policy-next",namespace:"kodex-system",labels:{"app.kubernetes.io/part-of":"kodex","kodex.dev/owner-intent":"true"}},immutable:true,data:{pullRegistryHost:host,promotedPullRepository:`${host}/kodex/roles`,pullCredentialGeneration:"1",trustedRoleBaseDigest:digest,nodeReadbackImage:`${host}/kodex/agent-runner@${digest}`}};}
@@ -131,4 +131,26 @@ test('canonical ConfigMap defaults сохраняют ссылочную кон�
   app=>app.env.push(structuredClone(app.env[0])),
  ]){const changed=structuredClone(values);mutate(changed[0].spec.template.spec.containers[0]);assert.throws(()=>createDefaultRunnerPlan(changed,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[old]),/EXACT_POLICY_CONFIG_REQUIRED/);}
  const mutable=structuredClone(old);mutable.immutable=false;assert.throws(()=>createDefaultRunnerPlan(values,nextRef,'33333333-3333-4333-8333-333333333333',policy,undefined,[mutable]),/EXACT_POLICY_CONFIG_REQUIRED/);
+});
+
+// Выполняется настоящий CLI; stub проверяет transport до первого чтения.
+test("default runner требует exact kubeconfig до Kubernetes и передаёт его явно", async()=>{
+ const {mkdtempSync,writeFileSync,rmSync,existsSync,symlinkSync}=await import("node:fs");
+ const {tmpdir}=await import("node:os"),{join}=await import("node:path");
+ const directory=mkdtempSync(join(tmpdir(),"kodex-default-kubeconfig-"));
+ try {
+  const config=join(directory,"config"),linked=join(directory,"linked"),called=join(directory,"called");
+  writeFileSync(config,"synthetic",{mode:0o600});symlinkSync(config,linked);
+  writeFileSync(join(directory,"kubectl"),`#!/usr/bin/env node
+const fs=require('node:fs'),args=process.argv.slice(2);
+if(JSON.stringify(args.slice(0,5))!==JSON.stringify(['--kubeconfig',process.env.EXPECTED_CONFIG,'--context','synthetic','--request-timeout=30s']))process.exit(91);
+fs.writeFileSync(process.env.CALLED,'read');process.stdout.write(JSON.stringify({spec:{template:{spec:{containers:[]}}}}));
+`,{mode:0o700});
+  const run=args=>spawnSync(process.execPath,[fileURLToPath(new URL("./default-runner-transition.mjs",import.meta.url)),"plan","--context","synthetic",...args],
+    {encoding:"utf8",env:{...process.env,PATH:`${directory}:${process.env.PATH}`,EXPECTED_CONFIG:config,CALLED:called}});
+  for(const args of [[],["--kubeconfig","relative"],["--kubeconfig",linked]]){
+   const result=run(args);assert.equal(result.status,1);assert.match(result.stderr,/EXACT_KUBECONFIG_REQUIRED/);assert.equal(existsSync(called),false);
+  }
+  const result=run(["--kubeconfig",config]);assert.equal(result.status,1);assert.match(result.stderr,/ACTIVE_RUNNER_POLICY_REQUIRED/);assert.equal(existsSync(called),true);
+ } finally {rmSync(directory,{recursive:true,force:true});}
 });

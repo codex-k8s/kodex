@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { openSync, closeSync, writeSync, fsyncSync, readFileSync, lstatSync } from "node:fs";
+import { openSync, closeSync, writeSync, fsyncSync, readFileSync, lstatSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { migrationOwnerDatabase, validateMigrationDatabaseIdentity } from "./migration-owner-database.mjs";
 import { portableRunnerTarget } from "./portable-runner-target.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 import { namespace, applyIssuerAdmissionTransition, preparePolicy, requireIdle, planDeployment, planBinding, planGatewayMaintenance, policyEnvironmentValue } from "./runner-policy-model.mjs";
@@ -35,7 +36,7 @@ function content(resource) {
 }
 
 export function samePlan(saved, current) {
-  requireValue(saved.version === 1 && ["context", "clusterUID", "namespaceUID", "bundleSHA256", "phase", "readerImage", "portableTargetSHA256"]
+  requireValue(saved.version === 1 && ["context", "kubeconfig", "clusterUID", "namespaceUID", "bundleSHA256", "phase", "readerImage", "portableTargetSHA256"]
     .every((key) => saved[key] === current[key]) && fingerprint(saved.operations) === fingerprint(current.operations) &&
     fingerprint(saved.guards) === fingerprint(current.guards), "PLAN_PRECONDITION_CHANGED");
 }
@@ -71,7 +72,7 @@ export function planReaderRecovery(controller, failedPlan, evidence, recoveryIma
     (controller.status?.availableReplicas ?? 0) < controller.spec.replicas,
   "READER_RECOVERY_STATE_REJECTED");
   applications[0].image = recoveryImage;
-  return { version: 1, kind: "RUNNER_POLICY_READER_RECOVERY", incident, context: failedPlan.context,
+  return { version: 1, kind: "RUNNER_POLICY_READER_RECOVERY", incident, context: failedPlan.context, kubeconfig: failedPlan.kubeconfig,
     clusterUID: failedPlan.clusterUID, namespaceUID: failedPlan.namespaceUID, failedPlanID: failedPlan.id,
     bundleSHA256: failedPlan.bundleSHA256, readerImage: recoveryImage, uid: controller.metadata.uid,
     resourceVersion: controller.metadata.resourceVersion, before, after };
@@ -83,17 +84,31 @@ function main(args) {
   while (args.length) {
     const key = args.shift();
     if (key === "--k3s-sudo") { requireValue(!options[key], "INVALID_ARGUMENTS"); options[key] = true; continue; }
-    requireValue(["--portable-target", "--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm", "--failed-plan", "--failed-evidence", "--incident"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
+    requireValue(["--portable-target", "--kubeconfig", "--context", "--authority-issuer-image", "--node-readback-image", "--runner-digest", "--reader-image", "--bundle", "--phase", "--output", "--plan", "--evidence", "--confirm", "--failed-plan", "--failed-evidence", "--incident"].includes(key) && !Object.hasOwn(options, key) && args.length, "INVALID_ARGUMENTS");
     options[key] = args.shift();
   }
+  const kubeconfig = options["--kubeconfig"];
+  requireValue(typeof kubeconfig === "string" && kubeconfig.startsWith("/") && !/[\r\n\0]/.test(kubeconfig) &&
+    lstatSync(kubeconfig).isFile() && !lstatSync(kubeconfig).isSymbolicLink() && realpathSync(kubeconfig) === kubeconfig,
+  "EXACT_KUBECONFIG_REQUIRED");
   const context = options["--context"];
   requireValue(typeof context === "string" && context.length > 0 && !/prod/i.test(context), "STAGING_CONTEXT_REQUIRED");
-  const kubectl = (args, input) => execFileSync(options["--k3s-sudo"] ? "sudo" : "kubectl", [...(options["--k3s-sudo"] ? ["-n", "k3s", "kubectl"] : []), "--context", context, "--namespace", namespace, ...args],
+  const kubectl = (args, input) => execFileSync(options["--k3s-sudo"] ? "sudo" : "kubectl", [...(options["--k3s-sudo"] ? ["-n", "k3s", "kubectl"] : []), "--kubeconfig", kubeconfig, "--context", context, "--namespace", namespace, ...args],
     { encoding: "utf8", input, timeout: 310_000, maxBuffer: 16 << 20, stdio: [input ? "pipe" : "ignore", "pipe", "pipe"] });
   const get = (kind, name) => JSON.parse(kubectl(["get", kind, name, "-o", "json"]));
   const clusterUID = get("namespace", "kube-system").metadata.uid;
   const namespaceUID = get("namespace", namespace).metadata.uid;
   const controller = get("deployment", "image-admission-controller");
+  const postgresIdentity = () => {
+    const pod = get("pod", "kodex-postgresql-0"), owners = pod.metadata?.ownerReferences?.filter(owner => owner.controller === true) ?? [];
+    requireValue(pod.kind === "Pod" && pod.metadata?.name === "kodex-postgresql-0" && pod.metadata.namespace === namespace &&
+      /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(pod.metadata.uid ?? "") && !pod.metadata.deletionTimestamp && pod.status?.phase === "Running" &&
+      pod.metadata.labels?.["app.kubernetes.io/name"] === "kodex-postgresql" && owners.length === 1 &&
+      owners[0].kind === "StatefulSet" && owners[0].name === "kodex-postgresql" && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(owners[0].uid ?? ""),
+    "RUNNER_POLICY_POSTGRES_IDENTITY_INVALID");
+    return { pod: pod.metadata.name, uid: pod.metadata.uid, ownerUID: owners[0].uid };
+  };
+  const ownerDatabase = migrationOwnerDatabase(kubectl, postgresIdentity);
   const readerImage = options["--reader-image"];
   const portableTarget = options["--portable-target"] ? portableRunnerTarget(privateRead(options["--portable-target"]),
     { context, clusterUID, namespaceUID, installation: get("configmap", "kodex-installation-profile") }) : undefined;
@@ -110,7 +125,7 @@ function main(args) {
   if (command === "recovery-apply") {
     requireValue(options["--confirm"] === "RECOVER-STAGING-RUNNER-POLICY-READER" && options["--evidence"], "RECOVERY_CONFIRMATION_REQUIRED");
     const saved = privateRead(options["--plan"]);
-    requireValue(saved.kind === "RUNNER_POLICY_READER_RECOVERY" && saved.context === context && saved.clusterUID === clusterUID &&
+    requireValue(saved.kind === "RUNNER_POLICY_READER_RECOVERY" && saved.context === context && saved.kubeconfig === kubeconfig && saved.clusterUID === clusterUID &&
       saved.namespaceUID === namespaceUID && saved.incident === options["--incident"] && saved.readerImage === readerImage &&
       saved.uid === controller.metadata.uid && saved.resourceVersion === controller.metadata.resourceVersion &&
       fingerprint(saved.before) === fingerprint(controller.spec), "READER_RECOVERY_PLAN_DRIFT");
@@ -143,18 +158,20 @@ function main(args) {
     requireValue(catalogs.length === 1, "EXACT_CATALOG_REQUIRED");
     const bundle = preparePolicy(get("configmap", oldName), get("imageadmissionpolicyparameters", oldName), get("configmap", catalogs[0].configMap.name),
       options["--runner-digest"], options["--authority-issuer-image"], options["--node-readback-image"], portableTarget);
-    record(options["--output"], { ...bundle, clusterUID, namespaceUID, ...targetPin });
+    const postgres = postgresIdentity(), postgresBackend = ownerDatabase.identity(postgres);
+    record(options["--output"], { ...bundle, kubeconfig, postgres, postgresBackend, clusterUID, namespaceUID, ...targetPin });
     process.stdout.write(`${JSON.stringify({ status: "PREPARED", policy: bundle.resources[0].metadata.name, digest: bundle.resources[0].data.policySHA256 })}\n`);
     return;
   }
   const bundle = privateRead(options["--bundle"]);
-  requireValue(bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID && bundle.portableTargetSHA256 === portableTarget?.digest, "CLUSTER_IDENTITY_CHANGED");
+  requireValue(bundle.kubeconfig === kubeconfig && bundle.clusterUID === clusterUID && bundle.namespaceUID === namespaceUID && bundle.portableTargetSHA256 === portableTarget?.digest, "CLUSTER_IDENTITY_CHANGED");
+  validateMigrationDatabaseIdentity(bundle.postgresBackend);
   const recomputed = preparePolicy(get("configmap", bundle.previous.policyName), get("imageadmissionpolicyparameters", bundle.previous.policyName),
     get("configmap", bundle.previous.catalogName), bundle.resources[0].data.trustedRoleBaseDigest,
     bundle.resources[0].data.authorityIssuerImage !== get("configmap", bundle.previous.policyName).data.authorityIssuerImage ? bundle.resources[0].data.authorityIssuerImage : undefined,
     bundle.resources[0].data.nodeReadbackImage !== get("configmap", bundle.previous.policyName).data.nodeReadbackImage ? bundle.resources[0].data.nodeReadbackImage : undefined, portableTarget);
-  requireValue(fingerprint({ ...recomputed, clusterUID, namespaceUID, ...targetPin }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
-  const readDB = () => JSON.parse(kubectl(["exec", "-i", "kodex-postgresql-0", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], readFileSync(new URL("./runner-policy-readback.sql", import.meta.url), "utf8")));
+  requireValue(fingerprint({ ...recomputed, kubeconfig, postgres:bundle.postgres, postgresBackend:bundle.postgresBackend, clusterUID, namespaceUID, ...targetPin }) === fingerprint(bundle), "BUNDLE_OR_PREDECESSOR_CHANGED");
+  const readDB = () => ownerDatabase.read(readFileSync(new URL("./runner-policy-readback.sql", import.meta.url), "utf8"), bundle.postgres, bundle.postgresBackend);
   const database = readDB();
   const phase = command === "apply" ? privateRead(options["--plan"]).phase : options["--phase"];
   const cp = get("deployment", "control-plane"), builder = get("deployment", "role-image-builder"), gateway = get("deployment", "control-api-gateway");
@@ -259,7 +276,7 @@ function main(args) {
       patch(target, "spec", planDeployment(target, bundle, phase, readerImage, portableTarget).next);
     }
   }
-  const current = { version: 1, context, clusterUID, namespaceUID, ...targetPin, phase, readerImage, bundleSHA256: fingerprint(bundle), guards, operations };
+  const current = { version: 1, context, kubeconfig, clusterUID, namespaceUID, ...targetPin, phase, readerImage, bundleSHA256: fingerprint(bundle), guards, operations };
   if (command === "plan") {
     requireValue(options["--output"] && !options["--confirm"], "READ_ONLY_PLAN_REQUIRED");
     record(options["--output"], { ...current, id: randomUUID(), at: new Date().toISOString() });

@@ -32,13 +32,14 @@ for (const component of ['runner', 'session-archive', 'role-image-builder']) for
       rmSync(join(state,'agent-runner-image'));
       rmSync(join(state,'cache','agent-runner-fixture.oci.tar'));
     }
+    const kubeconfig=join(root,'config');writeFileSync(kubeconfig,'synthetic',{mode:0o600});
     const stub=`#!${process.execPath}
 const fs=require('node:fs'),path=require('node:path');
 let name=path.basename(process.argv[1]),args=process.argv.slice(2),prefix=[];
 if(name==='sudo'){if(JSON.stringify(args.slice(0,3))!==JSON.stringify(['-n','k3s','kubectl']))process.exit(91);prefix=args.splice(0,3);name='kubectl';}
 fs.appendFileSync(process.env.CALLS,JSON.stringify({name,args,prefix,uid:process.getuid()})+'\\n');
 if(name==='kubectl'){
- if(args[0]!=='--context'||args[1]!=='fixture')process.exit(92);args=args.slice(2);
+ if(args[0]!=='--kubeconfig'||args[1]!==process.env.EXPECTED_CONFIG||args[2]!=='--context'||args[3]!=='fixture')process.exit(92);args=args.slice(4);
  if(args[0]==='config'){process.stdout.write('fixture');process.exit(0);}
  if(args.includes('port-forward'))process.exit(23);
  if(args.includes('secret/kodex-image-promotion-writer')){let data={};for(const key of ['registry-client.crt','registry-client.key','ca.pem','promotion.username','promotion.password'])data[key]=Buffer.from('SENTINEL_PRIVATE_VALUE').toString('base64');process.stdout.write(JSON.stringify({data}));process.exit(0);}
@@ -47,16 +48,22 @@ if(name==='kubectl'){
 else if(name==='tar')process.stdout.write(JSON.stringify({manifests:[{digest:'sha256:'+'b'.repeat(64)}]}));
 `;
     for(const name of ['sudo','kubectl','docker','tar','yq'])writeFileSync(join(bin,name),stub,{mode:0o755});
-    const result=spawnSync('bash',['tools/dev/seed-local-image-supply-chain.sh','--context','fixture','--state-directory',state,'--component',component,'--readback-only','--evidence',join(root,'evidence.jsonl'),...(sudo?['--k3s-sudo']:[])],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,CALLS:log,TMPDIR:root},encoding:'utf8',timeout:10000});
+    const result=spawnSync('bash',['tools/dev/seed-local-image-supply-chain.sh','--kubeconfig',kubeconfig,'--context','fixture','--state-directory',state,'--component',component,'--readback-only','--evidence',join(root,'evidence.jsonl'),...(sudo?['--k3s-sudo']:[])],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,CALLS:log,TMPDIR:root,EXPECTED_CONFIG:kubeconfig},encoding:'utf8',timeout:10000});
     assert.notEqual(result.status,0,'stub port-forward must stop before a real registry operation');
     const raw=readFileSync(log,'utf8'), calls=raw.trim().split('\n').map(JSON.parse), kube=calls.filter(item=>item.name==='kubectl');
     assert.ok(kube.some(item=>item.args.includes('config')));
     assert.ok(kube.some(item=>item.args.includes('secret/kodex-image-promotion-writer')));
     assert.ok(kube.some(item=>item.args.includes('port-forward')));
     assert.ok(kube.every(item=>JSON.stringify(item.prefix)===JSON.stringify(sudo?['-n','k3s','kubectl']:[])));
-    assert.ok(kube.every(item=>item.args[0]==='--context'&&item.args[1]==='fixture'));
+    assert.ok(kube.every(item=>item.args[0]==='--kubeconfig'&&item.args[1]===kubeconfig&&item.args[2]==='--context'&&item.args[3]==='fixture'));
     assert.ok(calls.filter(item=>item.name==='docker').every(item=>item.prefix.length===0&&item.uid===process.getuid()));
     assert.ok(!(raw+result.stdout+result.stderr).includes('SENTINEL_PRIVATE_VALUE'));
     assert.ok(!(raw+result.stdout+result.stderr).includes(Buffer.from('SENTINEL_PRIVATE_VALUE').toString('base64')));
   } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test('portable seed rejects an omitted kubeconfig before any cluster or credential access',()=>{
+ const result=spawnSync('bash',['tools/dev/seed-local-image-supply-chain.sh','--context','fixture','--portable-target','/synthetic-target.json'],
+  {encoding:'utf8',timeout:1000,env:{PATH:'/usr/bin:/bin'}});
+ assert.equal(result.status,1);assert.match(result.stderr,/portable publication requires exact kubeconfig/);
 });
