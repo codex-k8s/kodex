@@ -10,13 +10,13 @@ export function validKubernetesPortName(value){
 export function validateKubernetesPortNames(resources){
  for(const resource of resources){
   if(resource.kind==='Service')for(const port of resource.spec?.ports??[]){
-   if(port.name!==undefined)fail(typeof port.name==='string'&&port.name.length>0&&port.name.length<=63&&/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(port.name));
+   if(port.name!==undefined&&port.name!=='')fail(typeof port.name==='string'&&port.name.length>0&&port.name.length<=63&&/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(port.name));
    if(typeof port.targetPort==='string')fail(validKubernetesPortName(port.targetPort));
   }
   const pod=resource.kind==='Pod'?resource.spec:resource.kind==='CronJob'?resource.spec?.jobTemplate?.spec?.template?.spec:resource.spec?.template?.spec;
   for(const container of [...(pod?.containers??[]),...(pod?.initContainers??[]),...(pod?.ephemeralContainers??[])]){
    const names=new Set();
-   for(const port of container.ports??[])if(port.name!==undefined){fail(validKubernetesPortName(port.name)&&!names.has(port.name));names.add(port.name);}
+   for(const port of container.ports??[])if(port.name!==undefined&&port.name!==''){fail(validKubernetesPortName(port.name)&&!names.has(port.name));names.add(port.name);}
   }
  }
 }

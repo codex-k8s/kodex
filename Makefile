@@ -687,6 +687,10 @@ test-telegram-deployment:
 test-telegram-frozen-delivery:
 	@timeout 900s node --test --test-name-pattern='^real CLI046/107 frozen:' tools/release/telegram-deployment.cli.test.mjs
 
+.PHONY: test-telegram-port-repair-backup
+test-telegram-port-repair-backup:
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107 backup-port-repair:' tools/release/telegram-deployment.cli.test.mjs
+
 .PHONY: test-telegram-port-repair
 test-telegram-port-repair:
 	@timeout 90s node --test tools/release/kubernetes-port-names.test.mjs tools/release/telegram-port-repair.test.mjs

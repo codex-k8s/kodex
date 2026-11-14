@@ -458,3 +458,25 @@ Projection/traffic планирование использует `--application-
 оператор в выбранном target. Прежний префикс журнала не меняется, новый bind и
 обычные recovery receipts добавляются в append-only журнал. Rollback DDL и
 возврат к недопустимому alias отсутствуют.
+
+
+Для `telegram-notifications-backup` после final107 API restore создаётся новый
+immutable backup resume plan штатным `backup-controller-maintenance-cli.mjs`.
+Его `--stopped-source-sha` равен original application SHA (именно источнику
+backup stop и migration), а отдельный executor остаётся новым. При plan
+передаются original `--stopped-plan`, `--stopped-evidence`, `--migration-plan`,
+`--migration-evidence` и полный набор final107 ссылок: `--cp-projection-plan`,
+`--cp-projection-evidence`, `--authority-plan`, `--authority-evidence`,
+`--authority-status-plan`, `--authority-status-evidence`, `--api-open-plan`,
+`--api-open-evidence`, `--api-restore-plan`, `--api-restore-evidence`, а при
+ремонте также `--telegram-port-repair-plan`. Они закрепляются в plan и
+передаются spawned migration inspect; произвольные argv и source override
+запрещены. Apply/status используют закреплённые ссылки; переданный иной путь
+закрывается до journal lock и эффекта. SQL/owner/database pins не меняются.
+
+`make test-telegram-port-repair-backup` — отдельный900s wholeCLI контур:
+canonical backup stop → original046 → invalid port refusal → repair →107 →
+API restore → real backup resume plan/apply/status через spawned final inspect.
+Он не добавляет второй DDL и не изменяет original plan. Normal repair и backup
+имеют отдельные конечные бюджеты; последовательный запуск обоих не укладывается
+в один общий900s budget.
