@@ -52,7 +52,7 @@ const save=()=>fs.writeFileSync(statePath,JSON.stringify(s));
 fs.appendFileSync(path.join(base,'trace'),JSON.stringify({program:path.basename(process.argv[1]),args:a})+'\\n');
 const program=path.basename(process.argv[1]);
 if(program==='git'){
- if(a[0]==='rev-parse')console.log((s.sourceDrift?'f':'e').repeat(40));
+ if(a[0]==='rev-parse')console.log((s.sourceDrift||s.executorDrift&&process.cwd()!==s.checkoutPath?'f':process.cwd()===s.checkoutPath?'a':'e').repeat(40));
  else if(a[0]==='status'){}
  else if(a[0]==='archive')process.stdout.write('synthetic git archive');
  else if(!['merge-base','diff'].includes(a[0]))process.exit(3);
@@ -137,13 +137,13 @@ async function setup(retainedComponent, builtComponent = "control-plane", config
   }
   const run = (mode, output, extra = []) => {
     try { return { status: 0, output: execFileSync(process.execPath, [cli, mode, "--context", "fixture",
-      "--output", join(directory, output), ...extra], { env: { PATH: join(directory, "bin") + ":/usr/local/bin:/usr/bin:/bin",
+      "--kubeconfig", join(directory, "explicit fixture kubeconfig"), "--output", join(directory, output), ...extra], { env: { PATH: join(directory, "bin") + ":/usr/local/bin:/usr/bin:/bin",
         PYTHONDONTWRITEBYTECODE: "1" }, timeout: 30000, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) }; }
     catch (error) { return { status: error.status, output: (error.stdout ?? "") + (error.stderr ?? "") }; }
   };
-  const plan = () => run(retainedComponent ? "retained-plan" : "plan", "plan", [...(retainedComponent ? ["--component", component] :
+  const plan = (extra = []) => run(retainedComponent ? "retained-plan" : "plan", "plan", [...(retainedComponent ? ["--component", component] :
     ["--receipt", join(directory, "receipt.json")]), "--archive", archive,
-    "--tool-state-directory", join(directory, "tools")]);
+    "--tool-state-directory", join(directory, "tools"), ...extra]);
   return { directory, fixture, run, plan };
 }
 
@@ -180,6 +180,10 @@ for (const component of ["control-plane", "backup-controller"]) test(`real publi
     assert.equal(state.imports, 1); assert.equal(state.creates, 2); assert.equal(state.removes, 2);
     assert.throws(() => process.kill(state.forwardPID, 0), { code: "ESRCH" });
     const trace = await readFile(join(directory, "trace"), "utf8"); assert.equal(trace.includes("PRIVATE_AUTH_SENTINEL"), false);
+    const kubectlCalls = trace.trim().split("\n").map(JSON.parse).filter(v => v.program === "kubectl");
+    assert.ok(kubectlCalls.some(v => v.args.includes("port-forward")));
+    assert.ok(kubectlCalls.every(v => v.args[v.args.indexOf("--kubeconfig") + 1] === join(directory, "explicit fixture kubeconfig") &&
+      v.args[v.args.indexOf("--context") + 1] === "fixture"));
     assert.equal((await readFile(join(directory, "apply.jsonl"), "utf8")).includes("PRIVATE_AUTH_SENTINEL"), false);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -280,4 +284,26 @@ test("authority publication requires its exact nonroot verifier entrypoint and u
       assert.equal(JSON.parse(await readFile(join(directory, "fixture.json"), "utf8")).imports, 1);
     } finally { await rm(directory, { recursive: true, force: true }); }
   }
+});
+
+// Старый source checkout позволяет отдельно доставить predecessor schema;
+// executor и build source закрепляются разными SHA, ни один не угадывается.
+test("explicit source checkout pins both build source and publication executor across apply/readback", async () => {
+  const {directory,fixture,run,plan} = await setup();
+  try {
+    const checkout = join(directory,"source checkout"); await mkdir(checkout);
+    fixture.checkoutPath = checkout; await writeFile(join(directory,"fixture.json"),JSON.stringify(fixture));
+    const source = ["--source-checkout",checkout], planned=plan(source); assert.equal(planned.status,0,planned.output);
+    const path=join(directory,"plan","plan.json"),value=JSON.parse(await readFile(path,"utf8"));
+    assert.equal(value.source,"a".repeat(40)); assert.equal(value.sourceCheckout.executorSource,"e".repeat(40));
+    assert.equal(value.sourceCheckout.path,checkout);
+    const args=["--plan",path,"--approved-plan-sha",fingerprint(value)];
+    const omitted=run("apply","omitted.jsonl",args);assert.notEqual(omitted.status,0);assert.match(omitted.output,/EXECUTOR_SOURCE_DRIFT/);
+    const changed=run("apply","changed.jsonl",[...args,"--source-checkout",directory]);assert.notEqual(changed.status,0);
+    const applied=run("apply","apply.jsonl",[...args,...source]);assert.equal(applied.status,0,applied.output);
+    const readback=run("readback","readback.jsonl",["--plan",path,...source]);assert.equal(readback.status,0,readback.output);
+    const state=JSON.parse(await readFile(join(directory,"fixture.json"),"utf8")); assert.equal(state.imports,1);
+    state.executorDrift=true;await writeFile(join(directory,"fixture.json"),JSON.stringify(state));
+    const drift=run("readback","executor-drift.jsonl",["--plan",path,...source]);assert.notEqual(drift.status,0);assert.match(drift.output,/EXECUTOR_SOURCE_DRIFT/);
+  } finally { await rm(directory,{recursive:true,force:true}); }
 });

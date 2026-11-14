@@ -1,5 +1,5 @@
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
-import { validateStableReceipt } from './stable-image-publication.mjs';
+import { validatedStablePublication } from './stable-image-publication.mjs';
 import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -122,19 +122,7 @@ const mounts = [
 export function immutableMigrationImage(source, evidence, profile = 'outbox-index') {
   if (isComponentMigrationPublication(evidence))
     return componentMigrationPublication(evidence,source,profile).components.find(c => c.component === 'control-plane').imageRef;
-  const { publicationPlan: plan, publicationEvidence: records } = evidence ?? {};
-  const image = validateStableReceipt(plan?.receipt);
-  ensure(plan.schema === 'kodex.stable-image-publication/v2' && plan.artifactProfile === 'built' &&
-    image.component === 'control-plane' && image.sourceSHA === source.revision &&
-    fingerprint(image) === fingerprint(plan.image) && plan.archiveSHA256 === plan.receipt.archiveSHA256,
-  'MIGRATION_IMAGE_PROVENANCE_INVALID');
-  ensure(Array.isArray(records) && records.length === 2 &&
-    records[0].schema === 'kodex.stable-image-publication-attempt/v1' && records[0].status === 'INTENT' &&
-    ['apply','readback'].includes(records[0].mode) && records[0].planSHA256 === fingerprint(plan) &&
-    records[0].component === image.component && records[0].digest === image.digest &&
-    records[1].status === 'PASS' && records[1].phase === 'REGISTRY_PUBLICATION_ONLY' && records[1].nodePull === 'NOT_RUN',
-  'MIGRATION_IMAGE_PUBLICATION_UNCONFIRMED');
-  return `registry.local.kodex/kodex/control-plane@${image.digest}`;
+  return validatedStablePublication(source.revision,evidence,'control-plane');
 }
 
 // Штатный render задаёт только существующую migrator boundary; executable spec строится закрыто заново.

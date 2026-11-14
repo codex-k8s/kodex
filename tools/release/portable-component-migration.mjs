@@ -32,6 +32,11 @@ export function componentMigrationNames(profile) {
   requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
   return [...profiles[profile].components];
 }
+// Producer использует тот же закрытый профиль и корни исходников, что consumer.
+export function componentMigrationConfiguration(profile) {
+  requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
+  return {...structuredClone(profiles[profile]),sources:{...componentSources}};
+}
 export function componentMigrationTargetNames(profile) {
   return [...new Set([...componentMigrationNames(profile),'control-api-gateway'])];
 }

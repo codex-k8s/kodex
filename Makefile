@@ -617,3 +617,8 @@ test-personal-integration-assistant-regression-postgres: check-go-toolchain
 .PHONY: test-runner-policy-transition
 test-runner-policy-transition:
 	@timeout 300s node --test tools/release/portable-runner-target.test.mjs tools/release/runner-policy-transition.test.mjs tools/release/default-runner-transition.test.mjs
+
+.PHONY: test-component-publication
+test-component-publication:
+	@timeout 180s node --test tools/release/component-publication.test.mjs tools/release/stable-image-publication.test.mjs
+	@bash -n tools/release/publish-stable-image-worker.sh

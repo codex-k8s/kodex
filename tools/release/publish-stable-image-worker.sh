@@ -3,15 +3,18 @@ set -euo pipefail
 umask 077
 
 fail() { printf 'Stable image publication failed: %s\n' "$*" >&2; exit 1; }
-context="" plan="" mode=""
+context="" plan="" mode="" kubeconfig=""
 while (($#)); do
   case "$1" in
     --context) context=${2:-}; shift 2 ;;
+    --kubeconfig) kubeconfig=${2:-}; [[ "$kubeconfig" == /* && "$kubeconfig" != *$'\n'* && "$kubeconfig" != *$'\r'* ]] || fail 'absolute kubeconfig is required'; shift 2 ;;
     --plan) plan=${2:-}; shift 2 ;;
     --mode) mode=${2:-}; shift 2 ;;
     *) fail 'unsupported argument' ;;
   esac
 done
+kubeconfig_args=()
+[[ -z "$kubeconfig" ]] || kubeconfig_args=(--kubeconfig "$kubeconfig")
 [[ "$context" =~ ^[A-Za-z0-9_.:@/-]{1,160}$ && "${context,,}" != *prod* && ("$mode" == apply || "$mode" == readback) ]] || fail 'exact local context and mode are required'
 [[ "$plan" == /* && -f "$plan" && ! -L "$plan" && "$(stat -c '%u:%a' "$plan")" == "$(id -u):600" ]] || fail 'private plan is required'
 for program in kubectl docker jq sha256sum timeout realpath grep; do command -v "$program" >/dev/null || fail 'required program is absent'; done
@@ -55,22 +58,22 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-[[ "$(kubectl --context "$context" --request-timeout=15s get namespace kube-system -o 'jsonpath={.metadata.uid}')" == "$(jq -er '.clusterUID' "$plan")" ]] || fail 'cluster identity changed'
-[[ "$(kubectl --context "$context" --request-timeout=15s get namespace kodex-system -o 'jsonpath={.metadata.uid}')" == "$(jq -er '.namespaceUID' "$plan")" ]] || fail 'namespace identity changed'
+[[ "$(kubectl "${kubeconfig_args[@]}" --context "$context" --request-timeout=15s get namespace kube-system -o 'jsonpath={.metadata.uid}')" == "$(jq -er '.clusterUID' "$plan")" ]] || fail 'cluster identity changed'
+[[ "$(kubectl "${kubeconfig_args[@]}" --context "$context" --request-timeout=15s get namespace kodex-system -o 'jsonpath={.metadata.uid}')" == "$(jq -er '.namespaceUID' "$plan")" ]] || fail 'namespace identity changed'
 for kind in deployment service; do
   for name in kodex-image-registry-promotion kodex-image-registry-pull; do
     expected_uid=$(jq -er --arg kind "$kind" --arg name "$name" '.registries[] | select(.kind == $kind and .name == $name) | .uid' "$plan")
-    [[ "$(kubectl --context "$context" --request-timeout=15s -n kodex-system get "$kind" "$name" -o 'jsonpath={.metadata.uid}')" == "$expected_uid" ]] || fail 'registry identity changed'
+    [[ "$(kubectl "${kubeconfig_args[@]}" --context "$context" --request-timeout=15s -n kodex-system get "$kind" "$name" -o 'jsonpath={.metadata.uid}')" == "$expected_uid" ]] || fail 'registry identity changed'
   done
 done
-secret=$(kubectl --context "$context" --request-timeout=15s -n kodex-system get secret kodex-image-promotion-writer -o json) || fail 'writer projection is unavailable'
+secret=$(kubectl "${kubeconfig_args[@]}" --context "$context" --request-timeout=15s -n kodex-system get secret kodex-image-promotion-writer -o json) || fail 'writer projection is unavailable'
 [[ "$(jq -er '.metadata.uid + "|" + .metadata.resourceVersion' <<<"$secret")" == "$(jq -er '.writerMetadata' "$plan")" ]] || fail 'writer projection changed'
 for entry in registry-client.crt:client.crt registry-client.key:client.key ca.pem:ca.pem promotion.username:username promotion.password:password; do
   key=${entry%%:*} filename=${entry#*:}
   jq -er --arg key "$key" '.data[$key] | @base64d | select(length > 0)' <<<"$secret" >"$temporary_directory/$filename" || fail 'writer projection is incomplete'
 done
 unset secret
-kubectl --context "$context" --request-timeout=15s -n kodex-system port-forward --address 127.0.0.1 \
+kubectl "${kubeconfig_args[@]}" --context "$context" --request-timeout=15s -n kodex-system port-forward --address 127.0.0.1 \
   service/kodex-image-registry-promotion :5003 >"$temporary_directory/forward.log" 2>&1 &
 port_forward_pid=$!
 port=""
