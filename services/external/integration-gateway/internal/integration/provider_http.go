@@ -3,6 +3,8 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -21,6 +23,12 @@ import (
 // JSON and multipart bodies are mutually exclusive; Client optionally selects an already configured specialized transport.
 // RU: JSON и multipart body взаимоисключаемы; Client необязательно выбирает уже настроенный специализированный transport.
 type providerCall struct {
+	// invalidCredentialProbe is private to the typed observability authentication probe; it never contains caller-supplied material.
+	// invalidCredentialProbe доступен только typed observability authentication probe и не содержит caller-supplied данных.
+	invalidCredentialProbe bool
+	// tenantHeader/tenantID carry only server-selected routing context, never evidence of tenant isolation.
+	// tenantHeader/tenantID содержат только выбранный сервером routing context, не доказательство tenant isolation.
+	tenantHeader, tenantID                                                                string
 	permissionEffect                                                                      *permissionEffectObservation
 	BaseURL, Method, Path, AuthScheme, AuthHeader, Username, EffectKey, IdempotencyHeader string
 	Query                                                                                 url.Values
@@ -80,6 +88,22 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 		}
 	}
 	defer clear(credential)
+	if call.invalidCredentialProbe {
+		if call.Method != http.MethodGet || call.Capability.Risk != "READ" || call.Capability.OpenAPI != nil || call.AuthScheme != "BEARER" || (call.Path != "/api/v1/status/buildinfo" && call.Path != "/loki/api/v1/labels") {
+			return nil, &SafeError{Code: providerConfigurationInvalidCode}
+		}
+		clear(credential)
+		probe := make([]byte, 32)
+		if _, err := rand.Read(probe); err != nil {
+			return nil, &SafeError{Code: providerUnavailableCode}
+		}
+		credential = []byte("kodex-invalid-" + hex.EncodeToString(probe))
+		defer clear(credential)
+		clear(probe)
+	}
+	if call.tenantHeader != "" && ((call.tenantHeader != "THANOS-TENANT" && call.tenantHeader != "X-Scope-OrgID") || !integrationpackage.ValidSentrySlug(call.tenantID) || call.Capability.OpenAPI != nil) {
+		return nil, &SafeError{Code: providerConfigurationInvalidCode}
+	}
 
 	body := []byte(nil)
 	if call.Body != nil {
@@ -124,6 +148,9 @@ func (adapter *Adapter) callProviderResponse(ctx context.Context, call providerC
 			return nil, &SafeError{Code: providerConfigurationInvalidCode}
 		}
 		request.Header.Set("Accept", "application/json")
+		if call.tenantHeader != "" {
+			request.Header.Set(call.tenantHeader, call.tenantID)
+		}
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
 		}

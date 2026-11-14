@@ -220,8 +220,8 @@ func sentryCursor(value string) bool {
 	return true
 }
 
-// executeSentry executes the closed first vertical: project health, bounded issue list/detail, projected event detail and one approved issue-status mutation. Comments, assignment, releases and alerts require subsequent explicit contracts.
-// executeSentry исполняет закрытую первую вертикаль: здоровье проекта, ограниченные list/detail ошибок, проекцию события и одно одобренное изменение статуса. Комментарии, назначения, релизы и alerts требуют следующих явных контрактов.
+// executeSentry executes the finite project contract and dispatches explicit organization connections separately; shared release/workflow mutations never inherit project-only authority.
+// executeSentry исполняет конечный project contract и отдельно направляет явные organization connections; shared release/workflow mutations не наследуют project-only authority.
 func (adapter *Adapter) executeSentry(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (Result, error) {
 	if request.DefinitionKey == "sentry-organization" || request.DefinitionKey == "sentry-self-hosted-organization" {
 		return adapter.executeSentryOrganization(ctx, request, capability, configuration)

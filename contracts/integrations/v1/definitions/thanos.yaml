@@ -1,0 +1,515 @@
+{
+  "apiVersion": "integrations.kodex.io/v1",
+  "kind": "IntegrationPackage",
+  "metadata": {
+    "key": "thanos",
+    "version": "1.0.0",
+    "origin": "SHIPPED"
+  },
+  "spec": {
+    "name": "Thanos",
+    "description": "Ограниченные запросы и чтение метрик всего выбранного HTTPS endpoint. Это полная область endpoint, а не изоляция проекта или tenant.",
+    "category": "observability",
+    "adapter": "OBSERVABILITY",
+    "adapterOwner": "integration-gateway",
+    "executionRoute": "MANAGED_MCP",
+    "readiness": "READY",
+    "credential": {
+      "secretKey": "api_token",
+      "kind": "TOKEN"
+    },
+    "configurationFields": [
+      {
+        "key": "base_url",
+        "type": "STRING",
+        "format": "HTTPS_ORIGIN",
+        "required": true,
+        "maximumLength": 2048,
+        "label": "Адрес API",
+        "help": "Точный HTTPS origin с обязательным broker-owned transport; redirects запрещены."
+      },
+      {
+        "key": "scope_mode",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 32,
+        "label": "Область доступа",
+        "help": "WHOLE_ENDPOINT предоставляет выбранному grant всю область endpoint; tenant header не доказывает изоляцию.",
+        "allowedValues": [
+          "WHOLE_ENDPOINT"
+        ]
+      },
+      {
+        "key": "tenant_id",
+        "type": "STRING",
+        "format": "IDENTIFIER",
+        "required": true,
+        "maximumLength": 100,
+        "label": "Tenant маршрутизации",
+        "help": "Значение THANOS-TENANT; его изоляцию подтверждает отдельная проверка двух tenant и двух ключей."
+      }
+    ],
+    "networkDestinations": [
+      {
+        "key": "thanos_api",
+        "source": "CONFIGURATION",
+        "configurationField": "base_url",
+        "port": 443,
+        "tls": "REQUIRED"
+      }
+    ],
+    "healthCheck": {
+      "operation": "thanos.connection.read",
+      "timeoutSeconds": 15,
+      "maxAttempts": 1
+    },
+    "capabilities": [
+      {
+        "key": "thanos.connection.read",
+        "name": "Проверить подключение",
+        "description": "Проверить подключение в полной выбранной области endpoint.",
+        "operation": "thanos.connection.read",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.query.instant",
+        "name": "Запросить значение метрик",
+        "description": "Запросить значение метрик в полной выбранной области endpoint.",
+        "operation": "thanos.query.instant",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 4096,
+            "label": "PromQL",
+            "help": "Выражение в выбранной области endpoint; URL и HTTP параметры не принимаются."
+          },
+          {
+            "key": "time",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Момент времени",
+            "help": "RFC3339 UTC; запрос всегда имеет явный момент времени."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.query.range",
+        "name": "Запросить ряд метрик",
+        "description": "Запросить ряд метрик в полной выбранной области endpoint.",
+        "operation": "thanos.query.range",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "query",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 4096,
+            "label": "PromQL",
+            "help": "Выражение в выбранной области endpoint; URL и HTTP параметры не принимаются."
+          },
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "step_seconds",
+            "type": "INTEGER",
+            "required": true,
+            "minimum": 1,
+            "maximum": 3600,
+            "label": "Шаг, секунды",
+            "help": "Не более 1000 шагов на запрос."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.labels.list",
+        "name": "Перечислить имена меток",
+        "description": "Перечислить имена меток в полной выбранной области endpoint.",
+        "operation": "thanos.labels.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "match",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+            "label": "Селектор рядов",
+            "help": "Один обязательный match[] внутри выбранной области endpoint."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.label.values",
+        "name": "Прочитать значения метки",
+        "description": "Прочитать значения метки в полной выбранной области endpoint.",
+        "operation": "thanos.label.values",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "match",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+            "label": "Селектор рядов",
+            "help": "Один обязательный match[] внутри выбранной области endpoint."
+          },
+          {
+            "key": "label",
+            "type": "STRING",
+            "format": "IDENTIFIER",
+            "required": true,
+            "maximumLength": 100,
+            "label": "Имя метки",
+            "help": "Буквальное имя без HTTP path или query."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.series.list",
+        "name": "Перечислить ряды",
+        "description": "Перечислить ряды в полной выбранной области endpoint.",
+        "operation": "thanos.series.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [
+          {
+            "key": "start",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Начало периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "end",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 40,
+            "label": "Конец периода",
+            "help": "RFC3339 UTC; период не более 24 часов."
+          },
+          {
+            "key": "match",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 2048,
+            "label": "Селектор рядов",
+            "help": "Один обязательный match[] внутри выбранной области endpoint."
+          }
+        ],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.rules.list",
+        "name": "Прочитать правила",
+        "description": "Прочитать правила в полной выбранной области endpoint.",
+        "operation": "thanos.rules.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      },
+      {
+        "key": "thanos.alerts.list",
+        "name": "Прочитать alerts",
+        "description": "Прочитать alerts в полной выбранной области endpoint.",
+        "operation": "thanos.alerts.list",
+        "risk": "READ",
+        "approvalPolicy": "NONE",
+        "allowedApprovalPolicies": [
+          "NONE"
+        ],
+        "resourceScope": {
+          "kind": "HTTPS_RESOURCE",
+          "connectionFields": [
+            "base_url",
+            "scope_mode",
+            "tenant_id"
+          ]
+        },
+        "inputFields": [],
+        "outputFields": [
+          {
+            "key": "text",
+            "type": "STRING",
+            "format": "PLAIN",
+            "required": true,
+            "maximumLength": 65536,
+            "label": "Результат",
+            "help": "Ограниченная типизированная проекция; неполный или неоднозначный provider response закрыто отклоняется."
+          }
+        ],
+        "execution": {
+          "idempotency": "READ_ONLY",
+          "timeoutSeconds": 30,
+          "maxAttempts": 1,
+          "retryBackoffMilliseconds": 250
+        }
+      }
+    ]
+  }
+}

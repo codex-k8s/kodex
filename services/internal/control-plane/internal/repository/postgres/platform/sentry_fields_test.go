@@ -7,14 +7,14 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 )
 
-// TestSentryFieldsMatchToolSchema checks the contract from shipped typed tool inputs through owner projections used by generic UI, including Russian labels/help and actual integer/boolean types.
-// TestSentryFieldsMatchToolSchema проверяет контракт от shipped typed inputs до owner projections generic UI, включая русские labels/help и реальные integer/boolean types.
-func TestSentryFieldsMatchToolSchema(t *testing.T) {
+// TestIntegrationFieldsMatchToolSchema checks the contract from shipped typed tool inputs through owner projections used by generic UI, including Russian labels/help and actual integer/boolean types.
+// TestIntegrationFieldsMatchToolSchema проверяет контракт от shipped typed inputs до owner projections generic UI, включая русские labels/help и реальные integer/boolean types.
+func TestIntegrationFieldsMatchToolSchema(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization"} {
+	for _, key := range []string{"sentry", "sentry-self-hosted", "sentry-organization", "sentry-self-hosted-organization", "prometheus", "thanos"} {
 		definition := definitions[key]
 		for _, capability := range definition.Spec.Capabilities {
 			raw, err := capability.InputSchema()

@@ -4997,6 +4997,8 @@ enum IntegrationCredentialResourcePermissionProfile {
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_OBJECT_READ_V1 = 16;
   // Общие release/workflow изменяются только full-organization grant и отдельным EACH решением.
   INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_SENTRY_ORGANIZATION_MUTATION_V1 = 17;
+  // Текущий типизированный GET в явно выбранной полной области endpoint; tenant header не даёт authority.
+  INTEGRATION_CREDENTIAL_RESOURCE_PERMISSION_PROFILE_OBSERVABILITY_TYPED_RESOURCE_READ_V1 = 18;
 }
 message IntegrationInvocationClaim {
   string invocation_ref = 1;

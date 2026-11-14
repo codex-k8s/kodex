@@ -172,6 +172,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 		if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 			continue
 		}
+		if definition.Spec.Adapter == "OBSERVABILITY" {
+			t.Run(key, func(t *testing.T) { testObservabilityCapabilities(t, key) })
+			continue
+		}
 		if definition.Spec.Adapter == "SENTRY" {
 			t.Run(key, func(t *testing.T) { testSentryCapabilities(t, key) })
 			continue

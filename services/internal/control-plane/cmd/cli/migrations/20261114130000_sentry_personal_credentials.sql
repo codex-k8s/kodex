@@ -16,10 +16,10 @@ DECLARE
 BEGIN
  FOR target,column_name,marker,replacement IN VALUES
   ('control_plane.integration_definitions'::regclass,'adapter',
-   '''SSH_COMPOSE''::text', '''SSH_COMPOSE''::text, ''SENTRY''::text'),
+   '''SSH_COMPOSE''::text', '''SSH_COMPOSE''::text, ''SENTRY''::text, ''OBSERVABILITY''::text'),
   ('control_plane.integration_personal_invocation_credentials'::regclass,'resource_permission_profile',
    '''GITLAB_SCOPED_RESOURCE_V2''::text',
-   '''GITLAB_SCOPED_RESOURCE_V2''::text, ''SENTRY_PROJECT_OBJECT_READ_V1''::text, ''SENTRY_ISSUE_STATUS_WRITE_V1''::text, ''SENTRY_PROJECT_MUTATION_V1''::text, ''SENTRY_ORGANIZATION_OBJECT_READ_V1''::text, ''SENTRY_ORGANIZATION_MUTATION_V1''::text'),
+   '''GITLAB_SCOPED_RESOURCE_V2''::text, ''SENTRY_PROJECT_OBJECT_READ_V1''::text, ''SENTRY_ISSUE_STATUS_WRITE_V1''::text, ''SENTRY_PROJECT_MUTATION_V1''::text, ''SENTRY_ORGANIZATION_OBJECT_READ_V1''::text, ''SENTRY_ORGANIZATION_MUTATION_V1''::text, ''OBSERVABILITY_TYPED_RESOURCE_READ_V1''::text'),
   ('control_plane.integration_personal_credentials'::regclass,'observed_permission_profiles',
    '''GITLAB_PROJECT_WRITE_SCOPE_V1''::text',
    '''GITLAB_PROJECT_WRITE_SCOPE_V1''::text, ''SENTRY_TOKEN_SCOPES_V1''::text')
@@ -83,9 +83,18 @@ DECLARE
                   OR (invocation.risk='DESTRUCTIVE' AND invocation.capability_key='sentry.organization.alert.delete'))
                 AND binding.observed_permission_profiles @> ARRAY['SENTRY_TOKEN_SCOPES_V1']::text[])
              ))
+            OR (connection.definition_key IN ('prometheus','thanos')
+             AND NEW.resource_permission_profile='OBSERVABILITY_TYPED_RESOURCE_READ_V1'
+             AND invocation.resource_kind='HTTPS_RESOURCE' AND invocation.operation=invocation.capability_key
+             AND invocation.risk='READ' AND invocation.approval_policy='NONE'
+             AND invocation.capability_key IN (connection.definition_key||'.connection.read',connection.definition_key||'.query.instant',
+              connection.definition_key||'.query.range',connection.definition_key||'.labels.list',connection.definition_key||'.label.values',
+              connection.definition_key||'.series.list',connection.definition_key||'.rules.list',connection.definition_key||'.alerts.list')
+             AND binding.verified_capabilities @> ARRAY[connection.definition_key||'.connection.read']::text[]
+             AND NOT binding.denied_capabilities && ARRAY[connection.definition_key||'.connection.read']::text[])
             OR (NEW.resource_permission_profile='GITLAB_SCOPED_RESOURCE_V2'$after$;
  empty_marker text := $empty$(NEW.resource_permission_profile=''$empty$;
- empty_replacement text := $empty$(NEW.resource_permission_profile='' AND connection.definition_key NOT IN ('sentry','sentry-self-hosted','sentry-organization','sentry-self-hosted-organization')$empty$;
+ empty_replacement text := $empty$(NEW.resource_permission_profile='' AND connection.definition_key NOT IN ('sentry','sentry-self-hosted','sentry-organization','sentry-self-hosted-organization','prometheus','thanos')$empty$;
 BEGIN
  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid='control_plane.guard_personal_invocation_credential()'::regprocedure
   AND pg_get_userbyid(proowner)='control_plane_owner' AND NOT prosecdef)

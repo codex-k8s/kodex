@@ -1014,6 +1014,7 @@ HTTP401/403 сохраняют собственную auth-классифика�
 
 ## Наблюдение внешних возможностей с credential
 
+<<<<<<< HEAD
 При расширении Git-области discovery хранит только координаты ресурса. ID,
 canonical name и успешный публичный GET не заменяют текущую принадлежность
 аутентифицированной области ключа. Каждый эффект повторяет её проверку;
@@ -1023,6 +1024,24 @@ rename, ID mismatch и stale discovery закрываются. Specialized nativ
 Замена либо отзыв personal binding атомарно закрывают её pre-effect consumers;
 начатый эффект сохраняет прежний UNKNOWN/read-only reconciliation и не
 получает shared fallback. Классификация personal/service и discovery boundary выводится из проверенного adapter/resource contract, а не из названия версии; managed сужение сохраняет эти ограничения. Это не заменяет обязательные exact version/digest pins. Специализированный consumer выводит selectors из owner snapshot и проверяет фактическую pinned schema. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
+=======
+Для metrics/logs HTTP window, число output samples и размер body ограничивают
+только соответствующую часть запроса/ответа. Они не ограничивают embedded
+lookback, offset, subquery и стоимость вычисления до ответа. Typed consumer
+использует штатный parser с закрытым AST profile либо доказанный server profile;
+ошибка parser закрывает путь до semantic use. Deadline/request cancellation
+проверяется по точной совместимой версии. Пределы CPU, memory, cardinality,
+max-samples и concurrency отдельно описываются как declared/observed; response
+cutoff не становится доказательством server cost bound.
+
+Endpoint authority выбирается явно. Tenant header — routing context, а не
+доказательство provider isolation. Успех действительного ключа и отказ свежего
+неверного ключа подтверждают только наблюдение authentication rejection.
+Изоляция остаётся UNKNOWN до отдельной positive/negative матрицы двух
+действительных ключей и двух tenant; её нельзя вывести из пары HTTP200/401.
+Любые metric/log payloads остаются недоверенными данными, а не инструкциями,
+permission metadata либо новыми grants.
+>>>>>>> 0a319ccfc (Добавить типизированные чтения Prometheus и Thanos с AST budget #2140)
 
 Список возможностей SDK, встроенный fallback и успешный локальный запуск не
 доказывают доступность provider для конкретной учётной записи. Наблюдение

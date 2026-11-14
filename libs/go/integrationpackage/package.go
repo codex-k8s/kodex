@@ -327,6 +327,11 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 			return errors.New("integration configuration required field is missing")
 		}
 	}
+	if definition.Spec.Adapter == string(AdapterObservability) {
+		if err := validateObservabilityConfiguration(definition, configuration); err != nil {
+			return err
+		}
+	}
 	if definition.Spec.Adapter == string(AdapterSentry) {
 		if err := validateSentryConfiguration(definition, configuration); err != nil {
 			return err

@@ -41,6 +41,8 @@ updated: 2026-11-14
 
 - `OPS-DOC-SENTRY-INTEGRATIONS-2140` — [Управляемая интеграция Sentry](../operations/sentry-integrations-2140.md).
 
+- `OPS-DOC-OBSERVABILITY-INTEGRATIONS-2140` — [Управляемые подключения к системам наблюдаемости](../operations/observability-integrations-2140.md).
+
 ## Frontmatter
 
 ```yaml

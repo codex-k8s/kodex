@@ -470,6 +470,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	case "OPENAPI_MCP":
 		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
+	case "OBSERVABILITY":
+		result, err = adapter.executeObservability(ctx, request, capability, configuration)
 	case "SENTRY":
 		result, err = adapter.executeSentry(ctx, request, capability, configuration)
 	case "CONTEXT7":
