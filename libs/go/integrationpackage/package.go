@@ -318,7 +318,7 @@ func (definition Package) validateConfiguration(configuration map[string]string,
 	}
 	for key, raw := range configuration {
 		field, exists := fields[key]
-		if !exists || validateStringValue(field, raw, false) != nil {
+		if !exists || validateConfigurationValue(field, raw) != nil {
 			return errors.New("integration configuration is invalid")
 		}
 	}
