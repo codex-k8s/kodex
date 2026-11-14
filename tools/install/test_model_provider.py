@@ -31,6 +31,19 @@ def fixture():
 
 
 class ModelProviderTests(unittest.TestCase):
+    def test_zai_coding_plan_preset_has_exact_endpoint_and_no_cache_overrides(self):
+        config = MODULE.zai_coding_plan('a' * 40, ['192.0.2.4/32'], 'glm-5.3')
+        provider = config['providers'][0]
+        self.assertEqual(provider['base_url'], 'https://api.z.ai/api/coding/paas/v4')
+        self.assertEqual(provider['api'], 'CHAT_COMPLETIONS')
+        self.assertEqual(provider['engine_version'], '1.19.5')
+        self.assertEqual([model['id'] for model in provider['models']], ['glm-5.3', 'glm-5.3-flash'])
+        self.assertTrue(all('cache_policy' not in model for model in provider['models']))
+        with self.assertRaises(ValueError):
+            MODULE.zai_coding_plan('a' * 40, ['0.0.0.0/0'], 'glm-5.3')
+        with self.assertRaises(ValueError):
+            MODULE.zai_coding_plan('a' * 40, ['192.0.2.4/32'], 'unknown-fallback')
+
     def assert_role_catalog_authority(self, resources, expected_component):
         deployment = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane')
         pod = deployment['spec']['template']

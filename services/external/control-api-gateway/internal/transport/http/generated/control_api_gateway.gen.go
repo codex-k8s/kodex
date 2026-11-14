@@ -3988,6 +3988,177 @@ func (e ModelContextPolicyRevision) Valid() bool {
 	}
 }
 
+// Defines values for ModelDiscoveryModelAccount.
+const (
+	ModelDiscoveryModelAccountAVAILABLE   ModelDiscoveryModelAccount = "AVAILABLE"
+	ModelDiscoveryModelAccountUNAVAILABLE ModelDiscoveryModelAccount = "UNAVAILABLE"
+	ModelDiscoveryModelAccountUNKNOWN     ModelDiscoveryModelAccount = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelAccount enum.
+func (e ModelDiscoveryModelAccount) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelAccountAVAILABLE:
+		return true
+	case ModelDiscoveryModelAccountUNAVAILABLE:
+		return true
+	case ModelDiscoveryModelAccountUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelAdapter.
+const (
+	ModelDiscoveryModelAdapterBUNDLED     ModelDiscoveryModelAdapter = "BUNDLED"
+	ModelDiscoveryModelAdapterUNKNOWN     ModelDiscoveryModelAdapter = "UNKNOWN"
+	ModelDiscoveryModelAdapterUNSUPPORTED ModelDiscoveryModelAdapter = "UNSUPPORTED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelAdapter enum.
+func (e ModelDiscoveryModelAdapter) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelAdapterBUNDLED:
+		return true
+	case ModelDiscoveryModelAdapterUNKNOWN:
+		return true
+	case ModelDiscoveryModelAdapterUNSUPPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelAllowed.
+const (
+	ModelDiscoveryModelAllowedUNAVAILABLE ModelDiscoveryModelAllowed = "UNAVAILABLE"
+	ModelDiscoveryModelAllowedUNKNOWN     ModelDiscoveryModelAllowed = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelAllowed enum.
+func (e ModelDiscoveryModelAllowed) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelAllowedUNAVAILABLE:
+		return true
+	case ModelDiscoveryModelAllowedUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelKnown.
+const (
+	ModelDiscoveryModelKnownCUSTOM  ModelDiscoveryModelKnown = "CUSTOM"
+	ModelDiscoveryModelKnownKNOWN   ModelDiscoveryModelKnown = "KNOWN"
+	ModelDiscoveryModelKnownREMOVED ModelDiscoveryModelKnown = "REMOVED"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelKnown enum.
+func (e ModelDiscoveryModelKnown) Valid() bool {
+	switch e {
+	case ModelDiscoveryModelKnownCUSTOM:
+		return true
+	case ModelDiscoveryModelKnownKNOWN:
+		return true
+	case ModelDiscoveryModelKnownREMOVED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoveryModelTested.
+const (
+	NOTRUN ModelDiscoveryModelTested = "NOT_RUN"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoveryModelTested enum.
+func (e ModelDiscoveryModelTested) Valid() bool {
+	switch e {
+	case NOTRUN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceLicense.
+const (
+	MIT ModelDiscoverySourceLicense = "MIT"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceLicense enum.
+func (e ModelDiscoverySourceLicense) Valid() bool {
+	switch e {
+	case MIT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceSchema.
+const (
+	KodexModelProviderDiscoveryv1 ModelDiscoverySourceSchema = "kodex.model-provider-discovery/v1"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceSchema enum.
+func (e ModelDiscoverySourceSchema) Valid() bool {
+	switch e {
+	case KodexModelProviderDiscoveryv1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceSource.
+const (
+	ModelsDev ModelDiscoverySourceSource = "models.dev"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceSource enum.
+func (e ModelDiscoverySourceSource) Valid() bool {
+	switch e {
+	case ModelsDev:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceSourceUrl.
+const (
+	HttpsmodelsDevExperimentalV20ApiJson ModelDiscoverySourceSourceUrl = "https://models.dev/_experimental_v2.0_api.json"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceSourceUrl enum.
+func (e ModelDiscoverySourceSourceUrl) Valid() bool {
+	switch e {
+	case HttpsmodelsDevExperimentalV20ApiJson:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelDiscoverySourceUpstreamSchema.
+const (
+	ModelsDevexperimentalV20 ModelDiscoverySourceUpstreamSchema = "models.dev/experimental-v2.0"
+)
+
+// Valid indicates whether the value is a known member of the ModelDiscoverySourceUpstreamSchema enum.
+func (e ModelDiscoverySourceUpstreamSchema) Valid() bool {
+	switch e {
+	case ModelsDevexperimentalV20:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ModelMeasurementCompleteness.
 const (
 	ModelMeasurementCompletenessCOMPLETE ModelMeasurementCompleteness = "COMPLETE"
@@ -5934,31 +6105,31 @@ func (e RepositoryBundlePublicationContinuationState) Valid() bool {
 
 // Defines values for RepositoryBundlePublicationFailureCode.
 const (
-	RepositoryBundlePublicationFailureCodeAUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
-	RepositoryBundlePublicationFailureCodeBASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
-	RepositoryBundlePublicationFailureCodeBRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
-	RepositoryBundlePublicationFailureCodeCONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
-	RepositoryBundlePublicationFailureCodeDEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
-	RepositoryBundlePublicationFailureCodeOUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
-	RepositoryBundlePublicationFailureCodeUNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
+	AUTHORITYCHANGED   RepositoryBundlePublicationFailureCode = "AUTHORITY_CHANGED"
+	BASEINVALID        RepositoryBundlePublicationFailureCode = "BASE_INVALID"
+	BRANCHCONFLICT     RepositoryBundlePublicationFailureCode = "BRANCH_CONFLICT"
+	CONTENTINVALID     RepositoryBundlePublicationFailureCode = "CONTENT_INVALID"
+	DEADLINEEXCEEDED   RepositoryBundlePublicationFailureCode = "DEADLINE_EXCEEDED"
+	OUTCOMEUNCONFIRMED RepositoryBundlePublicationFailureCode = "OUTCOME_UNCONFIRMED"
+	UNAVAILABLE        RepositoryBundlePublicationFailureCode = "UNAVAILABLE"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryBundlePublicationFailureCode enum.
 func (e RepositoryBundlePublicationFailureCode) Valid() bool {
 	switch e {
-	case RepositoryBundlePublicationFailureCodeAUTHORITYCHANGED:
+	case AUTHORITYCHANGED:
 		return true
-	case RepositoryBundlePublicationFailureCodeBASEINVALID:
+	case BASEINVALID:
 		return true
-	case RepositoryBundlePublicationFailureCodeBRANCHCONFLICT:
+	case BRANCHCONFLICT:
 		return true
-	case RepositoryBundlePublicationFailureCodeCONTENTINVALID:
+	case CONTENTINVALID:
 		return true
-	case RepositoryBundlePublicationFailureCodeDEADLINEEXCEEDED:
+	case DEADLINEEXCEEDED:
 		return true
-	case RepositoryBundlePublicationFailureCodeOUTCOMEUNCONFIRMED:
+	case OUTCOMEUNCONFIRMED:
 		return true
-	case RepositoryBundlePublicationFailureCodeUNAVAILABLE:
+	case UNAVAILABLE:
 		return true
 	default:
 		return false
@@ -8253,25 +8424,25 @@ func (e SchedulePreviewInputOverlapPolicy) Valid() bool {
 
 // Defines values for SchedulePreviewInputPreset.
 const (
-	SchedulePreviewInputPresetCUSTOM   SchedulePreviewInputPreset = "CUSTOM"
-	SchedulePreviewInputPresetDAILY    SchedulePreviewInputPreset = "DAILY"
-	SchedulePreviewInputPresetHOURLY   SchedulePreviewInputPreset = "HOURLY"
-	SchedulePreviewInputPresetWEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
-	SchedulePreviewInputPresetWEEKLY   SchedulePreviewInputPreset = "WEEKLY"
+	CUSTOM   SchedulePreviewInputPreset = "CUSTOM"
+	DAILY    SchedulePreviewInputPreset = "DAILY"
+	HOURLY   SchedulePreviewInputPreset = "HOURLY"
+	WEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
+	WEEKLY   SchedulePreviewInputPreset = "WEEKLY"
 )
 
 // Valid indicates whether the value is a known member of the SchedulePreviewInputPreset enum.
 func (e SchedulePreviewInputPreset) Valid() bool {
 	switch e {
-	case SchedulePreviewInputPresetCUSTOM:
+	case CUSTOM:
 		return true
-	case SchedulePreviewInputPresetDAILY:
+	case DAILY:
 		return true
-	case SchedulePreviewInputPresetHOURLY:
+	case HOURLY:
 		return true
-	case SchedulePreviewInputPresetWEEKDAYS:
+	case WEEKDAYS:
 		return true
-	case SchedulePreviewInputPresetWEEKLY:
+	case WEEKLY:
 		return true
 	default:
 		return false
@@ -13640,6 +13811,83 @@ type ModelContextPolicy struct {
 // ModelContextPolicyRevision defines model for ModelContextPolicy.Revision.
 type ModelContextPolicyRevision int
 
+// ModelDiscoveryModel defines model for ModelDiscoveryModel.
+type ModelDiscoveryModel struct {
+	Account          ModelDiscoveryModelAccount `json:"account"`
+	Adapter          ModelDiscoveryModelAdapter `json:"adapter"`
+	Allowed          ModelDiscoveryModelAllowed `json:"allowed"`
+	ContextTokens    string                     `json:"contextTokens"`
+	InputModalities  []string                   `json:"inputModalities"`
+	Known            ModelDiscoveryModelKnown   `json:"known"`
+	ModelId          string                     `json:"modelId"`
+	Name             string                     `json:"name"`
+	OutputModalities []string                   `json:"outputModalities"`
+	OutputTokens     string                     `json:"outputTokens"`
+	ProviderId       string                     `json:"providerId"`
+	ProviderName     string                     `json:"providerName"`
+	Reasoning        bool                       `json:"reasoning"`
+	ReasoningEfforts []string                   `json:"reasoningEfforts"`
+	RouteConfigured  bool                       `json:"routeConfigured"`
+	Tested           ModelDiscoveryModelTested  `json:"tested"`
+	Tools            bool                       `json:"tools"`
+	Type             string                     `json:"type"`
+	UpstreamStatus   string                     `json:"upstreamStatus"`
+}
+
+// ModelDiscoveryModelAccount defines model for ModelDiscoveryModel.Account.
+type ModelDiscoveryModelAccount string
+
+// ModelDiscoveryModelAdapter defines model for ModelDiscoveryModel.Adapter.
+type ModelDiscoveryModelAdapter string
+
+// ModelDiscoveryModelAllowed defines model for ModelDiscoveryModel.Allowed.
+type ModelDiscoveryModelAllowed string
+
+// ModelDiscoveryModelKnown defines model for ModelDiscoveryModel.Known.
+type ModelDiscoveryModelKnown string
+
+// ModelDiscoveryModelTested defines model for ModelDiscoveryModel.Tested.
+type ModelDiscoveryModelTested string
+
+// ModelDiscoveryPage defines model for ModelDiscoveryPage.
+type ModelDiscoveryPage struct {
+	Items         []ModelDiscoveryModel `json:"items"`
+	NextPageToken string                `json:"nextPageToken"`
+	Source        ModelDiscoverySource  `json:"source"`
+	Total         string                `json:"total"`
+}
+
+// ModelDiscoverySource defines model for ModelDiscoverySource.
+type ModelDiscoverySource struct {
+	CatalogSha256  string                             `json:"catalogSha256"`
+	License        ModelDiscoverySourceLicense        `json:"license"`
+	ModelCount     int                                `json:"modelCount"`
+	OverlaySha256  string                             `json:"overlaySha256"`
+	Schema         ModelDiscoverySourceSchema         `json:"schema"`
+	SchemaSha256   string                             `json:"schemaSha256"`
+	SnapshotSha256 string                             `json:"snapshotSha256"`
+	Source         ModelDiscoverySourceSource         `json:"source"`
+	SourceRevision string                             `json:"sourceRevision"`
+	SourceUrl      ModelDiscoverySourceSourceUrl      `json:"sourceUrl"`
+	UpstreamSchema ModelDiscoverySourceUpstreamSchema `json:"upstreamSchema"`
+	UpstreamSha256 string                             `json:"upstreamSha256"`
+}
+
+// ModelDiscoverySourceLicense defines model for ModelDiscoverySource.License.
+type ModelDiscoverySourceLicense string
+
+// ModelDiscoverySourceSchema defines model for ModelDiscoverySource.Schema.
+type ModelDiscoverySourceSchema string
+
+// ModelDiscoverySourceSource defines model for ModelDiscoverySource.Source.
+type ModelDiscoverySourceSource string
+
+// ModelDiscoverySourceSourceUrl defines model for ModelDiscoverySource.SourceUrl.
+type ModelDiscoverySourceSourceUrl string
+
+// ModelDiscoverySourceUpstreamSchema defines model for ModelDiscoverySource.UpstreamSchema.
+type ModelDiscoverySourceUpstreamSchema string
+
 // ModelExecutionPolicy defines model for ModelExecutionPolicy.
 type ModelExecutionPolicy struct {
 	Cache               ModelCacheResolution `json:"cache"`
@@ -18625,6 +18873,14 @@ type ListModelCapabilitiesParams struct {
 	PageToken             *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
 }
 
+// ListModelDiscoveryParams defines parameters for ListModelDiscovery.
+type ListModelDiscoveryParams struct {
+	Query      *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize   *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken  *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	ProviderId *string    `form:"providerId,omitempty" json:"providerId,omitempty"`
+}
+
 // CompleteOnboardingParams defines parameters for CompleteOnboarding.
 type CompleteOnboardingParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -21920,6 +22176,9 @@ type ServerInterface interface {
 
 	// (GET /api/v1/model-capabilities)
 	ListModelCapabilities(w http.ResponseWriter, r *http.Request, params ListModelCapabilitiesParams)
+
+	// (GET /api/v1/model-discovery)
+	ListModelDiscovery(w http.ResponseWriter, r *http.Request, params ListModelDiscoveryParams)
 
 	// (POST /api/v1/onboarding/completion)
 	CompleteOnboarding(w http.ResponseWriter, r *http.Request, params CompleteOnboardingParams)
@@ -35819,6 +36078,84 @@ func (siw *ServerInterfaceWrapper) ListModelCapabilities(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListModelCapabilities(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListModelDiscovery operation middleware
+func (siw *ServerInterfaceWrapper) ListModelDiscovery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListModelDiscoveryParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "providerId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "providerId", r.URL.Query(), &params.ProviderId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "providerId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModelDiscovery(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -53222,6 +53559,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ListMemoryRecordRevisions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/revisions", wrapper.ReviseMemoryRecord)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/model-capabilities", wrapper.ListModelCapabilities)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/model-discovery", wrapper.ListModelDiscovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/onboarding/completion", wrapper.CompleteOnboarding)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.ListSystemRoleImageRecipes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.CreateSystemRoleImageRecipe)

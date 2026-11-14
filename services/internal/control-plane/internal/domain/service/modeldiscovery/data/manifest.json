@@ -1,0 +1,12 @@
+{
+  "license": "MIT",
+  "model_count": 9726,
+  "schema": "kodex.model-provider-discovery/v1",
+  "schema_sha256": "311d8d6fd567011417344ca66ea0e823564044673acdc16702070025e442deb5",
+  "snapshot_sha256": "cf4c9461df42e191f74587594c4be9832d06e1d870cac0fba811f95decf8f114",
+  "source": "models.dev",
+  "source_revision": "a5458bdc8326d995619413b54425db97e911f4d4",
+  "source_url": "https://models.dev/_experimental_v2.0_api.json",
+  "upstream_schema": "models.dev/experimental-v2.0",
+  "upstream_sha256": "408e76fe27e67dfde4ea7462da1a0144ddf22488d48489dfe4ee17e677c63ef3"
+}

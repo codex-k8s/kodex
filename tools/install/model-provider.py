@@ -36,6 +36,10 @@ def configuration(path):
     if not 0 < len(raw) <= 524288:
         raise ValueError()
     value = json.loads(raw, object_pairs_hook=unique_object)
+    return validate_configuration(value)
+
+
+def validate_configuration(value):
     runner_schema = json.loads((ROOT / 'contracts/runtime-controller/v10/agent-runner-input.schema.json').read_text())
     schema = json.loads((ROOT / 'contracts/model-provider/v1/catalog.schema.json').read_text())
     registry = Registry().with_resource(runner_schema['$id'], Resource.from_contents(runner_schema))
@@ -59,6 +63,24 @@ def configuration(path):
     if not default_found:
         raise ValueError()
     return value
+
+
+def zai_coding_plan(revision, addresses, default_model):
+    # Coding Plan — самостоятельный маршрут. Обычный paid API и latest SDK metadata не выбираются автоматически.
+    models = ('glm-5.3', 'glm-5.3-flash')
+    if default_model not in models:
+        raise ValueError()
+    return validate_configuration({
+        'schema': 'kodex.model-provider-catalog/v1', 'managed_by': 'git', 'source_revision': revision,
+        'default_provider': 'opencode-zai-coding-plan', 'default_model': default_model,
+        'providers': [{
+            'schema': 'kodex.model-provider/v1', 'managed_by': 'git', 'source_revision': revision,
+            'engine': 'opencode', 'engine_version': '1.19.5', 'tool_mode': 'managed_mcp',
+            'provider_id': 'zai-coding-plan', 'base_url': 'https://api.z.ai/api/coding/paas/v4',
+            'api': 'CHAT_COMPLETIONS', 'route_kind': 'DIRECT', 'address_cidrs': addresses,
+            'models': [{'id': model, 'context_window_tokens': 1000000, 'maximum_output_tokens': 32768} for model in models],
+        }],
+    })
 
 
 def validate_provider(value):
@@ -199,13 +221,27 @@ def prepare_auth(config, input_path, output_path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('validate', 'render', 'prepare-auth'))
-    parser.add_argument('--configuration', required=True)
+    parser.add_argument('mode', choices=('validate', 'render', 'prepare-auth', 'preset-zai-coding-plan'))
+    parser.add_argument('--configuration')
+    parser.add_argument('--source-revision')
+    parser.add_argument('--address-cidr', action='append')
     parser.add_argument('--render')
     parser.add_argument('--default-model', default='')
     parser.add_argument('--api-key-file')
     parser.add_argument('--output')
     args = parser.parse_args()
+    if args.mode == 'preset-zai-coding-plan':
+        if args.configuration or args.render or args.api_key_file or not args.output or not args.source_revision or not args.address_cidr:
+            raise ValueError()
+        config = zai_coding_plan(args.source_revision, args.address_cidr, args.default_model or 'glm-5.3')
+        out = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(out, 'w') as stream:
+            json.dump(config, stream, ensure_ascii=False, sort_keys=True, indent=2)
+            stream.write('\n')
+        print('Model provider operation completed')
+        return
+    if not args.configuration or args.source_revision or args.address_cidr:
+        raise ValueError()
     config = configuration(args.configuration)
     if args.mode == 'render':
         render(config, args.render, args.default_model)

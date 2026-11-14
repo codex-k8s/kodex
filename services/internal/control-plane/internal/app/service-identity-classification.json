@@ -1523,6 +1523,11 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.query.model-discovery.list",
+      "source_binding_sha256": "acb33bbd0a6436696b99013bdc549344a3a79154ee260fcaa7a72540957a60d1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.query.models.list",
       "source_binding_sha256": "c8d23918bb576248ab159803fedd38ec913392cd72e93c854ef98e9684148a09",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"

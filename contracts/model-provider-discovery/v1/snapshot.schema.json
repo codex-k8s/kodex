@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kodex:contract:model-provider-discovery:v1",
+  "title": "Поисковая проекция models.dev; метаданные не разрешают исполнение",
+  "type": "array",
+  "maxItems": 50000,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "provider_id",
+      "provider_name",
+      "model_id",
+      "name",
+      "type",
+      "upstream_status",
+      "context_tokens",
+      "output_tokens",
+      "tools",
+      "reasoning",
+      "reasoning_efforts",
+      "input_modalities",
+      "output_modalities",
+      "apis"
+    ],
+    "properties": {
+      "provider_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "provider_name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "model_id": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "type": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "upstream_status": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32
+      },
+      "context_tokens": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000000
+      },
+      "output_tokens": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1000000000000
+      },
+      "tools": {
+        "type": "boolean"
+      },
+      "reasoning": {
+        "type": "boolean"
+      },
+      "reasoning_efforts": {
+        "type": "array",
+        "maxItems": 16,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32
+        }
+      },
+      "input_modalities": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "output_modalities": {
+        "type": "array",
+        "maxItems": 64,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "apis": {
+        "type": "array",
+        "maxItems": 32,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocol",
+            "base_url",
+            "sdk"
+          ],
+          "properties": {
+            "protocol": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "base_url": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "sdk": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        }
+      }
+    }
+  }
+}
