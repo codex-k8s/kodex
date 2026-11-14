@@ -55,7 +55,7 @@ async function backup({context,kubeconfig,clusterUID,namespaceUID,parent}) {
  const commandArgs=["exec",before.podName,"-c","postgresql","--","env","-i","PATH=/usr/local/bin:/usr/bin:/bin"];
  const databaseIdentity=()=>{
   const value=JSON.parse(kube([...commandArgs,"psql",...databaseArgs,"-X","-A","-t","-v","ON_ERROR_STOP=1","-c",
-   "SELECT json_build_object('systemIdentifier',system_identifier::text,'databaseOID',oid::text,'database',current_database(),'port',current_setting('port'),'serverAddress',inet_server_addr(),'serverPort',inet_server_port()) FROM pg_control_system(),pg_database WHERE datname=current_database()"]));
+   "SELECT pg_catalog.json_build_object('systemIdentifier',system_identifier::pg_catalog.text,'databaseOID',oid::pg_catalog.text,'database',pg_catalog.current_database(),'port',pg_catalog.current_setting('port'),'serverAddress',pg_catalog.inet_server_addr(),'serverPort',pg_catalog.inet_server_port()) FROM pg_catalog.pg_control_system(),pg_catalog.pg_database WHERE datname=pg_catalog.current_database()"]));
   ensure(value && typeof value.systemIdentifier==="string" && /^[0-9]{1,20}$/.test(value.systemIdentifier) &&
    typeof value.databaseOID==="string" && /^[0-9]{1,10}$/.test(value.databaseOID) &&
    value.database==="control_plane" && value.port==="5432" && value.serverAddress===null && value.serverPort===null,"BACKUP_DATABASE_IDENTITY_INVALID");
