@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
+	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"
 )
 
 const (
@@ -26,32 +27,34 @@ const (
 // loadConfig applies deployment environment overrides before validation; integration-specific policy remains in owner claims and adapters.
 // RU: loadConfig применяет переменные развёртывания до валидации; политика конкретной интеграции остаётся в owner claims и адаптерах.
 type Config struct {
-	SecretBrokerTarget          string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TARGET"`
-	SecretBrokerTLSServerName   string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TLS_SERVER_NAME"`
-	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
-	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
-	TechnicalListen             string        `env:"INTEGRATION_GATEWAY_TECHNICAL_LISTEN"`
-	ControlPlaneTarget          string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_TARGET"`
-	ControlPlaneTLSServerName   string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME"`
-	ControlPlaneCAFile          string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_CA_FILE"`
-	ControlPlaneCertificateFile string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_CERTIFICATE_FILE"`
-	ControlPlanePrivateKeyFile  string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE"`
-	ApplicationGrantFile        string        `env:"INTEGRATION_GATEWAY_APPLICATION_GRANT_FILE"`
-	InstanceID                  string        `env:"INTEGRATION_GATEWAY_INSTANCE_ID"`
-	CredentialDirectory         string        `env:"INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY"`
-	EgressProxyURL              string        `env:"INTEGRATION_GATEWAY_EGRESS_PROXY_URL"`
-	OpenAPIProxyURL             string        `env:"INTEGRATION_GATEWAY_OPENAPI_PROXY_URL"`
-	NativeProxyURL              string        `env:"INTEGRATION_GATEWAY_NATIVE_PROXY_URL"`
-	SyntheticBaseURL            string        `env:"INTEGRATION_GATEWAY_SYNTHETIC_BASE_URL"`
-	LocalOpenAPIBaseURL         string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL"`
-	LocalOpenAPICAFile          string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE"`
-	StartupTimeout              time.Duration `env:"INTEGRATION_GATEWAY_STARTUP_TIMEOUT"`
-	ShutdownTimeout             time.Duration `env:"INTEGRATION_GATEWAY_SHUTDOWN_TIMEOUT"`
-	RequestTimeout              time.Duration `env:"INTEGRATION_GATEWAY_REQUEST_TIMEOUT"`
-	OperationTimeout            time.Duration `env:"INTEGRATION_GATEWAY_OPERATION_TIMEOUT"`
-	PollInterval                time.Duration `env:"INTEGRATION_GATEWAY_POLL_INTERVAL"`
-	ReadinessInterval           time.Duration `env:"INTEGRATION_GATEWAY_READINESS_INTERVAL"`
-	ClaimLimit                  int32         `env:"INTEGRATION_GATEWAY_CLAIM_LIMIT"`
+	SecretBrokerTarget               string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TARGET"`
+	SecretBrokerTLSServerName        string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TLS_SERVER_NAME"`
+	RPCProfile                       string        `env:"KODEX_RPC_PROFILE"`
+	Environment                      string        `env:"DEPLOYMENT_ENVIRONMENT"`
+	TechnicalListen                  string        `env:"INTEGRATION_GATEWAY_TECHNICAL_LISTEN"`
+	ControlPlaneTarget               string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName        string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile               string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile      string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile       string        `env:"INTEGRATION_GATEWAY_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile             string        `env:"INTEGRATION_GATEWAY_APPLICATION_GRANT_FILE"`
+	InstanceID                       string        `env:"INTEGRATION_GATEWAY_INSTANCE_ID"`
+	CredentialDirectory              string        `env:"INTEGRATION_GATEWAY_CREDENTIAL_DIRECTORY"`
+	EgressProxyURL                   string        `env:"INTEGRATION_GATEWAY_EGRESS_PROXY_URL"`
+	OpenAPIProxyURL                  string        `env:"INTEGRATION_GATEWAY_OPENAPI_PROXY_URL"`
+	NativeProxyURL                   string        `env:"INTEGRATION_GATEWAY_NATIVE_PROXY_URL"`
+	ObservabilityQualificationFile   string        `env:"INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_FILE"`
+	ObservabilityQualificationSHA256 string        `env:"INTEGRATION_GATEWAY_OBSERVABILITY_QUALIFICATION_SHA256"`
+	SyntheticBaseURL                 string        `env:"INTEGRATION_GATEWAY_SYNTHETIC_BASE_URL"`
+	LocalOpenAPIBaseURL              string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_BASE_URL"`
+	LocalOpenAPICAFile               string        `env:"INTEGRATION_GATEWAY_LOCAL_OPENAPI_CA_FILE"`
+	StartupTimeout                   time.Duration `env:"INTEGRATION_GATEWAY_STARTUP_TIMEOUT"`
+	ShutdownTimeout                  time.Duration `env:"INTEGRATION_GATEWAY_SHUTDOWN_TIMEOUT"`
+	RequestTimeout                   time.Duration `env:"INTEGRATION_GATEWAY_REQUEST_TIMEOUT"`
+	OperationTimeout                 time.Duration `env:"INTEGRATION_GATEWAY_OPERATION_TIMEOUT"`
+	PollInterval                     time.Duration `env:"INTEGRATION_GATEWAY_POLL_INTERVAL"`
+	ReadinessInterval                time.Duration `env:"INTEGRATION_GATEWAY_READINESS_INTERVAL"`
+	ClaimLimit                       int32         `env:"INTEGRATION_GATEWAY_CLAIM_LIMIT"`
 }
 
 // loadConfig parses typed environment overrides onto fixed service defaults and returns a zero configuration on parse or validation failure.
@@ -90,6 +93,12 @@ func loadConfig() (Config, error) {
 // The optional local OpenAPI route requires the trusted-cluster profile, its exact HTTPS host and a normalized absolute CA path.
 // RU: Необязательный локальный OpenAPI-маршрут требует trusted-cluster профиля, точного HTTPS-хоста и нормализованного абсолютного пути CA.
 func (config Config) validate() error {
+	if err := integration.ValidateObservabilityQualificationConfiguration(config.ObservabilityQualificationFile, config.ObservabilityQualificationSHA256); err != nil {
+		return err
+	}
+	if config.ObservabilityQualificationFile != "" && config.NativeProxyURL == "" {
+		return errors.New("observability qualification native transport is required")
+	}
 	if config.SecretBrokerTarget != "secret-broker.kodex-system.svc:8443" || config.SecretBrokerTLSServerName != "secret-broker.kodex-system.svc.cluster.local" {
 		return errors.New("SSH credential broker target is invalid")
 	}

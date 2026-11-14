@@ -1,6 +1,9 @@
 package integration
 
 const (
+	// queryProfileUnsupportedCode distinguishes a valid but deliberately unsupported query construct from malformed input or credential failure.
+	// queryProfileUnsupportedCode отличает valid, но deliberately unsupported query construct от malformed input либо credential failure.
+	queryProfileUnsupportedCode = "INTEGRATION_QUERY_PROFILE_UNSUPPORTED"
 	// providerResponseInvalidCode rejects a bounded but unverifiable provider response without exposing upstream diagnostics.
 	// providerResponseInvalidCode отклоняет ограниченный, но непроверяемый ответ без выдачи upstream diagnostics.
 	providerResponseInvalidCode = "INTEGRATION_RESPONSE_INVALID"
