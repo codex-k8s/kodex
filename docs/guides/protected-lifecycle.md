@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.81
+version: 1.1.82
 updated: 2026-11-14
 ---
 
@@ -41,6 +41,14 @@ Service остаётся отдельно изолированным после 
 Возврат маршрута связан с exact завершённым owner protocol и свежим authoritative
 status, а не только с прежним ACK или completed Job. Исполняемый порядок:
 [обслуживание API](../runbooks/portable-install.md#закрытие-api-при-согласованном-обновлении-компонентов).
+
+Сравнение Deployment template с фактическим Pod учитывает только доказанные
+defaults API: отсутствующий `enableServiceLinks` допускает добавленное `true`.
+Явное `false` сохраняется без нормализации; неизвестные поля, изменённые containers,
+credentials/config volumes и неподтверждённые статусы не становятся готовностью.
+Проверены Context7 `/kubernetes/kubernetes` и
+[исходник Kubernetes v1.35.5](https://github.com/kubernetes/kubernetes/blob/v1.35.5/pkg/apis/core/v1/defaults.go):
+`SetDefaults_Pod` применяет это значение к Pod отдельно от PodTemplate.
 
 После BIND отмена Pod немедленно закрывает command admission executor и отменяет
 активную команду. Ограниченное ожидание разрешает только `QUIESCE` прежней
