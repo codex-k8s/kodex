@@ -109,7 +109,7 @@ export function integrationEffectPreview(
   const scope = intent?.resourceScope;
   const owner = scope?.values.owner;
   const repository = scope?.values.repository;
-  const repositoryName =
+  const fixedRepositoryName =
     scope?.kind === "GITHUB_REPOSITORY" &&
     typeof owner === "string" &&
     /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner) &&
@@ -117,6 +117,29 @@ export function integrationEffectPreview(
     /^[A-Za-z0-9_.-]{1,100}$/.test(repository)
       ? `${owner}/${repository}`
       : undefined;
+  const selectedName = fields.find(
+    (field) =>
+      field.key === "repository_full_name" && !field.hidden && !field.truncated,
+  )?.value;
+  const selectedID = fields.find(
+    (field) =>
+      field.key === "repository_id" && !field.hidden && !field.truncated,
+  )?.value;
+  const scopedRepositoryName =
+    scope?.kind === "GITHUB_SCOPE" &&
+    intent?.definitionKey === "github" &&
+    intent.capabilityKey === intent.operation &&
+    intent.operation.startsWith("github.") &&
+    ["ALL_ACCESSIBLE", "SELECTED"].includes(scope.values.scope_kind ?? "") &&
+    typeof selectedName === "string" &&
+    /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(selectedName) &&
+    !selectedName.split("/").some((part) => part === "." || part === "..") &&
+    typeof selectedID === "number" &&
+    Number.isSafeInteger(selectedID) &&
+    selectedID > 0
+      ? selectedName
+      : undefined;
+  const repositoryName = fixedRepositoryName ?? scopedRepositoryName;
   const issue = fields.find(
     (field) =>
       field.key === "issue_number" && !field.hidden && !field.truncated,

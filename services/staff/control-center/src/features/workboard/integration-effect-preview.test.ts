@@ -237,3 +237,64 @@ describe("integrationEffectPreview", () => {
     );
   });
 });
+
+describe("точный GitHub scoped target в Human Gate", () => {
+  it("показывает repository из bounded owner projection вместе с immutable ID", () => {
+    const value = intent([
+      { key: "repository_id", type: "INTEGER", value: 7, opaque: false },
+      {
+        key: "repository_full_name",
+        type: "STRING",
+        value: "organization/repository",
+        opaque: false,
+        truncated: false,
+      },
+      { key: "issue_number", type: "INTEGER", value: 17, opaque: false },
+    ]);
+    value.resourceScope = {
+      kind: "GITHUB_SCOPE",
+      values: { scope_kind: "ALL_ACCESSIBLE" },
+      digest: "a".repeat(64),
+    };
+    expect(integrationEffectPreview(value)).toMatchObject({
+      repositoryName: "organization/repository",
+      commentIssue: 17,
+    });
+  });
+  it.each(["missing ID", "hidden name", "ambiguous name"])(
+    "не считает %s полным указанием repository",
+    (kind) => {
+      const fields: unknown[] = [
+        {
+          key: "repository_full_name",
+          type: "STRING",
+          value: "organization/repository",
+          opaque: kind === "hidden name",
+          truncated: false,
+        },
+      ];
+      if (kind !== "missing ID")
+        fields.push({
+          key: "repository_id",
+          type: "INTEGER",
+          value: 7,
+          opaque: false,
+        });
+      if (kind === "ambiguous name")
+        fields.push({
+          key: "repository_full_name",
+          type: "STRING",
+          value: "other/repository",
+          opaque: false,
+          truncated: false,
+        });
+      const value = intent(fields);
+      value.resourceScope = {
+        kind: "GITHUB_SCOPE",
+        values: { scope_kind: "ALL_ACCESSIBLE" },
+        digest: "a".repeat(64),
+      };
+      expect(integrationEffectPreview(value).repositoryName).toBeUndefined();
+    },
+  );
+});

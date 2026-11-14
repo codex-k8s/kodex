@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 // TestPersonalGitHubScopedPolicyComponent proves each resource mode and selected policy through owner verification, launch, immutable personal pin, optional human gate, claim and one-time Begin; provider effects remain synthetic and unexecuted.
 // TestPersonalGitHubScopedPolicyComponent проверяет каждый resource mode и selected policy через owner verification, launch, immutable personal pin, optional human gate, claim и one-time Begin; provider effects остаются synthetic и не исполняются.
 func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
-	for _, scenario := range []struct{ kind, policy, change string }{{"READ", "NONE", ""}, {"WRITE", "HUMAN_EACH_EFFECT", ""}, {"WRITE", "HUMAN_SCOPED", ""}, {"WRITE", "HUMAN_EACH_EFFECT", "REVOKE"}, {"WRITE", "HUMAN_EACH_EFFECT", "ROTATE"}} {
+	for _, scenario := range []struct{ kind, policy, change string }{{"READ", "NONE", ""}, {"READ_MANAGED", "NONE", ""}, {"WRITE", "HUMAN_EACH_EFFECT", ""}, {"WRITE", "HUMAN_SCOPED", ""}, {"WRITE", "HUMAN_EACH_EFFECT", "REVOKE"}, {"WRITE", "HUMAN_EACH_EFFECT", "ROTATE"}} {
 		t.Run(scenario.kind+"/"+scenario.policy+"/"+scenario.change, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 45*time.Second)
 			defer cancel()
@@ -38,11 +39,24 @@ func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
 			}
 			owner, runtimeWorker, gateway := resolveIntegrationEffectTestPrincipals(t, ctx, repository)
 			execute := newComponentCommandExecutor(t, ctx, service, "scoped-personal-")
+			readScenario := strings.HasPrefix(scenario.kind, "READ")
 			configuration := map[string]any{"scope_kind": "ALL_ACCESSIBLE"}
 			connection := execute(command.CreateConnection, owner, "connection", nil, command.ConnectionInput{DefinitionKey: "github", Name: "Synthetic personal GitHub", PublicConfiguration: configuration}).Connection
 			if connection.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
 				t.Fatal("personal GitHub connection defaulted to shared credential")
 			}
+			if scenario.kind == "READ_MANAGED" {
+				connection = rebindManagedGitHubScopedComponent(t, ctx, repository, service, owner, *connection)
+				disabled := execute(command.SetConnectionEnabled, owner, "managed-disable", &connection.Version, command.ConnectionInput{Ref: connection.Ref, Enabled: false}).Connection
+				policyOwner := owner
+				policyOwner.Permission = "platform.integrations.credential-policy.set"
+				_, policyErr := service.Execute(ctx, command.Command{Kind: command.SetIntegrationCredentialPolicy, Principal: policyOwner, Mutation: value.Mutation{IdempotencyKey: "managed-scope-shared-without-service", ExpectedVersion: &disabled.Version}, Payload: command.IntegrationCredentialPolicyInput{ConnectionRef: connection.Ref, Policy: entity.IntegrationCredentialProjectShared}})
+				if !errors.Is(policyErr, errs.ErrInvalid) {
+					t.Fatal("managed version bypassed explicit service-identity policy", policyErr)
+				}
+				connection = execute(command.SetConnectionEnabled, owner, "managed-enable", &disabled.Version, command.ConnectionInput{Ref: connection.Ref, Enabled: true}).Connection
+			}
+
 			owner.Permission = "platform.personal-integrations.create"
 			binding := execute(command.CreatePersonalIntegrationCredential, owner, "binding", nil, command.PersonalIntegrationCredentialInput{ConnectionRef: connection.Ref, ExpectedConnectionVersion: connection.Version}).PersonalIntegrationCredential
 			owner.Permission = "platform.personal-integrations.configure"
@@ -52,7 +66,7 @@ func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
 			}
 			owner.Permission = "platform.personal-integrations.test"
 			discoveryPage := 0
-			if scenario.kind == "READ" {
+			if readScenario {
 				discoveryPage = 1
 			}
 			execute(command.TestPersonalIntegrationCredential, owner, "test", &configured.Version, command.PersonalIntegrationCredentialInput{ConnectionRef: connection.Ref, ExpectedConnectionVersion: connection.Version, GitHubDiscoveryPage: discoveryPage})
@@ -73,7 +87,7 @@ func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
 			}
 			verifier.Permission = "platform.personal-integration-tests.complete"
 			execute(command.CompletePersonalIntegrationCredentialTest, verifier, "verified", nil, probe)
-			if scenario.kind == "READ" {
+			if readScenario {
 				owner.Permission = "platform.command.integrations.update"
 				forged := command.ConnectionInput{Ref: connection.Ref, Name: connection.Name, PublicConfiguration: map[string]any{"scope_kind": "SELECTED", "repositories": `[{"id":8,"full_name":"foreign/repo"}]`}}
 				_, err := service.Execute(ctx, command.Command{Kind: command.UpdateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "scoped-personal-forged-selection", ExpectedVersion: &connection.Version}, Payload: forged})
@@ -107,7 +121,7 @@ func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
 			project := execute(command.CreateProject, owner, "project", nil, command.ProjectInput{Name: "Scoped personal project", Language: "en"}).Project
 			agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "scoped-personal-agent", "Scoped commenter")
 			operation := "github.issue.comment.create"
-			if scenario.kind == "READ" {
+			if readScenario {
 				operation = "github.issue.read"
 			}
 			capability, _ := repository.integrationDefinitions["github"].Capability(operation)
@@ -124,7 +138,7 @@ func TestPersonalGitHubScopedPolicyComponent(t *testing.T) {
 			}
 			invokeInput := map[string]string{"run_ref": run.Ref, "node_ref": stringMap(runtime[0], "nodeRef"), "connection_ref": connection.Ref, "capability_key": operation, "idempotency_key": "scoped-personal-comment"}
 			boundedInput := map[string]any{"repository_full_name": "fixture/repo", "repository_id": 7, "issue_number": 12}
-			if scenario.kind != "READ" {
+			if !readScenario {
 				boundedInput["body"] = "Synthetic comment"
 			}
 			invocation, err := service.ResolveIntegrationInvocation(ctx, runtimeWorker, invokeInput, boundedInput)

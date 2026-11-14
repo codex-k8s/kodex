@@ -2824,6 +2824,7 @@ const ru = {
     integrationResourceKinds: {
       SYNTHETIC_JOURNAL: "Запись проверочного журнала",
       GITHUB_REPOSITORY: "Репозиторий GitHub",
+      GITHUB_SCOPE: "Выбранная область GitHub",
       MATTERMOST_CHANNEL: "Канал Mattermost",
       GITLAB_PROJECT: "Проект GitLab",
       GITLAB_SCOPE: "Настроенная область GitLab",
@@ -7742,6 +7743,7 @@ const en = {
     integrationResourceKinds: {
       SYNTHETIC_JOURNAL: "Synthetic journal entry",
       GITHUB_REPOSITORY: "GitHub repository",
+      GITHUB_SCOPE: "Configured GitHub scope",
       MATTERMOST_CHANNEL: "Mattermost channel",
       GITLAB_PROJECT: "GitLab project",
       GITLAB_SCOPE: "Configured GitLab scope",

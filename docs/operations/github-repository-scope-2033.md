@@ -81,6 +81,8 @@ Shared-режим нового пакета требует явно указан
 
 Проверка GitHub прав разделена по операциям. Code/content/branch/bundle/merge/actions требуют текущего repository push; issue/comment/review/PR collaboration используют текущую authenticated membership и окончательную проверку author/triage permissions точным provider endpoint. Наблюдаемый CanPush не объявляется универсальным правом записи. Архивный репозиторий закрыт для новых WRITE.
 
+Управляемые сужения определения сохраняют personal default, discovery proof и явную service identity независимо от значения metadata.version. Worker resource kind берётся из закреплённого scope, а не из номера shipped release. Source/writeback effect validation добавляет exact ID/name из frozen owner configuration перед проверкой фактической schema; пользовательские IDs здесь не используются.
+
 ## Ручная проверка
 
 В disposable проекте создать GitHub подключение, открыть «Мои подключения»,

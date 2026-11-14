@@ -187,3 +187,63 @@ test("собственный GitHub: две страницы discovery, точн
   await expect(page.getByText(/Подтверждённый аккаунт:/)).toHaveCount(0);
   expect(failures).toEqual([]);
 });
+
+test("исторический GitHub personal contract не показывает неподдерживаемый scope discovery", async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  await installSyntheticCsrf(page.context(), "h");
+  await page.route("**/*", async (route) => {
+    const url = new URL(route.request().url());
+    if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
+    if (
+      url.pathname === "/api/v1/me/integration-connections" &&
+      route.request().method() === "GET"
+    ) {
+      const credential: PersonalIntegrationCredential = {
+        connectionRef: "int_legacy001",
+        connectionVersion: 7,
+        bindingRef: "ipc_legacy001",
+        version: 3,
+        policy: "INITIATOR_REQUIRED",
+        state: "READY",
+        credentialConfigured: true,
+        verifiedCapabilityKeys: ["github.repository.metadata.read"],
+        deniedCapabilityKeys: [],
+      };
+      const connection: PersonalIntegrationConnection = {
+        connectionRef: credential.connectionRef,
+        connectionVersion: 7,
+        name: "Исторический GitHub",
+        definitionKey: "github",
+        policy: "INITIATOR_REQUIRED",
+        enabled: true,
+        available: true,
+        credential,
+      };
+      await route.fulfill({ json: { items: [connection] } });
+      return;
+    }
+    if (url.pathname.startsWith("/api/")) {
+      failures.push("unexpected legacy API");
+      await route.abort();
+      return;
+    }
+    await route.fulfill({
+      response: await route.fetch({
+        url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+      }),
+    });
+  });
+  await page.goto("/e2e/fixtures/personal-connections.html");
+  await expect(
+    page.getByRole("heading", { name: "Исторический GitHub" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Репозитории GitHub" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Найти доступные репозитории" }),
+  ).toHaveCount(0);
+  expect(failures).toEqual([]);
+});

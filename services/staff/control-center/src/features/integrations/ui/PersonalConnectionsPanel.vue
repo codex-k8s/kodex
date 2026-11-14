@@ -133,7 +133,9 @@ onBeforeUnmount(() => window.removeEventListener("pagehide", model.suspend));
         v-if="
           connection.definitionKey === 'github' &&
           connection.policy === 'INITIATOR_REQUIRED' &&
-          connection.credential
+          connection.credential?.verifiedCapabilityKeys.includes(
+            'github.identity.read',
+          )
         "
         :connection="connection"
         @changed="model.load()"

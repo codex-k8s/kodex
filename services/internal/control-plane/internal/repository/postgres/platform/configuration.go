@@ -443,7 +443,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if !valid || definition.ValidateConnectionBootstrapConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 			return commandOutcome{}, errs.ErrInvalid
 		}
-		if payload.DefinitionKey == "github" && definition.Metadata.Version == "6.5.0" && configuration["scope_kind"] != "ALL_ACCESSIBLE" {
+		if githubScopedDefinition(definition) && configuration["scope_kind"] != "ALL_ACCESSIBLE" {
 			return commandOutcome{}, errs.ErrInvalid
 		}
 		if payload.DefinitionKey == "ssh-compose" {
@@ -459,9 +459,13 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		var item entity.IntegrationConnection
 		var connectionID string
 		var config []byte
+		credentialPolicy := entity.IntegrationCredentialProjectShared
+		if githubScopedDefinition(definition) {
+			credentialPolicy = entity.IntegrationCredentialInitiatorRequired
+		}
 		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState,
 			ref, scope.organizationID, payload.Name, maskedCredentials, asJSON(configuration), scope.actorID,
-			definition.Metadata.Version, definition.Digest, payload.DefinitionKey,
+			definition.Metadata.Version, definition.Digest, payload.DefinitionKey, string(credentialPolicy),
 		).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.Enabled, &item.Version, &config, &item.CreatedAt, &item.UpdatedAt)
 		if err != nil {
 			return commandOutcome{}, mapWriteError(err)
@@ -707,7 +711,7 @@ func (repository *Repository) updateIntegrationConnection(
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if locked.definitionKey == "github" && definition.Metadata.Version == "6.5.0" {
+	if githubScopedDefinition(definition) {
 		if err := repository.validatePersonalGitHubScopeSelection(ctx, tx, current, payload.Ref, configuration); err != nil {
 			return commandOutcome{}, err
 		}

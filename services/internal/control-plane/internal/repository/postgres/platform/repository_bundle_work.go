@@ -71,7 +71,7 @@ func repositoryBundleWork(row repositoryBundleRow) entity.RepositoryBundlePublic
 	snapshot := row.snapshot
 	resourceKind := "GITHUB_REPOSITORY"
 	profile := ""
-	if snapshot.DefinitionVersion == "6.5.0" {
+	if _, scoped := snapshot.ResourceScope["scope_kind"]; scoped {
 		resourceKind = "GITHUB_SCOPE"
 		if snapshot.PersonalBindingRef != "" {
 			profile = "GITHUB_SCOPED_RESOURCE_V1"

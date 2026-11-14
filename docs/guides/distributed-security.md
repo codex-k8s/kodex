@@ -1001,7 +1001,7 @@ rename, ID mismatch и stale discovery закрываются. Specialized nativ
 явную service identity для фоновой работы без интерактивного инициатора.
 Замена либо отзыв personal binding атомарно закрывают её pre-effect consumers;
 начатый эффект сохраняет прежний UNKNOWN/read-only reconciliation и не
-получает shared fallback. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
+получает shared fallback. Классификация personal/service и discovery boundary выводится из проверенного adapter/resource contract, а не из названия версии; managed сужение сохраняет эти ограничения. Это не заменяет обязательные exact version/digest pins. Специализированный consumer выводит selectors из owner snapshot и проверяет фактическую pinned schema. Реализация: `OPS-DOC-GITHUB-SCOPE-2033`.
 
 Список возможностей SDK, встроенный fallback и успешный локальный запуск не
 доказывают доступность provider для конкретной учётной записи. Наблюдение

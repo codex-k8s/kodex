@@ -45,3 +45,17 @@ func (repository *Repository) validatePersonalGitHubScopeSelection(ctx context.C
 	}
 	return nil
 }
+
+// githubScopedDefinition recognizes the validated adapter/resource contract independently of a shipped or managed revision label; changing a version cannot remove personal discovery or service-identity boundaries.
+// githubScopedDefinition распознаёт проверенный adapter/resource contract независимо от версии shipped либо managed revision; изменение версии не отменяет personal discovery либо service-identity boundary.
+func githubScopedDefinition(definition integrationpackage.Package) bool {
+	if definition.Metadata.Key != "github" || definition.Spec.Adapter != string(integrationpackage.AdapterGitHub) || definition.Spec.AdapterOwner != string(integrationpackage.OwnerIntegrationGateway) || definition.Spec.ExecutionRoute != string(integrationpackage.RouteManagedMCP) {
+		return false
+	}
+	for _, capability := range definition.Spec.Capabilities {
+		if capability.ResourceScope.Kind == "GITHUB_SCOPE" {
+			return true
+		}
+	}
+	return false
+}
