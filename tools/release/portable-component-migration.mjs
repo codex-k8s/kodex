@@ -562,7 +562,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
           let raw,ack;
           try{raw=kube(args(path));}catch{journal.append({type:'UNKNOWN',step:type,repairSHA256:observabilityRepair.sha256});throw Error('TELEGRAM_OBSERVABILITY_PATCH_UNKNOWN');}
           try{ack=JSON.parse(raw);}catch{ /* Успешный повреждённый ответ не становится потерянным ACK. */ }
-          if(!(ack?.metadata?.uid===original.uid&&typeof ack.metadata.resourceVersion==='string'&&!ack.metadata.deletionTimestamp&&
+          if(!(ack?.apiVersion==='apps/v1'&&ack.kind==='Deployment'&&ack.metadata?.name===name&&ack.metadata.namespace===namespace&&
+            ack.metadata.uid===original.uid&&typeof ack.metadata.resourceVersion==='string'&&/^[1-9][0-9]*$/.test(ack.metadata.resourceVersion)&&!ack.metadata.deletionTimestamp&&
             ack.spec&&fingerprint(ack.spec)===fingerprint(stages[next]))){
             journal.append({type:'TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED',step:type,repairSHA256:observabilityRepair.sha256});
             throw Error('TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED');

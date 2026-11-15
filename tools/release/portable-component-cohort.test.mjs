@@ -112,7 +112,8 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
         if(faults.replaceSpecAfterPatch===name)app.spec.paused=true;
         if(faults.lostACK===name){faults.lostACK='';throw Error('SYNTHETIC_RESPONSE_LOST');}
       }
-      return args.includes('-o')?JSON.stringify(faults.badACK?{...app,metadata:{...app.metadata,uid:uuid(999)}}:app):'{}';
+      const ack=structuredClone(app);if(faults.badACK)ack.metadata.uid=uuid(999);faults.mutateACK?.(ack);
+      return args.includes('-o')?JSON.stringify(ack):'{}';
     }
     if(args.includes('deployment')){const name=args[args.indexOf('deployment')+1];faults.beforeComponentRead?.(name);return JSON.stringify(apps.get(name));}
     if(args.includes('replicasets,pods,jobs')){
@@ -576,4 +577,16 @@ test('046 telemetry repair: positive Pod join precedes env mutation; replacement
  await assert.rejects(()=>f.repairLifecycle().repairObservability(),/JOIN_REQUIRED/);assert.equal(f.patches.length,before+1);
  f.faults.blocked='';f.apps.get('interaction-gateway').metadata.uid=uuid(999);
  await assert.rejects(()=>f.repairLifecycle().repairObservability(),/UID_CHANGED/);assert.equal(f.patches.length,before+1);
+});
+
+
+test('046 telemetry repair: successful ACK requires exact Deployment identity and nonempty RV',async()=>{
+ for(const mutate of [a=>a.metadata.resourceVersion='',a=>a.metadata.resourceVersion='invalid',a=>a.apiVersion='foreign/v1',
+  a=>a.kind='Job',a=>a.metadata.name='foreign',a=>a.metadata.namespace='foreign']){
+  const f=await observabilityRepairFixture(),before=f.patches.length;f.faults.mutateACK=mutate;
+  await assert.rejects(()=>f.repairLifecycle().repairObservability(),/ACK_REJECTED/);
+  f.faults.mutateACK=undefined;
+  await assert.rejects(()=>f.repairLifecycle().repairObservability(),/ACK_REJECTED/);
+  assert.equal(f.patches.length,before+1);assert.equal(f.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE'),false);
+ }
 });
