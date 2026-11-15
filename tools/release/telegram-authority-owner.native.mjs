@@ -5,9 +5,13 @@ import {chmodSync,existsSync,mkdtempSync,readFileSync,rmSync,statSync,statfsSync
 import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {validateTelegramOwnerHistory} from './telegram-authority-owner.mjs';
+import {validateTelegramAuthorityDeliveryState,telegramPolicyTransition} from './authority-telegram-transition.mjs';
+import {validateAuthorityDistributePrecondition,validateAuthorityDistributePostcondition} from './authority-distribute-status-migration-model.mjs';
 
 // Disposable native proof: только loopback PostgreSQL и private Go overlay.
 // Результат доказывает representation, а не выдаёт authority107 admission.
+assert.ok(process.argv.length===2||process.argv.length===3&&process.argv[2]==='--distribute-status','native profile argument rejected');
+const distribute=process.argv[2]==='--distribute-status';
 const root=resolve(fileURLToPath(new URL('../../',import.meta.url)));
 const image='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7';
 const relative='services/internal/internal-rpc-authority/cmd/cli/rotation_operation_component_test.go';
@@ -80,14 +84,33 @@ func captureTelegramOwnerWire(t *testing.T, ctx context.Context, connection *pgx
  run('docker',['exec','-i',container,'psql','-Xq','-U','postgres','-d','postgres','--no-password','-v','ON_ERROR_STOP=1'],{input:readFileSync(join(root,'deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql'))});
  const goLog=run(go,['test','-p=1','-count=1','-timeout=180s','-overlay',overlayPath,'./cmd/cli','-run','^TestAuthorityBaselineGooseComponent$'],{
   cwd:join(root,'services/internal/internal-rpc-authority'),timeout:240000,
-  env:{...process.env,GOTOOLCHAIN:'local',GOENV:'off',GOWORK:'off',GOPROXY:'off',GOFLAGS:'',GOMAXPROCS:'2',GOMEMLIMIT:'2GiB',KODEX_AUTHORITY_MIGRATION_TEST_PORT:port,KODEX_AUTHORITY_OWNER_WIRE_OUTPUT:output}});
+  env:{...process.env,GOTOOLCHAIN:'local',GOENV:'off',GOWORK:'off',GOPROXY:'off',GOFLAGS:'',GOMAXPROCS:'2',GOMEMLIMIT:'2GiB',KODEX_AUTHORITY_MIGRATION_TEST_PORT:port,KODEX_AUTHORITY_OWNER_WIRE_OUTPUT:output,KODEX_AUTHORITY_DISTRIBUTE_UPGRADE_TEST:distribute?'1':'',KODEX_AUTHORITY_DISTRIBUTE_PROOF_OUTPUT:distribute?output:'',KODEX_AUTHORITY_STATE_SQL_FILE:join(root,'tools/release/authority-distribute-status-migration-state.sql'),KODEX_AUTHORITY_STATE_SQL_SHA256:sha(readFileSync(join(root,'tools/release/authority-distribute-status-migration-state.sql')))}});
  process.stdout.write(goLog);
  const wireBytes=readFileSync(output),proof=JSON.parse(wireBytes);
+ if(distribute){
+  assert.equal(proof.schema,'kodex.authority-distribute-status-native/v1');
+  assert.equal(proof.before.definitionSHA256,'c615a3d183ca67cadff5cf027d12adb7207bf9a4cf456dea02affe6f63b86af1');
+  assert.match(proof.after.definitionSHA256,/^[a-f0-9]{64}$/);assert.notEqual(proof.after.definitionSHA256,proof.before.definitionSHA256);
+  for(const field of ['oid','owner','acl'])assert.equal(proof.after[field],proof.before[field]);
+  assert.equal(proof.operationPublications,0);assert.equal(proof.currentStatus.actualReadbackCount,0);assert.ok(proof.negativeBindings>=22);
+  assert.equal(Object.hasOwn(proof.oldStatus,'sourceRevision'),false);assert.equal(Object.hasOwn(proof.oldStatus,'sourceDigestSHA256'),false);
+  const identity={sourceRevision:proof.currentStatus.registryRevision,sourceDigestSHA256:proof.currentStatus.registrySourceDigestSHA256};
+  assert.throws(()=>validateTelegramAuthorityDeliveryState(proof.oldStatus,identity,proof.currentStatus.operationId),/DELIVERY_OWNER_REJECTED/);
+  validateTelegramAuthorityDeliveryState(proof.currentStatus,identity,proof.currentStatus.operationId);
+  validateTelegramAuthorityDeliveryState(proof.goDTO,identity,proof.currentStatus.operationId);
+  const rotation={policyTransition:{profile:telegramPolicyTransition},ownerOperationID:proof.currentStatus.operationId,
+   registry:{sourceRevision:proof.currentStatus.registryRevision,sourceDigestSHA256:proof.currentStatus.registrySourceDigestSHA256}};
+  validateAuthorityDistributePrecondition(proof.beforeObserver,rotation);
+  validateAuthorityDistributePostcondition(proof.beforeObserver,proof.afterObserver,rotation);
+  summary={schema:'kodex.authority-distribute-status-native-proof/v1',result:'PASS',go:'1.26.10',postgres:image,oldDefinitionSHA256:proof.before.definitionSHA256,newDefinitionSHA256:proof.after.definitionSHA256,
+   functionIdentityRetained:true,observerSQLSHA256:sha(readFileSync(join(root,'tools/release/authority-distribute-status-migration-state.sql'))),ledgerSHA256:proof.ledgerSHA256,negativeBindings:proof.negativeBindings,operationPublications:0,actualReadbacks:0,wireSHA256:sha(wireBytes),elapsedMS:Date.now()-started};
+ }else{
  assert.deepEqual(Object.keys(proof).sort(),['goDTO','lateSQL','sqlRaw']);
  assert.equal(proof.sqlRaw.status,'RETIRED');assert.ok(proof.sqlRaw.operationId&&proof.sqlRaw.previousNotAfter);
  assert.match(proof.sqlRaw.previousNotAfter,/\.[0-9]{1,6}\+00:00$/);assert.match(proof.goDTO.previousNotAfter,/Z$/);
  validateTelegramOwnerHistory(proof.sqlRaw,proof.goDTO);validateTelegramOwnerHistory(proof.goDTO,proof.lateSQL);
  assert.equal(sha(readFileSync(join(root,relative))),expectedSHA,'source Go changed');
  summary={schema:'kodex.telegram-authority-owner-native-proof/v1',result:'PASS',go:'1.26.10',postgres:image,sourceSHA256:expectedSHA,wireSHA256:sha(wireBytes),representations:['SQL_RAW','ACTUAL_GO_DTO_JSON','LATE_SQL'],elapsedMS:Date.now()-started};
+ }
 }finally{cleanup();}
 console.log(JSON.stringify({...summary,containerJoined:true}));
