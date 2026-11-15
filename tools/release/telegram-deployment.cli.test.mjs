@@ -288,8 +288,8 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   assert.equal(f.read().resources['deployment/control-api-gateway'].status.readyReplicas,0);
   const started=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(started.status,0,started.stderr);
   assert.equal(JSON.parse(started.stdout).status,'READERS_STARTED_PENDING_READINESS');assert.equal(JSON.parse(started.stdout).pairReady,false);
-  const effects=f.read().effects.length;
-  const again=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,effects);
+  const repeatStatus=fresh(),effects=f.read().effects.length;
+  const again=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...repeatStatus]);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,effects);
   checked('component-api-maintenance.mjs',['status',...flags,'--plan',open,'--evidence',openEvidence,...closed,...isolated]);
   const resumed=f.run('resume',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);
  }
