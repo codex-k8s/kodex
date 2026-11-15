@@ -498,18 +498,78 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
   };
   // Исправление уже принятого reader не создаёт новый install/authority intent.
   // Полный schema/owner drain и изоляция API обязательны также при повторном apply.
-  const repairPreflight=()=>{
+  const repairPreflight=(repairedName='interaction-gateway')=>{
     requireValue(profiles[plan.imageEvidence.profile].introduced==='interaction-gateway'&&!apiRestoration&&
       typeof readCPProjection==='function','TELEGRAM_OBSERVABILITY_REPAIR_SCOPE_INVALID');
     schemaReady(true);readCPProjection();
     requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK')&&journal.events.some(e=>
       e.type==='PAIR_ACTIVATE_INTENT'&&e.name==='interaction-gateway'),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
-    for(const name of names.filter(n=>n!=='interaction-gateway')){
+    for(const name of names.filter(n=>n!==repairedName)){
       const state=observe(name);
       requireValue(part(name).maintenance?state.stage==='isolatedReadersSpec':state.stage==='resumedSpec'&&
-        journal.events.some(e=>e.type===(name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT')&&e.name===name),
+        journal.events.some(e=>e.type===(part(name).introduced?'PAIR_ACTIVATE_INTENT':name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT')&&e.name===name),
         'TELEGRAM_OBSERVABILITY_REPAIR_COHORT_INVALID');
     }
+  };
+  // Закрытые repair wrappers используют один stop/join/CAS/rejoin протокол.
+  // Он не принимает caller patch и не ослабляет owner/schema/API preconditions.
+  const repairComponent=async ({name,repair,validateRepair,prefix})=>{
+    const bound=`${prefix}_REPAIR_BOUND`,complete=`${prefix}_REPAIR_COMPLETE`;
+    requireValue(({
+    'interaction-gateway':'TELEGRAM_OBSERVABILITY','egress-gateway':'TELEGRAM_EGRESS_REVISION'
+    })[name]===prefix&&repair&&typeof validateRepair==='function',`${prefix}_REPAIR_PIN_REQUIRED`);
+    repairPreflight(name);validateRepair();
+    requireValue(!journal.events.some(e=>e.type===`${prefix}_PATCH_ACK_REJECTED`),`${prefix}_PATCH_ACK_REJECTED`);
+    const original=(effectiveHandoff??plan.componentHandoff).components.find(c=>c.name===name),
+      stages=[original.resumedSpec,{...original.resumedSpec,replicas:0},repair.part.stagedSpec,repair.part.resumedSpec],
+      types=[`${prefix}_STOP_INTENT`,`${prefix}_RENDER_INTENT`,`${prefix}_RESUME_INTENT`];
+    requireValue(stages.every(s=>s)&&stages[0].replicas>0&&stages[3].replicas===stages[0].replicas&&
+      fingerprint(stages[1])!==fingerprint(stages[2]),`${prefix}_REPAIR_SOURCE_CHANGED`);
+    const read=()=>{
+      const actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
+      requireValue(actual.metadata?.uid===original.uid&&!actual.metadata.deletionTimestamp,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
+      const index=stages.findIndex(spec=>fingerprint(spec)===fingerprint(actual.spec));
+      requireValue(index>=0,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
+      requireValue(index===0||types.slice(0,index).every(type=>journal.events.some(e=>e.type===type&&e.repairSHA256===repair.sha256)),
+        'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+      const pods=activePods(readComponentServingInventory(kube,name,original.uid),original.uid);
+      return {actual,index,joined:actual.status?.observedGeneration>=actual.metadata.generation&&!(actual.status?.replicas??0)&&pods.length===0};
+    };
+    read();
+    if(!journal.events.some(e=>e.type===bound))journal.append({type:bound,repairSHA256:repair.sha256,jobUID:repair.repair.jobUID,deploymentUID:original.uid});
+    for(let next=1;next<stages.length;next++){
+      let current=read();
+      if(current.index>=next)continue;
+      requireValue(current.index===next-1,`${prefix}_REPAIR_ORDER_INVALID`);
+      if(next>1){current=await wait(read,s=>s.joined,`${prefix}_REPAIR_JOIN_REQUIRED`,clock);requireValue(current.index===next-1,`${prefix}_REPAIR_ORDER_INVALID`);}
+      repairPreflight(name);validateRepair();
+      const type=types[next-1],patch=[{op:'test',path:'/metadata/uid',value:original.uid},
+        {op:'test',path:'/metadata/resourceVersion',value:current.actual.metadata.resourceVersion},
+        {op:'test',path:'/spec',value:current.actual.spec},{op:'replace',path:'/spec',value:stages[next]}];
+      const args=path=>['-n',namespace,'patch','deployment',name,'--type=json',`--patch-file=${path}`,'-o','json'];
+      withPrivatePatchFile(patch,path=>kube([...args(path),'--dry-run=server']));
+      const proof=await delivered();
+      withPrivatePatchFile(patch,path=>{
+        const api=observe('control-api-gateway');
+        requireValue(api.stage==='isolatedReadersSpec'&&api.readers?.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
+        deliveryFresh(proof);
+        journal.append({type,repairSHA256:repair.sha256,resourceVersion:current.actual.metadata.resourceVersion,
+          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+        let raw,ack;
+        try{raw=kube(args(path));}catch{journal.append({type:'UNKNOWN',step:type,repairSHA256:repair.sha256});throw Error(`${prefix}_PATCH_UNKNOWN`);}
+        try{ack=JSON.parse(raw);}catch{ /* Успешный повреждённый ответ не становится потерянным ACK. */ }
+        if(!(ack?.apiVersion==='apps/v1'&&ack.kind==='Deployment'&&ack.metadata?.name===name&&ack.metadata.namespace===namespace&&
+          ack.metadata.uid===original.uid&&typeof ack.metadata.resourceVersion==='string'&&/^[1-9][0-9]*$/.test(ack.metadata.resourceVersion)&&!ack.metadata.deletionTimestamp&&
+          ack.spec&&fingerprint(ack.spec)===fingerprint(stages[next]))){
+          journal.append({type:`${prefix}_PATCH_ACK_REJECTED`,step:type,repairSHA256:repair.sha256});
+          throw Error(`${prefix}_PATCH_ACK_REJECTED`);
+        }
+      });
+      await wait(read,s=>s.index===next&&(next===3||s.joined),`${prefix}_REPAIR_JOIN_REQUIRED`,clock);
+    }
+    requireValue(read().index===3,`${prefix}_REPAIR_UNCONFIRMED`);
+    if(!journal.events.some(e=>e.type===complete))journal.append({type:complete,repairSHA256:repair.sha256});
+    return {status:'READERS_STARTED_PENDING_READINESS',repairSHA256:repair.sha256,pairReady:false,apiReadersIsolated:true};
   };
   return {
     inspect,
@@ -521,59 +581,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       return state.actual;
     },
     async repairObservability(){
-      requireValue(observabilityRepair&&typeof validateObservabilityRepair==='function','TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');
-      repairPreflight();validateObservabilityRepair();
-      requireValue(!journal.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED'),'TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED');
-      const name='interaction-gateway',original=plan.componentHandoff.components.find(c=>c.name===name),
-        stages=[original.resumedSpec,{...original.resumedSpec,replicas:0},observabilityRepair.part.stagedSpec,observabilityRepair.part.resumedSpec],
-        types=['TELEGRAM_OBSERVABILITY_STOP_INTENT','TELEGRAM_OBSERVABILITY_RENDER_INTENT','TELEGRAM_OBSERVABILITY_RESUME_INTENT'];
-      requireValue(stages.every(s=>s)&&stages[0].replicas>0&&stages[3].replicas===stages[0].replicas&&
-        fingerprint(stages[1])!==fingerprint(stages[2]),'TELEGRAM_OBSERVABILITY_REPAIR_SOURCE_CHANGED');
-      const read=()=>{
-        const actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
-        requireValue(actual.metadata?.uid===original.uid&&!actual.metadata.deletionTimestamp,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
-        const index=stages.findIndex(spec=>fingerprint(spec)===fingerprint(actual.spec));
-        requireValue(index>=0,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-        requireValue(index===0||types.slice(0,index).every(type=>journal.events.some(e=>e.type===type&&e.repairSHA256===observabilityRepair.sha256)),
-          'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
-        const pods=activePods(readComponentServingInventory(kube,name,original.uid),original.uid);
-        return {actual,index,joined:actual.status?.observedGeneration>=actual.metadata.generation&&!(actual.status?.replicas??0)&&pods.length===0};
-      };
-      read();
-      if(!repairEvents().length)journal.append({type:repairBound,repairSHA256:observabilityRepair.sha256,jobUID:observabilityRepair.repair.jobUID,deploymentUID:original.uid});
-      for(let next=1;next<stages.length;next++){
-        let current=read();
-        if(current.index>=next)continue;
-        requireValue(current.index===next-1,'TELEGRAM_OBSERVABILITY_REPAIR_ORDER_INVALID');
-        if(next>1){current=await wait(read,s=>s.joined,'TELEGRAM_OBSERVABILITY_REPAIR_JOIN_REQUIRED',clock);requireValue(current.index===next-1,'TELEGRAM_OBSERVABILITY_REPAIR_ORDER_INVALID');}
-        repairPreflight();validateObservabilityRepair();
-        const type=types[next-1],patch=[{op:'test',path:'/metadata/uid',value:original.uid},
-          {op:'test',path:'/metadata/resourceVersion',value:current.actual.metadata.resourceVersion},
-          {op:'test',path:'/spec',value:current.actual.spec},{op:'replace',path:'/spec',value:stages[next]}];
-        const args=path=>['-n',namespace,'patch','deployment',name,'--type=json',`--patch-file=${path}`,'-o','json'];
-        withPrivatePatchFile(patch,path=>kube([...args(path),'--dry-run=server']));
-        const proof=await delivered();
-        withPrivatePatchFile(patch,path=>{
-          const api=observe('control-api-gateway');
-          requireValue(api.stage==='isolatedReadersSpec'&&api.readers?.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
-          deliveryFresh(proof);
-          journal.append({type,repairSHA256:observabilityRepair.sha256,resourceVersion:current.actual.metadata.resourceVersion,
-            operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
-          let raw,ack;
-          try{raw=kube(args(path));}catch{journal.append({type:'UNKNOWN',step:type,repairSHA256:observabilityRepair.sha256});throw Error('TELEGRAM_OBSERVABILITY_PATCH_UNKNOWN');}
-          try{ack=JSON.parse(raw);}catch{ /* Успешный повреждённый ответ не становится потерянным ACK. */ }
-          if(!(ack?.apiVersion==='apps/v1'&&ack.kind==='Deployment'&&ack.metadata?.name===name&&ack.metadata.namespace===namespace&&
-            ack.metadata.uid===original.uid&&typeof ack.metadata.resourceVersion==='string'&&/^[1-9][0-9]*$/.test(ack.metadata.resourceVersion)&&!ack.metadata.deletionTimestamp&&
-            ack.spec&&fingerprint(ack.spec)===fingerprint(stages[next]))){
-            journal.append({type:'TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED',step:type,repairSHA256:observabilityRepair.sha256});
-            throw Error('TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED');
-          }
-        });
-        await wait(read,s=>s.index===next&&(next===3||s.joined),'TELEGRAM_OBSERVABILITY_REPAIR_JOIN_REQUIRED',clock);
-      }
-      requireValue(read().index===3,'TELEGRAM_OBSERVABILITY_REPAIR_UNCONFIRMED');
-      if(!journal.events.some(e=>e.type===repairComplete))journal.append({type:repairComplete,repairSHA256:observabilityRepair.sha256});
-      return {status:'READERS_STARTED_PENDING_READINESS',repairSHA256:observabilityRepair.sha256,pairReady:false,apiReadersIsolated:true};
+      return repairComponent({name:'interaction-gateway',repair:observabilityRepair,validateRepair:validateObservabilityRepair,prefix:'TELEGRAM_OBSERVABILITY'});
     },
     requireStopped() {
       for(const name of workers) {
