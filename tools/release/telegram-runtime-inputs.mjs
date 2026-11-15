@@ -38,9 +38,10 @@ export function telegramRuntimeInputProjection(resources){
  fail(same(cpMount,{name:'interaction-grant-trust',mountPath:'/var/run/config/kodex/control-plane/interaction-grant-trust',readOnly:true})&&
   same(cpVolume,{name:'interaction-grant-trust',secret:{secretName:'control-plane-interaction-grant-trust',defaultMode:292}}),
   'TELEGRAM_RUNTIME_ORIGIN_OR_TRUST_INVALID');
- const egEnv=['EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN','EGRESS_GATEWAY_TELEGRAM_POLICY_FILE','EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST'].map(name=>copy(named(eg.env,name)));
+ const egEnv=['EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN','EGRESS_GATEWAY_TELEGRAM_POLICY_FILE','EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION','EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST'].map(name=>copy(named(eg.env,name)));
  fail(same(egEnv,[{name:'EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN',value:':8086'},
   {name:'EGRESS_GATEWAY_TELEGRAM_POLICY_FILE',value:'/var/run/config/kodex/egress-gateway-telegram/policy.json'},
+  {name:'EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION',value:'2026-09-05.1'},
   {name:'EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST',value:digest}]),'TELEGRAM_RUNTIME_POLICY_INPUT_INVALID');
  const egMount=copy(named(eg.volumeMounts,'telegram-policy')),egVolume=copy(named(egSpec.volumes,'telegram-policy'));
  fail(same(egMount,{name:'telegram-policy',mountPath:'/var/run/config/kodex/egress-gateway-telegram',readOnly:true})&&

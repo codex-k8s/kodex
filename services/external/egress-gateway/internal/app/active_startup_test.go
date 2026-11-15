@@ -62,6 +62,7 @@ func TestActiveStartupWithUnavailableOptionalProjections(t *testing.T) {
 		t.Fatal(err)
 	}
 	config.ExpectedRevision = "2026-09-05.1"
+	config.TelegramExpectedRevision = "2026-09-05.1"
 	active := loadRepositoryPolicy(t)
 	if active.Limits().MaximumConnections != 256 {
 		t.Fatal("fixture lost the canonical capacity")

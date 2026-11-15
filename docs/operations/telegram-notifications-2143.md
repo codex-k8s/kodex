@@ -4,11 +4,24 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.20
+version: 1.0.21
 updated: 2026-11-15
 ---
 
 # Уведомления проекта через Telegram
+
+Listener Telegram в egress требует полный отдельный набор
+`EGRESS_GATEWAY_TELEGRAM_POLICY_FILE`,
+`EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION` и
+`EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST`. Канонический render закрепляет для
+него revision `2026-09-05.1`; `EGRESS_GATEWAY_EXPECTED_POLICY_REVISION`
+продолжает проверять только основную policy и может иметь другое значение.
+Отсутствующий либо неверный Telegram pin не наследуется от основного профиля.
+Проверка `TestTelegramRevisionIsIndependentFromReleasedBase` загружает оба
+файла при разных ревизиях и подтверждает закрытый отказ отдельного профиля.
+Доставка нового binary и его env в существующую установку требует отдельного
+закреплённого плана; этот исходный контракт не переписывает ранее созданные
+046/107 plans, journals или ConfigMap policy.
 
 `make test-telegram-native-egress` с бюджетом360s запускает actual adapter
 defaultTransport → отдельный CONNECT gateway → TLS provider `api.telegram.org`

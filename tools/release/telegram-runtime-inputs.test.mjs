@@ -65,10 +65,23 @@ test('runtime inputs берутся из полного source render; суще�
   const after=telegramDeploymentInputs(before,name,f.projection),wanted=after.template.spec.containers.find(c=>c.name===name);
   for(const env of container.env)assert.deepEqual(wanted.env.find(e=>e.name===env.name),env);
   if(name==='egress-gateway')assert.equal(wanted.env.find(e=>e.name==='EGRESS_GATEWAY_EXPECTED_POLICY_DIGEST').value,'8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218');
+  if(name==='egress-gateway')assert.equal(wanted.env.find(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION').value,'2026-09-05.1');
  }
  const result=f.step();assert.equal(result.state,'INPUTS_STAGED');assert.equal(f.state.effects.length,8);
  const count=f.state.effects.length;assert.equal(applyTelegramRuntimeInputs({plan:f.plan,journal:f.journal,kube:f.kube,readOnly:true}).state,'INPUTS_STAGED');assert.equal(f.step().policyUID,result.policyUID);assert.equal(f.state.effects.length,count);
  const service=f.get('Service','egress-gateway');assert.equal(service.spec.clusterIP,'192.0.2.1');assert.equal(service.spec.ports.filter(p=>p.port===8086).length,1);
+});
+
+test('canonical Telegram revision pin независим от released base и missing/foreign source pin закрыт',()=>{
+ const changed=structuredClone(source),gateway=changed.find(r=>r.kind==='Deployment'&&r.metadata.name==='egress-gateway').spec.template.spec.containers.find(c=>c.name==='egress-gateway');
+ gateway.env.find(e=>e.name==='EGRESS_GATEWAY_EXPECTED_POLICY_REVISION').value='release-component-test';
+ const projection=telegramRuntimeInputProjection(changed);
+ assert.equal(projection.egress.env.find(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION').value,'2026-09-05.1');
+ assert.equal(gateway.env.find(e=>e.name==='EGRESS_GATEWAY_EXPECTED_POLICY_REVISION').value,'release-component-test');
+ const pin=gateway.env.find(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');pin.value='release-component-test';
+ assert.throws(()=>telegramRuntimeInputProjection(changed),/POLICY_INPUT_INVALID/);
+ gateway.env=gateway.env.filter(e=>e.name!=='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');
+ assert.throws(()=>telegramRuntimeInputProjection(changed),/SOURCE_CLOSURE_INVALID/);
 });
 
 test('create и каждый patch lostACK восстанавливаются чтением exact UID/body без второго effect',()=>{
