@@ -10,7 +10,7 @@ import {promisify} from 'node:util';
 import {fingerprint} from './stable-inventory.mjs';
 import {validatedStablePublication,sourceArchiveHash} from './stable-image-publication.mjs';
 import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockMaxBytes,componentPublicationMaxBytes} from './portable-component-migration.mjs';
-import {validateNodeContainer} from './stable-node-registry-model.mjs';
+import {qualifyComponentNodeImages} from './component-node-qualification.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 
 const execute=promisify(execFile),root=fileURLToPath(new URL('../../',import.meta.url));
@@ -162,36 +162,14 @@ async function main(args){
     'COMPONENT_PUBLICATION_EXACT_PLAN_REQUIRED');
   // Повторная локальная проверка bytes/receipts/source не подменяется флагом в JSON.
   requireValue(same(await prepare(prepared.configuration),prepared),'COMPONENT_PUBLICATION_PREPARED_DRIFT');
-  const config=prepared.configuration,context=config.context;
-  const kube=async argv=>JSON.parse(await run('kubectl',['--kubeconfig',options['--kubeconfig'],'--context',context,'--request-timeout=15s',...argv,'-o','json']));
-  const snapshot=async()=>{
-    const system=await kube(['get','namespace','kube-system']),ns=await kube(['get','namespace','kodex-system']),nodes=await kube(['get','nodes']);
-    requireValue(system.metadata?.uid===config.clusterUID&&ns.metadata?.uid===config.namespaceUID&&Array.isArray(nodes.items)&&
-      nodes.items.length===config.nodes.length&&nodes.items.every(n=>config.nodes.some(c=>c.name===n.metadata?.name&&c.uid===n.metadata?.uid))&&
-      nodes.items.every(n=>!n.metadata.deletionTimestamp&&n.status?.conditions?.some(c=>c.type==='DiskPressure'&&c.status==='False')),'COMPONENT_PUBLICATION_TARGET_DRIFT');
-    const bound=[];
-    for(const node of nodes.items){const inspect=JSON.parse(await run('docker',['inspect','--type','container',node.metadata.name]));
-      requireValue(inspect.length===1,'COMPONENT_PUBLICATION_NODE_INVALID');
-      bound.push(validateNodeContainer(node,inspect[0],context.slice(4)));}
-    return bound.sort((a,b)=>a.name.localeCompare(b.name));
-  };
-  const before=await snapshot(),publication=structuredClone(prepared.publication);
+  const config=prepared.configuration,publication=structuredClone(prepared.publication);
+  const images=publication.components.map(part=>JSON.parse(Buffer.from(part.componentLockRawBase64,'base64')).image_ref);
+  const qualified=await qualifyComponentNodeImages({target:config,kubeconfig:options['--kubeconfig'],images,mode});
   for(const part of publication.components){
-    const lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64')),nodes=[];
-    for(const node of before){
-      requireValue(same(await snapshot(),before),'COMPONENT_PUBLICATION_TARGET_DRIFT');
-      const cri=['exec',node.containerID,'crictl','--runtime-endpoint','unix:///run/k3s/containerd/containerd.sock',
-        '--image-endpoint','unix:///run/k3s/containerd/containerd.sock'];
-      if(mode==='qualify')await run('docker',[...cri,'pull',lock.image_ref],180000);
-      const image=JSON.parse(await run('docker',[...cri,'inspecti','-q','-o','json',lock.image_ref]));
-      requireValue(/^sha256:[a-f0-9]{64}$/.test(image.status?.id??'')&&image.status?.repoDigests?.includes(lock.image_ref),
-        'COMPONENT_PUBLICATION_NODE_DIGEST_MISMATCH');
-      nodes.push({name:node.name,uid:node.uid,imageRef:lock.image_ref,repoDigestVerified:true});
-    }
+    const lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64')),nodes=qualified.images.find(value=>value.imageRef===lock.image_ref).nodes;
     part.nodeProof={schema:'kodex.component-node-proof/v1',component:part.component,sourceSHA:config.sourceSHA,
       componentLockSHA256:part.componentLockSHA256,imageRef:lock.image_ref,clusterUID:config.clusterUID,namespaceUID:config.namespaceUID,nodes};
   }
-  requireValue(same(await snapshot(),before),'COMPONENT_PUBLICATION_TARGET_DRIFT');
   componentMigrationPublication(publication,{revision:config.sourceSHA},config.profile);
   createPrivatePrettyJSONSync(resolve(options['--output']),publication);
   console.log(JSON.stringify({status:'PASS',phase:'NODE_QUALIFIED_NOT_DEPLOYED',publicationSHA256:fingerprint(publication)}));

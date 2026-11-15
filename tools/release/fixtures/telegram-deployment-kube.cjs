@@ -35,10 +35,10 @@ const readersStarted=()=>{
   running.filter(c=>c.name===name&&c.env?.filter(e=>e.name==='OTEL_SDK_DISABLED').length===1&&c.env.find(e=>e.name==='OTEL_SDK_DISABLED').value==='true').length===1);
 };
 if(s.bootstrapBarrier&&s.schemaMigrated&&readersStarted())s.bootstrapReleased=true;
-const cpReady=app=>!(s.bootstrapBarrier&&s.schemaMigrated&&requiredReaders.includes(app.metadata.name)&&!s.bootstrapReleased&&!readersStarted())&&(app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107));
+const cpReady=app=>(!s.egressRevisionRequired||app.metadata.name!=='egress-gateway'||app.spec.template.spec.containers[0].env?.some(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION'&&e.value==='2026-09-05.1'))&&!(s.bootstrapBarrier&&s.schemaMigrated&&requiredReaders.includes(app.metadata.name)&&!s.bootstrapReleased&&!readersStarted())&&(app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107));
 const sync=app=>{app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);app.metadata.generation=(app.metadata.generation??1)+1;
  app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(field=>[field,['readyReplicas','availableReplicas'].includes(field)&&!cpReady(app)?0:app.spec.replicas]))};};
-if(s.bootstrapBarrier&&s.schemaMigrated)for(const name of requiredReaders){
+if(s.bootstrapBarrier&&s.schemaMigrated)for(const name of [...requiredReaders,'egress-gateway']){
  const app=get('deployment',name);if(app?.status){app.status.readyReplicas=cpReady(app)?app.spec.replicas:0;app.status.availableReplicas=app.status.readyReplicas;}
 }
 const inventory=()=>{
@@ -179,7 +179,7 @@ const run=request=>{
   if(candidate.kind==='Service')for(const port of candidate.spec.ports??[])if(typeof port.targetPort==='string'&&!validName(port.targetPort))fail();
   for(const container of candidate.spec?.template?.spec?.containers??[])for(const port of container.ports??[])if(port.name!==undefined&&!validName(port.name))fail();
   if(!args.includes('--dry-run=server')){
-   const intent=events().at(-1);assert.ok(['TELEGRAM_INPUT_PATCH_INTENT','STOP_INTENT','PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT','PAIR_ACTIVATE_INTENT','TELEGRAM_OBSERVABILITY_STOP_INTENT','TELEGRAM_OBSERVABILITY_RENDER_INTENT','TELEGRAM_OBSERVABILITY_RESUME_INTENT','INTENT'].includes(intent.type)||intent.operation==='CP_POINTER_CAS');
+   const intent=events().at(-1);assert.ok(['TELEGRAM_INPUT_PATCH_INTENT','STOP_INTENT','PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT','PAIR_ACTIVATE_INTENT','TELEGRAM_OBSERVABILITY_STOP_INTENT','TELEGRAM_OBSERVABILITY_RENDER_INTENT','TELEGRAM_OBSERVABILITY_RESUME_INTENT','TELEGRAM_EGRESS_REVISION_STOP_INTENT','TELEGRAM_EGRESS_REVISION_RENDER_INTENT','TELEGRAM_EGRESS_REVISION_RESUME_INTENT','INTENT'].includes(intent.type)||intent.operation==='CP_POINTER_CAS');
    if(s.lostBefore===name)fail();
    Object.assign(resource,candidate);
    if(kind==='deployment')sync(resource);else resource.metadata.resourceVersion=String(Number(resource.metadata.resourceVersion)+1);
