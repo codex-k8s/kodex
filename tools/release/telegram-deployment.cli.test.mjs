@@ -282,7 +282,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  assert.equal(f.read().effects.filter(effect=>effect==='POLICY_PROJECTION_CREATE').length,1);
  const projected=f.read();assert.equal(projected.resources['deployment/control-plane'].spec.replicas,0);
  const cpProjection=['--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence];
- if(scenario.bootstrap)f.edit(s=>{s.bootstrapBarrier=true;});
+ if(scenario.bootstrap)f.edit(s=>{s.bootstrapBarrier=true;s.telemetryRequired=true;});
  else {
  const resumed=f.run('resume',[...cpProjection,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);assert.equal(JSON.parse(resumed.stdout).status,'PENDING_AUTHORITY');
  const after=f.read();assert.equal(after.resources['deployment/control-plane'].spec.replicas,3);assert.equal(after.resources['deployment/control-plane'].status.availableReplicas,3);
@@ -300,6 +300,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   assert.equal(JSON.parse(started.stdout).status,'READERS_STARTED_PENDING_READINESS');assert.equal(JSON.parse(started.stdout).pairReady,false);
   const repeatStatus=fresh(),effects=f.read().effects.length;
   const again=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...repeatStatus]);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,effects);
+  assert.equal(f.read().bootstrapReleased,undefined);assert.equal(f.read().resources['deployment/control-plane'].status.readyReplicas,0);
   const repairPath=join(f.directory,'observability-repair.json'),oldMigration=readFileSync(f.plan),oldCreator=readFileSync(f.creator.planPath),oldAuthority=readFileSync(owner);
   const repairInputs=[...cpProjection,...apiOpen,...authority];
   const plannedRepair=f.run('plan-observability-repair',[...repairInputs,...fresh(),'--telegram-observability-repair-plan',repairPath]);assert.equal(plannedRepair.status,0,plannedRepair.stderr);
@@ -307,6 +308,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   f.enableObservabilityRepair(repairPath);
   const repaired=f.run('apply-observability-repair',[...repairInputs,...fresh()]);assert.equal(repaired.status,0,repaired.stderr);
   assert.equal(JSON.parse(repaired.stdout).status,'READERS_STARTED_PENDING_READINESS');
+  assert.equal(f.read().bootstrapReleased,true);
   const repairWrites=f.read().effects.filter(e=>e.startsWith('TELEGRAM_OBSERVABILITY_'));assert.equal(repairWrites.length,3);
   const repairedAgain=f.run('apply-observability-repair',[...repairInputs,...fresh()]);assert.equal(repairedAgain.status,0,repairedAgain.stderr);
   assert.equal(f.read().effects.filter(e=>e.startsWith('TELEGRAM_OBSERVABILITY_')).length,3);

@@ -590,3 +590,14 @@ test('046 telemetry repair: successful ACK requires exact Deployment identity an
   assert.equal(f.patches.length,before+1);assert.equal(f.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE'),false);
  }
 });
+
+
+test('046 telemetry repair: unready CP with claims refuses; idle startup requires no fabricated claims',async()=>{
+ const f=await observabilityRepairFixture(),before=f.patches.length,cp=f.apps.get('control-plane');
+ cp.status.readyReplicas=0;f.faults.claimSessions=3;
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/OWNER_PRECONDITION_FAILED/);
+ assert.equal(f.patches.length,before);
+ f.faults.claimSessions=0;
+ assert.equal((await f.repairLifecycle().repairObservability()).status,'READERS_STARTED_PENDING_READINESS');
+ assert.equal(f.patches.length,before+3);
+});
