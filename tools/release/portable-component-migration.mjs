@@ -197,7 +197,7 @@ export function componentMigrationTarget(target, publication, observed) {
 export function planComponentMigrationHandoff(publication, deployments, source, runtimeInputs) {
   const validated = componentMigrationPublication(publication,source,publication.profile);
   requireValue(!runtimeInputs||profiles[publication.profile].introduced&&runtimeInputs.sourceSHA===source.revision&&
-    runtimeInputs.schema==='kodex.telegram-runtime-inputs/v1','TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
+    ['kodex.telegram-runtime-inputs/v1','kodex.telegram-runtime-inputs/v2'].includes(runtimeInputs.schema),'TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
   return {schema:'kodex.component-migration-handoff/v1',publicationSHA256:validated.digest,
     ...(profiles[publication.profile].introduced?{introducedReadiness:telegramStagedPolicyProtocol}:{}),
     ...(runtimeInputs?{runtimeInputsSHA256:fingerprint(runtimeInputs)}:{}),

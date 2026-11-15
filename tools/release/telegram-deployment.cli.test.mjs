@@ -31,9 +31,17 @@ const activities=['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','ac
  'activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks','activeInteractionDeliveries','activeBackupSessions','oldClaimSessions'];
 const write=(path,value)=>writeFileSync(path,JSON.stringify(value)+'\n',{mode:0o600});
 const read=path=>JSON.parse(readFileSync(path,'utf8'));
+const revisionEnvironmentLine='            - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION, value: 2026-09-05.1}\n';
+const retainedDeploymentSource=raw=>{assert.equal(raw.split(revisionEnvironmentLine).length,2);return raw.replace(revisionEnvironmentLine,'');};
 
 async function fixture(t,{narrow=false,successor=false,repair=false,backup=false,bootstrap=false}={}){
  const sourceResources=structuredClone(canonicalSourceResources);
+ if(bootstrap){
+  assert.ok(repair&&successor);
+  const container=sourceResources.find(r=>r.kind==='Deployment'&&r.metadata.name==='egress-gateway').spec.template.spec.containers.find(c=>c.name==='egress-gateway');
+  assert.equal(container.env.filter(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION').length,1);
+  container.env=container.env.filter(e=>e.name!=='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');
+ }
  if(repair)for(const resource of sourceResources){
   if(resource.kind==='Service'&&resource.metadata.name==='egress-gateway')for(const port of resource.spec.ports)if(port.port===8086){port.name='telegram-connect';port.targetPort='telegram-connect';}
   if(resource.kind==='Deployment'&&resource.metadata.name==='egress-gateway')for(const port of resource.spec.template.spec.containers.find(c=>c.name==='egress-gateway').ports)if(port.containerPort===8086)port.name='telegram-connect';
@@ -56,6 +64,16 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   for(const file of ['deployment.yaml','service.yaml']){const path=join(source,'deploy/k8s/base/egress-gateway',file);writeFileSync(path,readFileSync(path,'utf8').replaceAll('tg-connect','telegram-connect'));}
  }
  if(bootstrap){
+  // Исторический producer выпускает v1/3env до immutable Git/source capture.
+  // Новый executor ниже получает настоящий versioned decoder, не этот producer.
+  const inputs=join(source,'tools/release/telegram-runtime-inputs.mjs'),raw=readFileSync(inputs,'utf8');
+  let retained=raw;
+  for(const call of ['runtimeInputProjection(resources,currentSchema)','planRuntimeInputs(input,currentSchema)']){
+   assert.equal(retained.split(call).length,2);retained=retained.replace(call,call.replace('currentSchema','retainedSchema'));
+  }
+  writeFileSync(inputs,retained);
+  const deployment=join(source,'deploy/k8s/base/egress-gateway/deployment.yaml');
+  writeFileSync(deployment,retainedDeploymentSource(readFileSync(deployment,'utf8')));
   // Counterfactual старой установки: renderer созданного receiver пропустил
   // существующий canonical telemetry transform. Fault только в source fixture.
   const path=join(source,'tools/release/telegram-resource-create.mjs');
@@ -73,6 +91,11 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   if(repair){
    copyFileSync(join(root,'tools/release/control-plane-immutable-migration.mjs'),join(executor,'tools/release/control-plane-immutable-migration.mjs'));
    for(const file of ['deployment.yaml','service.yaml'])copyFileSync(join(root,'deploy/k8s/base/egress-gateway',file),join(executor,'deploy/k8s/base/egress-gateway',file));
+   if(bootstrap){
+    copyFileSync(join(root,'tools/release/telegram-runtime-inputs.mjs'),join(executor,'tools/release/telegram-runtime-inputs.mjs'));
+    const deployment=join(executor,'deploy/k8s/base/egress-gateway/deployment.yaml');
+    writeFileSync(deployment,retainedDeploymentSource(readFileSync(deployment,'utf8')));
+   }
   }
   writeFileSync(join(executor,'tools/release/synthetic-successor.txt'),'Synthetic qualified executor revision\n',{mode:0o644});
   execute('git',['-C',executor,'add','.']);
@@ -218,6 +241,8 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  const f=await fixture(t,scenario),frozenPaths=[f.admission.paths.planPath,f.admission.paths.evidencePath,f.admission.paths.trafficPlanPath,f.admission.paths.trafficEvidencePath],
   frozenBytes=frozenPaths.map(path=>readFileSync(path)),pass=(phase,status)=>{const result=f.run(phase);assert.equal(result.status,0,result.stderr);const body=JSON.parse(result.stdout);if(status)assert.equal(body.status,status);return body;};
  pass('plan','PLANNED');const planned=read(f.plan);assert.equal(planned.telegramInputs.patches.length,7);
+ assert.equal(planned.telegramInputs.schema,scenario.bootstrap?'kodex.telegram-runtime-inputs/v1':'kodex.telegram-runtime-inputs/v2');
+ assert.equal(planned.telegramInputs.projection.egress.env.length,scenario.bootstrap?3:4);
  pass('check','PASS');pass('stop','STOPPED');pass('apply','PASS');
  if(scenario.repair){
   const original=f.run('handoff');assert.notEqual(original.status,0);assert.match(original.stderr,/KUBERNETES_OPERATION_UNKNOWN/);
@@ -376,4 +401,20 @@ test('real CLI046/107 invalid-port: новый planner отказывает до
  const f=await fixture(t,{narrow:true,successor:true,repair:true});f.useCurrentPlanner();
  const result=f.run('plan');assert.notEqual(result.status,0);assert.match(result.stderr,/KUBERNETES_PORT_NAME_INVALID/);
  assert.equal(existsSync(f.plan),false);assert.equal(f.read().effects.length,0);
+});
+
+
+test('runtime-metadata: новый executor читает immutable original v1/3env через реальный CLI inspect',async t=>{
+ const f=await fixture(t,{narrow:true,successor:true,repair:true,bootstrap:true});
+ const planned=f.run('plan');assert.equal(planned.status,0,planned.stderr);
+ const original=readFileSync(f.plan),value=JSON.parse(original);
+ assert.equal(value.telegramInputs.schema,'kodex.telegram-runtime-inputs/v1');assert.equal(value.telegramInputs.projection.egress.env.length,3);
+ assert.notEqual(f.source,f.executor);
+ const inspected=f.run('inspect');assert.equal(inspected.status,0,inspected.stderr);
+ assert.deepEqual(readFileSync(f.plan),original);
+ assert.equal(f.read().effects.length,0);
+ const actual=readFileSync(join(f.executor,'tools/release/telegram-runtime-inputs.mjs'),'utf8');
+ assert.equal(actual,readFileSync(join(root,'tools/release/telegram-runtime-inputs.mjs'),'utf8'));
+ assert.equal(execute('git',['-C',f.source,'status','--porcelain']).trim(),'');
+ assert.equal(execute('git',['-C',f.executor,'status','--porcelain']).trim(),'');
 });

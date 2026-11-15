@@ -724,3 +724,8 @@ test-authority-distribute-status-migration:
 .PHONY: test-telegram-observability-repair
 test-telegram-observability-repair:
 	@timeout 300s node --test tools/release/telegram-runtime-observability.test.mjs tools/release/telegram-observability-repair.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs
+
+.PHONY: test-telegram-runtime-inputs
+test-telegram-runtime-inputs:
+	@timeout 120s node --test tools/release/telegram-runtime-inputs.test.mjs
+	@timeout 120s node --test --test-name-pattern='runtime-metadata:' tools/release/telegram-deployment.cli.test.mjs

@@ -4,11 +4,22 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.21
+version: 1.0.22
 updated: 2026-11-15
 ---
 
 # Уведомления проекта через Telegram
+
+Новый producer install inputs выпускает только
+`kodex.telegram-runtime-inputs/v2`: render обязан содержать четыре точных Telegram
+env, включая отдельную revision. Сохранённый immutable receipt v1 проверяется
+строго по своему прежнему render из трёх env и полному исходному snapshot; новый
+pin в таком render отклоняется. Версия берётся из hash-bound install metadata,
+а не угадывается по отсутствующему полю. Проверка не добавляет env, не меняет
+версию/хеши/старый migration journal и не разрешает запуск нового приложения без
+обязательного pin. Source, render, policy, target UID и original snapshot guards
+сохраняются для обеих версий. `telegram-runtime-inputs.test.mjs` проверяет обе
+формы и отрицательные current/retained сочетания.
 
 Listener Telegram в egress требует полный отдельный набор
 `EGRESS_GATEWAY_TELEGRAM_POLICY_FILE`,

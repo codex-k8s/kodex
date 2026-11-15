@@ -4,6 +4,9 @@ import {execFileSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
+import {fingerprint} from './scoped-release.mjs';
+import {componentCohortFixture} from './fixtures/component-cohort-synthetic.mjs';
+import {planComponentMigrationHandoff} from './portable-component-migration.mjs';
 import {telegramRuntimeInputProjection,telegramDeploymentInputs,planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
@@ -55,6 +58,7 @@ function fixture(){
 
 test('runtime inputs берутся из полного source render; существующие policy/spec/allocation не заменяются',()=>{
  const f=fixture();verifyTelegramRuntimeInputs(f.plan,f.resources,f.input.installation,f.get('ConfigMap','kodex-platform-endpoints'));
+ assert.equal(f.plan.schema,'kodex.telegram-runtime-inputs/v2');
  assert.equal(f.plan.patches.length,7);
  for(const name of ['control-plane','egress-gateway']){
   const spec=structuredClone(f.resources.find(r=>r.kind==='Deployment'&&r.metadata.name===name).spec),before=structuredClone(spec);
@@ -132,4 +136,56 @@ test('invalid successful immutable policy ACK не превращается в l
   const step=()=>applyTelegramRuntimeInputs({plan:f.plan,journal:f.journal,kube,gate:()=>{}});
   assert.throws(step,/POLICY_ACK_INVALID/);assert.equal(f.state.effects.length,1);assert.throws(step,/POLICY_ACK_INVALID/);assert.equal(f.state.effects.length,1);
  }
+});
+
+
+// Сохранённый receipt имеет точную историческую форму: policy/network/RBAC и
+// immutable original snapshots прежние, отдельного revision env в v1 ещё не было.
+function retainedFixture(){
+ const f=fixture(),resources=structuredClone(f.resources),plan=structuredClone(f.plan);
+ const container=resources.find(r=>r.kind==='Deployment'&&r.metadata.name==='egress-gateway').spec.template.spec.containers.find(c=>c.name==='egress-gateway');
+ container.env=container.env.filter(e=>e.name!=='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');
+ plan.schema='kodex.telegram-runtime-inputs/v1';
+ plan.projection.egress.env=plan.projection.egress.env.filter(e=>e.name!=='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');
+ return {...f,resources,plan};
+}
+
+test('retained v1 проверяет ровно прежний render и receipt без смены версии, hashes или env',()=>{
+ const f=retainedFixture(),before=JSON.stringify(f.plan),sha=fingerprint(f.plan),endpoints=f.get('ConfigMap','kodex-platform-endpoints');
+ verifyTelegramRuntimeInputs(f.plan,f.resources,f.input.installation,endpoints);
+ assert.equal(JSON.stringify(f.plan),before);assert.equal(fingerprint(f.plan),sha);
+ const cohort=componentCohortFixture('telegram-notifications'),handoff=planComponentMigrationHandoff(cohort.value,cohort.deployments,{revision:f.plan.sourceSHA},f.plan);
+ assert.equal(handoff.runtimeInputsSHA256,sha);
+ const eg=handoff.components.find(c=>c.name==='egress-gateway').resumedSpec.template.spec.containers[0];
+ assert.equal(eg.env.some(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION'),false);
+ const gate=()=>verifyTelegramRuntimeInputs(f.plan,f.resources,f.input.installation,endpoints);
+ assert.equal(applyTelegramRuntimeInputs({plan:f.plan,journal:f.journal,kube:f.kube,gate}).state,'INPUTS_STAGED');
+ assert.equal(JSON.stringify(f.plan),before);
+});
+
+test('fresh v2 не выбирает старый контракт при отсутствующем pin; retained v1 не принимает current render',()=>{
+ const retained=retainedFixture(),fresh=fixture();
+ assert.throws(()=>planTelegramRuntimeInputs({...retained.input,resources:retained.resources,schema:'kodex.telegram-runtime-inputs/v1'}),/SOURCE_CLOSURE_INVALID/);
+ assert.throws(()=>telegramRuntimeInputProjection(retained.resources),/SOURCE_CLOSURE_INVALID/);
+ assert.throws(()=>verifyTelegramRuntimeInputs(fresh.plan,retained.resources,fresh.input.installation,fresh.get('ConfigMap','kodex-platform-endpoints')),/SOURCE_CLOSURE_INVALID/);
+ assert.throws(()=>verifyTelegramRuntimeInputs(retained.plan,fresh.resources,retained.input.installation,retained.get('ConfigMap','kodex-platform-endpoints')),/POLICY_INPUT_INVALID/);
+ const cohort=componentCohortFixture('telegram-notifications'),handoff=planComponentMigrationHandoff(cohort.value,cohort.deployments,{revision:fresh.plan.sourceSHA},fresh.plan);
+ assert.equal(handoff.runtimeInputsSHA256,fingerprint(fresh.plan));
+ assert.equal(handoff.components.find(c=>c.name==='egress-gateway').resumedSpec.template.spec.containers[0].env.find(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION').value,'2026-09-05.1');
+});
+
+test('версии receipt не смешиваются: смена schema, projection, source, policy, original snapshots и unknown fields отвергается',()=>{
+ for(const make of [fixture,retainedFixture])for(const mutate of [
+  p=>p.schema=p.schema.endsWith('/v1')?'kodex.telegram-runtime-inputs/v2':'kodex.telegram-runtime-inputs/v1',
+  p=>p.schema='kodex.telegram-runtime-inputs/v3',p=>delete p.schema,p=>p.sourceSHA='b'.repeat(40),
+  p=>p.policy.data['policy.json']+=' ',p=>p.patches.at(-1).after[0].verbs.push('create'),p=>p.extra=true,
+  p=>p.projection.egress.env.push({name:'EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION',value:'foreign'})
+ ]){
+  const f=make(),plan=structuredClone(f.plan);mutate(plan);
+  assert.throws(()=>verifyTelegramRuntimeInputs(plan,f.resources,f.input.installation,f.get('ConfigMap','kodex-platform-endpoints')));
+  assert.equal(f.state.effects.length,0);
+ }
+ let reads=0;
+ assert.throws(()=>applyTelegramRuntimeInputs({plan:{schema:'kodex.telegram-runtime-inputs/v3'},journal:{events:[]},kube:()=>{reads++;}}),/SCHEMA_INVALID/);
+ assert.equal(reads,0);
 });
