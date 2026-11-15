@@ -720,3 +720,7 @@ test-authority-distribute-status-native:
 .PHONY: test-authority-distribute-status-migration
 test-authority-distribute-status-migration:
 	@timeout 90s node --test tools/release/authority-distribute-status-migration.test.mjs
+
+.PHONY: test-telegram-observability-repair
+test-telegram-observability-repair:
+	@timeout 180s node --test tools/release/telegram-runtime-observability.test.mjs tools/release/telegram-observability-repair.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs

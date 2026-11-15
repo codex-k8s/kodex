@@ -1,3 +1,4 @@
+import {planTelegramObservabilityRepair,readTelegramObservabilityRepair} from './telegram-observability-repair.mjs';
 import {readTelegramPortRepair,telegramPortRepairCodes,telegramPortRepairBound} from './telegram-port-repair.mjs';
 import {validateKubernetesPortNames} from './kubernetes-port-names.mjs';
 import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
@@ -406,7 +407,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       fingerprint(authority.introducedReceiver)===fingerprint(componentPublication.introducedReceiver),'TELEGRAM_ACTIVATION_SOURCE_CHANGED');
     return authority;
   };
-  const readMaintenanceReaders = () => readTelegramAPIReaders({allowPending:phase==='start-readers',migration:retainedPlan,authority:activationAuthority(),
+  const readMaintenanceReaders = () => readTelegramAPIReaders({allowPending:['start-readers','plan-observability-repair','apply-observability-repair'].includes(phase),migration:retainedPlan,authority:activationAuthority(),
     openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
     restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
   const readAuthorityDelivery = async () => {
@@ -655,6 +656,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const portRepair=options['--telegram-port-repair-plan']?readTelegramPortRepair(options['--telegram-port-repair-plan'],{migration:plan,phase,executorRevision:options['--telegram-port-repair-executor-sha']}):undefined;
   ensure(!portRepair||portRepair.repair.migrationPlanPath===resolve(options['--plan'])&&portRepair.repair.migrationEvidencePath===resolve(options['--evidence']),'TELEGRAM_PORT_REPAIR_SCOPE_CHANGED');
   const effectiveInputs=portRepair?.inputs??plan.telegramInputs;
+  const readObservabilityRepair=()=>readTelegramObservabilityRepair(options['--telegram-observability-repair-plan'],{migration:plan,
+    migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],publisher:get('deployment','internal-rpc-authority-publisher')});
+  const observabilityRepair=phase!=='plan-observability-repair'&&options['--telegram-observability-repair-plan']?readObservabilityRepair():undefined;
   const readCPProjection=(required=true)=>{
     if(!options['--cp-projection-plan']&&!required)return undefined;
     return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
@@ -696,6 +700,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const repairBound=journal.events.filter(e=>e.type===telegramPortRepairBound);
     ensure(repairBound.length<=1&&(!repairBound.length||portRepair&&repairBound[0].repairSHA256===portRepair.sha256&&repairBound[0].jobUID===portRepair.repair.jobUID),telegramPortRepairCodes.pinRequired);
 
+    const observabilityBound=journal.events.filter(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_BOUND');
+    ensure(observabilityBound.length<=1&&(!observabilityBound.length||observabilityRepair&&observabilityBound[0].repairSHA256===observabilityRepair.sha256),
+      'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');
+    ensure(!observabilityBound.length||phase==='apply-observability-repair'||journal.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE'&&e.repairSHA256===observabilityRepair.sha256),
+      'TELEGRAM_OBSERVABILITY_REPAIR_INCOMPLETE');
+    ensure(!journal.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED'),'TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED');
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
     const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
     ensure(attempts.length <= 1 && checks.length <= 1, 'MIGRATION_JOURNAL_INVALID');
@@ -831,7 +841,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
-    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
+    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,observabilityRepair,validateObservabilityRepair:()=>{ensure(readObservabilityRepair().sha256===observabilityRepair.sha256,'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');},effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
       activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
       prepareRuntimeInputs:()=>{
@@ -945,6 +955,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (pair) await pair.stopController();
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
+    if(phase==='plan-observability-repair'){
+      pair.prepareObservabilityRepair();
+      const repair=planTelegramObservabilityRepair({migration:plan,migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],
+        evidence:readAuthorityPrivateText(options['--evidence']),publisher:get('deployment','internal-rpc-authority-publisher'),observedAt:new Date().toISOString()});
+      writePrivate(options['--telegram-observability-repair-plan'],repair);
+      return output({status:'PLAN_ONLY',repairSHA256:fingerprint(repair)});
+    }
+    if(phase==='apply-observability-repair')return output(await pair.repairObservability());
     if (phase === 'handoff') return output(await pair.handoff());
     if (phase === 'start-readers') return output(await pair.startReaders());
     if (phase === 'activate') return output(await pair.activateIntroduced());

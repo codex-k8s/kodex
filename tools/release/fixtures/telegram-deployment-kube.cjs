@@ -169,7 +169,7 @@ const run=request=>{
   if(candidate.kind==='Service')for(const port of candidate.spec.ports??[])if(typeof port.targetPort==='string'&&!validName(port.targetPort))fail();
   for(const container of candidate.spec?.template?.spec?.containers??[])for(const port of container.ports??[])if(port.name!==undefined&&!validName(port.name))fail();
   if(!args.includes('--dry-run=server')){
-   const intent=events().at(-1);assert.ok(['TELEGRAM_INPUT_PATCH_INTENT','STOP_INTENT','PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT','PAIR_ACTIVATE_INTENT','INTENT'].includes(intent.type)||intent.operation==='CP_POINTER_CAS');
+   const intent=events().at(-1);assert.ok(['TELEGRAM_INPUT_PATCH_INTENT','STOP_INTENT','PAIR_STOP_INTENT','PAIR_HANDOFF_INTENT','RESUME_INTENT','PAIR_RESUME_INTENT','PAIR_ACTIVATE_INTENT','TELEGRAM_OBSERVABILITY_STOP_INTENT','TELEGRAM_OBSERVABILITY_RENDER_INTENT','TELEGRAM_OBSERVABILITY_RESUME_INTENT','INTENT'].includes(intent.type)||intent.operation==='CP_POINTER_CAS');
    if(s.lostBefore===name)fail();
    Object.assign(resource,candidate);
    if(kind==='deployment')sync(resource);else resource.metadata.resourceVersion=String(Number(resource.metadata.resourceVersion)+1);

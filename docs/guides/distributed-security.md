@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.76
+version: 1.7.77
 updated: 2026-11-15
 ---
 
@@ -293,6 +293,15 @@ renderer меняет только этот env; остальные executable �
 сохраняются. Profile repair допускает лишь exact публичное преобразование
 закреплённого predecessor, UID/resourceVersion CAS, preimage и полный readback.
 Известный либо неизвестный эффект существующего Job не разрешает его пересоздать.
+Добавление нового long-running workload применяет тот же canonical renderer,
+включая native sidecars; raw kustomize не заменяет environment transform.
+Явный режим сверяется с UID/image-bound runtime projection действующего publisher.
+Восстановление уже запущенного receiver сохраняет original creator/schema/authority
+receipts и отдельный immutable repair plan. Оно требует полного stop/join перед
+сменой template, exact UID/spec/RV CAS и свежего owner proof перед каждым effect.
+Неизвестный ACK разрешает лишь проверку принятого состояния; повреждённый успешный
+ACK закрывает дальнейшие effects. Все последующие resume/inspect и backup consumers
+обязаны передать тот же repair pin и проверить завершённый effective spec.
 Профиль, порядок и recovery описаны в [portable install](../runbooks/portable-install.md).
 
 Nested BuildKit профиль отделён от agent runtime и не отключает user namespace.
