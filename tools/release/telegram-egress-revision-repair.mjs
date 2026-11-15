@@ -21,9 +21,9 @@ const digest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)&&value
 
 // Только отдельный опубликованный egress image. SQL, RPC, shared libraries и
 // зависимости сборки неизменны; Git archive повторно связывает receipt с source.
-export async function readTelegramEgressRevisionCandidate(path,migration){
+export async function readTelegramEgressRevisionCandidate(path,migration,{allowUnqualified=false}={}){
  const candidate=readAuthorityPrivateJSON(path);
- fail(exact(candidate,['schema','source','publicationPlanPath','publicationEvidencePath'])&&
+ fail(exact(candidate,['schema','source','publicationPlanPath','publicationEvidencePath','nodeProof'])&&
   candidate.schema==='kodex.telegram-egress-revision-candidate/v1'&&exact(candidate.source,['path','revision'])&&
   privatePath(candidate.source.path)&&/^[a-f0-9]{40}$/.test(candidate.source.revision)&&
   privatePath(candidate.publicationPlanPath)&&privatePath(candidate.publicationEvidencePath));
@@ -42,9 +42,18 @@ export async function readTelegramEgressRevisionCandidate(path,migration){
   publicationPlan.namespaceUID===migration.namespaceUID&&publicationPlan.source===source.revision&&
   publicationPlan.receipt.contextSHA256===await sourceArchiveHash(source.revision,source.path));
  fail(inspectSource(source.path).revision===source.revision);
+ const proof=candidate.nodeProof;
+ if(!(allowUnqualified&&proof===null)){
+  const expected=migration.imageEvidence.components[0].nodeProof.nodes.map(n=>({name:n.name,uid:n.uid})).sort((a,b)=>a.name.localeCompare(b.name));
+  fail(exact(proof,['schema','sourceSHA','imageRef','clusterUID','namespaceUID','bindingSHA256','nodes'])&&
+   proof.schema==='kodex.telegram-egress-node-proof/v1'&&proof.sourceSHA===source.revision&&proof.imageRef===imageRef&&
+   proof.clusterUID===migration.clusterUID&&proof.namespaceUID===migration.namespaceUID&&digest(proof.bindingSHA256)&&
+   Array.isArray(proof.nodes)&&proof.nodes.every(n=>exact(n,['name','uid','imageRef','repoDigestVerified'])&&n.imageRef===imageRef&&n.repoDigestVerified===true)&&
+   same(proof.nodes.map(n=>({name:n.name,uid:n.uid})).sort((a,b)=>a.name.localeCompare(b.name)),expected));
+ }
  return {path:resolve(path),candidateSHA256:fingerprint(candidate),source,imageRef,
   publicationPlanSHA256:fingerprint(publicationPlan),publicationEvidenceSHA256:hash(readAuthorityPrivateText(candidate.publicationEvidencePath)),
-  contextSHA256:publicationPlan.receipt.contextSHA256,changed};
+  contextSHA256:publicationPlan.receipt.contextSHA256,nodeProofSHA256:proof?fingerprint(proof):null,changed};
 }
 
 // Никакого caller patch: только новый immutable image и один закрытый revision
@@ -70,10 +79,10 @@ export function planTelegramEgressRevisionRepair({migration,migrationPlanPath,mi
   privatePath(migrationPlanPath)&&privatePath(migrationEvidencePath)&&migrationPlanPath!==migrationEvidencePath&&
   typeof evidence==='string'&&evidence.endsWith('\n')&&Buffer.byteLength(evidence)<=16<<20&&
   typeof observedAt==='string'&&Number.isFinite(Date.parse(observedAt))&&migration.portableTarget&&migration.postgres&&
-  digest(migration.postconditionSQLSHA256)&&exact(candidate,['path','candidateSHA256','source','imageRef','publicationPlanSHA256','publicationEvidenceSHA256','contextSHA256','changed'])&&
+  digest(migration.postconditionSQLSHA256)&&exact(candidate,['path','candidateSHA256','source','imageRef','publicationPlanSHA256','publicationEvidenceSHA256','contextSHA256','nodeProofSHA256','changed'])&&
   privatePath(candidate.path)&&exact(candidate.source,['path','revision'])&&privatePath(candidate.source.path)&&
   /^[a-f0-9]{40}$/.test(candidate.source.revision)&&candidate.source.revision!==migration.source.revision&&
-  ['candidateSHA256','publicationPlanSHA256','publicationEvidenceSHA256','contextSHA256'].every(key=>digest(candidate[key]))&&Array.isArray(candidate.changed)&&candidate.changed.length>0);
+  ['candidateSHA256','publicationPlanSHA256','publicationEvidenceSHA256','contextSHA256','nodeProofSHA256'].every(key=>digest(candidate[key]))&&Array.isArray(candidate.changed)&&candidate.changed.length>0);
  const events=rows(evidence);
  fail(events[0]?.type==='HEADER'&&events[0].version===1&&events[0].kind==='CONTROL_PLANE_MIGRATION'&&events[0].planSHA256===fingerprint(migration)&&events.filter(e=>e.type==='HEADER').length===1&&
   !events.some(e=>e.type===telegramEgressRevisionRepairBound||e.type==='BACKUP_RESUME_INTENT'));
