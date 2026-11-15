@@ -1,3 +1,4 @@
+import {telegramPublisherRuntimeObservability} from './telegram-runtime-observability.mjs';
 import {authorityOwnerPostgresObjects} from './fixtures/authority-owner-postgres-synthetic.mjs';
 import {catalogAuthorityBaselineSQL} from './catalog-authority-baseline.mjs';
 import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
@@ -254,8 +255,8 @@ for(const authorityTransition of [catalogPolicyTransition,telegramPolicyTransiti
 
 async function prepareTelegramIntroduction(f){
  const resources=telegramCreateSourceFixture(),planPath=join(f.directory,'introduced.json'),evidencePath=join(f.directory,'introduced.jsonl'),publicationPath=join(f.directory,'introduced-publication.json');
- const target={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:f.revision,context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,
-  installationUID:f.installation.metadata.uid,installationSHA256:fingerprint(f.installation.data),publisherUID:f.publisher.metadata.uid,authorityImage:f.publisher.spec.template.spec.containers[0].image};
+ const target={schema:'kodex.telegram-resource-create-target/v2',sourceSHA:f.revision,context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,
+  installationUID:f.installation.metadata.uid,installationSHA256:fingerprint(f.installation.data),publisherUID:f.publisher.metadata.uid,authorityImage:f.publisher.spec.template.spec.containers[0].image,runtimeObservability:telegramPublisherRuntimeObservability(f.publisher,'ENABLED')};
  const observe=()=>({context:f.profile.context,clusterUID:f.profile.clusterUID,namespaceUID:f.profile.namespaceUID,namespace:f.get('namespace','kodex-system'),installation:f.installation,publisher:f.publisher});
  const get=request=>f.get(request.kind.toLowerCase(),request.metadata.name)??null;
  const dryRun=request=>{const r=structuredClone(request);Object.assign(r.metadata,{uid:uid(200),resourceVersion:'1',generation:1});if(r.kind==='Service')Object.assign(r.spec,{clusterIP:'10.43.1.2',clusterIPs:['10.43.1.2'],ipFamilies:['IPv4'],ipFamilyPolicy:'SingleStack'});if(r.kind==='Deployment')r.status={observedGeneration:1,replicas:0};return r;};

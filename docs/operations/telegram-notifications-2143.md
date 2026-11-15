@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.19
+version: 1.0.20
 updated: 2026-11-15
 ---
 
@@ -669,3 +669,41 @@ owner claims, Begin и approvals. Предварительный drain вклю�
 readers. Kubernetes/PostgreSQL transport в этой suite синтетический; это не
 кластерная приёмка. `make test-telegram-authority-delivery` отдельно проверяет
 pending/ready, потерю ответа, чужой UID/spec, TTL, operation и изоляцию Service.
+
+
+## Восстановление пропущенного режима телеметрии
+
+Creator target/v2 содержит явный `runtimeObservability` и hash публичной runtime
+проекции publisher. Перед созданием Deployment применяется штатный
+`tools/install/observability_profile.py`. Три long-running контейнера получают
+`OTEL_SDK_DISABLED=true` в отключённом профиле; one-shot socket init не меняется.
+Прежний target не переинтерпретируется новым creator.
+
+Для уже доставленного receiver без этого env доступны отдельные фазы существующего
+`control-plane-migration.mjs`: `plan-observability-repair` и
+`apply-observability-repair`. Они используют original migration plan/evidence,
+original107/status receipts, CP projection, API-open и ранее выбранный port repair
+executor. `--telegram-observability-repair-plan` обозначает новый private output
+при планировании и immutable input при apply. Apply требует обычного
+`--confirm APPLY-STAGING-CP-MIGRATION`.
+
+План допускает только отсутствующий env трёх контейнеров и подтверждённый
+DISABLED у исходного publisher. UID/image publisher выводятся из hash-bound
+original creator metadata. Original migration, creator, authority operation,
+DDL и images не переписываются. Протокол: exact receiver3 → stop0 → положительный
+Pod join → canonical env-only transform0 → resume3. API остаётся изолированным,
+backup остановлен. `READERS_STARTED_PENDING_READINESS` не означает готовности
+или завершения107. Потерянный ответ PATCH сверяется чтением; повреждённый успешный
+ACK блокирует продолжение и требует отдельного расследования.
+
+После первого repair intent этот pin обязателен для inspect/resume/activate,
+start-readers и финального backup resume. Отсутствующий pin, незавершённая repair,
+сменившийся UID/spec/publisher, активный owner effect и открытый API приводят к
+отказу. Затем штатно проверяются full cohort readiness, terminal107, восстановление
+API и backup. Повторный apply завершённой repair не создаёт PATCH.
+
+`make test-telegram-observability-repair` проверяет immutable plan, canonical
+renderer и lifecycle/ACK/negative paths. `make test-telegram-reader-bootstrap`
+проверяет отдельные реальные CLI-процессы с synthetic Kubernetes/PostgreSQL
+transport, включая counterfactual пропущенный renderer, repair и final backup.
+Это локальная квалификация, а не live acceptance.
