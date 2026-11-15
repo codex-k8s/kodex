@@ -303,6 +303,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   const repairPath=join(f.directory,'observability-repair.json'),oldMigration=readFileSync(f.plan),oldCreator=readFileSync(f.creator.planPath),oldAuthority=readFileSync(owner);
   const repairInputs=[...cpProjection,...apiOpen,...authority];
   const plannedRepair=f.run('plan-observability-repair',[...repairInputs,...fresh(),'--telegram-observability-repair-plan',repairPath]);assert.equal(plannedRepair.status,0,plannedRepair.stderr);
+  assert.equal(execute('git',['-C',f.executor,'status','--porcelain','--untracked-files=all']).trim(),'','read-only renderer must preserve exact source checkout');
   f.enableObservabilityRepair(repairPath);
   const repaired=f.run('apply-observability-repair',[...repairInputs,...fresh()]);assert.equal(repaired.status,0,repaired.stderr);
   assert.equal(JSON.parse(repaired.stdout).status,'READERS_STARTED_PENDING_READINESS');

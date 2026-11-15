@@ -35,6 +35,7 @@ export function requireTelegramRuntimeObservability(profile,publisher){
 // Единственный renderer остаётся canonical Python transform. Проверка результата
 // ограничивает его этой Deployment и тремя long-running env; one-shot init,
 // images, Secret references, probes и остальные поля не меняются.
+// -B исключает запись import cache в закреплённый source checkout.
 export function projectTelegramRuntimeObservability(deployment,mode){
  fail(modes.includes(mode)&&deployment?.apiVersion==='apps/v1'&&deployment.kind==='Deployment'&&
   deployment.metadata?.name==='interaction-gateway'&&deployment.metadata.namespace==='kodex-system');
@@ -51,7 +52,7 @@ export function projectTelegramRuntimeObservability(deployment,mode){
  const input=JSON.stringify([deployment]);fail(Buffer.byteLength(input)<=1<<20);
  const script="import sys,json;sys.path.insert(0,sys.argv[1]);import observability_profile;print(json.dumps(observability_profile.transform(json.load(sys.stdin),disabled=sys.argv[2]=='DISABLED')))";
  let result;
- try{result=JSON.parse(execFileSync('python3',['-I','-c',script,root+'tools/install',mode],{
+ try{result=JSON.parse(execFileSync('python3',['-I','-B','-c',script,root+'tools/install',mode],{
   cwd:root,input,encoding:'utf8',timeout:10000,maxBuffer:2<<20,
   env:Object.fromEntries(['PATH','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]])),stdio:['pipe','pipe','pipe']}));
  }catch{throw Error(rejected);}
