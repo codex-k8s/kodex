@@ -377,7 +377,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair,egressRevisionRepair,validateEgressRevisionRepair}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -388,8 +388,15 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
   const repairEvents=()=>journal.events.filter(e=>e.type===repairBound);
   requireValue(repairEvents().length<=1&&(!repairEvents().length||observabilityRepair&&
     repairEvents()[0].repairSHA256===observabilityRepair.sha256),'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');
-  const part = name => observabilityRepair&&name==='interaction-gateway'&&journal.events.some(e=>e.type===repairComplete&&e.repairSHA256===observabilityRepair.sha256)
-    ?observabilityRepair.part:(effectiveHandoff??plan.componentHandoff).components.find(c => c.name === name);
+  const egressBound='TELEGRAM_EGRESS_REVISION_REPAIR_BOUND',egressComplete='TELEGRAM_EGRESS_REVISION_REPAIR_COMPLETE';
+  const egressEvents=()=>journal.events.filter(e=>e.type===egressBound);
+  requireValue(egressEvents().length<=1&&(!egressEvents().length||egressRevisionRepair&&
+    egressEvents()[0].repairSHA256===egressRevisionRepair.sha256),'TELEGRAM_EGRESS_REVISION_REPAIR_PIN_REQUIRED');
+  const part = name => {
+    if(name==='egress-gateway'&&egressRevisionRepair&&journal.events.some(e=>e.type===egressComplete&&e.repairSHA256===egressRevisionRepair.sha256))return egressRevisionRepair.part;
+    if(name==='interaction-gateway'&&observabilityRepair&&journal.events.some(e=>e.type===repairComplete&&e.repairSHA256===observabilityRepair.sha256))return observabilityRepair.part;
+    return (effectiveHandoff??plan.componentHandoff).components.find(c=>c.name===name);
+  };
   const observe = name => {
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
@@ -518,7 +525,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     requireValue(({
     'interaction-gateway':'TELEGRAM_OBSERVABILITY','egress-gateway':'TELEGRAM_EGRESS_REVISION'
     })[name]===prefix&&repair&&typeof validateRepair==='function',`${prefix}_REPAIR_PIN_REQUIRED`);
-    repairPreflight(name);validateRepair();
+    repairPreflight(name);await validateRepair();
     requireValue(!journal.events.some(e=>e.type===`${prefix}_PATCH_ACK_REJECTED`),`${prefix}_PATCH_ACK_REJECTED`);
     const original=(effectiveHandoff??plan.componentHandoff).components.find(c=>c.name===name),
       stages=[original.resumedSpec,{...original.resumedSpec,replicas:0},repair.part.stagedSpec,repair.part.resumedSpec],
@@ -542,7 +549,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       if(current.index>=next)continue;
       requireValue(current.index===next-1,`${prefix}_REPAIR_ORDER_INVALID`);
       if(next>1){current=await wait(read,s=>s.joined,`${prefix}_REPAIR_JOIN_REQUIRED`,clock);requireValue(current.index===next-1,`${prefix}_REPAIR_ORDER_INVALID`);}
-      repairPreflight(name);validateRepair();
+      repairPreflight(name);await validateRepair();
       const type=types[next-1],patch=[{op:'test',path:'/metadata/uid',value:original.uid},
         {op:'test',path:'/metadata/resourceVersion',value:current.actual.metadata.resourceVersion},
         {op:'test',path:'/spec',value:current.actual.spec},{op:'replace',path:'/spec',value:stages[next]}];
@@ -582,6 +589,16 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     },
     async repairObservability(){
       return repairComponent({name:'interaction-gateway',repair:observabilityRepair,validateRepair:validateObservabilityRepair,prefix:'TELEGRAM_OBSERVABILITY'});
+    },
+    prepareEgressRevisionRepair(){
+      repairPreflight('egress-gateway');
+      requireValue(!egressEvents().length&&!egressRevisionRepair,'TELEGRAM_EGRESS_REVISION_REPAIR_ALREADY_BOUND');
+      const state=observe('egress-gateway');
+      requireValue(state.stage==='resumedSpec','TELEGRAM_EGRESS_REVISION_REPAIR_SOURCE_CHANGED');
+      return state.actual;
+    },
+    async repairEgressRevision(){
+      return repairComponent({name:'egress-gateway',repair:egressRevisionRepair,validateRepair:validateEgressRevisionRepair,prefix:'TELEGRAM_EGRESS_REVISION'});
     },
     requireStopped() {
       for(const name of workers) {
