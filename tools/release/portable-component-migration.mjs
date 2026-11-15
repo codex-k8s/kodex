@@ -547,15 +547,23 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
         const current=observe(name),type=part(name).introduced?'PAIR_ACTIVATE_INTENT':name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT';
         requireValue(current.stage==='stagedSpec'&&current.joined||current.stage==='resumedSpec'&&
           journal.events.some(e=>e.type===type&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
-        if(part(name).introduced&&current.stage==='stagedSpec')journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',
-          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256,snapshotRevision:proof.snapshotRevision});
-        if(name==='control-plane'&&current.stage==='stagedSpec')journal.append({type:'TELEGRAM_CP_AUTHORITY_VERIFIED',
-          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+        if(current.stage==='resumedSpec')continue;
+        // Медленный rejoin предыдущего reader не расходует допуск следующего
+        // writer. Обновляется реальный owner read, а не timestamp старого proof.
+        const currentProof=await delivered();
+        requireValue(['operationID','registryRevision','registrySHA256','snapshotRevision','snapshotSHA256','deliveredAt'].every(
+          key=>currentProof[key]===proof[key]),'TELEGRAM_API_READERS_REQUIRED');
+        journal.append({type:'TELEGRAM_READER_AUTHORITY_VERIFIED',name,
+          operationID:currentProof.operationID,deliverySHA256:currentProof.deliverySHA256});
+        if(part(name).introduced)journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',
+          operationID:currentProof.operationID,deliverySHA256:currentProof.deliverySHA256,snapshotRevision:currentProof.snapshotRevision});
+        if(name==='control-plane')journal.append({type:'TELEGRAM_CP_AUTHORITY_VERIFIED',
+          operationID:currentProof.operationID,deliverySHA256:currentProof.deliverySHA256});
         await transition(name,'resumedSpec',type,()=>{
           const currentAPI=observe('control-api-gateway');
-          requireValue(currentAPI.stage==='isolatedReadersSpec'&&currentAPI.readers?.operationID===proof.operationID,
+          requireValue(currentAPI.stage==='isolatedReadersSpec'&&currentAPI.readers?.operationID===currentProof.operationID,
             'TELEGRAM_API_READERS_REQUIRED');
-          deliveryFresh(proof);
+          deliveryFresh(currentProof);
         });
       }
       requireValue(observe('control-api-gateway').stage==='isolatedReadersSpec','TELEGRAM_API_READERS_REQUIRED');

@@ -114,7 +114,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
       }
       return '{}';
     }
-    if(args.includes('deployment'))return JSON.stringify(apps.get(args[args.indexOf('deployment')+1]));
+    if(args.includes('deployment')){const name=args[args.indexOf('deployment')+1];faults.beforeComponentRead?.(name);return JSON.stringify(apps.get(name));}
     if(args.includes('replicasets,pods,jobs')){
       let rows=inventory();
       if(remainingDiscovery>0){remainingDiscovery--;faults.discoveryObserved++;rows=faults.discoveryAlternating&&faults.discoveryObserved%2===0?inventory():previousInventory;}
@@ -129,7 +129,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>{faults.beforeAuthorityRead?.();return faults.authorityDelivery;},readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},
     clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}});
@@ -489,4 +489,33 @@ test('046 bootstrap повторно проверяет DELIVER TTL после �
  try{await assert.rejects(()=>f.lifecycle.startReaders(),/AUTHORITY_DELIVERY_REQUIRED/);}finally{Date.now=now;}
  assert.equal(afterDryRun,true);assert.equal(f.patches.length,before);assert.equal(f.apps.get('control-plane').spec.replicas,0);
  assert.equal(f.events.some(e=>e.type==='RESUME_INTENT'),false);
+});
+
+test('046 bootstrap обновляет owner DELIVER для каждого нового writer после медленного owned CP rejoin',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ f.faults.policyReady=false;await assert.rejects(()=>f.lifecycle.resume(),/RESUME_TIMEOUT/);
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ const now=Date.now,cpWrites=f.patches.filter(name=>name==='control-plane').length;let instant=now(),reads=0;
+ Date.now=()=>instant;
+ f.faults.beforeComponentRead=name=>{if(reads>0&&name==='control-plane')instant+=40000;};
+ f.faults.beforeAuthorityRead=()=>{reads++;const {deliverySHA256,...body}=f.faults.authorityDelivery;
+  body.observedAt=new Date(instant).toISOString();f.faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};};
+ try{assert.equal((await f.lifecycle.startReaders()).status,'READERS_STARTED_PENDING_READINESS');}finally{Date.now=now;}
+ assert.equal(reads,4);assert.equal(f.patches.filter(name=>name==='control-plane').length,cpWrites);
+ for(const name of ['staff-control-center','egress-gateway','interaction-gateway'])assert.ok(f.apps.get(name).spec.replicas>0);
+ assert.equal(f.events.some(e=>['RESUME_ACK','PAIR_RESUME_ACK','PAIR_ACTIVATE_ACK'].includes(e.type)),false);
+});
+
+test('046 новый owner read не разрешает заменить bootstrap operation или snapshot перед writer CAS',async()=>{
+ for(const [field,value] of [['operationID',uuid(201)],['snapshotRevision',6],['snapshotSHA256','f'.repeat(64)]]){
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ let reads=0;const writes=f.patches.length;
+ f.faults.beforeAuthorityRead=()=>{if(++reads===2){const {deliverySHA256,...body}=f.faults.authorityDelivery;
+  body[field]=value;f.faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};}};
+ await assert.rejects(()=>f.lifecycle.startReaders(),/TELEGRAM_API_READERS_REQUIRED/);
+ assert.equal(reads,2);assert.equal(f.patches.length,writes);assert.equal(f.events.some(e=>e.type==='RESUME_INTENT'),false);
+ }
 });
