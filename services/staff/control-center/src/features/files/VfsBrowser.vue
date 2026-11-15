@@ -536,7 +536,7 @@ onBeforeUnmount(() => {
       <div ref="scrollRoot" class="vfs-list" :aria-busy="loading">
         <div v-for="node in nodes" :key="node.ref" class="vfs-entry">
           <span
-            v-if="node.directory"
+            v-if="node.directory && node.resourceKind !== 'SKILL_BUNDLE'"
             class="vfs-entry__selection-placeholder"
             aria-hidden="true"
           />

@@ -114,11 +114,16 @@ function node(
   };
 }
 async function choose(container: Locator, name: string) {
-  await container.locator(".async-picker__trigger").click();
+  const trigger = container.locator(".async-picker__trigger");
+  // Повторный выбор продолжает уже открытый список; toggle мог бы его закрыть.
+  if ((await trigger.getAttribute("aria-expanded")) === "false")
+    await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
   await container
     .page()
     .getByRole("option", { name: new RegExp(name) })
     .click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
 }
 for (const width of [390, 2900]) {
   test(`synthetic: controlled clear и VFS lifecycle ${String(width)}px`, async ({
@@ -133,6 +138,17 @@ for (const width of [390, 2900]) {
       node("SKILL", "skill", "SKILL_BUNDLE", "Навык"),
       node("MEMORY", "memory", "MEMORY_RECORD", "Память"),
       node("INPUT", "immutable", "ARTIFACT", "Вход запуска", false),
+      node("SKILL", "blocked-skill", "SKILL_BUNDLE", "Закрытый навык", false),
+      {
+        ...node("DIRECTORY", "folder", "", "Обычный каталог", false),
+        directory: true,
+        entityRef: "",
+        version: 0,
+        revision: 0,
+        revisionRef: "",
+        selectionReason: "DIRECTORY",
+        nextActions: [],
+      },
     ];
     const mutations: string[] = [];
     const filters: URLSearchParams[] = [];
@@ -354,6 +370,15 @@ for (const width of [390, 2900]) {
     await expect(
       page.getByRole("checkbox", { name: "Выбрать: Вход запуска" }),
     ).toBeDisabled();
+    await expect(
+      page.getByRole("checkbox", { name: "Выбрать: Закрытый навык" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("checkbox", { name: "Выбрать: Обычный каталог" }),
+    ).toHaveCount(0);
+    await expect(
+      page.locator(".vfs-row").filter({ hasText: "Обычный каталог" }),
+    ).toBeVisible();
     await page.locator(".vfs-row").filter({ hasText: "Документ" }).click();
     await expect(page.locator("#assistant-context")).toContainText(
       '"entityKind":"FILE"',

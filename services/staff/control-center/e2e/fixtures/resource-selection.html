@@ -9,6 +9,7 @@
     <div id="app"></div>
     <script type="module">
       import { createApp, h, ref, reactive } from "vue";
+      import { createPinia } from "pinia";
       import { createRouter, createMemoryHistory } from "vue-router";
       import { i18n } from "../../src/app/i18n/index";
       import { loadRuntimeConfig } from "../../src/shared/config/runtime";
@@ -74,6 +75,7 @@
               h("section", { id: "project-picker" }, [
                 h(ProjectPicker, {
                   project: project.value,
+                  clearable: true,
                   onSelect: (value) => {
                     project.value = value ? fixture.project : undefined;
                   },
@@ -167,6 +169,7 @@
             ]);
         },
       })
+        .use(createPinia())
         .use(i18n)
         .use(router)
         .mount("#app");
