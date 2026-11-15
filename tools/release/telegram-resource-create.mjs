@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {projectTelegramRuntimeObservability,requireTelegramRuntimeObservability} from './telegram-runtime-observability.mjs';
 import {readTelegramIntroductionInventory,telegramIdentitySecretNames,telegramProducerSecretReferences} from './telegram-introduction-inventory.mjs';
 import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
@@ -29,8 +30,8 @@ export const telegramResourceCreateHeader=plan=>({schema:'kodex.telegram-resourc
 // Новый target закрепляет существующую установку и publisher, не присваивая
 // ещё отсутствующим ресурсам выдуманные UID. Их UID появляются только в readback.
 export function requireTelegramResourceCreateTarget(target,observed){
- fail(exact(target,['schema','sourceSHA','context','clusterUID','namespaceUID','installationUID','installationSHA256','publisherUID','authorityImage'])&&
-  target.schema==='kodex.telegram-resource-create-target/v1'&&source(target.sourceSHA)&&
+ fail(exact(target,['schema','sourceSHA','context','clusterUID','namespaceUID','installationUID','installationSHA256','publisherUID','authorityImage','runtimeObservability'])&&
+  target.schema==='kodex.telegram-resource-create-target/v2'&&source(target.sourceSHA)&&
   /^[A-Za-z0-9_.:@/-]{1,160}$/.test(target.context??'')&&['clusterUID','namespaceUID','installationUID','publisherUID'].every(k=>uuid(target[k]))&&
   sha(target.installationSHA256)&&/^registry\.local\.kodex\/kodex\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(target.authorityImage??'')&&
   !target.authorityImage.endsWith('0'.repeat(64)),'TELEGRAM_CREATE_TARGET_INVALID');
@@ -47,6 +48,7 @@ export function requireTelegramResourceCreateTarget(target,observed){
   publisher.metadata.labels?.['kodex.dev/profile']==='web-only'&&publisher.metadata.labels?.['kodex.dev/environment']==='production'&&
   publisher.spec?.template?.spec?.containers?.filter(c=>c.name==='publisher'&&c.image===target.authorityImage).length===1,
   'TELEGRAM_CREATE_TARGET_CHANGED');
+ requireTelegramRuntimeObservability(target.runtimeObservability,publisher);
  return fingerprint(target);
 }
 
@@ -76,6 +78,9 @@ export function telegramResourceCreateRequests(resources,target,createID,interac
    fail(agents.length===expected.length&&same(agents.map(c=>c.name).sort(),[...expected].sort())&&!spec.ephemeralContainers?.length,
     'TELEGRAM_CREATE_SOURCE_CONTAINERS_INVALID');
    for(const container of agents)container.image=container.name==='interaction-gateway'?interactionImage:target.authorityImage;
+   fail(target.schema==='kodex.telegram-resource-create-target/v2'&&target.runtimeObservability,'TELEGRAM_CREATE_TARGET_INVALID');
+   const projected=projectTelegramRuntimeObservability(item,target.runtimeObservability.mode);
+   item.spec=projected.spec;
   }
  }
  return requests;
@@ -183,12 +188,12 @@ export function planTelegramResourceCreate({target,observed,resources,interactio
   if(request.kind==='Deployment')fail(expected.spec.replicas===0,'TELEGRAM_CREATE_ADMISSION_STARTED_WORKLOAD');
   objects.push({request,expected});
  }
- const plan={schema:'kodex.telegram-resource-create-plan/v1',target,createID,interactionImage,intendedReplicas:3,planPath,evidencePath,objects};
+ const plan={schema:'kodex.telegram-resource-create-plan/v2',target,createID,interactionImage,intendedReplicas:3,planPath,evidencePath,objects};
  validatePlan(plan);return plan;
 }
 
 function validatePlan(plan){
- fail(exact(plan,['schema','target','createID','interactionImage','intendedReplicas','planPath','evidencePath','objects'])&&plan.schema==='kodex.telegram-resource-create-plan/v1'&&uuid(plan.createID)&&plan.intendedReplicas===3&&
+ fail(exact(plan,['schema','target','createID','interactionImage','intendedReplicas','planPath','evidencePath','objects'])&&plan.schema==='kodex.telegram-resource-create-plan/v2'&&uuid(plan.createID)&&plan.intendedReplicas===3&&
   Array.isArray(plan.objects)&&same(plan.objects.map(p=>key(p.request)),telegramResourceCreateKeys)&&
   [plan.planPath,plan.evidencePath].every(path=>typeof path==='string'&&path===resolve(path)&&!/[\r\n\0]/.test(path))&&plan.planPath!==plan.evidencePath,'TELEGRAM_CREATE_PLAN_INVALID');
  for(const part of plan.objects){

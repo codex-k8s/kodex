@@ -540,7 +540,7 @@ test-scoped-backup-reader:
 .PHONY: test-telegram-resource-create test-telegram-notifications-owner test-telegram-authority-delivery
 
 test-telegram-resource-create:
-	@timeout 180s node --test tools/release/telegram-resource-create.test.mjs
+	@timeout 180s node --test tools/release/telegram-runtime-observability.test.mjs tools/release/telegram-resource-create.test.mjs
 
 test-telegram-notifications-owner:
 	@timeout 600s bash scripts/tests/control-plane-postgres-test.sh --telegram-notifications-owner
