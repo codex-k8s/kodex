@@ -712,3 +712,7 @@ test-telegram-authority-owner:
 .PHONY: test-telegram-reader-bootstrap
 test-telegram-reader-bootstrap:
 	@timeout 900s node --test --test-name-pattern='^real CLI046/107 reader-bootstrap:' tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-observability-repair
+test-telegram-observability-repair:
+	@timeout 180s node --test tools/release/telegram-runtime-observability.test.mjs tools/release/telegram-observability-repair.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs

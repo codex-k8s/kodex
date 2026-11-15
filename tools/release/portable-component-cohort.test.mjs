@@ -112,7 +112,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
         if(faults.replaceSpecAfterPatch===name)app.spec.paused=true;
         if(faults.lostACK===name){faults.lostACK='';throw Error('SYNTHETIC_RESPONSE_LOST');}
       }
-      return '{}';
+      return args.includes('-o')?JSON.stringify(faults.badACK?{...app,metadata:{...app.metadata,uid:uuid(999)}}:app):'{}';
     }
     if(args.includes('deployment')){const name=args[args.indexOf('deployment')+1];faults.beforeComponentRead?.(name);return JSON.stringify(apps.get(name));}
     if(args.includes('replicasets,pods,jobs')){
@@ -126,14 +126,15 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   };
   const observeCP=()=>{const app=apps.get('control-plane'),part=handoff.components[0];
     return {stage:fingerprint(app.spec)===fingerprint(part.stoppedSpec)?'STOPPED':'STAGED',joined:app.spec.replicas===0};};
-  const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
+  const lifecycleInputs={plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
     readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>{faults.beforeAuthorityRead?.();return faults.authorityDelivery;},readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
-    wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},
-    clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}});
-  return {lifecycle,apps,events,patches,faults,plan,projectCP:()=>{
+    wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{const value=observe();if(!ready(value))throw Error(code);return value;},
+    clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}};
+  const lifecycle=componentMigrationLifecycle(lifecycleInputs);
+  return {lifecycle,rebuild:extra=>componentMigrationLifecycle({...lifecycleInputs,...extra}),apps,events,patches,faults,plan,projectCP:()=>{
       const part=handoff.components[0];faults.cpProjection={stagedSpec:structuredClone(part.stagedSpec),resumedSpec:structuredClone(part.resumedSpec)};
       for(const spec of [faults.cpProjection.stagedSpec,faults.cpProjection.resumedSpec])spec.template.spec.containers[0].env.push({name:'POLICY_REVISION',value:'107'});
       apps.get('control-plane').spec=structuredClone(faults.cpProjection.stagedSpec);status(apps.get('control-plane'));faults.policyReady=true;
@@ -518,4 +519,61 @@ test('046 новый owner read не разрешает заменить bootstr
  await assert.rejects(()=>f.lifecycle.startReaders(),/TELEGRAM_API_READERS_REQUIRED/);
  assert.equal(reads,2);assert.equal(f.patches.length,writes);assert.equal(f.events.some(e=>e.type==='RESUME_INTENT'),false);
  }
+});
+
+// После первой доставки данные и owner operation остаются прежними: меняется
+// только утверждённая env projection введённого reader, через полный stop/join.
+async function observabilityRepairFixture(){
+ const f=lifecycleFixture('telegram-notifications-backup');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+ await f.lifecycle.handoff();f.projectCP();
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:0,availableReplicas:0};
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ await f.lifecycle.startReaders();
+ const original=f.plan.componentHandoff.components.find(c=>c.name==='interaction-gateway'),part=structuredClone(original);
+ for(const key of ['stoppedSpec','stagedSpec','resumedSpec'])part[key].template.spec.containers[0].env.push({name:'OTEL_SDK_DISABLED',value:'true'});
+ const repair={repair:{jobUID:uuid(808)},part,sha256:'e'.repeat(64)};
+ return {...f,repair,repairLifecycle:()=>f.rebuild({observabilityRepair:repair,validateObservabilityRepair:()=>{if(f.faults.publisherChanged)throw Error('PUBLISHER_CHANGED');}})};
+}
+
+test('046 telemetry repair: stop/join→canonical env→resume; final consumers и повтор без второго effect',async()=>{
+ const f=await observabilityRepairFixture(),original=JSON.stringify(f.plan),before=f.patches.length;
+ assert.equal(f.lifecycle.prepareObservabilityRepair().metadata.name,'interaction-gateway');
+ const result=await f.repairLifecycle().repairObservability();
+ assert.equal(result.status,'READERS_STARTED_PENDING_READINESS');assert.equal(result.pairReady,false);
+ assert.deepEqual(f.patches.slice(before),Array(3).fill('interaction-gateway'));
+ assert.equal(JSON.stringify(f.plan),original);
+ assert.equal(f.repairLifecycle().inspect().find(p=>p.name==='interaction-gateway').stage,'resumedSpec');
+ await f.repairLifecycle().repairObservability();assert.equal(f.patches.length,before+3);
+ assert.throws(()=>f.rebuild({}),/REPAIR_PIN_REQUIRED/);
+});
+
+test('046 telemetry repair: lost accepted ACK rejoins without duplicate PATCH',async()=>{
+ const f=await observabilityRepairFixture(),before=f.patches.length;f.faults.lostACK='interaction-gateway';
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/PATCH_UNKNOWN/);
+ assert.equal(f.patches.length,before+1);
+ await f.repairLifecycle().repairObservability();assert.equal(f.patches.length,before+3);
+});
+
+test('046 telemetry repair: malformed successful ACK cannot become UNKNOWN or later success',async()=>{
+ const f=await observabilityRepairFixture(),before=f.patches.length;f.faults.badACK=true;
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/ACK_REJECTED/);
+ f.faults.badACK=false;
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/ACK_REJECTED/);
+ assert.equal(f.patches.length,before+1);assert.equal(f.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE'),false);
+});
+
+test('046 telemetry repair: active writers, publisher drift, foreign API and unowned reader refuse before effect',async()=>{
+ for(const mutation of [f=>f.faults.activeEffects=1,f=>f.faults.publisherChanged=true,
+  f=>f.faults.apiReaders.state='RESTORED_READERS_READY',f=>f.events.splice(f.events.findIndex(e=>e.type==='PAIR_ACTIVATE_INTENT'),1)]){
+  const f=await observabilityRepairFixture(),before=f.patches.length;mutation(f);
+  await assert.rejects(()=>f.repairLifecycle().repairObservability());assert.equal(f.patches.length,before);
+ }
+});
+
+test('046 telemetry repair: positive Pod join precedes env mutation; replacement UID refuses',async()=>{
+ const f=await observabilityRepairFixture(),before=f.patches.length;f.faults.blocked='interaction-gateway';
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/JOIN_REQUIRED/);assert.equal(f.patches.length,before+1);
+ f.faults.blocked='';f.apps.get('interaction-gateway').metadata.uid=uuid(999);
+ await assert.rejects(()=>f.repairLifecycle().repairObservability(),/UID_CHANGED/);assert.equal(f.patches.length,before+1);
 });
