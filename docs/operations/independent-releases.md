@@ -4,8 +4,8 @@ title: Независимые релизы и переход worker grants
 type: operations
 status: approved
 owner: manager
-version: 1.3.0
-updated: 2026-09-08
+version: 1.3.1
+updated: 2026-11-15
 ---
 
 # Независимые релизы
@@ -18,6 +18,50 @@ updated: 2026-09-08
 Совместимость относится к протоколу и возможностям, не к общему Git SHA.
 Batch состоит из независимых обновлений с ограничением параллелизма и
 поэлементным результатом. Ошибка одного участника не откатывает соседей.
+
+### Адресное обновление portable PWA
+
+Для #1977 `scoped-release.mjs --profile portable-pwa` принимает ровно один
+`staff-control-center` установленного `web-only` профиля. Его штатный label
+`environment=production` не требует переименования в staging: область задают
+явное разрешение оператора, точные kubeconfig/context, cluster/namespace UID и
+Deployment UID/spec. Обычный профиль по-прежнему отклоняет production label.
+Новый профиль не допускает другие компоненты, source mounts, sidecars, init
+containers, hostPath, изменение executable или перенос образа в другой registry.
+
+До plan оператор проверяет совместимость API и неизменность schema, публикует
+штатный OCI image, квалифицирует exact digest на узлах и сохраняет provenance.
+Manifest имеет прежнюю форму `version:1, targets:[{name,image,build}]`, где
+`build.sourceSHA` — source образа, а `build.provenanceSHA256` — digest сохранённого
+доказательства публикации/квалификации этого компонента. Само наличие этих полей
+не доказывает admission, node pull или совместимость. Plan и manifest — owned
+regular files0600; executor — чистый точный checkout. Прежний полный base lock
+сохраняется. `component-source-sha` и `component-upgrade-sha256` описывают новый
+образ; rollback manifest сохраняет прежние значения вместе с exact image.
+
+```bash
+node tools/release/scoped-release.mjs plan --profile portable-pwa \
+  --kubeconfig "$KUBECONFIG_FILE" --context "$CONTEXT" \
+  --manifest "$PRIVATE/pwa-image.json" --output "$PRIVATE/pwa-plan.json"
+node tools/release/scoped-release.mjs apply --profile portable-pwa \
+  --kubeconfig "$KUBECONFIG_FILE" --context "$CONTEXT" \
+  --plan "$PRIVATE/pwa-plan.json" --evidence "$PRIVATE/pwa-journal.jsonl" \
+  --confirm APPLY-STAGING-APPLICATIONS
+```
+
+| Переход | Полномочия и условие | Эффект / authoritative read |
+| --- | --- | --- |
+| plan | Разрешённый operator target; готовый exact PWA, immutable image и provenance | Только Kubernetes GET и private plan; cluster/namespace/executor/spec закреплены |
+| apply | Те же pins, свежий UID/spec и Kubernetes RBAC | fsync intent, один JSON Patch с UID/resourceVersion tests; только image и provenance |
+| readback | Deployment controller завершил rolling update | Exact spec, observed generation, replicas; отдельно проверить actual Pod/CRI digest и UI |
+| UNKNOWN / retry | ACK или наблюдение потеряны | Original journal сохраняется; повтор apply с ним запрещён, сначала readback, без второго PATCH |
+| rollback | Проверенная совместимость прежнего PWA и original rollback manifest | Новый plan проверяет expected image/release ID; БД и bootstrap не затрагиваются |
+
+Конфигурация, Service/Ingress, API, credentials, authority и миграции не меняются.
+Node/Pod readback и браузерная приёмка обязательны отдельно от локального теста.
+Проверка: `node --test tools/release/scoped-release*.test.mjs
+tools/release/application-restart.test.mjs`. Документы Kubernetes через Context7:
+`/kubernetes/website`, Deployment RollingUpdate и JSON Patch resourceVersion test.
 
 ## Подтверждённая причина и порядок внедрения
 
