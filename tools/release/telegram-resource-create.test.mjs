@@ -1,3 +1,4 @@
+import {telegramPublisherRuntimeObservability} from './telegram-runtime-observability.mjs';
 import producerMetadata from './fixtures/telegram-producer-metadata.cjs';
 import {telegramIntroductionResources} from './telegram-introduction-inventory.mjs';
 import test from 'node:test';
@@ -17,8 +18,9 @@ const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const metadata=name=>({name,namespace:'kodex-system',labels:{'app.kubernetes.io/part-of':'kodex','kodex.dev/environment':'production','kodex.dev/profile':'web-only'}});
 function fixture(){
  const installation={apiVersion:'v1',kind:'ConfigMap',metadata:{...metadata('kodex-installation-profile'),uid:uid(3),labels:{...metadata('').labels,'app.kubernetes.io/managed-by':'kodex-install'}},data:{'source.sha':'a'.repeat(40)}};
- const target={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:'b'.repeat(40),context:'k3d-kodex',clusterUID:uid(1),namespaceUID:uid(2),installationUID:uid(3),installationSHA256:fingerprint(installation.data),publisherUID:uid(4),authorityImage:'registry.local.kodex/kodex/internal-rpc-authority@sha256:'+'c'.repeat(64)};
+ const target={schema:'kodex.telegram-resource-create-target/v2',sourceSHA:'b'.repeat(40),context:'k3d-kodex',clusterUID:uid(1),namespaceUID:uid(2),installationUID:uid(3),installationSHA256:fingerprint(installation.data),publisherUID:uid(4),authorityImage:'registry.local.kodex/kodex/internal-rpc-authority@sha256:'+'c'.repeat(64)};
  const publisher={apiVersion:'apps/v1',kind:'Deployment',metadata:{...metadata('internal-rpc-authority-publisher'),uid:uid(4)},spec:{template:{spec:{containers:[{name:'publisher',image:target.authorityImage}]}}}};
+ target.runtimeObservability=telegramPublisherRuntimeObservability(publisher,'ENABLED');
  const observed={context:target.context,clusterUID:target.clusterUID,namespaceUID:target.namespaceUID,namespace:{kind:'Namespace',metadata:{name:'kodex-system',uid:target.namespaceUID},status:{phase:'Active'}},installation,publisher};
  const resources=telegramCreateSourceFixture();
  const interactionImage='registry.local.kodex/kodex/interaction-gateway@sha256:'+'d'.repeat(64),stored=new Map(),state={effects:0,lostACK:false,extra:[],allocated:'10.43.1.2',gateDrift:false};
@@ -41,6 +43,29 @@ test('fixed dormant create сохраняет server UID и allocation, нико
  const uids=result.resources.map(r=>r.uid);assert.equal(new Set(uids).size,10);
  f.state.allocated='10.43.1.3';assert.equal((await f.step('apply',plan,journal)).state,'CREATED_DORMANT');assert.equal(f.state.effects,10);
  assert.deepEqual((await f.step('status',plan,journal)).resources.map(r=>r.uid),uids);
+});
+
+test('v2 disabled creator и повторный admission используют canonical env на всех трёх long-running',async()=>{
+ const f=fixture();f.observed.publisher.spec.template.spec.containers[0].env=[{name:'OTEL_SDK_DISABLED',value:'true'}];
+ f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,'DISABLED');
+ const plan=f.plan(),request=plan.objects.at(-1).request;
+ assert.equal(plan.schema,'kodex.telegram-resource-create-plan/v2');
+ for(const container of request.spec.template.spec.containers)assert.deepEqual(container.env,[{name:'OTEL_SDK_DISABLED',value:'true'}]);
+ assert.equal(request.spec.template.spec.initContainers[0].env,undefined);
+ const plain=fixture().plan();
+ assert.deepEqual(plan.objects.slice(0,-1).map(p=>p.request.spec),plain.objects.slice(0,-1).map(p=>p.request.spec));
+ const journal=f.journal(plan);await f.step('apply',plan,journal);assert.equal(f.state.effects,10);
+ f.observed.publisher.spec.template.metadata={annotations:{'kodex.dev/restarted':'unrelated'}};
+ assert.equal((await f.step('status',plan,journal)).state,'CREATED_DORMANT');
+ f.observed.publisher.spec.template.spec.containers[0].env=[];
+ await assert.rejects(f.step('status',plan,journal),/RUNTIME_OBSERVABILITY_REJECTED/);
+});
+
+test('новый creator не принимает legacy v1 target либо неподтверждённый mode до effect',()=>{
+ for(const mutate of [f=>f.target.schema='kodex.telegram-resource-create-target/v1',
+  f=>delete f.target.runtimeObservability,f=>f.target.runtimeObservability.mode='DISABLED']){
+  const f=fixture();mutate(f);assert.throws(f.plan,/TARGET_INVALID|RUNTIME_OBSERVABILITY_REJECTED/);assert.equal(f.state.effects,0);
+ }
 });
 
 test('lost ACK восстанавливается по exact nonce/spec без повторного create',async()=>{
@@ -138,8 +163,11 @@ if(call[0]==='create'){
 throw Error('unrecognized operation');
 `;
 
-async function cliFixture(){
- const f=fixture(),directory=await mkdtemp(join(tmpdir(),'kodex-telegram-create-cli-'));
+async function cliFixture(mode='ENABLED'){
+ const f=fixture();
+ if(mode==='DISABLED')f.observed.publisher.spec.template.spec.containers[0].env=[{name:'OTEL_SDK_DISABLED',value:'true'}];
+ f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode);
+ const directory=await mkdtemp(join(tmpdir(),'kodex-telegram-create-cli-'));
  const bin=join(directory,'bin');await mkdir(bin,{mode:0o700});
  for(const name of ['git','kubectl'])await writeFile(join(bin,name),backend,{mode:0o700});
  const state={target:f.target,observed:f.observed,resources:f.resources,stored:{},extra:[],effects:0};
@@ -178,6 +206,20 @@ test('real CLI synthetic backend держит explicit target, source render,10c
   const readback=f.run('status');assert.equal(readback.status,0,readback.output);assert.equal(JSON.parse(readback.output).qualification,'NOT_ACTIVATED_NOT_INSTALLED');
   const final=JSON.parse(await readFile(f.statePath,'utf8'));assert.equal(final.effects,10);assert.equal(final.stored['deployment/interaction-gateway'].spec.replicas,0);
   assert.match(await readFile(f.evidencePath,'utf8'),/"type":"UNKNOWN"/);
+ }finally{await rm(f.directory,{recursive:true,force:true});}
+});
+
+test('real CLI disabled profile создаёт10objects и readback сохраняет canonical env трёх контейнеров',async()=>{
+ const f=await cliFixture('DISABLED');
+ try{
+  const planned=f.run('plan');assert.equal(planned.status,0,planned.output);
+  const plan=JSON.parse(await readFile(f.planPath,'utf8'));
+  const applied=f.run('apply',['--approved-plan-sha',fingerprint(plan)]);assert.equal(applied.status,0,applied.output);
+  const readback=f.run('status');assert.equal(readback.status,0,readback.output);
+  const final=JSON.parse(await readFile(f.statePath,'utf8'));assert.equal(final.effects,10);
+  const pod=final.stored['deployment/interaction-gateway'].spec.template.spec;
+  for(const container of pod.containers)assert.deepEqual(container.env,[{name:'OTEL_SDK_DISABLED',value:'true'}]);
+  assert.equal(pod.initContainers[0].env,undefined);
  }finally{await rm(f.directory,{recursive:true,force:true});}
 });
 
@@ -226,8 +268,11 @@ test('deprecated serviceAccount допускает только непустую
 
 // 107 admission перечитывает actual objects и private create/publication lineage;
 // завершённый create остаётся PENDING_AUTHORITY до отдельного key delivery.
-test('107 introduction связывает source/publication,10actualUID и dormant0 без effects',async()=>{
- const f=fixture(),directory=await mkdtemp(join(tmpdir(),'kodex-telegram-introduction-'));
+for(const mode of ['ENABLED','DISABLED'])test('107 introduction связывает source/publication,10actualUID и dormant0 без effects: '+mode,async()=>{
+ const f=fixture();
+ if(mode==='DISABLED')f.observed.publisher.spec.template.spec.containers[0].env=[{name:'OTEL_SDK_DISABLED',value:'true'}];
+ f.target.runtimeObservability=telegramPublisherRuntimeObservability(f.observed.publisher,mode);
+ const directory=await mkdtemp(join(tmpdir(),'kodex-telegram-introduction-'));
  try{
   const plan=f.plan();plan.planPath=join(directory,'plan.json');plan.evidencePath=join(directory,'evidence.jsonl');
   const journal=f.journal(plan);await f.step('apply',plan,journal);

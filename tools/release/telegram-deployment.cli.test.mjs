@@ -1,3 +1,4 @@
+import {telegramPublisherRuntimeObservability} from './telegram-runtime-observability.mjs';
 import {authorityOwnerPostgresObjects} from './fixtures/authority-owner-postgres-synthetic.mjs';
 import {catalogAuthorityBaselineSQL} from './catalog-authority-baseline.mjs';
 import {backupMaintenanceFixture} from './fixtures/backup-controller-maintenance-synthetic.mjs';
@@ -122,8 +123,8 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  const admission=prepareAdmission({directory,revision,profile:apiProfile,installation,api,service:apiService,
   state:{slices:{items:[]},isolationPods:{items:[]}},authorityTransition:telegramPolicyTransition});
  const kubeconfig=join(directory,'kubeconfig');writeFileSync(kubeconfig,'synthetic-unused',{mode:0o600});
- const createTarget={schema:'kodex.telegram-resource-create-target/v1',sourceSHA:revision,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,
-  installationUID:installation.metadata.uid,installationSHA256:fingerprint(installation.data),publisherUID:publisher.metadata.uid,authorityImage:publisher.spec.template.spec.containers[0].image};
+ const createTarget={schema:'kodex.telegram-resource-create-target/v2',sourceSHA:revision,context:f.target.context,clusterUID:f.target.clusterUID,namespaceUID:f.target.namespaceUID,
+  installationUID:installation.metadata.uid,installationSHA256:fingerprint(installation.data),publisherUID:publisher.metadata.uid,authorityImage:publisher.spec.template.spec.containers[0].image,runtimeObservability:telegramPublisherRuntimeObservability(publisher,'ENABLED')};
  const namespace={kind:'Namespace',metadata:{name:'kodex-system',uid:createTarget.namespaceUID},status:{phase:'Active'}};
  const observed={context:createTarget.context,clusterUID:createTarget.clusterUID,namespaceUID:createTarget.namespaceUID,namespace,installation,publisher};
  const get=request=>structuredClone(resources[request.kind.toLowerCase()+'/'+request.metadata.name]??null);
