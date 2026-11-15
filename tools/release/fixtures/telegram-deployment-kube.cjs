@@ -24,8 +24,18 @@ let inputBytes;const input=()=>inputBytes??=(fs.readFileSync(0,'utf8'));
 const evidence=s.activeEvidence??s.evidence;
 const events=()=>fs.existsSync(evidence)?fs.readFileSync(evidence,'utf8').trim().split('\n').map(JSON.parse):[];
 const requiredReaders=['control-plane','control-api-gateway','interaction-gateway'];
-const readersStarted=()=>requiredReaders.every(name=>get('deployment',name)?.spec.replicas>0);
-const cpReady=app=>!(s.bootstrapBarrier&&s.schemaMigrated&&requiredReaders.includes(app.metadata.name)&&!readersStarted())&&(app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107));
+// Startup barrier имеет durable release: остановка уже допущенного reader
+// не отменяет выполненную публикацию. Telemetry omission блокирует первый join.
+const readersStarted=()=>{
+ if(!requiredReaders.every(name=>get('deployment',name)?.spec.replicas===3))return false;
+ if(!s.telemetryRequired)return true;
+ const pod=get('deployment','interaction-gateway').spec.template.spec;
+ const running=[...pod.containers,...(pod.initContainers??[]).filter(c=>c.restartPolicy==='Always')];
+ return running.length===3&&['interaction-gateway','internal-rpc-authority-issuer','platform-worker-grant-agent'].every(name=>
+  running.filter(c=>c.name===name&&c.env?.filter(e=>e.name==='OTEL_SDK_DISABLED').length===1&&c.env.find(e=>e.name==='OTEL_SDK_DISABLED').value==='true').length===1);
+};
+if(s.bootstrapBarrier&&s.schemaMigrated&&readersStarted())s.bootstrapReleased=true;
+const cpReady=app=>!(s.bootstrapBarrier&&s.schemaMigrated&&requiredReaders.includes(app.metadata.name)&&!s.bootstrapReleased&&!readersStarted())&&(app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107));
 const sync=app=>{app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);app.metadata.generation=(app.metadata.generation??1)+1;
  app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(field=>[field,['readyReplicas','availableReplicas'].includes(field)&&!cpReady(app)?0:app.spec.replicas]))};};
 if(s.bootstrapBarrier&&s.schemaMigrated)for(const name of requiredReaders){
@@ -119,7 +129,7 @@ const run=request=>{
   }
   assert.ok(sql.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;')&&sql.includes('ROLLBACK;'));
   if(sql.includes('PORTABLE_COMPONENT_DRAIN_V1'))return out({...s.precondition,profile:'PORTABLE_COMPONENT_DRAIN_V1',gooseVersion:s.schemaMigrated?20261114140000:20261114130000,
-   oldClaimSessions:get('deployment','control-plane').spec.replicas?3:0,...s.drainOverrides});
+   oldClaimSessions:get('deployment','control-plane').spec.replicas&&!(s.bootstrapBarrier&&!s.bootstrapReleased)?3:0,...s.drainOverrides});
   if(sql.includes('TELEGRAM_NOTIFICATIONS_PREDECESSOR_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_PREDECESSOR_V1'))return out({...s.precondition,...s.preconditionOverrides});
   if(sql.includes('TELEGRAM_NOTIFICATIONS_V1')||sql.includes('TELEGRAM_NOTIFICATIONS_BACKUP_V1')){
    return out({...s.postcondition,...s.postconditionOverrides});
