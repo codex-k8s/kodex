@@ -36,7 +36,7 @@ export async function readTelegramEgressRevisionCandidate(path,migration,{allowU
  const changed=git('diff','--name-only',migration.source.revision,source.revision,'--','services/external/egress-gateway').trim().split('\n').filter(Boolean);
  fail(changed.includes('services/external/egress-gateway/internal/app/app.go')&&changed.includes('services/external/egress-gateway/internal/app/config.go')&&
   changed.every(p=>p.startsWith('services/external/egress-gateway/internal/app/')));
- const publicationPlan=readAuthorityPrivateJSON(candidate.publicationPlanPath),publicationEvidence=rows(readAuthorityPrivateText(candidate.publicationEvidencePath));
+ const publicationPlan=readAuthorityPrivateJSON(candidate.publicationPlanPath),publicationRaw=readAuthorityPrivateText(candidate.publicationEvidencePath),publicationEvidence=rows(publicationRaw);
  const imageRef=validatedStablePublication(source.revision,{publicationPlan,publicationEvidence},name);
  fail(publicationPlan.context===migration.context&&publicationPlan.clusterUID===migration.clusterUID&&
   publicationPlan.namespaceUID===migration.namespaceUID&&publicationPlan.source===source.revision&&
@@ -52,7 +52,7 @@ export async function readTelegramEgressRevisionCandidate(path,migration,{allowU
    same(proof.nodes.map(n=>({name:n.name,uid:n.uid})).sort((a,b)=>a.name.localeCompare(b.name)),expected));
  }
  return {path:resolve(path),candidateSHA256:fingerprint(candidate),source,imageRef,
-  publicationPlanSHA256:fingerprint(publicationPlan),publicationEvidenceSHA256:hash(readAuthorityPrivateText(candidate.publicationEvidencePath)),
+  publicationPlanSHA256:fingerprint(publicationPlan),publicationEvidenceSHA256:hash(publicationRaw),
   contextSHA256:publicationPlan.receipt.contextSHA256,nodeProofSHA256:proof?fingerprint(proof):null,changed};
 }
 

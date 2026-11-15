@@ -5,7 +5,7 @@ import {validateKubernetesPortNames} from './kubernetes-port-names.mjs';
 import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
 import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
-import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
+import {readTelegramAuthorityDelivered,readTelegramAuthorityTerminal} from './authority-rotation-transition.mjs';
 import {readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
@@ -417,6 +417,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
     const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
     return readTelegramAuthorityDelivered({plan:authority,events:events(options['--authority-evidence']),
+      freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
+      admissionProof:authority.maintenance.proof},kube);
+  };
+  const readAuthorityTerminal=async()=>{
+    const authority=activationAuthority();
+    ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readTelegramAuthorityTerminal({plan:authority,events:events(options['--authority-evidence']),
       freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
       admissionProof:authority.maintenance.proof},kube);
   };
@@ -853,7 +861,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     };
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,egressRevisionRepair,validateEgressRevisionRepair:async()=>{ensure((await readEgressRevisionRepair()).sha256===egressRevisionRepair.sha256,'TELEGRAM_EGRESS_REVISION_REPAIR_PIN_REQUIRED');},observabilityRepair,validateObservabilityRepair:()=>{ensure(readObservabilityRepair().sha256===observabilityRepair.sha256,'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');},effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,readCPProjection,
       prepareRuntimeInputs:()=>{
         if(portRepair&&!journal.events.some(e=>e.type===telegramPortRepairBound)){
           ensure(!journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'||e.type==='PAIR_HANDOFF_ACK'||e.type==='TELEGRAM_INPUT_PATCH_INTENT'&&e.resource==='v1|Service|egress-gateway'),telegramPortRepairCodes.lifecycleRejected);
@@ -966,7 +974,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
     if(phase==='plan-egress-revision-repair'){
-      pair.prepareEgressRevisionRepair();
+      await pair.prepareEgressRevisionRepair();
       const candidate=await readTelegramEgressRevisionCandidate(options['--telegram-egress-revision-candidate'],plan);
       const repair=planTelegramEgressRevisionRepair({migration:plan,migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],
         evidence:readAuthorityPrivateText(options['--evidence']),candidate,observedAt:new Date().toISOString()});

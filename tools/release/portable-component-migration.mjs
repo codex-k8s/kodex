@@ -377,7 +377,7 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair,egressRevisionRepair,validateEgressRevisionRepair}) {
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair,egressRevisionRepair,validateEgressRevisionRepair}) {
   const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
@@ -503,6 +503,20 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       observed<=now+5000&&now-observed<=30000,'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
     return proof;
   };
+  // Поздний egress repair использует terminal reader завершённой ротации.
+  // Допуск исходного DELIVER bootstrap при этом не расширяется.
+  const retired=async()=>{
+    requireValue(typeof readAuthorityTerminal==='function','TELEGRAM_EGRESS_TERMINAL_REQUIRED');
+    const proof=await readAuthorityTerminal(),{terminalSHA256,...body}=proof??{},readers=telegramAuthorityReadbackContract();
+    requireValue(proof?.policyRevision===107&&uid(proof.operationID)&&typeof plan.context==='string'&&typeof plan.kubeconfig==='string'&&Object.entries(readers).every(([key,value])=>proof[key]===value)&&
+      Number.isSafeInteger(proof.actualReadbackCount)&&proof.actualReadbackCount>=readers.expectedReadbackCount&&proof.actualReadbackCount<=384&&
+      Number.isSafeInteger(proof.registryRevision)&&proof.registryRevision>0&&Number.isSafeInteger(proof.snapshotRevision)&&proof.snapshotRevision>0&&
+      ['policySHA256','registrySHA256','snapshotSHA256','planSHA256','freshPlanSHA256','targetSHA256'].every(key=>sha(proof[key]))&&
+      proof.ownerScope?.sourceRevision===plan.source.revision&&proof.ownerScope.context===plan.context&&proof.ownerScope.kubeconfig===plan.kubeconfig&&
+      proof.ownerScope.targetSHA256===(proof.authorityTargetSHA256??proof.targetSHA256)&&sha(terminalSHA256)&&terminalSHA256===fingerprint(body),
+      'TELEGRAM_EGRESS_TERMINAL_REQUIRED');
+    deliveryFresh(proof);return proof;
+  };
   // Исправление уже принятого reader не создаёт новый install/authority intent.
   // Полный schema/owner drain и изоляция API обязательны также при повторном apply.
   const repairPreflight=(repairedName='interaction-gateway')=>{
@@ -526,6 +540,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     'interaction-gateway':'TELEGRAM_OBSERVABILITY','egress-gateway':'TELEGRAM_EGRESS_REVISION'
     })[name]===prefix&&repair&&typeof validateRepair==='function',`${prefix}_REPAIR_PIN_REQUIRED`);
     repairPreflight(name);await validateRepair();
+    if(name==='egress-gateway'){const proof=await retired();requireValue(observe('control-api-gateway').readers?.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');}
     requireValue(!journal.events.some(e=>e.type===`${prefix}_PATCH_ACK_REJECTED`),`${prefix}_PATCH_ACK_REJECTED`);
     const original=(effectiveHandoff??plan.componentHandoff).components.find(c=>c.name===name),
       stages=[original.resumedSpec,{...original.resumedSpec,replicas:0},repair.part.stagedSpec,repair.part.resumedSpec],
@@ -555,13 +570,13 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
         {op:'test',path:'/spec',value:current.actual.spec},{op:'replace',path:'/spec',value:stages[next]}];
       const args=path=>['-n',namespace,'patch','deployment',name,'--type=json',`--patch-file=${path}`,'-o','json'];
       withPrivatePatchFile(patch,path=>kube([...args(path),'--dry-run=server']));
-      const proof=await delivered();
+      const proof=await (name==='egress-gateway'?retired():delivered());
       withPrivatePatchFile(patch,path=>{
         const api=observe('control-api-gateway');
         requireValue(api.stage==='isolatedReadersSpec'&&api.readers?.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
         deliveryFresh(proof);
         journal.append({type,repairSHA256:repair.sha256,resourceVersion:current.actual.metadata.resourceVersion,
-          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+          operationID:proof.operationID,...(name==='egress-gateway'?{terminalSHA256:proof.terminalSHA256}:{deliverySHA256:proof.deliverySHA256})});
         let raw,ack;
         try{raw=kube(args(path));}catch{journal.append({type:'UNKNOWN',step:type,repairSHA256:repair.sha256});throw Error(`${prefix}_PATCH_UNKNOWN`);}
         try{ack=JSON.parse(raw);}catch{ /* Успешный повреждённый ответ не становится потерянным ACK. */ }
@@ -590,8 +605,10 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     async repairObservability(){
       return repairComponent({name:'interaction-gateway',repair:observabilityRepair,validateRepair:validateObservabilityRepair,prefix:'TELEGRAM_OBSERVABILITY'});
     },
-    prepareEgressRevisionRepair(){
+    async prepareEgressRevisionRepair(){
       repairPreflight('egress-gateway');
+      const proof=await retired(),api=observe('control-api-gateway');
+      requireValue(api.stage==='isolatedReadersSpec'&&api.readers?.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
       requireValue(!egressEvents().length&&!egressRevisionRepair,'TELEGRAM_EGRESS_REVISION_REPAIR_ALREADY_BOUND');
       const state=observe('egress-gateway');
       requireValue(state.stage==='resumedSpec','TELEGRAM_EGRESS_REVISION_REPAIR_SOURCE_CHANGED');

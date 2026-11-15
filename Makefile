@@ -729,3 +729,7 @@ test-telegram-observability-repair:
 test-telegram-runtime-inputs:
 	@timeout 120s node --test tools/release/telegram-runtime-inputs.test.mjs
 	@timeout 120s node --test --test-name-pattern='runtime-metadata:' tools/release/telegram-deployment.cli.test.mjs
+
+.PHONY: test-telegram-egress-revision-repair
+test-telegram-egress-revision-repair:
+	@timeout 300s node --test tools/release/telegram-egress-revision-repair.test.mjs tools/release/component-node-qualification.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs
