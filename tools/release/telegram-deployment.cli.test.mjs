@@ -316,6 +316,17 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   assert.deepEqual(readFileSync(f.plan),oldMigration);assert.deepEqual(readFileSync(f.creator.planPath),oldCreator);assert.deepEqual(readFileSync(owner),oldAuthority);
   const pod=f.read().resources['deployment/interaction-gateway'].spec.template.spec;
   for(const c of [...pod.containers,...pod.initContainers.filter(c=>c.restartPolicy==='Always')])assert.ok(c.env.some(e=>e.name==='OTEL_SDK_DISABLED'&&e.value==='true'));
+  checked('component-api-maintenance.mjs',['status',...flags,'--plan',open,'--evidence',openEvidence,...closed,...isolated]);
+  const resumed=f.run('resume',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);
+ }
+ const activated=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activated.status,0,activated.stderr);assert.equal(JSON.parse(activated.stdout).status,'READERS_STARTED_PENDING_RETIRE');
+ const active=f.read();assert.equal(active.resources['deployment/interaction-gateway'].spec.replicas,3);
+ const activationAgain=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activationAgain.status,0,activationAgain.stderr);
+ assert.equal(f.read().effects.filter(effect=>effect==='PAIR_ACTIVATE_INTENT:interaction-gateway').length,1);
+ f.edit(s=>{const now=Date.now();s.ownerStatus={...s.ownerStatus,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',sourceRevision:7,actualReadbackCount:17,
+  switchNotBefore:new Date(now-10000).toISOString(),previousNotAfter:new Date(now-2000).toISOString(),completedAt:new Date(now-1000).toISOString()};});
+ if(scenario.bootstrap){
+  const repairInputs=[...cpProjection,...apiOpen,...authority],oldMigration=readFileSync(f.plan),oldCreator=readFileSync(f.creator.planPath),oldAuthority=readFileSync(owner);
   // Отдельный source/image и receipt fixture: реальны Git archive и CLI owner
   // consumers; registry/CRI здесь синтетические и не считаются live qualification.
   const candidateSource=join(f.directory,'egress-candidate-source');
@@ -346,15 +357,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
   const egressAgain=f.run('apply-egress-revision-repair',[...repairInputs,...fresh()]);assert.equal(egressAgain.status,0,egressAgain.stderr);
   assert.equal(f.read().effects.filter(e=>e.startsWith('TELEGRAM_EGRESS_REVISION_')).length,3);
   assert.deepEqual(readFileSync(f.plan),oldMigration);assert.deepEqual(readFileSync(f.creator.planPath),oldCreator);assert.deepEqual(readFileSync(owner),oldAuthority);
-  checked('component-api-maintenance.mjs',['status',...flags,'--plan',open,'--evidence',openEvidence,...closed,...isolated]);
-  const resumed=f.run('resume',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);
  }
- const activated=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activated.status,0,activated.stderr);assert.equal(JSON.parse(activated.stdout).status,'READERS_STARTED_PENDING_RETIRE');
- const active=f.read();assert.equal(active.resources['deployment/interaction-gateway'].spec.replicas,3);
- const activationAgain=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activationAgain.status,0,activationAgain.stderr);
- assert.equal(f.read().effects.filter(effect=>effect==='PAIR_ACTIVATE_INTENT:interaction-gateway').length,1);
- f.edit(s=>{const now=Date.now();s.ownerStatus={...s.ownerStatus,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',sourceRevision:7,actualReadbackCount:17,
-  switchNotBefore:new Date(now-10000).toISOString(),previousNotAfter:new Date(now-2000).toISOString(),completedAt:new Date(now-1000).toISOString()};});
  const restored=join(f.directory,'restored.json'),restoredEvidence=join(f.directory,'restored.jsonl');
  checked('component-api-traffic.mjs',['plan',...flags,...f.applicationFlags,'--policy-transition',telegramPolicyTransition,'--action','restore','--target',f.apiTarget,'--plan',restored,...closed,...isolated,...authority,...fresh()]);
  const restoreStatus=fresh(),restoreHistory=structuredClone(f.read().ownerLogs);if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);

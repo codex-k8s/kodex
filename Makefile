@@ -716,3 +716,7 @@ test-telegram-reader-bootstrap:
 .PHONY: test-telegram-observability-repair
 test-telegram-observability-repair:
 	@timeout 300s node --test tools/release/telegram-runtime-observability.test.mjs tools/release/telegram-observability-repair.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs
+
+.PHONY: test-telegram-egress-revision-repair
+test-telegram-egress-revision-repair:
+	@timeout 300s node --test tools/release/telegram-egress-revision-repair.test.mjs tools/release/component-node-qualification.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs

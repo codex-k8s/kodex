@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.20
+version: 1.0.21
 updated: 2026-11-15
 ---
 
@@ -707,3 +707,35 @@ renderer и lifecycle/ACK/negative paths. `make test-telegram-reader-bootstrap`
 проверяет отдельные реальные CLI-процессы с synthetic Kubernetes/PostgreSQL
 transport, включая counterfactual пропущенный renderer, repair и final backup.
 Это локальная квалификация, а не live acceptance.
+
+## Отдельная ревизия egress policy и позднее восстановление
+
+Base egress policy и Telegram policy имеют самостоятельные revision pins.
+Новый egress image читает `EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION`; он не
+выводит эту ревизию из base policy. Для уже начатой установки046 используется
+адресный `plan-egress-revision-repair` / `apply-egress-revision-repair`,
+сохраняющий исходные DDL, authority107, creator и journal prefix.
+
+Candidate descriptor связывает clean Git SHA, полный archive hash, receipt
+канонической публикации и exact digest. CLI
+`tools/release/telegram-egress-revision-candidate.mjs` принимает `plan`, затем
+`qualify` с `--approved-plan-sha` либо `readback` без повторного pull. План
+связывает cluster/namespace UID, UID узлов и соответствующие k3d containers.
+Readback CRI проверяет exact repo digest каждого узла. Descriptor без node proof
+не допускается к восстановлению; это не доказательство live E2E.
+
+| Переход | Допуск | Результат и повтор |
+| --- | --- | --- |
+| План | Исходный046 PASS, immutable source/publication/node proof, API isolated и107 RETIRED | Новый отдельный plan; исходные bytes сохраняются |
+| Stop | Fresh terminal owner proof, schema/drain, UID/RV/spec CAS | Replicas0 и положительный join всех прежних Pods |
+| Render | Тот же terminal proof и stopped join | Только image + один закрытый Telegram revision env; replicas0 |
+| Resume | Fresh terminal proof, exact staged spec, прежний replica count | Только исходное число replicas; readback effective spec |
+| Повтор / потерянный ACK | Тот же repair pin, prefix и live CAS state | Readback исхода; прежний effect не повторяется |
+| Повреждённый успешный ACK | Durable rejection marker | Последующие effects закрыты |
+| Final / backup resume | Тот же repair pin во всех consumers, readiness, API restoration | Исходный backup lifecycle, без повторного DDL/rotation |
+
+Обязательная локальная точка входа: `make test-telegram-egress-revision-repair`
+(300s). Полный CLI-порядок после RETIRED проверяет
+`make test-telegram-reader-bootstrap` (1800s); его Kubernetes/registry backend
+синтетический. Реальные build/publication/node qualification, readiness и
+сотрудник → Telegram подтверждаются отдельно на разрешённом target.
