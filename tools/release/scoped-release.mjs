@@ -353,14 +353,14 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
         await record(result);
         return result;
       } catch (error) {
-        const result = { name: item.name, status: "FAIL", stage,
+        const result = { name: item.name, status: portable && stage !== "PREFLIGHT" ? "UNKNOWN" : "FAIL", stage,
           code: /^[A-Z_]{1,80}$/.test(error.message) ? error.message : "RELEASE_OPERATION_FAILED" };
         await record(result);
         return result;
       }
     });
     const success = results.every((result) => result.status === "PASS");
-    await record({ status: success ? "PASS" : "FAIL", results });
+    await record({ status: success ? "PASS" : results.some(result => result.status === "UNKNOWN") ? "UNKNOWN" : "FAIL", results });
     process.stdout.write(`${JSON.stringify({ releaseID: plan.releaseID, results })}\n`);
     if (!success) process.exitCode = 1;
   } finally { await journal.close(); }

@@ -110,7 +110,7 @@ test("portable CLI binds namespace and config, keeps original journal after lost
     assert.equal(patches, 1);
     const before = await readFile(journal, "utf8");
     assert.match(before, /PATCH_ATTEMPT/);
-    assert.match(before, /FAIL/);
+    assert.match(before, /UNKNOWN/);
     await assert.rejects(releaseCLI(apply.slice(), command, source), /EEXIST/);
     assert.equal(patches, 1);
     assert.equal(await readFile(journal, "utf8"), before);
