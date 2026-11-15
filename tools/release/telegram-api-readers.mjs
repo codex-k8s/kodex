@@ -4,17 +4,19 @@ import {requireAuthorityAPIScope} from './authority-api-scope.mjs';
 import {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 import {componentAPIMaintenanceStep} from './component-api-maintenance.mjs';
 import {requireClosedAPIAdmission,componentAPITrafficStep,sameAuthorityOutcome} from './component-api-traffic.mjs';
-import {readComponentServingInventory} from './portable-component-migration.mjs';
+import {componentPodMatchesTemplate,componentServingInventory,readComponentServingInventory} from './portable-component-migration.mjs';
+import {activeDeploymentPods} from './stable-archive-transition.mjs';
 import {telegramPolicyTransition} from './authority-telegram-transition.mjs';
 
 const fail=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b);
 const namespace='kodex-system',name='control-api-gateway';
 
-// API readers разрешены только exact OPEN собственного maintenance journal:
-// прежний положительный join и текущая пустая Service boundary обязательны.
-// Счётчики Deployment и произвольные replicas3 не заменяют историю и Pod proof.
-export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvents,closed,traffic,deployment,resources,restored}){
+// Готовые API readers требуют exact OPEN собственного maintenance journal.
+// Только explicit bootstrap может прочитать CONVERGING как STARTING: прежний
+// положительный join, exact текущий spec и пустая Service boundary обязательны.
+// STARTING не подтверждает готовность и не допускает restore Service.
+export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvents,closed,traffic,deployment,resources,restored,allowPending=false}){
  requireAuthorityAPIScope(closed.plan.target,authority.policyTransition.targetProfile);
  fail(fingerprint(closed.plan.target)===authority.maintenance?.proof?.targetSHA256,'TELEGRAM_API_READERS_SCOPE_CHANGED');
  const part=migration.componentHandoff?.components.find(c=>c.name===name);
@@ -29,8 +31,9 @@ export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvent
  fail(openEvents[0]?.type==='HEADER'&&openEvents[0].schema==='kodex.component-api-maintenance-evidence/v1'&&
   openEvents[0].planSHA256===fingerprint(openPlan)&&openEvents[0].maintenanceID===openPlan.maintenanceID,
   'TELEGRAM_API_READERS_JOURNAL_INVALID');
+ fail(typeof allowPending==='boolean'&&(!allowPending||!restored),'TELEGRAM_API_READERS_PENDING_REJECTED');
  const intent=openEvents.findLastIndex(e=>e.type==='INTENT'&&e.step==='apply');
- fail(intent>0&&openEvents.some((e,index)=>index>intent&&e.type==='OBSERVED'&&e.state==='OPEN'&&
+ fail(intent>0&&openEvents.some((e,index)=>index>intent&&e.type==='OBSERVED'&&(e.state==='OPEN'||allowPending&&e.state==='CONVERGING')&&
   e.deploymentUID===part.uid&&e.maintenanceID===openPlan.maintenanceID),'TELEGRAM_API_READERS_OPEN_UNCONFIRMED');
  let admission;
  if(restored){
@@ -56,15 +59,23 @@ export function verifyTelegramAPIReaders({migration,authority,openPlan,openEvent
   admission.serviceUID===openPlan.serviceUID,'TELEGRAM_API_READERS_ISOLATION_CHANGED');
  const actual=componentAPIMaintenanceStep({phase:'status',plan:openPlan,journal:{events:openEvents,append:()=>{}},
   get:()=>deployment,resources:()=>resources,patch:()=>{throw Error('TELEGRAM_API_READERS_READ_ONLY_REQUIRED');}});
- fail(actual.state==='OPEN','TELEGRAM_API_READERS_NOT_READY');
- return {state:restored?'RESTORED_READERS_READY':'ISOLATED_READERS_READY',sourceSHA:migration.source.revision,deploymentUID:part.uid,
+ const pending=allowPending&&actual.state==='CONVERGING';
+ fail(actual.state==='OPEN'||pending,'TELEGRAM_API_READERS_NOT_READY');
+ fail(same(deployment.spec,openPlan.afterSpec)&&same(deployment.metadata.annotations??{},openPlan.afterAnnotations),
+  'TELEGRAM_API_READERS_SPEC_CHANGED');
+ if(pending){
+  const pods=activeDeploymentPods(componentServingInventory(resources,name,part.uid),part.uid);
+  fail(pods.every(p=>componentPodMatchesTemplate(deployment,p)),'TELEGRAM_API_READERS_POD_CHANGED');
+ }
+
+ return {state:restored?'RESTORED_READERS_READY':pending?'ISOLATED_READERS_STARTING':'ISOLATED_READERS_READY',sourceSHA:migration.source.revision,deploymentUID:part.uid,
   openPlanSHA256:fingerprint(openPlan),trafficPlanSHA256:openPlan.trafficPlanSHA256,
   spec:structuredClone(deployment.spec),operationID:authority.ownerOperationID};
 }
 
 // Только приватные canonical inputs и свежие GET. Запуск/patch API остаётся
 // отдельным штатным maintenance protocol; данный consumer не выдаёт effects.
-export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvidencePath,restorePlanPath,restoreEvidencePath,repairPlanPath,repairExecutorRevision},kube){
+export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvidencePath,restorePlanPath,restoreEvidencePath,repairPlanPath,repairExecutorRevision,allowPending=false},kube){
  const openPlan=readAuthorityPrivateJSON(openPlanPath),readEvents=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
  const maintenance=authority.maintenance;
  fail(maintenance?.trafficPlanPath&&maintenance.trafficEvidencePath,'TELEGRAM_API_READERS_ISOLATION_REQUIRED');
@@ -79,5 +90,5 @@ export function readTelegramAPIReaders({migration,authority,openPlanPath,openEvi
  const repair=repairPlanPath?readTelegramPortRepair(repairPlanPath,{migration,executorRevision:repairExecutorRevision}):undefined;
  const restored=restorePlanPath?{plan:readAuthorityPrivateJSON(restorePlanPath),events:readEvents(restoreEvidencePath)}:undefined;
  fail(!restored||restored.plan.sourceCompatibility?.telegramPortRepair?.planSHA256===repair?.sha256,telegramPortRepairCodes.pinRequired);
- return verifyTelegramAPIReaders({migration,authority,openPlan,openEvents:readEvents(openEvidencePath),closed,traffic,deployment,resources,restored});
+ return verifyTelegramAPIReaders({migration,authority,openPlan,openEvents:readEvents(openEvidencePath),closed,traffic,deployment,resources,restored,allowPending});
 }

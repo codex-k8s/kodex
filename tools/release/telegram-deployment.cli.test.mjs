@@ -172,7 +172,7 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  let activeRepair,activeRepairExecutor,newPlanner=false;const repairPath=join(directory,'port-repair.json');
  const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair&&phase==='plan'&&!newPlanner?source:executor,'tools/release/control-plane-migration.mjs'),phase,...(activeRepair?['--telegram-port-repair-plan',activeRepair,...(activeRepairExecutor?['--telegram-port-repair-executor-sha',activeRepairExecutor]:[])]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
   '--context',f.target.context,'--plan',plan,...(phase==='plan'?['--source',source,'--revision',revision,'--base-render',render,'--component-publication',component,'--portable-target',target,...(backup?['--backup-maintenance-plan',backupPlan,'--backup-maintenance-evidence',backupEvidence]:[])]:['--evidence',evidence]),
-  ...(['check','stop','apply','handoff','resume','activate'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
+  ...(['check','stop','apply','handoff','resume','activate','start-readers'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
   {encoding:'utf8',timeout:backup?180000:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});
   let callCount;try{callCount=read(state).calls.length-beforeCalls;}catch{}
   const observation={phase,elapsedMs:Date.now()-started,status:result.status,signal:result.signal,error:result.error?.code,callCount};
@@ -203,7 +203,7 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
    activeRepairExecutor=execute('git',['-C',executor,'rev-parse','HEAD']).trim();applicationFlags.push('--telegram-port-repair-executor-sha',activeRepairExecutor);return config;},repairPath,run,command,directory,source,get executor(){return executor;},get repairExecutor(){return activeRepairExecutor;},applicationFlags,apiTarget,revision,kubeconfig,context:f.target.context,authorityTarget,admission,creator,publicationPath,read:()=>read(state),edit:fn=>{const value=read(state);fn(value);write(state,value);},plan,evidence};
 }
 
-for(const scenario of [{name:'real CLI046/107:',narrow:false,successor:false},{name:'real CLI046/107 frozen:',narrow:true,successor:true},{name:'real CLI046/107 port-repair:',narrow:true,successor:true,repair:true},{name:'real CLI046/107 backup-port-repair:',narrow:true,successor:true,repair:true,backup:true}])
+for(const scenario of [{name:'real CLI046/107 reader-bootstrap:',narrow:true,successor:true,repair:true,backup:true,bootstrap:true},{name:'real CLI046/107:',narrow:false,successor:false},{name:'real CLI046/107 frozen:',narrow:true,successor:true},{name:'real CLI046/107 port-repair:',narrow:true,successor:true,repair:true},{name:'real CLI046/107 backup-port-repair:',narrow:true,successor:true,repair:true,backup:true}])
 test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→ready→APIreaders→activate→RETIRE→restore/rejoin',async t=>{
  const f=await fixture(t,scenario),frozenPaths=[f.admission.paths.planPath,f.admission.paths.evidencePath,f.admission.paths.trafficPlanPath,f.admission.paths.trafficEvidencePath],
   frozenBytes=frozenPaths.map(path=>readFileSync(path)),pass=(phase,status)=>{const result=f.run(phase);assert.equal(result.status,0,result.stderr);const body=JSON.parse(result.stdout);if(status)assert.equal(body.status,status);return body;};
@@ -272,15 +272,27 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  assert.equal(f.read().effects.filter(effect=>effect==='POLICY_PROJECTION_CREATE').length,1);
  const projected=f.read();assert.equal(projected.resources['deployment/control-plane'].spec.replicas,0);
  const cpProjection=['--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence];
+ if(scenario.bootstrap)f.edit(s=>{s.bootstrapBarrier=true;});
+ else {
  const resumed=f.run('resume',[...cpProjection,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);assert.equal(JSON.parse(resumed.stdout).status,'PENDING_AUTHORITY');
  const after=f.read();assert.equal(after.resources['deployment/control-plane'].spec.replicas,3);assert.equal(after.resources['deployment/control-plane'].status.availableReplicas,3);
  assert.equal(after.resources['deployment/control-api-gateway'].spec.replicas,0);assert.equal(after.resources['deployment/interaction-gateway'].spec.replicas,0);
  const again=f.run('resume',cpProjection);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,after.effects.length);
+ }
  const open=join(f.directory,'open.json'),openEvidence=join(f.directory,'open.jsonl'),closed=['--closed-plan',f.admission.paths.planPath,'--closed-evidence',f.admission.paths.evidencePath],isolated=['--isolation-plan',f.admission.paths.trafficPlanPath,'--isolation-evidence',f.admission.paths.trafficEvidencePath];
  checked('component-api-maintenance.mjs',['plan',...flags,'--action','open','--target',f.apiTarget,'--plan',open,...closed,...isolated]);
  checked('component-api-maintenance.mjs',['apply',...flags,'--plan',open,'--evidence',openEvidence,'--approved-plan-sha',fingerprint(read(open)),...closed,...isolated]);
  const apiOpen=['--api-open-plan',open,'--api-open-evidence',openEvidence];
  assert.equal(f.read().resources['service/control-api-gateway'].spec.selector['kodex.dev/component-traffic-isolation'],f.admission.closed.plan.maintenanceID);
+ if(scenario.bootstrap){
+  assert.equal(f.read().resources['deployment/control-api-gateway'].status.readyReplicas,0);
+  const started=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(started.status,0,started.stderr);
+  assert.equal(JSON.parse(started.stdout).status,'READERS_STARTED_PENDING_READINESS');assert.equal(JSON.parse(started.stdout).pairReady,false);
+  const repeatStatus=fresh(),effects=f.read().effects.length;
+  const again=f.run('start-readers',[...cpProjection,...apiOpen,...authority,...repeatStatus]);assert.equal(again.status,0,again.stderr);assert.equal(f.read().effects.length,effects);
+  checked('component-api-maintenance.mjs',['status',...flags,'--plan',open,'--evidence',openEvidence,...closed,...isolated]);
+  const resumed=f.run('resume',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(resumed.status,0,resumed.stderr);
+ }
  const activated=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activated.status,0,activated.stderr);assert.equal(JSON.parse(activated.stdout).status,'READERS_STARTED_PENDING_RETIRE');
  const active=f.read();assert.equal(active.resources['deployment/interaction-gateway'].spec.replicas,3);
  const activationAgain=f.run('activate',[...cpProjection,...apiOpen,...authority,...fresh()]);assert.equal(activationAgain.status,0,activationAgain.stderr);

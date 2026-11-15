@@ -23,9 +23,14 @@ const get=(kind,name)=>s.resources[key(kind,name)];
 let inputBytes;const input=()=>inputBytes??=(fs.readFileSync(0,'utf8'));
 const evidence=s.activeEvidence??s.evidence;
 const events=()=>fs.existsSync(evidence)?fs.readFileSync(evidence,'utf8').trim().split('\n').map(JSON.parse):[];
-const cpReady=app=>app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107);
+const requiredReaders=['control-plane','control-api-gateway','interaction-gateway'];
+const readersStarted=()=>requiredReaders.every(name=>get('deployment',name)?.spec.replicas>0);
+const cpReady=app=>!(s.bootstrapBarrier&&s.schemaMigrated&&requiredReaders.includes(app.metadata.name)&&!readersStarted())&&(app.metadata.name!=='control-plane'||app.spec.template.spec.containers[0].image===s.cpOldImage||app.spec.template.spec.volumes?.some(volume=>volume.name==='control-plane-environment-policy'&&JSON.parse(get('configmap',volume.configMap.name)?.data?.['policy.json']??'{}').policy_revision===107));
 const sync=app=>{app.metadata.resourceVersion=String(Number(app.metadata.resourceVersion)+1);app.metadata.generation=(app.metadata.generation??1)+1;
  app.status={observedGeneration:app.metadata.generation,...Object.fromEntries(['replicas','updatedReplicas','readyReplicas','availableReplicas'].map(field=>[field,['readyReplicas','availableReplicas'].includes(field)&&!cpReady(app)?0:app.spec.replicas]))};};
+if(s.bootstrapBarrier&&s.schemaMigrated)for(const name of requiredReaders){
+ const app=get('deployment',name);if(app?.status){app.status.readyReplicas=cpReady(app)?app.spec.replicas:0;app.status.availableReplicas=app.status.readyReplicas;}
+}
 const inventory=()=>{
  const result=[];
  for(const name of s.componentNames){const app=get('deployment',name),rs=name+'-rs',rsUID=s.backup?syntheticUID('rs/'+app.metadata.uid):app.metadata.uid+'-rs';

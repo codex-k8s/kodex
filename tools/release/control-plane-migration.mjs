@@ -119,14 +119,14 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha','--telegram-port-repair-plan','--telegram-port-repair-executor-sha'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate','start-readers'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha','--telegram-port-repair-plan','--telegram-port-repair-executor-sha'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
   ensure(!['stop','resume','check'].includes(phase) || isImmutableMigrationProfile(profile), 'PHASE_ARGUMENT_INVALID');
   const migrationPath = `services/internal/control-plane/cmd/cli/migrations/${file}`;
   const context = options['--context']; ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? '') && (!/prod(?:uction)?/i.test(context) || isComponentMigrationProfile(profile)), 'STAGING_CONTEXT_REQUIRED');
-  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check','handoff','activate'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
+  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check','handoff','activate','start-readers'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
   ensure(phase === 'plan' && isImmutableMigrationProfile(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
     !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
   ensure(requiresBackupMaintenance(profile) && phase==='plan' ? options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'] : !options['--backup-maintenance-plan'] && !options['--backup-maintenance-evidence'],'PHASE_ARGUMENT_INVALID');
@@ -134,15 +134,15 @@ async function main() {
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
   const telegramProfile=['telegram-notifications','telegram-notifications-backup'].includes(profile);
-  ensure(!options['--telegram-port-repair-plan']||telegramProfile&&['handoff','resume','inspect','activate'].includes(phase),telegramPortRepairCodes.phaseRejected);
+  ensure(!options['--telegram-port-repair-plan']||telegramProfile&&['handoff','resume','inspect','activate','start-readers'].includes(phase),telegramPortRepairCodes.phaseRejected);
   ensure(!options['--telegram-port-repair-executor-sha']||options['--telegram-port-repair-plan']&&/^[a-f0-9]{40}$/.test(options['--telegram-port-repair-executor-sha']),'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   const activationInputs=['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'];
   const activationProvided=activationInputs.some(key=>options[key]);
-  ensure((phase!=='activate'&&!activationProvided)||telegramProfile&&['activate','inspect','resume'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+  ensure((!['activate','start-readers'].includes(phase)&&!activationProvided)||telegramProfile&&['activate','inspect','resume','start-readers'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
   for(const group of [['--api-open-plan','--api-open-evidence'],['--cp-projection-plan','--cp-projection-evidence'],['--api-restore-plan','--api-restore-evidence']]){
-    ensure(!group.some(key=>options[key])||telegramProfile&&['activate','inspect','resume'].includes(phase)&&group.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+    ensure(!group.some(key=>options[key])||telegramProfile&&['activate','inspect','resume','start-readers'].includes(phase)&&group.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
   }
-  ensure(phase!=='activate'||options['--api-open-plan']&&options['--cp-projection-plan'],'PHASE_ARGUMENT_INVALID');
+  ensure(!['activate','start-readers'].includes(phase)||options['--api-open-plan']&&options['--cp-projection-plan'],'PHASE_ARGUMENT_INVALID');
 
   ensure(isImmutableMigrationProfile(profile) && phase === 'plan'
     ? options['--base-render'] && (componentInput ? !options['--publication-plan'] && !options['--publication-evidence'] : options['--publication-plan'] && options['--publication-evidence'])

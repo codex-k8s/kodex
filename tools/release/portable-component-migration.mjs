@@ -186,7 +186,7 @@ export function componentMigrationTarget(target, publication, observed) {
     opened.proof.specSHA256===fingerprint(gateway.spec)&&fingerprint(opened.spec)===fingerprint(gateway.spec)&&
     opened.replicas===gateway.spec.replicas&&opened.replicas===opened.proof.replicas&&Number.isSafeInteger(opened.replicas)&&opened.replicas>=1&&opened.replicas<=8,
     'COMPONENT_MIGRATION_API_RESTORATION_INVALID');
-  else requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&['ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&
+  else requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&
     readers.sourceSHA===observed.sourceRevision&&readers.deploymentUID===gateway.metadata.uid&&
     fingerprint(readers.spec)===fingerprint(gateway.spec),'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
   return {...validated,targetSHA256:scope.digest};
@@ -339,17 +339,23 @@ export function readComponentServingInventory(kube, name, deploymentUID) {
   return componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
 }
 
+// Pending reader не получает READY, но его наблюдаемый Pod проверяется
+// по тому же exact template, что и serving path.
+export function componentPodMatchesTemplate(actual,p) {
+  return Object.entries(actual.spec.template.spec).every(([key,value])=>Object.hasOwn(p.spec??{},key)&&fingerprint(p.spec[key])===fingerprint(value))&&
+        // Kubernetes defaulting добавляет enableServiceLinks=true именно Pod,
+        // а не PodTemplate. Явное значение template сравнивается выше без исключений.
+        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key)||
+          key==='enableServiceLinks'&&p.spec[key]===true);
+}
+
 // Проверяет полный состав запущенных readers/writers; counters Deployment
 // недостаточны для допуска после обновления или открытия внешнего API.
 export function componentServingReady(actual,pods,expectedReplicas) {
   return actual.status?.observedGeneration >= actual.metadata.generation && actual.spec.replicas === expectedReplicas &&
       ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => actual.status[k] === expectedReplicas) && Array.isArray(pods) && expectedReplicas > 0 && pods.length === expectedReplicas &&
       pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === 'Ready' && c.status === 'True') &&
-        Object.entries(actual.spec.template.spec).every(([key,value])=>Object.hasOwn(p.spec??{},key)&&fingerprint(p.spec[key])===fingerprint(value))&&
-        // Kubernetes defaulting добавляет enableServiceLinks=true именно Pod,
-        // а не PodTemplate. Явное значение template сравнивается выше без исключений.
-        Object.keys(p.spec??{}).every(key=>Object.hasOwn(actual.spec.template.spec,key)||['nodeName','preemptionPolicy','priority','tolerations'].includes(key)||
-          key==='enableServiceLinks'&&p.spec[key]===true)&&
+        componentPodMatchesTemplate(actual,p)&&
         ['containers','initContainers','ephemeralContainers'].every(field => {
           const expected=actual.spec.template.spec[field] ?? [], observed=p.spec?.[field] ?? [];
           const statusField={containers:'containerStatuses',initContainers:'initContainerStatuses',ephemeralContainers:'ephemeralContainerStatuses'}[field];
@@ -395,7 +401,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     }
     if(!stage&&expected.maintenance&&profiles[plan.imageEvidence.profile].introduced&&typeof readMaintenanceReaders==='function'){
       readers=readMaintenanceReaders();
-      requireValue(['ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&readers.sourceSHA===plan.source.revision&&
+      requireValue(['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&readers.sourceSHA===plan.source.revision&&
         readers.deploymentUID===expected.uid&&fingerprint(readers.spec)===fingerprint(actual.spec),'TELEGRAM_API_READERS_REQUIRED');
       stage=readers.state==='RESTORED_READERS_READY'?'restoredReadersSpec':'isolatedReadersSpec';
     }
@@ -516,6 +522,45 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       await transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT');
       journal.append({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};
+    },
+    // Authority promotion требует readback каждого обязательного reader. Запуск
+    // всего exact cohort предшествует ожиданию readiness; Service остаётся
+    // изолированным. STARTED не заменяет ACK готовности или terminal107.
+    async startReaders() {
+      const introduced=profiles[plan.imageEvidence.profile].introduced;
+      requireValue(introduced&&typeof readAuthorityDelivery==='function'&&typeof readCPProjection==='function',
+        'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
+      schemaReady(true);readCPProjection();
+      requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'),'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      const api=observe('control-api-gateway');
+      requireValue(api.stage==='isolatedReadersSpec'&&['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY'].includes(api.readers?.state),
+        'TELEGRAM_API_READERS_REQUIRED');
+      for(const name of names.filter(name=>!part(name).maintenance)){
+        const state=observe(name),type=part(name).introduced?'PAIR_ACTIVATE_INTENT':name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT';
+        requireValue(state.stage==='stagedSpec'&&state.joined||state.stage==='resumedSpec'&&
+          journal.events.some(e=>e.type===type&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+      }
+      const proof=await delivered();
+      requireValue(api.readers.operationID===proof.operationID,'TELEGRAM_API_READERS_REQUIRED');
+      journal.append({type:'TELEGRAM_READERS_BOOTSTRAP_VERIFIED',operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+      for(const name of names.filter(name=>!part(name).maintenance)){
+        const current=observe(name),type=part(name).introduced?'PAIR_ACTIVATE_INTENT':name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT';
+        requireValue(current.stage==='stagedSpec'&&current.joined||current.stage==='resumedSpec'&&
+          journal.events.some(e=>e.type===type&&e.name===name),'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+        if(part(name).introduced&&current.stage==='stagedSpec')journal.append({type:'TELEGRAM_AUTHORITY_DELIVERY_VERIFIED',
+          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256,snapshotRevision:proof.snapshotRevision});
+        if(name==='control-plane'&&current.stage==='stagedSpec')journal.append({type:'TELEGRAM_CP_AUTHORITY_VERIFIED',
+          operationID:proof.operationID,deliverySHA256:proof.deliverySHA256});
+        await transition(name,'resumedSpec',type,()=>{
+          const currentAPI=observe('control-api-gateway');
+          requireValue(currentAPI.stage==='isolatedReadersSpec'&&currentAPI.readers?.operationID===proof.operationID,
+            'TELEGRAM_API_READERS_REQUIRED');
+          deliveryFresh(proof);
+        });
+      }
+      requireValue(observe('control-api-gateway').stage==='isolatedReadersSpec','TELEGRAM_API_READERS_REQUIRED');
+      return {status:'READERS_STARTED_PENDING_READINESS',schemaPostcondition:'PASS',pairReady:false,
+        gatewayMaintenance:true,apiReadersIsolated:true,forwardOnly:true};
     },
     // Новый receiver запускается отдельно от schema resume. Свежий callback
     // принадлежит closed owner reader, а не caller boolean/переданному payload.

@@ -4,11 +4,21 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.74
-updated: 2026-11-14
+version: 1.7.75
+updated: 2026-11-15
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Если readiness потребителя требует promotion снимка, а promotion требует
+его readback, delivery запускает весь обязательный набор readers до ожидания
+их готовности. Pending подтверждает только собственный intent, exact UID/spec
+и действующую изоляцию; он не заменяет READY/CRI readback, promotion или
+terminal authority receipt. Внешний Service сохраняется изолированным до
+конечного допуска. Отдельный старт не является разрешением произвольных
+background effects: свежий owner drain и штатные claim/Begin/approvals
+сохраняются. Повторное исполнение не переписывает original source/image/DDL
+и не выдаёт второй CAS после неоднозначного ответа без readback.
 
 Возврат внешнего Service после рутинной schema migration имеет собственный
 terminal consumer и не переиспользует admission proof прежней authority

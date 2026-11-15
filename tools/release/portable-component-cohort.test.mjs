@@ -129,7 +129,7 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const lifecycle=componentMigrationLifecycle({plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
     readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
-    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>faults.apiReaders,readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
+    readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>faults.authorityDelivery,readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{if(!ready(observe()))throw Error(code);},
     clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}});
@@ -441,4 +441,52 @@ test('046: postPATCH discovery нового issuer не выдаёт activation 
  assert.equal(f.events.some(row=>row.type==='PAIR_ACTIVATE_ACK'),false);
  f.lifecycle.inspect();assert.equal((await f.lifecycle.activateIntroduced()).status,'READERS_STARTED_PENDING_RETIRE');
  assert.equal(f.patches.filter(name=>name==='interaction-gateway').length,1);
+});
+
+// Counterfactual: PROMOTED недоступен, пока обязательные API/receiver остановлены.
+// Старый последовательный resume обязан timeout, start-readers не выдумывает READY.
+test('046 authority bootstrap запускает весь cohort до readiness и сохраняет owned rejoin',async()=>{
+ const f=lifecycleFixture('telegram-notifications-backup');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+ await f.lifecycle.handoff();f.projectCP();f.faults.policyReady=false;
+ await assert.rejects(()=>f.lifecycle.resume(),/RESUME_TIMEOUT/);
+ const cpWrites=f.patches.filter(name=>name==='control-plane').length;
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;api.metadata.generation++;
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:0,availableReplicas:0};
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ const result=await f.lifecycle.startReaders();assert.equal(result.status,'READERS_STARTED_PENDING_READINESS');assert.equal(result.pairReady,false);
+ for(const name of ['control-plane','egress-gateway','staff-control-center','interaction-gateway'])assert.ok(f.apps.get(name).spec.replicas>0);
+ assert.equal(f.patches.filter(name=>name==='control-plane').length,cpWrites);
+ assert.equal(f.events.some(e=>['RESUME_ACK','PAIR_RESUME_ACK','PAIR_ACTIVATE_ACK'].includes(e.type)),false);
+ const writes=f.patches.length;await f.lifecycle.startReaders();assert.equal(f.patches.length,writes);
+ f.faults.policyReady=true;f.faults.apiReaders.state='ISOLATED_READERS_READY';
+ api.status={observedGeneration:api.metadata.generation,replicas:3,updatedReplicas:3,readyReplicas:3,availableReplicas:3};
+ assert.equal((await f.lifecycle.resume()).status,'PENDING_AUTHORITY');
+ assert.equal((await f.lifecycle.activateIntroduced()).status,'READERS_STARTED_PENDING_RETIRE');assert.equal(f.patches.length,writes);
+});
+
+test('046 bootstrap pending API не разрешает смену operation, active effects или чужой start',async()=>{
+ for(const fault of ['operation','active','unowned','expired']){
+  const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+  const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+  f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+  if(fault==='operation')f.faults.apiReaders.operationID=uuid(201);
+  if(fault==='active')f.faults.activeInteractionDeliveries=1;
+  if(fault==='unowned')f.apps.get('interaction-gateway').spec.replicas=3;
+  if(fault==='expired'){const {deliverySHA256,...body}=f.faults.authorityDelivery;body.observedAt=new Date(Date.now()-31000).toISOString();f.faults.authorityDelivery={...body,deliverySHA256:fingerprint(body)};}
+  await assert.rejects(()=>f.lifecycle.startReaders(),/READERS_REQUIRED|OWNER_PRECONDITION_FAILED|UNOWNED_HANDOFF|DELIVERY_REQUIRED/);
+  assert.equal(f.events.some(e=>e.type==='PAIR_ACTIVATE_ACK'),false);
+ }
+});
+
+
+test('046 bootstrap повторно проверяет DELIVER TTL после медленного API isolation read перед CAS',async()=>{
+ const f=lifecycleFixture('telegram-notifications');await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;await f.lifecycle.handoff();f.projectCP();
+ const api=f.apps.get('control-api-gateway');api.spec.replicas=3;
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,deploymentUID:api.metadata.uid,spec:structuredClone(api.spec),operationID:uuid(200)};
+ const now=Date.now,before=f.patches.length;let afterDryRun=false;
+ f.faults.beforePatch=name=>{if(name==='control-plane')afterDryRun=true;};
+ f.faults.beforeAPIRead=()=>{if(afterDryRun)Date.now=()=>now()+40000;};
+ try{await assert.rejects(()=>f.lifecycle.startReaders(),/AUTHORITY_DELIVERY_REQUIRED/);}finally{Date.now=now;}
+ assert.equal(afterDryRun,true);assert.equal(f.patches.length,before);assert.equal(f.apps.get('control-plane').spec.replicas,0);
+ assert.equal(f.events.some(e=>e.type==='RESUME_INTENT'),false);
 });

@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.17
+version: 1.0.18
 updated: 2026-11-15
 ---
 
@@ -627,3 +627,43 @@ ACK, продолжение после перезапуска оператора
 `make test-authority-distribute-status-native` отдельно доказывает настоящую
 PostgreSQL миграцию и SQL→Go→защищённый107 consumer. Локальные проверки не
 объявляются живой приёмкой или успешным CI.
+
+
+## Запуск обязательных readers без цикла readiness
+
+Для owner107 `DISTRIBUTE/DELIVERED` активация authority-снимка ожидает
+`PROMOTED`, а promotion требует readback всех обязательных получателей.
+Поэтому последовательность «дождаться Ready CP → запустить API → запустить
+interaction» неработоспособна. Total readback count также может включать
+необязательные image jobs и не доказывает полноту required membership.
+
+После положительного schema046 join и immutable projection107 выполнить:
+
+1. Штатные `component-api-maintenance.mjs plan/apply --action open` сохраняют
+   изолированный Service и фиксируют собственный запуск API. `CONVERGING`
+   означает только начатый запуск, не `OPEN` и не готовность.
+2. `control-plane-migration.mjs start-readers` получает те же original migration,
+   projection, authority/status, API-open и при необходимости port-repair pins,
+   что `activate`, включая `--confirm APPLY-STAGING-CP-MIGRATION`. В backup-профиле
+   сохраняется исходная остановка backup-controller. Полный read-only drain,
+   exact Job/Pod, source/schema/image/spec/UID и свежий owner DELIVER обязательны.
+3. Фаза запускает оставшиеся exact компоненты cohort до ожидания Ready. Каждый
+   CAS имеет durable original intent, проверку TTL и повторное чтение изоляции.
+   Уже начатый CP с собственным intent не запускается повторно. Возвращается
+   `READERS_STARTED_PENDING_READINESS`, `pairReady=false`; ACK готовности нет.
+4. После реальных readback/promotion штатный API `status` записывает `OPEN`.
+   Прежние `resume` и `activate` подтверждают full Pod/CRI readiness. Service
+   возвращается только после полного owner107 RETIRE и прежних final guards.
+
+`start-readers` не является режимом read-only для приложения: до promotion
+startup barrier не допускает workers; после promotion действуют штатные
+owner claims, Begin и approvals. Предварительный drain включает ожидающие,
+назначенные и начатые interaction effects. При drift, активном эффекте либо
+потере подтверждения продолжение закрывается; старые журналы не переписываются.
+Повтор start подтверждает тот же spec/intent, не создаёт новую ротацию или DDL.
+
+`make test-telegram-reader-bootstrap` проверяет настоящий CLI normal contracts
+в backup/frozen/port-repair fixture с принудительным ожиданием обязательных
+readers. Kubernetes/PostgreSQL transport в этой suite синтетический; это не
+кластерная приёмка. `make test-telegram-authority-delivery` отдельно проверяет
+pending/ready, потерю ответа, чужой UID/spec, TTL, operation и изоляцию Service.

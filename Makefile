@@ -709,6 +709,10 @@ test-telegram-authority-owner-native:
 test-telegram-authority-owner:
 	@timeout 150s node --test tools/release/telegram-authority-owner.test.mjs tools/release/authority-catalog-transition.cli.test.mjs tools/release/telegram-port-repair.test.mjs tools/release/telegram-executor-source.test.mjs
 
+.PHONY: test-telegram-reader-bootstrap
+test-telegram-reader-bootstrap:
+	@timeout 900s node --test --test-name-pattern='^real CLI046/107 reader-bootstrap:' tools/release/telegram-deployment.cli.test.mjs
+
 .PHONY: test-authority-distribute-status-native
 test-authority-distribute-status-native:
 	@timeout 360s node tools/release/telegram-authority-owner.native.mjs --distribute-status
