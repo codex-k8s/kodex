@@ -6,6 +6,9 @@ const fail=(ok,code)=>{if(!ok)throw Error(code);};
 const same=(a,b)=>fingerprint(a)===fingerprint(b),copy=structuredClone;
 const ownerLabel='app.kubernetes.io/part-of';
 const inputAnnotation='kodex.dev/telegram-runtime-inputs';
+const retainedSchema='kodex.telegram-runtime-inputs/v1',currentSchema='kodex.telegram-runtime-inputs/v2';
+const revisionKey='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION';
+const knownSchema=schema=>schema===retainedSchema||schema===currentSchema;
 // Runtime digest канонизирует policy; raw source pin отдельно сохраняет bytes.
 const digest='91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0';
 const policyRawSHA256='64d68357a69d84307354efb2463e64e7f5c1baf882294b4ec0856b0a431ad88f';
@@ -26,7 +29,12 @@ const asset=(resources,kind,name)=>one(resources,r=>r.kind===kind&&r.metadata?.n
 
 // Из source выбираются только уже реализованные inputs. Новые destinations,
 // env/volumes, Secret names, RBAC verbs либо произвольные kinds не принимаются.
-export function telegramRuntimeInputProjection(resources){
+export function telegramRuntimeInputProjection(resources){return runtimeInputProjection(resources,currentSchema);}
+
+// Версию выбирает immutable install receipt, а не наличие env. Fresh producer
+// всегда v2; v1 читает ровно прежнюю source projection и не допускает новый pin.
+function runtimeInputProjection(resources,schema){
+ fail(knownSchema(schema),'TELEGRAM_RUNTIME_INPUT_SCHEMA_INVALID');
  const cp=named(asset(resources,'Deployment','control-plane').spec.template.spec.containers,'control-plane');
  const egSpec=asset(resources,'Deployment','egress-gateway').spec.template.spec,eg=named(egSpec.containers,'egress-gateway');
  const cpSpec=asset(resources,'Deployment','control-plane').spec.template.spec;
@@ -38,9 +46,12 @@ export function telegramRuntimeInputProjection(resources){
  fail(same(cpMount,{name:'interaction-grant-trust',mountPath:'/var/run/config/kodex/control-plane/interaction-grant-trust',readOnly:true})&&
   same(cpVolume,{name:'interaction-grant-trust',secret:{secretName:'control-plane-interaction-grant-trust',defaultMode:292}}),
   'TELEGRAM_RUNTIME_ORIGIN_OR_TRUST_INVALID');
- const egEnv=['EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN','EGRESS_GATEWAY_TELEGRAM_POLICY_FILE','EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST'].map(name=>copy(named(eg.env,name)));
+ const current=schema===currentSchema;
+ fail(current||!eg.env?.some(e=>e.name===revisionKey),'TELEGRAM_RUNTIME_POLICY_INPUT_INVALID');
+ const egEnv=['EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN','EGRESS_GATEWAY_TELEGRAM_POLICY_FILE',...(current?[revisionKey]:[]),'EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST'].map(name=>copy(named(eg.env,name)));
  fail(same(egEnv,[{name:'EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN',value:':8086'},
   {name:'EGRESS_GATEWAY_TELEGRAM_POLICY_FILE',value:'/var/run/config/kodex/egress-gateway-telegram/policy.json'},
+  ...(current?[{name:revisionKey,value:'2026-09-05.1'}]:[]),
   {name:'EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST',value:digest}]),'TELEGRAM_RUNTIME_POLICY_INPUT_INVALID');
  const egMount=copy(named(eg.volumeMounts,'telegram-policy')),egVolume=copy(named(egSpec.volumes,'telegram-policy'));
  fail(same(egMount,{name:'telegram-policy',mountPath:'/var/run/config/kodex/egress-gateway-telegram',readOnly:true})&&
@@ -108,8 +119,12 @@ function networkSpec(before,name,projection){
 
 // Plan содержит original snapshots и закрытую source projection, а не
 // caller patch. UID/runtime values не выводятся из rendered placeholders.
-export function planTelegramRuntimeInputs({resources,get,installation,sourceSHA,migrationID}){
- const projection=telegramRuntimeInputProjection(resources);
+export function planTelegramRuntimeInputs(input){return planRuntimeInputs(input,currentSchema);}
+
+// Rebuild сохранённого receipt сохраняет его исходную версию и весь snapshot.
+// Эта внутренняя ветвь не является producer старой конфигурации.
+function planRuntimeInputs({resources,get,installation,sourceSHA,migrationID},schema){
+ const projection=runtimeInputProjection(resources,schema);
  fail(/^[a-f0-9]{40}$/.test(sourceSHA??'')&&uid(migrationID)&&installation?.metadata?.name==='kodex-installation-profile'&&
   uid(installation.metadata.uid)&&installation.metadata.namespace===namespace&&installation.metadata.labels?.[ownerLabel]==='kodex',
   'TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
@@ -132,27 +147,28 @@ export function planTelegramRuntimeInputs({resources,get,installation,sourceSHA,
  policy.metadata.ownerReferences=[{apiVersion:'v1',kind:'ConfigMap',name:installation.metadata.name,uid:installation.metadata.uid}];
  policy.metadata.annotations={...(policy.metadata.annotations??{}),[inputAnnotation]:JSON.stringify({migrationID,sourceSHA})};
  fail(!get('ConfigMap',policy.metadata.name),'TELEGRAM_RUNTIME_POLICY_ALREADY_EXISTS');
- return {schema:'kodex.telegram-runtime-inputs/v1',sourceSHA,migrationID,installationUID:installation.metadata.uid,
+ return {schema,sourceSHA,migrationID,installationUID:installation.metadata.uid,
   installationSHA256:fingerprint(installation.data),endpoints:{uid:endpoints.metadata.uid,dataSHA256:fingerprint(endpoints.data)},projection,policy,patches};
 }
 
 // Fresh projection и immutable original snapshots восстанавливают весь план:
 // сохранённые after/rules или replacement ConfigMap не становятся authority.
 export function verifyTelegramRuntimeInputs(plan,resources,installation,endpoints){
- fail(plan?.schema==='kodex.telegram-runtime-inputs/v1'&&same(telegramRuntimeInputProjection(resources),plan.projection)&&
+ fail(knownSchema(plan?.schema)&&same(runtimeInputProjection(resources,plan.schema),plan.projection)&&
   installation.metadata.uid===plan.installationUID&&fingerprint(installation.data)===plan.installationSHA256&&
   owned(endpoints,'ConfigMap','kodex-platform-endpoints').metadata.uid===plan.endpoints.uid&&fingerprint(endpoints.data)===plan.endpoints.dataSHA256,
   'TELEGRAM_RUNTIME_INPUT_SOURCE_CHANGED');
  const snapshots=new Map(plan.patches.map(p=>[identity(p.before),p.before]));
  const get=(kind,name)=>kind==='ConfigMap'?(name==='kodex-platform-endpoints'?endpoints:null):
   [...snapshots.values()].find(r=>r.kind===kind&&r.metadata.name===name);
- const rebuilt=planTelegramRuntimeInputs({resources,get,installation,sourceSHA:plan.sourceSHA,migrationID:plan.migrationID});
+ const rebuilt=planRuntimeInputs({resources,get,installation,sourceSHA:plan.sourceSHA,migrationID:plan.migrationID},plan.schema);
  fail(same(rebuilt,plan),'TELEGRAM_RUNTIME_INPUT_PLAN_CHANGED');
 }
 
 // Journal общий с schema handoff. Каждый network/RBAC effect имеет собственный
 // fsync INTENT; lost ACK rejoin читает exact UID/body и не повторяет PATCH/create.
 export function applyTelegramRuntimeInputs({plan,journal,kube,gate,readOnly=false,requireStaged=true}){
+ fail(knownSchema(plan?.schema),'TELEGRAM_RUNTIME_INPUT_SCHEMA_INVALID');
  fail(!journal.events.some(e=>e.type==='TELEGRAM_INPUT_CREATE_ACK_INVALID'),'TELEGRAM_RUNTIME_POLICY_ACK_INVALID');
  const get=(kind,name)=>{const raw=kube(['-n',namespace,'get',kind.toLowerCase(),name,'--ignore-not-found=true','-o','json']);return raw.trim()?JSON.parse(raw):null;};
  const policy=plan.policy,key=identity(policy),existing=get('ConfigMap',policy.metadata.name);

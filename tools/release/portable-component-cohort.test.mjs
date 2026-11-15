@@ -601,3 +601,68 @@ test('046 telemetry repair: unready CP with claims refuses; idle startup require
  assert.equal((await f.repairLifecycle().repairObservability()).status,'READERS_STARTED_PENDING_READINESS');
  assert.equal(f.patches.length,before+3);
 });
+
+
+async function egressRevisionRepairFixture(){
+ const f=await observabilityRepairFixture();await f.repairLifecycle().repairObservability();
+ const part=structuredClone(f.plan.componentHandoff.components.find(c=>c.name==='egress-gateway'));
+ for(const key of ['stoppedSpec','stagedSpec','resumedSpec']){
+  const container=part[key].template.spec.containers[0];
+  container.image='registry.local.kodex/kodex/egress-gateway@sha256:'+'9'.repeat(64);
+  container.env.push({name:'EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION',value:'2026-09-05.1'});
+ }
+ const repair={repair:{jobUID:uuid(808)},part,sha256:'d'.repeat(64)};
+ f.plan.context='k3d-synthetic';f.plan.kubeconfig='/synthetic/kubeconfig';
+ const readAuthorityTerminal=async()=>{
+  const body={policyRevision:107,...telegramAuthorityReadbackContract(),actualReadbackCount:17,registryRevision:3,snapshotRevision:7,
+   operationID:uuid(200),observedAt:new Date().toISOString(),policySHA256:'a'.repeat(64),registrySHA256:'b'.repeat(64),snapshotSHA256:'c'.repeat(64),
+   planSHA256:'d'.repeat(64),freshPlanSHA256:'e'.repeat(64),targetSHA256:'f'.repeat(64),
+   ownerScope:{sourceRevision:revision,context:f.plan.context,kubeconfig:f.plan.kubeconfig,targetSHA256:'f'.repeat(64)}};
+  if(f.faults.terminalMutation)f.faults.terminalMutation(body);
+  return {...body,terminalSHA256:fingerprint(body)};
+ };
+ const bindings={observabilityRepair:f.repair,validateObservabilityRepair:()=>{},readAuthorityTerminal};
+ return {...f,egressRepair:repair,prepare:()=>f.rebuild(bindings),egressLifecycle:()=>f.rebuild({...bindings,
+  egressRevisionRepair:repair,validateEgressRevisionRepair:async()=>{if(f.faults.candidateChanged)throw Error('CANDIDATE_CHANGED');}})};
+}
+
+test('046 egress revision repair: separate image/pin, prior telemetry receipt and repeat without duplicate effects',async()=>{
+ const f=await egressRevisionRepairFixture(),before=f.patches.length,original=JSON.stringify(f.plan);
+ assert.equal((await f.prepare().prepareEgressRevisionRepair()).metadata.name,'egress-gateway');
+ assert.equal((await f.egressLifecycle().repairEgressRevision()).status,'READERS_STARTED_PENDING_READINESS');
+ assert.deepEqual(f.patches.slice(before),Array(3).fill('egress-gateway'));assert.equal(JSON.stringify(f.plan),original);
+ const inspected=f.egressLifecycle().inspect();assert.equal(inspected.find(p=>p.name==='egress-gateway').stage,'resumedSpec');
+ assert.equal(inspected.find(p=>p.name==='interaction-gateway').stage,'resumedSpec');
+ await f.egressLifecycle().repairEgressRevision();assert.equal(f.patches.length,before+3);
+ assert.throws(()=>f.prepare(),/EGRESS_REVISION_REPAIR_PIN_REQUIRED/);
+});
+
+test('046 egress revision repair: lost accepted ACK rejoins; candidate/owner/API drift rejects before patch',async()=>{
+ const f=await egressRevisionRepairFixture(),before=f.patches.length;f.faults.lostACK='egress-gateway';
+ await assert.rejects(()=>f.egressLifecycle().repairEgressRevision(),/PATCH_UNKNOWN/);
+ await f.egressLifecycle().repairEgressRevision();assert.equal(f.patches.length,before+3);
+ for(const mutate of [f=>f.faults.candidateChanged=true,f=>f.faults.activeEffects=1,f=>f.faults.apiReaders.state='RESTORED_READERS_READY']){
+  const g=await egressRevisionRepairFixture(),count=g.patches.length;mutate(g);
+  await assert.rejects(()=>g.egressLifecycle().repairEgressRevision());assert.equal(g.patches.length,count);
+ }
+});
+
+test('046 egress revision repair: malformed success and missing positive join never permit env/image switch',async()=>{
+ const f=await egressRevisionRepairFixture(),before=f.patches.length;f.faults.badACK=true;
+ await assert.rejects(()=>f.egressLifecycle().repairEgressRevision(),/ACK_REJECTED/);f.faults.badACK=false;
+ await assert.rejects(()=>f.egressLifecycle().repairEgressRevision(),/ACK_REJECTED/);assert.equal(f.patches.length,before+1);
+ const g=await egressRevisionRepairFixture(),count=g.patches.length;g.faults.blocked='egress-gateway';
+ await assert.rejects(()=>g.egressLifecycle().repairEgressRevision(),/JOIN_REQUIRED/);assert.equal(g.patches.length,count+1);
+});
+
+
+test('046 late egress repair требует fresh terminal107, без fallback на delivered bootstrap',async()=>{
+ for(const mutation of [p=>p.policyRevision=106,p=>p.actualReadbackCount=0,p=>p.ownerScope.sourceRevision='f'.repeat(40),
+  p=>p.ownerScope.kubeconfig='/foreign/kubeconfig',p=>p.ownerScope.targetSHA256='a'.repeat(64),
+  p=>p.observedAt=new Date(Date.now()-31000).toISOString(),p=>p.observedAt=new Date(Date.now()+10000).toISOString(),
+  p=>{delete p.registryRevision;p.state='PENDING_AUTHORITY';}]){
+  const f=await egressRevisionRepairFixture(),count=f.patches.length;f.faults.terminalMutation=mutation;
+  await assert.rejects(()=>f.prepare().prepareEgressRevisionRepair());
+  await assert.rejects(()=>f.egressLifecycle().repairEgressRevision());assert.equal(f.patches.length,count);
+ }
+});

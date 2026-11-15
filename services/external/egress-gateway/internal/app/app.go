@@ -483,7 +483,7 @@ func loadTelegramProfile(config Config) (*policy.Active, error) {
 	if config.TelegramConnectAddress == "" {
 		return nil, nil
 	}
-	active, err := policy.LoadFile(config.TelegramPolicyFile, config.ExpectedRevision, config.TelegramExpectedDigest)
+	active, err := policy.LoadFile(config.TelegramPolicyFile, config.TelegramExpectedRevision, config.TelegramExpectedDigest)
 	if err != nil {
 		return nil, err
 	}

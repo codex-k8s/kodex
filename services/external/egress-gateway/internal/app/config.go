@@ -22,6 +22,7 @@ type Config struct {
 	STTConnectAddress         string `env:"EGRESS_GATEWAY_STT_CONNECT_LISTEN"`
 	TelegramConnectAddress    string `env:"EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN"`
 	TelegramPolicyFile        string `env:"EGRESS_GATEWAY_TELEGRAM_POLICY_FILE"`
+	TelegramExpectedRevision  string `env:"EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION"`
 	TelegramExpectedDigest    string `env:"EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST"`
 	MailConnectAddress        string `env:"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN"`
 	MailPolicyFile            string `env:"EGRESS_GATEWAY_MAIL_POLICY_FILE"`
@@ -66,9 +67,12 @@ func (config Config) validate() error {
 		}
 		paths = append(paths, config.NativePolicyFile)
 	}
-	if config.TelegramConnectAddress != "" || config.TelegramPolicyFile != "" || config.TelegramExpectedDigest != "" {
-		if config.Mode != "" || config.TelegramConnectAddress == "" || config.TelegramPolicyFile == "" || config.TelegramExpectedDigest == "" {
+	if config.TelegramConnectAddress != "" || config.TelegramPolicyFile != "" || config.TelegramExpectedRevision != "" || config.TelegramExpectedDigest != "" {
+		if config.Mode != "" || config.TelegramConnectAddress == "" || config.TelegramPolicyFile == "" || config.TelegramExpectedRevision == "" || config.TelegramExpectedDigest == "" {
 			return errors.New("egress gateway Telegram configuration is incomplete")
+		}
+		if len(config.TelegramExpectedRevision) < 3 || len(config.TelegramExpectedRevision) > 64 || strings.TrimSpace(config.TelegramExpectedRevision) != config.TelegramExpectedRevision {
+			return errors.New("egress gateway Telegram policy revision is invalid")
 		}
 		paths = append(paths, config.TelegramPolicyFile)
 	}

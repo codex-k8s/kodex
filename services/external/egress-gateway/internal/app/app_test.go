@@ -82,6 +82,7 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 		"EGRESS_GATEWAY_STT_CONNECT_LISTEN":                ":8081",
 		"EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN":           ":8086",
 		"EGRESS_GATEWAY_TELEGRAM_POLICY_FILE":              "/var/run/config/kodex/egress-gateway-telegram/policy.json",
+		"EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION":          "2026-09-05.1",
 		"EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST":            strings.Repeat("a", 64),
 		"EGRESS_GATEWAY_MAIL_CONNECT_LISTEN":               ":8082",
 		"EGRESS_GATEWAY_MAIL_POLICY_FILE":                  "/var/run/config/kodex/egress-gateway-mail/policy.json",
@@ -102,6 +103,9 @@ func TestConfigUsesOneTypedParseAndEnforcesCanonicalDigest(t *testing.T) {
 	config, err := loadConfig()
 	if err != nil {
 		t.Fatal(err)
+	}
+	if config.TelegramExpectedRevision != "2026-09-05.1" || config.ExpectedRevision != "2026-08-07.1" {
+		t.Fatal("independent policy revisions were not parsed separately")
 	}
 	config.ConnectAddress, config.STTConnectAddress = config.STTConnectAddress, config.ConnectAddress
 	if err := config.validate(); err == nil {

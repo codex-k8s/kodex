@@ -52,6 +52,7 @@ spec:
             - {name: EGRESS_GATEWAY_STT_CONNECT_LISTEN, value: ":8081"}
             - {name: EGRESS_GATEWAY_TELEGRAM_CONNECT_LISTEN, value: ":8086"}
             - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-telegram/policy.json}
+            - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION, value: 2026-09-05.1}
             - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_DIGEST, value: 91bf766d2cb635882309927bbbc6e4d45d6b91998b88f436efbcfd59fd5520f0}
             - {name: EGRESS_GATEWAY_MAIL_CONNECT_LISTEN, value: ":8082"}
             - {name: EGRESS_GATEWAY_MAIL_POLICY_FILE, value: /var/run/config/kodex/egress-gateway-mail/mail-policy.json}

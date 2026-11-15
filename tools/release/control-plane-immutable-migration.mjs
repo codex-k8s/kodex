@@ -1,10 +1,11 @@
+import {planTelegramEgressRevisionRepair,readTelegramEgressRevisionRepair,readTelegramEgressRevisionCandidate} from './telegram-egress-revision-repair.mjs';
 import {planTelegramObservabilityRepair,readTelegramObservabilityRepair} from './telegram-observability-repair.mjs';
 import {readTelegramPortRepair,telegramPortRepairCodes,telegramPortRepairBound} from './telegram-port-repair.mjs';
 import {validateKubernetesPortNames} from './kubernetes-port-names.mjs';
 import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
 import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
-import {readTelegramAuthorityDelivered} from './authority-rotation-transition.mjs';
+import {readTelegramAuthorityDelivered,readTelegramAuthorityTerminal} from './authority-rotation-transition.mjs';
 import {readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
@@ -419,6 +420,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
       admissionProof:authority.maintenance.proof},kube);
   };
+  const readAuthorityTerminal=async()=>{
+    const authority=activationAuthority();
+    ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],'TELEGRAM_ACTIVATION_INPUTS_REQUIRED');
+    const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readTelegramAuthorityTerminal({plan:authority,events:events(options['--authority-evidence']),
+      freshPlan:privateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),
+      admissionProof:authority.maintenance.proof},kube);
+  };
   const imageScope = (evidence, nsUID) => {
     if (isComponentMigrationPublication(evidence)) {
       const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
@@ -659,6 +668,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const readObservabilityRepair=()=>readTelegramObservabilityRepair(options['--telegram-observability-repair-plan'],{migration:plan,
     migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],publisher:get('deployment','internal-rpc-authority-publisher')});
   const observabilityRepair=phase!=='plan-observability-repair'&&options['--telegram-observability-repair-plan']?readObservabilityRepair():undefined;
+  const readEgressRevisionRepair=()=>readTelegramEgressRevisionRepair(options['--telegram-egress-revision-repair-plan'],{migration:plan,
+    migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence']});
+  const egressRevisionRepair=phase!=='plan-egress-revision-repair'&&options['--telegram-egress-revision-repair-plan']?await readEgressRevisionRepair():undefined;
   const readCPProjection=(required=true)=>{
     if(!options['--cp-projection-plan']&&!required)return undefined;
     return readTelegramCPProjection({migration:plan,planPath:options['--cp-projection-plan'],evidencePath:options['--cp-projection-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
@@ -706,6 +718,12 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ensure(!observabilityBound.length||phase==='apply-observability-repair'||journal.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE'&&e.repairSHA256===observabilityRepair.sha256),
       'TELEGRAM_OBSERVABILITY_REPAIR_INCOMPLETE');
     ensure(!journal.events.some(e=>e.type==='TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED'),'TELEGRAM_OBSERVABILITY_PATCH_ACK_REJECTED');
+    const egressBound=journal.events.filter(e=>e.type==='TELEGRAM_EGRESS_REVISION_REPAIR_BOUND');
+    ensure(egressBound.length<=1&&(!egressBound.length||egressRevisionRepair&&egressBound[0].repairSHA256===egressRevisionRepair.sha256),
+      'TELEGRAM_EGRESS_REVISION_REPAIR_PIN_REQUIRED');
+    ensure(!egressBound.length||phase==='apply-egress-revision-repair'||journal.events.some(e=>e.type==='TELEGRAM_EGRESS_REVISION_REPAIR_COMPLETE'&&e.repairSHA256===egressRevisionRepair.sha256),
+      'TELEGRAM_EGRESS_REVISION_REPAIR_INCOMPLETE');
+    ensure(!journal.events.some(e=>e.type==='TELEGRAM_EGRESS_REVISION_PATCH_ACK_REJECTED'),'TELEGRAM_EGRESS_REVISION_PATCH_ACK_REJECTED');
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
     const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
     ensure(attempts.length <= 1 && checks.length <= 1, 'MIGRATION_JOURNAL_INVALID');
@@ -841,9 +859,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
-    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,observabilityRepair,validateObservabilityRepair:()=>{ensure(readObservabilityRepair().sha256===observabilityRepair.sha256,'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');},effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
+    const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,egressRevisionRepair,validateEgressRevisionRepair:async()=>{ensure((await readEgressRevisionRepair()).sha256===egressRevisionRepair.sha256,'TELEGRAM_EGRESS_REVISION_REPAIR_PIN_REQUIRED');},observabilityRepair,validateObservabilityRepair:()=>{ensure(readObservabilityRepair().sha256===observabilityRepair.sha256,'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');},effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readMaintenanceReaders,readCPProjection,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,readCPProjection,
       prepareRuntimeInputs:()=>{
         if(portRepair&&!journal.events.some(e=>e.type===telegramPortRepairBound)){
           ensure(!journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'||e.type==='PAIR_HANDOFF_ACK'||e.type==='TELEGRAM_INPUT_PATCH_INTENT'&&e.resource==='v1|Service|egress-gateway'),telegramPortRepairCodes.lifecycleRejected);
@@ -955,6 +973,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (pair) await pair.stopController();
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
+    if(phase==='plan-egress-revision-repair'){
+      await pair.prepareEgressRevisionRepair();
+      const candidate=await readTelegramEgressRevisionCandidate(options['--telegram-egress-revision-candidate'],plan);
+      const repair=planTelegramEgressRevisionRepair({migration:plan,migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],
+        evidence:readAuthorityPrivateText(options['--evidence']),candidate,observedAt:new Date().toISOString()});
+      writePrivate(options['--telegram-egress-revision-repair-plan'],repair);
+      return output({status:'PLAN_ONLY',repairSHA256:fingerprint(repair)});
+    }
+    if(phase==='apply-egress-revision-repair')return output(await pair.repairEgressRevision());
     if(phase==='plan-observability-repair'){
       pair.prepareObservabilityRepair();
       const repair=planTelegramObservabilityRepair({migration:plan,migrationPlanPath:options['--plan'],migrationEvidencePath:options['--evidence'],

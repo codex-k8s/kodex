@@ -19,7 +19,7 @@ import {fingerprint} from './scoped-release.mjs';
 import {telegramNotificationsCatalog} from './telegram-notifications-catalog.gen.mjs';
 import {decodeTelegramResourceCreateSource,planTelegramResourceCreate,telegramResourceCreateStep,telegramResourceCreateHeader,telegramResourceCreateKeys} from './telegram-resource-create.mjs';
 import {readTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
-import {validateStableReceipt} from './stable-image-publication.mjs';
+import {validateStableReceipt,sourceArchiveHash} from './stable-image-publication.mjs';
 
 const root=fileURLToPath(new URL('../../',import.meta.url)),uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const execute=(command,args,input,maxBuffer=32<<20)=>execFileSync(command,args,{cwd:root,input,encoding:'utf8',timeout:30000,maxBuffer,
@@ -31,9 +31,17 @@ const activities=['activeRuntimeLeases','activeRuntimeRuns','activeRunNodes','ac
  'activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks','activeInteractionDeliveries','activeBackupSessions','oldClaimSessions'];
 const write=(path,value)=>writeFileSync(path,JSON.stringify(value)+'\n',{mode:0o600});
 const read=path=>JSON.parse(readFileSync(path,'utf8'));
+const revisionEnvironmentLine='            - {name: EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION, value: 2026-09-05.1}\n';
+const retainedDeploymentSource=raw=>{assert.equal(raw.split(revisionEnvironmentLine).length,2);return raw.replace(revisionEnvironmentLine,'');};
 
 async function fixture(t,{narrow=false,successor=false,repair=false,backup=false,bootstrap=false}={}){
  const sourceResources=structuredClone(canonicalSourceResources);
+ if(bootstrap){
+  assert.ok(repair&&successor);
+  const container=sourceResources.find(r=>r.kind==='Deployment'&&r.metadata.name==='egress-gateway').spec.template.spec.containers.find(c=>c.name==='egress-gateway');
+  assert.equal(container.env.filter(e=>e.name==='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION').length,1);
+  container.env=container.env.filter(e=>e.name!=='EGRESS_GATEWAY_TELEGRAM_POLICY_REVISION');
+ }
  if(repair)for(const resource of sourceResources){
   if(resource.kind==='Service'&&resource.metadata.name==='egress-gateway')for(const port of resource.spec.ports)if(port.port===8086){port.name='telegram-connect';port.targetPort='telegram-connect';}
   if(resource.kind==='Deployment'&&resource.metadata.name==='egress-gateway')for(const port of resource.spec.template.spec.containers.find(c=>c.name==='egress-gateway').ports)if(port.containerPort===8086)port.name='telegram-connect';
@@ -56,6 +64,16 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   for(const file of ['deployment.yaml','service.yaml']){const path=join(source,'deploy/k8s/base/egress-gateway',file);writeFileSync(path,readFileSync(path,'utf8').replaceAll('tg-connect','telegram-connect'));}
  }
  if(bootstrap){
+  // Исторический producer выпускает v1/3env до immutable Git/source capture.
+  // Новый executor ниже получает настоящий versioned decoder, не этот producer.
+  const inputs=join(source,'tools/release/telegram-runtime-inputs.mjs'),raw=readFileSync(inputs,'utf8');
+  let retained=raw;
+  for(const call of ['runtimeInputProjection(resources,currentSchema)','planRuntimeInputs(input,currentSchema)']){
+   assert.equal(retained.split(call).length,2);retained=retained.replace(call,call.replace('currentSchema','retainedSchema'));
+  }
+  writeFileSync(inputs,retained);
+  const deployment=join(source,'deploy/k8s/base/egress-gateway/deployment.yaml');
+  writeFileSync(deployment,retainedDeploymentSource(readFileSync(deployment,'utf8')));
   // Counterfactual старой установки: renderer созданного receiver пропустил
   // существующий canonical telemetry transform. Fault только в source fixture.
   const path=join(source,'tools/release/telegram-resource-create.mjs');
@@ -73,6 +91,11 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   if(repair){
    copyFileSync(join(root,'tools/release/control-plane-immutable-migration.mjs'),join(executor,'tools/release/control-plane-immutable-migration.mjs'));
    for(const file of ['deployment.yaml','service.yaml'])copyFileSync(join(root,'deploy/k8s/base/egress-gateway',file),join(executor,'deploy/k8s/base/egress-gateway',file));
+   if(bootstrap){
+    copyFileSync(join(root,'tools/release/telegram-runtime-inputs.mjs'),join(executor,'tools/release/telegram-runtime-inputs.mjs'));
+    const deployment=join(executor,'deploy/k8s/base/egress-gateway/deployment.yaml');
+    writeFileSync(deployment,retainedDeploymentSource(readFileSync(deployment,'utf8')));
+   }
   }
   writeFileSync(join(executor,'tools/release/synthetic-successor.txt'),'Synthetic qualified executor revision\n',{mode:0o644});
   execute('git',['-C',executor,'add','.']);
@@ -84,6 +107,7 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  for(const [index,part] of f.value.components.entries()){
   const lock=JSON.parse(Buffer.from(part.componentLockRawBase64,'base64'));lock.source_sha=revision;replaceComponentLock(part,lock);part.nodeProof.sourceSHA=revision;
   const app=f.deployments[index];app.spec.selector={matchLabels:{'app.kubernetes.io/name':app.metadata.name}};
+  if(bootstrap&&app.metadata.name==='egress-gateway')app.spec.template.spec.containers[0].env.push({name:'EGRESS_GATEWAY_EXPECTED_POLICY_REVISION',value:'release-synthetic-distinct'});
   app.spec.template.metadata.labels={...app.metadata.labels,...(app.metadata.name==='control-api-gateway'?{'app.kubernetes.io/component':'external-gateway'}:{})};
   resources['deployment/'+app.metadata.name]=structuredClone(app);
  }
@@ -179,10 +203,10 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
  const backend=fileURLToPath(new URL('./fixtures/telegram-deployment-kube.cjs',import.meta.url));
  writeFileSync(join(bin,'kubectl'),`#!${process.execPath}\nprocess.env.KODEX_TELEGRAM_SYNTHETIC_STATE=${JSON.stringify(state)};\nrequire(${JSON.stringify(backend)});\n`,{mode:0o700});
  const setEvidence=path=>{const value=read(state);value.activeEvidence=path;write(state,value);};
- let activeRepair,activeRepairExecutor,activeObservabilityRepair,newPlanner=false;const repairPath=join(directory,'port-repair.json');
- const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair&&phase==='plan'&&!newPlanner?source:executor,'tools/release/control-plane-migration.mjs'),phase,...(activeObservabilityRepair?['--telegram-observability-repair-plan',activeObservabilityRepair]:[]),...(activeRepair?['--telegram-port-repair-plan',activeRepair,...(activeRepairExecutor?['--telegram-port-repair-executor-sha',activeRepairExecutor]:[])]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
+ let activeRepair,activeRepairExecutor,activeObservabilityRepair,activeEgressRepair,newPlanner=false;const repairPath=join(directory,'port-repair.json');
+ const run=(phase,extra=[])=>{setEvidence(evidence);const started=Date.now(),beforeCalls=read(state).calls.length;const result=spawnSync(process.execPath,[join(repair&&phase==='plan'&&!newPlanner?source:executor,'tools/release/control-plane-migration.mjs'),phase,...(activeEgressRepair?['--telegram-egress-revision-repair-plan',activeEgressRepair]:[]),...(activeObservabilityRepair?['--telegram-observability-repair-plan',activeObservabilityRepair]:[]),...(activeRepair?['--telegram-port-repair-plan',activeRepair,...(activeRepairExecutor?['--telegram-port-repair-executor-sha',activeRepairExecutor]:[])]:[]),'--profile',migrationProfile,'--kubeconfig',kubeconfig,
   '--context',f.target.context,'--plan',plan,...(phase==='plan'?['--source',source,'--revision',revision,'--base-render',render,'--component-publication',component,'--portable-target',target,...(backup?['--backup-maintenance-plan',backupPlan,'--backup-maintenance-evidence',backupEvidence]:[])]:['--evidence',evidence]),
-  ...(['check','stop','apply','handoff','resume','activate','start-readers','apply-observability-repair'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
+  ...(['check','stop','apply','handoff','resume','activate','start-readers','apply-observability-repair','apply-egress-revision-repair'].includes(phase)?['--confirm','APPLY-STAGING-CP-MIGRATION']:[]),...extra],
   {encoding:'utf8',timeout:backup?180000:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});
   let callCount;try{callCount=read(state).calls.length-beforeCalls;}catch{}
   const observation={phase,elapsedMs:Date.now()-started,status:result.status,signal:result.signal,error:result.error?.code,callCount};
@@ -206,7 +230,7 @@ async function fixture(t,{narrow=false,successor=false,repair=false,backup=false
   const prepared=command('backup-controller-maintenance-cli.mjs',['plan','--action','stop','--migration-profile',migrationProfile,'--target',backupTarget,...flags]);assert.equal(prepared.status,0,prepared.stderr);
   const applied=spawnSync(process.execPath,[join(source,'tools/release/backup-controller-maintenance-cli.mjs'),'apply',...flags,'--approved-plan-sha',fingerprint(read(backupPlan))],{encoding:'utf8',timeout:90000,env:{HOME:directory,PATH:bin+':'+process.env.PATH,LANG:'C.UTF-8',KODEX_TELEGRAM_SYNTHETIC_STATE:state}});assert.equal(applied.status,0,applied.stderr);
  }
- return {backupPlan,backupEvidence,backupTarget,enableObservabilityRepair:path=>{activeObservabilityRepair=path;},useCurrentPlanner:()=>{newPlanner=true;},withoutRepair:(phase,extra)=>{const saved=activeRepair;activeRepair=undefined;try{return run(phase,extra);}finally{activeRepair=saved;}},enableRepair:()=>{activeRepair=repairPath;applicationFlags.push('--telegram-port-repair-plan',repairPath);},
+ return {backupPlan,backupEvidence,backupTarget,enableEgressRepair:path=>{activeEgressRepair=path;},enableObservabilityRepair:path=>{activeObservabilityRepair=path;},useCurrentPlanner:()=>{newPlanner=true;},withoutRepair:(phase,extra)=>{const saved=activeRepair;activeRepair=undefined;try{return run(phase,extra);}finally{activeRepair=saved;}},enableRepair:()=>{activeRepair=repairPath;applicationFlags.push('--telegram-port-repair-plan',repairPath);},
   upgradeRepairExecutor:()=>{const config=executor;executor=join(directory,'late-owner-executor');execute('git',['-C',config,'worktree','add','-q','--detach',executor,'HEAD']);
    writeFileSync(join(executor,'tools/release/synthetic-owner-successor.txt'),'Synthetic tools-only late owner successor\n',{mode:0o644});execute('git',['-C',executor,'add','.']);
    execute('git',['-C',executor,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Синтетический late owner executor']);
@@ -218,6 +242,8 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  const f=await fixture(t,scenario),frozenPaths=[f.admission.paths.planPath,f.admission.paths.evidencePath,f.admission.paths.trafficPlanPath,f.admission.paths.trafficEvidencePath],
   frozenBytes=frozenPaths.map(path=>readFileSync(path)),pass=(phase,status)=>{const result=f.run(phase);assert.equal(result.status,0,result.stderr);const body=JSON.parse(result.stdout);if(status)assert.equal(body.status,status);return body;};
  pass('plan','PLANNED');const planned=read(f.plan);assert.equal(planned.telegramInputs.patches.length,7);
+ assert.equal(planned.telegramInputs.schema,scenario.bootstrap?'kodex.telegram-runtime-inputs/v1':'kodex.telegram-runtime-inputs/v2');
+ assert.equal(planned.telegramInputs.projection.egress.env.length,scenario.bootstrap?3:4);
  pass('check','PASS');pass('stop','STOPPED');pass('apply','PASS');
  if(scenario.repair){
   const original=f.run('handoff');assert.notEqual(original.status,0);assert.match(original.stderr,/KUBERNETES_OPERATION_UNKNOWN/);
@@ -324,6 +350,39 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  assert.equal(f.read().effects.filter(effect=>effect==='PAIR_ACTIVATE_INTENT:interaction-gateway').length,1);
  f.edit(s=>{const now=Date.now();s.ownerStatus={...s.ownerStatus,status:'RETIRED',operationStatus:'RETIRED',phase:'RETIRE',sourceRevision:7,actualReadbackCount:17,
   switchNotBefore:new Date(now-10000).toISOString(),previousNotAfter:new Date(now-2000).toISOString(),completedAt:new Date(now-1000).toISOString()};});
+ if(scenario.bootstrap){
+  const repairInputs=[...cpProjection,...apiOpen,...authority],oldMigration=readFileSync(f.plan),oldCreator=readFileSync(f.creator.planPath),oldAuthority=readFileSync(owner);
+  // Отдельный source/image и receipt fixture: реальны Git archive и CLI owner
+  // consumers; registry/CRI здесь синтетические и не считаются live qualification.
+  const candidateSource=join(f.directory,'egress-candidate-source');
+  execute('git',['-C',f.source,'worktree','add','-q','--detach',candidateSource,f.revision]);
+  for(const filename of ['app.go','config.go']){
+   const path=join(candidateSource,'services/external/egress-gateway/internal/app',filename);
+   mkdirSync(dirname(path),{recursive:true,mode:0o755});writeFileSync(path,'package app\n// Synthetic source identity fixture.\n',{mode:0o644});
+  }
+  execute('git',['-C',candidateSource,'add','.']);execute('git',['-C',candidateSource,'-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Синтетический egress candidate']);
+  const candidateSHA=execute('git',['-C',candidateSource,'rev-parse','HEAD']).trim(),contextSHA=await sourceArchiveHash(candidateSHA,candidateSource);
+  const receipt={schema:'kodex.stable-local-build/v1',component:'egress-gateway',sourceSHA:candidateSHA,contextSHA256:contextSHA,
+   archiveSHA256:'a'.repeat(64),imageDigest:'sha256:'+'9'.repeat(64),publication:'NOT_RUN',admission:'NOT_RUN',nodePull:'NOT_RUN'};
+  const original=read(f.plan),publication={schema:'kodex.stable-image-publication/v2',artifactProfile:'built',source:candidateSHA,receipt,
+   image:validateStableReceipt(receipt),archiveSHA256:receipt.archiveSHA256,context:f.context,clusterUID:original.clusterUID,namespaceUID:original.namespaceUID};
+  const publicationPath=join(f.directory,'egress-candidate-publication.json'),publicationEvidencePath=join(f.directory,'egress-candidate-publication.jsonl');write(publicationPath,publication);
+  writeFileSync(publicationEvidencePath,[{schema:'kodex.stable-image-publication-attempt/v1',status:'INTENT',mode:'apply',planSHA256:fingerprint(publication),component:'egress-gateway',digest:receipt.imageDigest},
+   {status:'PASS',phase:'REGISTRY_PUBLICATION_ONLY',nodePull:'NOT_RUN'}].map(v=>JSON.stringify(v)+'\n').join(''),{mode:0o600});
+  const imageRef='registry.local.kodex/kodex/egress-gateway@'+receipt.imageDigest,candidatePath=join(f.directory,'egress-candidate.json');
+  write(candidatePath,{schema:'kodex.telegram-egress-revision-candidate/v1',source:{path:candidateSource,revision:candidateSHA},publicationPlanPath:publicationPath,publicationEvidencePath,
+   nodeProof:{schema:'kodex.telegram-egress-node-proof/v1',sourceSHA:candidateSHA,imageRef,clusterUID:original.clusterUID,namespaceUID:original.namespaceUID,bindingSHA256:'b'.repeat(64),
+    nodes:original.imageEvidence.components[0].nodeProof.nodes.map(n=>({name:n.name,uid:n.uid,imageRef,repoDigestVerified:true}))}});
+  f.edit(s=>{s.egressRevisionRequired=true;const app=s.resources['deployment/egress-gateway'];app.status.readyReplicas=0;app.status.availableReplicas=0;});
+  const egressRepairPath=join(f.directory,'egress-revision-repair.json');
+  const egressPlan=f.run('plan-egress-revision-repair',[...repairInputs,...fresh(),'--telegram-egress-revision-repair-plan',egressRepairPath,'--telegram-egress-revision-candidate',candidatePath]);
+  assert.equal(egressPlan.status,0,egressPlan.stderr);f.enableEgressRepair(egressRepairPath);
+  const egressApply=f.run('apply-egress-revision-repair',[...repairInputs,...fresh()]);assert.equal(egressApply.status,0,egressApply.stderr);
+  assert.equal(f.read().effects.filter(e=>e.startsWith('TELEGRAM_EGRESS_REVISION_')).length,3);
+  const egressAgain=f.run('apply-egress-revision-repair',[...repairInputs,...fresh()]);assert.equal(egressAgain.status,0,egressAgain.stderr);
+  assert.equal(f.read().effects.filter(e=>e.startsWith('TELEGRAM_EGRESS_REVISION_')).length,3);
+  assert.deepEqual(readFileSync(f.plan),oldMigration);assert.deepEqual(readFileSync(f.creator.planPath),oldCreator);assert.deepEqual(readFileSync(owner),oldAuthority);
+ }
  const restored=join(f.directory,'restored.json'),restoredEvidence=join(f.directory,'restored.jsonl');
  checked('component-api-traffic.mjs',['plan',...flags,...f.applicationFlags,'--policy-transition',telegramPolicyTransition,'--action','restore','--target',f.apiTarget,'--plan',restored,...closed,...isolated,...authority,...fresh()]);
  const restoreStatus=fresh(),restoreHistory=structuredClone(f.read().ownerLogs);if(scenario.repair)f.edit(s=>s.ownerPreflightDelayMS=35000);
@@ -347,7 +406,7 @@ test(scenario.name+' dormant→schema→stagedCP0→DELIVER→projection107→re
  const finalResume=f.run('resume',finalInputs);assert.equal(finalResume.status,0,finalResume.stderr);assert.equal(JSON.parse(finalResume.stdout).status,'RESUMED');assert.equal(f.read().effects.length,finalCount);
  if(scenario.backup){
   const resumed=join(f.directory,'backup-resume.json'),resumedEvidence=join(f.directory,'backup-resume.jsonl');
-  const refs=[...(scenario.bootstrap?['--telegram-observability-repair-plan',join(f.directory,'observability-repair.json')]:[]),'--stopped-plan',f.backupPlan,'--stopped-evidence',f.backupEvidence,'--migration-plan',f.plan,'--migration-evidence',f.evidence,
+  const refs=[...(scenario.bootstrap?['--telegram-observability-repair-plan',join(f.directory,'observability-repair.json'),'--telegram-egress-revision-repair-plan',join(f.directory,'egress-revision-repair.json')]:[]),'--stopped-plan',f.backupPlan,'--stopped-evidence',f.backupEvidence,'--migration-plan',f.plan,'--migration-evidence',f.evidence,
    '--cp-projection-plan',projection,'--cp-projection-evidence',projectionEvidence,...apiOpen,...authority,...restoreStatus,'--api-restore-plan',restored,'--api-restore-evidence',restoredEvidence,'--telegram-port-repair-plan',f.repairPath,...(f.repairExecutor?['--telegram-port-repair-executor-sha',f.repairExecutor]:[])];
   const beforeBackup=f.read().backup.effects,foreign='unrelated-backup-producer';
   f.edit(s=>{s.jobs[foreign]={apiVersion:'batch/v1',kind:'Job',metadata:{name:foreign,namespace:'kodex-system',uid:uid(9901),labels:{}},spec:{template:{spec:{serviceAccountName:'backup-controller',containers:[{name:'foreign',image:'synthetic.invalid/foreign@sha256:'+'e'.repeat(64)}],volumes:[{name:'credentials',secret:{secretName:'backup-controller-credentials'}}]}}},status:{active:1}};
@@ -376,4 +435,20 @@ test('real CLI046/107 invalid-port: новый planner отказывает до
  const f=await fixture(t,{narrow:true,successor:true,repair:true});f.useCurrentPlanner();
  const result=f.run('plan');assert.notEqual(result.status,0);assert.match(result.stderr,/KUBERNETES_PORT_NAME_INVALID/);
  assert.equal(existsSync(f.plan),false);assert.equal(f.read().effects.length,0);
+});
+
+
+test('runtime-metadata: новый executor читает immutable original v1/3env через реальный CLI inspect',async t=>{
+ const f=await fixture(t,{narrow:true,successor:true,repair:true,bootstrap:true});
+ const planned=f.run('plan');assert.equal(planned.status,0,planned.stderr);
+ const original=readFileSync(f.plan),value=JSON.parse(original);
+ assert.equal(value.telegramInputs.schema,'kodex.telegram-runtime-inputs/v1');assert.equal(value.telegramInputs.projection.egress.env.length,3);
+ assert.notEqual(f.source,f.executor);
+ const inspected=f.run('inspect');assert.equal(inspected.status,0,inspected.stderr);
+ assert.deepEqual(readFileSync(f.plan),original);
+ assert.equal(f.read().effects.length,0);
+ const actual=readFileSync(join(f.executor,'tools/release/telegram-runtime-inputs.mjs'),'utf8');
+ assert.equal(actual,readFileSync(join(root,'tools/release/telegram-runtime-inputs.mjs'),'utf8'));
+ assert.equal(execute('git',['-C',f.source,'status','--porcelain']).trim(),'');
+ assert.equal(execute('git',['-C',f.executor,'status','--porcelain']).trim(),'');
 });

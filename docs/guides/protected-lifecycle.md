@@ -15,6 +15,12 @@ plan либо уже записанный префикс журнала. Узк�
 config и plan hashes, допустимую точную дельту и fresh terminal/owner/join proof.
 Каждый handoff, повторное чтение, projection и финальный consumer использует
 один и тот же repair pin; отсутствие pin не означает возврат к прежнему spec.
+После завершения authority rotation новый repair использует terminal owner read,
+а не повторяет допуск промежуточного DELIVER. Fresh proof связывает исходную
+operation, publisher/registry, полный набор readers и target; прежние receipts
+и исход операции не переписываются. План, каждый effect и повторное apply
+проверяют тот же terminal contract. Проверка сценария воспроизводит именно
+порядок RETIRED → repair → API restore → backup resume.
 Новый intent записывается и fsync-ится до эффекта, а потерянный ACK допускает
 только штатное чтение исхода. Успешный YAML render не доказывает допустимость
 Kubernetes spec: имена ContainerPort и строкового Service.targetPort проверяются
