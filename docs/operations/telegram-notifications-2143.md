@@ -4,7 +4,7 @@ title: Ограниченные исходящие уведомления Telegr
 type: operations
 status: approved
 owner: developer
-version: 1.0.18
+version: 1.0.19
 updated: 2026-11-15
 ---
 
@@ -648,7 +648,9 @@ interaction» неработоспособна. Total readback count также 
    сохраняется исходная остановка backup-controller. Полный read-only drain,
    exact Job/Pod, source/schema/image/spec/UID и свежий owner DELIVER обязательны.
 3. Фаза запускает оставшиеся exact компоненты cohort до ожидания Ready. Каждый
-   CAS имеет durable original intent, проверку TTL и повторное чтение изоляции.
+   необходимый CAS получает отдельное свежее чтение owner после rejoin прежних
+   readers, durable original intent, проверку TTL и повторное чтение изоляции.
+   Новый proof сохраняет operation/registry/snapshot; TTL не увеличивается.
    Уже начатый CP с собственным intent не запускается повторно. Возвращается
    `READERS_STARTED_PENDING_READINESS`, `pairReady=false`; ACK готовности нет.
 4. После реальных readback/promotion штатный API `status` записывает `OPEN`.

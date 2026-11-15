@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.75
+version: 1.7.76
 updated: 2026-11-15
 ---
 
@@ -19,6 +19,12 @@ terminal authority receipt. Внешний Service сохраняется изо
 background effects: свежий owner drain и штатные claim/Begin/approvals
 сохраняются. Повторное исполнение не переписывает original source/image/DDL
 и не выдаёт второй CAS после неоднозначного ответа без readback.
+Последовательный запуск получает новый owner READ для каждого необходимого
+writer после дорогого rejoin предыдущих readers. Operation, registry и snapshot
+остаются прежними; обновление времени старого proof запрещено. Последняя
+проверка изоляции и TTL перед CAS сохраняется: медленный read не продлевает
+допуск и не разрешает истёкший effect. Уже подтверждённый собственный запуск
+не повторяется ради обновления допуска.
 
 Возврат внешнего Service после рутинной schema migration имеет собственный
 terminal consumer и не переиспользует admission proof прежней authority
