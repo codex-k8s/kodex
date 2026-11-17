@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import io
+import sys
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('node_cache', Path(__file__).with_name('node-runner-cache.py'))
@@ -11,6 +13,19 @@ SPEC.loader.exec_module(C)
 
 
 class CacheTests(unittest.TestCase):
+    def test_actual_export_process_has_byte_budget_and_positive_join(self):
+        output = io.BytesIO()
+        self.assertEqual(C.export_bytes([sys.executable, '-c', 'print("synthetic")'], output, limit=64, seconds=2), 10)
+        self.assertEqual(output.getvalue(), b'synthetic\n')
+        output = io.BytesIO()
+        with self.assertRaises(ValueError):
+            C.export_bytes([sys.executable, '-c', 'print("x"*1024)'], output, limit=64, seconds=2)
+        self.assertLessEqual(len(output.getvalue()), 64)
+
+    def test_actual_export_timeout_joins_silent_producer(self):
+        with self.assertRaises(ValueError):
+            C.export_bytes([sys.executable, '-c', 'import time; time.sleep(5)'], io.BytesIO(), seconds=0.05)
+
     def test_projection_retains_pending_and_init_images_without_private_payload(self):
         raw = b'uid-one|Pending|||example.invalid/init example.invalid/main docker-pullable://example.invalid/main@sha256:aaa\nuid-two|Failed|||example.invalid/old\n'
         with patch.object(C, 'run', return_value=raw) as command:
@@ -19,6 +34,8 @@ class CacheTests(unittest.TestCase):
         template = command.call_args.args[0][-1]
         self.assertNotIn('env', template)
         self.assertNotIn('annotations', template)
+        for field in ('ephemeralContainers', 'initContainerStatuses', 'ephemeralContainerStatuses'):
+            self.assertIn(field, template)
 
     def test_projection_malformed_or_missing_container_images_rejected(self):
         for raw in (b'uid|Pending|||\n', b'uid|Pending|||image|unexpected\n'):

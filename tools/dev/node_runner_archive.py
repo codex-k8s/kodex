@@ -38,6 +38,30 @@ def identity(info):
         "st_dev", "st_ino", "st_uid", "st_gid", "st_mode", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns"))
 
 
+def raw_headers(source, size):
+    """Отклонить extension/sparse headers до tarfile, который читает PAX payload целиком."""
+    source.seek(0)
+    seen = set()
+    while source.tell() + 512 <= size:
+        header = source.read(512)
+        if header == b'\0' * 512:
+            require(source.read(512) == b'\0' * 512)
+            for block in iter(lambda: source.read(1 << 20), b''):
+                require(not any(block))
+            source.seek(0)
+            return
+        member = tarfile.TarInfo.frombuf(header, 'utf-8', 'strict')
+        name = member.name.rstrip('/')
+        require(member.type in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE)
+                and not member.linkname and not member.sparse and name not in seen and len(seen) < 1024)
+        seen.add(name)
+        require(member.isdir() and name in ('blobs', 'blobs/sha256') or member.isreg() and
+                (name in ('index.json', 'oci-layout') or re.fullmatch(r'blobs/sha256/[a-f0-9]{64}', name)))
+        require(0 <= member.size <= LIMIT and source.tell() + ((member.size + 511) // 512) * 512 <= size)
+        source.seek(((member.size + 511) // 512) * 512, os.SEEK_CUR)
+    require(False)
+
+
 def verify(path, expected):
     """Проверить exact owned archive и полный reachable graph, не извлекая files на диск.
 
@@ -56,6 +80,7 @@ def verify(path, expected):
         for block in iter(lambda: source.read(1 << 20), b""):
             archive_hash.update(block)
         source.seek(0)
+        raw_headers(source, before.st_size)
         with tarfile.open(fileobj=source, mode="r:") as archive:
             members = {}
             for member in archive:

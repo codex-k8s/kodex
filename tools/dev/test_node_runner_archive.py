@@ -8,11 +8,24 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import node_runner_archive as verifier
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_large_pax_rejected_before_allocating_tar_decoder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'large-pax.tar'
+            header = tarfile.TarInfo('extension')
+            header.type = tarfile.XHDTYPE
+            header.size = 7 << 30
+            path.write_bytes(header.tobuf() + b'\0' * 1024)
+            path.chmod(0o600)
+            with patch.object(verifier.tarfile, 'open', side_effect=AssertionError('PAX decoder reached')):
+                with self.assertRaises(ValueError):
+                    verifier.verify(path, 'sha256:' + 'a' * 64)
+
     def fixture(self, directory, change=None):
         """Собрать минимальный настоящий OCI layout; нарушения вносить до tar записи."""
         blobs = {}

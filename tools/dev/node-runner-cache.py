@@ -7,7 +7,10 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
+import signal
 import subprocess
+import tarfile
 import time
 
 import installation_images as images
@@ -17,6 +20,34 @@ from node_runner_archive import verify, require
 NODES = ('k3d-kodex-agent-0', 'k3d-kodex-server-0')
 PREFIX = 'registry.local.kodex/kodex/agent-runner@'
 SCHEMA = 'kodex.node-runner-cache/v1'
+
+
+def export_bytes(command, output, limit=8 << 30, seconds=240):
+    """Ограничить фактически записанные bytes и дождаться local producer после отказа."""
+    deadline = time.monotonic() + seconds
+    child = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, start_new_session=True)
+    count = 0
+    try:
+        with selectors.DefaultSelector() as selector:
+            selector.register(child.stdout, selectors.EVENT_READ)
+            while selector.get_map():
+                require(time.monotonic() < deadline)
+                for key, _ in selector.select(min(0.25, max(0, deadline - time.monotonic()))):
+                    block = os.read(key.fileobj.fileno(), 1 << 20)
+                    if not block:
+                        selector.unregister(key.fileobj)
+                        continue
+                    require(len(block) <= limit - count)
+                    output.write(block)
+                    count += len(block)
+            require(child.wait(timeout=max(0.001, deadline - time.monotonic())) == 0)
+    finally:
+        if child.poll() is None:
+            os.killpg(child.pid, signal.SIGKILL)
+            child.wait(timeout=5)
+        child.stdout.close()
+    return count
 
 
 def run(args, timeout=30):
@@ -34,8 +65,9 @@ def workload_refs(base, kind):
     """Читать лишь bounded status/image projection, исключая env и last-applied payload."""
     root = '.spec' if kind == 'pods' else '.spec.jobTemplate.spec.template.spec' if kind == 'cronjobs' else '.spec.template.spec'
     template = ('{range .items[*]}{.metadata.uid}{"|"}{.status.phase}{"|"}{.status.succeeded}{"|"}{.status.failed}{"|"}'
-                + '{' + root + '.initContainers[*].image}{" "}{' + root + '.containers[*].image}{" "}'
-                + '{.status.containerStatuses[*].imageID}{"\\n"}{end}')
+                + '{' + root + '.initContainers[*].image}{" "}{' + root + '.containers[*].image}{" "}{' + root + '.ephemeralContainers[*].image}{" "}'
+                + '{.status.containerStatuses[*].imageID}{" "}{.status.initContainerStatuses[*].imageID}{" "}'
+                + '{.status.ephemeralContainerStatuses[*].imageID}{"\\n"}{end}')
     raw = run(base + ['get', kind, '-A', '-o', 'jsonpath=' + template]).decode('utf-8')
     result = set()
     for line in raw.splitlines():
@@ -142,9 +174,8 @@ def main():
                     require(disk.f_bavail * disk.f_frsize >= 12 << 30)
                     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
                     with os.fdopen(fd, 'wb') as output:
-                        subprocess.run(['docker', 'exec', node['container'], 'ctr', '-n', 'k8s.io', 'images', 'export',
-                                        '--platform', 'linux/amd64', '--skip-manifest-json', '-', image['ref']],
-                                       stdout=output, stderr=subprocess.DEVNULL, check=True, timeout=240)
+                        export_bytes(['docker', 'exec', node['container'], 'timeout', '240', 'ctr', '-n', 'k8s.io', 'images', 'export',
+                                      '--platform', 'linux/amd64', '--skip-manifest-json', '-', image['ref']])
                         output.flush(); os.fsync(output.fileno())
                 verify(path, image['digest'])
                 parent = os.open(args.archives, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -188,6 +219,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+    except (OSError, ValueError, KeyError, TypeError, tarfile.TarError, subprocess.SubprocessError):
         print('Node runner cache operation rejected', file=__import__('sys').stderr)
         raise SystemExit(1) from None
