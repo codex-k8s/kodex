@@ -1,4 +1,8 @@
 GOVULNCHECK_VERSION := v1.6.0
+
+.PHONY: test-node-runner-cache
+test-node-runner-cache:
+	@timeout 30s python3 -m unittest discover -s tools/dev -p 'test_node_runner*.py'
 GO_MIN_VERSION := 1.26.10
 GO_TOOLCHAIN := go1.26.10
 

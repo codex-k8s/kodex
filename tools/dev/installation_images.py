@@ -36,7 +36,17 @@ def helper_file(path, expected, source):
     if (not path.is_absolute() or path.resolve() != path or not stat.S_ISREG(mode.st_mode)
             or mode.st_uid != os.getuid() or mode.st_nlink != 1 or mode.st_mode & 0o022):
         raise ValueError(ERROR)
-    payload = path.read_bytes()
+    if not 0 < mode.st_size <= 32 << 20:
+        raise ValueError(ERROR)
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    with os.fdopen(descriptor, "rb") as stream:
+        if os.fstat(stream.fileno()) != mode:
+            raise ValueError(ERROR)
+        payload = stream.read((32 << 20) + 1)
+        after = os.fstat(stream.fileno())
+        if (mode.st_dev, mode.st_ino, mode.st_size, mode.st_mtime_ns, mode.st_ctime_ns) != (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+            raise ValueError(ERROR)
     if len(payload) > 32 << 20 or hashlib.sha256(payload).hexdigest() != expected:
         raise ValueError(ERROR)
     information = command(["go", "version", "-m", str(path)]).decode()
