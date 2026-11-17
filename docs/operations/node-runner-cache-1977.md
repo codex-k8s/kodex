@@ -33,7 +33,11 @@ Helper сохраняет образы существующих контейне
 нетерминальных Pods, Deployment/StatefulSet/DaemonSet, Jobs и
 CronJobs, включая init/ephemeral spec и фактические imageID всех трёх статусов.
 Factory/base pins сохраняются также по точным template annotations и двум
-известным keys текущих подключённых image-admission ConfigMaps. Env values и
+известным keys текущих подключённых image-admission ConfigMaps. Exact promoted
+registry host выводится из отдельного известного `pullRegistryHost` key этих
+же ConfigMaps и закрепляется в плане; alias иного host сохраняет всю группу.
+Canonical `:local-<sha256>` tag допускается только для того же exact target.
+Env values и
 полное содержимое ConfigMaps не читаются. Неизвестный alias сохраняет всю группу.
 Атомарность Kubernetes create Pod и удаления image name не обещается:
 containerd leases защищают занятый content; новый конкурентный consumer требует

@@ -87,7 +87,7 @@ def workload_refs(base, kind):
 
 def delivered_pins(base):
     """Сохранить текущие factory/base pins, даже когда соответствующий Pod отсутствует."""
-    result, maps = set(), set()
+    result, maps, hosts = set(), set(), set()
     for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
         spec = '.spec' if kind == 'pods' else '.spec.jobTemplate.spec.template.spec' if kind == 'cronjobs' else '.spec.template.spec'
         metadata = '.metadata' if kind == 'pods' else '.spec.jobTemplate.spec.template.metadata' if kind == 'cronjobs' else '.spec.template.metadata'
@@ -106,11 +106,16 @@ def delivered_pins(base):
                 elif re.fullmatch(r'kodex-image-admission-policy(?:-[a-f0-9]{8,64})?', value):
                     maps.add((fields[0], value))
     for namespace, name in sorted(maps):
-        template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}'
-        values = run(base + ['-n', namespace, 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split()
+        template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}{"|"}{.data.pullRegistryHost}'
+        fields = run(base + ['-n', namespace, 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split('|')
+        require(len(fields) == 2)
+        values = fields[0].split()
         require(values and all(re.fullmatch(r'sha256:[a-f0-9]{64}', v) or re.fullmatch(r'[a-z0-9.:/-]+@sha256:[a-f0-9]{64}', v) for v in values))
         result.update(values)
-    return result
+        if fields[1]:
+            require(re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,252}', fields[1]))
+            hosts.add(fields[1])
+    return result, hosts
 
 
 def target(args):
@@ -125,7 +130,8 @@ def target(args):
     refs = set()
     for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
         refs.update(workload_refs(base, kind))
-    refs.update(delivered_pins(base))
+    pins, hosts = delivered_pins(base)
+    refs.update(pins)
     nodes = []
     for node in sorted(actual_nodes, key=lambda n: n['metadata']['name']):
         name = node['metadata']['name']
@@ -133,10 +139,10 @@ def target(args):
         info = decode(run(['docker', 'inspect', '--format', projection, name]))
         require(info['name'] == '/' + name and info['cluster'] == 'kodex')
         nodes.append({'name': name, 'uid': node['metadata']['uid'], 'container': info['id']})
-    return nodes, refs
+    return nodes, refs, hosts
 
 
-def selected(records, refs):
+def selected(records, refs, hosts=()):
     """Выбирать лишь immutable runner targets без неизвестных aliases и текущих consumers."""
     protected = {r.partition('@')[2] for r in refs if '@sha256:' in r} | {r for r in refs if re.fullmatch(r'sha256:[a-f0-9]{64}', r)}
     result = []
@@ -149,8 +155,9 @@ def selected(records, refs):
         if digest in protected or any(r['name'] in refs for r in group):
             continue
         # Bare config IDs и promoted aliases допускаются только с canonical witness.
-        if any(not (r['name'].startswith(PREFIX) or re.fullmatch(r'sha256:[a-f0-9]{64}', r['name'])
-                    or re.fullmatch(r'[a-z0-9.-]+/kodex/agent-runner@sha256:[a-f0-9]{64}', r['name'])) for r in group):
+        if any(not (r['name'].startswith(PREFIX) or re.fullmatch(r'registry\.local\.kodex/kodex/agent-runner:local-[a-f0-9]{64}', r['name'])
+                    or re.fullmatch(r'sha256:[a-f0-9]{64}', r['name'])
+                    or any(r['name'] == host + '/kodex/agent-runner@' + digest for host in hosts)) for r in group):
             continue
         result.append({'ref': name, 'digest': digest, 'aliases': sorted(group, key=lambda r: r['name'])})
     require(len({r['digest'] for r in result}) == len(result) and len(result) <= 16)
@@ -178,21 +185,22 @@ def main():
     args = parser.parse_args()
     source = git_source()
     helper = images.helper_file(args.helper, args.helper_sha256, source)
-    nodes, refs = target(args)
+    nodes, refs, hosts = target(args)
     if args.mode == 'plan':
         for node in nodes:
             path = images.install_helper(node['container'], helper, args.helper_sha256)
             node['helper'] = path
             records = decode(run(['docker', 'exec', node['container'], path, 'inspect']))
-            node['images'] = selected(records, refs)
+            node['images'] = selected(records, refs, hosts)
         plan = {'schema': SCHEMA, 'source': source, 'clusterUID': args.cluster_uid, 'nodes': nodes,
-                'helperSHA256': args.helper_sha256, 'created': time.time()}
+                'helperSHA256': args.helper_sha256, 'created': time.time(), 'registryHosts': sorted(hosts)}
         write_private(args.plan, plan)
         print(json.dumps({'status': 'PLANNED', 'images': sum(len(n['images']) for n in nodes),
                           'planSHA256': hashlib.sha256(args.plan.read_bytes()).hexdigest()}))
         return
     plan = read_plan(args.plan, args.plan_sha256)
     require(plan['clusterUID'] == args.cluster_uid and plan['helperSHA256'] == args.helper_sha256)
+    require(plan['registryHosts'] == sorted(hosts))
     require([{k: n[k] for k in ('name', 'uid', 'container')} for n in plan['nodes']] == nodes)
     require(args.archives.is_absolute() and args.archives.resolve(strict=True) == args.archives)
     directory = args.archives.stat()
@@ -231,10 +239,10 @@ def main():
             for image in node['images']:
                 require(time.monotonic() < deadline)
                 verify(args.archives / (image['digest'][7:] + '.oci.tar'), image['digest'])
-                fresh_nodes, refs = target(args)
-                require(fresh_nodes == nodes)
+                fresh_nodes, refs, fresh_hosts = target(args)
+                require(fresh_nodes == nodes and fresh_hosts == hosts)
                 records = decode(run(['docker', 'exec', container, path, 'inspect']))
-                require(image in selected(records, refs))
+                require(image in selected(records, refs, hosts))
                 # Aliases уходят первыми; canonical witness сохраняется до конца.
                 aliases = [r for r in image['aliases'] if r['name'] != image['ref']]
                 for record in aliases + [{'name': image['ref'], 'digest': image['digest']}]:

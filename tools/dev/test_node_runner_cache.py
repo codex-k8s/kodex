@@ -22,12 +22,12 @@ class CacheTests(unittest.TestCase):
         def command(args):
             if 'configmap' in args:
                 self.assertIn('kodex-image-admission-policy-aaaaaaaa', args)
-                self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}')
-                return (image + ' ' + digest).encode()
+                self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}{"|"}{.data.pullRegistryHost}')
+                return (image + ' ' + digest + '|pull.example.invalid').encode()
             self.assertNotIn('.env[*].value}', args[-1])
             return ('synthetic|Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
         with patch.object(C, 'run', side_effect=command):
-            self.assertEqual(C.delivered_pins(['kubectl']), {digest, image})
+            self.assertEqual(C.delivered_pins(['kubectl']), ({digest, image}, {'pull.example.invalid'}))
         item = {'name': C.PREFIX + digest, 'digest': digest}
         self.assertEqual(C.selected([item], {digest}), [])
 
@@ -38,10 +38,10 @@ class CacheTests(unittest.TestCase):
             if 'configmap' in args:
                 namespace = args[args.index('-n') + 1]
                 seen.add(namespace)
-                return (first if namespace == 'project-one' else second).encode()
+                return ((first if namespace == 'project-one' else second) + '|').encode()
             return b'project-one||kodex-image-admission-policy-aaaaaaaa\nproject-two||kodex-image-admission-policy-aaaaaaaa\n'
         with patch.object(C, 'run', side_effect=command):
-            self.assertEqual(C.delivered_pins(['kubectl']), {first, second})
+            self.assertEqual(C.delivered_pins(['kubectl']), ({first, second}, set()))
         self.assertEqual(seen, {'project-one', 'project-two'})
 
     def test_oversized_helper_rejected_before_payload_read_or_go_probe(self):
@@ -61,7 +61,7 @@ class CacheTests(unittest.TestCase):
             original, digest = ArchiveTests().fixture(directory)
             archives = root / 'archives'; archives.mkdir(mode=0o700)
             node = {'name': 'synthetic', 'uid': 'synthetic-uid', 'container': 'synthetic-container'}
-            plan = {'clusterUID': 'synthetic-cluster', 'helperSHA256': 'synthetic-helper',
+            plan = {'clusterUID': 'synthetic-cluster', 'helperSHA256': 'synthetic-helper', 'registryHosts': [],
                     'nodes': [dict(node, images=[{'digest': digest, 'ref': C.PREFIX + digest}])]}
             argv = ['node-runner-cache.py', 'export', '--kubectl', 'synthetic', '--kubeconfig', 'synthetic',
                     '--context', 'k3d-kodex', '--cluster-uid', 'synthetic-cluster', '--helper-sha256', 'synthetic-helper',
@@ -72,7 +72,7 @@ class CacheTests(unittest.TestCase):
                 self.assertEqual(command[-1], C.PREFIX + digest)
                 return actual_export([sys.executable, '-c', 'import sys;sys.stdout.buffer.write(open(sys.argv[1],"rb").read())', str(original)], output, **kwargs)
             with patch.object(sys, 'argv', argv), patch.object(C, 'git_source', return_value='synthetic-source'), \
-                 patch.object(C.images, 'helper_file', return_value=b'synthetic'), patch.object(C, 'target', return_value=([node], set())), \
+                 patch.object(C.images, 'helper_file', return_value=b'synthetic'), patch.object(C, 'target', return_value=([node], set(), set())), \
                  patch.object(C, 'read_plan', return_value=plan), patch.object(C, 'export_bytes', side_effect=producer), \
                  contextlib.redirect_stdout(io.StringIO()):
                 C.main()
@@ -124,6 +124,16 @@ class CacheTests(unittest.TestCase):
         image = {'name': C.PREFIX + digest, 'digest': digest}
         foreign = {'name': 'example.invalid/foreign:fixture', 'digest': digest}
         self.assertEqual(C.selected([image, foreign], set()), [])
+
+    def test_exact_local_tag_and_only_proven_promoted_host_selected(self):
+        digest = 'sha256:' + 'a' * 64
+        own = {'name': C.PREFIX + digest, 'digest': digest}
+        tag = {'name': 'registry.local.kodex/kodex/agent-runner:local-' + 'b' * 64, 'digest': digest}
+        promoted = {'name': 'pull.example.invalid/kodex/agent-runner@' + digest, 'digest': digest}
+        self.assertEqual(len(C.selected([own, tag], set())), 1)
+        self.assertEqual(C.selected([own, tag, promoted], set()), [])
+        self.assertEqual(len(C.selected([own, tag, promoted], set(), {'pull.example.invalid'})), 1)
+        self.assertEqual(C.selected([own, tag, promoted], {tag['name']}, {'pull.example.invalid'}), [])
 
     def test_bare_alias_requires_owned_witness_and_remains_protected(self):
         digest = 'sha256:' + 'a' * 64
