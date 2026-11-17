@@ -275,6 +275,8 @@ class ColdCacheTests(unittest.TestCase):
         for args, root, age in (
                 (['audit'], C.ROOT, 72),
                 (['audit', '--profile', 'shared'], C.ROOT, 72),
+                (['audit', '--profile', 'kodex-personal-2145', '--minimum-age-hours', '24'],
+                 Path('/home/s/.cache/kodex-personal-kubernetes-20261114/go-cache'), 24),
                 (['audit', '--profile', 'kodex-realtime-1797'], C.PROFILES['kodex-realtime-1797'], 72),
                 (['audit', '--profile', 'kodex-realtime-1797', '--minimum-age-hours', '24'],
                  C.PROFILES['kodex-realtime-1797'], 24)):

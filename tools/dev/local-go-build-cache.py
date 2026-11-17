@@ -15,6 +15,7 @@ ROOT = Path('/home/s/.cache/go-build')
 PROFILES = {
     'shared': ROOT,
     'kodex-realtime-1797': Path('/home/s/.local/state/kodex-dev/realtime-combined-check.2Jlsd4pc/go-cache'),
+    'kodex-personal-2145': Path('/home/s/.cache/kodex-personal-kubernetes-20261114/go-cache'),
 }
 AGE_HOURS = (24, 72)
 DEFAULT_AGE_HOURS = 72
