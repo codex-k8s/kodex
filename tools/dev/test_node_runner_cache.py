@@ -25,11 +25,24 @@ class CacheTests(unittest.TestCase):
                 self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}')
                 return (image + ' ' + digest).encode()
             self.assertNotIn('.env[*].value}', args[-1])
-            return ('Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
+            return ('synthetic|Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
         with patch.object(C, 'run', side_effect=command):
             self.assertEqual(C.delivered_pins(['kubectl']), {digest, image})
         item = {'name': C.PREFIX + digest, 'digest': digest}
         self.assertEqual(C.selected([item], {digest}), [])
+
+    def test_same_policy_name_is_bound_to_actual_namespace(self):
+        first, second = 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64
+        seen = set()
+        def command(args):
+            if 'configmap' in args:
+                namespace = args[args.index('-n') + 1]
+                seen.add(namespace)
+                return (first if namespace == 'project-one' else second).encode()
+            return b'project-one||kodex-image-admission-policy-aaaaaaaa\nproject-two||kodex-image-admission-policy-aaaaaaaa\n'
+        with patch.object(C, 'run', side_effect=command):
+            self.assertEqual(C.delivered_pins(['kubectl']), {first, second})
+        self.assertEqual(seen, {'project-one', 'project-two'})
 
     def test_oversized_helper_rejected_before_payload_read_or_go_probe(self):
         with tempfile.TemporaryDirectory() as directory:

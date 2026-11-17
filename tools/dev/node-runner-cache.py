@@ -94,20 +94,20 @@ def delivered_pins(base):
         paths = [metadata + '.annotations.kodex\\.dev/agent-runtime-image-digest', metadata + '.annotations.kodex\\.dev/trusted-role-base-digest',
                  spec + '.volumes[*].configMap.name', spec + '.containers[*].envFrom[*].configMapRef.name',
                  spec + '.containers[*].env[*].valueFrom.configMapKeyRef.name']
-        template = '{range .items[*]}{.status.phase}{"|"}' + ''.join('{' + p + '}{" "}' for p in paths) + '{"\\n"}{end}'
+        template = '{range .items[*]}{.metadata.namespace}{"|"}{.status.phase}{"|"}' + ''.join('{' + p + '}{" "}' for p in paths) + '{"\\n"}{end}'
         for line in run(base + ['get', kind, '-A', '-o', 'jsonpath=' + template]).decode().splitlines():
             fields = line.split('|')
-            require(len(fields) == 2)
-            if kind == 'pods' and fields[0] in ('Succeeded', 'Failed'):
+            require(len(fields) == 3 and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}', fields[0]))
+            if kind == 'pods' and fields[1] in ('Succeeded', 'Failed'):
                 continue
-            for value in fields[1].split():
+            for value in fields[2].split():
                 if re.fullmatch(r'sha256:[a-f0-9]{64}', value):
                     result.add(value)
                 elif re.fullmatch(r'kodex-image-admission-policy(?:-[a-f0-9]{8,64})?', value):
-                    maps.add(value)
-    for name in sorted(maps):
+                    maps.add((fields[0], value))
+    for namespace, name in sorted(maps):
         template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}'
-        values = run(base + ['-n', 'kodex-system', 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split()
+        values = run(base + ['-n', namespace, 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split()
         require(values and all(re.fullmatch(r'sha256:[a-f0-9]{64}', v) or re.fullmatch(r'[a-z0-9.:/-]+@sha256:[a-f0-9]{64}', v) for v in values))
         result.update(values)
     return result
