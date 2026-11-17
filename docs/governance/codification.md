@@ -17,6 +17,7 @@ updated: 2026-11-14
 - `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).
 
 - `OPS-DOC-STAGING-CAPACITY-1931` — [Проверка фактической ёмкости staging перед работой](../operations/staging-capacity-preflight-1931.md).
+- `OPS-NODE-RUNNER-CACHE-1977` — [Адресная очистка воспроизводимого runner cache узлов](../operations/node-runner-cache-1977.md).
 
 - `OPS-DOC-1859` — [Публикация CLEAN bundle исходников одним commit](../operations/repository-bundle-publication-1859.md).
 
