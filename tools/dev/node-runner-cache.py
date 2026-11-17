@@ -30,6 +30,26 @@ def git_source():
     return run(['git', 'rev-parse', 'HEAD']).decode().strip()
 
 
+def workload_refs(base, kind):
+    """Читать лишь bounded status/image projection, исключая env и last-applied payload."""
+    root = '.spec' if kind == 'pods' else '.spec.jobTemplate.spec.template.spec' if kind == 'cronjobs' else '.spec.template.spec'
+    template = ('{range .items[*]}{.metadata.uid}{"|"}{.status.phase}{"|"}{.status.succeeded}{"|"}{.status.failed}{"|"}'
+                + '{' + root + '.initContainers[*].image}{" "}{' + root + '.containers[*].image}{" "}'
+                + '{.status.containerStatuses[*].imageID}{"\\n"}{end}')
+    raw = run(base + ['get', kind, '-A', '-o', 'jsonpath=' + template]).decode('utf-8')
+    result = set()
+    for line in raw.splitlines():
+        fields = line.split('|')
+        require(len(fields) == 5 and fields[0] and len(fields[0]) <= 256)
+        _, phase, succeeded, failed, image_text = fields
+        if kind == 'pods' and phase in ('Succeeded', 'Failed'):
+            continue
+        refs = image_text.split()
+        require(refs and len(refs) <= 256 and all(len(ref) <= 1024 for ref in refs))
+        result.update(ref.removeprefix('docker-pullable://') for ref in refs)
+    return result
+
+
 def target(args):
     """Сверить UID target и собрать только image refs работающих либо будущих workloads."""
     require(args.context == 'k3d-kodex')
@@ -41,19 +61,7 @@ def target(args):
     require({n['metadata']['name'] for n in actual_nodes} == set(NODES))
     refs = set()
     for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
-        for item in get('get', kind, '-A', '-o', 'json')['items']:
-            state = item.get('status', {})
-            if kind == 'pods' and state.get('phase') in ('Succeeded', 'Failed'):
-                continue
-            if kind == 'jobs' and (state.get('succeeded') or state.get('failed')):
-                continue
-            spec = item['spec']
-            if kind == 'cronjobs':
-                spec = spec['jobTemplate']['spec']
-            if kind != 'pods':
-                spec = spec['template']['spec']
-            refs.update(c['image'] for c in spec.get('initContainers', []) + spec['containers'])
-            refs.update(c.get('imageID', '').removeprefix('docker-pullable://') for c in state.get('containerStatuses', []))
+        refs.update(workload_refs(base, kind))
     nodes = []
     for node in sorted(actual_nodes, key=lambda n: n['metadata']['name']):
         name = node['metadata']['name']

@@ -24,7 +24,7 @@ Issue #1977, связанная доступность личного конту
 | Lost ACK | Нет положительного ABSENT | Остановка, readback и новый plan; blind replay запрещён |
 
 Helper сохраняет образы существующих контейнеров. Отдельно защищены refs
-нетерминальных Pods, Deployment/StatefulSet/DaemonSet, незавершённых Jobs и
+нетерминальных Pods, Deployment/StatefulSet/DaemonSet, Jobs и
 CronJobs, включая init containers. Неизвестный alias сохраняет всю группу.
 Атомарность Kubernetes create Pod и удаления image name не обещается:
 containerd leases защищают занятый content; новый конкурентный consumer требует

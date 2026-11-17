@@ -3,6 +3,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('node_cache', Path(__file__).with_name('node-runner-cache.py'))
 C = importlib.util.module_from_spec(SPEC)
@@ -10,6 +11,20 @@ SPEC.loader.exec_module(C)
 
 
 class CacheTests(unittest.TestCase):
+    def test_projection_retains_pending_and_init_images_without_private_payload(self):
+        raw = b'uid-one|Pending|||example.invalid/init example.invalid/main docker-pullable://example.invalid/main@sha256:aaa\nuid-two|Failed|||example.invalid/old\n'
+        with patch.object(C, 'run', return_value=raw) as command:
+            refs = C.workload_refs(['kubectl', '--context', 'synthetic'], 'pods')
+        self.assertEqual(refs, {'example.invalid/init', 'example.invalid/main', 'example.invalid/main@sha256:aaa'})
+        template = command.call_args.args[0][-1]
+        self.assertNotIn('env', template)
+        self.assertNotIn('annotations', template)
+
+    def test_projection_malformed_or_missing_container_images_rejected(self):
+        for raw in (b'uid|Pending|||\n', b'uid|Pending|||image|unexpected\n'):
+            with patch.object(C, 'run', return_value=raw), self.assertRaises(ValueError):
+                C.workload_refs(['kubectl'], 'pods')
+
     def test_only_old_exact_owned_runner_selected(self):
         digest = 'sha256:' + 'a' * 64
         ref = C.PREFIX + digest
