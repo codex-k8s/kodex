@@ -16,6 +16,12 @@ Issue #1977, связанная доступность личного конту
 `tools/dev/installation-runtime` с SHA256 и clean VCS provenance того же source.
 Данные, PVC, registry objects и контейнеры в удаление не входят.
 
+Helper собирается из отдельного чистого checkout с `.git`-каталогом:
+`CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=true` в его module.
+Перед plan проверяются `go version -m` (exact revision, modified=false) и
+отсутствие ELF interpreter. Закреплённый Go не обнаруживает `.git`-файл worktree;
+отсутствующая provenance закрыто отклоняется и не заменяется переданным SHA.
+
 | Шаг | Проверки | Эффект |
 | --- | --- | --- |
 | Plan | Cluster/node UID, Docker container ID/cluster label, текущие workload refs и все aliases | Private план и временный проверенный helper; без image deletion |
@@ -25,7 +31,10 @@ Issue #1977, связанная доступность личного конту
 
 Helper сохраняет образы существующих контейнеров. Отдельно защищены refs
 нетерминальных Pods, Deployment/StatefulSet/DaemonSet, Jobs и
-CronJobs, включая init containers. Неизвестный alias сохраняет всю группу.
+CronJobs, включая init/ephemeral spec и фактические imageID всех трёх статусов.
+Factory/base pins сохраняются также по точным template annotations и двум
+известным keys текущих подключённых image-admission ConfigMaps. Env values и
+полное содержимое ConfigMaps не читаются. Неизвестный alias сохраняет всю группу.
 Атомарность Kubernetes create Pod и удаления image name не обещается:
 containerd leases защищают занятый content; новый конкурентный consumer требует
 обычного восстановления из registry/сохранённого archive.

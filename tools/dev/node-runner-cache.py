@@ -2,6 +2,7 @@
 """Адресные plan/export/apply старых runner caches с сохранением полного OCI."""
 
 import argparse
+import io
 import hashlib
 import json
 import os
@@ -52,7 +53,9 @@ def export_bytes(command, output, limit=8 << 30, seconds=240):
 
 def run(args, timeout=30):
     """Ограничить команды и не выдавать daemon errors либо kubeconfig."""
-    return images.command(args, timeout=timeout)
+    output = io.BytesIO()
+    export_bytes(args, output, limit=4 << 20, seconds=timeout)
+    return output.getvalue()
 
 
 def git_source():
@@ -82,6 +85,34 @@ def workload_refs(base, kind):
     return result
 
 
+def delivered_pins(base):
+    """Сохранить текущие factory/base pins, даже когда соответствующий Pod отсутствует."""
+    result, maps = set(), set()
+    for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
+        spec = '.spec' if kind == 'pods' else '.spec.jobTemplate.spec.template.spec' if kind == 'cronjobs' else '.spec.template.spec'
+        metadata = '.metadata' if kind == 'pods' else '.spec.jobTemplate.spec.template.metadata' if kind == 'cronjobs' else '.spec.template.metadata'
+        paths = [metadata + '.annotations.kodex\\.dev/agent-runtime-image-digest', metadata + '.annotations.kodex\\.dev/trusted-role-base-digest',
+                 spec + '.volumes[*].configMap.name', spec + '.containers[*].envFrom[*].configMapRef.name',
+                 spec + '.containers[*].env[*].valueFrom.configMapKeyRef.name']
+        template = '{range .items[*]}{.status.phase}{"|"}' + ''.join('{' + p + '}{" "}' for p in paths) + '{"\\n"}{end}'
+        for line in run(base + ['get', kind, '-A', '-o', 'jsonpath=' + template]).decode().splitlines():
+            fields = line.split('|')
+            require(len(fields) == 2)
+            if kind == 'pods' and fields[0] in ('Succeeded', 'Failed'):
+                continue
+            for value in fields[1].split():
+                if re.fullmatch(r'sha256:[a-f0-9]{64}', value):
+                    result.add(value)
+                elif re.fullmatch(r'kodex-image-admission-policy(?:-[a-f0-9]{8,64})?', value):
+                    maps.add(value)
+    for name in sorted(maps):
+        template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}'
+        values = run(base + ['-n', 'kodex-system', 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split()
+        require(values and all(re.fullmatch(r'sha256:[a-f0-9]{64}', v) or re.fullmatch(r'[a-z0-9.:/-]+@sha256:[a-f0-9]{64}', v) for v in values))
+        result.update(values)
+    return result
+
+
 def target(args):
     """Сверить UID target и собрать только image refs работающих либо будущих workloads."""
     require(args.context == 'k3d-kodex')
@@ -94,6 +125,7 @@ def target(args):
     refs = set()
     for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
         refs.update(workload_refs(base, kind))
+    refs.update(delivered_pins(base))
     nodes = []
     for node in sorted(actual_nodes, key=lambda n: n['metadata']['name']):
         name = node['metadata']['name']
@@ -106,7 +138,7 @@ def target(args):
 
 def selected(records, refs):
     """Выбирать лишь immutable runner targets без неизвестных aliases и текущих consumers."""
-    protected = {r.partition('@')[2] for r in refs if '@sha256:' in r}
+    protected = {r.partition('@')[2] for r in refs if '@sha256:' in r} | {r for r in refs if re.fullmatch(r'sha256:[a-f0-9]{64}', r)}
     result = []
     for record in records:
         name, digest = record['name'], record['digest']

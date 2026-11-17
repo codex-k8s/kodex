@@ -7,6 +7,7 @@ import io
 import sys
 import tempfile
 import contextlib
+import os
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('node_cache', Path(__file__).with_name('node-runner-cache.py'))
@@ -15,6 +16,31 @@ SPEC.loader.exec_module(C)
 
 
 class CacheTests(unittest.TestCase):
+    def test_delivered_factory_and_base_pins_are_projected_without_other_data(self):
+        digest = 'sha256:' + 'a' * 64
+        image = 'example.invalid/kodex/agent-runner@' + digest
+        def command(args):
+            if 'configmap' in args:
+                self.assertIn('kodex-image-admission-policy-aaaaaaaa', args)
+                self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}')
+                return (image + ' ' + digest).encode()
+            self.assertNotIn('.env[*].value}', args[-1])
+            return ('Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
+        with patch.object(C, 'run', side_effect=command):
+            self.assertEqual(C.delivered_pins(['kubectl']), {digest, image})
+        item = {'name': C.PREFIX + digest, 'digest': digest}
+        self.assertEqual(C.selected([item], {digest}), [])
+
+    def test_oversized_helper_rejected_before_payload_read_or_go_probe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'helper'
+            with path.open('wb') as stream:
+                stream.truncate(33 << 20)
+            with patch.object(Path, 'read_bytes', side_effect=AssertionError('unbounded read')), patch.object(C.images, 'command') as command:
+                with self.assertRaises(ValueError):
+                    C.images.helper_file(path, 'synthetic', 'synthetic')
+                command.assert_not_called()
+
     def test_main_export_streams_actual_producer_into_verified_owned_archive(self):
         from test_node_runner_archive import ArchiveTests
         with tempfile.TemporaryDirectory() as directory:
