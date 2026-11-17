@@ -85,9 +85,20 @@ def workload_refs(base, kind):
     return result
 
 
+def trusted_policy_maps(base):
+    """Вывести deletion authority только из текущего canonical system control-plane."""
+    template = '{.metadata.uid}{"|"}{.metadata.labels.app\\.kubernetes\\.io/part-of}{"|"}{.spec.template.spec.containers[?(@.name=="control-plane")].env[*].valueFrom.configMapKeyRef.name}'
+    fields = run(base + ['-n', 'kodex-system', 'get', 'deployment', 'control-plane', '-o', 'jsonpath=' + template]).decode().split('|')
+    require(len(fields) == 3 and fields[0] and fields[1] == 'kodex')
+    result = {name for name in fields[2].split() if re.fullmatch(r'kodex-image-admission-policy(?:-[a-f0-9]{8,64})?', name)}
+    require(result)
+    return result
+
+
 def delivered_pins(base):
     """Сохранить текущие factory/base pins, даже когда соответствующий Pod отсутствует."""
     result, maps, hosts = set(), set(), set()
+    trusted = trusted_policy_maps(base)
     for kind in ('pods', 'deployments', 'statefulsets', 'daemonsets', 'jobs', 'cronjobs'):
         spec = '.spec' if kind == 'pods' else '.spec.jobTemplate.spec.template.spec' if kind == 'cronjobs' else '.spec.template.spec'
         metadata = '.metadata' if kind == 'pods' else '.spec.jobTemplate.spec.template.metadata' if kind == 'cronjobs' else '.spec.template.metadata'
@@ -106,15 +117,18 @@ def delivered_pins(base):
                 elif re.fullmatch(r'kodex-image-admission-policy(?:-[a-f0-9]{8,64})?', value):
                     maps.add((fields[0], value))
     for namespace, name in sorted(maps):
-        template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}{"|"}{.data.pullRegistryHost}'
+        template = '{.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}'
         fields = run(base + ['-n', namespace, 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split('|')
-        require(len(fields) == 2)
+        require(len(fields) == 1)
         values = fields[0].split()
         require(values and all(re.fullmatch(r'sha256:[a-f0-9]{64}', v) or re.fullmatch(r'[a-z0-9.:/-]+@sha256:[a-f0-9]{64}', v) for v in values))
         result.update(values)
-        if fields[1]:
-            require(re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,252}', fields[1]))
-            hosts.add(fields[1])
+        if namespace == 'kodex-system' and name in trusted:
+            template = '{.immutable}{"|"}{.metadata.labels.app\\.kubernetes\\.io/part-of}{"|"}{.data.pullRegistryHost}'
+            authority = run(base + ['-n', namespace, 'get', 'configmap', name, '-o', 'jsonpath=' + template]).decode().split('|')
+            require(len(authority) == 3 and authority[0] == 'true' and authority[1] == 'kodex'
+                    and re.fullmatch(r'[a-z0-9][a-z0-9.-]{0,252}', authority[2]))
+            hosts.add(authority[2])
     return result, hosts
 
 

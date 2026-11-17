@@ -34,8 +34,10 @@ Helper сохраняет образы существующих контейне
 CronJobs, включая init/ephemeral spec и фактические imageID всех трёх статусов.
 Factory/base pins сохраняются также по точным template annotations и двум
 известным keys текущих подключённых image-admission ConfigMaps. Exact promoted
-registry host выводится из отдельного известного `pullRegistryHost` key этих
-же ConfigMaps и закрепляется в плане; alias иного host сохраняет всю группу.
+registry host выводится из `pullRegistryHost` только immutable Kodex-owned
+system policy, подключённой текущим canonical control-plane Deployment в
+`kodex-system`, и закрепляется в плане. Проектные ConfigMaps могут лишь
+защищать digest; они не назначают deletion authority. Alias иного host сохраняет всю группу.
 Canonical `:local-<sha256>` tag допускается только для того же exact target.
 Env values и
 полное содержимое ConfigMaps не читаются. Неизвестный alias сохраняет всю группу.

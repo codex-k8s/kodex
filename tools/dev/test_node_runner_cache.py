@@ -22,11 +22,13 @@ class CacheTests(unittest.TestCase):
         def command(args):
             if 'configmap' in args:
                 self.assertIn('kodex-image-admission-policy-aaaaaaaa', args)
-                self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}{"|"}{.data.pullRegistryHost}')
-                return (image + ' ' + digest + '|pull.example.invalid').encode()
+                if '.pullRegistryHost' in args[-1]:
+                    return b'true|kodex|pull.example.invalid'
+                self.assertEqual(args[-1], 'jsonpath={.data.nodeReadbackImage}{" "}{.data.trustedRoleBaseDigest}')
+                return (image + ' ' + digest).encode()
             self.assertNotIn('.env[*].value}', args[-1])
-            return ('synthetic|Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
-        with patch.object(C, 'run', side_effect=command):
+            return ('kodex-system|Running|' + digest + ' kodex-image-admission-policy-aaaaaaaa').encode()
+        with patch.object(C, 'run', side_effect=command), patch.object(C, 'trusted_policy_maps', return_value={'kodex-image-admission-policy-aaaaaaaa'}):
             self.assertEqual(C.delivered_pins(['kubectl']), ({digest, image}, {'pull.example.invalid'}))
         item = {'name': C.PREFIX + digest, 'digest': digest}
         self.assertEqual(C.selected([item], {digest}), [])
@@ -38,11 +40,20 @@ class CacheTests(unittest.TestCase):
             if 'configmap' in args:
                 namespace = args[args.index('-n') + 1]
                 seen.add(namespace)
-                return ((first if namespace == 'project-one' else second) + '|').encode()
+                self.assertNotIn('pullRegistryHost', args[-1])
+                return (first if namespace == 'project-one' else second).encode()
             return b'project-one||kodex-image-admission-policy-aaaaaaaa\nproject-two||kodex-image-admission-policy-aaaaaaaa\n'
-        with patch.object(C, 'run', side_effect=command):
+        with patch.object(C, 'run', side_effect=command), patch.object(C, 'trusted_policy_maps', return_value={'kodex-image-admission-policy-aaaaaaaa'}):
             self.assertEqual(C.delivered_pins(['kubectl']), ({first, second}, set()))
         self.assertEqual(seen, {'project-one', 'project-two'})
+
+    def test_only_canonical_system_producer_can_assign_registry_authority(self):
+        with patch.object(C, 'run', return_value=b'synthetic-uid|kodex|kodex-image-admission-policy-aaaaaaaa') as run:
+            self.assertEqual(C.trusted_policy_maps(['kubectl']), {'kodex-image-admission-policy-aaaaaaaa'})
+            self.assertIn('kodex-system', run.call_args.args[0])
+            self.assertIn('control-plane', run.call_args.args[0])
+        with patch.object(C, 'run', return_value=b'synthetic-uid|foreign|kodex-image-admission-policy-aaaaaaaa'), self.assertRaises(ValueError):
+            C.trusted_policy_maps(['kubectl'])
 
     def test_oversized_helper_rejected_before_payload_read_or_go_probe(self):
         with tempfile.TemporaryDirectory() as directory:
