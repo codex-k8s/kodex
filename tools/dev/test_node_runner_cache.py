@@ -95,10 +95,10 @@ class CacheTests(unittest.TestCase):
             C.export_bytes([sys.executable, '-c', 'import time; time.sleep(5)'], io.BytesIO(), seconds=0.05)
 
     def test_projection_retains_pending_and_init_images_without_private_payload(self):
-        raw = b'uid-one|Pending|||example.invalid/init example.invalid/main docker-pullable://example.invalid/main@sha256:aaa\nuid-two|Failed|||example.invalid/old\n'
+        raw = b'uid-one|Pending|||example.invalid/init example.invalid/main docker-pullable://example.invalid/main@sha256:aaa containerd://sha256:bbb docker://sha256:ccc\nuid-two|Failed|||example.invalid/old\n'
         with patch.object(C, 'run', return_value=raw) as command:
             refs = C.workload_refs(['kubectl', '--context', 'synthetic'], 'pods')
-        self.assertEqual(refs, {'example.invalid/init', 'example.invalid/main', 'example.invalid/main@sha256:aaa'})
+        self.assertEqual(refs, {'example.invalid/init', 'example.invalid/main', 'example.invalid/main@sha256:aaa', 'sha256:bbb', 'sha256:ccc'})
         template = command.call_args.args[0][-1]
         self.assertNotIn('env', template)
         self.assertNotIn('annotations', template)

@@ -81,7 +81,7 @@ def workload_refs(base, kind):
             continue
         refs = image_text.split()
         require(refs and len(refs) <= 256 and all(len(ref) <= 1024 for ref in refs))
-        result.update(ref.removeprefix('docker-pullable://') for ref in refs)
+        result.update(ref.removeprefix('docker-pullable://').removeprefix('containerd://').removeprefix('docker://') for ref in refs)
     return result
 
 
