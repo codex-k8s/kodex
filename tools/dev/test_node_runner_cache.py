@@ -5,6 +5,8 @@ from pathlib import Path
 import unittest
 import io
 import sys
+import tempfile
+import contextlib
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('node_cache', Path(__file__).with_name('node-runner-cache.py'))
@@ -13,6 +15,33 @@ SPEC.loader.exec_module(C)
 
 
 class CacheTests(unittest.TestCase):
+    def test_main_export_streams_actual_producer_into_verified_owned_archive(self):
+        from test_node_runner_archive import ArchiveTests
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            original, digest = ArchiveTests().fixture(directory)
+            archives = root / 'archives'; archives.mkdir(mode=0o700)
+            node = {'name': 'synthetic', 'uid': 'synthetic-uid', 'container': 'synthetic-container'}
+            plan = {'clusterUID': 'synthetic-cluster', 'helperSHA256': 'synthetic-helper',
+                    'nodes': [dict(node, images=[{'digest': digest, 'ref': C.PREFIX + digest}])]}
+            argv = ['node-runner-cache.py', 'export', '--kubectl', 'synthetic', '--kubeconfig', 'synthetic',
+                    '--context', 'k3d-kodex', '--cluster-uid', 'synthetic-cluster', '--helper-sha256', 'synthetic-helper',
+                    '--helper', str(root / 'helper'), '--plan', str(root / 'plan'), '--archives', str(archives),
+                    '--journal', str(root / 'journal'), '--plan-sha256', 'synthetic-plan']
+            actual_export = C.export_bytes
+            def producer(command, output, **kwargs):
+                self.assertEqual(command[-1], C.PREFIX + digest)
+                return actual_export([sys.executable, '-c', 'import sys;sys.stdout.buffer.write(open(sys.argv[1],"rb").read())', str(original)], output, **kwargs)
+            with patch.object(sys, 'argv', argv), patch.object(C, 'git_source', return_value='synthetic-source'), \
+                 patch.object(C.images, 'helper_file', return_value=b'synthetic'), patch.object(C, 'target', return_value=([node], set())), \
+                 patch.object(C, 'read_plan', return_value=plan), patch.object(C, 'export_bytes', side_effect=producer), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                C.main()
+            output = archives / (digest[7:] + '.oci.tar')
+            self.assertEqual(output.read_bytes(), original.read_bytes())
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+            self.assertFalse((root / 'journal').exists())
+
     def test_actual_export_process_has_byte_budget_and_positive_join(self):
         output = io.BytesIO()
         self.assertEqual(C.export_bytes([sys.executable, '-c', 'print("synthetic")'], output, limit=64, seconds=2), 10)

@@ -175,7 +175,7 @@ def main():
                     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
                     with os.fdopen(fd, 'wb') as output:
                         export_bytes(['docker', 'exec', node['container'], 'timeout', '240', 'ctr', '-n', 'k8s.io', 'images', 'export',
-                                      '--platform', 'linux/amd64', '--skip-manifest-json', '-', image['ref']])
+                                      '--platform', 'linux/amd64', '--skip-manifest-json', '-', image['ref']], output)
                         output.flush(); os.fsync(output.fileno())
                 verify(path, image['digest'])
                 parent = os.open(args.archives, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
