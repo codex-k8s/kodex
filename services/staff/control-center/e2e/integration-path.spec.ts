@@ -12,7 +12,9 @@ import { replaceAuthenticatedCookies } from "../../../../tools/dev/owner-session
 
 import type {
   AgentRuntimeConfigurationView,
+  IntegrationGrantInput,
   ModelCapabilityPage,
+  PersonalIntegrationCredential,
   ProviderAccountBlockerPage,
   ProviderAccountDeletion,
 } from "../src/shared/api/generated/openapi";
@@ -96,6 +98,7 @@ interface Connection extends VersionedRef {
   readonly name: string;
   readonly state: string;
   readonly credentialsConfigured: boolean;
+  readonly credentialPolicy: "PROJECT_SHARED" | "INITIATOR_REQUIRED";
   readonly publicConfiguration: Readonly<Record<string, unknown>>;
 }
 
@@ -136,6 +139,7 @@ interface SyntheticDiagnostic {
 }
 
 interface GitHubRepository {
+  readonly id: number;
   readonly full_name: string;
   readonly private: boolean;
 }
@@ -217,12 +221,14 @@ test.describe("deployed local integration path", () => {
       connection,
       agent.ref,
       "synthetic.journal.read",
+      "NONE",
     );
     connection = await changeGrant(
       page,
       connection,
       agent.ref,
       "synthetic.journal.write",
+      "HUMAN_EACH_EFFECT",
     );
 
     const readRun = await createRun(
@@ -327,6 +333,7 @@ test.describe("deployed local integration path", () => {
     let token: string | undefined = await readGitHubToken();
     const marker = `kodex-integration-e2e:${environment.resourcePrefix}`;
     let cleanupIssueNumber = 0;
+    let credentialPath: string | undefined;
 
     try {
       const repository = await githubRequest<GitHubRepository>(
@@ -337,6 +344,9 @@ test.describe("deployed local integration path", () => {
         full_name: `${github.owner}/${github.repository}`,
         private: true,
       });
+      expect(Number.isSafeInteger(repository.id) && repository.id > 0).toBe(
+        true,
+      );
       expect(await findGitHubMarkerIssues(token, marker)).toHaveLength(0);
 
       await gotoWithRetry(page, "/projects");
@@ -374,48 +384,109 @@ test.describe("deployed local integration path", () => {
         body: {
           definitionKey: "github",
           name: `${environment.resourcePrefix} — private GitHub fixture`,
-          publicConfiguration: {
-            owner: github.owner,
-            repository: github.repository,
-          },
+          publicConfiguration: { scope_kind: "ALL_ACCESSIBLE" },
         },
         expectedStatus: 201,
       });
-      connection = await mutateAPI<Connection>(page, {
-        method: "PUT",
-        path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/credential`,
-        body: { value: token },
-        version: connection.version,
-        expectedStatus: 200,
-      });
-      expect(connection.credentialsConfigured).toBe(true);
-      connection = await testConnection(page, connection);
+      expect(connection.credentialPolicy).toBe("INITIATOR_REQUIRED");
+      expect(connection.publicConfiguration.scope_kind).toBe("ALL_ACCESSIBLE");
+      expect(connection.credentialsConfigured).toBe(false);
       connection = await changeGrant(
         page,
         connection,
         agent.ref,
         "github.repository.metadata.read",
+        "NONE",
       );
       connection = await changeGrant(
         page,
         connection,
         agent.ref,
         "github.issue.create",
+        "HUMAN_EACH_EFFECT",
       );
 
+      const personalPath = `/api/v1/me/integration-connections/${encodeURIComponent(connection.ref)}/credential`;
+      let credential = await mutateAPI<PersonalIntegrationCredential>(page, {
+        method: "POST",
+        path: personalPath,
+        body: { expectedConnectionVersion: connection.version },
+        expectedStatus: 201,
+      });
+      credentialPath = personalPath;
+      expect(credential.state).toBe("NOT_CONFIGURED");
+      credential = await mutateAPI<PersonalIntegrationCredential>(page, {
+        method: "PUT",
+        path: personalPath,
+        body: { expectedConnectionVersion: connection.version, value: token },
+        version: credential.version,
+        expectedStatus: 200,
+      });
+      expect(credential.state).toBe("CHECK_REQUIRED");
+
+      // Источник выбора — completed owner discovery. REST используется
+      // отдельно как независимая сверка точного private fixture.
+      const discovered = await findPersonalGitHubFixture(
+        page,
+        personalPath,
+        connection,
+        credential,
+        repository,
+      );
+      expect(discovered.id).toBe(repository.id);
+      expect(discovered.fullName).toBe(repository.full_name);
+      expect(discovered.private).toBe(true);
+      expect(discovered.archived).toBe(false);
+      const resource = {
+        repository_id: discovered.id,
+        repository_full_name: discovered.fullName,
+      };
+      const readInvocation = {
+        connection_ref: connection.ref,
+        capability_key: "github.repository.metadata.read",
+        input: resource,
+      };
       const readRun = await createRun(
         page,
         project.ref,
         agent.ref,
-        "GitHub metadata READ",
-        {
-          connection_ref: connection.ref,
-          capability_key: "github.repository.metadata.read",
-          input: {},
-        },
+        "GitHub ALL_ACCESSIBLE metadata READ",
+        readInvocation,
       );
-      await waitForTerminalRun(page, readRun.ref, "SUCCEEDED");
+      const readTerminal = await waitForTerminalRun(
+        page,
+        readRun.ref,
+        "SUCCEEDED",
+      );
+      expect(readTerminal.gateRefs).toHaveLength(0);
       await expectIntegrationToolCall(page, readRun.ref, "SUCCEEDED");
+
+      const allAccessibleVersion = connection.version;
+      connection = await updateConnection(page, connection, {
+        name: connection.name,
+        publicConfiguration: {
+          scope_kind: "SELECTED",
+          repositories: JSON.stringify([
+            { id: discovered.id, full_name: discovered.fullName },
+          ]),
+        },
+      });
+      expect(connection.version).toBe(allAccessibleVersion + 1);
+      expect(connection.publicConfiguration.scope_kind).toBe("SELECTED");
+      expect(connection.credentialPolicy).toBe("INITIATOR_REQUIRED");
+      expect(connection.credentialsConfigured).toBe(false);
+      credential = await readAPI<PersonalIntegrationCredential>(
+        page,
+        personalPath,
+      );
+      expect(credential.state).toBe("CHECK_REQUIRED");
+      expect(credential.githubDiscovery).toBeUndefined();
+      await checkPersonalGitHubCredential(
+        page,
+        personalPath,
+        connection,
+        credential,
+      );
 
       const title = `[Kodex E2E] ${environment.resourcePrefix}`;
       const writeRun = await createRun(
@@ -427,6 +498,7 @@ test.describe("deployed local integration path", () => {
           connection_ref: connection.ref,
           capability_key: "github.issue.create",
           input: {
+            ...resource,
             title,
             body: `Disposable local integration fixture.\n\n<!-- ${marker} -->`,
           },
@@ -452,24 +524,44 @@ test.describe("deployed local integration path", () => {
       expect(issue).toMatchObject({ title, state: "open" });
       if (!issue) throw new Error("GitHub issue readback is unavailable");
       cleanupIssueNumber = issue.number;
+
+      await revokePersonalGitHubCredential(page, personalPath);
+      credentialPath = undefined;
+      await expect(
+        createRun(
+          page,
+          project.ref,
+          agent.ref,
+          "GitHub READ после отзыва",
+          readInvocation,
+        ),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: "INTEGRATION_CREDENTIALS_REQUIRED",
+      });
     } finally {
-      if (token) {
-        const issues =
-          cleanupIssueNumber > 0
-            ? [{ number: cleanupIssueNumber }]
-            : await findGitHubMarkerIssues(token, marker).catch(() => []);
-        for (const issue of issues) {
-          await githubRequest<GitHubIssue>(
-            token,
-            `${githubRepositoryPath(github)}/issues/${String(issue.number)}`,
-            {
-              method: "PATCH",
-              body: { state: "closed", state_reason: "not_planned" },
-            },
-          );
+      try {
+        if (credentialPath)
+          await revokePersonalGitHubCredential(page, credentialPath);
+      } finally {
+        if (token) {
+          const issues =
+            cleanupIssueNumber > 0
+              ? [{ number: cleanupIssueNumber }]
+              : await findGitHubMarkerIssues(token, marker).catch(() => []);
+          for (const issue of issues) {
+            await githubRequest<GitHubIssue>(
+              token,
+              `${githubRepositoryPath(github)}/issues/${String(issue.number)}`,
+              {
+                method: "PATCH",
+                body: { state: "closed", state_reason: "not_planned" },
+              },
+            );
+          }
         }
+        token = undefined;
       }
-      token = undefined;
     }
   });
 
@@ -795,6 +887,108 @@ async function createAndTestConnection(
   return testConnection(page, connection);
 }
 
+// Poll перечитывает только собственный binding и принимает единственный
+// completion связанной попытки при неизменном connection version.
+async function checkPersonalGitHubCredential(
+  page: Page,
+  path: string,
+  connection: Connection,
+  credential: PersonalIntegrationCredential,
+  githubDiscoveryPage?: number,
+): Promise<PersonalIntegrationCredential> {
+  const checking = await mutateAPI<PersonalIntegrationCredential>(page, {
+    method: "POST",
+    path: `${path}/test`,
+    body: {
+      expectedConnectionVersion: connection.version,
+      ...(githubDiscoveryPage === undefined ? {} : { githubDiscoveryPage }),
+    },
+    version: credential.version,
+    expectedStatus: 200,
+  });
+  expect(checking.state).toBe("CHECKING");
+  expect(checking.bindingRef).toBe(credential.bindingRef);
+  expect(checking.version).toBe(credential.version + 1);
+  let completed: PersonalIntegrationCredential | undefined;
+  await expect
+    .poll(
+      async () => {
+        const current = await readAPIDuringPoll<PersonalIntegrationCredential>(
+          page,
+          path,
+        );
+        if (!current) return "CHECKING";
+        if (
+          current.bindingRef !== checking.bindingRef ||
+          current.connectionRef !== connection.ref ||
+          current.connectionVersion !== connection.version
+        )
+          throw new Error("GitHub personal credential binding changed");
+        if (current.state === "CHECKING") return current.state;
+        if (
+          current.state !== "READY" ||
+          current.version !== checking.version + 1
+        )
+          throw new Error("GitHub personal credential check did not complete");
+        completed = current;
+        return current.state;
+      },
+      { timeout: 45_000, intervals: [250, 1_000, 2_000] },
+    )
+    .toBe("READY");
+  if (!completed) throw new Error("GitHub personal check readback is missing");
+  return completed;
+}
+
+async function findPersonalGitHubFixture(
+  page: Page,
+  path: string,
+  connection: Connection,
+  credential: PersonalIntegrationCredential,
+  fixture: GitHubRepository,
+) {
+  for (let cursor = 1; cursor <= 100; cursor += 1) {
+    credential = await checkPersonalGitHubCredential(
+      page,
+      path,
+      connection,
+      credential,
+      cursor,
+    );
+    const discovery = credential.githubDiscovery;
+    if (
+      !discovery ||
+      discovery.page !== cursor ||
+      ![0, cursor + 1].includes(discovery.nextPage)
+    )
+      throw new Error("GitHub personal discovery cursor is invalid");
+    const repository = discovery.items.find(
+      (item) => item.id === fixture.id && item.fullName === fixture.full_name,
+    );
+    if (repository) return repository;
+    if (discovery.nextPage === 0) break;
+  }
+  throw new Error("GitHub private fixture is missing from personal discovery");
+}
+
+async function revokePersonalGitHubCredential(
+  page: Page,
+  path: string,
+): Promise<void> {
+  const current = await readAPI<PersonalIntegrationCredential>(page, path);
+  if (current.state === "REVOKED") return;
+  const revoked = await mutateAPI<PersonalIntegrationCredential>(page, {
+    method: "POST",
+    path: `${path}/revoke`,
+    body: {},
+    version: current.version,
+    expectedStatus: 200,
+  });
+  expect(revoked.bindingRef).toBe(current.bindingRef);
+  expect(revoked.state).toBe("REVOKED");
+  expect(revoked.version).toBe(current.version + 1);
+}
+
 async function testConnection(
   page: Page,
   connection: Connection,
@@ -900,11 +1094,18 @@ async function changeGrant(
   connection: Connection,
   agentRef: string,
   capabilityKey: string,
+  approvalPolicy: IntegrationGrantInput["approvalPolicy"],
 ): Promise<Connection> {
+  const body: IntegrationGrantInput = {
+    capabilityKey,
+    agentRef,
+    enabled: true,
+    approvalPolicy,
+  };
   return mutateAPI<Connection>(page, {
     method: "POST",
     path: `/api/v1/integration-connections/${encodeURIComponent(connection.ref)}/grants`,
-    body: { capabilityKey, agentRef, enabled: true },
+    body,
     version: connection.version,
     expectedStatus: 200,
   });
@@ -1191,7 +1392,7 @@ async function readAPIDuringPoll<T>(
 class APIMutationFailure extends Error {
   constructor(
     readonly status: number,
-    code: string,
+    readonly code: string,
   ) {
     super(`API mutation failed: status=${String(status)} code=${code}`);
   }
