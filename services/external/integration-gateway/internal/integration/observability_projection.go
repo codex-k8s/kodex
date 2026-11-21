@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 )
@@ -125,7 +126,7 @@ func observabilityMetricProjection(operation string, raw []byte) (any, error) {
 
 // observabilityProjection dispatches finite safe result types; rules/alerts omit expressions, annotations, diagnostic errors, source files and generator URLs.
 // observabilityProjection выбирает конечные безопасные result types; rules/alerts не содержат expressions, annotations, diagnostics, source files и generator URLs.
-func observabilityProjection(operation string, raw []byte) (any, error) {
+func observabilityProjection(provider, operation string, raw []byte) (any, error) {
 	invalid := &SafeError{Code: providerResponseInvalidCode}
 	if strings.HasPrefix(operation, "query.") {
 		return observabilityMetricProjection(operation, raw)
@@ -157,18 +158,7 @@ func observabilityProjection(operation string, raw []byte) (any, error) {
 		return map[string]any{"items": values}, nil
 	}
 	if operation == "alerts.list" {
-		var data struct {
-			Alerts []observabilityAlert `json:"alerts"`
-		}
-		if observabilityData(raw, &data) != nil || data.Alerts == nil || len(data.Alerts) > 100 {
-			return nil, invalid
-		}
-		for _, alert := range data.Alerts {
-			if !observabilityAlertValid(alert) {
-				return nil, invalid
-			}
-		}
-		return map[string]any{"items": data.Alerts}, nil
+		return observabilityAlertsProjection(provider, raw)
 	}
 	if operation == "rules.list" {
 		var data struct {
@@ -200,6 +190,31 @@ func observabilityProjection(operation string, raw []byte) (any, error) {
 		return map[string]any{"items": items}, nil
 	}
 	return nil, &SafeError{Code: providerCapabilityUnsupportedCode}
+}
+
+// observabilityAlertsProjection accepts Thanos 0.42.5's explicit null for an empty alert list after validating the provider envelope. An absent alerts field, warnings, or Prometheus null remain invalid.
+// observabilityAlertsProjection принимает явный null пустого списка Thanos 0.42.5 после проверки ответа провайдера. Отсутствующее поле alerts, warnings и null от Prometheus отклоняются.
+func observabilityAlertsProjection(provider string, raw []byte) (any, error) {
+	var data struct {
+		Alerts json.RawMessage `json:"alerts"`
+	}
+	invalid := &SafeError{Code: providerResponseInvalidCode}
+	if observabilityData(raw, &data) != nil || len(data.Alerts) == 0 {
+		return nil, invalid
+	}
+	alerts := []observabilityAlert{}
+	if provider == "thanos" && bytes.Equal(bytes.TrimSpace(data.Alerts), []byte("null")) {
+		return map[string]any{"items": alerts}, nil
+	}
+	if observabilityDecode(data.Alerts, &alerts) != nil || alerts == nil || len(alerts) > 100 {
+		return nil, invalid
+	}
+	for _, alert := range alerts {
+		if !observabilityAlertValid(alert) {
+			return nil, invalid
+		}
+	}
+	return map[string]any{"items": alerts}, nil
 }
 
 // observabilityAlert retains only bounded state/value and redacted labels; activeAt and provider URLs are not needed to authorize or project this read.
