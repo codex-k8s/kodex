@@ -81,30 +81,36 @@ func (adapter *Adapter) grafanaHealth(ctx context.Context, request Request, capa
 	return map[string]string{"provider": "grafana", "version": health.Version, "organization_id": configuration["organization_id"], "scope_mode": configuration["scope_mode"], "authentication_rejection": "OBSERVED"}, nil
 }
 
-// grafanaPermissions reloads current action/scope metadata from the same selected token; unknown or oversized documents never become sufficient WRITE evidence.
-// grafanaPermissions повторно загружает текущие action/scope metadata того же selected token; неизвестные либо слишком большие документы не становятся достаточным WRITE evidence.
+// grafanaPermissions reloads metadata for the selected token and treats identical scopes contributed by multiple roles as a set. It validates and counts every wire entry before removing repetitions.
+// grafanaPermissions перечитывает метаданные выбранного токена и объединяет одинаковые области нескольких ролей. Каждое значение проверяется и учитывается до удаления повторов.
 func (adapter *Adapter) grafanaPermissions(ctx context.Context, request Request, capability integrationpackage.Capability, configuration map[string]string) (map[string][]string, error) {
 	response, err := adapter.grafanaJSON(ctx, request, capability, configuration, http.MethodGet, "/api/access-control/user/permissions", url.Values{"reloadcache": {"true"}}, nil, false)
 	if err != nil {
 		return nil, err
 	}
-	var permissions map[string][]string
-	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &permissions) != nil || permissions == nil || len(permissions) > 500 {
+	var wirePermissions map[string][]*string
+	if integrationpackage.ValidateCredentialPermissionJSON(response.Body) != nil || decodeProviderJSON(response.Body, &wirePermissions) != nil || wirePermissions == nil || len(wirePermissions) > 500 {
 		return nil, &SafeError{Code: providerResponseInvalidCode}
 	}
+	permissions := make(map[string][]string, len(wirePermissions))
 	total := 0
-	for action, scopes := range permissions {
+	for action, scopes := range wirePermissions {
 		if action == "" || len(action) > 100 || strings.ContainsAny(action, "\r\n\x00") || scopes == nil || len(scopes) > 500 {
 			return nil, &SafeError{Code: providerResponseInvalidCode}
 		}
-		seen := map[string]bool{}
+		seen := make(map[string]struct{}, len(scopes))
+		unique := make([]string, 0, len(scopes))
 		for _, scope := range scopes {
 			total++
-			if len(scope) > 200 || strings.ContainsAny(scope, "\r\n\x00") || seen[scope] || total > 2000 {
+			if scope == nil || len(*scope) > 200 || strings.ContainsAny(*scope, "\r\n\x00") || total > 2000 {
 				return nil, &SafeError{Code: providerResponseInvalidCode}
 			}
-			seen[scope] = true
+			if _, duplicate := seen[*scope]; !duplicate {
+				seen[*scope] = struct{}{}
+				unique = append(unique, *scope)
+			}
 		}
+		permissions[action] = unique
 	}
 	return permissions, nil
 }

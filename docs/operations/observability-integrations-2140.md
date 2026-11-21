@@ -166,6 +166,12 @@ POST/PATCH/DELETE, UNKNOWN сохраняется после lost transport/5xx/
 Known read-only блокирует launch, unknown metadata оставляет WRITE unconfirmed.
 READ использует profile18 с inputless health prerequisite и прежними owner pins.
 
+Grafana 13.2.0 возвращает один и тот же scope несколько раз, если его дают
+пересекающиеся роли. Gateway сначала проверяет тип и считает каждое wire-значение
+в пределах общего бюджета, затем объединяет точные повторы внутри одного action.
+Повторяющиеся ключи action, `null` и выход за бюджет отклоняются. Сравнение
+scope с ресурсом и проверка текущего токена сохраняются перед каждым эффектом.
+
 Узкая mutation scope требует доказательства immutable ownership, которого
 нельзя получить одним pre-read. В exact13.2.0 legacy SQL store update не меняет
 `dashboard_uid`; новый annotation API также запрещает изменение dashboardUID

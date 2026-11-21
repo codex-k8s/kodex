@@ -84,6 +84,7 @@ type grafanaFixture struct {
 	scenario       string
 	operation      string
 	rulePayload    []byte
+	permissionBody string
 	beforeEffect   func()
 }
 
@@ -244,6 +245,9 @@ func (f *grafanaFixture) roundTrip(r *http.Request) (*http.Response, error) {
 			if f.scenario == "ambiguous-permissions" {
 				body = `{"annotations:create":["dashboards:*"],"Annotations:Create":[]}`
 			}
+			if f.permissionBody != "" {
+				body = f.permissionBody
+			}
 		case "/api/dashboards/uid/fixture-dashboard":
 			body = `{"dashboard":{"uid":"fixture-dashboard","title":"Fixture dashboard","version":3,"links":["must-drop"],"templating":{"secret":"must-drop"}},"meta":{"provisioned":true,"provisionedExternalId":"must-drop"}}`
 		case "/api/datasources/uid/fixture-prometheus":
@@ -402,6 +406,44 @@ func TestGrafanaBoundariesRejectBeforeEffect(t *testing.T) {
 			}
 			if _, err := adapter.Execute(t.Context(), request); err == nil || fixture.effects != 0 {
 				t.Fatal("Grafana scope/permission failure caused an effect", err)
+			}
+		})
+	}
+}
+
+// TestGrafanaPermissionScopeRepetition verifies that overlapping provider roles preserve the exact allowed resource and that malformed metadata remains closed before dispatch.
+// TestGrafanaPermissionScopeRepetition проверяет, что пересечение ролей сохраняет точный разрешённый ресурс, а повреждённые метаданные закрывают вызов до отправки.
+func TestGrafanaPermissionScopeRepetition(t *testing.T) {
+	for _, scenario := range []struct {
+		name, body, rejected string
+	}{
+		{name: "overlapping roles", body: `{"annotations:create":["dashboards:uid:fixture-dashboard","dashboards:uid:fixture-dashboard"],"annotations:read":["dashboards:*","dashboards:*"]}`},
+		{name: "foreign scope", body: `{"annotations:create":["dashboards:uid:foreign","dashboards:uid:foreign"]}`, rejected: providerRequestRejectedCode},
+		{name: "null scope element", body: `{"annotations:create":["dashboards:*",null]}`, rejected: providerResponseInvalidCode},
+		{name: "null scope array", body: `{"annotations:create":null}`, rejected: providerResponseInvalidCode},
+		{name: "ambiguous action", body: `{"annotations:create":["dashboards:*"],"Annotations:Create":["dashboards:*"]}`, rejected: providerResponseInvalidCode},
+		{name: "excessive repetitions", body: `{"annotations:create":[` + strings.Repeat(`"dashboards:*",`, 500) + `"dashboards:*"]}`, rejected: providerResponseInvalidCode},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			const key, operation = "grafana-organization", "grafana.annotation.create"
+			adapter := testAdapter(t)
+			fixture := &grafanaFixture{t: t, operation: operation, permissionBody: scenario.body}
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(fixture.roundTrip)}
+			request := observabilityInvocation(t, adapter, key, operation, grafanaFixtureInput(t, operation))
+			capability, _ := adapter.definitions[key].Capability(operation)
+			request.PersonalCredentialAdmission = true
+			request.ResourcePermissionProfile = integrationpackage.CredentialResourcePermissionProfile(adapter.definitions[key], capability)
+			result, err := adapter.Execute(t.Context(), request)
+			if scenario.rejected != "" {
+				var safe *SafeError
+				if !errors.As(err, &safe) || safe.Code != scenario.rejected || fixture.effects != 0 {
+					t.Fatal("invalid Grafana metadata was not refused before dispatch", err)
+				}
+				return
+			}
+			if err != nil || fixture.effects != 1 || result.Receipt.EffectKey != request.EffectKey ||
+				result.Receipt.InputDigest != request.InputDigest || result.Receipt.ResponseDigest == "" {
+				t.Fatal("overlapping roles did not produce the exact admitted effect receipt", err)
 			}
 		})
 	}
