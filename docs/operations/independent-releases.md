@@ -4,8 +4,8 @@ title: Независимые релизы и переход worker grants
 type: operations
 status: approved
 owner: manager
-version: 1.3.1
-updated: 2026-11-15
+version: 1.4.0
+updated: 2026-11-22
 ---
 
 # Независимые релизы
@@ -62,6 +62,28 @@ Node/Pod readback и браузерная приёмка обязательны 
 Проверка: `node --test tools/release/scoped-release*.test.mjs
 tools/release/application-restart.test.mjs`. Документы Kubernetes через Context7:
 `/kubernetes/website`, Deployment RollingUpdate и JSON Patch resourceVersion test.
+
+### Адресное обновление portable Integration Gateway
+
+Для #1204 профиль `scoped-release.mjs --profile portable-integration-gateway`
+принимает ровно один `integration-gateway` из установленного `web-only`
+профиля. Применяйте его к совместимому изменению одного образа. Изменение
+контрактов, схемы, credentials или конфигурации требует согласованной поставки
+затронутых компонентов.
+
+Используйте те же команды `plan` и `apply`, указав профиль
+`portable-integration-gateway` и manifest с целью `integration-gateway`.
+Перед apply опубликуйте образ и подтвердите exact digest на целевых узлах.
+Plan сверяет исходный digest, provenance, ServiceAccount, strategy и форму
+authority sidecars. Apply закрепляет UID и spec Deployment, меняет только
+образ приложения и три annotations релиза. Authority issuer, grant agent с
+привязкой к Pod UID и socket init остаются частью прежнего PodSpec.
+
+После apply сверьте digest и готовность всех реплик и выполните согласованную
+операцию интеграции. При `UNKNOWN` сначала прочитайте фактическое состояние
+Deployment и реплик. Для отката используйте исходный `rollback` из плана как
+единственную цель нового plan после сверки совместимости и доступа к старому
+digest. Тесты portable release проверяют обе цели отдельно.
 
 ## Подтверждённая причина и порядок внедрения
 

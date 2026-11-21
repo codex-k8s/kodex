@@ -11,6 +11,8 @@ const image = hex => `images.example.invalid/kodex/${component}@sha256:${hex.rep
 const id = "11111111-1111-4111-8111-111111111111";
 const namespaceUID = "22222222-2222-4222-8222-222222222222";
 const requested = { name: component, image: image("b"), build: { sourceSHA: "c".repeat(40), provenanceSHA256: "d".repeat(64) } };
+const gateway = "integration-gateway";
+const gatewayRequest = { ...requested, name: gateway, image: image("b").replace(component, gateway) };
 
 function fixture() {
   return { apiVersion: "apps/v1", kind: "Deployment",
@@ -22,6 +24,24 @@ function fixture() {
       spec: { serviceAccountName: component, containers: [{ name: component, image: image("a"), ports: [{ name: "https", containerPort: 8443 }] }],
         volumes: [{ name: "runtime-config", configMap: { name: "synthetic-runtime" } }] } } },
     status: { observedGeneration: 1, replicas: 2, availableReplicas: 2, readyReplicas: 2, updatedReplicas: 2 } };
+}
+
+function gatewayFixture() {
+  const deployment = fixture();
+  deployment.metadata.name = gateway;
+  const pod = deployment.spec.template;
+  const spec = pod.spec;
+  spec.serviceAccountName = gateway;
+  spec.containers[0].name = gateway;
+  spec.containers[0].image = image("a").replace(component, gateway);
+  const authority = name => ({ name, image: image("f").replace(component, "internal-rpc-authority"),
+    command: [`/usr/local/bin/${name === "platform-worker-grant-agent" ? "internal-rpc-authority-" : ""}${name}`] });
+  spec.containers.push(authority("internal-rpc-authority-issuer"), { ...authority("platform-worker-grant-agent"),
+    env: [{ name: "PLATFORM_WORKER_GRANT_INSTANCE_ID", valueFrom: { fieldRef: { fieldPath: "metadata.uid" } } },
+      { name: "SYNTHETIC_PRIVATE", value: "PRIVATE_AUTHORITY_SENTINEL" }] });
+  spec.initContainers = [authority("internal-rpc-authority-socket-init")];
+  pod.metadata.annotations["kodex.dev/worker-grant-format"] = "2";
+  return deployment;
 }
 
 test("portable PWA requires explicit mode and preserves configuration, base lock and rollback provenance", () => {
@@ -69,6 +89,40 @@ test("portable PWA cannot widen target, executable, mounts, registry or provenan
   assert.throws(() => planTarget(fixture(), { ...requested, build: undefined }, id, undefined, "portable-pwa"));
 });
 
+test("portable integration gateway rejects noncanonical workload and preserves authority on update and rollback", () => {
+  const current = gatewayFixture();
+  const profile = "portable-integration-gateway";
+  assert.throws(() => planTarget(current, gatewayRequest, id), /STAGING_PROFILE_REQUIRED/);
+  assert.throws(() => planTarget(current, gatewayRequest, id, undefined, "portable-pwa"), /PORTABLE_PWA_BOUNDARY_REQUIRED/);
+  for (const mutate of [
+    d => { d.spec.template.spec.serviceAccountName = "control-plane"; },
+    d => { d.spec.template.spec.hostIPC = true; },
+    d => { d.spec.template.spec.containers[0].command = ["/bin/sh"]; },
+    d => { d.spec.template.spec.containers[1].command = ["/synthetic"]; },
+    d => { d.spec.template.spec.containers[1].image = "example.invalid/kodex/internal-rpc-authority:mutable"; },
+    d => { d.spec.template.spec.containers[1].securityContext = { privileged: true }; },
+    d => { d.spec.template.spec.containers.pop(); },
+    d => { d.spec.template.spec.initContainers[0].name = "synthetic-other"; },
+    d => { delete d.spec.template.metadata.annotations["kodex.dev/worker-grant-format"]; },
+    d => { d.spec.template.spec.containers[2].env[0].valueFrom.fieldRef.fieldPath = "metadata.name"; },
+  ]) {
+    const changed = gatewayFixture();
+    mutate(changed);
+    assert.throws(() => planTarget(changed, gatewayRequest, id, undefined, profile));
+  }
+  const plan = planTarget(current, gatewayRequest, id, undefined, profile);
+  assert.ok(!JSON.stringify(plan).includes("PRIVATE_AUTHORITY_SENTINEL"));
+  const expected = structuredClone(current.spec);
+  const pod = expected.template;
+  pod.spec.containers[0].image = gatewayRequest.image;
+  Object.assign(pod.metadata.annotations, { "kodex.dev/component-source-sha": gatewayRequest.build.sourceSHA,
+    "kodex.dev/component-upgrade-sha256": gatewayRequest.build.provenanceSHA256, "kodex.dev/application-release": id });
+  assert.equal(plan.afterSpecSHA256, fingerprint(expected));
+  const rollback = planTarget({ ...current, spec: expected }, plan.rollback, namespaceUID, undefined, profile);
+  assert.equal(rollback.image, current.spec.template.spec.containers[0].image);
+  assert.deepEqual(rollback.rollback.build, gatewayRequest.build);
+});
+
 test("exact kubeconfig is passed to every command and cannot mix with sudo or relative paths", () => {
   assert.deepEqual(kubectlInvocation("k3d-synthetic", ["get", "nodes"], false, "/synthetic/config").arguments,
     ["--kubeconfig", "/synthetic/config", "--context", "k3d-synthetic", "--request-timeout=30s", "get", "nodes"]);
@@ -77,13 +131,15 @@ test("exact kubeconfig is passed to every command and cannot mix with sudo or re
   assert.throws(() => kubectlInvocation("k3d-synthetic", [], true, "/synthetic/config"), /EXACT_KUBECONFIG_REQUIRED/);
 });
 
-test("portable CLI binds namespace and config, keeps original journal after lost ACK and never repeats PATCH", async () => {
+for (const [profile, makeDeployment, request] of [["portable-pwa", fixture, requested],
+  ["portable-integration-gateway", gatewayFixture, gatewayRequest]]) {
+test(`${profile} binds namespace and config, keeps original journal after lost ACK and never repeats PATCH`, async () => {
   const directory = await mkdtemp(join(tmpdir(), "kodex-pwa-contract-"));
   const previousExit = process.exitCode;
   try {
     const manifest = join(directory, "manifest.json"), plan = join(directory, "plan.json"), journal = join(directory, "journal.jsonl");
-    await writeFile(manifest, JSON.stringify({ version: 1, targets: [requested] }), { mode: 0o600 });
-    const deployment = fixture();
+    await writeFile(manifest, JSON.stringify({ version: 1, targets: [request] }), { mode: 0o600 });
+    const deployment = makeDeployment();
     let patches = 0, wrongNamespace = false;
     const source = () => ({ revision: "e".repeat(40) });
     const command = async (file, args) => {
@@ -94,16 +150,20 @@ test("portable CLI binds namespace and config, keeps original journal after lost
       assert.ok(args.includes("get"));
       return { stdout: JSON.stringify(deployment) };
     };
-    const flags = ["--profile", "portable-pwa", "--context", "k3d-synthetic", "--kubeconfig", "/synthetic/config"];
+    const flags = ["--profile", profile, "--context", "k3d-synthetic", "--kubeconfig", "/synthetic/config"];
     await releaseCLI(["plan", ...flags, "--manifest", manifest, "--output", plan], command, source);
     const value = JSON.parse(await readFile(plan, "utf8"));
     assert.equal(value.namespaceUID, namespaceUID);
     assert.equal(value.kubeconfig, "/synthetic/config");
+    assert.equal(value.profile, profile);
     const apply = ["apply", ...flags, "--plan", plan, "--evidence", journal, "--confirm", "APPLY-STAGING-APPLICATIONS"];
     wrongNamespace = true;
     await assert.rejects(releaseCLI(apply.slice(), command, source), /RELEASE_PLAN_IDENTITY_MISMATCH/);
     assert.equal(patches, 0);
     wrongNamespace = false;
+    const otherProfile = profile === "portable-pwa" ? "portable-integration-gateway" : "portable-pwa";
+    const otherApply = apply.map(value => value === profile ? otherProfile : value);
+    await assert.rejects(releaseCLI(otherApply, command, source), /RELEASE_PLAN_IDENTITY_MISMATCH/);
     await assert.rejects(releaseCLI(apply.slice(), command, () => ({ revision: "f".repeat(40) })), /RELEASE_PLAN_IDENTITY_MISMATCH/);
     assert.equal(patches, 0);
     await releaseCLI(apply.slice(), command, source);
@@ -117,7 +177,7 @@ test("portable CLI binds namespace and config, keeps original journal after lost
   } finally { process.exitCode = previousExit; await rm(directory, { recursive: true, force: true }); }
 });
 
-test("portable CLI successful rollout uses real local kubectl patch and exact final spec", async () => {
+test(`${profile} successful rollout uses real local kubectl patch and exact final spec`, async () => {
   const directory = await mkdtemp(join(tmpdir(), "kodex-pwa-patch-"));
   const previousExit = process.exitCode;
   try {
@@ -125,8 +185,8 @@ test("portable CLI successful rollout uses real local kubectl patch and exact fi
     const localConfig = join(directory, "synthetic-config.json");
     await writeFile(localConfig, JSON.stringify({ apiVersion: "v1", kind: "Config", clusters: [{ name: "synthetic", cluster: { server: "https://kubernetes.example.invalid" } }],
       contexts: [{ name: "synthetic", context: { cluster: "synthetic" } }], "current-context": "synthetic", users: [] }), { mode: 0o600 });
-    await writeFile(manifest, JSON.stringify({ version: 1, targets: [requested] }), { mode: 0o600 });
-    let current = fixture(), patches = 0;
+    await writeFile(manifest, JSON.stringify({ version: 1, targets: [request] }), { mode: 0o600 });
+    let current = makeDeployment(), patches = 0;
     const original = structuredClone(current.spec.template.spec.volumes);
     const command = async (file, args) => {
       assert.equal(file, "kubectl");
@@ -142,21 +202,22 @@ test("portable CLI successful rollout uses real local kubectl patch and exact fi
         { encoding: "utf8", env: { PATH: process.env.PATH, HOME: directory }, timeout: 10000 }));
         current.metadata.generation++;
         current.status.observedGeneration = current.metadata.generation;
-        return { stdout: "deployment.apps/staff-control-center" };
+        return { stdout: `deployment.apps/${request.name}` };
       }
       if (args.includes("rollout")) return { stdout: "success" };
       assert.ok(args.includes("get"));
       return { stdout: JSON.stringify(current) };
     };
-    const flags = ["--profile", "portable-pwa", "--context", "k3d-synthetic", "--kubeconfig", "/synthetic/config"];
+    const flags = ["--profile", profile, "--context", "k3d-synthetic", "--kubeconfig", "/synthetic/config"];
     const source = () => ({ revision: "e".repeat(40) });
     await releaseCLI(["plan", ...flags, "--manifest", manifest, "--output", plan], command, source);
     await releaseCLI(["apply", ...flags, "--plan", plan, "--evidence", journal, "--confirm", "APPLY-STAGING-APPLICATIONS"], command, source);
     assert.equal(patches, 1);
-    assert.equal(current.spec.template.spec.containers[0].image, requested.image);
+    assert.equal(current.spec.template.spec.containers[0].image, request.image);
     assert.deepEqual(current.spec.template.spec.volumes, original);
     const result = (await readFile(journal, "utf8")).trim().split("\n").map(JSON.parse).at(-1);
     assert.equal(result.status, "PASS");
-    assert.equal(result.results[0].image, requested.image);
+    assert.equal(result.results[0].image, request.image);
   } finally { process.exitCode = previousExit; await rm(directory, { recursive: true, force: true }); }
 });
+}
