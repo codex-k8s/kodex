@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Только cold Go build outputs; explicit audit plan, без рекурсивного удаления."""
+"""Только воспроизводимые Go build outputs с адресным аудитом и удалением."""
 
 import argparse
 from contextlib import contextmanager
@@ -12,10 +12,11 @@ import stat
 import time
 
 ROOT = Path('/home/s/.cache/go-build')
+PERSONAL_PROFILE = 'kodex-personal-2145'
 PROFILES = {
     'shared': ROOT,
     'kodex-realtime-1797': Path('/home/s/.local/state/kodex-dev/realtime-combined-check.2Jlsd4pc/go-cache'),
-    'kodex-personal-2145': Path('/home/s/.cache/kodex-personal-kubernetes-20261114/go-cache'),
+    PERSONAL_PROFILE: Path('/home/s/.cache/kodex-personal-kubernetes-20261114/go-cache'),
 }
 AGE_HOURS = (24, 72)
 DEFAULT_AGE_HOURS = 72
@@ -75,12 +76,13 @@ def relative(value):
 
 
 @contextmanager
-def opened_root(root):
+def opened_root(root, *, private=False):
     require(root.is_absolute() and root.resolve(strict=True) == root, 'ROOT_UNSAFE')
     before = directory(root.lstat())
     fd = os.open(root, FLAGS | os.O_DIRECTORY)
     try:
         require(directory(os.fstat(fd)) == before, 'ROOT_CHANGED')
+        require(not private or stat.S_IMODE(before[-1]) == 0o700, 'IDLE_PERSONAL_ROOT_NOT_PRIVATE')
         yield fd, before
     finally:
         os.close(fd)
@@ -98,18 +100,20 @@ def opened_shard(fd, shard):
 
 
 class Cache:
-    def __init__(self, root=ROOT, *, minimum_age_hours=DEFAULT_AGE_HOURS):
+    def __init__(self, root=ROOT, *, minimum_age_hours=DEFAULT_AGE_HOURS, drain_idle_personal=False):
         require(type(minimum_age_hours) is int and minimum_age_hours in AGE_HOURS, 'AGE_PROFILE_INVALID')
         self.root = Path(root)
-        self.minimum_age_hours = minimum_age_hours
-        self.minimum_age_ns = minimum_age_hours * 3600 * 10**9
+        require(not drain_idle_personal or self.root == PROFILES[PERSONAL_PROFILE], 'IDLE_PERSONAL_PROFILE_REQUIRED')
+        self.drain_idle_personal = drain_idle_personal
+        self.minimum_age_hours = 0 if drain_idle_personal else minimum_age_hours
+        self.minimum_age_ns = self.minimum_age_hours * 3600 * 10**9
         self.removed_count = self.removed_bytes = self.skipped_count = 0
 
     def audit(self):
         now = time.time_ns()
         deadline = time.monotonic() + SECONDS
         records, shards, seen, total = [], {}, 0, 0
-        with opened_root(self.root) as (fd, root_identity):
+        with opened_root(self.root, private=self.drain_idle_personal) as (fd, root_identity):
             for shard in sorted(os.listdir(fd)):
                 if not SHARD.fullmatch(shard):
                     continue
@@ -165,7 +169,7 @@ class Cache:
         self.removed_count = self.removed_bytes = self.skipped_count = 0
         self.validate(plan, expected)
         deadline = time.monotonic() + SECONDS
-        with opened_root(self.root) as (fd, root_identity):
+        with opened_root(self.root, private=self.drain_idle_personal) as (fd, root_identity):
             require(root_identity == plan['rootIdentity'], 'ROOT_CHANGED')
             for item in plan['records']:
                 require(time.monotonic() < deadline, 'PRUNE_BUDGET')
@@ -279,10 +283,14 @@ def main(argv=None):
         parser.add_argument('--output-plan')
         parser.add_argument('--plan')
         parser.add_argument('--expected-fingerprint')
-        parser.add_argument('--minimum-age-hours', type=int, choices=AGE_HOURS, default=DEFAULT_AGE_HOURS)
+        parser.add_argument('--minimum-age-hours', type=int, choices=AGE_HOURS)
+        parser.add_argument('--drain-idle-personal', action='store_true')
         args = parser.parse_args(argv)
         require(args.mode == 'audit' or args.output_plan is None, 'OUTPUT_PLAN_AUDIT_ONLY')
-        cache = Cache(PROFILES[args.profile], minimum_age_hours=args.minimum_age_hours)
+        require(not args.drain_idle_personal or args.profile == PERSONAL_PROFILE, 'IDLE_PERSONAL_PROFILE_REQUIRED')
+        require(not args.drain_idle_personal or args.minimum_age_hours is None, 'IDLE_PERSONAL_AGE_CONFLICT')
+        cache = Cache(PROFILES[args.profile], minimum_age_hours=args.minimum_age_hours or DEFAULT_AGE_HOURS,
+                      drain_idle_personal=args.drain_idle_personal)
         if args.mode == 'audit':
             require(args.plan is None and args.expected_fingerprint is None, 'AUDIT_TARGET_FORBIDDEN')
             result = cache.audit()

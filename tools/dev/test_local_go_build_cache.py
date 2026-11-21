@@ -288,6 +288,47 @@ class ColdCacheTests(unittest.TestCase):
                     self.assertEqual(constructor.call_args.kwargs['minimum_age_hours'], age)
                     audit.assert_called_once()
 
+    def test_idle_drain_private_profile_keeps_freshness_and_scope_guards(self):
+        self.root.chmod(0o700)
+        os.utime(self.old, ns=(self.now - 1, self.now - 1))
+        changed = self.shard / ('aa' + 'b' * 62 + '-a')
+        changed.write_bytes(b'synthetic second output')
+        service = self.root / 'README'
+        service.write_bytes(b'synthetic service file')
+        with patch.dict(C.PROFILES, {C.PERSONAL_PROFILE: self.root}):
+            cache = C.Cache(self.root, drain_idle_personal=True)
+            cold = self.cache.audit()
+            plan = cache.audit()
+            self.assertEqual(cold['records'][0]['path'], 'aa/' + changed.name)
+            self.assertEqual(plan['ageHours'], 0)
+            self.assertEqual(len(plan['records']), 2)
+            with self.assertRaisesRegex(C.Failure, 'PLAN_SCOPE_INVALID'):
+                self.cache.prune(plan, plan['fingerprint'])
+            with self.assertRaisesRegex(C.Failure, 'PLAN_SCOPE_INVALID'):
+                cache.prune(cold, cold['fingerprint'])
+            self.root.chmod(0o750)
+            with self.assertRaisesRegex(C.Failure, 'IDLE_PERSONAL_ROOT_NOT_PRIVATE'):
+                cache.prune(plan, plan['fingerprint'])
+            self.root.chmod(0o700)
+            os.utime(changed, ns=(self.now, self.now))
+            result = cache.prune(plan, plan['fingerprint'])
+        self.assertEqual(result['removedCount'], 1)
+        self.assertEqual(result['skippedChangedOrAbsent'], 1)
+        self.assertFalse(self.old.exists())
+        self.assertTrue(changed.exists())
+        self.assertTrue(service.exists())
+
+    def test_cli_idle_drain_rejects_shared_profile_and_explicit_age(self):
+        for args, code in (
+                ([], 'IDLE_PERSONAL_PROFILE_REQUIRED'),
+                (['--profile', 'kodex-realtime-1797'], 'IDLE_PERSONAL_PROFILE_REQUIRED'),
+                (['--profile', C.PERSONAL_PROFILE, '--minimum-age-hours', '24'], 'IDLE_PERSONAL_AGE_CONFLICT')):
+            output = io.StringIO()
+            with patch.object(C.Cache, 'audit') as audit, contextlib.redirect_stdout(output):
+                self.assertEqual(C.main(['audit', '--drain-idle-personal'] + args), 1)
+                audit.assert_not_called()
+            self.assertEqual(json.loads(output.getvalue())['code'], code)
+
     def test_closed_profile_rejects_arbitrary_paths_without_mutation_or_raw_errors(self):
         for value in ('PRIVATE_CANARY', '/PRIVATE_CANARY', 'kodex-realtime-1797/../shared', ''):
             with patch.object(C.os, 'unlink') as unlink:
