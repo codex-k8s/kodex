@@ -58,7 +58,7 @@ func (adapter *Adapter) lokiHealth(ctx context.Context, request Request, configu
 	if err != nil {
 		return nil, err
 	}
-	if _, err = observabilityProjection("labels.list", response.Body); err != nil {
+	if _, err = observabilityProjection("loki", "labels.list", response.Body); err != nil {
 		return nil, err
 	}
 	_, err = adapter.lokiHTTP(ctx, request, capability, configuration, http.MethodGet, "/loki/api/v1/labels", query, nil, true)
@@ -245,7 +245,7 @@ func (adapter *Adapter) executeLoki(ctx context.Context, request Request, capabi
 			if request.Operation == "loki.logs.query" {
 				projection, err = lokiLogsProjection(response.Body, request.Input)
 			} else {
-				projection, err = observabilityProjection(strings.TrimPrefix(request.Operation, "loki."), response.Body)
+				projection, err = observabilityProjection(request.DefinitionKey, strings.TrimPrefix(request.Operation, "loki."), response.Body)
 			}
 		}
 	}

@@ -55,6 +55,10 @@ core/direct/public fallback отсутствует. Пока native target не 
 | Rules | `GET /api/v1/rules` | ≤50 groups/100 rules; name/type/state/health/labels без file/expression/lastError |
 | Alerts | `GET /api/v1/alerts` | ≤100 alerts; labels/state/value без annotations/generatorURL |
 
+Thanos 0.42.5 возвращает `data.alerts: null`, когда активных предупреждений
+нет. Для этого профиля адаптер выдаёт пустой список. Поле `alerts`
+обязательно, предупреждения о частичном ответе приводят к отказу.
+
 Actor приходит из проверенного transport и owner root state; публичный endpoint
 управления — существующий control-api-gateway, затем прежние CP owner commands,
 claim/Begin/Complete и gateway. Owner назначает connection/grant/credential и

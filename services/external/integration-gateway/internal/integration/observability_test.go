@@ -313,12 +313,12 @@ func TestObservabilityProjectionRejectsAmbiguity(t *testing.T) {
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"histogram":[1,{"count":"1","sum":"2","buckets":[[4,"0","1","1"]]}]}]}}`,
 		`{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"histogram":[1,{"count":"1","sum":"2","buckets":[[null,"0","1","2"]]}]}]}}`,
 	} {
-		if _, err := observabilityProjection("query.instant", []byte(data)); err == nil {
+		if _, err := observabilityProjection("prometheus", "query.instant", []byte(data)); err == nil {
 			t.Fatal("ambiguous/partial metrics response accepted")
 		}
 	}
 	valid := `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"a":"one","A":"two"},"histogram":[1,{"count":"1","sum":"2","buckets":[[0,"-Inf","+Inf","1"]],"secret":"must-drop"}]}]}}`
-	projection, err := observabilityProjection("query.instant", []byte(valid))
+	projection, err := observabilityProjection("prometheus", "query.instant", []byte(valid))
 	raw, _ := json.Marshal(projection)
 	if err != nil || strings.Contains(string(raw), "must-drop") {
 		t.Fatal("native histogram compatibility/projection failed", err)
@@ -416,6 +416,59 @@ func TestObservabilityPersonalHealthChecksExactSelectedKey(t *testing.T) {
 			result, err := adapter.VerifyPersonalCredential(t.Context(), request)
 			if err != nil || calls != 2 || len(result.ConfirmedCapabilityKeys) != 1 || result.ConfirmedCapabilityKeys[0] != key+".connection.read" || len(result.ObservedPermissionProfiles) != 0 || len(result.DeniedCapabilityKeys) != 0 {
 				t.Fatal("personal endpoint verification invented extra permission evidence", err)
+			}
+		})
+	}
+}
+
+// TestThanosEmptyAlertsPreservesProviderBoundary covers the native null alert list without accepting omitted or partial lists, or broadening Prometheus decoding.
+// TestThanosEmptyAlertsPreservesProviderBoundary проверяет нативный null пустого списка без допуска отсутствующих и частичных списков либо изменения разбора Prometheus.
+func TestThanosEmptyAlertsPreservesProviderBoundary(t *testing.T) {
+	for _, scenario := range []struct {
+		name, provider, body string
+		accept               bool
+	}{
+		{"thanos null", "thanos", `{"status":"success","data":{"alerts":null}}`, true},
+		{"thanos array", "thanos", `{"status":"success","data":{"alerts":[]}}`, true},
+		{"thanos missing", "thanos", `{"status":"success","data":{}}`, false},
+		{"thanos alias", "thanos", `{"status":"success","data":{"Alerts":null}}`, false},
+		{"thanos duplicate", "thanos", `{"status":"success","data":{"alerts":[],"alerts":null}}`, false},
+		{"thanos warning", "thanos", `{"status":"success","data":{"alerts":null},"warnings":["partial"]}`, false},
+		{"prometheus null", "prometheus", `{"status":"success","data":{"alerts":null}}`, false},
+		{"prometheus array", "prometheus", `{"status":"success","data":{"alerts":[]}}`, true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			adapter := testAdapter(t)
+			adapter.nativeHTTPClient = &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				status, body := http.StatusOK, scenario.body
+				if request.URL.Path == "/api/v1/status/buildinfo" {
+					version := "0.42.5"
+					if scenario.provider == "prometheus" {
+						version = "3.14.0"
+					}
+					body = `{"status":"success","data":{"version":"` + version + `"}}`
+					if strings.HasPrefix(request.Header.Get("Authorization"), "Bearer kodex-invalid-") {
+						status, body = http.StatusUnauthorized, ""
+					}
+				} else if request.URL.Path != "/api/v1/alerts" {
+					t.Fatal("unexpected provider path")
+				}
+				return &http.Response{Request: request, StatusCode: status, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(body))}, nil
+			})}
+			request := observabilityInvocation(t, adapter, scenario.provider, scenario.provider+".alerts.list", map[string]any{})
+			result, err := adapter.Execute(context.Background(), request)
+			if !scenario.accept {
+				if err == nil || err.Error() != providerResponseInvalidCode || result.Receipt.ResponseDigest != "" {
+					t.Fatal("invalid response must fail without a successful receipt", err)
+				}
+				return
+			}
+			if err != nil || result.Receipt.ResponseDigest == "" || result.Receipt.InputDigest != request.InputDigest {
+				t.Fatal("empty list must have a bound successful receipt", err)
+			}
+			var projection map[string]string
+			if json.Unmarshal([]byte(result.Summary), &projection) != nil || projection["text"] != `{"items":[]}` {
+				t.Fatal("empty result must be an array")
 			}
 		})
 	}

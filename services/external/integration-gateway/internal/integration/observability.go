@@ -259,7 +259,7 @@ func (adapter *Adapter) executeObservability(ctx context.Context, request Reques
 		if err != nil {
 			return Result{}, err
 		}
-		projection, err = observabilityProjection(operation, response.Body)
+		projection, err = observabilityProjection(request.DefinitionKey, operation, response.Body)
 		if err != nil {
 			return Result{}, err
 		}
