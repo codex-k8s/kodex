@@ -21,6 +21,31 @@ const applicationNames = new Set([
 ]);
 const digestImage = /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+const portableTargets = new Map([
+  ["portable-pwa", "staff-control-center"],
+  ["portable-integration-gateway", "integration-gateway"],
+]);
+
+// Поддержана действующая форма portable Integration Gateway с отдельными authority containers.
+// Их digest, commands и остальная PodSpec сохраняются целиком под проверкой before/after.
+function portableIntegrationGatewayPod(spec) {
+  if (spec?.serviceAccountName !== "integration-gateway" || spec.containers?.length !== 3 ||
+      spec.initContainers?.length !== 1) return false;
+  const expected = new Map([
+    ["internal-rpc-authority-issuer", "/usr/local/bin/internal-rpc-authority-issuer"],
+    ["platform-worker-grant-agent", "/usr/local/bin/internal-rpc-authority-platform-worker-grant-agent"],
+    ["internal-rpc-authority-socket-init", "/usr/local/bin/internal-rpc-authority-socket-init"],
+  ]);
+  if (spec.initContainers[0].name !== "internal-rpc-authority-socket-init" ||
+      !spec.containers.some(container => container.name === "integration-gateway")) return false;
+  const dependencies = spec.containers.filter(container => container.name !== "integration-gateway").concat(spec.initContainers);
+  const authorityImage = spec.initContainers[0].image;
+  return new Set(dependencies.map(container => container.name)).size === expected.size &&
+    digestImage.test(authorityImage) && /\/internal-rpc-authority@sha256:(?!0{64}$)/.test(authorityImage) &&
+    dependencies.every(container => expected.has(container.name) && container.image === authorityImage &&
+      container.command?.length === 1 && container.command[0] === expected.get(container.name)) &&
+    [...spec.containers, ...spec.initContainers].every(container => !container.securityContext?.privileged);
+}
 
 // Закрытый registry общий для release и restart; новый сценарий не получает произвольный Deployment locator.
 export function isApplicationTargetName(name) { return applicationNames.has(name); }
@@ -108,11 +133,12 @@ export function validateManifest(value) {
   return value;
 }
 
-// Общая граница одного staging-приложения: identity, готовый rolling Deployment и exact current image.
+// Общая граница приложения: identity, готовый rolling Deployment и exact current image.
 // Функция ничего не меняет; release и restart применяют собственные закрытые переходы после этих проверок.
 export function applicationDeploymentBoundary(deployment, target, mode = "release") {
   requireValue(applicationNames.has(target?.name), "INVALID_TARGET");
-  requireValue(["release", "recovery", "portable-pwa"].includes(mode), "INVALID_RELEASE_MODE");
+  const portableTarget = portableTargets.get(mode);
+  requireValue(["release", "recovery"].includes(mode) || portableTarget, "INVALID_RELEASE_MODE");
   const metadata = deployment?.metadata;
   const spec = deployment?.spec;
   const pod = spec?.template;
@@ -121,13 +147,15 @@ export function applicationDeploymentBoundary(deployment, target, mode = "releas
     metadata?.name === target.name && metadata.namespace === "kodex-system" &&
     uuid.test(metadata.uid) && typeof metadata.resourceVersion === "string" &&
     metadata.labels?.["app.kubernetes.io/part-of"] === "kodex", "DEPLOYMENT_IDENTITY_MISMATCH");
-  if (mode === "portable-pwa") {
-    requireValue(target.name === "staff-control-center" && target.build && !target.source &&
+  if (portableTarget) {
+    const workload = pod?.spec;
+    requireValue(target.name === portableTarget && target.build && !target.source &&
       metadata.labels?.["kodex.dev/profile"] === "web-only" &&
       metadata.labels?.["kodex.dev/environment"] === "production" &&
-      pod?.spec?.containers?.length === 1 && !pod.spec.initContainers?.length &&
-      !pod.spec.volumes?.some(volume => volume.hostPath) && !pod.spec.hostNetwork && !pod.spec.hostPID,
-      "PORTABLE_PWA_BOUNDARY_REQUIRED");
+      !workload?.volumes?.some(volume => volume.hostPath) && !workload?.hostNetwork && !workload?.hostPID &&
+      (mode === "portable-pwa" ? workload?.containers?.length === 1 && !workload.initContainers?.length :
+        !workload?.hostIPC && portableIntegrationGatewayPod(workload)),
+      mode === "portable-pwa" ? "PORTABLE_PWA_BOUNDARY_REQUIRED" : "PORTABLE_INTEGRATION_GATEWAY_BOUNDARY_REQUIRED");
   } else requireValue(metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" ||
     metadata.labels?.["kodex.dev/environment"] === "staging", "STAGING_PROFILE_REQUIRED");
   requireValue(spec.paused !== true && Number.isSafeInteger(spec.replicas) && spec.replicas > 0 &&
@@ -171,6 +199,7 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
   validateManifest({ version: 1, targets: [target] });
   requireValue(uuid.test(releaseID), "INVALID_RELEASE_ID");
   const { metadata, spec, pod, containers, index, application, beforeImage } = applicationDeploymentBoundary(deployment, target, mode);
+  const portable = portableTargets.has(mode);
   const image = target.image ?? beforeImage;
   const afterSpec = structuredClone(spec);
   const source = target.source ? planSourceChange(deployment, afterSpec, index, target.source, sourceInspector) : null;
@@ -184,14 +213,15 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
   const annotations = { ...(pod.metadata?.annotations ?? {}), [releaseAnnotation]: releaseID };
   if (target.source) annotations["kodex.dev/application-source-sha"] = target.source.revision;
   let previousBuild;
-  if (target.build && mode === "portable-pwa") {
+  if (target.build && portable) {
     requireValue(!containers[index].command && !containers[index].args &&
       beforeImage.split("@")[0] === image.split("@")[0] &&
       /^[a-f0-9]{40}$/.test(annotations["kodex.dev/component-source-sha"] ?? "") &&
       /^[a-f0-9]{64}$/.test(annotations["kodex.dev/component-base-lock-sha256"] ?? "") &&
       /^[a-f0-9]{64}$/.test(annotations["kodex.dev/component-upgrade-sha256"] ?? "") &&
       !["kodex.dev/component-source-sha", "kodex.dev/component-base-lock-sha256", "kodex.dev/component-upgrade-sha256"].some(key => /^0+$/.test(annotations[key])) &&
-      !annotations["kodex.dev/component-image-profile-sha256"], "PORTABLE_PWA_PROVENANCE_REQUIRED");
+      !annotations["kodex.dev/component-image-profile-sha256"],
+      mode === "portable-pwa" ? "PORTABLE_PWA_PROVENANCE_REQUIRED" : "PORTABLE_INTEGRATION_GATEWAY_PROVENANCE_REQUIRED");
     previousBuild = { sourceSHA: annotations["kodex.dev/component-source-sha"], provenanceSHA256: annotations["kodex.dev/component-upgrade-sha256"] };
     annotations["kodex.dev/component-source-sha"] = target.build.sourceSHA;
     annotations["kodex.dev/component-upgrade-sha256"] = target.build.provenanceSHA256;
@@ -212,7 +242,7 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
     { op: "test", path: `/spec/template/spec/containers/${index}/image`, value: beforeImage },
     { op: "replace", path: `/spec/template/spec/containers/${index}/image`, value: image },
     ...(source?.patch ?? []),
-    ...(mode === "portable-pwa" ? [releaseAnnotation, "kodex.dev/component-source-sha", "kodex.dev/component-upgrade-sha256"].map(key =>
+    ...(portable ? [releaseAnnotation, "kodex.dev/component-source-sha", "kodex.dev/component-upgrade-sha256"].map(key =>
       ({ op: "add", path: "/spec/template/metadata/annotations/" + key.replaceAll("/", "~1"), value: annotations[key] })) :
       [{ op: "add", path: "/spec/template/metadata/annotations", value: annotations }]),
   ];
@@ -263,9 +293,12 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
   }
   requireValue(["plan", "apply", "recovery-plan", "recovery-apply"].includes(command), "INVALID_COMMAND");
   const context = options["--context"];
-  const portable = options["--profile"] === "portable-pwa";
+  const profile = options["--profile"];
+  const portableTarget = portableTargets.get(profile);
+  const portable = portableTarget !== undefined;
   requireValue(options["--profile"] === undefined || portable, "EXACT_RELEASE_PROFILE_REQUIRED");
-  requireValue(!portable || (options["--kubeconfig"] && !options["--k3s-sudo"] && ["plan", "apply"].includes(command)), "PORTABLE_PWA_ACCESS_REQUIRED");
+  requireValue(!portable || (options["--kubeconfig"] && !options["--k3s-sudo"] && ["plan", "apply"].includes(command)),
+    profile === "portable-pwa" ? "PORTABLE_PWA_ACCESS_REQUIRED" : "PORTABLE_INTEGRATION_GATEWAY_ACCESS_REQUIRED");
   const executorSHA = portable ? sourceInspector(resolve(fileURLToPath(new URL("../../", import.meta.url)))).revision : undefined;
   requireValue(typeof context === "string" && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context) &&
     !/prod(?:uction)?/i.test(context), "EXACT_STAGING_CONTEXT_REQUIRED");
@@ -284,18 +317,20 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
   requireValue(!portable || uuid.test(namespaceUID ?? ""), "INVALID_NAMESPACE_IDENTITY");
   const recovery = command.startsWith("recovery-");
   const incident = options["--incident"];
+  const mode = profile ?? (recovery ? "recovery" : "release");
   if (recovery) requireValue(/^https:\/\/github\.com\/codex-k8s\/kodex\/issues\/[1-9][0-9]*$/.test(incident ?? ""), "EXACT_INCIDENT_REQUIRED");
   else requireValue(incident === undefined, "UNEXPECTED_INCIDENT");
   if (command === "plan" || command === "recovery-plan") {
     requireValue(options["--manifest"] && options["--output"] && !options["--plan"] && !options["--confirm"], "INVALID_PLAN_ARGUMENTS");
     const manifest = validateManifest(portable ? await readPrivateJSON(options["--manifest"]) : JSON.parse(await readFile(options["--manifest"], "utf8")));
-    requireValue(!portable || (manifest.targets.length === 1 && manifest.targets[0].name === "staff-control-center"), "SINGLE_PWA_TARGET_REQUIRED");
+    requireValue(!portable || (manifest.targets.length === 1 && manifest.targets[0].name === portableTarget),
+      profile === "portable-pwa" ? "SINGLE_PWA_TARGET_REQUIRED" : "SINGLE_INTEGRATION_GATEWAY_TARGET_REQUIRED");
     if (recovery) requireValue(manifest.targets.length === 1, "SINGLE_RECOVERY_TARGET_REQUIRED");
     const releaseID = randomUUID();
     const targets = [];
     for (const target of manifest.targets) {
       const deployment = await get("deployment", target.name);
-      const planned = planTarget(deployment, target, releaseID, undefined, portable ? "portable-pwa" : recovery ? "recovery" : "release");
+      const planned = planTarget(deployment, target, releaseID, undefined, mode);
       // Не сохраняем env, annotations или security references в плане и журнале.
       const { patch: _patch, ...safe } = planned;
       targets.push({ ...safe, requested: target });
@@ -303,7 +338,7 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
     await createPrivate(options["--output"], { version: 1, releaseID, context,
       accessProfile: options["--k3s-sudo"] === true ? "k3s-sudo" : "kubectl", clusterUID: identity,
       ...(options["--kubeconfig"] ? { kubeconfig: options["--kubeconfig"] } : {}),
-      ...(portable ? { profile: "portable-pwa", namespaceUID, executorSHA } : {}),
+      ...(portable ? { profile, namespaceUID, executorSHA } : {}),
       ...(recovery ? { kind: "APPLICATION_READINESS_RECOVERY", incident } : {}), targets });
     process.stdout.write(`Release plan ready: targets=${targets.length} release=${releaseID}\n`);
     return;
@@ -317,7 +352,8 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
   const plan = portable ? await readPrivateJSON(options["--plan"]) : JSON.parse(await readFile(options["--plan"], "utf8"));
   requireValue(plan.version === 1 && plan.context === context &&
     plan.kubeconfig === options["--kubeconfig"] &&
-    (portable ? plan.profile === "portable-pwa" && plan.namespaceUID === namespaceUID && plan.executorSHA === executorSHA && plan.targets?.length === 1 && plan.targets[0].name === "staff-control-center" : plan.profile === undefined) &&
+    (portable ? plan.profile === profile && plan.namespaceUID === namespaceUID && plan.executorSHA === executorSHA &&
+      plan.targets?.length === 1 && plan.targets[0].name === portableTarget : plan.profile === undefined) &&
     plan.accessProfile === (options["--k3s-sudo"] === true ? "k3s-sudo" : "kubectl") &&
     plan.clusterUID === identity && uuid.test(plan.releaseID) &&
     Array.isArray(plan.targets), "RELEASE_PLAN_IDENTITY_MISMATCH");
@@ -335,7 +371,7 @@ export async function releaseCLI(args, commandPort, sourceInspector = inspectSou
         const current = await get("deployment", item.name);
         requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.beforeSpecSHA256,
           "DEPLOYMENT_CHANGED_AFTER_PLAN");
-        const prepared = planTarget(current, item.requested, plan.releaseID, undefined, portable ? "portable-pwa" : recovery ? "recovery" : "release");
+        const prepared = planTarget(current, item.requested, plan.releaseID, undefined, mode);
         requireValue(prepared.afterSpecSHA256 === item.afterSpecSHA256, "PLAN_CONTENT_MISMATCH");
         await record({ name: item.name, status: "PATCH_ATTEMPT", beforeImage: prepared.beforeImage, image: prepared.image,
           rollback: prepared.rollback });
