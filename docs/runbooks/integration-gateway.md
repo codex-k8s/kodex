@@ -113,14 +113,14 @@ integration. Его безопасная конфигурация передаё
 ```text
 KODEX_INTEGRATION_E2E_GITHUB_OWNER=codex-k8s
 KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY=kodex-integration-e2e
-KODEX_GITHUB_BOT_PAT=<Kubernetes Secret source only>
+KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE=/absolute/private/path/github-fixture-token
 ```
 
-Repository private; `kodex-agent` имеет pull/push без admin. Значение
-`KODEX_GITHUB_BOT_PAT` не включается в package, Connection, manifest, command
-line или отчёт. Двухфазная команда Control Center создаёт/обновляет data key в
-`kodex-integration-credentials`, после чего Connection получает только
-authoritative Secret metadata и content digest. В production fixture owner и
+Отдельный PAT тестового пользователя ограничен разрешённым private repository,
+чтением metadata и записью Issues. Тест устанавливает PAT через API личной
+привязки инициатора. Connection и результаты чтения содержат безопасные
+метаданные. Значение PAT не включается в package, Connection, manifest, argv
+или отчёт. В production fixture owner и
 repository не имеют default и всегда задаются Connection config.
 
 ## Поддерживаемый deployed local E2E
@@ -180,25 +180,26 @@ directory и удаляются по `trap`; screenshot, trace, video и HTML re
 
 GitHub-профиль выключен по умолчанию. Он включается только явным
 `KODEX_INTEGRATION_E2E_GITHUB=1`, всегда ограничен private repository
-`codex-k8s/kodex-integration-e2e` и требует ровно один источник token:
+из `KODEX_INTEGRATION_E2E_GITHUB_OWNER` и
+`KODEX_INTEGRATION_E2E_GITHUB_REPOSITORY` и требует отдельный файл PAT:
 
 ```bash
 export KODEX_INTEGRATION_E2E_GITHUB=1
-export KODEX_GITHUB_BOT_PAT_FILE='/absolute/owner-private/path/kodex-agent.token'
+export KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE=/absolute/private/path/github-fixture-token
 make test-integration-deployed-e2e
 ```
 
-Вместо файла допускается owner-private environment
-`KODEX_GITHUB_BOT_PAT`; одновременно задавать оба источника запрещено. Файл
-должен быть regular non-symlink, принадлежать текущему UID и не иметь прав для
-group/other. Token передаётся в двухфазную credential-команду платформы и не
-попадает в argv, Connection readback, reporter или artifacts.
+Файл принадлежит текущему UID, имеет режим `0600` и одну ссылку. Playwright
+открывает его без перехода по symlink. Значение PAT передаётся в API личной
+привязки платформы и не попадает в argv, Connection readback, reporter или
+artifacts.
 
-GitHub-сценарий читает metadata exact private repository, затем через
-`invoke_integration` создаёт ровно один issue с уникальным marker после Human
-Gate. Прямой GitHub API применяется только для authoritative before/after
-readback и cleanup: созданный issue закрывается в `finally`. `gh` и прямой API
-не используются как доказательство платформенного write.
+GitHub-сценарий читает metadata private repository через `invoke_integration`
+в режиме `ALL_ACCESSIBLE`. После переключения в `SELECTED` создаётся один
+issue с уникальным маркером после Human Gate. Прямой GitHub API подтверждает
+эффект и закрывает один подтверждённый issue в прежнем репозитории. При
+неполном поиске, смене идентичности репозитория или нескольких совпадениях
+сценарий сообщает об ошибке.
 
 Статическая проверка TypeScript и обнаружения отдельного suite выполняется без
 мутаций:

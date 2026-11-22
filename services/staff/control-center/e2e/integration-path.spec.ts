@@ -333,6 +333,8 @@ test.describe("deployed local integration path", () => {
     let token: string | undefined = await readGitHubToken();
     const marker = `kodex-integration-e2e:${environment.resourcePrefix}`;
     let cleanupIssueNumber = 0;
+    let fixtureRepositoryID = 0;
+    let writeRunRef: string | undefined;
     let credentialPath: string | undefined;
 
     try {
@@ -347,6 +349,7 @@ test.describe("deployed local integration path", () => {
       expect(Number.isSafeInteger(repository.id) && repository.id > 0).toBe(
         true,
       );
+      fixtureRepositoryID = repository.id;
       expect(await findGitHubMarkerIssues(token, marker)).toHaveLength(0);
 
       await gotoWithRetry(page, "/projects");
@@ -506,6 +509,7 @@ test.describe("deployed local integration path", () => {
       );
       const gate = await waitForOpenGate(page, writeRun.ref);
       expect(await findGitHubMarkerIssues(token, marker)).toHaveLength(0);
+      writeRunRef = writeRun.ref;
       expect((await resolveGate(page, gate, "APPROVE")).state).toBe("APPROVED");
       await waitForTerminalRun(page, writeRun.ref, "SUCCEEDED");
       await expectIntegrationToolCall(page, writeRun.ref, "SUCCEEDED");
@@ -544,21 +548,23 @@ test.describe("deployed local integration path", () => {
         if (credentialPath)
           await revokePersonalGitHubCredential(page, credentialPath);
       } finally {
-        if (token) {
-          const issues =
-            cleanupIssueNumber > 0
-              ? [{ number: cleanupIssueNumber }]
-              : await findGitHubMarkerIssues(token, marker).catch(() => []);
-          for (const issue of issues) {
-            await githubRequest<GitHubIssue>(
-              token,
-              `${githubRepositoryPath(github)}/issues/${String(issue.number)}`,
-              {
-                method: "PATCH",
-                body: { state: "closed", state_reason: "not_planned" },
-              },
+        if (token && writeRunRef) {
+          const run = await readAPI<Run>(
+            page,
+            `/api/v1/runs/${encodeURIComponent(writeRunRef)}`,
+          );
+          if (!terminalStates.has(run.state)) {
+            throw new Error(
+              "GitHub fixture cleanup requires a terminal write run",
             );
           }
+          await closeGitHubFixtureIssue(
+            token,
+            github,
+            fixtureRepositoryID,
+            marker,
+            cleanupIssueNumber,
+          );
         }
         token = undefined;
       }
@@ -1564,6 +1570,7 @@ async function restartIntegrationGateway(): Promise<void> {
   const childEnvironment = { ...process.env };
   delete childEnvironment.KODEX_GITHUB_BOT_PAT;
   delete childEnvironment.KODEX_GITHUB_BOT_PAT_FILE;
+  delete childEnvironment.KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE;
   try {
     await execFileAsync(
       "kubectl",
@@ -1673,6 +1680,7 @@ async function verifySingleProviderAffinity(
   delete childEnvironment.KODEX_PROVIDER_E2E_API_KEY_FILE;
   delete childEnvironment.KODEX_GITHUB_BOT_PAT;
   delete childEnvironment.KODEX_GITHUB_BOT_PAT_FILE;
+  delete childEnvironment.KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE;
   const contextResult = await execFileAsync(
     "kubectl",
     ["config", "current-context"],
@@ -1791,6 +1799,7 @@ function localKubernetesEnvironment(): NodeJS.ProcessEnv {
   delete childEnvironment.KODEX_PROVIDER_E2E_API_KEY_FILE;
   delete childEnvironment.KODEX_GITHUB_BOT_PAT;
   delete childEnvironment.KODEX_GITHUB_BOT_PAT_FILE;
+  delete childEnvironment.KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE;
   return childEnvironment;
 }
 
@@ -1821,14 +1830,9 @@ function githubRepositoryPath(configuration: {
 }
 
 async function readGitHubToken(): Promise<string> {
-  const direct = process.env.KODEX_GITHUB_BOT_PAT;
-  const file = process.env.KODEX_GITHUB_BOT_PAT_FILE;
-  if ((direct === undefined) === (file === undefined)) {
-    throw new Error("Exactly one GitHub token source must be configured");
-  }
-  if (direct !== undefined) return validateToken(direct);
+  const file = process.env.KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE;
   if (!file || !isAbsolute(file))
-    throw new Error("KODEX_GITHUB_BOT_PAT_FILE must be absolute");
+    throw new Error("KODEX_INTEGRATION_E2E_GITHUB_PAT_FILE must be absolute");
 
   const handle = await open(
     file,
@@ -1838,9 +1842,10 @@ async function readGitHubToken(): Promise<string> {
     const stat = await handle.stat();
     if (
       !stat.isFile() ||
+      stat.nlink !== 1 ||
       stat.size < 1 ||
       stat.size > 16_384 ||
-      (stat.mode & 0o077) !== 0
+      (stat.mode & 0o777) !== 0o600
     ) {
       throw new Error(
         "GitHub token file must be a bounded owner-private regular file",
@@ -1905,7 +1910,57 @@ async function findGitHubMarkerIssues(
           (issue.body ?? "").includes(`<!-- ${marker} -->`),
       ),
     );
-    if (issues.length < 100) break;
+    if (issues.length < 100) return found;
   }
-  return found;
+  throw new Error("GitHub fixture issue search exceeded the page limit");
+}
+
+async function closeGitHubFixtureIssue(
+  token: string,
+  github: ReturnType<typeof githubFixtureConfiguration>,
+  repositoryID: number,
+  marker: string,
+  issueNumber: number,
+): Promise<void> {
+  const path = githubRepositoryPath(github);
+  const repository = await githubRequest<GitHubRepository>(token, path);
+  if (
+    repository.id !== repositoryID ||
+    repository.private !== true ||
+    repository.full_name !== `${github.owner}/${github.repository}`
+  ) {
+    throw new Error("GitHub fixture cleanup repository scope changed");
+  }
+  const issues = await findGitHubMarkerIssues(token, marker);
+  const [issue] = issues;
+  if (
+    issues.length !== 1 ||
+    !issue ||
+    !Number.isSafeInteger(issue.number) ||
+    issue.number < 1 ||
+    (issueNumber > 0 && issue.number !== issueNumber)
+  ) {
+    throw new Error("GitHub fixture cleanup could not confirm one exact issue");
+  }
+  if (issue.state === "closed") return;
+  if (issue.state !== "open")
+    throw new Error("GitHub fixture issue state is unknown");
+  const issuePath = `${path}/issues/${String(issue.number)}`;
+  try {
+    await githubRequest<GitHubIssue>(token, issuePath, {
+      method: "PATCH",
+      body: { state: "closed", state_reason: "not_planned" },
+    });
+  } catch {
+    // Потерянный ACK проверяется чтением того же issue без нового PATCH.
+  }
+  const closed = await githubRequest<GitHubIssue>(token, issuePath);
+  if (
+    closed.number !== issue.number ||
+    closed.state !== "closed" ||
+    closed.pull_request ||
+    !(closed.body ?? "").includes(`<!-- ${marker} -->`)
+  ) {
+    throw new Error("GitHub fixture issue close is unconfirmed");
+  }
 }
