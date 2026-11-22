@@ -15,6 +15,7 @@ import subprocess
 
 import yaml
 import bootstrap_completion as completion
+import release_materializer
 from deployment_profile import require, Rejected
 from portable_state import State, seal, verify_resource, verify_schemas, normalized_pod
 
@@ -155,6 +156,8 @@ def prepare(previous_raw, target_raw, profile):
         elif resource.get('kind') == 'Job' and resource['metadata']['name'] == MIGRATION:
             resource['spec']['backoffLimit'] = 0
             migration_contract(resource)
+    if image_only:
+        release_materializer.version(result)
     require(not any(r.get('kind') == 'ConfigMap' and r['metadata']['name'].startswith('kodex-bootstrap-upgrade-') for r in result),
             'UPGRADE_PROFILE_COLLISION')
     raw = json.dumps(profile, sort_keys=True, separators=(',', ':')).encode()
@@ -209,12 +212,12 @@ def verify_apply(state, resources, receipt):
     if receipt['origin'] == IMAGE_ORIGIN:
         completion.verify_render_pin(receipt, sha(render_bytes(resources)))
     from authority_registry import verify_upgrade_preconditions
-    verify_upgrade_preconditions(state, resources)
+    verify_upgrade_preconditions(state, resources, versioned_materializer=receipt['origin'] == IMAGE_ORIGIN)
     completion.verify(state, resources, receipt)
     proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
     if receipt['origin'] == IMAGE_ORIGIN:
         completion.verify(state, resources, receipt)
-    verify_upgrade_preconditions(state, resources)
+    verify_upgrade_preconditions(state, resources, versioned_materializer=receipt['origin'] == IMAGE_ORIGIN)
     return {'status': 'SAME_SCHEMA_UPGRADE_APPLY_VERIFIED' if receipt['origin'] == IMAGE_ORIGIN else 'FORWARD_UPGRADE_APPLY_VERIFIED',
             'schema_proof_sha256': proof, 'effects_replayed': False}
 

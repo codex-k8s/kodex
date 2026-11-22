@@ -210,6 +210,16 @@ verify_provider_credential() {
 
 verify_provider_credential
 
+materializer_job_name=release-artifact-materializer
+if ((${#completion_arguments[@]})); then
+  # Выбираем Job один раз по тому же защищённому render, который прошёл receipt gates.
+  materializer_job_name=$(python3 -B "$repository_root/tools/install/release_materializer.py" \
+    --render "$render_file") || fail 'release materializer contract rejected'
+  [[ "$materializer_job_name" == release-artifact-materializer || \
+     "$materializer_job_name" =~ ^release-materializer-[a-f0-9]{40}$ ]] || \
+    fail 'release materializer Job identity is invalid'
+fi
+
 render_filter() {
   local name=$1 expression=$2 output
   output="$temporary_directory/$name.yaml"
@@ -360,6 +370,8 @@ reconcile_immutable_configmaps() {
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
     [[ "$mode" != upgrade || "$name" != internal-rpc-authority-publisher-target-registry ]] || continue
+    # Версия рецепта является новой immutable identity; прежнюю историю не удаляем.
+    [[ "$mode" != upgrade || ! "$name" =~ ^kodex-materializer-script-[a-f0-9]{24}$ ]] || continue
     if ! current=$(kubectl --context "$context" -n "$namespace" get \
       "configmap/$name" -o json 2>/dev/null); then
       continue
@@ -899,7 +911,7 @@ apply_workloads_after_authority() {
     kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
       --timeout=15m >/dev/null || fail "release materializer dependency failed: $dependency"
   done
-  apply_job release-artifact-materializer
+  apply_job "$materializer_job_name"
   for dependency in kodex-image-registry-pull kodex-buildkit; do
     kubectl --context "$context" -n "$namespace" rollout status "deployment/$dependency" \
       --timeout=15m >/dev/null || fail "role image builder dependency failed: $dependency"
@@ -1081,9 +1093,9 @@ if ((${#completion_arguments[@]})); then
     --render "$render_file" --context "$context" "${completion_arguments[@]}"
 fi
 for job_name in kodex-postgresql-runtime-credentials internal-rpc-authority-migrate \
-  control-plane-migrate control-plane-broker-bootstrap release-artifact-materializer \
+  control-plane-migrate control-plane-broker-bootstrap "$materializer_job_name" \
   email-bridge-migration; do
-  if ((${#completion_arguments[@]})) && [[ "$job_name" != release-artifact-materializer ]]; then
+  if ((${#completion_arguments[@]})) && [[ "$job_name" != "$materializer_job_name" ]]; then
     # Только пять bootstrap Jobs уже проверены по receipt; другие Jobs обязательны live.
     continue
   fi

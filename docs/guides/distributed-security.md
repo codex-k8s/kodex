@@ -138,6 +138,10 @@ private snapshot, а readback сверяет SHA256 фактически про�
 Stock upgrade проверяет текущую пару registry/publisher вместе с маркерами
 ротации до первой записи. Его apply и immutable reconciliation исключают оба
 ресурса из области записи. Изменения пары проходят собственный owner lifecycle.
+Имя materializer Job закрепляется за source SHA, который задаёт область
+promotion tags. Recipe digest связывает релиз, исполняемый spec и содержимое
+immutable script ConfigMap. Повтор одного source присоединяется к точному
+Job, а конфликт recipe и незавершённый прежний writer отклоняются до create.
 
 При смене image policy runtime AppArmor-проекция и admission binding обновляются
 вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker

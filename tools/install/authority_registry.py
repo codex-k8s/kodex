@@ -11,6 +11,7 @@ import yaml
 from deployment_profile import require, Rejected
 from portable_state import State, verify_resource, verify_schemas, key
 import bootstrap_completion
+import release_materializer
 import component_image_profile
 import clamav_profile
 import egress_secret_access
@@ -91,7 +92,7 @@ def verify_completed_bootstrap(state, resources, completion=None):
     bootstrap_completion.verify_jobs(state, resources, completion)
 
 
-def verify_upgrade_preconditions(state, resources):
+def verify_upgrade_preconditions(state, resources, versioned_materializer=False):
     """Сверяет сохраняемую authority и существующий materializer до записи rollout."""
     ignored_annotations = {'kubectl.kubernetes.io/last-applied-configuration', 'deployment.kubernetes.io/revision'}
     for kind, name in (('ConfigMap', REGISTRY), ('Deployment', PUBLISHER)):
@@ -107,7 +108,8 @@ def verify_upgrade_preconditions(state, resources):
         if kind == 'ConfigMap':
             require(all(desired.get(field, {}) == live.get(field, {}) for field in ('data', 'binaryData')) and
                     desired.get('immutable', False) == live.get('immutable', False), 'UPGRADE_AUTHORITY_REGISTRY_DRIFT')
-    existing_job(state, resources, 'release-artifact-materializer')
+    job, _ = release_materializer.resolve(resources, versioned_required=versioned_materializer)
+    existing_job(state, resources, job['metadata']['name'], require_script=False)
 
 
 def verify_startup_only(state, observed):
@@ -228,15 +230,19 @@ def verify_workload_resume(state, resources, previous, buildkit_profile='standar
                 migrations='VERIFIED_NOT_REPEATED', authorityHistory='PRESERVED_NOT_REPLAYED')
 
 
-def existing_job(state, resources, name):
+def existing_job(state, resources, name, require_script=True):
     """Проверяет существующий Job, не повторяя его известный либо неизвестный эффект."""
     desired = one(resources, 'Job', name)
     actual = state.get(desired)
-    if actual is None:
-        return False
-    verify_resource(desired, actual)
-    require(not any(c.get('type') == 'Failed' and c.get('status') == 'True' for c in actual.get('status', {}).get('conditions', [])), 'FAILED_JOB_REQUIRES_RECONCILIATION')
-    return True
+    if actual is not None:
+        verify_resource(desired, actual)
+        require(not any(c.get('type') == 'Failed' and c.get('status') == 'True' for c in actual.get('status', {}).get('conditions', [])),
+                'FAILED_JOB_REQUIRES_RECONCILIATION')
+    if name.startswith(release_materializer.JOB_PREFIX):
+        job, script = release_materializer.resolve(resources, versioned_required=True)
+        require(job == desired, 'MATERIALIZER_SELECTED_JOB_CHANGED')
+        release_materializer.verify_live(state, job, script, actual, require_script)
+    return actual is not None
 
 
 def verify_resume(state, resources, completion=None):
@@ -327,7 +333,8 @@ def main():
             print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode, args.clamav_storage_profile, args.preserve_observability_profile)))
         elif args.mode == 'verify-bootstrap':
             if completion is not None and completion['origin'] in bootstrap_completion.ORIGINS[2:]:
-                verify_upgrade_preconditions(state, resources)
+                verify_upgrade_preconditions(state, resources,
+                    versioned_materializer=completion['origin'] == bootstrap_completion.ORIGINS[3])
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))
         elif args.mode == 'existing-job':

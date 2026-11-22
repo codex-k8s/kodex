@@ -17,6 +17,7 @@ repository_root=$FIXTURE_REPOSITORY
 context=synthetic-context
 namespace=kodex-system
 clamav_storage_profile=$FIXTURE_CLAMAV_STORAGE
+materializer_job_name=$FIXTURE_MATERIALIZER_JOB
 render_file=$FIXTURE_MANIFEST
 yq() { "$FIXTURE_YQ" "$@"; }
 stage() {
@@ -52,7 +53,7 @@ python3() {
 apply_job() {
   [[ $# == 1 ]] || fail 'unexpected Job arguments'
   case "$1" in
-    release-artifact-materializer) stage materializer-terminal ;;
+    "$FIXTURE_MATERIALIZER_JOB") stage materializer-terminal ;;
     clamav-db-bootstrap-aaaaaaaaaaaaaaaa) stage clamav-bootstrap-terminal ;;
     *) fail 'unexpected Job' ;;
   esac
@@ -107,18 +108,21 @@ class InstallWorkloadStartupTest(unittest.TestCase):
             for profile in ['shared-rwx','node-local-rwo']:
                 stages=STAGES if profile=='shared-rwx' else STAGES[:2]+['ready:clamav-egress-gateway','clamav-bootstrap-terminal']+STAGES[2:]
                 scenarios += [(profile,'success',stages)]+[(profile,'fail-'+stage,stages[:index+1]) for index,stage in enumerate(stages)]
-            for index, (profile, scenario, expected) in enumerate(scenarios):
-                with self.subTest(scenario=scenario):
-                    trace = temporary / ('trace-'+str(index)); selected = temporary / ('selected-'+str(index))
-                    environment = {'PATH': str(temporary/'empty-path'), 'HOME': directory,
-                                   'FIXTURE_REPOSITORY': str(ROOT), 'FIXTURE_YQ': yq, 'FIXTURE_CLAMAV_STORAGE': profile,
-                                   'FIXTURE_FUNCTION': str(helper), 'FIXTURE_MANIFEST': str(fixture),
-                                   'FIXTURE_TRACE': str(trace), 'FIXTURE_SELECTED': str(selected), 'FIXTURE_SCENARIO': scenario}
-                    result = subprocess.run([bash, '--noprofile', '--norc', str(harness)], env=environment,
-                                            cwd=directory, capture_output=True, timeout=5)
-                    actual = trace.read_text().splitlines() if trace.exists() else []
-                    self.assertEqual(result.returncode == 0, scenario == 'success', 'wrong startup outcome: '+scenario+' ' + result.stderr.decode(errors='replace')[:512])
-                    self.assertEqual(actual, expected, 'mandatory gate was skipped or later effect ran: '+scenario)
+            for materializer in ('release-artifact-materializer', 'release-materializer-' + 'a' * 40):
+                for index, (profile, scenario, expected) in enumerate(scenarios):
+                    with self.subTest(materializer=materializer, profile=profile, scenario=scenario):
+                        trace = temporary / f'trace-{materializer}-{index}'
+                        selected = temporary / f'selected-{materializer}-{index}'
+                        environment = {'PATH': str(temporary/'empty-path'), 'HOME': directory,
+                                       'FIXTURE_REPOSITORY': str(ROOT), 'FIXTURE_YQ': yq, 'FIXTURE_CLAMAV_STORAGE': profile,
+                                       'FIXTURE_MATERIALIZER_JOB': materializer,
+                                       'FIXTURE_FUNCTION': str(helper), 'FIXTURE_MANIFEST': str(fixture),
+                                       'FIXTURE_TRACE': str(trace), 'FIXTURE_SELECTED': str(selected), 'FIXTURE_SCENARIO': scenario}
+                        result = subprocess.run([bash, '--noprofile', '--norc', str(harness)], env=environment,
+                                                cwd=directory, capture_output=True, timeout=5)
+                        actual = trace.read_text().splitlines() if trace.exists() else []
+                        self.assertEqual(result.returncode == 0, scenario == 'success', 'wrong startup outcome: '+scenario+' ' + result.stderr.decode(errors='replace')[:512])
+                        self.assertEqual(actual, expected, 'mandatory gate was skipped or later effect ran: '+scenario)
 
 
 if __name__ == '__main__':

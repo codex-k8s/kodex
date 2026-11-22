@@ -41,6 +41,9 @@ native catalog verifier. Unknown schema и дополнительные поля
    Различия bootstrap command/args/env/volumes/identity отклоняются. Единственная
    нормализация — уже поддержанные значения migration backoff0/2 при сравнении;
    в выходе остаётся исходный spec, а не изменённый Job.
+   Prepare также создаёт декларации Job `release-materializer-<source-sha>`
+   и immutable ConfigMap его скрипта. Recipe SHA256 закрепляет release lock,
+   Job и скрипт. SHA источника совпадает с областью promotion tags.
 3. До rollout выполнить `bootstrap_upgrade.py capture --render ...
    --previous-render ... --target-render ... --previous-receipt ...
    --previous-receipt-sha256 ... --context ... --output ...`. Capture проверяет
@@ -62,8 +65,14 @@ native catalog verifier. Unknown schema и дополнительные поля
    `tools/release/authority-publisher-image.mjs`. Подготовленный render
    должен закреплять уже действующие registry data, rotation markers и spec
    publisher.
-   При наличии `release-artifact-materializer` его spec и состояние сверяются
-   до записи rollout. Поздний запуск по-прежнему использует штатный lifecycle Job.
+   До записи rollout и непосредственно перед запуском проверяются выбранный
+   Job, его script ConfigMap и завершение прежних materializer writers.
+   Повтор одного release использует прежний Job. Другая recipe для того же SHA,
+   конфликт script ConfigMap или неподтверждённое завершение прежнего writer
+   закрывают допуск. Прежний Job и его скрипт остаются в истории.
+   Сохраняйте Job и его script ConfigMap, пока используется соответствующий
+   release source. Если Job удалён вне установщика, перед повтором вручную
+   сверьте публикацию артефактов в registry.
    Все пять bootstrap Jobs пропускаются; штатный materializer и остальные
    rollout/readback gates остаются обязательными.
 5. Проверить actual CRI digests, readiness, данные и функции. Сохранить новый
@@ -77,6 +86,7 @@ native catalog verifier. Unknown schema и дополнительные поля
 | prepare | Operator + Git-managed exact profile и два render | Новый render сохраняет пять прежних effects; mismatch закрыто отклоняется, API вызовов нет |
 | capture | Оба исходных render + прежний pinned completion + текущие Kubernetes UID/spec и native SQL catalog | Новый `SAME_SCHEMA_IMAGE_UPGRADE` receipt сохраняет исходные Job UID/timestamps и закрепляет подготовленный render; только чтение |
 | verify/apply | Stock operator lifecycle + новый receipt/profile, свежий native proof и точная пара registry/publisher | Bootstrap не повторяется; пара authority остаётся в области записи штатной ротации |
+| materializer | Release source, immutable recipe и текущие Job/Pod identities | Точный Job запускается либо используется повторно. Прежний незавершённый writer или конфликт того же source останавливают rollout |
 | TTL / повтор / второе обновление | Прежняя цепочка receipt, original cluster/namespace и fingerprints | Сохраняются те же effects; отсутствие доказательств не заменяется успехом |
 | Drift / crash / неизвестный исход apply | Actual readback и сохранённый operation journal | Нет автоматического повторного apply либо новых bootstrap effects |
 
@@ -85,6 +95,10 @@ render, а также native schema proof. Исходные Job UID сохран
 смены образов без `prepared_render_sha256` повторите capture из сохранённых
 исходных render и предшествующей квитанции. Эта операция выполняется только
 чтением. Forward migration сохраняет собственный формат квитанции.
+Для старого подготовленного image upgrade с фиксированным именем materializer
+повторите prepare и capture по исходным pins. Прежние квитанции bootstrap и
+завершённые Jobs сохраняются. Fresh и forward профили используют фиксированное
+имя своего materializer.
 
 ## Проверка и возврат
 
