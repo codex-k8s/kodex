@@ -12,9 +12,21 @@ import yaml
 import bootstrap_completion as completion
 import bootstrap_upgrade as upgrade
 import authority_registry as authority
+import release_materializer as materializer
 from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
-from test_bootstrap_upgrade import fixture, controller_defaults
+from test_bootstrap_upgrade import fixture, controller_defaults, pin_materializer
+
+
+class MaterializerState(State):
+    def call(self, args):
+        if args[:3] == ['-n','kodex-system','get'] and 'app.kubernetes.io/name=' + materializer.JOB in args:
+            self.calls.append(args)
+            rows = getattr(self, 'materializer_pods', []) if args[3] == 'pods' else [
+                r for r in self.current.values() if r['kind'] == 'Job' and
+                r['metadata'].get('labels', {}).get(materializer.NAME_LABEL) == materializer.JOB]
+            return json.dumps({'items':rows}).encode()
+        return super().call(args)
 
 
 class ImageUpgradeTests(unittest.TestCase):
@@ -36,6 +48,8 @@ class ImageUpgradeTests(unittest.TestCase):
                             container['image'] = 'registry.example.invalid/bootstrap@sha256:' + 'a' * 64
                 target = copy.deepcopy(old)
                 upgrade.installation(target)['source.sha'] = 'b' * 40
+                pin_materializer(old, 'a' * 40)
+                pin_materializer(target, 'b' * 40)
                 for job in completion.desired_jobs(target).values():
                     for field in ('containers', 'initContainers'):
                         for container in job['spec']['template']['spec'].get(field, []):
@@ -48,15 +62,26 @@ class ImageUpgradeTests(unittest.TestCase):
                 prepared = upgrade.prepare(before, after, profile)
                 self.assertEqual(completion.desired_jobs(prepared), completion.desired_jobs(old))
                 expected = copy.deepcopy(target)
+                job, script = materializer.resolve(prepared, versioned_required=True)
+                original_job, _ = materializer.resolve(target)
+                self.assertEqual(job['metadata']['name'], materializer.JOB_PREFIX + 'b' * 40)
+                self.assertEqual(script['data'], next(r['data'] for r in target if r['kind'] == 'ConfigMap'
+                                                      and r['metadata']['name'] == materializer.SCRIPT))
+                self.assertEqual(job['spec']['template']['metadata'], original_job['spec']['template']['metadata'])
                 for index, resource in enumerate(expected):
                     if resource.get('kind') == 'Job' and resource['metadata']['name'] in completion.JOBS:
                         expected[index] = copy.deepcopy(completion.desired_jobs(old)[resource['metadata']['name']])
+                    elif resource['kind'] == 'Job' and resource['metadata']['name'] == materializer.JOB:
+                        expected[index] = job
+                    elif resource['kind'] == 'ConfigMap' and resource['metadata']['name'] == materializer.SCRIPT:
+                        expected[index] = script
                 self.assertEqual(prepared[:-1], expected)
 
     def prepared(self):
         old, target, before, after, profile = fixture(20261108000100, 20261108000100)
         profile.update(schema=upgrade.IMAGE_SCHEMA, upgrade_kind=upgrade.IMAGE_KIND)
-        state = State(old)
+        state = MaterializerState(old)
+        state.current[materializer.JOB]['status']['conditions'] = [{'type':'Complete','status':'True'}]
         controller_defaults(state)
         with patch.object(completion, 'verify_schemas'):
             receipt = completion.capture(state, old)
@@ -111,15 +136,83 @@ class ImageUpgradeTests(unittest.TestCase):
         old, _, before, after, profile, state, receipt = self.prepared()
         prepared = upgrade.prepare(before, after, profile)
         result = self.capture(state, prepared, old, receipt, before, after)
-        materializer = state.current['release-artifact-materializer']
-        materializer['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/changed:latest'
+        job, script = materializer.resolve(prepared)
+        name = job['metadata']['name']
+        state.current[name] = copy.deepcopy(job)
+        state.current[name]['metadata']['uid'] = uuid(99)
+        state.current[script['metadata']['name']] = copy.deepcopy(script)
+        state.current[name]['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/changed:latest'
+        controller_defaults(state)
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof') as proof:
             with self.assertRaises(Rejected):
                 upgrade.verify_apply(state, prepared, result)
             proof.assert_not_called()
-            del state.current['release-artifact-materializer']
+            del state.current[name]
             upgrade.verify_apply(state, prepared, result)
             proof.assert_called_once()
+
+    def test_materializer_source_slot_binds_the_full_recipe_and_preserves_original_job(self):
+        old, target, before, after, profile, state, _ = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        expected_job, expected_script = materializer.resolve(prepared)
+        changed = copy.deepcopy(target)
+        next(row for row in changed if row['metadata']['name'] == materializer.SCRIPT)['data'][materializer.SCRIPT_FILE] += '# next\n'
+        changed_raw = upgrade.render_bytes(changed)
+        other = upgrade.prepare(before, changed_raw, {**profile,'target_render_sha256':upgrade.sha(changed_raw)})
+        other_job, other_script = materializer.resolve(other)
+        self.assertEqual(other_job['metadata']['name'], expected_job['metadata']['name'])
+        self.assertNotEqual(other_script['metadata']['name'], expected_script['metadata']['name'])
+        self.assertEqual(expected_job['metadata']['annotations'][materializer.RECIPE],
+                         expected_script['metadata']['annotations'][materializer.RECIPE])
+        self.assertTrue(expected_script['immutable'])
+        self.assertEqual(materializer.resolve(old)[0]['metadata']['name'], materializer.JOB)
+        expected_script['data'][materializer.SCRIPT_FILE] += 'changed\n'
+        with self.assertRaisesRegex(Rejected,'MATERIALIZER_RECIPE_DRIFT'):
+            materializer.resolve(prepared)
+
+    def test_materializer_does_not_allow_automatic_job_expiration(self):
+        _, target, before, _, profile, _, _ = self.prepared()
+        next(row for row in target if row['metadata']['name'] == materializer.JOB)['spec']['ttlSecondsAfterFinished'] = 3600
+        raw = upgrade.render_bytes(target)
+        with self.assertRaisesRegex(Rejected, 'MATERIALIZER_JOB_RETENTION_REQUIRED'):
+            upgrade.prepare(before, raw, {**profile, 'target_render_sha256': upgrade.sha(raw)})
+
+    def test_materializer_resumes_selected_exact_job_and_refuses_same_source_or_unjoined_predecessor(self):
+        _, _, before, after, profile, state, _ = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        job, script = materializer.resolve(prepared)
+        name = job['metadata']['name']
+        old = state.current[materializer.JOB]
+        state.current[script['metadata']['name']] = copy.deepcopy(script)
+        self.assertFalse(authority.existing_job(state, prepared, name))
+        changed = copy.deepcopy(state)
+        instance = changed.current[materializer.JOB]
+        instance['status']['active'] = 1
+        with self.assertRaisesRegex(Rejected,'MATERIALIZER_PREVIOUS_JOB_NOT_TERMINAL'):
+            authority.existing_job(changed, prepared, name)
+        instance['status'].pop('active')
+        for env in instance['spec']['template']['spec']['containers'][0]['env']:
+            if env['name'] == 'RELEASE_SOURCE_SHA':
+                env['value'] = 'b' * 40
+        with self.assertRaisesRegex(Rejected,'MATERIALIZER_SOURCE_ALREADY_USED'):
+            authority.existing_job(changed, prepared, name)
+        changed = copy.deepcopy(state)
+        changed.materializer_pods = [{'kind':'Pod','metadata':{'uid':uuid(90),'namespace':'kodex-system',
+            'labels':{materializer.NAME_LABEL:materializer.JOB},
+            'ownerReferences':[{'kind':'Job','uid':old['metadata']['uid'],'controller':True}]},
+            'spec':{'nodeName':'synthetic'},'status':{'phase':'Running'}}]
+        with self.assertRaisesRegex(Rejected,'MATERIALIZER_PREVIOUS_POD_NOT_JOINED'):
+            authority.existing_job(changed, prepared, name)
+        state.current[name] = copy.deepcopy(job)
+        state.current[name]['metadata']['uid'] = uuid(99)
+        state.current[name]['status'] = {'active':1}
+        controller_defaults(state)
+        preimage = copy.deepcopy(state.current)
+        self.assertTrue(authority.existing_job(state, prepared, name))
+        self.assertEqual(state.current, preimage)
+        del state.current[script['metadata']['name']]
+        with self.assertRaisesRegex(Rejected,'MATERIALIZER_LIVE_SCRIPT_REQUIRED'):
+            authority.existing_job(state, prepared, name)
 
     def test_apply_rejects_current_rotation_or_publisher_drift_before_native_sql(self):
         old, _, before, after, profile, state, receipt = self.prepared()
@@ -312,11 +405,11 @@ class ImageUpgradeTests(unittest.TestCase):
                 with self.assertRaises(Rejected): completion.load(path, write(path, altered), True)
 
     def test_second_image_upgrade_preserves_original_uids_and_can_be_verified_again(self):
-        old, _, before, after, profile, state, receipt = self.prepared()
+        old, target, before, after, profile, state, receipt = self.prepared()
         first = upgrade.prepare(before, after, profile)
         first_receipt = self.capture(state, first, old, receipt, before, after)
-        target = copy.deepcopy([r for r in first if not r['metadata']['name'].startswith('kodex-bootstrap-upgrade-')])
         upgrade.installation(target)['source.sha'] = 'c' * 40
+        pin_materializer(target, 'c' * 40)
         for job in completion.desired_jobs(target).values():
             job['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'c' * 64
         before2, after2 = upgrade.render_bytes(first), yaml.safe_dump_all(target).encode()

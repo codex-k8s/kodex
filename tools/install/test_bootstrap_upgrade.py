@@ -11,9 +11,18 @@ import yaml
 import bootstrap_completion as completion
 import bootstrap_upgrade as upgrade
 import observability_profile
+import release_materializer as materializer
 from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
 from test_authority_registry import fixture as authority_fixture
+
+
+def pin_materializer(resources, source):
+    upgrade.installation(resources)['release-lock.sha256'] = source[0] * 64
+    job, _ = materializer.resolve(resources)
+    container = job['spec']['template']['spec']['containers'][0]
+    container['image'] = 'registry.example.invalid/materializer@sha256:' + source[0] * 64
+    next(env for env in container['env'] if env['name'] == 'RELEASE_SOURCE_SHA')['value'] = source
 
 
 def fixture(previous_version=20261030000100, target_version=20261105000100):
@@ -31,11 +40,17 @@ def fixture(previous_version=20261030000100, target_version=20261105000100):
     target[0]['data'].update({'source.sha': 'b' * 40, 'schema-heads.json': json.dumps({**heads, 'control-plane': target_version})})
     for resource in target[1:]: resource['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'b' * 64
     authority = [resource for resource in authority_fixture() if resource['kind'] != 'Job']
-    materializer = copy.deepcopy(resources[-1])
-    materializer['metadata']['name'] = 'release-artifact-materializer'
-    preserved = [*authority, materializer]
+    base = Path(__file__).resolve().parents[2] / 'deploy/k8s/base/image-supply-chain/release-artifact-materializer.yaml'
+    job = next(resource for resource in yaml.safe_load_all(base.read_bytes()) if resource['kind'] == 'Job')
+    job['metadata']['namespace'] = 'kodex-system'
+    job['metadata']['labels']['app.kubernetes.io/part-of'] = 'kodex'
+    script = {'apiVersion':'v1','kind':'ConfigMap','metadata':{'name':materializer.SCRIPT,'namespace':'kodex-system',
+              'labels':{'app.kubernetes.io/part-of':'kodex'}},'data':{materializer.SCRIPT_FILE:'#!/bin/sh\nexit 0\n'}}
+    preserved = [*authority, job, script]
     resources.extend(preserved)
     target.extend(copy.deepcopy(preserved))
+    pin_materializer(resources, 'a' * 40)
+    pin_materializer(target, 'b' * 40)
     before, after = yaml.safe_dump_all(resources).encode(), yaml.safe_dump_all(target).encode()
     profile = {'schema': upgrade.SCHEMA, 'managed_by': 'git', 'previous_render_sha256': upgrade.sha(before), 'target_render_sha256': upgrade.sha(after),
                'previous_source_sha': 'a' * 40, 'target_source_sha': 'b' * 40, 'from_schema_heads': heads,
@@ -49,8 +64,8 @@ def controller_defaults(state):
         if value['kind'] != 'Job': continue
         uid = value['metadata']['uid']
         value['spec']['selector'] = {'matchLabels': {'batch.kubernetes.io/controller-uid': uid}}
-        value['spec']['template']['metadata'] = {'labels': {'batch.kubernetes.io/controller-uid': uid,
-            'batch.kubernetes.io/job-name': value['metadata']['name']}}
+        value['spec']['template'].setdefault('metadata', {}).setdefault('labels', {}).update({
+            'batch.kubernetes.io/controller-uid': uid, 'batch.kubernetes.io/job-name': value['metadata']['name']})
 
 
 class UpgradeState(State):

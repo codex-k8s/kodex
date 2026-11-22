@@ -15,6 +15,120 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 
 
 class Tests(unittest.TestCase):
+    def test_receipt_selects_one_materializer_from_verified_snapshot_before_mutations(self):
+        block = 'materializer_job_name=release-artifact-materializer' + TEXT.split(
+            'materializer_job_name=release-artifact-materializer', 1)[1].split('\nrender_filter() {', 1)[0]
+        setup = r'''
+set -euo pipefail
+repository_root=/synthetic
+render_file=/synthetic/verified-render.yaml
+fail(){ printf '%s\n' "$*" >&2; exit 42; }
+python3(){
+  [[ "$*" == '-B /synthetic/tools/install/release_materializer.py --render /synthetic/verified-render.yaml' ]] || exit 90
+  printf 'select\n' >&2
+  [[ "$selected_name" != REJECT ]] || return 1
+  printf '%s\n' "$selected_name"
+}
+'''
+        for receipt in (False, True):
+            for name in ('release-artifact-materializer', 'release-materializer-' + 'a' * 40,
+                         'release-materializer-' + 'a' * 39, 'foreign-job', 'REJECT',
+                         'release-artifact-materializer\nrelease-materializer-' + 'b' * 40):
+                with self.subTest(receipt=receipt, name=name):
+                    arguments = '(--bootstrap-completion-receipt synthetic)' if receipt else '()'
+                    script = setup + '\ncompletion_arguments=' + arguments + '\n' + block + '\nprintf "%s\\n" "$materializer_job_name"\n'
+                    result = subprocess.run(['bash'], input=script, text=True, capture_output=True, timeout=5,
+                                            env={**os.environ, 'selected_name': name})
+                    valid = name in ('release-artifact-materializer', 'release-materializer-' + 'a' * 40)
+                    self.assertEqual(result.returncode, 0 if valid or not receipt else 42, result.stderr)
+                    self.assertEqual(result.stderr.splitlines().count('select'), int(receipt))
+                    if result.returncode == 0:
+                        self.assertEqual(result.stdout.strip(), name if receipt else 'release-artifact-materializer')
+        selection = TEXT.index('materializer_job_name=release-artifact-materializer')
+        self.assertLess(selection, TEXT.index('if [[ "$mode" == defer-public-tls ]]; then'))
+        self.assertLess(selection, TEXT.index('if [[ "$mode" == prepare-preflight ]]; then', selection))
+
+    def test_upgrade_versioned_materializer_reuses_or_creates_selected_job_and_requires_same_readback(self):
+        selection = 'materializer_job_name=release-artifact-materializer' + TEXT.split(
+            'materializer_job_name=release-artifact-materializer', 1)[1].split('\nrender_filter() {', 1)[0]
+        workloads = 'apply_workloads_after_authority() {' + TEXT.split(
+            'apply_workloads_after_authority() {', 1)[1].split('\nif [[ "$mode" == prepare-preflight', 1)[0]
+        readback = 'for job_name in ' + TEXT.split('for job_name in ', 1)[1].split('\nfailing_pods=', 1)[0]
+        setup = r'''
+set -euo pipefail
+repository_root=/synthetic
+render_file=/synthetic/verified-render.yaml
+context=synthetic
+namespace=kodex-system
+mode=upgrade
+profile_mode=portable
+clamav_storage_profile=shared-rwx
+completion_arguments=(--bootstrap-completion-receipt synthetic)
+fail(){ printf '%s\n' "$*" >&2; exit 42; }
+python3(){
+  case "$1" in
+    -B)
+      [[ "$*" == '-B /synthetic/tools/install/release_materializer.py --render /synthetic/verified-render.yaml' ]] || exit 90
+      printf 'select\n' >>"$temporary_directory/calls"
+      printf '%s\n' "$selected_name" ;;
+    */authority_registry.py)
+      [[ "${*: -1}" == "$selected_name" ]] || exit 91
+      printf 'existing:%s\n' "${*: -1}" >>"$temporary_directory/calls"
+      [[ "$synthetic_presence" != REJECT ]] || return 1
+      printf '%s\n' "$synthetic_presence" ;;
+    */provider-bootstrap.py) [[ "$2" == recover ]] || exit 92 ;;
+    *) exit 93 ;;
+  esac
+}
+yq(){ [[ "$JOB_NAME" == "$selected_name" ]] || exit 94; printf 'selected-manifest\n'; }
+portable_apply_file(){ printf 'apply:%s\n' "$(cat "$1")" >>"$temporary_directory/calls"; }
+wait_job_terminal(){ [[ "$1" == "$selected_name" ]] || exit 95; printf 'wait:%s\n' "$1" >>"$temporary_directory/calls"; }
+kubectl(){
+  if [[ "$*" == *'rollout status '* ]]; then return; fi
+  [[ "$*" == *"get job/$selected_name -o jsonpath="* ]] || exit 96
+  printf 'readback:%s\n' "$selected_name" >>"$temporary_directory/calls"
+  printf '1'
+}
+ensure_email_projection_secret(){ :; }
+apply_render(){ :; }
+wait_workloads(){ :; }
+prune_role_environment_configmaps(){ :; }
+'''
+        selected = 'release-materializer-' + 'b' * 40
+        for presence in ('PRESENT', 'ABSENT', 'UNKNOWN', 'REJECT'):
+            with self.subTest(presence=presence), tempfile.TemporaryDirectory() as directory:
+                script = setup + selection + '\n' + FUNCTION + '\n' + workloads + '\napply_workloads_after_authority\n' + readback
+                result = subprocess.run(['bash'], input=script, text=True, capture_output=True, timeout=5,
+                    env={**os.environ, 'temporary_directory': directory, 'selected_name': selected,
+                         'synthetic_presence': presence})
+                calls = (Path(directory) / 'calls').read_text().splitlines()
+                expected = ['select', 'existing:' + selected]
+                if presence in ('PRESENT', 'ABSENT'):
+                    if presence == 'ABSENT': expected.append('apply:selected-manifest')
+                    expected += ['wait:' + selected, 'readback:' + selected]
+                self.assertEqual(result.returncode, 0 if presence in ('PRESENT', 'ABSENT') else 42, result.stderr)
+                self.assertEqual(calls, expected)
+
+    def test_upgrade_never_reconciles_versioned_materializer_script_by_deleting_it(self):
+        function = 'reconcile_immutable_configmaps() {' + TEXT.split(
+            'reconcile_immutable_configmaps() {', 1)[1].split('\nprune_role_environment_configmaps()', 1)[0]
+        setup = r'''
+set -euo pipefail
+namespace=kodex-system
+context=synthetic
+render_file=/synthetic/not-opened
+yq(){ printf '%s\n' "$script_name"; }
+kubectl(){ printf 'query\n' >>"$test_calls"; return 1; }
+'''
+        for mode in ('upgrade', 'apply'):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                calls = Path(directory) / 'calls'
+                result = subprocess.run(['bash'], input=setup + function + '\nreconcile_immutable_configmaps\n',
+                    env={**os.environ, 'mode': mode, 'script_name': 'kodex-materializer-script-' + 'a' * 24,
+                         'test_calls': str(calls)}, capture_output=True, text=True, timeout=5)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(calls.exists(), mode == 'apply')
+
     def test_stock_upgrade_excludes_authority_registry_and_publisher_from_the_write_manifest(self):
         function = 'apply_render() {' + TEXT.split('apply_render() {',1)[1].split('\nwait_statefulset()',1)[0]
         with tempfile.TemporaryDirectory() as directory:
