@@ -166,3 +166,9 @@ func assertPersonalInvocationFiniteAllowance(t *testing.T, ctx context.Context, 
 		}
 	}
 }
+
+// TestPersonalIntegrationInvocationDeadlineComponent runs the unchanged personal credential setup and invocation owner assertions without claiming assistant/process resume acceptance.
+// TestPersonalIntegrationInvocationDeadlineComponent выполняет прежний personal credential setup и invocation owner assertions, не заявляя приёмку assistant/process resume.
+func TestPersonalIntegrationInvocationDeadlineComponent(t *testing.T) {
+	testPersonalCredentialComponent(t, true)
+}

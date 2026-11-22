@@ -51,9 +51,9 @@ updated: 2026-11-22
 прежняя strict проверка ответа закрывает personal вызов. Нужна совместная
 поставка CP/generated contracts/gateway; shared calls сохраняют прежний путь.
 
-Native regression входит в `make test-personal-integration-token-allowance-postgres`:
+Focused native regression `TestPersonalIntegrationInvocationDeadlineComponent` входит в `make test-personal-integration-token-allowance-postgres`:
 текущая canonical046 без изменения исторического034 upgrade-профиля,
-исходный второй actor, реальный claim, native COMMIT с задержкой только ACK,
+полный прежний setup и invocation owner lifecycle, исходный второй actor, реальный claim, native COMMIT с задержкой только ACK,
 отсутствие descriptor, сохранённый одноразовый receipt, revoke/regrant и completion
 уже допущенного результата. Gateway regression использует настоящий dispatch
 helper и synthetic owner/adapter, включая старый wire descriptor. Это не
@@ -74,3 +74,10 @@ verification READ всё ещё возможен; claim также уже сод
 Существующие exact lease, pin, revoke и одноразовый PROBING предотвращают повтор
 после lost ACK, но не сохраняют finite ACL deadline. Общая готовность personal
 credentials этим исправлением не утверждается.
+
+Отдельный полный `TestPersonalIntegrationCredentialsComponent` сохраняет все
+прежние assertions, включая assistant и OS-process resume. В локальном прогоне
+canonical046 он дошёл после четырёх finite случаев до прежнего process resume
+и завершился FAIL: native session не присоединилась, managed MCP compatibility
+input отсутствовал у обоих сравниваемых snapshots. Это не PASS полного unit;
+причинная проверка этого отдельного baseline gap данным срезом не заявляется.

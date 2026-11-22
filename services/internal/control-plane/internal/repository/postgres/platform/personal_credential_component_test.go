@@ -93,6 +93,13 @@ func (repository *lostPersonalCredentialResponse) ListPersonalIntegrationConnect
 // keys, lost-response reconciliation, OCC/revoke и immutable history. Principals — проверенные
 // fixture inputs; реальные RPC authentication, provider tests, launch и gateway проверяются отдельно.
 func TestPersonalIntegrationCredentialsComponent(t *testing.T) {
+	testPersonalCredentialComponent(t, false)
+}
+
+// testPersonalCredentialComponent retains the complete existing setup and assertions; the explicit invocation scope ends after the original owner invocation lifecycle, before unrelated assistant/process fixtures.
+// testPersonalCredentialComponent сохраняет полный прежний setup и assertions; явный invocation scope завершается после исходного owner invocation lifecycle до отдельных assistant/process fixtures.
+func testPersonalCredentialComponent(t *testing.T, invocationOnly bool) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -271,6 +278,9 @@ func TestPersonalIntegrationCredentialsComponent(t *testing.T) {
 	assertPersonalCredentialCatalog(t, ctx, pool, service, owner, second, connection, current, rotated, *viewBinding.AccessBinding)
 	assertPersonalGrantConfiguration(t, ctx, r, service, owner, second, connection)
 	assertPersonalIntegrationRuntime(t, ctx, r, service, owner, second, connection)
+	if invocationOnly {
+		return
+	}
 	assertPersonalSystemAssistantRuntime(t, ctx, r, service, owner, connection.Ref)
 	assertPersonalProjectAssistantRuntime(t, ctx, r, service, owner)
 	assertPersonalWorkflowGateInitiator(t, ctx, r, service, owner, connection.Ref)

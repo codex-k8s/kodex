@@ -209,7 +209,7 @@ test-control-plane-postgres:
 
 .PHONY: test-personal-integration-token-allowance-postgres
 test-personal-integration-token-allowance-postgres: check-go-toolchain
-	@timeout --kill-after=10s 300s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh '^TestPersonalIntegrationCredentialsComponent$$'
+	@timeout --kill-after=10s 300s env KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh '^TestPersonalIntegrationInvocationDeadlineComponent$$'
 
 .PHONY: test-personal-integration-credentials-postgres
 test-personal-integration-credentials-postgres: check-go-toolchain
