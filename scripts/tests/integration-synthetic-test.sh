@@ -13,7 +13,8 @@ done
 
 (
   cd -- "$repository_root/services/external/integration-gateway"
-  env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -race \
+  # Полный каталог провайдеров под race требует отдельного ограниченного бюджета прогона.
+  env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -race -timeout=20m \
     ./internal/integrationfixture ./internal/integration
 )
 "$repository_root/scripts/tests/integration-synthetic-fixture-e2e.sh"
