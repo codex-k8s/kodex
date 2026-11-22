@@ -11,6 +11,7 @@ from unittest.mock import patch
 import yaml
 import bootstrap_completion as completion
 import bootstrap_upgrade as upgrade
+import authority_registry as authority
 from deployment_profile import Rejected
 from test_bootstrap_completion import State, uuid, write
 from test_bootstrap_upgrade import fixture, controller_defaults
@@ -104,6 +105,36 @@ class ImageUpgradeTests(unittest.TestCase):
                 else:
                     upgrade.verify_apply(state, changed, result)
             self.assertEqual(state.calls, [])
+            proof.assert_not_called()
+
+    def test_apply_checks_materializer_conflict_before_native_sql_and_allows_absence(self):
+        old, _, before, after, profile, state, receipt = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        result = self.capture(state, prepared, old, receipt, before, after)
+        materializer = state.current['release-artifact-materializer']
+        materializer['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/changed:latest'
+        with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof') as proof:
+            with self.assertRaises(Rejected):
+                upgrade.verify_apply(state, prepared, result)
+            proof.assert_not_called()
+            del state.current['release-artifact-materializer']
+            upgrade.verify_apply(state, prepared, result)
+            proof.assert_called_once()
+
+    def test_apply_rejects_current_rotation_or_publisher_drift_before_native_sql(self):
+        old, _, before, after, profile, state, receipt = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        result = self.capture(state, prepared, old, receipt, before, after)
+        for resource, field in ((authority.REGISTRY, 'registry'), ('internal-rpc-authority-publisher', 'publisher')):
+            changed = copy.deepcopy(state)
+            if field == 'registry':
+                changed.current[resource]['metadata']['annotations'] = {'kodex.dev/rotation-operation': uuid(77)}
+            else:
+                changed.current[resource]['spec']['template']['metadata'] = {'annotations': {
+                    'kodex.dev/authority-rotation-operation': uuid(77)}}
+            with self.subTest(field=field), patch.object(completion, 'verify_schemas'), \
+                    patch.object(upgrade, 'schema_proof') as proof, self.assertRaises(Rejected):
+                upgrade.verify_apply(changed, prepared, result)
             proof.assert_not_called()
 
     def test_verify_apply_rejects_changed_file_bytes_before_discovery(self):

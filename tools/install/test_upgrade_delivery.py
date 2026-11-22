@@ -15,6 +15,54 @@ FUNCTION = 'apply_job() {' + TEXT.split('apply_job() {',1)[1].split('\nwait_job_
 
 
 class Tests(unittest.TestCase):
+    def test_stock_upgrade_excludes_authority_registry_and_publisher_from_the_write_manifest(self):
+        function = 'apply_render() {' + TEXT.split('apply_render() {',1)[1].split('\nwait_statefulset()',1)[0]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'source.yaml'
+            registry = 'internal-rpc-authority-publisher-target-registry'
+            publisher = 'internal-rpc-authority-publisher'
+            desired = [('ConfigMap',registry,'kodex-system'), ('Deployment',publisher,'kodex-system'),
+                       ('Deployment','synthetic-control-plane','kodex-system'), ('Deployment',publisher,'synthetic')]
+            path.write_text(yaml.safe_dump_all([
+                {'kind':kind,'metadata':{'name':name,'namespace':namespace}} for kind,name,namespace in desired]))
+            setup = r'''
+set -euo pipefail
+profile_mode=portable
+render_filter() {
+  yq "$2" "$test_render" >"$test_output"
+  printf '%s\n' "$test_output"
+}
+portable_apply_file() { cat "$1"; }
+'''
+            for mode, expected in (('upgrade',desired[2:]), ('apply',desired)):
+                with self.subTest(mode=mode):
+                    result = subprocess.run(['bash'],input=setup+function+'\napply_render synthetic ". | select(.kind != null)"\n',
+                        env={**os.environ,'mode':mode,'test_render':str(path),'test_output':str(Path(directory)/'out.yaml')},
+                        capture_output=True,text=True,timeout=5)
+                    self.assertEqual(result.returncode,0,result.stderr)
+                    actual = [(r['kind'],r['metadata']['name'],r['metadata']['namespace'])
+                              for r in yaml.safe_load_all(result.stdout)]
+                    self.assertEqual(actual,expected)
+
+    def test_stock_upgrade_never_queries_authority_registry_for_immutable_replacement(self):
+        function = 'reconcile_immutable_configmaps() {' + TEXT.split('reconcile_immutable_configmaps() {',1)[1].split('\nprune_role_environment_configmaps()',1)[0]
+        setup = r'''
+set -euo pipefail
+namespace=kodex-system
+context=synthetic
+render_file=/synthetic/not-opened
+yq(){ printf '%s\n' internal-rpc-authority-publisher-target-registry; }
+kubectl(){ printf '%s\n' "${3:-}" >>"$test_calls"; return 1; }
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            calls = Path(directory)/'calls'
+            for mode, wanted in (('upgrade',False), ('apply',True)):
+                if calls.exists(): calls.unlink()
+                result = subprocess.run(['bash'],input=setup+function+'\nreconcile_immutable_configmaps\n',
+                    env={**os.environ,'mode':mode,'test_calls':str(calls)}, capture_output=True,text=True,timeout=5)
+                self.assertEqual(result.returncode,0,result.stderr)
+                self.assertEqual(calls.exists(),wanted)
+
     def test_final_readback_retains_the_verified_upgrade_completion_receipt(self):
         block=TEXT.rsplit('if [[ -n "${profile_mode:-}" ]]; then',1)[1].split('\nfi',1)[0]
         expected=['--bootstrap-completion-receipt','/synthetic/composite.json',

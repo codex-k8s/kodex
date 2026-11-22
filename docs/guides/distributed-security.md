@@ -135,6 +135,9 @@ Discovery, в том числе пустые search/manifest, проверяет
 воспроизводит render из закреплённых входов. Проверка и apply читают один
 private snapshot, а readback сверяет SHA256 фактически прочитанных байтов.
 Квитанции старых bootstrap Jobs служат доказательством прежних эффектов.
+Stock upgrade проверяет текущую пару registry/publisher вместе с маркерами
+ротации до первой записи. Его apply и immutable reconciliation исключают оба
+ресурса из области записи. Изменения пары проходят собственный owner lifecycle.
 
 При смене image policy runtime AppArmor-проекция и admission binding обновляются
 вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker

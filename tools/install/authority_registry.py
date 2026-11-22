@@ -20,6 +20,7 @@ import buildkit_runtime_profile
 import provider_sandbox_profile
 
 REGISTRY = 'internal-rpc-authority-publisher-target-registry'
+PUBLISHER = 'internal-rpc-authority-publisher'
 ANNOTATION = 'kodex.dev/authority-registry-source-revision'
 MIGRATION_JOBS = bootstrap_completion.JOBS
 
@@ -88,6 +89,25 @@ def projection_plan(resources, registry):
 def verify_completed_bootstrap(state, resources, completion=None):
     verify_schemas(state, resources)
     bootstrap_completion.verify_jobs(state, resources, completion)
+
+
+def verify_upgrade_preconditions(state, resources):
+    """Сверяет сохраняемую authority и существующий materializer до записи rollout."""
+    ignored_annotations = {'kubectl.kubernetes.io/last-applied-configuration', 'deployment.kubernetes.io/revision'}
+    for kind, name in (('ConfigMap', REGISTRY), ('Deployment', PUBLISHER)):
+        desired = one(resources, kind, name)
+        live = state.get(desired)
+        require(live is not None and not live['metadata'].get('deletionTimestamp') and
+                bootstrap_completion.uuid_value(live['metadata'].get('uid')), 'UPGRADE_AUTHORITY_RESOURCE_REQUIRED')
+        verify_resource(desired, live)
+        expected_annotations, actual_annotations = (
+            {key: value for key, value in resource['metadata'].get('annotations', {}).items() if key not in ignored_annotations}
+            for resource in (desired, live))
+        require(expected_annotations == actual_annotations, 'UPGRADE_AUTHORITY_ANNOTATION_DRIFT')
+        if kind == 'ConfigMap':
+            require(all(desired.get(field, {}) == live.get(field, {}) for field in ('data', 'binaryData')) and
+                    desired.get('immutable', False) == live.get('immutable', False), 'UPGRADE_AUTHORITY_REGISTRY_DRIFT')
+    existing_job(state, resources, 'release-artifact-materializer')
 
 
 def verify_startup_only(state, observed):
@@ -306,6 +326,8 @@ def main():
             previous = list(filter(None, yaml.safe_load_all(raw)))
             print(json.dumps(verify_workload_resume(state, resources, previous, args.buildkit_runtime_profile, args.repair_kubernetes_api_endpoints, args.clamav_mode, args.repair_egress_secret_access, component_image, completion, previous_component_image, args.provider_apparmor_profile, args.artifact_antivirus_mode, args.clamav_storage_profile, args.preserve_observability_profile)))
         elif args.mode == 'verify-bootstrap':
+            if completion is not None and completion['origin'] in bootstrap_completion.ORIGINS[2:]:
+                verify_upgrade_preconditions(state, resources)
             verify_completed_bootstrap(state, resources, completion)
             print(json.dumps({'status':'BOOTSTRAP_COMPLETION_VERIFIED','effects_replayed':False}))
         elif args.mode == 'existing-job':
