@@ -14,6 +14,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// interactionDeliveryFixturePrincipal resolves the gateway's system authority for the specific
+// registered delivery operation, keeping acceptance, claim and completion proofs separate.
+// interactionDeliveryFixturePrincipal разрешает системное полномочие шлюза на точную
+// зарегистрированную операцию доставки, разделяя доказательства приёма, захвата и завершения.
+func interactionDeliveryFixturePrincipal(t *testing.T, ctx context.Context, repository *Repository, operation string) value.Principal {
+	t.Helper()
+	return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+		CallerWorkload: "interaction-gateway", Operation: operation,
+	}, "interaction-gateway")
+}
+
 // testInteractionACK checks one durable inbound ACK and its exact channel and root binding,
 // including completion replay, and returns the accepted run reference.
 // testInteractionACK проверяет единственное сохранённое подтверждение входящего сообщения и точную
@@ -49,10 +61,8 @@ FROM control_plane.integration_connections WHERE ref=$1 RETURNING id,connection_
 UPDATE control_plane.integration_connections connection SET credential_revision_id=revision.id FROM revision WHERE connection.id=revision.connection_id`, connectionRef); err != nil {
 		t.Fatal(err)
 	}
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "interaction-gateway", Operation: "platform.interactions.messages.accept",
-	}, "interaction-gateway")
-	message := command.Command{Kind: command.AcceptInteractionMessage, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "ack-accept"}, Payload: command.InteractionMessageInput{
+	acceptor := interactionDeliveryFixturePrincipal(t, ctx, repository, "platform.interactions.messages.accept")
+	message := command.Command{Kind: command.AcceptInteractionMessage, Principal: acceptor, Mutation: value.Mutation{IdempotencyKey: "ack-accept"}, Payload: command.InteractionMessageInput{
 		ConnectionRef: connectionRef, ExternalTeamRef: "team-ref", ExternalChannelRef: "channel-ref", ExternalUserDigest: strings.Repeat("b", 64),
 		ExternalEventRef: "ack-event", ExternalPostRef: "ack-post", ExternalRootPostRef: "ack-root", Message: "Prepare bounded result",
 	}}
@@ -68,9 +78,13 @@ UPDATE control_plane.integration_connections connection SET credential_revision_
 JOIN control_plane.runs run ON run.id=delivery.root_run_id WHERE run.ref=$1 AND delivery.capability_key='mattermost.acknowledgements'`, accepted.Run.Ref).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("ack cardinality %d: %v", count, err)
 	}
-	claims, err := service.ClaimInteractionDeliveries(ctx, worker, "ack-worker", 32)
+	if _, err := service.ClaimInteractionDeliveries(ctx, acceptor, "ack-worker", 32); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("acceptance authority could claim ACK: %v", err)
+	}
+	claimant := interactionDeliveryFixturePrincipal(t, ctx, repository, "platform.interactions.deliveries.claim")
+	claims, err := service.ClaimInteractionDeliveries(ctx, claimant, "ack-worker", 32)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("claim accepted ACK: %v", err)
 	}
 	var claim map[string]any
 	for _, item := range claims {
@@ -82,7 +96,8 @@ JOIN control_plane.runs run ON run.id=delivery.root_run_id WHERE run.ref=$1 AND 
 		stringMap(claim, "externalRootPostRef") != "ack-root" || stringMap(claim, "acceptanceReceiptRef") == "" {
 		t.Fatalf("exact ACK claim missing: %v", claim != nil)
 	}
-	complete := command.Command{Kind: command.CompleteInteractionDelivery, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "ack-complete-wrong-channel"}, Payload: command.InteractionDeliveryInput{
+	completer := interactionDeliveryFixturePrincipal(t, ctx, repository, "platform.interactions.deliveries.complete")
+	complete := command.Command{Kind: command.CompleteInteractionDelivery, Principal: completer, Mutation: value.Mutation{IdempotencyKey: "ack-complete-wrong-channel"}, Payload: command.InteractionDeliveryInput{
 		DeliveryRef: stringMap(claim, "deliveryRef"), LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64),
 		Success: true, ExternalTeamRef: "team-ref", ExternalChannelRef: "other-channel", ExternalPostRef: "ack-result", ExternalThreadRef: "ack-root",
 	}}
