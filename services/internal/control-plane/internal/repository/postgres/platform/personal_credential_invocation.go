@@ -38,10 +38,11 @@ var queryPersonalInvocationPin string
 // Policy/configuration принадлежат блокированному Connection, subject — сохранённому корню.
 type personalInvocationCredentialContext struct {
 	invocationID, connectionID, connectionRef, definitionKey, definitionVersion, definitionDigest string
-	rootID, subjectID, subjectKind, source, capabilityKey                                         string
+	rootID, subjectID, subjectRef, subjectKind, source, capabilityKey                             string
 	policy                                                                                        entity.IntegrationCredentialPolicy
 	configuration                                                                                 []byte
 	ready, visible                                                                                bool
+	accessUntil                                                                                   time.Time
 }
 
 // personalInvocationCredentialChoice keeps a freshly locked owner selection inside its transaction.
@@ -100,7 +101,7 @@ func (repository *Repository) selectPersonalInvocationCredentialTx(ctx context.C
 		"organization_id": organizationID, "invocation_ref": invocationRef,
 	}).Scan(&current.invocationID, &current.connectionID, &current.connectionRef, &current.policy,
 		&current.definitionKey, &current.definitionVersion, &current.definitionDigest, &current.configuration,
-		&current.capabilityKey, &current.rootID, &current.subjectID, &current.subjectKind, &current.source,
+		&current.capabilityKey, &current.rootID, &current.subjectID, &current.subjectRef, &current.subjectKind, &current.source,
 		&current.ready, &current.visible)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errs.ErrForbidden
@@ -116,6 +117,10 @@ func (repository *Repository) selectPersonalInvocationCredentialTx(ctx context.C
 	}
 	if current.subjectKind != "USER" || current.source == "SCHEDULE" || current.source == "INTEGRATION" {
 		return nil, personalInvocationCredentialProblem(current, entity.IntegrationCredentialInitiatorMissing)
+	}
+	current.accessUntil, err = repository.requireAccessUntil(ctx, tx, scope{organizationID: organizationID, actorID: current.subjectID, actorRef: current.subjectRef}, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: current.connectionRef})
+	if err != nil {
+		return nil, err
 	}
 	definition, err := repository.integrationPackage(ctx, tx, organizationID, current.connectionRef,
 		current.definitionKey, current.definitionVersion, current.definitionDigest)

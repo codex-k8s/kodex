@@ -2,7 +2,7 @@
 SELECT invocation.id::text,connection.id::text,connection.ref,connection.credential_policy,
        connection.definition_key,connection.definition_version,connection.definition_digest,
        connection.public_configuration,invocation.capability_key,root.id::text,
-       subject.id::text,subject.kind,root.source,
+       subject.id::text,subject.ref,subject.kind,root.source,
        control_plane.integration_connection_configuration_ready(connection.id),
        subject.active AND control_plane.catalog_resource_visible(connection.organization_id,
          subject.id,'integration.manage','INTEGRATION',connection.id,NULL,connection.created_by,

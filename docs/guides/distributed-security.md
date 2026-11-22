@@ -4,11 +4,21 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.79
-updated: 2026-11-17
+version: 1.7.80
+updated: 2026-11-22
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Срок нового внешнего dispatch и срок приёмки результата уже допущенного эффекта
+не смешиваются. Personal TOKEN admission получает конечный серверный deadline
+из текущих разрешающих bindings исходного root actor и owner lease; успешный
+поздний COMMIT ACK не выдаёт descriptor после этого срока. Consumer сохраняет
+минимум исходного claim envelope и fresh admission deadline до native request.
+Восстановление grant не продлевает ранее выданный envelope; повтор одноразового
+admission не создаёт новый dispatch. Durable receipt/reconciliation сохраняет
+прежний owner lease/fence/generation и не выдаёт новые credentials.
+Карта и ограничения: [персональный TOKEN allowance](../operations/personal-token-allowance-2033.md).
 
 Предел архива проверяется до обработки расширений контейнерного формата.
 Высокоуровневый tar decoder может прочитать весь PAX/GNU payload до выдачи

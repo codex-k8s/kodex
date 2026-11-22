@@ -130,6 +130,7 @@ WHERE invocation.ref=$1`, request.InvocationRef).Scan(&initiator); err != nil ||
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteIntegrationInvocation, Principal: gateway, Mutation: value.Mutation{IdempotencyKey: "personal-runtime-second-complete"}, Payload: command.IntegrationInvocationInput{InvocationRef: request.InvocationRef, LeaseRef: request.LeaseRef, Fence: request.Fence, Generation: request.Generation, Success: true, EffectKey: stringMap(work[0], "effectKey"), InputDigest: stringMap(work[0], "inputDigest"), ProviderEffectRef: "gitlab-project:2", ResultSummary: summary, ResponseDigest: workflowResultSHA([]byte(summary))}}); err != nil {
 		t.Fatal("complete second-user effect receipt", err)
 	}
+	assertPersonalInvocationFiniteAllowance(t, ctx, repository, service, worker, gateway, run.Ref, stringMap(claimed.RuntimeItems[0], "nodeRef"), connectionRef)
 	fresh, err := service.GetRun(ctx, owner, run.Ref)
 	if err != nil {
 		t.Fatal(err)

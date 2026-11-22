@@ -93,6 +93,8 @@ func (repository *Repository) BeginPersonalIntegrationInvocation(ctx context.Con
 	fenceDigest := hex.EncodeToString(fence[:])
 	selection, selected := choice.selection, choice.context
 	var recovery bool
+	var leaseExpiry, observed time.Time
+	beforeLeaseRead := time.Now()
 	err = tx.QueryRow(ctx, queryPersonalInvocationBeginLease, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "invocation_ref": input.InvocationRef,
 		"lease_ref": input.LeaseRef, "generation": input.Generation, "fence_digest": fenceDigest,
@@ -101,12 +103,19 @@ func (repository *Repository) BeginPersonalIntegrationInvocation(ctx context.Con
 		"binding_generation": selection.BindingGeneration, "credential_ref": selection.Credential.Ref,
 		"definition_digest": selected.definitionDigest, "configuration_digest": choice.configurationDigest,
 		"resource_permission_profile": selection.ResourcePermissionProfile,
-	}).Scan(&recovery)
+	}).Scan(&recovery, &leaseExpiry, &observed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return empty, denyUnstartedPersonalInvocationTx(ctx, tx, current, input, errs.ErrForbidden)
 	}
 	if err != nil {
 		return empty, serializableTransactionError(err, errs.ErrUnavailable)
+	}
+	until := beforeLeaseRead.Add(leaseExpiry.Sub(observed))
+	if !selected.accessUntil.IsZero() && selected.accessUntil.Before(until) {
+		until = selected.accessUntil
+	}
+	if !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
 	}
 	tag, err := tx.Exec(ctx, queryPersonalInvocationAdmit, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "invocation_id": selected.invocationID,
@@ -128,10 +137,16 @@ func (repository *Repository) BeginPersonalIntegrationInvocation(ctx context.Con
 		"INTEGRATION_INVOCATION", input.InvocationRef, "i18n:PERSONAL_INTEGRATION_CALL_ADMITTED", current.correlationRef); err != nil {
 		return empty, errs.ErrUnavailable
 	}
+	if !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return empty, errs.ErrUnavailable
 	}
-	return entity.PersonalIntegrationInvocationAdmissionResult{Credential: selection.Credential, RecoveryReadOnly: recovery,
+	if !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
+	}
+	return entity.PersonalIntegrationInvocationAdmissionResult{AuthorizedUntil: until, Credential: selection.Credential, RecoveryReadOnly: recovery,
 		ResourcePermissionProfile: selection.ResourcePermissionProfile}, nil
 }
 

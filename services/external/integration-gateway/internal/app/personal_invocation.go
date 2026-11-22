@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/services/external/integration-gateway/internal/integration"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // personalInvocationAdmissionClient exposes only the one-time owner call-start operation.
@@ -51,20 +52,38 @@ type invocationExecution struct {
 func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissionClient, adapter invocationExecutionAdapter, claim *cp.IntegrationInvocationClaim, config Config) (invocationExecution, error) {
 	var empty invocationExecution
 	lease := claim.GetLease()
+	observed := time.Now()
 	budget := config.OperationTimeout + config.RequestTimeout
 	if claim.GetCredentialAdmissionRequired() {
 		budget += config.RequestTimeout
 	}
 	if claim == nil || lease == nil || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil ||
-		lease.GetExpiresAt().AsTime().Before(time.Now().Add(budget)) {
+		lease.GetExpiresAt().AsTime().Before(observed.Add(budget)) {
 		return empty, errors.New("integration lease budget is insufficient")
+	}
+	if claim.GetCredentialAdmissionRequired() {
+		// Retain the original monotonic ceiling through Begin; a later clock read or fresh grant cannot extend it.
+		// Сохраняем original monotonic ceiling через Begin: позднее чтение часов или fresh grant не продлевает его.
+		originalUntil := personalInvocationDeadline(observed, lease.GetExpiresAt().AsTime())
+		var cancelOriginal context.CancelFunc
+		ctx, cancelOriginal = context.WithDeadline(ctx, originalUntil)
+		defer cancelOriginal()
 	}
 	work, err := admitPersonalInvocation(ctx, owner, claim, config)
 	if err != nil || work == nil {
 		return empty, err
 	}
+	if claim.GetCredentialAdmissionRequired() {
+		var cancelAllowance context.CancelFunc
+		freshUntil := personalInvocationDeadline(observed, work.GetLease().GetExpiresAt().AsTime())
+		ctx, cancelAllowance = context.WithDeadline(ctx, freshUntil)
+		defer cancelAllowance()
+	}
 	operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
 	defer cancel()
+	if err := operation.Err(); err != nil {
+		return empty, err
+	}
 	executed := invocationExecution{claim: work, executed: true}
 	if work.GetWorkMode() == cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_RECOVER_READ_ONLY {
 		executed.result, executed.operationErr = adapter.Recover(operation, integration.RequestFromInvocation(work))
@@ -114,10 +133,14 @@ func admitPersonalInvocation(ctx context.Context, client personalInvocationAdmis
 		return nil, errors.New("personal invocation admission response is invalid")
 	}
 	if !response.GetAdmitted() {
-		if response.GetCredentialRevision() != nil || response.GetWorkMode() != cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_UNSPECIFIED || response.GetResourcePermissionProfile() != 0 {
+		if response.GetAuthorizedUntil() != nil || response.GetCredentialRevision() != nil || response.GetWorkMode() != cp.IntegrationInvocationWorkMode_INTEGRATION_INVOCATION_WORK_MODE_UNSPECIFIED || response.GetResourcePermissionProfile() != 0 {
 			return nil, errors.New("personal invocation denial contains work authority")
 		}
 		return nil, nil
+	}
+	until := response.GetAuthorizedUntil()
+	if until == nil || until.CheckValid() != nil || len(until.ProtoReflect().GetUnknown()) != 0 || !until.AsTime().After(time.Now().Add(config.OperationTimeout+config.RequestTimeout)) {
+		return nil, errors.New("personal invocation admission allowance is invalid")
 	}
 	credential := response.GetCredentialRevision()
 	if response.GetWorkMode() != claim.GetWorkMode() || response.GetResourcePermissionProfile() != claim.GetResourcePermissionProfile() || credential == nil || len(credential.ProtoReflect().GetUnknown()) != 0 ||
@@ -129,6 +152,9 @@ func admitPersonalInvocation(ctx context.Context, client personalInvocationAdmis
 	}
 	work := proto.Clone(claim).(*cp.IntegrationInvocationClaim)
 	work.CredentialRevision = proto.Clone(credential).(*cp.IntegrationCredentialRevision)
+	if until.AsTime().Before(work.Lease.ExpiresAt.AsTime()) {
+		work.Lease.ExpiresAt = timestamppb.New(until.AsTime())
+	}
 	return work, nil
 }
 
@@ -175,4 +201,10 @@ func personalContractAllowsClaimPolicy(contract integrationpackage.CredentialRes
 	}
 	raw, err := json.Marshal(claim.GetBoundedInput().AsMap())
 	return err == nil && definition.ValidateInvocationApprovalPolicy(capability, policy, raw) == nil
+}
+
+// personalInvocationDeadline projects a validated owner timestamp onto the single pre-RPC monotonic observation; later wall-clock readings cannot renew either dispatch ceiling.
+// personalInvocationDeadline переносит проверенный owner timestamp на единственный pre-RPC monotonic observation; поздние wall-clock readings не продлевают dispatch ceilings.
+func personalInvocationDeadline(observed, until time.Time) time.Time {
+	return observed.Add(until.Sub(observed))
 }
