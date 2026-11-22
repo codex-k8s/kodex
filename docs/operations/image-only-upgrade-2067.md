@@ -4,7 +4,7 @@ title: Обновление immutable images без повторного bootstr
 type: runbook
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.1.1
 updated: 2026-11-22
 ---
 
@@ -29,6 +29,12 @@ heads остаются прежними. Это отдельный опцион�
 native catalog verifier. Unknown schema и дополнительные поля отклоняются.
 Предыдущий render и completion receipt хранятся как защищённые operator files,
 вне Git, с явными SHA256. Их нельзя восстанавливать из предположения об успехе.
+
+Подготовленный render с Job `release-materializer-<40hex>` в `kodex-system`
+не является входом новой установки. Оба установочных entrypoint отклоняют его
+в режиме `apply` до inventory и изменений Kubernetes; проверка и последующее
+исполнение используют один приватный снимок render. Обновление выполняется
+через `upgrade` с проверенной completion receipt. Режим `plan` остаётся чтением.
 
 ## Порядок
 

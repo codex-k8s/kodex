@@ -1,6 +1,7 @@
 """Проверяет настоящие shell entrypoints: optional upgrade не повторяет исторические effects."""
 import os
 import json
+import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -379,6 +380,100 @@ kubectl() { printf 'unexpected-kubectl\n' >>"$temporary_directory/calls"; return
     def test_fresh_apply_retains_previous_job_lifecycle(self):
         result,calls=self.run_job('apply','control-plane-migrate')
         self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(calls,['delete','apply','wait'])
+
+
+class PreparedRenderFreshGuardTests(unittest.TestCase):
+    def run_entrypoint(self, entry, resource, *, replace_input=False):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            render = base / 'render.yaml'
+            render.write_text(yaml.safe_dump(resource))
+            render.chmod(0o600)
+            binary = base / 'bin'
+            binary.mkdir()
+            kubectl = binary / 'kubectl'
+            # Полный entrypoint не может вызвать настоящий kubectl, даже до исправления.
+            kubectl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >>"$TEST_KUBECTL_CALLS"\n'
+                               '[ "$*" = "config current-context" ] || exit 91\nprintf synthetic\n')
+            kubectl.chmod(0o700)
+            python = binary / 'python3'
+            python.write_text('#!' + sys.executable + '\n' + r'''
+import hashlib, os, pathlib, stat, sys
+args = sys.argv[1:]
+path = pathlib.Path(args[args.index('--render') + 1])
+original = pathlib.Path(os.environ['TEST_ORIGINAL'])
+with open(os.environ['TEST_HELPER_CALLS'], 'a') as stream:
+    stream.write(path.name + '\n')
+if os.environ['TEST_REPLACE'] == 'true':
+    original.write_text('replaced input\n')
+    assert path != original
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == os.environ['TEST_SHA']
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+# Первый pure helper завершает оснастку до inventory, admission или effects.
+sys.exit(77)
+''')
+            python.chmod(0o700)
+            digest = hashlib.sha256(render.read_bytes()).hexdigest()
+            arguments = ['bash', str(ROOT / 'tools/install' / entry), '--mode', 'apply',
+                         '--context', 'synthetic', '--render', str(render)]
+            if entry == 'portable-release.sh':
+                arguments += ['--render-sha256', digest]
+            kubectl_calls = base / 'kubectl-calls'
+            helper_calls = base / 'helper-calls'
+            result = subprocess.run(arguments, capture_output=True, text=True, timeout=5,
+                env={**os.environ, 'PATH': str(binary) + ':' + os.environ['PATH'],
+                     'TEST_KUBECTL_CALLS': str(kubectl_calls), 'TEST_HELPER_CALLS': str(helper_calls),
+                     'TEST_ORIGINAL': str(render), 'TEST_REPLACE': str(replace_input).lower(), 'TEST_SHA': digest})
+            calls = kubectl_calls.read_text().splitlines() if kubectl_calls.exists() else []
+            helpers = helper_calls.read_text().splitlines() if helper_calls.exists() else []
+            return result, calls, helpers
+
+    def test_prepared_render_is_rejected_by_both_entrypoints_before_inventory_or_effects(self):
+        for entry in ('deploy-platform.sh', 'portable-release.sh'):
+            with self.subTest(entry=entry):
+                resource = {'apiVersion': 'batch/v1', 'kind': 'Job', 'metadata': {
+                    'namespace': 'kodex-system', 'name': 'release-materializer-' + 'b' * 40}}
+                result, calls, helpers = self.run_entrypoint(entry, resource)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn('prepared upgrade render requires verified completion receipt and upgrade mode', result.stderr)
+                self.assertTrue(all(call == 'config current-context' for call in calls))
+                self.assertEqual(helpers, [])
+
+    def test_legitimate_fresh_apply_consumes_same_private_snapshot_after_input_replacement(self):
+        resource = {'apiVersion': 'batch/v1', 'kind': 'Job', 'metadata': {
+            'namespace': 'kodex-system', 'name': 'release-artifact-materializer'}}
+        for entry in ('deploy-platform.sh', 'portable-release.sh'):
+            with self.subTest(entry=entry):
+                result, calls, helpers = self.run_entrypoint(entry, resource, replace_input=True)
+                self.assertEqual(result.returncode, 77, result.stderr)
+                self.assertTrue(all(call == 'config current-context' for call in calls))
+                self.assertEqual(len(helpers), 1)
+
+    def test_guard_is_exact_and_readonly_plan_and_upgrade_are_unchanged(self):
+        for entry in ('deploy-platform.sh', 'portable-release.sh'):
+            source = (ROOT / 'tools/install' / entry).read_text()
+            command = source.index('  yq -N -o=json -I=0')
+            start = source.rfind('if [[ "$mode" == apply ]]; then', 0, command)
+            guard = source[start:source.index('\nfi', command) + len('\nfi')] + '\n'
+            for mode in ('apply', 'plan', 'upgrade', 'readback'):
+                for api, kind, name, namespace, blocked in (
+                    ('batch/v1', 'Job', 'release-materializer-' + 'a' * 40, 'kodex-system', True),
+                    ('batch/v1', 'Job', 'release-artifact-materializer', 'kodex-system', False),
+                    ('batch/v1', 'Job', 'release-materializer-' + 'a' * 39, 'kodex-system', False),
+                    ('batch/v1', 'Job', 'release-materializer-' + 'a' * 41, 'kodex-system', False),
+                    ('batch/v1', 'Job', 'release-materializer-' + 'a' * 40, 'other', False),
+                    ('v1', 'ConfigMap', 'release-materializer-' + 'a' * 40, 'kodex-system', False),
+                    ('other/v1', 'Job', 'release-materializer-' + 'a' * 40, 'kodex-system', False)):
+                    with self.subTest(entry=entry, mode=mode, api=api, kind=kind, name=name, namespace=namespace), tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / 'render.yaml'
+                        path.write_text(yaml.safe_dump({'apiVersion': api, 'kind': kind,
+                            'metadata': {'name': name, 'namespace': namespace}}))
+                        (Path(directory) / 'verified-render.yaml').write_bytes(path.read_bytes())
+                        result = subprocess.run(['bash'], input='set -euo pipefail\nfail(){ exit 42; }\n' + guard,
+                            capture_output=True, text=True, timeout=5,
+                            env={**os.environ, 'render_file': str(path), 'temporary': directory,
+                                 'temporary_directory': directory, 'mode': mode})
+                        self.assertEqual(result.returncode, 42 if blocked and mode == 'apply' else 0, result.stderr)
 
 
 if __name__=='__main__':unittest.main()
