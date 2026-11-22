@@ -154,6 +154,11 @@ export class AssistantRetryNetwork {
           : {}),
       },
       sessionRef,
+      sessionReadiness: {
+        sessionRef,
+        storageState: "LIVE",
+        reason: "NO_SESSION_BLOCKER",
+      },
       rootRunRef: ref,
       ...(attempt > 1 ? { retryOfRunRef: failedRunRef } : {}),
       target: {
@@ -280,6 +285,20 @@ export class AssistantRetryNetwork {
   ): void {
     const workspace = this.runs.get(runRef);
     if (!workspace) throw new Error("Unknown synthetic run subscription");
+    // Передаётся полный exact owner snapshot, включая predecessor после retry;
+    // соседние диалоги не становятся частью графа или authority этого запуска.
+    const runRefs = new Set([
+      workspace.graph.runRef,
+      ...workspace.graph.nodes.flatMap((node) => [
+        node.runRef,
+        ...node.childRunRefs,
+      ]),
+    ]);
+    const runs = [...runRefs].map((ref) => {
+      const current = this.runs.get(ref);
+      if (!current) throw new Error("Missing synthetic graph run snapshot");
+      return current.run;
+    });
     socket.send(
       JSON.stringify({
         type: "RUN_GRAPH_SNAPSHOT",
@@ -288,6 +307,7 @@ export class AssistantRetryNetwork {
         streamRef: runRef,
         cursor: workspace.graph.sequence,
         snapshot: workspace.graph,
+        runs,
       }),
     );
     socket.send(
@@ -296,7 +316,7 @@ export class AssistantRetryNetwork {
         requestRef,
         streamKind: "RUN",
         streamRef: runRef,
-        cursor: 0,
+        cursor: workspace.graph.sequence,
       }),
     );
   }
