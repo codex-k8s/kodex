@@ -145,6 +145,8 @@ async function installFixture(
       await route.fulfill({
         response: await route.fetch({
           url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+          maxRetries: route.request().method() === "GET" ? 2 : 0,
+          timeout: 15_000,
         }),
       });
     } else {

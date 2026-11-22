@@ -128,6 +128,8 @@ for (const width of [1440, 390]) {
           }
           const response = await route.fetch({
             url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+            maxRetries: route.request().method() === "GET" ? 2 : 0,
+            timeout: 15_000,
           });
           await route.fulfill({ response });
         });
@@ -377,6 +379,8 @@ for (const width of [1440, 390]) {
           }
           const response = await route.fetch({
             url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+            maxRetries: request.method() === "GET" ? 2 : 0,
+            timeout: 15_000,
           });
           await route.fulfill({ response });
         });
