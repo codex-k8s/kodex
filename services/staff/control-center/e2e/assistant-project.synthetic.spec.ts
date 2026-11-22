@@ -19,8 +19,11 @@ for (const width of [1440, 390]) {
         `/e2e/fixtures/ui-proof.html?fixture=project-assistant&locale=${locale}`,
       );
       await page.locator(".assistant-fab").click();
+      await page.locator(".assistant-plan-record > summary").click();
       const card = page.locator(".assistant-created-entity");
-      await expect(card.locator("a")).toHaveAttribute(
+      const resultLink = card.getByRole("link");
+      await expect(resultLink).toBeVisible();
+      await expect(resultLink).toHaveAttribute(
         "href",
         "/projects/project_fixture/agents/agent_helper_fixture?assistantForm=1",
       );
@@ -67,6 +70,7 @@ for (const mismatch of [
     await installFixture(page, calls, mismatch);
     await page.goto("/e2e/fixtures/ui-proof.html?fixture=project-assistant");
     await page.locator(".assistant-fab").click();
+    await page.locator(".assistant-plan-record > summary").click();
     const card = page.locator(".assistant-created-entity");
     await expect(card.getByRole("alert")).toBeVisible();
     await expect(card.locator("a")).toHaveCount(0);
