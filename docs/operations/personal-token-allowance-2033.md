@@ -108,3 +108,22 @@ USER turn в канонических строках владельца с пр�
 ```sh
 KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh '^TestPersonalIntegrationCredentialsComponent$'
 ```
+
+Для составного source с typed KUBE/SSH owners новый finite TOKEN admission
+использует отдельный named SQL. Прежний broker health query сохраняет исходные
+три аргумента; KUBE/SSH не получают TOKEN allowance либо generic token path.
+
+Текущий SSH owner проверяется на полной схеме051 с настоящим native gateway
+consumer, который оснастка собирает до PostgreSQL и закрепляет по SHA256:
+
+```sh
+make test-ssh-execution-current-entrypoint
+make test-ssh-execution-current-postgres
+```
+
+Текущий профиль принимает только явный `--ssh-identity-owner-current` и RAM;
+внешний `KODEX_CONTROL_PLANE_TEST_FILTER` отклоняется до любого IO. Профиль
+применяет обычный full-schema bootstrap, требует exact head051 и штатный
+read-only postcondition. Затем запускается только `TestSSHExecutionOwnerComponent`;
+SSH target и настоящие credentials не используются. Исторический
+`--ssh-identity-owner-development` сохраняет отдельный seed049 и прежние проверки.

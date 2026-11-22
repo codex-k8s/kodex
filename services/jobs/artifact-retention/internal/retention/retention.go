@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
@@ -19,6 +20,8 @@ var ErrLostClaim = errors.New("artifact retention claim is lost")
 type Claim struct {
 	ArtifactID, ArtifactRef, RevisionID, ObjectKey, ObjectVersion string
 	Generation                                                    int64
+	Manual, ReconcileOnly                                         bool
+	AuthorizedUntil                                               time.Time
 }
 
 // Repository owns bounded lease acquisition and transactional artifact tombstone finalization.
@@ -66,6 +69,9 @@ func (processor *Processor) Process(
 	batchSize int,
 	leaseSeconds int64,
 ) (int, error) {
+	if deleter, ok := processor.objects.(objectstorage.SingleAttemptDeleter); !ok || deleter.CheckDeleteOnce(ctx) != nil {
+		return 0, errors.New("artifact retention single-attempt deletion is unavailable")
+	}
 	claims, err := processor.repository.Claim(ctx, owner, batchSize, leaseSeconds)
 	if err != nil {
 		return 0, err
@@ -77,22 +83,52 @@ func (processor *Processor) Process(
 			resultErr = errors.Join(resultErr, errors.New("artifact retention claim is incomplete"))
 			continue
 		}
-		if err := processor.objects.Delete(ctx, claim.ObjectKey, claim.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
-			resultErr = errors.Join(resultErr, fmt.Errorf("delete claimed artifact object version: %w", err))
+		if claim.AuthorizedUntil.IsZero() || !time.Now().Before(claim.AuthorizedUntil) {
+			resultErr = errors.Join(resultErr, ErrLostClaim)
 			continue
 		}
-		if _, err := processor.objects.Head(ctx, claim.ObjectKey, claim.ObjectVersion); err == nil {
-			resultErr = errors.Join(resultErr, errors.New("deleted artifact object version is still present"))
-			continue
-		} else if !errors.Is(err, objectstorage.ErrNotFound) {
-			resultErr = errors.Join(resultErr, fmt.Errorf("read back deleted artifact object version: %w", err))
-			continue
-		}
-		if err := processor.repository.Finalize(ctx, claim, owner); err != nil {
+		operation, cancel := context.WithDeadline(ctx, claim.AuthorizedUntil)
+		err := processor.processClaim(operation, claim, owner)
+		cancel()
+		if err != nil {
 			resultErr = errors.Join(resultErr, err)
 			continue
 		}
 		processed++
 	}
 	return processed, resultErr
+}
+
+// processClaim preserves scheduled retries while manual custody admits one DeleteOnce or observation.
+// It never substitutes an ordinary Delete after uncertain manual IO or a lost admission ACK.
+// processClaim сохраняет scheduled retries, а manual custody допускает один DeleteOnce либо
+// наблюдение. Обычный Delete не заменяет uncertain manual IO или lost admission ACK.
+func (processor *Processor) processClaim(ctx context.Context, claim Claim, owner string) error {
+	acknowledged := false
+	if !claim.ReconcileOnly {
+		var err error
+		if claim.Manual {
+			err = processor.objects.(objectstorage.SingleAttemptDeleter).DeleteOnce(ctx, claim.ObjectKey, claim.ObjectVersion)
+		} else {
+			err = processor.objects.Delete(ctx, claim.ObjectKey, claim.ObjectVersion)
+		}
+		if err != nil && (claim.Manual || !errors.Is(err, objectstorage.ErrNotFound)) {
+			return fmt.Errorf("delete claimed artifact object version: %w", err)
+		}
+		acknowledged = err == nil
+	}
+	if _, err := processor.objects.Head(ctx, claim.ObjectKey, claim.ObjectVersion); err == nil {
+		return errors.New("deleted artifact object version is still present")
+	} else if !errors.Is(err, objectstorage.ErrNotFound) {
+		return fmt.Errorf("read back deleted artifact object version: %w", err)
+	}
+	if claim.Manual && !acknowledged {
+		if err := objectstorage.VerifyVersionAbsent(ctx, processor.objects, claim.ObjectKey, claim.ObjectVersion); err != nil {
+			return err
+		}
+	}
+	if ctx.Err() != nil || !time.Now().Before(claim.AuthorizedUntil) {
+		return ErrLostClaim
+	}
+	return processor.repository.Finalize(ctx, claim, owner)
 }

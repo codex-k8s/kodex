@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-NAMESPACES = frozenset({"kodex-system", "kodex-runtime", "kodex-trust", "kodex-secret-drafts",
+NAMESPACES = frozenset({"kodex-system", "kodex-runtime", "kodex-trust", "kodex-secret-drafts", "kodex-ssh-identities",
                         "kodex-infra", "identity", "observability"})
 MAX_RESPONSE = 16 << 20
 ERROR = "Installation inventory failed: target, transport, metadata or output validation rejected"

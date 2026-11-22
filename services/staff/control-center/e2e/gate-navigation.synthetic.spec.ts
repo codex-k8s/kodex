@@ -32,7 +32,7 @@ for (const width of [390, 2900]) {
           values: { repository: "team/project" },
           digest: "a".repeat(64),
         },
-        effectKey: "effect_gate_exact",
+        effectKey: `eff_${"a".repeat(32)}`,
         effectPreview: {
           inputDigest: "b".repeat(64),
           inputBytes: 128,
@@ -71,6 +71,28 @@ for (const width of [390, 2900]) {
       openedAt: "2026-09-05T00:00:00Z",
       nextActions: ["RESOLVE_GATE"],
     };
+    // Разные server-owned intent refs и имена сохраняют exact navigation,
+    // когда заголовок строится из семантики операции и подключения.
+    function addressedVariant(
+      ref: string,
+      title: string,
+      name: string,
+      marker: string,
+    ): OwnerGate {
+      const intent = gate.integrationIntent;
+      if (!intent) throw new Error("Fixture integration intent missing");
+      return {
+        ...gate,
+        ref,
+        title,
+        integrationIntent: {
+          ...intent,
+          connectionRef: `connection_${ref}`,
+          connectionName: name,
+          effectKey: `eff_${marker.repeat(32)}`,
+        },
+      };
+    }
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
@@ -82,12 +104,18 @@ for (const width of [390, 2900]) {
           json: {
             items: [
               {
-                ...gate,
+                ...addressedVariant(
+                  more ? "gate_next" : "gate_other",
+                  more
+                    ? "Решение следующей страницы"
+                    : "Другое решение первой страницы",
+                  more
+                    ? "Подключение следующей страницы"
+                    : "Подключение другого решения",
+                  more ? "c" : "b",
+                ),
                 state: history ? "APPROVED" : "OPEN",
-                ref: more ? "gate_next" : "gate_other",
-                title: more
-                  ? "Решение следующей страницы"
-                  : "Другое решение первой страницы",
+                nextActions: history ? [] : gate.nextActions,
               },
             ],
             nextPageToken: more ? "" : "more_gates",
@@ -110,16 +138,38 @@ for (const width of [390, 2900]) {
           json:
             reference === "gate_history"
               ? {
-                  ...gate,
-                  ref: reference,
-                  title: "Адресованная история",
+                  ...addressedVariant(
+                    reference,
+                    "Адресованная история",
+                    "Подключение адресованной истории",
+                    "d",
+                  ),
                   state: "APPROVED",
-                  allowedDecisions: [],
                   nextActions: [],
                   decision: "APPROVE",
                   decidedAt: "2026-09-05T01:00:00Z",
                 }
               : gate,
+        });
+        return;
+      }
+      if (url.pathname === "/api/v1/projects/project_navigation") {
+        await route.fulfill({
+          json: {
+            ref: "project_navigation",
+            version: 1,
+            name: "Проект навигации",
+            purpose: "Синтетическая проверка",
+            language: "ru",
+            lifecycle: "ACTIVE",
+            agentCount: 1,
+            workflowCount: 0,
+            activeRunCount: 1,
+            pendingGateCount: 1,
+            integrationState: "READY",
+            updatedAt: "2026-11-15T00:00:00Z",
+            nextActions: [],
+          },
         });
         return;
       }
@@ -144,7 +194,9 @@ for (const width of [390, 2900]) {
         }),
       });
     });
-    await page.goto("/e2e/fixtures/gate-navigation.html");
+    await page.goto(
+      "/e2e/fixtures/gate-navigation.html?projectRef=project_navigation",
+    );
     const pendingTab = page.getByRole("button", {
       name: "Решения, ожидающие ответа",
     });
@@ -154,7 +206,7 @@ for (const width of [390, 2900]) {
       "Решения, ожидающие ответа",
     );
     await expect(page.locator(".decision-detail h2")).toHaveText(
-      "Адресованное решение",
+      "Изменить данные через «Подключение согласования»",
     );
     expect(reads).toContain("gate_addressed");
     const intent = page.locator(".decision-integration-intent");
@@ -162,7 +214,7 @@ for (const width of [390, 2900]) {
     await expect(intent).toContainText("team/project");
     await expect(intent).toContainText("TYPE_LITERAL");
     await expect(intent).toContainText("i18n:INTERACTION_AUTHORITY_CHANGED");
-    await expect(intent).toContainText("effect_gate_exact");
+    await expect(intent).toContainText(`eff_${"a".repeat(32)}`);
     await expect(page.locator(".decision-option")).toContainText(
       "Результат будет подтверждён отдельной квитанцией.",
     );
@@ -174,8 +226,10 @@ for (const width of [390, 2900]) {
       })
       .click();
     await expect(page.locator(".decision-detail h2")).toHaveText(
-      "Адресованная история",
+      "Изменить данные через «Подключение адресованной истории»",
     );
+    expect(reads.at(-1)).toBe("gate_history");
+    await expect(intent).toContainText(`eff_${"d".repeat(32)}`);
     await expect(page.locator(".decision-detail")).toContainText("Одобрено");
     await expect(intent).toContainText("TYPE_LITERAL");
     await expect(page.locator(".decision-toolbar__count")).toContainText("91");
@@ -213,8 +267,9 @@ for (const width of [390, 2900]) {
       .getByRole("button", { name: "Decisions awaiting your answer" })
       .click();
     await expect(page.locator(".decision-detail h2")).toHaveText(
-      "Другое решение первой страницы",
+      "Change data through “Подключение другого решения”",
     );
+    await expect(intent).toContainText(`eff_${"b".repeat(32)}`);
     expect(lists.at(-1)?.getAll("states")).toEqual(["OPEN"]);
     await page
       .getByRole("button", { name: "Открыть скрытое решение", exact: true })
@@ -223,20 +278,30 @@ for (const width of [390, 2900]) {
     await expect(page.locator(".decision-detail")).toHaveCount(0);
     await expect(page.locator(".problem-notice")).toBeVisible();
     await page.getByRole("button", { name: "Home Gates", exact: true }).click();
-    await expect(page.locator(".home-gate-catalog header")).toContainText("91");
+    await expect(page.locator(".home-gate-catalog > header")).not.toContainText(
+      "91",
+    );
     await page
       .getByRole("button", { name: "Expand list", exact: true })
       .click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText("91");
     await dialog.getByRole("searchbox").fill("literal %_");
     await expect.poll(() => lists.at(-1)?.get("query")).toBe("literal %_");
-    expect(lists.at(-1)?.has("pageToken")).toBe(false);
-    await dialog
-      .getByRole("button", { name: "Load more", exact: true })
-      .click();
+    await expect(page.locator(".home-gate-catalog > header")).toContainText(
+      "91",
+    );
+    await expect(dialog).toContainText("91");
+    // Поиск начинает новую последовательность без cursor; короткая первая
+    // страница затем догружается штатным IntersectionObserver списка.
+    const searchedPages = () =>
+      lists.filter((params) => params.get("query") === "literal %_");
+    expect(searchedPages()[0]?.has("pageToken")).toBe(false);
     await expect(dialog.locator(".home-gate-row")).toHaveCount(2);
-    expect(lists.at(-1)?.get("pageToken")).toBe("more_gates");
+    expect(searchedPages().at(-1)?.get("pageToken")).toBe("more_gates");
+    await expect(dialog.locator(".home-gate-row")).toContainText([
+      "Другое решение первой страницы",
+      "Решение следующей страницы",
+    ]);
     await page.screenshot({
       path: testInfo.outputPath(`home-gates-${String(width)}.png`),
       fullPage: true,

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"github.com/codex-k8s/kodex/libs/go/sttapi/errorprofile"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/security/availability"
 	"github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/problemresponse"
@@ -51,8 +52,17 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		statusCode, name, retryable = http.StatusPreconditionFailed, "VERSION_OR_STATE_CONFLICT", true
 	case codes.FailedPrecondition:
 		statusCode, name = http.StatusConflict, "STATE_CONFLICT"
+		if rpcErrorHasReason(err, artifactPurgeReconciliationReason) {
+			name = artifactPurgeReconciliationReason
+		}
+		if rpcErrorHasReason(err, managedkubernetes.ProjectStagingReconciliationReason) {
+			name = managedkubernetes.ProjectStagingReconciliationReason
+		}
 		if rpcErrorHasReason(err, resourceInUseReason) {
 			name = resourceInUseReason
+		}
+		if rpcErrorHasClosedReason(err, managedkubernetes.ConfigurationPlanUnsupportedReason) {
+			name = managedkubernetes.ConfigurationPlanUnsupportedReason
 		}
 		for _, reason := range []string{"LEGACY_REWORK_SCOPE_UNSUPPORTED", "LEGACY_REWORK_WRITE_REQUIRES_RECONCILIATION", "LEGACY_REWORK_PARENT_BUSY", "LEGACY_REWORK_DELIVERY_BLOCKED", "LEGACY_REWORK_READ_LIMIT"} {
 			if rpcErrorHasClosedReason(err, reason) {
@@ -62,6 +72,9 @@ func writeRPCProblem(writer http.ResponseWriter, err error) {
 		}
 	case codes.ResourceExhausted:
 		statusCode, name, retryable = http.StatusTooManyRequests, "RATE_LIMITED", true
+		if rpcErrorHasClosedReason(err, managedkubernetes.ReasonStagingQuotaExceeded) {
+			statusCode, name, retryable = http.StatusInsufficientStorage, managedkubernetes.ReasonStagingQuotaExceeded, false
+		}
 	case codes.Canceled:
 		var localAuthorityFailure *authorityclient.LocalAuthorityError
 		if errors.As(err, &localAuthorityFailure) {

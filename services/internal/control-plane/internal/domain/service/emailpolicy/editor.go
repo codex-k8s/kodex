@@ -1,12 +1,12 @@
 package emailpolicy
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"strings"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"go.yaml.in/yaml/v3"
@@ -78,13 +78,11 @@ func DecodeSpecification(format, content string) (entity.EmailMailboxSpecificati
 	} else {
 		return result, errs.ErrInvalid
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&result) != nil {
-		return result, errs.ErrInvalid
-	}
-	var trailing any
-	if decoder.Decode(&trailing) != io.EOF || BoundSpecification(result) != nil || !knownMailboxEnums(result) {
+	// Canonical incomplete drafts historically encode these unset slices as null. Explicit null
+	// scalar/endpoints remain invalid, including fields omitted by an editor before submission.
+	// Канонические неполные черновики исторически кодируют эти незаданные slices как null. Явный null
+	// scalar/endpoints остаётся ошибкой, включая поля, которые редактор мог бы пропустить.
+	if internalrpcauth.DecodeExactJSON(raw, &result, "allowed_folders", "recipients", "policies") != nil || BoundSpecification(result) != nil || !knownMailboxEnums(result) {
 		return entity.EmailMailboxSpecification{}, errs.ErrInvalid
 	}
 	return result, nil
@@ -122,6 +120,9 @@ func boundedMailboxYAML(node *yaml.Node, depth int) bool {
 // knownMailboxEnums допускает отсутствующие enum черновика, но отклоняет неизвестные протоколы
 // приёма, authentication/TLS endpoints и operation policies.
 func knownMailboxEnums(spec entity.EmailMailboxSpecification) bool {
+	if !KnownProviderProfile(spec.ProviderProfile) {
+		return false
+	}
 	if spec.ReceiveProtocol != "" && !spec.ReceiveProtocol.Valid() {
 		return false
 	}

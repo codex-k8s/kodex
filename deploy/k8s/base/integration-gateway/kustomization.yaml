@@ -17,4 +17,5 @@ components:
 - ../../components/workload-runtime-egress-common
 - ../../components/internal-rpc-authority-integration-gateway-issuer
 - ../../components/internal-rpc-authority-namespaced-network-egress-common
-patches: null
+patches:
+- path: lifecycle-patch.yaml

@@ -2,7 +2,10 @@ import { defineComponent, type Ref, type SetupContext } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import { AppProblem } from "@/shared/api/problem";
-import type { IntegrationConnection } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  EmailMailboxOwnership,
+  IntegrationConnection,
+} from "@/shared/api/generated/openapi/types.gen";
 const dependencies = vi.hoisted(() => ({ save: vi.fn(), recover: vi.fn() }));
 vi.mock("../email-credentials", async (original) => ({
   ...(await original<typeof import("../email-credentials")>()),
@@ -26,7 +29,19 @@ const connection: IntegrationConnection = {
   definitionDigest: "a".repeat(64),
   publicConfiguration: {},
 };
+const ownership: EmailMailboxOwnership = {
+  connectionRef: connection.ref,
+  connectionVersion: connection.version,
+  deliveryKind: "MAILBOX_CONFIGURATION",
+  policy: "PROJECT_SHARED",
+  state: "ACTIVE",
+  generation: 1,
+  ownerEligible: true,
+  serviceSubjectRef: "subject_service",
+};
 interface State {
+  discardStale(): void;
+  stalePending: Ref<boolean>;
   save(): Promise<void>;
   clear(): void;
   restore(): void;
@@ -38,11 +53,18 @@ interface State {
   problem: Ref<AppProblem | undefined>;
   receipt: Ref<unknown>;
 }
-async function panel(): Promise<State> {
+async function panel(
+  withOwnership = true,
+  selectedOwner = ownership,
+  selectedConnection = connection,
+): Promise<State> {
   const setup = (
     EmailMailboxCredentialPanel as unknown as {
       setup: (
-        props: { connection: IntegrationConnection },
+        props: {
+          connection: IntegrationConnection;
+          ownership?: EmailMailboxOwnership;
+        },
         context: SetupContext,
       ) => Record<string, unknown>;
     }
@@ -50,7 +72,13 @@ async function panel(): Promise<State> {
   return (await captureSetupState(
     defineComponent({
       setup(_props, context) {
-        return setup({ connection }, context);
+        return setup(
+          {
+            connection: selectedConnection,
+            ownership: withOwnership ? selectedOwner : undefined,
+          },
+          context,
+        );
       },
     }),
   )) as unknown as State;
@@ -68,6 +96,31 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("EMAIL credential: очистка и неопределённость", () => {
+  it("новый owner epoch не использует старую попытку; явная очистка меняет только local metadata", async () => {
+    dependencies.save.mockRejectedValue(new TypeError("Lost ACK"));
+    const initial = await panel();
+    initial.value.value = "synthetic private value";
+    await initial.save();
+    initial.clear();
+    const current = await panel(
+      true,
+      { ...ownership, generation: 2, connectionVersion: 4 },
+      { ...connection, version: 4 },
+    );
+    current.restore();
+    expect(current.stalePending.value).toBe(true);
+    await current.recover();
+    expect(dependencies.recover).not.toHaveBeenCalled();
+    current.discardStale();
+    expect(current.pending.value).toBeUndefined();
+    expect(dependencies.save).toHaveBeenCalledOnce();
+  });
+  it("не открывает запись без текущей mailbox owner metadata", async () => {
+    const current = await panel(false);
+    current.value.value = "synthetic private value";
+    await current.save();
+    expect(dependencies.save).not.toHaveBeenCalled();
+  });
   it("после закрытия проверяет owner receipt без value и повторного POST", async () => {
     dependencies.save.mockRejectedValue(new TypeError("Lost ACK"));
     const initial = await panel();

@@ -1822,6 +1822,99 @@ func (e EmailMailboxOperation) Valid() bool {
 	}
 }
 
+// Defines values for EmailMailboxOwnershipDeliveryKind.
+const (
+	MAILBOXCONFIGURATION EmailMailboxOwnershipDeliveryKind = "MAILBOX_CONFIGURATION"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxOwnershipDeliveryKind enum.
+func (e EmailMailboxOwnershipDeliveryKind) Valid() bool {
+	switch e {
+	case MAILBOXCONFIGURATION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxOwnershipPolicy.
+const (
+	EmailMailboxOwnershipPolicyINITIATORREQUIRED EmailMailboxOwnershipPolicy = "INITIATOR_REQUIRED"
+	EmailMailboxOwnershipPolicyPROJECTSHARED     EmailMailboxOwnershipPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxOwnershipPolicy enum.
+func (e EmailMailboxOwnershipPolicy) Valid() bool {
+	switch e {
+	case EmailMailboxOwnershipPolicyINITIATORREQUIRED:
+		return true
+	case EmailMailboxOwnershipPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxOwnershipState.
+const (
+	EmailMailboxOwnershipStateACTIVE       EmailMailboxOwnershipState = "ACTIVE"
+	EmailMailboxOwnershipStateREVOKED      EmailMailboxOwnershipState = "REVOKED"
+	EmailMailboxOwnershipStateUNCONFIGURED EmailMailboxOwnershipState = "UNCONFIGURED"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxOwnershipState enum.
+func (e EmailMailboxOwnershipState) Valid() bool {
+	switch e {
+	case EmailMailboxOwnershipStateACTIVE:
+		return true
+	case EmailMailboxOwnershipStateREVOKED:
+		return true
+	case EmailMailboxOwnershipStateUNCONFIGURED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxOwnershipInputPolicy.
+const (
+	EmailMailboxOwnershipInputPolicyINITIATORREQUIRED EmailMailboxOwnershipInputPolicy = "INITIATOR_REQUIRED"
+	EmailMailboxOwnershipInputPolicyPROJECTSHARED     EmailMailboxOwnershipInputPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxOwnershipInputPolicy enum.
+func (e EmailMailboxOwnershipInputPolicy) Valid() bool {
+	switch e {
+	case EmailMailboxOwnershipInputPolicyINITIATORREQUIRED:
+		return true
+	case EmailMailboxOwnershipInputPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EmailMailboxProviderProfile.
+const (
+	EmailMailboxProviderProfileCUSTOM           EmailMailboxProviderProfile = "CUSTOM"
+	EmailMailboxProviderProfileGMAILAPPPASSWORD EmailMailboxProviderProfile = "GMAIL_APP_PASSWORD"
+	EmailMailboxProviderProfileTIMEWEBPASSWORD  EmailMailboxProviderProfile = "TIMEWEB_PASSWORD"
+)
+
+// Valid indicates whether the value is a known member of the EmailMailboxProviderProfile enum.
+func (e EmailMailboxProviderProfile) Valid() bool {
+	switch e {
+	case EmailMailboxProviderProfileCUSTOM:
+		return true
+	case EmailMailboxProviderProfileGMAILAPPPASSWORD:
+		return true
+	case EmailMailboxProviderProfileTIMEWEBPASSWORD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EmailMailboxPublicationFailureCode.
 const (
 	EmailMailboxPublicationFailureCodeEMAILMAILBOXCONNECTIONCHANGED EmailMailboxPublicationFailureCode = "EMAIL_MAILBOX_CONNECTION_CHANGED"
@@ -2618,6 +2711,7 @@ const (
 	IntegrationCapabilityResourceKindGITLABSCOPE       IntegrationCapabilityResourceKind = "GITLAB_SCOPE"
 	IntegrationCapabilityResourceKindHTTPSRESOURCE     IntegrationCapabilityResourceKind = "HTTPS_RESOURCE"
 	IntegrationCapabilityResourceKindJIRAPROJECT       IntegrationCapabilityResourceKind = "JIRA_PROJECT"
+	IntegrationCapabilityResourceKindKUBERNETESTARGET  IntegrationCapabilityResourceKind = "KUBERNETES_TARGET"
 	IntegrationCapabilityResourceKindMATTERMOSTCHANNEL IntegrationCapabilityResourceKind = "MATTERMOST_CHANNEL"
 	IntegrationCapabilityResourceKindSSHTARGET         IntegrationCapabilityResourceKind = "SSH_TARGET"
 	IntegrationCapabilityResourceKindSYNTHETICJOURNAL  IntegrationCapabilityResourceKind = "SYNTHETIC_JOURNAL"
@@ -2641,6 +2735,8 @@ func (e IntegrationCapabilityResourceKind) Valid() bool {
 	case IntegrationCapabilityResourceKindHTTPSRESOURCE:
 		return true
 	case IntegrationCapabilityResourceKindJIRAPROJECT:
+		return true
+	case IntegrationCapabilityResourceKindKUBERNETESTARGET:
 		return true
 	case IntegrationCapabilityResourceKindMATTERMOSTCHANNEL:
 		return true
@@ -2773,6 +2869,57 @@ func (e IntegrationConnectionCommandAction) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationCredentialDelivery0Kind.
+const (
+	IntegrationCredentialDelivery0KindNONE  IntegrationCredentialDelivery0Kind = "NONE"
+	IntegrationCredentialDelivery0KindTOKEN IntegrationCredentialDelivery0Kind = "TOKEN"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCredentialDelivery0Kind enum.
+func (e IntegrationCredentialDelivery0Kind) Valid() bool {
+	switch e {
+	case IntegrationCredentialDelivery0KindNONE:
+		return true
+	case IntegrationCredentialDelivery0KindTOKEN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCredentialDelivery1BrokerPurpose.
+const (
+	IntegrationCredentialDelivery1BrokerPurposeKUBERNETESTARGET IntegrationCredentialDelivery1BrokerPurpose = "KUBERNETES_TARGET"
+	IntegrationCredentialDelivery1BrokerPurposeSSHTARGET        IntegrationCredentialDelivery1BrokerPurpose = "SSH_TARGET"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCredentialDelivery1BrokerPurpose enum.
+func (e IntegrationCredentialDelivery1BrokerPurpose) Valid() bool {
+	switch e {
+	case IntegrationCredentialDelivery1BrokerPurposeKUBERNETESTARGET:
+		return true
+	case IntegrationCredentialDelivery1BrokerPurposeSSHTARGET:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCredentialDelivery1Kind.
+const (
+	BROKERIDENTITY IntegrationCredentialDelivery1Kind = "BROKER_IDENTITY"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCredentialDelivery1Kind enum.
+func (e IntegrationCredentialDelivery1Kind) Valid() bool {
+	switch e {
+	case BROKERIDENTITY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationCredentialPolicyInputPolicy.
 const (
 	IntegrationCredentialPolicyInputPolicyINITIATORREQUIRED IntegrationCredentialPolicyInputPolicy = "INITIATOR_REQUIRED"
@@ -2839,11 +2986,13 @@ const (
 	IntegrationDefinitionAdapterGITLAB                IntegrationDefinitionAdapter = "GITLAB"
 	IntegrationDefinitionAdapterHTTPSJSONREAD         IntegrationDefinitionAdapter = "HTTPS_JSON_READ"
 	IntegrationDefinitionAdapterJIRA                  IntegrationDefinitionAdapter = "JIRA"
+	IntegrationDefinitionAdapterKUBERNETES            IntegrationDefinitionAdapter = "KUBERNETES"
 	IntegrationDefinitionAdapterMATTERMOSTINTERACTION IntegrationDefinitionAdapter = "MATTERMOST_INTERACTION"
 	IntegrationDefinitionAdapterOBSERVABILITY         IntegrationDefinitionAdapter = "OBSERVABILITY"
 	IntegrationDefinitionAdapterOPENAPIMCP            IntegrationDefinitionAdapter = "OPENAPI_MCP"
 	IntegrationDefinitionAdapterSENTRY                IntegrationDefinitionAdapter = "SENTRY"
 	IntegrationDefinitionAdapterSSHCOMPOSE            IntegrationDefinitionAdapter = "SSH_COMPOSE"
+	IntegrationDefinitionAdapterSSHTARGET             IntegrationDefinitionAdapter = "SSH_TARGET"
 	IntegrationDefinitionAdapterSYNTHETICHTTP         IntegrationDefinitionAdapter = "SYNTHETIC_HTTP"
 	IntegrationDefinitionAdapterTELEGRAMINTERACTION   IntegrationDefinitionAdapter = "TELEGRAM_INTERACTION"
 )
@@ -2865,6 +3014,8 @@ func (e IntegrationDefinitionAdapter) Valid() bool {
 		return true
 	case IntegrationDefinitionAdapterJIRA:
 		return true
+	case IntegrationDefinitionAdapterKUBERNETES:
+		return true
 	case IntegrationDefinitionAdapterMATTERMOSTINTERACTION:
 		return true
 	case IntegrationDefinitionAdapterOBSERVABILITY:
@@ -2874,6 +3025,8 @@ func (e IntegrationDefinitionAdapter) Valid() bool {
 	case IntegrationDefinitionAdapterSENTRY:
 		return true
 	case IntegrationDefinitionAdapterSSHCOMPOSE:
+		return true
+	case IntegrationDefinitionAdapterSSHTARGET:
 		return true
 	case IntegrationDefinitionAdapterSYNTHETICHTTP:
 		return true
@@ -3146,6 +3299,7 @@ const (
 	IntegrationResourceScopeKindGITLABSCOPE       IntegrationResourceScopeKind = "GITLAB_SCOPE"
 	IntegrationResourceScopeKindHTTPSRESOURCE     IntegrationResourceScopeKind = "HTTPS_RESOURCE"
 	IntegrationResourceScopeKindJIRAPROJECT       IntegrationResourceScopeKind = "JIRA_PROJECT"
+	IntegrationResourceScopeKindKUBERNETESTARGET  IntegrationResourceScopeKind = "KUBERNETES_TARGET"
 	IntegrationResourceScopeKindMATTERMOSTCHANNEL IntegrationResourceScopeKind = "MATTERMOST_CHANNEL"
 	IntegrationResourceScopeKindSSHTARGET         IntegrationResourceScopeKind = "SSH_TARGET"
 	IntegrationResourceScopeKindSYNTHETICJOURNAL  IntegrationResourceScopeKind = "SYNTHETIC_JOURNAL"
@@ -3169,6 +3323,8 @@ func (e IntegrationResourceScopeKind) Valid() bool {
 	case IntegrationResourceScopeKindHTTPSRESOURCE:
 		return true
 	case IntegrationResourceScopeKindJIRAPROJECT:
+		return true
+	case IntegrationResourceScopeKindKUBERNETESTARGET:
 		return true
 	case IntegrationResourceScopeKindMATTERMOSTCHANNEL:
 		return true
@@ -3250,6 +3406,1125 @@ func (e InteractionIdentityState) Valid() bool {
 	case InteractionIdentityStateACTIVE:
 		return true
 	case InteractionIdentityStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginChannel.
+const (
+	KubernetesArtifactCaptureOriginChannelCONTROL     KubernetesArtifactCaptureOriginChannel = "CONTROL"
+	KubernetesArtifactCaptureOriginChannelFILECONTENT KubernetesArtifactCaptureOriginChannel = "FILE_CONTENT"
+	KubernetesArtifactCaptureOriginChannelPORTFORWARD KubernetesArtifactCaptureOriginChannel = "PORT_FORWARD"
+	KubernetesArtifactCaptureOriginChannelSTDERR      KubernetesArtifactCaptureOriginChannel = "STDERR"
+	KubernetesArtifactCaptureOriginChannelSTDOUT      KubernetesArtifactCaptureOriginChannel = "STDOUT"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginChannel enum.
+func (e KubernetesArtifactCaptureOriginChannel) Valid() bool {
+	switch e {
+	case KubernetesArtifactCaptureOriginChannelCONTROL:
+		return true
+	case KubernetesArtifactCaptureOriginChannelFILECONTENT:
+		return true
+	case KubernetesArtifactCaptureOriginChannelPORTFORWARD:
+		return true
+	case KubernetesArtifactCaptureOriginChannelSTDERR:
+		return true
+	case KubernetesArtifactCaptureOriginChannelSTDOUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginKind.
+const (
+	KubernetesArtifactCaptureOriginKindFULL    KubernetesArtifactCaptureOriginKind = "FULL"
+	KubernetesArtifactCaptureOriginKindPARTIAL KubernetesArtifactCaptureOriginKind = "PARTIAL"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginKind enum.
+func (e KubernetesArtifactCaptureOriginKind) Valid() bool {
+	switch e {
+	case KubernetesArtifactCaptureOriginKindFULL:
+		return true
+	case KubernetesArtifactCaptureOriginKindPARTIAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginLocalState.
+const (
+	KubernetesArtifactCaptureOriginLocalStateCANCELED  KubernetesArtifactCaptureOriginLocalState = "CANCELED"
+	KubernetesArtifactCaptureOriginLocalStateCOMPLETED KubernetesArtifactCaptureOriginLocalState = "COMPLETED"
+	KubernetesArtifactCaptureOriginLocalStateEXPIRED   KubernetesArtifactCaptureOriginLocalState = "EXPIRED"
+	KubernetesArtifactCaptureOriginLocalStateLOST      KubernetesArtifactCaptureOriginLocalState = "LOST"
+	KubernetesArtifactCaptureOriginLocalStateREVOKED   KubernetesArtifactCaptureOriginLocalState = "REVOKED"
+	KubernetesArtifactCaptureOriginLocalStateUNKNOWN   KubernetesArtifactCaptureOriginLocalState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginLocalState enum.
+func (e KubernetesArtifactCaptureOriginLocalState) Valid() bool {
+	switch e {
+	case KubernetesArtifactCaptureOriginLocalStateCANCELED:
+		return true
+	case KubernetesArtifactCaptureOriginLocalStateCOMPLETED:
+		return true
+	case KubernetesArtifactCaptureOriginLocalStateEXPIRED:
+		return true
+	case KubernetesArtifactCaptureOriginLocalStateLOST:
+		return true
+	case KubernetesArtifactCaptureOriginLocalStateREVOKED:
+		return true
+	case KubernetesArtifactCaptureOriginLocalStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginOperation.
+const (
+	KubernetesAttach             KubernetesArtifactCaptureOriginOperation = "kubernetes.attach"
+	KubernetesCpDownload         KubernetesArtifactCaptureOriginOperation = "kubernetes.cp.download"
+	KubernetesCpUpload           KubernetesArtifactCaptureOriginOperation = "kubernetes.cp.upload"
+	KubernetesDebug              KubernetesArtifactCaptureOriginOperation = "kubernetes.debug"
+	KubernetesExec               KubernetesArtifactCaptureOriginOperation = "kubernetes.exec"
+	KubernetesLogs               KubernetesArtifactCaptureOriginOperation = "kubernetes.logs"
+	KubernetesPortForward        KubernetesArtifactCaptureOriginOperation = "kubernetes.port-forward"
+	KubernetesWatch              KubernetesArtifactCaptureOriginOperation = "kubernetes.watch"
+	KubernetesWatchAllNamespaces KubernetesArtifactCaptureOriginOperation = "kubernetes.watch.all-namespaces"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginOperation enum.
+func (e KubernetesArtifactCaptureOriginOperation) Valid() bool {
+	switch e {
+	case KubernetesAttach:
+		return true
+	case KubernetesCpDownload:
+		return true
+	case KubernetesCpUpload:
+		return true
+	case KubernetesDebug:
+		return true
+	case KubernetesExec:
+		return true
+	case KubernetesLogs:
+		return true
+	case KubernetesPortForward:
+		return true
+	case KubernetesWatch:
+		return true
+	case KubernetesWatchAllNamespaces:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginOwnerState.
+const (
+	KubernetesArtifactCaptureOriginOwnerStateCANCELED  KubernetesArtifactCaptureOriginOwnerState = "CANCELED"
+	KubernetesArtifactCaptureOriginOwnerStateCOMPLETED KubernetesArtifactCaptureOriginOwnerState = "COMPLETED"
+	KubernetesArtifactCaptureOriginOwnerStateEXPIRED   KubernetesArtifactCaptureOriginOwnerState = "EXPIRED"
+	KubernetesArtifactCaptureOriginOwnerStateLOST      KubernetesArtifactCaptureOriginOwnerState = "LOST"
+	KubernetesArtifactCaptureOriginOwnerStateREVOKED   KubernetesArtifactCaptureOriginOwnerState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginOwnerState enum.
+func (e KubernetesArtifactCaptureOriginOwnerState) Valid() bool {
+	switch e {
+	case KubernetesArtifactCaptureOriginOwnerStateCANCELED:
+		return true
+	case KubernetesArtifactCaptureOriginOwnerStateCOMPLETED:
+		return true
+	case KubernetesArtifactCaptureOriginOwnerStateEXPIRED:
+		return true
+	case KubernetesArtifactCaptureOriginOwnerStateLOST:
+		return true
+	case KubernetesArtifactCaptureOriginOwnerStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesArtifactCaptureOriginRemoteOutcome.
+const (
+	KubernetesArtifactCaptureOriginRemoteOutcomeFAILED    KubernetesArtifactCaptureOriginRemoteOutcome = "FAILED"
+	KubernetesArtifactCaptureOriginRemoteOutcomeSUCCEEDED KubernetesArtifactCaptureOriginRemoteOutcome = "SUCCEEDED"
+	KubernetesArtifactCaptureOriginRemoteOutcomeUNKNOWN   KubernetesArtifactCaptureOriginRemoteOutcome = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesArtifactCaptureOriginRemoteOutcome enum.
+func (e KubernetesArtifactCaptureOriginRemoteOutcome) Valid() bool {
+	switch e {
+	case KubernetesArtifactCaptureOriginRemoteOutcomeFAILED:
+		return true
+	case KubernetesArtifactCaptureOriginRemoteOutcomeSUCCEEDED:
+		return true
+	case KubernetesArtifactCaptureOriginRemoteOutcomeUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesCaptureStatusKind.
+const (
+	KubernetesCaptureStatusKindEMPTY   KubernetesCaptureStatusKind = "EMPTY"
+	KubernetesCaptureStatusKindFULL    KubernetesCaptureStatusKind = "FULL"
+	KubernetesCaptureStatusKindNONE    KubernetesCaptureStatusKind = "NONE"
+	KubernetesCaptureStatusKindPARTIAL KubernetesCaptureStatusKind = "PARTIAL"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesCaptureStatusKind enum.
+func (e KubernetesCaptureStatusKind) Valid() bool {
+	switch e {
+	case KubernetesCaptureStatusKindEMPTY:
+		return true
+	case KubernetesCaptureStatusKindFULL:
+		return true
+	case KubernetesCaptureStatusKindNONE:
+		return true
+	case KubernetesCaptureStatusKindPARTIAL:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesCaptureSummaryReasonCode.
+const (
+	KubernetesCaptureSummaryReasonCodeCAPTURECONTENTREJECTED    KubernetesCaptureSummaryReasonCode = "CAPTURE_CONTENT_REJECTED"
+	KubernetesCaptureSummaryReasonCodeCAPTUREELIGIBILITYCHANGED KubernetesCaptureSummaryReasonCode = "CAPTURE_ELIGIBILITY_CHANGED"
+	KubernetesCaptureSummaryReasonCodeCAPTURERETENTIONEXPIRED   KubernetesCaptureSummaryReasonCode = "CAPTURE_RETENTION_EXPIRED"
+	KubernetesCaptureSummaryReasonCodeCAPTURERETRYEXHAUSTED     KubernetesCaptureSummaryReasonCode = "CAPTURE_RETRY_EXHAUSTED"
+	KubernetesCaptureSummaryReasonCodeCAPTURESOURCEINVALID      KubernetesCaptureSummaryReasonCode = "CAPTURE_SOURCE_INVALID"
+	KubernetesCaptureSummaryReasonCodeCAPTURESTORAGEUNKNOWN     KubernetesCaptureSummaryReasonCode = "CAPTURE_STORAGE_UNKNOWN"
+	KubernetesCaptureSummaryReasonCodeCAPTURESUPERSEDED         KubernetesCaptureSummaryReasonCode = "CAPTURE_SUPERSEDED"
+	KubernetesCaptureSummaryReasonCodeEmpty                     KubernetesCaptureSummaryReasonCode = ""
+)
+
+// Valid indicates whether the value is a known member of the KubernetesCaptureSummaryReasonCode enum.
+func (e KubernetesCaptureSummaryReasonCode) Valid() bool {
+	switch e {
+	case KubernetesCaptureSummaryReasonCodeCAPTURECONTENTREJECTED:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTUREELIGIBILITYCHANGED:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTURERETENTIONEXPIRED:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTURERETRYEXHAUSTED:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTURESOURCEINVALID:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTURESTORAGEUNKNOWN:
+		return true
+	case KubernetesCaptureSummaryReasonCodeCAPTURESUPERSEDED:
+		return true
+	case KubernetesCaptureSummaryReasonCodeEmpty:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesCaptureSummaryState.
+const (
+	KubernetesCaptureSummaryStateCLAIMED      KubernetesCaptureSummaryState = "CLAIMED"
+	KubernetesCaptureSummaryStateCOMPLETE     KubernetesCaptureSummaryState = "COMPLETE"
+	KubernetesCaptureSummaryStateREADY        KubernetesCaptureSummaryState = "READY"
+	KubernetesCaptureSummaryStateREJECTED     KubernetesCaptureSummaryState = "REJECTED"
+	KubernetesCaptureSummaryStateSUPERSEDED   KubernetesCaptureSummaryState = "SUPERSEDED"
+	KubernetesCaptureSummaryStateUNKNOWN      KubernetesCaptureSummaryState = "UNKNOWN"
+	KubernetesCaptureSummaryStateWAITINGOWNER KubernetesCaptureSummaryState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesCaptureSummaryState enum.
+func (e KubernetesCaptureSummaryState) Valid() bool {
+	switch e {
+	case KubernetesCaptureSummaryStateCLAIMED:
+		return true
+	case KubernetesCaptureSummaryStateCOMPLETE:
+		return true
+	case KubernetesCaptureSummaryStateREADY:
+		return true
+	case KubernetesCaptureSummaryStateREJECTED:
+		return true
+	case KubernetesCaptureSummaryStateSUPERSEDED:
+		return true
+	case KubernetesCaptureSummaryStateUNKNOWN:
+		return true
+	case KubernetesCaptureSummaryStateWAITINGOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesCapturedArtifactChannel.
+const (
+	KubernetesCapturedArtifactChannelCONTROL     KubernetesCapturedArtifactChannel = "CONTROL"
+	KubernetesCapturedArtifactChannelFILECONTENT KubernetesCapturedArtifactChannel = "FILE_CONTENT"
+	KubernetesCapturedArtifactChannelPORTFORWARD KubernetesCapturedArtifactChannel = "PORT_FORWARD"
+	KubernetesCapturedArtifactChannelSTDERR      KubernetesCapturedArtifactChannel = "STDERR"
+	KubernetesCapturedArtifactChannelSTDOUT      KubernetesCapturedArtifactChannel = "STDOUT"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesCapturedArtifactChannel enum.
+func (e KubernetesCapturedArtifactChannel) Valid() bool {
+	switch e {
+	case KubernetesCapturedArtifactChannelCONTROL:
+		return true
+	case KubernetesCapturedArtifactChannelFILECONTENT:
+		return true
+	case KubernetesCapturedArtifactChannelPORTFORWARD:
+		return true
+	case KubernetesCapturedArtifactChannelSTDERR:
+		return true
+	case KubernetesCapturedArtifactChannelSTDOUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileCleanupListProjection.
+const (
+	KubernetesFileCleanupListProjectionCLEANUPONLY KubernetesFileCleanupListProjection = "CLEANUP_ONLY"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileCleanupListProjection enum.
+func (e KubernetesFileCleanupListProjection) Valid() bool {
+	switch e {
+	case KubernetesFileCleanupListProjectionCLEANUPONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileCleanupReadbackProjection.
+const (
+	KubernetesFileCleanupReadbackProjectionCLEANUPONLY KubernetesFileCleanupReadbackProjection = "CLEANUP_ONLY"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileCleanupReadbackProjection enum.
+func (e KubernetesFileCleanupReadbackProjection) Valid() bool {
+	switch e {
+	case KubernetesFileCleanupReadbackProjectionCLEANUPONLY:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileInputViewReason.
+const (
+	KubernetesFileInputViewReasonCANCELLED         KubernetesFileInputViewReason = "CANCELLED"
+	KubernetesFileInputViewReasonCONTENTREJECTED   KubernetesFileInputViewReason = "CONTENT_REJECTED"
+	KubernetesFileInputViewReasonEXPIRED           KubernetesFileInputViewReason = "EXPIRED"
+	KubernetesFileInputViewReasonINPUTUNKNOWN      KubernetesFileInputViewReason = "INPUT_UNKNOWN"
+	KubernetesFileInputViewReasonNONE              KubernetesFileInputViewReason = "NONE"
+	KubernetesFileInputViewReasonPERMISSIONLOST    KubernetesFileInputViewReason = "PERMISSION_LOST"
+	KubernetesFileInputViewReasonSOURCECHANGED     KubernetesFileInputViewReason = "SOURCE_CHANGED"
+	KubernetesFileInputViewReasonSOURCEUNAVAILABLE KubernetesFileInputViewReason = "SOURCE_UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileInputViewReason enum.
+func (e KubernetesFileInputViewReason) Valid() bool {
+	switch e {
+	case KubernetesFileInputViewReasonCANCELLED:
+		return true
+	case KubernetesFileInputViewReasonCONTENTREJECTED:
+		return true
+	case KubernetesFileInputViewReasonEXPIRED:
+		return true
+	case KubernetesFileInputViewReasonINPUTUNKNOWN:
+		return true
+	case KubernetesFileInputViewReasonNONE:
+		return true
+	case KubernetesFileInputViewReasonPERMISSIONLOST:
+		return true
+	case KubernetesFileInputViewReasonSOURCECHANGED:
+		return true
+	case KubernetesFileInputViewReasonSOURCEUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileInputViewState.
+const (
+	KubernetesFileInputViewStateCANCELLED   KubernetesFileInputViewState = "CANCELLED"
+	KubernetesFileInputViewStateEXPIRED     KubernetesFileInputViewState = "EXPIRED"
+	KubernetesFileInputViewStatePREPARING   KubernetesFileInputViewState = "PREPARING"
+	KubernetesFileInputViewStateREADY       KubernetesFileInputViewState = "READY"
+	KubernetesFileInputViewStateREJECTED    KubernetesFileInputViewState = "REJECTED"
+	KubernetesFileInputViewStateTRANSFERRED KubernetesFileInputViewState = "TRANSFERRED"
+	KubernetesFileInputViewStateUNKNOWN     KubernetesFileInputViewState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileInputViewState enum.
+func (e KubernetesFileInputViewState) Valid() bool {
+	switch e {
+	case KubernetesFileInputViewStateCANCELLED:
+		return true
+	case KubernetesFileInputViewStateEXPIRED:
+		return true
+	case KubernetesFileInputViewStatePREPARING:
+		return true
+	case KubernetesFileInputViewStateREADY:
+		return true
+	case KubernetesFileInputViewStateREJECTED:
+		return true
+	case KubernetesFileInputViewStateTRANSFERRED:
+		return true
+	case KubernetesFileInputViewStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileInputViewTransferFormat.
+const (
+	FILE KubernetesFileInputViewTransferFormat = "FILE"
+	TAR  KubernetesFileInputViewTransferFormat = "TAR"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileInputViewTransferFormat enum.
+func (e KubernetesFileInputViewTransferFormat) Valid() bool {
+	switch e {
+	case FILE:
+		return true
+	case TAR:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileSourceListProjection.
+const (
+	KubernetesFileSourceListProjectionSOURCE KubernetesFileSourceListProjection = "SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileSourceListProjection enum.
+func (e KubernetesFileSourceListProjection) Valid() bool {
+	switch e {
+	case KubernetesFileSourceListProjectionSOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesFileSourceReadbackProjection.
+const (
+	KubernetesFileSourceReadbackProjectionSOURCE KubernetesFileSourceReadbackProjection = "SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesFileSourceReadbackProjection enum.
+func (e KubernetesFileSourceReadbackProjection) Valid() bool {
+	switch e {
+	case KubernetesFileSourceReadbackProjectionSOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesIdentitySetupRequirementsCredentialPolicy.
+const (
+	KubernetesIdentitySetupRequirementsCredentialPolicyINITIATORREQUIRED KubernetesIdentitySetupRequirementsCredentialPolicy = "INITIATOR_REQUIRED"
+	KubernetesIdentitySetupRequirementsCredentialPolicyPROJECTSHARED     KubernetesIdentitySetupRequirementsCredentialPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesIdentitySetupRequirementsCredentialPolicy enum.
+func (e KubernetesIdentitySetupRequirementsCredentialPolicy) Valid() bool {
+	switch e {
+	case KubernetesIdentitySetupRequirementsCredentialPolicyINITIATORREQUIRED:
+		return true
+	case KubernetesIdentitySetupRequirementsCredentialPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesIdentitySetupViewCredentialPolicy.
+const (
+	KubernetesIdentitySetupViewCredentialPolicyINITIATORREQUIRED KubernetesIdentitySetupViewCredentialPolicy = "INITIATOR_REQUIRED"
+	KubernetesIdentitySetupViewCredentialPolicyPROJECTSHARED     KubernetesIdentitySetupViewCredentialPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesIdentitySetupViewCredentialPolicy enum.
+func (e KubernetesIdentitySetupViewCredentialPolicy) Valid() bool {
+	switch e {
+	case KubernetesIdentitySetupViewCredentialPolicyINITIATORREQUIRED:
+		return true
+	case KubernetesIdentitySetupViewCredentialPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesIdentitySetupViewReasonCode.
+const (
+	KubernetesIdentitySetupViewReasonCodeEmpty                      KubernetesIdentitySetupViewReasonCode = ""
+	KubernetesIdentitySetupViewReasonCodeSETUPACKCONFLICT           KubernetesIdentitySetupViewReasonCode = "SETUP_ACK_CONFLICT"
+	KubernetesIdentitySetupViewReasonCodeSETUPACKREJECTED           KubernetesIdentitySetupViewReasonCode = "SETUP_ACK_REJECTED"
+	KubernetesIdentitySetupViewReasonCodeSETUPCOMPLETIONREQUIRED    KubernetesIdentitySetupViewReasonCode = "SETUP_COMPLETION_REQUIRED"
+	KubernetesIdentitySetupViewReasonCodeSETUPEXPIREDPENDINGCLOSURE KubernetesIdentitySetupViewReasonCode = "SETUP_EXPIRED_PENDING_CLOSURE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesIdentitySetupViewReasonCode enum.
+func (e KubernetesIdentitySetupViewReasonCode) Valid() bool {
+	switch e {
+	case KubernetesIdentitySetupViewReasonCodeEmpty:
+		return true
+	case KubernetesIdentitySetupViewReasonCodeSETUPACKCONFLICT:
+		return true
+	case KubernetesIdentitySetupViewReasonCodeSETUPACKREJECTED:
+		return true
+	case KubernetesIdentitySetupViewReasonCodeSETUPCOMPLETIONREQUIRED:
+		return true
+	case KubernetesIdentitySetupViewReasonCodeSETUPEXPIREDPENDINGCLOSURE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesIdentitySetupViewState.
+const (
+	KubernetesIdentitySetupViewStateACKREJECTED KubernetesIdentitySetupViewState = "ACK_REJECTED"
+	KubernetesIdentitySetupViewStateATTEMPTING  KubernetesIdentitySetupViewState = "ATTEMPTING"
+	KubernetesIdentitySetupViewStateCANCELLED   KubernetesIdentitySetupViewState = "CANCELLED"
+	KubernetesIdentitySetupViewStateCOMPLETED   KubernetesIdentitySetupViewState = "COMPLETED"
+	KubernetesIdentitySetupViewStateEXPIRED     KubernetesIdentitySetupViewState = "EXPIRED"
+	KubernetesIdentitySetupViewStatePREPARED    KubernetesIdentitySetupViewState = "PREPARED"
+	KubernetesIdentitySetupViewStateUNKNOWN     KubernetesIdentitySetupViewState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesIdentitySetupViewState enum.
+func (e KubernetesIdentitySetupViewState) Valid() bool {
+	switch e {
+	case KubernetesIdentitySetupViewStateACKREJECTED:
+		return true
+	case KubernetesIdentitySetupViewStateATTEMPTING:
+		return true
+	case KubernetesIdentitySetupViewStateCANCELLED:
+		return true
+	case KubernetesIdentitySetupViewStateCOMPLETED:
+		return true
+	case KubernetesIdentitySetupViewStateEXPIRED:
+		return true
+	case KubernetesIdentitySetupViewStatePREPARED:
+		return true
+	case KubernetesIdentitySetupViewStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesOwnerGatePreviewLimitations.
+const (
+	BUDGETEXCEEDED                      KubernetesOwnerGatePreviewLimitations = "BUDGET_EXCEEDED"
+	NOTAUTHORIZED                       KubernetesOwnerGatePreviewLimitations = "NOT_AUTHORIZED"
+	PORTFORWARDLOGICALSTREAM16ACTIVE    KubernetesOwnerGatePreviewLimitations = "PORT_FORWARD_LOGICAL_STREAM_16_ACTIVE"
+	PROTECTEDMATERIALHIDDEN             KubernetesOwnerGatePreviewLimitations = "PROTECTED_MATERIAL_HIDDEN"
+	SENSITIVEORUNCLASSIFIEDFIELDSHIDDEN KubernetesOwnerGatePreviewLimitations = "SENSITIVE_OR_UNCLASSIFIED_FIELDS_HIDDEN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesOwnerGatePreviewLimitations enum.
+func (e KubernetesOwnerGatePreviewLimitations) Valid() bool {
+	switch e {
+	case BUDGETEXCEEDED:
+		return true
+	case NOTAUTHORIZED:
+		return true
+	case PORTFORWARDLOGICALSTREAM16ACTIVE:
+		return true
+	case PROTECTEDMATERIALHIDDEN:
+		return true
+	case SENSITIVEORUNCLASSIFIEDFIELDSHIDDEN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesOwnerGatePreviewChangeOperation.
+const (
+	Add     KubernetesOwnerGatePreviewChangeOperation = "add"
+	Copy    KubernetesOwnerGatePreviewChangeOperation = "copy"
+	Move    KubernetesOwnerGatePreviewChangeOperation = "move"
+	Remove  KubernetesOwnerGatePreviewChangeOperation = "remove"
+	Replace KubernetesOwnerGatePreviewChangeOperation = "replace"
+	SUBMIT  KubernetesOwnerGatePreviewChangeOperation = "SUBMIT"
+	Test    KubernetesOwnerGatePreviewChangeOperation = "test"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesOwnerGatePreviewChangeOperation enum.
+func (e KubernetesOwnerGatePreviewChangeOperation) Valid() bool {
+	switch e {
+	case Add:
+		return true
+	case Copy:
+		return true
+	case Move:
+		return true
+	case Remove:
+		return true
+	case Replace:
+		return true
+	case SUBMIT:
+		return true
+	case Test:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesOwnerGatePreviewChangeValueKind.
+const (
+	KubernetesOwnerGatePreviewChangeValueKindARRAY   KubernetesOwnerGatePreviewChangeValueKind = "ARRAY"
+	KubernetesOwnerGatePreviewChangeValueKindBOOLEAN KubernetesOwnerGatePreviewChangeValueKind = "BOOLEAN"
+	KubernetesOwnerGatePreviewChangeValueKindNONE    KubernetesOwnerGatePreviewChangeValueKind = "NONE"
+	KubernetesOwnerGatePreviewChangeValueKindNULL    KubernetesOwnerGatePreviewChangeValueKind = "NULL"
+	KubernetesOwnerGatePreviewChangeValueKindNUMBER  KubernetesOwnerGatePreviewChangeValueKind = "NUMBER"
+	KubernetesOwnerGatePreviewChangeValueKindOBJECT  KubernetesOwnerGatePreviewChangeValueKind = "OBJECT"
+	KubernetesOwnerGatePreviewChangeValueKindSTRING  KubernetesOwnerGatePreviewChangeValueKind = "STRING"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesOwnerGatePreviewChangeValueKind enum.
+func (e KubernetesOwnerGatePreviewChangeValueKind) Valid() bool {
+	switch e {
+	case KubernetesOwnerGatePreviewChangeValueKindARRAY:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindBOOLEAN:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindNONE:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindNULL:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindNUMBER:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindOBJECT:
+		return true
+	case KubernetesOwnerGatePreviewChangeValueKindSTRING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesOwnerGatePreviewOptionKind.
+const (
+	KubernetesOwnerGatePreviewOptionKindARRAY   KubernetesOwnerGatePreviewOptionKind = "ARRAY"
+	KubernetesOwnerGatePreviewOptionKindBOOLEAN KubernetesOwnerGatePreviewOptionKind = "BOOLEAN"
+	KubernetesOwnerGatePreviewOptionKindNONE    KubernetesOwnerGatePreviewOptionKind = "NONE"
+	KubernetesOwnerGatePreviewOptionKindNULL    KubernetesOwnerGatePreviewOptionKind = "NULL"
+	KubernetesOwnerGatePreviewOptionKindNUMBER  KubernetesOwnerGatePreviewOptionKind = "NUMBER"
+	KubernetesOwnerGatePreviewOptionKindOBJECT  KubernetesOwnerGatePreviewOptionKind = "OBJECT"
+	KubernetesOwnerGatePreviewOptionKindSTRING  KubernetesOwnerGatePreviewOptionKind = "STRING"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesOwnerGatePreviewOptionKind enum.
+func (e KubernetesOwnerGatePreviewOptionKind) Valid() bool {
+	switch e {
+	case KubernetesOwnerGatePreviewOptionKindARRAY:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindBOOLEAN:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindNONE:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindNULL:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindNUMBER:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindOBJECT:
+		return true
+	case KubernetesOwnerGatePreviewOptionKindSTRING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesPortForwardConnectionProfileProtocol.
+const (
+	KubernetesPortForwardConnectionProfileProtocolEmpty                  KubernetesPortForwardConnectionProfileProtocol = ""
+	KubernetesPortForwardConnectionProfileProtocolPORTFORWARDSPDYV1      KubernetesPortForwardConnectionProfileProtocol = "PORT_FORWARD_SPDY_V1"
+	KubernetesPortForwardConnectionProfileProtocolPORTFORWARDWEBSOCKETV4 KubernetesPortForwardConnectionProfileProtocol = "PORT_FORWARD_WEBSOCKET_V4"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesPortForwardConnectionProfileProtocol enum.
+func (e KubernetesPortForwardConnectionProfileProtocol) Valid() bool {
+	switch e {
+	case KubernetesPortForwardConnectionProfileProtocolEmpty:
+		return true
+	case KubernetesPortForwardConnectionProfileProtocolPORTFORWARDSPDYV1:
+		return true
+	case KubernetesPortForwardConnectionProfileProtocolPORTFORWARDWEBSOCKETV4:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesPortForwardConnectionViewState.
+const (
+	KubernetesPortForwardConnectionViewStateCANCELLED KubernetesPortForwardConnectionViewState = "CANCELLED"
+	KubernetesPortForwardConnectionViewStateCLOSED    KubernetesPortForwardConnectionViewState = "CLOSED"
+	KubernetesPortForwardConnectionViewStateEXPIRED   KubernetesPortForwardConnectionViewState = "EXPIRED"
+	KubernetesPortForwardConnectionViewStateOPEN      KubernetesPortForwardConnectionViewState = "OPEN"
+	KubernetesPortForwardConnectionViewStateOPENING   KubernetesPortForwardConnectionViewState = "OPENING"
+	KubernetesPortForwardConnectionViewStatePREPARED  KubernetesPortForwardConnectionViewState = "PREPARED"
+	KubernetesPortForwardConnectionViewStateUNKNOWN   KubernetesPortForwardConnectionViewState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesPortForwardConnectionViewState enum.
+func (e KubernetesPortForwardConnectionViewState) Valid() bool {
+	switch e {
+	case KubernetesPortForwardConnectionViewStateCANCELLED:
+		return true
+	case KubernetesPortForwardConnectionViewStateCLOSED:
+		return true
+	case KubernetesPortForwardConnectionViewStateEXPIRED:
+		return true
+	case KubernetesPortForwardConnectionViewStateOPEN:
+		return true
+	case KubernetesPortForwardConnectionViewStateOPENING:
+		return true
+	case KubernetesPortForwardConnectionViewStatePREPARED:
+		return true
+	case KubernetesPortForwardConnectionViewStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialBeginInputOperation.
+const (
+	KubernetesResourceMaterialBeginInputOperationKubernetesApply   KubernetesResourceMaterialBeginInputOperation = "kubernetes.apply"
+	KubernetesResourceMaterialBeginInputOperationKubernetesCreate  KubernetesResourceMaterialBeginInputOperation = "kubernetes.create"
+	KubernetesResourceMaterialBeginInputOperationKubernetesEdit    KubernetesResourceMaterialBeginInputOperation = "kubernetes.edit"
+	KubernetesResourceMaterialBeginInputOperationKubernetesPatch   KubernetesResourceMaterialBeginInputOperation = "kubernetes.patch"
+	KubernetesResourceMaterialBeginInputOperationKubernetesReplace KubernetesResourceMaterialBeginInputOperation = "kubernetes.replace"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialBeginInputOperation enum.
+func (e KubernetesResourceMaterialBeginInputOperation) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialBeginInputOperationKubernetesApply:
+		return true
+	case KubernetesResourceMaterialBeginInputOperationKubernetesCreate:
+		return true
+	case KubernetesResourceMaterialBeginInputOperationKubernetesEdit:
+		return true
+	case KubernetesResourceMaterialBeginInputOperationKubernetesPatch:
+		return true
+	case KubernetesResourceMaterialBeginInputOperationKubernetesReplace:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialBeginInputPatchType.
+const (
+	KubernetesResourceMaterialBeginInputPatchTypeEmpty     KubernetesResourceMaterialBeginInputPatchType = ""
+	KubernetesResourceMaterialBeginInputPatchTypeJSON      KubernetesResourceMaterialBeginInputPatchType = "JSON"
+	KubernetesResourceMaterialBeginInputPatchTypeMERGE     KubernetesResourceMaterialBeginInputPatchType = "MERGE"
+	KubernetesResourceMaterialBeginInputPatchTypeSTRATEGIC KubernetesResourceMaterialBeginInputPatchType = "STRATEGIC"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialBeginInputPatchType enum.
+func (e KubernetesResourceMaterialBeginInputPatchType) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialBeginInputPatchTypeEmpty:
+		return true
+	case KubernetesResourceMaterialBeginInputPatchTypeJSON:
+		return true
+	case KubernetesResourceMaterialBeginInputPatchTypeMERGE:
+		return true
+	case KubernetesResourceMaterialBeginInputPatchTypeSTRATEGIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialViewCredentialPolicy.
+const (
+	KubernetesResourceMaterialViewCredentialPolicyINITIATORREQUIRED KubernetesResourceMaterialViewCredentialPolicy = "INITIATOR_REQUIRED"
+	KubernetesResourceMaterialViewCredentialPolicyPROJECTSHARED     KubernetesResourceMaterialViewCredentialPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialViewCredentialPolicy enum.
+func (e KubernetesResourceMaterialViewCredentialPolicy) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialViewCredentialPolicyINITIATORREQUIRED:
+		return true
+	case KubernetesResourceMaterialViewCredentialPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialViewOperation.
+const (
+	KubernetesResourceMaterialViewOperationKubernetesApply   KubernetesResourceMaterialViewOperation = "kubernetes.apply"
+	KubernetesResourceMaterialViewOperationKubernetesCreate  KubernetesResourceMaterialViewOperation = "kubernetes.create"
+	KubernetesResourceMaterialViewOperationKubernetesEdit    KubernetesResourceMaterialViewOperation = "kubernetes.edit"
+	KubernetesResourceMaterialViewOperationKubernetesPatch   KubernetesResourceMaterialViewOperation = "kubernetes.patch"
+	KubernetesResourceMaterialViewOperationKubernetesReplace KubernetesResourceMaterialViewOperation = "kubernetes.replace"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialViewOperation enum.
+func (e KubernetesResourceMaterialViewOperation) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialViewOperationKubernetesApply:
+		return true
+	case KubernetesResourceMaterialViewOperationKubernetesCreate:
+		return true
+	case KubernetesResourceMaterialViewOperationKubernetesEdit:
+		return true
+	case KubernetesResourceMaterialViewOperationKubernetesPatch:
+		return true
+	case KubernetesResourceMaterialViewOperationKubernetesReplace:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialViewPatchType.
+const (
+	KubernetesResourceMaterialViewPatchTypeEmpty     KubernetesResourceMaterialViewPatchType = ""
+	KubernetesResourceMaterialViewPatchTypeJSON      KubernetesResourceMaterialViewPatchType = "JSON"
+	KubernetesResourceMaterialViewPatchTypeMERGE     KubernetesResourceMaterialViewPatchType = "MERGE"
+	KubernetesResourceMaterialViewPatchTypeSTRATEGIC KubernetesResourceMaterialViewPatchType = "STRATEGIC"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialViewPatchType enum.
+func (e KubernetesResourceMaterialViewPatchType) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialViewPatchTypeEmpty:
+		return true
+	case KubernetesResourceMaterialViewPatchTypeJSON:
+		return true
+	case KubernetesResourceMaterialViewPatchTypeMERGE:
+		return true
+	case KubernetesResourceMaterialViewPatchTypeSTRATEGIC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialViewReasonCode.
+const (
+	KubernetesResourceMaterialViewReasonCodeEmpty                         KubernetesResourceMaterialViewReasonCode = ""
+	KubernetesResourceMaterialViewReasonCodeMATERIALACKCONFLICT           KubernetesResourceMaterialViewReasonCode = "MATERIAL_ACK_CONFLICT"
+	KubernetesResourceMaterialViewReasonCodeMATERIALACKREJECTED           KubernetesResourceMaterialViewReasonCode = "MATERIAL_ACK_REJECTED"
+	KubernetesResourceMaterialViewReasonCodeMATERIALCANCELLED             KubernetesResourceMaterialViewReasonCode = "MATERIAL_CANCELLED"
+	KubernetesResourceMaterialViewReasonCodeMATERIALCOMPLETIONREQUIRED    KubernetesResourceMaterialViewReasonCode = "MATERIAL_COMPLETION_REQUIRED"
+	KubernetesResourceMaterialViewReasonCodeMATERIALCONSUMED              KubernetesResourceMaterialViewReasonCode = "MATERIAL_CONSUMED"
+	KubernetesResourceMaterialViewReasonCodeMATERIALEXPIREDPENDINGCLOSURE KubernetesResourceMaterialViewReasonCode = "MATERIAL_EXPIRED_PENDING_CLOSURE"
+	KubernetesResourceMaterialViewReasonCodeMATERIALOBSERVATIONABSENT     KubernetesResourceMaterialViewReasonCode = "MATERIAL_OBSERVATION_ABSENT"
+	KubernetesResourceMaterialViewReasonCodeMATERIALSOURCECHANGED         KubernetesResourceMaterialViewReasonCode = "MATERIAL_SOURCE_CHANGED"
+	KubernetesResourceMaterialViewReasonCodeMATERIALUNAVAILABLE           KubernetesResourceMaterialViewReasonCode = "MATERIAL_UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialViewReasonCode enum.
+func (e KubernetesResourceMaterialViewReasonCode) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialViewReasonCodeEmpty:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALACKCONFLICT:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALACKREJECTED:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALCANCELLED:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALCOMPLETIONREQUIRED:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALCONSUMED:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALEXPIREDPENDINGCLOSURE:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALOBSERVATIONABSENT:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALSOURCECHANGED:
+		return true
+	case KubernetesResourceMaterialViewReasonCodeMATERIALUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesResourceMaterialViewState.
+const (
+	KubernetesResourceMaterialViewStateACKREJECTED KubernetesResourceMaterialViewState = "ACK_REJECTED"
+	KubernetesResourceMaterialViewStateATTEMPTING  KubernetesResourceMaterialViewState = "ATTEMPTING"
+	KubernetesResourceMaterialViewStateAVAILABLE   KubernetesResourceMaterialViewState = "AVAILABLE"
+	KubernetesResourceMaterialViewStateCANCELLED   KubernetesResourceMaterialViewState = "CANCELLED"
+	KubernetesResourceMaterialViewStateCONSUMED    KubernetesResourceMaterialViewState = "CONSUMED"
+	KubernetesResourceMaterialViewStateEXPIRED     KubernetesResourceMaterialViewState = "EXPIRED"
+	KubernetesResourceMaterialViewStatePREPARED    KubernetesResourceMaterialViewState = "PREPARED"
+	KubernetesResourceMaterialViewStateUNKNOWN     KubernetesResourceMaterialViewState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesResourceMaterialViewState enum.
+func (e KubernetesResourceMaterialViewState) Valid() bool {
+	switch e {
+	case KubernetesResourceMaterialViewStateACKREJECTED:
+		return true
+	case KubernetesResourceMaterialViewStateATTEMPTING:
+		return true
+	case KubernetesResourceMaterialViewStateAVAILABLE:
+		return true
+	case KubernetesResourceMaterialViewStateCANCELLED:
+		return true
+	case KubernetesResourceMaterialViewStateCONSUMED:
+		return true
+	case KubernetesResourceMaterialViewStateEXPIRED:
+		return true
+	case KubernetesResourceMaterialViewStatePREPARED:
+		return true
+	case KubernetesResourceMaterialViewStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamInputChannel.
+const (
+	KubernetesStreamInputChannelCONTROL        KubernetesStreamInputChannel = "CONTROL"
+	KubernetesStreamInputChannelFILECONTENT    KubernetesStreamInputChannel = "FILE_CONTENT"
+	KubernetesStreamInputChannelPORTFORWARD    KubernetesStreamInputChannel = "PORT_FORWARD"
+	KubernetesStreamInputChannelSTDIN          KubernetesStreamInputChannel = "STDIN"
+	KubernetesStreamInputChannelTERMINALRESIZE KubernetesStreamInputChannel = "TERMINAL_RESIZE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamInputChannel enum.
+func (e KubernetesStreamInputChannel) Valid() bool {
+	switch e {
+	case KubernetesStreamInputChannelCONTROL:
+		return true
+	case KubernetesStreamInputChannelFILECONTENT:
+		return true
+	case KubernetesStreamInputChannelPORTFORWARD:
+		return true
+	case KubernetesStreamInputChannelSTDIN:
+		return true
+	case KubernetesStreamInputChannelTERMINALRESIZE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamInputSubmissionState.
+const (
+	KubernetesStreamInputSubmissionStateACKNOWLEDGED KubernetesStreamInputSubmissionState = "ACKNOWLEDGED"
+	KubernetesStreamInputSubmissionStateCANCELLED    KubernetesStreamInputSubmissionState = "CANCELLED"
+	KubernetesStreamInputSubmissionStateCLAIMED      KubernetesStreamInputSubmissionState = "CLAIMED"
+	KubernetesStreamInputSubmissionStateQUEUED       KubernetesStreamInputSubmissionState = "QUEUED"
+	KubernetesStreamInputSubmissionStateREJECTED     KubernetesStreamInputSubmissionState = "REJECTED"
+	KubernetesStreamInputSubmissionStateUNKNOWN      KubernetesStreamInputSubmissionState = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamInputSubmissionState enum.
+func (e KubernetesStreamInputSubmissionState) Valid() bool {
+	switch e {
+	case KubernetesStreamInputSubmissionStateACKNOWLEDGED:
+		return true
+	case KubernetesStreamInputSubmissionStateCANCELLED:
+		return true
+	case KubernetesStreamInputSubmissionStateCLAIMED:
+		return true
+	case KubernetesStreamInputSubmissionStateQUEUED:
+		return true
+	case KubernetesStreamInputSubmissionStateREJECTED:
+		return true
+	case KubernetesStreamInputSubmissionStateUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamInputSubmitChannel.
+const (
+	KubernetesStreamInputSubmitChannelPORTFORWARD    KubernetesStreamInputSubmitChannel = "PORT_FORWARD"
+	KubernetesStreamInputSubmitChannelSTDIN          KubernetesStreamInputSubmitChannel = "STDIN"
+	KubernetesStreamInputSubmitChannelTERMINALRESIZE KubernetesStreamInputSubmitChannel = "TERMINAL_RESIZE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamInputSubmitChannel enum.
+func (e KubernetesStreamInputSubmitChannel) Valid() bool {
+	switch e {
+	case KubernetesStreamInputSubmitChannelPORTFORWARD:
+		return true
+	case KubernetesStreamInputSubmitChannelSTDIN:
+		return true
+	case KubernetesStreamInputSubmitChannelTERMINALRESIZE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamInputViewState.
+const (
+	KubernetesStreamInputViewStateACTIVE    KubernetesStreamInputViewState = "ACTIVE"
+	KubernetesStreamInputViewStateCANCELED  KubernetesStreamInputViewState = "CANCELED"
+	KubernetesStreamInputViewStateCOMPLETED KubernetesStreamInputViewState = "COMPLETED"
+	KubernetesStreamInputViewStateEXPIRED   KubernetesStreamInputViewState = "EXPIRED"
+	KubernetesStreamInputViewStateLOST      KubernetesStreamInputViewState = "LOST"
+	KubernetesStreamInputViewStatePREPARED  KubernetesStreamInputViewState = "PREPARED"
+	KubernetesStreamInputViewStateREVOKED   KubernetesStreamInputViewState = "REVOKED"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamInputViewState enum.
+func (e KubernetesStreamInputViewState) Valid() bool {
+	switch e {
+	case KubernetesStreamInputViewStateACTIVE:
+		return true
+	case KubernetesStreamInputViewStateCANCELED:
+		return true
+	case KubernetesStreamInputViewStateCOMPLETED:
+		return true
+	case KubernetesStreamInputViewStateEXPIRED:
+		return true
+	case KubernetesStreamInputViewStateLOST:
+		return true
+	case KubernetesStreamInputViewStatePREPARED:
+		return true
+	case KubernetesStreamInputViewStateREVOKED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamOutputFrameChannel.
+const (
+	CONTROL     KubernetesStreamOutputFrameChannel = "CONTROL"
+	FILECONTENT KubernetesStreamOutputFrameChannel = "FILE_CONTENT"
+	PORTFORWARD KubernetesStreamOutputFrameChannel = "PORT_FORWARD"
+	STDERR      KubernetesStreamOutputFrameChannel = "STDERR"
+	STDOUT      KubernetesStreamOutputFrameChannel = "STDOUT"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamOutputFrameChannel enum.
+func (e KubernetesStreamOutputFrameChannel) Valid() bool {
+	switch e {
+	case CONTROL:
+		return true
+	case FILECONTENT:
+		return true
+	case PORTFORWARD:
+		return true
+	case STDERR:
+		return true
+	case STDOUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesStreamOutputReadbackStatus.
+const (
+	KubernetesStreamOutputReadbackStatusENDED      KubernetesStreamOutputReadbackStatus = "ENDED"
+	KubernetesStreamOutputReadbackStatusFRAME      KubernetesStreamOutputReadbackStatus = "FRAME"
+	KubernetesStreamOutputReadbackStatusINCOMPLETE KubernetesStreamOutputReadbackStatus = "INCOMPLETE"
+	KubernetesStreamOutputReadbackStatusWAITING    KubernetesStreamOutputReadbackStatus = "WAITING"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesStreamOutputReadbackStatus enum.
+func (e KubernetesStreamOutputReadbackStatus) Valid() bool {
+	switch e {
+	case KubernetesStreamOutputReadbackStatusENDED:
+		return true
+	case KubernetesStreamOutputReadbackStatusFRAME:
+		return true
+	case KubernetesStreamOutputReadbackStatusINCOMPLETE:
+		return true
+	case KubernetesStreamOutputReadbackStatusWAITING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesToolViewSafeReasonCode.
+const (
+	KubernetesToolViewSafeReasonCodeKUBERNETESPORTFORWARDPROFILEUNSUPPORTED KubernetesToolViewSafeReasonCode = "KUBERNETES_PORT_FORWARD_PROFILE_UNSUPPORTED"
+	KubernetesToolViewSafeReasonCodeNONE                                    KubernetesToolViewSafeReasonCode = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesToolViewSafeReasonCode enum.
+func (e KubernetesToolViewSafeReasonCode) Valid() bool {
+	switch e {
+	case KubernetesToolViewSafeReasonCodeKUBERNETESPORTFORWARDPROFILEUNSUPPORTED:
+		return true
+	case KubernetesToolViewSafeReasonCodeNONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KubernetesToolViewState.
+const (
+	KubernetesToolViewStateCANCELLED       KubernetesToolViewState = "CANCELLED"
+	KubernetesToolViewStateFAILED          KubernetesToolViewState = "FAILED"
+	KubernetesToolViewStateREADY           KubernetesToolViewState = "READY"
+	KubernetesToolViewStateREJECTED        KubernetesToolViewState = "REJECTED"
+	KubernetesToolViewStateRUNNING         KubernetesToolViewState = "RUNNING"
+	KubernetesToolViewStateSUCCEEDED       KubernetesToolViewState = "SUCCEEDED"
+	KubernetesToolViewStateUNKNOWNOUTCOME  KubernetesToolViewState = "UNKNOWN_OUTCOME"
+	KubernetesToolViewStateWAITINGAPPROVAL KubernetesToolViewState = "WAITING_APPROVAL"
+)
+
+// Valid indicates whether the value is a known member of the KubernetesToolViewState enum.
+func (e KubernetesToolViewState) Valid() bool {
+	switch e {
+	case KubernetesToolViewStateCANCELLED:
+		return true
+	case KubernetesToolViewStateFAILED:
+		return true
+	case KubernetesToolViewStateREADY:
+		return true
+	case KubernetesToolViewStateREJECTED:
+		return true
+	case KubernetesToolViewStateRUNNING:
+		return true
+	case KubernetesToolViewStateSUCCEEDED:
+		return true
+	case KubernetesToolViewStateUNKNOWNOUTCOME:
+		return true
+	case KubernetesToolViewStateWAITINGAPPROVAL:
 		return true
 	default:
 		return false
@@ -4864,6 +6139,27 @@ func (e PermissionRisk) Valid() bool {
 	}
 }
 
+// Defines values for PersonalEmailMailboxMutationOperation.
+const (
+	PersonalEmailMailboxMutationOperationCONFIGURE PersonalEmailMailboxMutationOperation = "CONFIGURE"
+	PersonalEmailMailboxMutationOperationCREATE    PersonalEmailMailboxMutationOperation = "CREATE"
+	PersonalEmailMailboxMutationOperationREVOKE    PersonalEmailMailboxMutationOperation = "REVOKE"
+)
+
+// Valid indicates whether the value is a known member of the PersonalEmailMailboxMutationOperation enum.
+func (e PersonalEmailMailboxMutationOperation) Valid() bool {
+	switch e {
+	case PersonalEmailMailboxMutationOperationCONFIGURE:
+		return true
+	case PersonalEmailMailboxMutationOperationCREATE:
+		return true
+	case PersonalEmailMailboxMutationOperationREVOKE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PersonalIntegrationConnectionPolicy.
 const (
 	PersonalIntegrationConnectionPolicyINITIATORREQUIRED PersonalIntegrationConnectionPolicy = "INITIATOR_REQUIRED"
@@ -5197,6 +6493,27 @@ func (e ProjectMembershipCreateInputPermissions) Valid() bool {
 	case VIEW:
 		return true
 	case VIEWAUDIT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectPurgeRecoveryReasonCode.
+const (
+	ProjectPurgeRecoveryReasonCodeARTIFACTPURGERECONCILIATIONREQUIRED     ProjectPurgeRecoveryReasonCode = "ARTIFACT_PURGE_RECONCILIATION_REQUIRED"
+	ProjectPurgeRecoveryReasonCodeKUBERNETESSTAGINGRECONCILIATIONREQUIRED ProjectPurgeRecoveryReasonCode = "KUBERNETES_STAGING_RECONCILIATION_REQUIRED"
+	ProjectPurgeRecoveryReasonCodeNONE                                    ProjectPurgeRecoveryReasonCode = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the ProjectPurgeRecoveryReasonCode enum.
+func (e ProjectPurgeRecoveryReasonCode) Valid() bool {
+	switch e {
+	case ProjectPurgeRecoveryReasonCodeARTIFACTPURGERECONCILIATIONREQUIRED:
+		return true
+	case ProjectPurgeRecoveryReasonCodeKUBERNETESSTAGINGRECONCILIATIONREQUIRED:
+		return true
+	case ProjectPurgeRecoveryReasonCodeNONE:
 		return true
 	default:
 		return false
@@ -7998,16 +9315,16 @@ func (e RuntimeSecretDraftImpactPlanState) Valid() bool {
 
 // Defines values for RuntimeSecretPurpose.
 const (
-	RuntimeSecretPurposeAPPLICATION RuntimeSecretPurpose = "APPLICATION"
-	RuntimeSecretPurposeSSHCOMPOSE  RuntimeSecretPurpose = "SSH_COMPOSE"
+	APPLICATION RuntimeSecretPurpose = "APPLICATION"
+	SSHCOMPOSE  RuntimeSecretPurpose = "SSH_COMPOSE"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeSecretPurpose enum.
 func (e RuntimeSecretPurpose) Valid() bool {
 	switch e {
-	case RuntimeSecretPurposeAPPLICATION:
+	case APPLICATION:
 		return true
-	case RuntimeSecretPurposeSSHCOMPOSE:
+	case SSHCOMPOSE:
 		return true
 	default:
 		return false
@@ -8134,6 +9451,150 @@ const (
 func (e RuntimeWebAccessRuleProtocol) Valid() bool {
 	switch e {
 	case HTTPS:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSHIdentitySetupPolicy.
+const (
+	SSHIdentitySetupPolicyINITIATORREQUIRED SSHIdentitySetupPolicy = "INITIATOR_REQUIRED"
+	SSHIdentitySetupPolicyPROJECTSHARED     SSHIdentitySetupPolicy = "PROJECT_SHARED"
+)
+
+// Valid indicates whether the value is a known member of the SSHIdentitySetupPolicy enum.
+func (e SSHIdentitySetupPolicy) Valid() bool {
+	switch e {
+	case SSHIdentitySetupPolicyINITIATORREQUIRED:
+		return true
+	case SSHIdentitySetupPolicyPROJECTSHARED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSHIdentitySetupReasonCode.
+const (
+	SSHIdentitySetupReasonCodeACKREJECTED                        SSHIdentitySetupReasonCode = "ACK_REJECTED"
+	SSHIdentitySetupReasonCodeATTEMPTING                         SSHIdentitySetupReasonCode = "ATTEMPTING"
+	SSHIdentitySetupReasonCodeCANCELLED                          SSHIdentitySetupReasonCode = "CANCELLED"
+	SSHIdentitySetupReasonCodeCOMPLETED                          SSHIdentitySetupReasonCode = "COMPLETED"
+	SSHIdentitySetupReasonCodeEXPIRED                            SSHIdentitySetupReasonCode = "EXPIRED"
+	SSHIdentitySetupReasonCodeMATERIALRECORDEDNOATTACHMENT       SSHIdentitySetupReasonCode = "MATERIAL_RECORDED_NO_ATTACHMENT"
+	SSHIdentitySetupReasonCodeMATERIALUNKNOWN                    SSHIdentitySetupReasonCode = "MATERIAL_UNKNOWN"
+	SSHIdentitySetupReasonCodeMISSINGCOMPLETION                  SSHIdentitySetupReasonCode = "MISSING_COMPLETION"
+	SSHIdentitySetupReasonCodeOWNERREPLACED                      SSHIdentitySetupReasonCode = "OWNER_REPLACED"
+	SSHIdentitySetupReasonCodeOWNERREVOKED                       SSHIdentitySetupReasonCode = "OWNER_REVOKED"
+	SSHIdentitySetupReasonCodePREPARED                           SSHIdentitySetupReasonCode = "PREPARED"
+	SSHIdentitySetupReasonCodeQUARANTINED                        SSHIdentitySetupReasonCode = "QUARANTINED"
+	SSHIdentitySetupReasonCodeSETUPEXPIRED                       SSHIdentitySetupReasonCode = "SETUP_EXPIRED"
+	SSHIdentitySetupReasonCodeSETUPEXPIREDWITHMATERIALUNRESOLVED SSHIdentitySetupReasonCode = "SETUP_EXPIRED_WITH_MATERIAL_UNRESOLVED"
+	SSHIdentitySetupReasonCodeSTALEOWNER                         SSHIdentitySetupReasonCode = "STALE_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the SSHIdentitySetupReasonCode enum.
+func (e SSHIdentitySetupReasonCode) Valid() bool {
+	switch e {
+	case SSHIdentitySetupReasonCodeACKREJECTED:
+		return true
+	case SSHIdentitySetupReasonCodeATTEMPTING:
+		return true
+	case SSHIdentitySetupReasonCodeCANCELLED:
+		return true
+	case SSHIdentitySetupReasonCodeCOMPLETED:
+		return true
+	case SSHIdentitySetupReasonCodeEXPIRED:
+		return true
+	case SSHIdentitySetupReasonCodeMATERIALRECORDEDNOATTACHMENT:
+		return true
+	case SSHIdentitySetupReasonCodeMATERIALUNKNOWN:
+		return true
+	case SSHIdentitySetupReasonCodeMISSINGCOMPLETION:
+		return true
+	case SSHIdentitySetupReasonCodeOWNERREPLACED:
+		return true
+	case SSHIdentitySetupReasonCodeOWNERREVOKED:
+		return true
+	case SSHIdentitySetupReasonCodePREPARED:
+		return true
+	case SSHIdentitySetupReasonCodeQUARANTINED:
+		return true
+	case SSHIdentitySetupReasonCodeSETUPEXPIRED:
+		return true
+	case SSHIdentitySetupReasonCodeSETUPEXPIREDWITHMATERIALUNRESOLVED:
+		return true
+	case SSHIdentitySetupReasonCodeSTALEOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSHIdentitySetupState.
+const (
+	SSHIdentitySetupStateACKREJECTED SSHIdentitySetupState = "ACK_REJECTED"
+	SSHIdentitySetupStateATTEMPTING  SSHIdentitySetupState = "ATTEMPTING"
+	SSHIdentitySetupStateCANCELLED   SSHIdentitySetupState = "CANCELLED"
+	SSHIdentitySetupStateCOMPLETED   SSHIdentitySetupState = "COMPLETED"
+	SSHIdentitySetupStateEXPIRED     SSHIdentitySetupState = "EXPIRED"
+	SSHIdentitySetupStatePREPARED    SSHIdentitySetupState = "PREPARED"
+	SSHIdentitySetupStateQUARANTINED SSHIdentitySetupState = "QUARANTINED"
+	SSHIdentitySetupStateUNKNOWN     SSHIdentitySetupState = "UNKNOWN"
+	SSHIdentitySetupStateUNREPORTED  SSHIdentitySetupState = "UNREPORTED"
+)
+
+// Valid indicates whether the value is a known member of the SSHIdentitySetupState enum.
+func (e SSHIdentitySetupState) Valid() bool {
+	switch e {
+	case SSHIdentitySetupStateACKREJECTED:
+		return true
+	case SSHIdentitySetupStateATTEMPTING:
+		return true
+	case SSHIdentitySetupStateCANCELLED:
+		return true
+	case SSHIdentitySetupStateCOMPLETED:
+		return true
+	case SSHIdentitySetupStateEXPIRED:
+		return true
+	case SSHIdentitySetupStatePREPARED:
+		return true
+	case SSHIdentitySetupStateQUARANTINED:
+		return true
+	case SSHIdentitySetupStateUNKNOWN:
+		return true
+	case SSHIdentitySetupStateUNREPORTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSHIdentitySetupAdmission0ReconcileOnly.
+const (
+	SSHIdentitySetupAdmission0ReconcileOnlyFalse SSHIdentitySetupAdmission0ReconcileOnly = false
+)
+
+// Valid indicates whether the value is a known member of the SSHIdentitySetupAdmission0ReconcileOnly enum.
+func (e SSHIdentitySetupAdmission0ReconcileOnly) Valid() bool {
+	switch e {
+	case SSHIdentitySetupAdmission0ReconcileOnlyFalse:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SSHIdentitySetupAdmission1ReconcileOnly.
+const (
+	SSHIdentitySetupAdmission1ReconcileOnlyTrue SSHIdentitySetupAdmission1ReconcileOnly = true
+)
+
+// Valid indicates whether the value is a known member of the SSHIdentitySetupAdmission1ReconcileOnly enum.
+func (e SSHIdentitySetupAdmission1ReconcileOnly) Valid() bool {
+	switch e {
+	case SSHIdentitySetupAdmission1ReconcileOnlyTrue:
 		return true
 	default:
 		return false
@@ -8310,19 +9771,19 @@ func (e ScheduleState) Valid() bool {
 
 // Defines values for ScheduleCommandAction.
 const (
-	ScheduleCommandActionARCHIVE ScheduleCommandAction = "ARCHIVE"
-	ScheduleCommandActionENABLE  ScheduleCommandAction = "ENABLE"
-	ScheduleCommandActionPAUSE   ScheduleCommandAction = "PAUSE"
+	ARCHIVE ScheduleCommandAction = "ARCHIVE"
+	ENABLE  ScheduleCommandAction = "ENABLE"
+	PAUSE   ScheduleCommandAction = "PAUSE"
 )
 
 // Valid indicates whether the value is a known member of the ScheduleCommandAction enum.
 func (e ScheduleCommandAction) Valid() bool {
 	switch e {
-	case ScheduleCommandActionARCHIVE:
+	case ARCHIVE:
 		return true
-	case ScheduleCommandActionENABLE:
+	case ENABLE:
 		return true
-	case ScheduleCommandActionPAUSE:
+	case PAUSE:
 		return true
 	default:
 		return false
@@ -8685,25 +10146,25 @@ func (e SchedulePreviewInputOverlapPolicy) Valid() bool {
 
 // Defines values for SchedulePreviewInputPreset.
 const (
-	CUSTOM   SchedulePreviewInputPreset = "CUSTOM"
-	DAILY    SchedulePreviewInputPreset = "DAILY"
-	HOURLY   SchedulePreviewInputPreset = "HOURLY"
-	WEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
-	WEEKLY   SchedulePreviewInputPreset = "WEEKLY"
+	SchedulePreviewInputPresetCUSTOM   SchedulePreviewInputPreset = "CUSTOM"
+	SchedulePreviewInputPresetDAILY    SchedulePreviewInputPreset = "DAILY"
+	SchedulePreviewInputPresetHOURLY   SchedulePreviewInputPreset = "HOURLY"
+	SchedulePreviewInputPresetWEEKDAYS SchedulePreviewInputPreset = "WEEKDAYS"
+	SchedulePreviewInputPresetWEEKLY   SchedulePreviewInputPreset = "WEEKLY"
 )
 
 // Valid indicates whether the value is a known member of the SchedulePreviewInputPreset enum.
 func (e SchedulePreviewInputPreset) Valid() bool {
 	switch e {
-	case CUSTOM:
+	case SchedulePreviewInputPresetCUSTOM:
 		return true
-	case DAILY:
+	case SchedulePreviewInputPresetDAILY:
 		return true
-	case HOURLY:
+	case SchedulePreviewInputPresetHOURLY:
 		return true
-	case WEEKDAYS:
+	case SchedulePreviewInputPresetWEEKDAYS:
 		return true
-	case WEEKLY:
+	case SchedulePreviewInputPresetWEEKLY:
 		return true
 	default:
 		return false
@@ -9336,13 +10797,13 @@ func (e TelegramSubscriptionState) Valid() bool {
 
 // Defines values for TelegramSubscriptionDisableInputEnabled.
 const (
-	TelegramSubscriptionDisableInputEnabledFalse TelegramSubscriptionDisableInputEnabled = false
+	False TelegramSubscriptionDisableInputEnabled = false
 )
 
 // Valid indicates whether the value is a known member of the TelegramSubscriptionDisableInputEnabled enum.
 func (e TelegramSubscriptionDisableInputEnabled) Valid() bool {
 	switch e {
-	case TelegramSubscriptionDisableInputEnabledFalse:
+	case False:
 		return true
 	default:
 		return false
@@ -9351,13 +10812,13 @@ func (e TelegramSubscriptionDisableInputEnabled) Valid() bool {
 
 // Defines values for TelegramSubscriptionEnableInputEnabled.
 const (
-	True TelegramSubscriptionEnableInputEnabled = true
+	TelegramSubscriptionEnableInputEnabledTrue TelegramSubscriptionEnableInputEnabled = true
 )
 
 // Valid indicates whether the value is a known member of the TelegramSubscriptionEnableInputEnabled enum.
 func (e TelegramSubscriptionEnableInputEnabled) Valid() bool {
 	switch e {
-	case True:
+	case TelegramSubscriptionEnableInputEnabledTrue:
 		return true
 	default:
 		return false
@@ -11178,19 +12639,19 @@ func (e ListArtifactsParamsLifecycleState) Valid() bool {
 
 // Defines values for ListArtifactsParamsType.
 const (
-	ListArtifactsParamsTypeDOCUMENT ListArtifactsParamsType = "DOCUMENT"
-	ListArtifactsParamsTypeIMAGE    ListArtifactsParamsType = "IMAGE"
-	ListArtifactsParamsTypeTEXT     ListArtifactsParamsType = "TEXT"
+	DOCUMENT ListArtifactsParamsType = "DOCUMENT"
+	IMAGE    ListArtifactsParamsType = "IMAGE"
+	TEXT     ListArtifactsParamsType = "TEXT"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsType enum.
 func (e ListArtifactsParamsType) Valid() bool {
 	switch e {
-	case ListArtifactsParamsTypeDOCUMENT:
+	case DOCUMENT:
 		return true
-	case ListArtifactsParamsTypeIMAGE:
+	case IMAGE:
 		return true
-	case ListArtifactsParamsTypeTEXT:
+	case TEXT:
 		return true
 	default:
 		return false
@@ -11484,16 +12945,16 @@ func (e ListProviderAccountsParamsState) Valid() bool {
 
 // Defines values for GetProviderAccountParamsUsagePurpose.
 const (
-	GetProviderAccountParamsUsagePurposeCONFIGURE GetProviderAccountParamsUsagePurpose = "CONFIGURE"
-	GetProviderAccountParamsUsagePurposeLAUNCH    GetProviderAccountParamsUsagePurpose = "LAUNCH"
+	CONFIGURE GetProviderAccountParamsUsagePurpose = "CONFIGURE"
+	LAUNCH    GetProviderAccountParamsUsagePurpose = "LAUNCH"
 )
 
 // Valid indicates whether the value is a known member of the GetProviderAccountParamsUsagePurpose enum.
 func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 	switch e {
-	case GetProviderAccountParamsUsagePurposeCONFIGURE:
+	case CONFIGURE:
 		return true
-	case GetProviderAccountParamsUsagePurposeLAUNCH:
+	case LAUNCH:
 		return true
 	default:
 		return false
@@ -11520,31 +12981,31 @@ func (e ListRunsParamsTargetType) Valid() bool {
 
 // Defines values for ListRunsParamsStates.
 const (
-	CANCELLED    ListRunsParamsStates = "CANCELLED"
-	CANCELLING   ListRunsParamsStates = "CANCELLING"
-	FAILED       ListRunsParamsStates = "FAILED"
-	QUEUED       ListRunsParamsStates = "QUEUED"
-	RUNNING      ListRunsParamsStates = "RUNNING"
-	SUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
-	WAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
+	ListRunsParamsStatesCANCELLED    ListRunsParamsStates = "CANCELLED"
+	ListRunsParamsStatesCANCELLING   ListRunsParamsStates = "CANCELLING"
+	ListRunsParamsStatesFAILED       ListRunsParamsStates = "FAILED"
+	ListRunsParamsStatesQUEUED       ListRunsParamsStates = "QUEUED"
+	ListRunsParamsStatesRUNNING      ListRunsParamsStates = "RUNNING"
+	ListRunsParamsStatesSUCCEEDED    ListRunsParamsStates = "SUCCEEDED"
+	ListRunsParamsStatesWAITINGHUMAN ListRunsParamsStates = "WAITING_HUMAN"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsStates enum.
 func (e ListRunsParamsStates) Valid() bool {
 	switch e {
-	case CANCELLED:
+	case ListRunsParamsStatesCANCELLED:
 		return true
-	case CANCELLING:
+	case ListRunsParamsStatesCANCELLING:
 		return true
-	case FAILED:
+	case ListRunsParamsStatesFAILED:
 		return true
-	case QUEUED:
+	case ListRunsParamsStatesQUEUED:
 		return true
-	case RUNNING:
+	case ListRunsParamsStatesRUNNING:
 		return true
-	case SUCCEEDED:
+	case ListRunsParamsStatesSUCCEEDED:
 		return true
-	case WAITINGHUMAN:
+	case ListRunsParamsStatesWAITINGHUMAN:
 		return true
 	default:
 		return false
@@ -12012,26 +13473,29 @@ type AgentRuntimeEnvironmentBinding struct {
 
 // Artifact defines model for Artifact.
 type Artifact struct {
-	AgentBindings      []OpaqueRef            `json:"agentBindings"`
-	CreatedAt          Timestamp              `json:"createdAt"`
-	CurrentRevisionRef OpaqueRef              `json:"currentRevisionRef"`
-	DeletedAt          *Timestamp             `json:"deletedAt,omitempty"`
-	Digest             string                 `json:"digest"`
-	FileName           string                 `json:"fileName"`
-	LifecycleState     ArtifactLifecycleState `json:"lifecycleState"`
-	MediaType          string                 `json:"mediaType"`
-	NextActions        []NextAction           `json:"nextActions"`
-	PreviewAvailable   bool                   `json:"previewAvailable"`
-	ProjectRef         *OpaqueRef             `json:"projectRef,omitempty"`
-	PurgeAfter         *Timestamp             `json:"purgeAfter,omitempty"`
-	Ref                OpaqueRef              `json:"ref"`
-	Revision           int                    `json:"revision"`
-	RunRef             *OpaqueRef             `json:"runRef,omitempty"`
-	ScanState          ArtifactScanState      `json:"scanState"`
-	SessionRef         *OpaqueRef             `json:"sessionRef,omitempty"`
-	SizeBytes          int64                  `json:"sizeBytes"`
-	Source             ArtifactSource         `json:"source"`
-	Version            int64                  `json:"version"`
+	AgentBindings []OpaqueRef `json:"agentBindings"`
+
+	// CaptureOrigin Сохранённый owner-ACK prefix. FULL описывает полноту capture, а не успешность удалённой команды; PARTIAL не подтверждает остановку либо join. Поле не выдаёт новые полномочия.
+	CaptureOrigin      *KubernetesArtifactCaptureOrigin `json:"captureOrigin,omitempty"`
+	CreatedAt          Timestamp                        `json:"createdAt"`
+	CurrentRevisionRef OpaqueRef                        `json:"currentRevisionRef"`
+	DeletedAt          *Timestamp                       `json:"deletedAt,omitempty"`
+	Digest             string                           `json:"digest"`
+	FileName           string                           `json:"fileName"`
+	LifecycleState     ArtifactLifecycleState           `json:"lifecycleState"`
+	MediaType          string                           `json:"mediaType"`
+	NextActions        []NextAction                     `json:"nextActions"`
+	PreviewAvailable   bool                             `json:"previewAvailable"`
+	ProjectRef         *OpaqueRef                       `json:"projectRef,omitempty"`
+	PurgeAfter         *Timestamp                       `json:"purgeAfter,omitempty"`
+	Ref                OpaqueRef                        `json:"ref"`
+	Revision           int                              `json:"revision"`
+	RunRef             *OpaqueRef                       `json:"runRef,omitempty"`
+	ScanState          ArtifactScanState                `json:"scanState"`
+	SessionRef         *OpaqueRef                       `json:"sessionRef,omitempty"`
+	SizeBytes          int64                            `json:"sizeBytes"`
+	Source             ArtifactSource                   `json:"source"`
+	Version            int64                            `json:"version"`
 }
 
 // ArtifactLifecycleState defines model for Artifact.LifecycleState.
@@ -12129,17 +13593,20 @@ type ArtifactPurgeReceiptLifecycleState string
 
 // ArtifactRevision defines model for ArtifactRevision.
 type ArtifactRevision struct {
-	ArtifactRef      OpaqueRef                 `json:"artifactRef"`
-	CreatedAt        Timestamp                 `json:"createdAt"`
-	Digest           string                    `json:"digest"`
-	FileName         string                    `json:"fileName"`
-	MediaType        string                    `json:"mediaType"`
-	PreviewAvailable bool                      `json:"previewAvailable"`
-	Ref              OpaqueRef                 `json:"ref"`
-	Revision         int64                     `json:"revision"`
-	ScanState        ArtifactRevisionScanState `json:"scanState"`
-	SizeBytes        int64                     `json:"sizeBytes"`
-	Source           ArtifactRevisionSource    `json:"source"`
+	ArtifactRef OpaqueRef `json:"artifactRef"`
+
+	// CaptureOrigin Сохранённый owner-ACK prefix. FULL описывает полноту capture, а не успешность удалённой команды; PARTIAL не подтверждает остановку либо join. Поле не выдаёт новые полномочия.
+	CaptureOrigin    *KubernetesArtifactCaptureOrigin `json:"captureOrigin,omitempty"`
+	CreatedAt        Timestamp                        `json:"createdAt"`
+	Digest           string                           `json:"digest"`
+	FileName         string                           `json:"fileName"`
+	MediaType        string                           `json:"mediaType"`
+	PreviewAvailable bool                             `json:"previewAvailable"`
+	Ref              OpaqueRef                        `json:"ref"`
+	Revision         int64                            `json:"revision"`
+	ScanState        ArtifactRevisionScanState        `json:"scanState"`
+	SizeBytes        int64                            `json:"sizeBytes"`
+	Source           ArtifactRevisionSource           `json:"source"`
 }
 
 // ArtifactRevisionScanState defines model for ArtifactRevision.ScanState.
@@ -12817,6 +14284,38 @@ type EmailMailboxOperationPolicy struct {
 	Policy    *EmailMailboxApprovalPolicy `json:"policy,omitempty"`
 }
 
+// EmailMailboxOwnership defines model for EmailMailboxOwnership.
+type EmailMailboxOwnership struct {
+	ConnectionRef     OpaqueRef                         `json:"connectionRef"`
+	ConnectionVersion int64                             `json:"connectionVersion"`
+	DeliveryKind      EmailMailboxOwnershipDeliveryKind `json:"deliveryKind"`
+	Generation        int64                             `json:"generation"`
+
+	// OwnerEligible Текущая eligibility владельца и конфигуратора; не grant и не разрешение внешней операции.
+	OwnerEligible     bool                        `json:"ownerEligible"`
+	Policy            EmailMailboxOwnershipPolicy `json:"policy"`
+	ServiceSubjectRef *OpaqueRef                  `json:"serviceSubjectRef,omitempty"`
+	State             EmailMailboxOwnershipState  `json:"state"`
+}
+
+// EmailMailboxOwnershipDeliveryKind defines model for EmailMailboxOwnership.DeliveryKind.
+type EmailMailboxOwnershipDeliveryKind string
+
+// EmailMailboxOwnershipPolicy defines model for EmailMailboxOwnership.Policy.
+type EmailMailboxOwnershipPolicy string
+
+// EmailMailboxOwnershipState defines model for EmailMailboxOwnership.State.
+type EmailMailboxOwnershipState string
+
+// EmailMailboxOwnershipInput INITIATOR_REQUIRED назначает только текущего USER и запрещает serviceSubjectRef; PROJECT_SHARED требует явный serviceSubjectRef. Owner проверяет выбранный вариант до idempotency replay.
+type EmailMailboxOwnershipInput struct {
+	Policy            EmailMailboxOwnershipInputPolicy `json:"policy"`
+	ServiceSubjectRef *OpaqueRef                       `json:"serviceSubjectRef,omitempty"`
+}
+
+// EmailMailboxOwnershipInputPolicy defines model for EmailMailboxOwnershipInput.Policy.
+type EmailMailboxOwnershipInputPolicy string
+
 // EmailMailboxPreview defines model for EmailMailboxPreview.
 type EmailMailboxPreview struct {
 	CanonicalYaml string                   `json:"canonicalYaml"`
@@ -12826,6 +14325,9 @@ type EmailMailboxPreview struct {
 	Specification *EmailMailboxSpecification `json:"specification,omitempty"`
 	Valid         bool                       `json:"valid"`
 }
+
+// EmailMailboxProviderProfile Явный профиль SMTP/IMAP endpoints; пароль приложения Gmail не заявляет OAuth/XOAUTH2 lifecycle или успешный вход.
+type EmailMailboxProviderProfile string
 
 // EmailMailboxPublication defines model for EmailMailboxPublication.
 type EmailMailboxPublication struct {
@@ -12852,21 +14354,24 @@ type EmailMailboxReceiveProtocol string
 
 // EmailMailboxSpecification Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
 type EmailMailboxSpecification struct {
-	AllowedFolders  *[]string                      `json:"allowedFolders,omitempty"`
-	ArchiveFolder   *string                        `json:"archiveFolder,omitempty"`
-	DraftsFolder    *string                        `json:"draftsFolder,omitempty"`
-	Enabled         *bool                          `json:"enabled,omitempty"`
-	Folder          *string                        `json:"folder,omitempty"`
-	HelloName       *string                        `json:"helloName,omitempty"`
-	Imap            *EmailMailboxEndpoint          `json:"imap,omitempty"`
-	Limits          *EmailMailboxLimits            `json:"limits,omitempty"`
-	Policies        *[]EmailMailboxOperationPolicy `json:"policies,omitempty"`
-	Pop             *EmailMailboxEndpoint          `json:"pop,omitempty"`
-	ReceiveProtocol *EmailMailboxReceiveProtocol   `json:"receiveProtocol,omitempty"`
-	Recipients      *[]string                      `json:"recipients,omitempty"`
-	ReplyTo         *string                        `json:"replyTo,omitempty"`
-	Sender          *string                        `json:"sender,omitempty"`
-	Smtp            *EmailMailboxEndpoint          `json:"smtp,omitempty"`
+	AllowedFolders *[]string                      `json:"allowedFolders,omitempty"`
+	ArchiveFolder  *string                        `json:"archiveFolder,omitempty"`
+	DraftsFolder   *string                        `json:"draftsFolder,omitempty"`
+	Enabled        *bool                          `json:"enabled,omitempty"`
+	Folder         *string                        `json:"folder,omitempty"`
+	HelloName      *string                        `json:"helloName,omitempty"`
+	Imap           *EmailMailboxEndpoint          `json:"imap,omitempty"`
+	Limits         *EmailMailboxLimits            `json:"limits,omitempty"`
+	Policies       *[]EmailMailboxOperationPolicy `json:"policies,omitempty"`
+	Pop            *EmailMailboxEndpoint          `json:"pop,omitempty"`
+
+	// ProviderProfile Явный профиль SMTP/IMAP endpoints; пароль приложения Gmail не заявляет OAuth/XOAUTH2 lifecycle или успешный вход.
+	ProviderProfile *EmailMailboxProviderProfile `json:"providerProfile,omitempty"`
+	ReceiveProtocol *EmailMailboxReceiveProtocol `json:"receiveProtocol,omitempty"`
+	Recipients      *[]string                    `json:"recipients,omitempty"`
+	ReplyTo         *string                      `json:"replyTo,omitempty"`
+	Sender          *string                      `json:"sender,omitempty"`
+	Smtp            *EmailMailboxEndpoint        `json:"smtp,omitempty"`
 }
 
 // EmailMailboxTLSMode defines model for EmailMailboxTLSMode.
@@ -13394,6 +14899,12 @@ type IntegrationApprovalScopeContract struct {
 // IntegrationApprovalScopeContractAllowedLifetimes defines model for IntegrationApprovalScopeContract.AllowedLifetimes.
 type IntegrationApprovalScopeContractAllowedLifetimes string
 
+// IntegrationBrokerIdentityMetadata Безопасные metadata собственной или явно выбранной PROJECT_SHARED identity. Ref и revision не являются grant; Secret ref, UID, resourceVersion, content digest, kubeconfig и private key никогда не входят в это представление.
+type IntegrationBrokerIdentityMetadata struct {
+	Ref      OpaqueRef `json:"ref"`
+	Revision int64     `json:"revision"`
+}
+
 // IntegrationCandidateReason defines model for IntegrationCandidateReason.
 type IntegrationCandidateReason string
 
@@ -13452,8 +14963,13 @@ type IntegrationConfigurationFieldValueType string
 
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
-	Capabilities          []IntegrationCapability               `json:"capabilities"`
-	CreatedAt             *Timestamp                            `json:"createdAt,omitempty"`
+	// BrokerIdentity Безопасные metadata собственной или явно выбранной PROJECT_SHARED identity. Ref и revision не являются grant; Secret ref, UID, resourceVersion, content digest, kubeconfig и private key никогда не входят в это представление.
+	BrokerIdentity *IntegrationBrokerIdentityMetadata `json:"brokerIdentity,omitempty"`
+	Capabilities   []IntegrationCapability            `json:"capabilities"`
+	CreatedAt      *Timestamp                         `json:"createdAt,omitempty"`
+
+	// CredentialDelivery Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+	CredentialDelivery    *IntegrationCredentialDelivery        `json:"credentialDelivery,omitempty"`
 	CredentialPolicy      IntegrationConnectionCredentialPolicy `json:"credentialPolicy"`
 	CredentialsConfigured bool                                  `json:"credentialsConfigured"`
 	CredentialsHint       string                                `json:"credentialsHint"`
@@ -13464,15 +14980,18 @@ type IntegrationConnection struct {
 	DefinitionKey                  string                                     `json:"definitionKey"`
 	DefinitionVersion              string                                     `json:"definitionVersion"`
 	Grants                         []IntegrationGrant                         `json:"grants"`
-	LastTestOutcome                *string                                    `json:"lastTestOutcome,omitempty"`
-	LastTestedAt                   *Timestamp                                 `json:"lastTestedAt,omitempty"`
-	Name                           string                                     `json:"name"`
-	NextActions                    []NextAction                               `json:"nextActions"`
-	PublicConfiguration            map[string]interface{}                     `json:"publicConfiguration"`
-	Ref                            OpaqueRef                                  `json:"ref"`
-	State                          IntegrationConnectionState                 `json:"state"`
-	UpdatedAt                      *Timestamp                                 `json:"updatedAt,omitempty"`
-	Version                        int64                                      `json:"version"`
+
+	// KubernetesSetupRequirements Безопасные требования scoped подключения для локального экспорта до Begin. Отсутствие означает недоступность требований; эти метаданные не выдают доступ к target и не заменяют проверки владельца.
+	KubernetesSetupRequirements *KubernetesIdentitySetupRequirements `json:"kubernetesSetupRequirements,omitempty"`
+	LastTestOutcome             *string                              `json:"lastTestOutcome,omitempty"`
+	LastTestedAt                *Timestamp                           `json:"lastTestedAt,omitempty"`
+	Name                        string                               `json:"name"`
+	NextActions                 []NextAction                         `json:"nextActions"`
+	PublicConfiguration         map[string]interface{}               `json:"publicConfiguration"`
+	Ref                         OpaqueRef                            `json:"ref"`
+	State                       IntegrationConnectionState           `json:"state"`
+	UpdatedAt                   *Timestamp                           `json:"updatedAt,omitempty"`
+	Version                     int64                                `json:"version"`
 }
 
 // IntegrationConnectionCredentialPolicy defines model for IntegrationConnection.CredentialPolicy.
@@ -13502,6 +15021,31 @@ type IntegrationConnectionUpdateInput struct {
 	PublicConfiguration map[string]interface{} `json:"publicConfiguration"`
 }
 
+// IntegrationCredentialDelivery Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+type IntegrationCredentialDelivery struct {
+	union json.RawMessage
+}
+
+// IntegrationCredentialDelivery0 defines model for .
+type IntegrationCredentialDelivery0 struct {
+	Kind IntegrationCredentialDelivery0Kind `json:"kind"`
+}
+
+// IntegrationCredentialDelivery0Kind defines model for IntegrationCredentialDelivery.0.Kind.
+type IntegrationCredentialDelivery0Kind string
+
+// IntegrationCredentialDelivery1 defines model for .
+type IntegrationCredentialDelivery1 struct {
+	BrokerPurpose IntegrationCredentialDelivery1BrokerPurpose `json:"brokerPurpose"`
+	Kind          IntegrationCredentialDelivery1Kind          `json:"kind"`
+}
+
+// IntegrationCredentialDelivery1BrokerPurpose defines model for IntegrationCredentialDelivery.1.BrokerPurpose.
+type IntegrationCredentialDelivery1BrokerPurpose string
+
+// IntegrationCredentialDelivery1Kind defines model for IntegrationCredentialDelivery.1.Kind.
+type IntegrationCredentialDelivery1Kind string
+
 // IntegrationCredentialInput defines model for IntegrationCredentialInput.
 type IntegrationCredentialInput struct {
 	Value *string `json:"value,omitempty"`
@@ -13528,26 +15072,29 @@ type IntegrationCredentialPreflightIssueProblem string
 
 // IntegrationDefinition defines model for IntegrationDefinition.
 type IntegrationDefinition struct {
-	Adapter                IntegrationDefinitionAdapter          `json:"adapter"`
-	AdapterOwner           IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
-	AdapterReadiness       IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
-	Available              bool                                  `json:"available"`
-	BuiltIn                bool                                  `json:"builtIn"`
-	Capabilities           []IntegrationCapability               `json:"capabilities"`
-	Category               string                                `json:"category"`
-	ConfigurationFields    []IntegrationConfigurationField       `json:"configurationFields"`
-	ConnectionCount        int64                                 `json:"connectionCount"`
-	CredentialSecretKey    *string                               `json:"credentialSecretKey,omitempty"`
-	DefinitionVersion      string                                `json:"definitionVersion"`
-	Description            string                                `json:"description"`
-	Digest                 string                                `json:"digest"`
-	ExecutionRoute         IntegrationDefinitionExecutionRoute   `json:"executionRoute"`
-	HealthyConnectionCount int64                                 `json:"healthyConnectionCount"`
-	Key                    string                                `json:"key"`
-	Name                   string                                `json:"name"`
-	NextActions            []IntegrationDefinitionNextActions    `json:"nextActions"`
-	Origin                 IntegrationDefinitionOrigin           `json:"origin"`
-	SchemaVersion          string                                `json:"schemaVersion"`
+	Adapter             IntegrationDefinitionAdapter          `json:"adapter"`
+	AdapterOwner        IntegrationDefinitionAdapterOwner     `json:"adapterOwner"`
+	AdapterReadiness    IntegrationDefinitionAdapterReadiness `json:"adapterReadiness"`
+	Available           bool                                  `json:"available"`
+	BuiltIn             bool                                  `json:"builtIn"`
+	Capabilities        []IntegrationCapability               `json:"capabilities"`
+	Category            string                                `json:"category"`
+	ConfigurationFields []IntegrationConfigurationField       `json:"configurationFields"`
+	ConnectionCount     int64                                 `json:"connectionCount"`
+
+	// CredentialDelivery Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+	CredentialDelivery     *IntegrationCredentialDelivery      `json:"credentialDelivery,omitempty"`
+	CredentialSecretKey    *string                             `json:"credentialSecretKey,omitempty"`
+	DefinitionVersion      string                              `json:"definitionVersion"`
+	Description            string                              `json:"description"`
+	Digest                 string                              `json:"digest"`
+	ExecutionRoute         IntegrationDefinitionExecutionRoute `json:"executionRoute"`
+	HealthyConnectionCount int64                               `json:"healthyConnectionCount"`
+	Key                    string                              `json:"key"`
+	Name                   string                              `json:"name"`
+	NextActions            []IntegrationDefinitionNextActions  `json:"nextActions"`
+	Origin                 IntegrationDefinitionOrigin         `json:"origin"`
+	SchemaVersion          string                              `json:"schemaVersion"`
 
 	// Version Авторитетная версия каталога для If-Match при SHIPPED copy.
 	Version int64 `json:"version"`
@@ -13728,7 +15275,11 @@ type IntegrationGrantInput struct {
 	ApprovalScopePaths *[]string                           `json:"approvalScopePaths,omitempty"`
 	CapabilityKey      string                              `json:"capabilityKey"`
 	Enabled            bool                                `json:"enabled"`
-	WorkflowRef        *OpaqueRef                          `json:"workflowRef,omitempty"`
+	KubernetesGrantRef *OpaqueRef                          `json:"kubernetesGrantRef,omitempty"`
+
+	// KubernetesNamespace Только для Kubernetes. Явный namespace либо отдельная cluster/all-namespaces область; не wildcard и не источник полномочий.
+	KubernetesNamespace *KubernetesGrantNamespace `json:"kubernetesNamespace,omitempty"`
+	WorkflowRef         *OpaqueRef                `json:"workflowRef,omitempty"`
 }
 
 // IntegrationGrantInputApprovalPolicy defines model for IntegrationGrantInput.ApprovalPolicy.
@@ -13881,6 +15432,672 @@ type KodexMemoryRecord struct {
 	UpdatedAt       Timestamp            `json:"updatedAt"`
 	Version         int64                `json:"version"`
 }
+
+// KubernetesArtifactCaptureOrigin Сохранённый owner-ACK prefix. FULL описывает полноту capture, а не успешность удалённой команды; PARTIAL не подтверждает остановку либо join. Поле не выдаёт новые полномочия.
+type KubernetesArtifactCaptureOrigin struct {
+	AcknowledgedPrefix  string                                       `json:"acknowledgedPrefix"`
+	CaptureGeneration   int64                                        `json:"captureGeneration"`
+	Channel             KubernetesArtifactCaptureOriginChannel       `json:"channel"`
+	ConnectionRef       OpaqueRef                                    `json:"connectionRef"`
+	DroppedBytes        string                                       `json:"droppedBytes"`
+	ExitCode            *int32                                       `json:"exitCode,omitempty"`
+	InvocationRef       OpaqueRef                                    `json:"invocationRef"`
+	Kind                KubernetesArtifactCaptureOriginKind          `json:"kind"`
+	LocalState          KubernetesArtifactCaptureOriginLocalState    `json:"localState"`
+	NativeTerminalKnown bool                                         `json:"nativeTerminalKnown"`
+	Operation           KubernetesArtifactCaptureOriginOperation     `json:"operation"`
+	OutputWatermark     string                                       `json:"outputWatermark"`
+	OwnerState          KubernetesArtifactCaptureOriginOwnerState    `json:"ownerState"`
+	ReasonCode          string                                       `json:"reasonCode"`
+	RemoteOutcome       KubernetesArtifactCaptureOriginRemoteOutcome `json:"remoteOutcome"`
+
+	// Resource Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+	Resource         KubernetesOwnerGateResource `json:"resource"`
+	SealedAt         Timestamp                   `json:"sealedAt"`
+	SourceDigest     string                      `json:"sourceDigest"`
+	StreamGeneration int64                       `json:"streamGeneration"`
+	StreamRef        OpaqueRef                   `json:"streamRef"`
+	TargetRef        OpaqueRef                   `json:"targetRef"`
+	TargetRevision   int64                       `json:"targetRevision"`
+	TransportJoined  bool                        `json:"transportJoined"`
+}
+
+// KubernetesArtifactCaptureOriginChannel defines model for KubernetesArtifactCaptureOrigin.Channel.
+type KubernetesArtifactCaptureOriginChannel string
+
+// KubernetesArtifactCaptureOriginKind defines model for KubernetesArtifactCaptureOrigin.Kind.
+type KubernetesArtifactCaptureOriginKind string
+
+// KubernetesArtifactCaptureOriginLocalState defines model for KubernetesArtifactCaptureOrigin.LocalState.
+type KubernetesArtifactCaptureOriginLocalState string
+
+// KubernetesArtifactCaptureOriginOperation defines model for KubernetesArtifactCaptureOrigin.Operation.
+type KubernetesArtifactCaptureOriginOperation string
+
+// KubernetesArtifactCaptureOriginOwnerState defines model for KubernetesArtifactCaptureOrigin.OwnerState.
+type KubernetesArtifactCaptureOriginOwnerState string
+
+// KubernetesArtifactCaptureOriginRemoteOutcome defines model for KubernetesArtifactCaptureOrigin.RemoteOutcome.
+type KubernetesArtifactCaptureOriginRemoteOutcome string
+
+// KubernetesCapturePage defines model for KubernetesCapturePage.
+type KubernetesCapturePage struct {
+	Items         []KubernetesCaptureStatus `json:"items"`
+	NextPageToken string                    `json:"nextPageToken"`
+}
+
+// KubernetesCaptureReadback defines model for KubernetesCaptureReadback.
+type KubernetesCaptureReadback struct {
+	CleanupReceipt *KubernetesStagingCleanupRepairReceipt `json:"cleanupReceipt,omitempty"`
+	RepairReceipt  *KubernetesCaptureRepairReceipt        `json:"repairReceipt,omitempty"`
+	View           KubernetesCaptureStatus                `json:"view"`
+}
+
+// KubernetesCaptureRepairReceipt defines model for KubernetesCaptureRepairReceipt.
+type KubernetesCaptureRepairReceipt struct {
+	AcceptedAt       time.Time `json:"acceptedAt"`
+	AttemptCount     int64     `json:"attemptCount"`
+	CaptureRef       string    `json:"captureRef"`
+	RepairGeneration int64     `json:"repairGeneration"`
+	Version          int64     `json:"version"`
+}
+
+// KubernetesCaptureStatus defines model for KubernetesCaptureStatus.
+type KubernetesCaptureStatus struct {
+	Artifacts        []KubernetesCapturedArtifact    `json:"artifacts"`
+	AttemptCount     int64                           `json:"attemptCount"`
+	Cleanup          *KubernetesStagingCleanupStatus `json:"cleanup,omitempty"`
+	InvocationRef    OpaqueRef                       `json:"invocationRef"`
+	Kind             KubernetesCaptureStatusKind     `json:"kind"`
+	NodeRef          OpaqueRef                       `json:"nodeRef"`
+	Operation        string                          `json:"operation"`
+	RepairGeneration int64                           `json:"repairGeneration"`
+	RetainUntil      *time.Time                      `json:"retainUntil,omitempty"`
+	RunRef           OpaqueRef                       `json:"runRef"`
+	SealedAt         time.Time                       `json:"sealedAt"`
+	Summary          KubernetesCaptureSummary        `json:"summary"`
+}
+
+// KubernetesCaptureStatusKind defines model for KubernetesCaptureStatus.Kind.
+type KubernetesCaptureStatusKind string
+
+// KubernetesCaptureSummary defines model for KubernetesCaptureSummary.
+type KubernetesCaptureSummary struct {
+	CaptureGeneration int64                              `json:"captureGeneration"`
+	CaptureRef        string                             `json:"captureRef"`
+	ReasonCode        KubernetesCaptureSummaryReasonCode `json:"reasonCode"`
+	State             KubernetesCaptureSummaryState      `json:"state"`
+	StreamRef         OpaqueRef                          `json:"streamRef"`
+	Version           int64                              `json:"version"`
+}
+
+// KubernetesCaptureSummaryReasonCode defines model for KubernetesCaptureSummary.ReasonCode.
+type KubernetesCaptureSummaryReasonCode string
+
+// KubernetesCaptureSummaryState defines model for KubernetesCaptureSummary.State.
+type KubernetesCaptureSummaryState string
+
+// KubernetesCapturedArtifact defines model for KubernetesCapturedArtifact.
+type KubernetesCapturedArtifact struct {
+	ArtifactRef       OpaqueRef                         `json:"artifactRef"`
+	CaptureGeneration int64                             `json:"captureGeneration"`
+	Channel           KubernetesCapturedArtifactChannel `json:"channel"`
+	Digest            string                            `json:"digest"`
+	Partial           bool                              `json:"partial"`
+	RevisionRef       OpaqueRef                         `json:"revisionRef"`
+	SizeBytes         int64                             `json:"sizeBytes"`
+}
+
+// KubernetesCapturedArtifactChannel defines model for KubernetesCapturedArtifact.Channel.
+type KubernetesCapturedArtifactChannel string
+
+// KubernetesFileCleanupList defines model for KubernetesFileCleanupList.
+type KubernetesFileCleanupList struct {
+	Items      []KubernetesFileCleanupView         `json:"items"`
+	Projection KubernetesFileCleanupListProjection `json:"projection"`
+}
+
+// KubernetesFileCleanupListProjection defines model for KubernetesFileCleanupList.Projection.
+type KubernetesFileCleanupListProjection string
+
+// KubernetesFileCleanupReadback defines model for KubernetesFileCleanupReadback.
+type KubernetesFileCleanupReadback struct {
+	CleanupReceipt *KubernetesFileCleanupRepairReceipt     `json:"cleanupReceipt,omitempty"`
+	CleanupView    KubernetesFileCleanupView               `json:"cleanupView"`
+	Projection     KubernetesFileCleanupReadbackProjection `json:"projection"`
+}
+
+// KubernetesFileCleanupReadbackProjection defines model for KubernetesFileCleanupReadback.Projection.
+type KubernetesFileCleanupReadbackProjection string
+
+// KubernetesFileCleanupRepairReceipt defines model for KubernetesFileCleanupRepairReceipt.
+type KubernetesFileCleanupRepairReceipt struct {
+	AcceptedAt              time.Time `json:"acceptedAt"`
+	RemainingExhaustedCount int64     `json:"remainingExhaustedCount"`
+	RepairGeneration        int64     `json:"repairGeneration"`
+	RepairedCount           int64     `json:"repairedCount"`
+	SourceRef               string    `json:"sourceRef"`
+	Version                 int64     `json:"version"`
+}
+
+// KubernetesFileCleanupView defines model for KubernetesFileCleanupView.
+type KubernetesFileCleanupView struct {
+	Cleanup       KubernetesStagingCleanupStatus `json:"cleanup"`
+	InvocationRef OpaqueRef                      `json:"invocationRef"`
+
+	// RepairAvailable Доступность команды в профиле шлюза. При отсутствии поля команда недоступна. Права пользователя проверяются отдельно при вызове.
+	RepairAvailable *bool  `json:"repairAvailable,omitempty"`
+	SourceRef       string `json:"sourceRef"`
+}
+
+// KubernetesFileInputList defines model for KubernetesFileInputList.
+type KubernetesFileInputList struct {
+	union json.RawMessage
+}
+
+// KubernetesFileInputReadback defines model for KubernetesFileInputReadback.
+type KubernetesFileInputReadback struct {
+	union json.RawMessage
+}
+
+// KubernetesFileInputView defines model for KubernetesFileInputView.
+type KubernetesFileInputView struct {
+	AcknowledgedBytes   int64     `json:"acknowledgedBytes"`
+	ArtifactRef         OpaqueRef `json:"artifactRef"`
+	ArtifactRevisionRef OpaqueRef `json:"artifactRevisionRef"`
+	ArtifactSHA256      string    `json:"artifactSHA256"`
+	ArtifactSizeBytes   int64     `json:"artifactSizeBytes"`
+	ChildRef            string    `json:"childRef"`
+
+	// Cleanup Null означает недоступный port; нулевые physical counters не фабрикуются.
+	Cleanup               *KubernetesStagingCleanupStatus       `json:"cleanup"`
+	CreatedAt             time.Time                             `json:"createdAt"`
+	EofAcknowledged       bool                                  `json:"eofAcknowledged"`
+	HardDeadline          time.Time                             `json:"hardDeadline"`
+	InvocationRef         OpaqueRef                             `json:"invocationRef"`
+	NormalizationRevision int                                   `json:"normalizationRevision"`
+	NormalizedSHA256      string                                `json:"normalizedSHA256"`
+	NormalizedSizeBytes   int64                                 `json:"normalizedSizeBytes"`
+	PlanRef               string                                `json:"planRef"`
+	Reason                KubernetesFileInputViewReason         `json:"reason"`
+	SourceRef             string                                `json:"sourceRef"`
+	StagedBytes           int64                                 `json:"stagedBytes"`
+	State                 KubernetesFileInputViewState          `json:"state"`
+	StreamRef             string                                `json:"streamRef"`
+	TransferFormat        KubernetesFileInputViewTransferFormat `json:"transferFormat"`
+	Version               int64                                 `json:"version"`
+}
+
+// KubernetesFileInputViewReason defines model for KubernetesFileInputView.Reason.
+type KubernetesFileInputViewReason string
+
+// KubernetesFileInputViewState defines model for KubernetesFileInputView.State.
+type KubernetesFileInputViewState string
+
+// KubernetesFileInputViewTransferFormat defines model for KubernetesFileInputView.TransferFormat.
+type KubernetesFileInputViewTransferFormat string
+
+// KubernetesFileSourceList defines model for KubernetesFileSourceList.
+type KubernetesFileSourceList struct {
+	Items      []KubernetesFileInputView          `json:"items"`
+	Projection KubernetesFileSourceListProjection `json:"projection"`
+}
+
+// KubernetesFileSourceListProjection defines model for KubernetesFileSourceList.Projection.
+type KubernetesFileSourceListProjection string
+
+// KubernetesFileSourceReadback defines model for KubernetesFileSourceReadback.
+type KubernetesFileSourceReadback struct {
+	Projection KubernetesFileSourceReadbackProjection `json:"projection"`
+	View       KubernetesFileInputView                `json:"view"`
+}
+
+// KubernetesFileSourceReadbackProjection defines model for KubernetesFileSourceReadback.Projection.
+type KubernetesFileSourceReadbackProjection string
+
+// KubernetesGrantNamespace Только для Kubernetes. Явный namespace либо отдельная cluster/all-namespaces область; не wildcard и не источник полномочий.
+type KubernetesGrantNamespace = string
+
+// KubernetesIdentitySetupAdmission defines model for KubernetesIdentitySetupAdmission.
+type KubernetesIdentitySetupAdmission struct {
+	Endpoint      *KubernetesIdentityUploadEndpoint `json:"endpoint,omitempty"`
+	ReconcileOnly bool                              `json:"reconcileOnly"`
+	Setup         KubernetesIdentitySetupView       `json:"setup"`
+	UploadPermit  *[]byte                           `json:"uploadPermit,omitempty"`
+}
+
+// KubernetesIdentitySetupBeginInput defines model for KubernetesIdentitySetupBeginInput.
+type KubernetesIdentitySetupBeginInput struct {
+	ContentBytes              int    `json:"contentBytes"`
+	ContentSHA256             string `json:"contentSHA256"`
+	ExpectedConnectionVersion int64  `json:"expectedConnectionVersion"`
+
+	// ExpectedVersion Для личного setup текущая binding version либо явный ноль отсутствия binding; для shared текущая Connection version.
+	ExpectedVersion int64 `json:"expectedVersion"`
+}
+
+// KubernetesIdentitySetupRequirements Безопасные требования scoped подключения для локального экспорта до Begin. Отсутствие означает недоступность требований; эти метаданные не выдают доступ к target и не заменяют проверки владельца.
+type KubernetesIdentitySetupRequirements struct {
+	CanonicalContext  string                                              `json:"canonicalContext"`
+	ConnectionVersion int64                                               `json:"connectionVersion"`
+	CredentialPolicy  KubernetesIdentitySetupRequirementsCredentialPolicy `json:"credentialPolicy"`
+	TargetRef         OpaqueRef                                           `json:"targetRef"`
+	TargetRevision    int64                                               `json:"targetRevision"`
+}
+
+// KubernetesIdentitySetupRequirementsCredentialPolicy defines model for KubernetesIdentitySetupRequirements.CredentialPolicy.
+type KubernetesIdentitySetupRequirementsCredentialPolicy string
+
+// KubernetesIdentitySetupView defines model for KubernetesIdentitySetupView.
+type KubernetesIdentitySetupView struct {
+	BindingGeneration int64                                       `json:"bindingGeneration"`
+	BindingVersion    int64                                       `json:"bindingVersion"`
+	CanonicalContext  string                                      `json:"canonicalContext"`
+	ConnectionRef     OpaqueRef                                   `json:"connectionRef"`
+	ConnectionVersion int64                                       `json:"connectionVersion"`
+	CredentialPolicy  KubernetesIdentitySetupViewCredentialPolicy `json:"credentialPolicy"`
+	ExpiresAt         time.Time                                   `json:"expiresAt"`
+	IdentityRef       OpaqueRef                                   `json:"identityRef"`
+	IdentityRevision  int64                                       `json:"identityRevision"`
+	ReasonCode        KubernetesIdentitySetupViewReasonCode       `json:"reasonCode"`
+	SetupRef          OpaqueRef                                   `json:"setupRef"`
+	State             KubernetesIdentitySetupViewState            `json:"state"`
+	TargetRef         OpaqueRef                                   `json:"targetRef"`
+	Version           int64                                       `json:"version"`
+}
+
+// KubernetesIdentitySetupViewCredentialPolicy defines model for KubernetesIdentitySetupView.CredentialPolicy.
+type KubernetesIdentitySetupViewCredentialPolicy string
+
+// KubernetesIdentitySetupViewReasonCode defines model for KubernetesIdentitySetupView.ReasonCode.
+type KubernetesIdentitySetupViewReasonCode string
+
+// KubernetesIdentitySetupViewState defines model for KubernetesIdentitySetupView.State.
+type KubernetesIdentitySetupViewState string
+
+// KubernetesIdentityUploadEndpoint defines model for KubernetesIdentityUploadEndpoint.
+type KubernetesIdentityUploadEndpoint struct {
+	AddressIPs                 []string `json:"addressIPs"`
+	CertificateAuthorityPem    []byte   `json:"certificateAuthorityPem"`
+	CertificateAuthoritySHA256 string   `json:"certificateAuthoritySHA256"`
+	ServerOrigin               string   `json:"serverOrigin"`
+	TlsServerName              string   `json:"tlsServerName"`
+}
+
+// KubernetesOwnerGateChild Сохранённое описание одного дочернего действия, без material и execution credit. Решение относится только к этому child исходного plan.
+type KubernetesOwnerGateChild struct {
+	ChildRef             OpaqueRef                  `json:"childRef"`
+	InputDigest          string                     `json:"inputDigest"`
+	IntendedGenerateName string                     `json:"intendedGenerateName"`
+	IntendedName         string                     `json:"intendedName"`
+	Operation            string                     `json:"operation"`
+	PlanDigest           string                     `json:"planDigest"`
+	PlanRef              OpaqueRef                  `json:"planRef"`
+	Preview              KubernetesOwnerGatePreview `json:"preview"`
+
+	// Resource Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+	Resource       KubernetesOwnerGateResource `json:"resource"`
+	TargetRef      OpaqueRef                   `json:"targetRef"`
+	TargetRevision int64                       `json:"targetRevision"`
+}
+
+// KubernetesOwnerGatePreview defines model for KubernetesOwnerGatePreview.
+type KubernetesOwnerGatePreview struct {
+	Changes           []KubernetesOwnerGatePreviewChange      `json:"changes"`
+	InputDigest       string                                  `json:"inputDigest"`
+	Limitations       []KubernetesOwnerGatePreviewLimitations `json:"limitations"`
+	Options           []KubernetesOwnerGatePreviewOption      `json:"options"`
+	SecretMaterialRef string                                  `json:"secretMaterialRef"`
+}
+
+// KubernetesOwnerGatePreviewLimitations defines model for KubernetesOwnerGatePreview.Limitations.
+type KubernetesOwnerGatePreviewLimitations string
+
+// KubernetesOwnerGatePreviewChange defines model for KubernetesOwnerGatePreviewChange.
+type KubernetesOwnerGatePreviewChange struct {
+	From      string                                    `json:"from"`
+	Operation KubernetesOwnerGatePreviewChangeOperation `json:"operation"`
+	Path      string                                    `json:"path"`
+	Redacted  bool                                      `json:"redacted"`
+	ValueJson string                                    `json:"valueJson"`
+	ValueKind KubernetesOwnerGatePreviewChangeValueKind `json:"valueKind"`
+}
+
+// KubernetesOwnerGatePreviewChangeOperation defines model for KubernetesOwnerGatePreviewChange.Operation.
+type KubernetesOwnerGatePreviewChangeOperation string
+
+// KubernetesOwnerGatePreviewChangeValueKind defines model for KubernetesOwnerGatePreviewChange.ValueKind.
+type KubernetesOwnerGatePreviewChangeValueKind string
+
+// KubernetesOwnerGatePreviewOption defines model for KubernetesOwnerGatePreviewOption.
+type KubernetesOwnerGatePreviewOption struct {
+	Key       string                               `json:"key"`
+	Kind      KubernetesOwnerGatePreviewOptionKind `json:"kind"`
+	Redacted  bool                                 `json:"redacted"`
+	ValueJson string                               `json:"valueJson"`
+}
+
+// KubernetesOwnerGatePreviewOptionKind defines model for KubernetesOwnerGatePreviewOption.Kind.
+type KubernetesOwnerGatePreviewOptionKind string
+
+// KubernetesOwnerGateResource Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+type KubernetesOwnerGateResource struct {
+	AllNamespaces   bool   `json:"allNamespaces"`
+	Group           string `json:"group"`
+	Name            string `json:"name"`
+	Namespace       string `json:"namespace"`
+	Namespaced      bool   `json:"namespaced"`
+	Resource        string `json:"resource"`
+	ResourceVersion string `json:"resourceVersion"`
+	Subresource     string `json:"subresource"`
+	Uid             string `json:"uid"`
+	Version         string `json:"version"`
+}
+
+// KubernetesPortForwardConnectionClosed defines model for KubernetesPortForwardConnectionClosed.
+type KubernetesPortForwardConnectionClosed struct {
+	// Connection Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+	Connection KubernetesPortForwardConnectionView `json:"connection"`
+	Input      KubernetesStreamInputView           `json:"input"`
+	Submission *KubernetesStreamInputSubmission    `json:"submission,omitempty"`
+}
+
+// KubernetesPortForwardConnectionOpened defines model for KubernetesPortForwardConnectionOpened.
+type KubernetesPortForwardConnectionOpened struct {
+	// Connection Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+	Connection KubernetesPortForwardConnectionView `json:"connection"`
+	Input      KubernetesStreamInputView           `json:"input"`
+	Submission KubernetesStreamInputSubmission     `json:"submission"`
+}
+
+// KubernetesPortForwardConnectionPage defines model for KubernetesPortForwardConnectionPage.
+type KubernetesPortForwardConnectionPage struct {
+	Items         []KubernetesPortForwardConnectionView  `json:"items"`
+	NextPageToken string                                 `json:"nextPageToken"`
+	Profile       KubernetesPortForwardConnectionProfile `json:"profile"`
+}
+
+// KubernetesPortForwardConnectionProfile defines model for KubernetesPortForwardConnectionProfile.
+type KubernetesPortForwardConnectionProfile struct {
+	ActiveConnections        int                                            `json:"activeConnections"`
+	AdmissionReasonCode      string                                         `json:"admissionReasonCode"`
+	MaximumActiveConnections int                                            `json:"maximumActiveConnections"`
+	Ports                    []KubernetesPortForwardMapping                 `json:"ports"`
+	Protocol                 KubernetesPortForwardConnectionProfileProtocol `json:"protocol"`
+	TimeoutSeconds           int                                            `json:"timeoutSeconds"`
+}
+
+// KubernetesPortForwardConnectionProfileProtocol defines model for KubernetesPortForwardConnectionProfile.Protocol.
+type KubernetesPortForwardConnectionProfileProtocol string
+
+// KubernetesPortForwardConnectionReadback defines model for KubernetesPortForwardConnectionReadback.
+type KubernetesPortForwardConnectionReadback struct {
+	// Connection Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+	Connection KubernetesPortForwardConnectionView `json:"connection"`
+	Submission *KubernetesStreamInputSubmission    `json:"submission,omitempty"`
+}
+
+// KubernetesPortForwardConnectionRef defines model for KubernetesPortForwardConnectionRef.
+type KubernetesPortForwardConnectionRef = string
+
+// KubernetesPortForwardConnectionView Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+type KubernetesPortForwardConnectionView struct {
+	ConnectionRef    KubernetesPortForwardConnectionRef       `json:"connectionRef"`
+	Generation       int64                                    `json:"generation"`
+	HardDeadline     Timestamp                                `json:"hardDeadline"`
+	InputVersion     int64                                    `json:"inputVersion"`
+	InvocationRef    OpaqueRef                                `json:"invocationRef"`
+	LocalWriteClosed bool                                     `json:"localWriteClosed"`
+	NativeJoined     bool                                     `json:"nativeJoined"`
+	ReadEndObserved  bool                                     `json:"readEndObserved"`
+	ReasonCode       string                                   `json:"reasonCode"`
+	Slot             int                                      `json:"slot"`
+	State            KubernetesPortForwardConnectionViewState `json:"state"`
+	StreamGeneration int64                                    `json:"streamGeneration"`
+	StreamRef        KubernetesStreamInputRef                 `json:"streamRef"`
+}
+
+// KubernetesPortForwardConnectionViewState defines model for KubernetesPortForwardConnectionView.State.
+type KubernetesPortForwardConnectionViewState string
+
+// KubernetesPortForwardMapping Числовая TCP mapping из original immutable owner input; не caller override и не разрешение открыть listener.
+type KubernetesPortForwardMapping struct {
+	Port       int `json:"port"`
+	TargetPort int `json:"targetPort"`
+}
+
+// KubernetesResourceMaterialAdmission defines model for KubernetesResourceMaterialAdmission.
+type KubernetesResourceMaterialAdmission struct {
+	Endpoint      *KubernetesIdentityUploadEndpoint `json:"endpoint,omitempty"`
+	Material      KubernetesResourceMaterialView    `json:"material"`
+	ReconcileOnly bool                              `json:"reconcileOnly"`
+	UploadPermit  *[]byte                           `json:"uploadPermit,omitempty"`
+}
+
+// KubernetesResourceMaterialBeginInput defines model for KubernetesResourceMaterialBeginInput.
+type KubernetesResourceMaterialBeginInput struct {
+	ContentBytes              int    `json:"contentBytes"`
+	ContentSHA256             string `json:"contentSHA256"`
+	ExpectedConnectionVersion int64  `json:"expectedConnectionVersion"`
+
+	// ExpectedVersion Текущая personal binding version либо shared Connection version; eligibility заново разрешает owner.
+	ExpectedVersion int64 `json:"expectedVersion"`
+
+	// GenerateName Только CREATE, ровно один name/generateName.
+	GenerateName string                                        `json:"generateName"`
+	Name         string                                        `json:"name"`
+	Namespace    string                                        `json:"namespace"`
+	Operation    KubernetesResourceMaterialBeginInputOperation `json:"operation"`
+
+	// PatchType Непустой native dialect только для PATCH.
+	PatchType KubernetesResourceMaterialBeginInputPatchType `json:"patchType"`
+
+	// SecretType Тип Secret; service-account-token закрыто запрещён.
+	SecretType string `json:"secretType"`
+}
+
+// KubernetesResourceMaterialBeginInputOperation defines model for KubernetesResourceMaterialBeginInput.Operation.
+type KubernetesResourceMaterialBeginInputOperation string
+
+// KubernetesResourceMaterialBeginInputPatchType Непустой native dialect только для PATCH.
+type KubernetesResourceMaterialBeginInputPatchType string
+
+// KubernetesResourceMaterialView defines model for KubernetesResourceMaterialView.
+type KubernetesResourceMaterialView struct {
+	BindingVersion    int64                                          `json:"bindingVersion"`
+	ConnectionRef     OpaqueRef                                      `json:"connectionRef"`
+	ConnectionVersion int64                                          `json:"connectionVersion"`
+	CredentialPolicy  KubernetesResourceMaterialViewCredentialPolicy `json:"credentialPolicy"`
+	ExpiresAt         time.Time                                      `json:"expiresAt"`
+	GenerateName      string                                         `json:"generateName"`
+	IdentityRef       OpaqueRef                                      `json:"identityRef"`
+	IdentityRevision  int64                                          `json:"identityRevision"`
+	MaterialRef       OpaqueRef                                      `json:"materialRef"`
+	Name              string                                         `json:"name"`
+	Namespace         string                                         `json:"namespace"`
+	Operation         KubernetesResourceMaterialViewOperation        `json:"operation"`
+	PatchType         KubernetesResourceMaterialViewPatchType        `json:"patchType"`
+	ReasonCode        KubernetesResourceMaterialViewReasonCode       `json:"reasonCode"`
+	SecretType        string                                         `json:"secretType"`
+	State             KubernetesResourceMaterialViewState            `json:"state"`
+	TargetRef         OpaqueRef                                      `json:"targetRef"`
+	Version           int64                                          `json:"version"`
+}
+
+// KubernetesResourceMaterialViewCredentialPolicy defines model for KubernetesResourceMaterialView.CredentialPolicy.
+type KubernetesResourceMaterialViewCredentialPolicy string
+
+// KubernetesResourceMaterialViewOperation defines model for KubernetesResourceMaterialView.Operation.
+type KubernetesResourceMaterialViewOperation string
+
+// KubernetesResourceMaterialViewPatchType defines model for KubernetesResourceMaterialView.PatchType.
+type KubernetesResourceMaterialViewPatchType string
+
+// KubernetesResourceMaterialViewReasonCode defines model for KubernetesResourceMaterialView.ReasonCode.
+type KubernetesResourceMaterialViewReasonCode string
+
+// KubernetesResourceMaterialViewState defines model for KubernetesResourceMaterialView.State.
+type KubernetesResourceMaterialViewState string
+
+// KubernetesStagingCleanupRepairReceipt defines model for KubernetesStagingCleanupRepairReceipt.
+type KubernetesStagingCleanupRepairReceipt struct {
+	AcceptedAt              time.Time `json:"acceptedAt"`
+	CaptureRef              string    `json:"captureRef"`
+	RemainingExhaustedCount int64     `json:"remainingExhaustedCount"`
+	RepairGeneration        int64     `json:"repairGeneration"`
+	RepairedCount           int64     `json:"repairedCount"`
+	Version                 int64     `json:"version"`
+}
+
+// KubernetesStagingCleanupStatus defines model for KubernetesStagingCleanupStatus.
+type KubernetesStagingCleanupStatus struct {
+	EligibleExhaustedCount int64 `json:"eligibleExhaustedCount"`
+	ExhaustedCount         int64 `json:"exhaustedCount"`
+	OutstandingBytes       int64 `json:"outstandingBytes"`
+	OutstandingCount       int64 `json:"outstandingCount"`
+	RepairGeneration       int64 `json:"repairGeneration"`
+	Version                int64 `json:"version"`
+}
+
+// KubernetesStreamInputChannel defines model for KubernetesStreamInputChannel.
+type KubernetesStreamInputChannel string
+
+// KubernetesStreamInputPage defines model for KubernetesStreamInputPage.
+type KubernetesStreamInputPage struct {
+	Items         []KubernetesStreamInputView `json:"items"`
+	NextPageToken string                      `json:"nextPageToken"`
+}
+
+// KubernetesStreamInputReadback defines model for KubernetesStreamInputReadback.
+type KubernetesStreamInputReadback struct {
+	Submission *KubernetesStreamInputSubmission `json:"submission,omitempty"`
+	View       KubernetesStreamInputView        `json:"view"`
+}
+
+// KubernetesStreamInputRef defines model for KubernetesStreamInputRef.
+type KubernetesStreamInputRef = string
+
+// KubernetesStreamInputSubmission defines model for KubernetesStreamInputSubmission.
+type KubernetesStreamInputSubmission struct {
+	ByteCount     int64                                `json:"byteCount"`
+	Channel       KubernetesStreamInputChannel         `json:"channel"`
+	EndOfInput    bool                                 `json:"endOfInput"`
+	Generation    int64                                `json:"generation"`
+	InvocationRef OpaqueRef                            `json:"invocationRef"`
+	PayloadDigest string                               `json:"payloadDigest"`
+	Ref           string                               `json:"ref"`
+	Sequence      int64                                `json:"sequence"`
+	State         KubernetesStreamInputSubmissionState `json:"state"`
+	StreamRef     KubernetesStreamInputRef             `json:"streamRef"`
+}
+
+// KubernetesStreamInputSubmissionState defines model for KubernetesStreamInputSubmission.State.
+type KubernetesStreamInputSubmissionState string
+
+// KubernetesStreamInputSubmit PORT_FORWARD содержит base64 от binary frame: byte0 — zero-based mapping slot0..15, затем не менее одного TCP byte. Exact owner profile дополнительно ограничивает slot. Empty EndOfInput закрывает весь tunnel. FILE_CONTENT и CONTROL публично запрещены.
+type KubernetesStreamInputSubmit struct {
+	Channel       KubernetesStreamInputSubmitChannel `json:"channel"`
+	EndOfInput    bool                               `json:"endOfInput"`
+	PayloadBase64 string                             `json:"payloadBase64"`
+	PayloadDigest string                             `json:"payloadDigest"`
+}
+
+// KubernetesStreamInputSubmitChannel defines model for KubernetesStreamInputSubmit.Channel.
+type KubernetesStreamInputSubmitChannel string
+
+// KubernetesStreamInputView defines model for KubernetesStreamInputView.
+type KubernetesStreamInputView struct {
+	AcknowledgedSequence int64                            `json:"acknowledgedSequence"`
+	ClosedInputChannels  []KubernetesStreamInputChannel   `json:"closedInputChannels"`
+	ConnectionRef        OpaqueRef                        `json:"connectionRef"`
+	Container            string                           `json:"container"`
+	Generation           int64                            `json:"generation"`
+	HardDeadline         time.Time                        `json:"hardDeadline"`
+	InputChannels        []KubernetesStreamInputChannel   `json:"inputChannels"`
+	InvocationRef        OpaqueRef                        `json:"invocationRef"`
+	MaximumFrameBytes    int64                            `json:"maximumFrameBytes"`
+	MaximumStagedBytes   int64                            `json:"maximumStagedBytes"`
+	MaximumStagedObjects int64                            `json:"maximumStagedObjects"`
+	MaximumTotalBytes    int64                            `json:"maximumTotalBytes"`
+	Namespace            string                           `json:"namespace"`
+	NodeRef              OpaqueRef                        `json:"nodeRef"`
+	Operation            string                           `json:"operation"`
+	Pending              *KubernetesStreamInputSubmission `json:"pending,omitempty"`
+	PodName              string                           `json:"podName"`
+	ReasonCode           string                           `json:"reasonCode"`
+
+	// Resource Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+	Resource       KubernetesOwnerGateResource    `json:"resource"`
+	RunRef         OpaqueRef                      `json:"runRef"`
+	State          KubernetesStreamInputViewState `json:"state"`
+	StreamRef      KubernetesStreamInputRef       `json:"streamRef"`
+	TargetRef      string                         `json:"targetRef"`
+	TargetRevision int64                          `json:"targetRevision"`
+	Version        int64                          `json:"version"`
+}
+
+// KubernetesStreamInputViewState defines model for KubernetesStreamInputView.State.
+type KubernetesStreamInputViewState string
+
+// KubernetesStreamOutputFrame defines model for KubernetesStreamOutputFrame.
+type KubernetesStreamOutputFrame struct {
+	Channel       KubernetesStreamOutputFrameChannel `json:"channel"`
+	PayloadBase64 []byte                             `json:"payloadBase64"`
+	PayloadDigest string                             `json:"payloadDigest"`
+	Sequence      string                             `json:"sequence"`
+	StageRef      string                             `json:"stageRef"`
+}
+
+// KubernetesStreamOutputFrameChannel defines model for KubernetesStreamOutputFrame.Channel.
+type KubernetesStreamOutputFrameChannel string
+
+// KubernetesStreamOutputReadback defines model for KubernetesStreamOutputReadback.
+type KubernetesStreamOutputReadback struct {
+	AfterSequence       string                               `json:"afterSequence"`
+	AuthorizedUntil     time.Time                            `json:"authorizedUntil"`
+	DroppedBytes        string                               `json:"droppedBytes"`
+	Frame               *KubernetesStreamOutputFrame         `json:"frame,omitempty"`
+	Generation          string                               `json:"generation"`
+	InvocationRef       OpaqueRef                            `json:"invocationRef"`
+	NativeTerminalKnown bool                                 `json:"nativeTerminalKnown"`
+	OutputWatermark     string                               `json:"outputWatermark"`
+	Status              KubernetesStreamOutputReadbackStatus `json:"status"`
+	StreamRef           KubernetesStreamInputRef             `json:"streamRef"`
+	TransportJoined     bool                                 `json:"transportJoined"`
+}
+
+// KubernetesStreamOutputReadbackStatus defines model for KubernetesStreamOutputReadback.Status.
+type KubernetesStreamOutputReadbackStatus string
+
+// KubernetesToolPage defines model for KubernetesToolPage.
+type KubernetesToolPage struct {
+	Items         []KubernetesToolView `json:"items"`
+	NextPageToken string               `json:"nextPageToken"`
+}
+
+// KubernetesToolView defines model for KubernetesToolView.
+type KubernetesToolView struct {
+	CaptureStatuses []KubernetesCaptureSummary `json:"captureStatuses"`
+	ConnectionRef   OpaqueRef                  `json:"connectionRef"`
+	InvocationRef   OpaqueRef                  `json:"invocationRef"`
+	NodeRef         OpaqueRef                  `json:"nodeRef"`
+	Operation       string                     `json:"operation"`
+	RunRef          OpaqueRef                  `json:"runRef"`
+
+	// SafeReasonCode Закрытая сохранённая причина отказа до создания stream; не provider diagnostic и не разрешение retry.
+	SafeReasonCode KubernetesToolViewSafeReasonCode `json:"safeReasonCode"`
+	State          KubernetesToolViewState          `json:"state"`
+	TargetRef      string                           `json:"targetRef"`
+	TargetRevision int64                            `json:"targetRevision"`
+	Version        int64                            `json:"version"`
+	WaitingForGate bool                             `json:"waitingForGate"`
+}
+
+// KubernetesToolViewSafeReasonCode Закрытая сохранённая причина отказа до создания stream; не provider diagnostic и не разрешение retry.
+type KubernetesToolViewSafeReasonCode string
+
+// KubernetesToolViewState defines model for KubernetesToolView.State.
+type KubernetesToolViewState string
 
 // ManagedConfiguration defines model for ManagedConfiguration.
 type ManagedConfiguration struct {
@@ -14457,6 +16674,20 @@ type ModelMeasurementPhase string
 // ModelMeasurementSource defines model for ModelMeasurementSource.
 type ModelMeasurementSource string
 
+// MyEmailMailbox defines model for MyEmailMailbox.
+type MyEmailMailbox struct {
+	Available bool                  `json:"available"`
+	Enabled   bool                  `json:"enabled"`
+	Name      string                `json:"name"`
+	Ownership EmailMailboxOwnership `json:"ownership"`
+}
+
+// MyEmailMailboxPage defines model for MyEmailMailboxPage.
+type MyEmailMailboxPage struct {
+	Items         []MyEmailMailbox `json:"items"`
+	NextPageToken *string          `json:"nextPageToken,omitempty"`
+}
+
 // NextAction defines model for NextAction.
 type NextAction string
 
@@ -14531,32 +16762,35 @@ type OwnerAuthorizationInput struct {
 
 // OwnerGate defines model for OwnerGate.
 type OwnerGate struct {
-	AllowedDecisions           []OwnerGateAllowedDecisions    `json:"allowedDecisions"`
-	ConsequencesSummary        string                         `json:"consequencesSummary"`
-	ContextSummary             string                         `json:"contextSummary"`
-	DecidedAt                  *Timestamp                     `json:"decidedAt,omitempty"`
-	DecidedBy                  *UserSummary                   `json:"decidedBy,omitempty"`
-	Decision                   *OwnerGateDecision             `json:"decision,omitempty"`
-	DecisionComment            *string                        `json:"decisionComment,omitempty"`
-	DecisionConsequences       []OwnerGateDecisionConsequence `json:"decisionConsequences"`
-	ExpiresAt                  *Timestamp                     `json:"expiresAt,omitempty"`
-	IntegrationIntent          *IntegrationIntent             `json:"integrationIntent,omitempty"`
-	NextActions                []NextAction                   `json:"nextActions"`
-	NodeRef                    OpaqueRef                      `json:"nodeRef"`
-	OpenedAt                   Timestamp                      `json:"openedAt"`
-	OrganizationRef            OpaqueRef                      `json:"organizationRef"`
-	ProjectRef                 *OpaqueRef                     `json:"projectRef,omitempty"`
-	Ref                        OpaqueRef                      `json:"ref"`
-	RequestedBy                UserSummary                    `json:"requestedBy"`
-	ResolutionAttachmentSetRef *OpaqueRef                     `json:"resolutionAttachmentSetRef,omitempty"`
-	ResolutionKind             *OwnerGateResolutionKind       `json:"resolutionKind,omitempty"`
-	ReworkPlan                 *WorkflowReworkPreview         `json:"reworkPlan,omitempty"`
-	RunRef                     OpaqueRef                      `json:"runRef"`
-	ScopeKind                  OwnerGateScopeKind             `json:"scopeKind"`
-	SourceAttachmentSetRef     *OpaqueRef                     `json:"sourceAttachmentSetRef,omitempty"`
-	State                      OwnerGateState                 `json:"state"`
-	Title                      string                         `json:"title"`
-	Version                    int64                          `json:"version"`
+	AllowedDecisions     []OwnerGateAllowedDecisions    `json:"allowedDecisions"`
+	ConsequencesSummary  string                         `json:"consequencesSummary"`
+	ContextSummary       string                         `json:"contextSummary"`
+	DecidedAt            *Timestamp                     `json:"decidedAt,omitempty"`
+	DecidedBy            *UserSummary                   `json:"decidedBy,omitempty"`
+	Decision             *OwnerGateDecision             `json:"decision,omitempty"`
+	DecisionComment      *string                        `json:"decisionComment,omitempty"`
+	DecisionConsequences []OwnerGateDecisionConsequence `json:"decisionConsequences"`
+	ExpiresAt            *Timestamp                     `json:"expiresAt,omitempty"`
+	IntegrationIntent    *IntegrationIntent             `json:"integrationIntent,omitempty"`
+
+	// KubernetesChild Сохранённое описание одного дочернего действия, без material и execution credit. Решение относится только к этому child исходного plan.
+	KubernetesChild            *KubernetesOwnerGateChild `json:"kubernetesChild,omitempty"`
+	NextActions                []NextAction              `json:"nextActions"`
+	NodeRef                    OpaqueRef                 `json:"nodeRef"`
+	OpenedAt                   Timestamp                 `json:"openedAt"`
+	OrganizationRef            OpaqueRef                 `json:"organizationRef"`
+	ProjectRef                 *OpaqueRef                `json:"projectRef,omitempty"`
+	Ref                        OpaqueRef                 `json:"ref"`
+	RequestedBy                UserSummary               `json:"requestedBy"`
+	ResolutionAttachmentSetRef *OpaqueRef                `json:"resolutionAttachmentSetRef,omitempty"`
+	ResolutionKind             *OwnerGateResolutionKind  `json:"resolutionKind,omitempty"`
+	ReworkPlan                 *WorkflowReworkPreview    `json:"reworkPlan,omitempty"`
+	RunRef                     OpaqueRef                 `json:"runRef"`
+	ScopeKind                  OwnerGateScopeKind        `json:"scopeKind"`
+	SourceAttachmentSetRef     *OpaqueRef                `json:"sourceAttachmentSetRef,omitempty"`
+	State                      OwnerGateState            `json:"state"`
+	Title                      string                    `json:"title"`
+	Version                    int64                     `json:"version"`
 }
 
 // OwnerGateAllowedDecisions defines model for OwnerGate.AllowedDecisions.
@@ -14654,17 +16888,40 @@ type PermissionDefinitionPage struct {
 // PermissionRisk defines model for PermissionRisk.
 type PermissionRisk string
 
+// PersonalEmailMailboxConnectionInput defines model for PersonalEmailMailboxConnectionInput.
+type PersonalEmailMailboxConnectionInput struct {
+	// Name До160 Unicode codepoints в исходном вводе; имя сохраняется без пробелов по краям.
+	Name   string              `json:"name"`
+	Sender openapi_types.Email `json:"sender"`
+}
+
+// PersonalEmailMailboxMutationOperation defines model for PersonalEmailMailboxMutationOperation.
+type PersonalEmailMailboxMutationOperation string
+
+// PersonalEmailMailboxMutationReceipt defines model for PersonalEmailMailboxMutationReceipt.
+type PersonalEmailMailboxMutationReceipt struct {
+	Mailbox   *MyEmailMailbox                       `json:"mailbox,omitempty"`
+	Operation PersonalEmailMailboxMutationOperation `json:"operation"`
+	Ownership *EmailMailboxOwnership                `json:"ownership,omitempty"`
+}
+
 // PersonalIntegrationConnection defines model for PersonalIntegrationConnection.
 type PersonalIntegrationConnection struct {
-	// Available Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
-	Available         bool                                `json:"available"`
-	ConnectionRef     OpaqueRef                           `json:"connectionRef"`
-	ConnectionVersion int64                               `json:"connectionVersion"`
-	Credential        *PersonalIntegrationCredential      `json:"credential,omitempty"`
-	DefinitionKey     string                              `json:"definitionKey"`
-	Enabled           bool                                `json:"enabled"`
-	Name              string                              `json:"name"`
-	Policy            PersonalIntegrationConnectionPolicy `json:"policy"`
+	// Available Адаптер включён и тип личных реквизитов подтверждён; false не скрывает собственную привязку для отзыва и не заменяет проверку полномочий.
+	Available         bool                           `json:"available"`
+	ConnectionRef     OpaqueRef                      `json:"connectionRef"`
+	ConnectionVersion int64                          `json:"connectionVersion"`
+	Credential        *PersonalIntegrationCredential `json:"credential,omitempty"`
+
+	// CredentialDelivery Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+	CredentialDelivery *IntegrationCredentialDelivery `json:"credentialDelivery,omitempty"`
+	DefinitionKey      string                         `json:"definitionKey"`
+	Enabled            bool                           `json:"enabled"`
+
+	// KubernetesSetupRequirements Безопасные требования scoped подключения для локального экспорта до Begin. Отсутствие означает недоступность требований; эти метаданные не выдают доступ к target и не заменяют проверки владельца.
+	KubernetesSetupRequirements *KubernetesIdentitySetupRequirements `json:"kubernetesSetupRequirements,omitempty"`
+	Name                        string                               `json:"name"`
+	Policy                      PersonalIntegrationConnectionPolicy  `json:"policy"`
 }
 
 // PersonalIntegrationConnectionPolicy defines model for PersonalIntegrationConnection.Policy.
@@ -14678,10 +16935,17 @@ type PersonalIntegrationConnectionList struct {
 
 // PersonalIntegrationCredential defines model for PersonalIntegrationCredential.
 type PersonalIntegrationCredential struct {
-	BindingRef             OpaqueRef                           `json:"bindingRef"`
-	ConnectionRef          OpaqueRef                           `json:"connectionRef"`
-	ConnectionVersion      int64                               `json:"connectionVersion"`
-	CredentialConfigured   bool                                `json:"credentialConfigured"`
+	BindingGeneration *int64    `json:"bindingGeneration,omitempty"`
+	BindingRef        OpaqueRef `json:"bindingRef"`
+
+	// BrokerIdentity Безопасные metadata собственной или явно выбранной PROJECT_SHARED identity. Ref и revision не являются grant; Secret ref, UID, resourceVersion, content digest, kubeconfig и private key никогда не входят в это представление.
+	BrokerIdentity       *IntegrationBrokerIdentityMetadata `json:"brokerIdentity,omitempty"`
+	ConnectionRef        OpaqueRef                          `json:"connectionRef"`
+	ConnectionVersion    int64                              `json:"connectionVersion"`
+	CredentialConfigured bool                               `json:"credentialConfigured"`
+
+	// CredentialDelivery Только owner-derived metadata выбранного представления. Отсутствие поля означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+	CredentialDelivery     *IntegrationCredentialDelivery      `json:"credentialDelivery,omitempty"`
 	DeniedCapabilityKeys   []string                            `json:"deniedCapabilityKeys"`
 	ExpiresAt              *Timestamp                          `json:"expiresAt,omitempty"`
 	GithubDiscovery        *GitHubRepositoryDiscoveryPage      `json:"githubDiscovery,omitempty"`
@@ -14882,6 +17146,9 @@ type ProjectPurgeRecovery struct {
 	// ProjectVersion Ноль после удаления проекта; не используется в If-Match восстановления.
 	ProjectVersion int64 `json:"projectVersion"`
 
+	// ReasonCode Закрытая причина. Незавершённый staged object либо manual artifact purge сохраняет прежний lifecycle проекта и достижимый owner readback; повторный Delete не выдаётся.
+	ReasonCode *ProjectPurgeRecoveryReasonCode `json:"reasonCode,omitempty"`
+
 	// ResolutionRef Непрозрачная ссылка решения; пуста до принятия решения.
 	ResolutionRef       string                    `json:"resolutionRef"`
 	SnapshotDigest      string                    `json:"snapshotDigest"`
@@ -14889,6 +17156,9 @@ type ProjectPurgeRecovery struct {
 	UnknownContentCount int32                     `json:"unknownContentCount"`
 	Version             int64                     `json:"version"`
 }
+
+// ProjectPurgeRecoveryReasonCode Закрытая причина. Незавершённый staged object либо manual artifact purge сохраняет прежний lifecycle проекта и достижимый owner readback; повторный Delete не выдаётся.
+type ProjectPurgeRecoveryReasonCode string
 
 // ProjectPurgeRecoveryState defines model for ProjectPurgeRecovery.State.
 type ProjectPurgeRecoveryState string
@@ -17004,6 +19274,67 @@ type SSHComposeResourceValues struct {
 	User          string    `json:"user"`
 }
 
+// SSHIdentitySetup defines model for SSHIdentitySetup.
+type SSHIdentitySetup struct {
+	BindingGeneration int64                      `json:"bindingGeneration"`
+	BindingVersion    int64                      `json:"bindingVersion"`
+	ConnectionRef     OpaqueRef                  `json:"connectionRef"`
+	ConnectionVersion int64                      `json:"connectionVersion"`
+	ExpiresAt         time.Time                  `json:"expiresAt"`
+	IdentityRef       OpaqueRef                  `json:"identityRef"`
+	IdentityRevision  int64                      `json:"identityRevision"`
+	Policy            SSHIdentitySetupPolicy     `json:"policy"`
+	ReasonCode        SSHIdentitySetupReasonCode `json:"reasonCode"`
+	Ref               string                     `json:"ref"`
+	State             SSHIdentitySetupState      `json:"state"`
+	TargetRef         OpaqueRef                  `json:"targetRef"`
+	Version           int64                      `json:"version"`
+}
+
+// SSHIdentitySetupPolicy defines model for SSHIdentitySetup.Policy.
+type SSHIdentitySetupPolicy string
+
+// SSHIdentitySetupReasonCode defines model for SSHIdentitySetup.ReasonCode.
+type SSHIdentitySetupReasonCode string
+
+// SSHIdentitySetupState defines model for SSHIdentitySetup.State.
+type SSHIdentitySetupState string
+
+// SSHIdentitySetupAdmission defines model for SSHIdentitySetupAdmission.
+type SSHIdentitySetupAdmission struct {
+	union json.RawMessage
+}
+
+// SSHIdentitySetupAdmission0 defines model for .
+type SSHIdentitySetupAdmission0 struct {
+	ReconcileOnly SSHIdentitySetupAdmission0ReconcileOnly `json:"reconcileOnly"`
+	Setup         SSHIdentitySetup                        `json:"setup"`
+	Upload        struct {
+		Origin        string  `json:"origin"`
+		Permit        *string `json:"permit,omitempty"`
+		TlsServerName string  `json:"tlsServerName"`
+	} `json:"upload"`
+}
+
+// SSHIdentitySetupAdmission0ReconcileOnly defines model for SSHIdentitySetupAdmission.0.ReconcileOnly.
+type SSHIdentitySetupAdmission0ReconcileOnly bool
+
+// SSHIdentitySetupAdmission1 defines model for .
+type SSHIdentitySetupAdmission1 struct {
+	ReconcileOnly SSHIdentitySetupAdmission1ReconcileOnly `json:"reconcileOnly"`
+	Setup         SSHIdentitySetup                        `json:"setup"`
+}
+
+// SSHIdentitySetupAdmission1ReconcileOnly defines model for SSHIdentitySetupAdmission.1.ReconcileOnly.
+type SSHIdentitySetupAdmission1ReconcileOnly bool
+
+// SSHIdentitySetupBeginInput defines model for SSHIdentitySetupBeginInput.
+type SSHIdentitySetupBeginInput struct {
+	ContentBytes              int    `json:"contentBytes"`
+	ContentSHA256             string `json:"contentSHA256"`
+	ExpectedConnectionVersion int64  `json:"expectedConnectionVersion"`
+}
+
 // STTModelCatalog defines model for STTModelCatalog.
 type STTModelCatalog struct {
 	Models                                      []STTModelProfile `json:"models"`
@@ -17583,6 +19914,10 @@ type SystemAssistantIntegrationGrantInput struct {
 	CapabilityKey      string                                             `json:"capabilityKey"`
 	ConnectionRef      OpaqueRef                                          `json:"connectionRef"`
 	Enabled            bool                                               `json:"enabled"`
+	KubernetesGrantRef *OpaqueRef                                         `json:"kubernetesGrantRef,omitempty"`
+
+	// KubernetesNamespace Только для Kubernetes. Явный namespace либо отдельная cluster/all-namespaces область; не wildcard и не источник полномочий.
+	KubernetesNamespace *KubernetesGrantNamespace `json:"kubernetesNamespace,omitempty"`
 }
 
 // SystemAssistantIntegrationGrantInputApprovalPolicy defines model for SystemAssistantIntegrationGrantInput.ApprovalPolicy.
@@ -18367,6 +20702,12 @@ type RuntimeSecretDraftRef = OpaqueRef
 // RuntimeSecretRevision defines model for RuntimeSecretRevision.
 type RuntimeSecretRevision = int64
 
+// SSHIdentitySetupRef defines model for SSHIdentitySetupRef.
+type SSHIdentitySetupRef = string
+
+// SSHSetupIfMatch defines model for SSHSetupIfMatch.
+type SSHSetupIfMatch = string
+
 // ScheduleRef defines model for ScheduleRef.
 type ScheduleRef = OpaqueRef
 
@@ -19129,6 +21470,20 @@ type CreateEmailMailboxDraftParams struct {
 	IfMatch        *string        `json:"If-Match,omitempty"`
 }
 
+// RevokeEmailMailboxOwnershipParams defines parameters for RevokeEmailMailboxOwnership.
+type RevokeEmailMailboxOwnershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ConfigureEmailMailboxOwnershipParams defines parameters for ConfigureEmailMailboxOwnership.
+type ConfigureEmailMailboxOwnershipParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // PreviewEmailMailboxConfigurationParams defines parameters for PreviewEmailMailboxConfiguration.
 type PreviewEmailMailboxConfigurationParams struct {
 	XCSRFToken CsrfToken `json:"X-CSRF-Token"`
@@ -19152,6 +21507,28 @@ type BindInteractionIdentityParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetSSHIdentitySetupByBeginKeyParams defines parameters for GetSSHIdentitySetupByBeginKey.
+type GetSSHIdentitySetupByBeginKeyParams struct {
+	BeginIdempotencyKey string `form:"beginIdempotencyKey" json:"beginIdempotencyKey"`
+}
+
+// BeginSSHIdentitySetupParams defines parameters for BeginSSHIdentitySetup.
+type BeginSSHIdentitySetupParams struct {
+	IdempotencyKey IdempotencyKey  `json:"Idempotency-Key"`
+	IfMatch        SSHSetupIfMatch `json:"If-Match"`
+	XCSRFToken     CsrfToken       `json:"X-CSRF-Token"`
+}
+
+// CancelSSHIdentitySetupJSONBody defines parameters for CancelSSHIdentitySetup.
+type CancelSSHIdentitySetupJSONBody = map[string]interface{}
+
+// CancelSSHIdentitySetupParams defines parameters for CancelSSHIdentitySetup.
+type CancelSSHIdentitySetupParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // CopyIntegrationDefinitionConfigurationParams defines parameters for CopyIntegrationDefinitionConfiguration.
@@ -19299,11 +21676,134 @@ type ListIntegrationGrantRecipientCandidatesParams struct {
 // ListIntegrationGrantRecipientCandidatesParamsRecipientKind defines parameters for ListIntegrationGrantRecipientCandidates.
 type ListIntegrationGrantRecipientCandidatesParamsRecipientKind string
 
+// ListManagedKubernetesFileInputsParams defines parameters for ListManagedKubernetesFileInputs.
+type ListManagedKubernetesFileInputsParams struct {
+	// CleanupOnly Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+	CleanupOnly *bool `form:"cleanupOnly,omitempty" json:"cleanupOnly,omitempty"`
+}
+
+// GetManagedKubernetesFileInputParams defines parameters for GetManagedKubernetesFileInput.
+type GetManagedKubernetesFileInputParams struct {
+	// CleanupOnly Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+	CleanupOnly *bool `form:"cleanupOnly,omitempty" json:"cleanupOnly,omitempty"`
+
+	// CleanupIdempotencyKey Exact original-key receipt readback только при cleanupOnly=true; не повтор repair.
+	CleanupIdempotencyKey *string `form:"cleanupIdempotencyKey,omitempty" json:"cleanupIdempotencyKey,omitempty"`
+}
+
+// RepairManagedKubernetesFileCleanupJSONBody defines parameters for RepairManagedKubernetesFileCleanup.
+type RepairManagedKubernetesFileCleanupJSONBody = map[string]interface{}
+
+// RepairManagedKubernetesFileCleanupParams defines parameters for RepairManagedKubernetesFileCleanup.
+type RepairManagedKubernetesFileCleanupParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetManagedKubernetesStreamInputParams defines parameters for GetManagedKubernetesStreamInput.
+type GetManagedKubernetesStreamInputParams struct {
+	SubmissionIdempotencyKey *string `form:"submissionIdempotencyKey,omitempty" json:"submissionIdempotencyKey,omitempty"`
+}
+
+// SubmitManagedKubernetesStreamInputParams defines parameters for SubmitManagedKubernetesStreamInput.
+type SubmitManagedKubernetesStreamInputParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ReadManagedKubernetesStreamOutputParams defines parameters for ReadManagedKubernetesStreamOutput.
+type ReadManagedKubernetesStreamOutputParams struct {
+	Generation    string `form:"generation" json:"generation"`
+	AfterSequence string `form:"afterSequence" json:"afterSequence"`
+}
+
+// GetManagedKubernetesPortForwardConnectionParams defines parameters for GetManagedKubernetesPortForwardConnection.
+type GetManagedKubernetesPortForwardConnectionParams struct {
+	ConnectionRef      *KubernetesPortForwardConnectionRef `form:"connectionRef,omitempty" json:"connectionRef,omitempty"`
+	OpenIdempotencyKey *string                             `form:"openIdempotencyKey,omitempty" json:"openIdempotencyKey,omitempty"`
+}
+
+// ListManagedKubernetesPortForwardConnectionsParams defines parameters for ListManagedKubernetesPortForwardConnections.
+type ListManagedKubernetesPortForwardConnectionsParams struct {
+	PageSize  *int                                `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *KubernetesPortForwardConnectionRef `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// OpenManagedKubernetesPortForwardConnectionJSONBody defines parameters for OpenManagedKubernetesPortForwardConnection.
+type OpenManagedKubernetesPortForwardConnectionJSONBody struct {
+	Slot int `json:"slot"`
+}
+
+// OpenManagedKubernetesPortForwardConnectionParams defines parameters for OpenManagedKubernetesPortForwardConnection.
+type OpenManagedKubernetesPortForwardConnectionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CloseManagedKubernetesPortForwardConnectionJSONBody defines parameters for CloseManagedKubernetesPortForwardConnection.
+type CloseManagedKubernetesPortForwardConnectionJSONBody = map[string]interface{}
+
+// CloseManagedKubernetesPortForwardConnectionParams defines parameters for CloseManagedKubernetesPortForwardConnection.
+type CloseManagedKubernetesPortForwardConnectionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// StopManagedKubernetesStreamJSONBody defines parameters for StopManagedKubernetesStream.
+type StopManagedKubernetesStreamJSONBody = map[string]interface{}
+
+// StopManagedKubernetesStreamParams defines parameters for StopManagedKubernetesStream.
+type StopManagedKubernetesStreamParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// StopManagedKubernetesToolJSONBody defines parameters for StopManagedKubernetesTool.
+type StopManagedKubernetesToolJSONBody = map[string]interface{}
+
+// StopManagedKubernetesToolParams defines parameters for StopManagedKubernetesTool.
+type StopManagedKubernetesToolParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // RevokeInteractionIdentityParams defines parameters for RevokeInteractionIdentity.
 type RevokeInteractionIdentityParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 	IfMatch        IfMatch        `json:"If-Match"`
+}
+
+// GetManagedKubernetesCaptureStatusParams defines parameters for GetManagedKubernetesCaptureStatus.
+type GetManagedKubernetesCaptureStatusParams struct {
+	RepairIdempotencyKey  *string `form:"repairIdempotencyKey,omitempty" json:"repairIdempotencyKey,omitempty"`
+	CleanupIdempotencyKey *string `form:"cleanupIdempotencyKey,omitempty" json:"cleanupIdempotencyKey,omitempty"`
+}
+
+// RepairManagedKubernetesStagingCleanupJSONBody defines parameters for RepairManagedKubernetesStagingCleanup.
+type RepairManagedKubernetesStagingCleanupJSONBody = map[string]interface{}
+
+// RepairManagedKubernetesStagingCleanupParams defines parameters for RepairManagedKubernetesStagingCleanup.
+type RepairManagedKubernetesStagingCleanupParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// RepairManagedKubernetesCaptureJSONBody defines parameters for RepairManagedKubernetesCapture.
+type RepairManagedKubernetesCaptureJSONBody = map[string]interface{}
+
+// RepairManagedKubernetesCaptureParams defines parameters for RepairManagedKubernetesCapture.
+type RepairManagedKubernetesCaptureParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
 // ApproveManagedConfigurationGitWriteBackParams defines parameters for ApproveManagedConfigurationGitWriteBack.
@@ -19414,6 +21914,44 @@ type RevokePersonalIntegrationCredentialParams struct {
 
 // TestPersonalIntegrationCredentialParams defines parameters for TestPersonalIntegrationCredential.
 type TestPersonalIntegrationCredentialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetManagedKubernetesResourceMaterialParams defines parameters for GetManagedKubernetesResourceMaterial.
+type GetManagedKubernetesResourceMaterialParams struct {
+	MaterialRef         *string `form:"materialRef,omitempty" json:"materialRef,omitempty"`
+	BeginIdempotencyKey *string `form:"beginIdempotencyKey,omitempty" json:"beginIdempotencyKey,omitempty"`
+}
+
+// BeginManagedKubernetesResourceMaterialParams defines parameters for BeginManagedKubernetesResourceMaterial.
+type BeginManagedKubernetesResourceMaterialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CancelManagedKubernetesResourceMaterialParams defines parameters for CancelManagedKubernetesResourceMaterial.
+type CancelManagedKubernetesResourceMaterialParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	IfMatch        IfMatch        `json:"If-Match"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetManagedKubernetesIdentitySetupParams defines parameters for GetManagedKubernetesIdentitySetup.
+type GetManagedKubernetesIdentitySetupParams struct {
+	SetupRef            *string `form:"setupRef,omitempty" json:"setupRef,omitempty"`
+	BeginIdempotencyKey *string `form:"beginIdempotencyKey,omitempty" json:"beginIdempotencyKey,omitempty"`
+}
+
+// BeginManagedKubernetesIdentitySetupParams defines parameters for BeginManagedKubernetesIdentitySetup.
+type BeginManagedKubernetesIdentitySetupParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// CancelManagedKubernetesIdentitySetupParams defines parameters for CancelManagedKubernetesIdentitySetup.
+type CancelManagedKubernetesIdentitySetupParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	IfMatch        IfMatch        `json:"If-Match"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
@@ -19631,6 +22169,25 @@ type ResolveOwnerGateParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// ListMyEmailMailboxesParams defines parameters for ListMyEmailMailboxes.
+type ListMyEmailMailboxesParams struct {
+	Query     *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize  *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// CreatePersonalEmailMailboxConnectionParams defines parameters for CreatePersonalEmailMailboxConnection.
+type CreatePersonalEmailMailboxConnectionParams struct {
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetPersonalEmailMailboxMutationReceiptParams defines parameters for GetPersonalEmailMailboxMutationReceipt.
+type GetPersonalEmailMailboxMutationReceiptParams struct {
+	Operation      PersonalEmailMailboxMutationOperation `form:"operation" json:"operation"`
+	IdempotencyKey string                                `form:"idempotencyKey" json:"idempotencyKey"`
 }
 
 // ListOrganizationProjectMembershipsParams defines parameters for ListOrganizationProjectMemberships.
@@ -20362,6 +22919,24 @@ type ListRunEventsParams struct {
 	Limit         *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// ListManagedKubernetesCapturesParams defines parameters for ListManagedKubernetesCaptures.
+type ListManagedKubernetesCapturesParams struct {
+	PageSize  *int    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListManagedKubernetesStreamInputsParams defines parameters for ListManagedKubernetesStreamInputs.
+type ListManagedKubernetesStreamInputsParams struct {
+	PageSize  *int    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ListManagedKubernetesToolsParams defines parameters for ListManagedKubernetesTools.
+type ListManagedKubernetesToolsParams struct {
+	PageSize  *int    `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *string `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // GetRuntimeRevisionDiffParams defines parameters for GetRuntimeRevisionDiff.
 type GetRuntimeRevisionDiffParams struct {
 	// CurrentRevisionRef Точная сохранённая ревизия Run; без параметра сервер выбирает последнюю.
@@ -21000,6 +23575,9 @@ type ConfigureEmailMailboxCredentialJSONRequestBody = EmailMailboxCredentialInpu
 // CreateEmailMailboxDraftJSONRequestBody defines body for CreateEmailMailboxDraft for application/json ContentType.
 type CreateEmailMailboxDraftJSONRequestBody = EmailMailboxDraftInput
 
+// ConfigureEmailMailboxOwnershipJSONRequestBody defines body for ConfigureEmailMailboxOwnership for application/json ContentType.
+type ConfigureEmailMailboxOwnershipJSONRequestBody = EmailMailboxOwnershipInput
+
 // PreviewEmailMailboxConfigurationJSONRequestBody defines body for PreviewEmailMailboxConfiguration for application/json ContentType.
 type PreviewEmailMailboxConfigurationJSONRequestBody = EmailMailboxDraftContent
 
@@ -21008,6 +23586,12 @@ type ChangeIntegrationGrantJSONRequestBody = IntegrationGrantInput
 
 // BindInteractionIdentityJSONRequestBody defines body for BindInteractionIdentity for application/json ContentType.
 type BindInteractionIdentityJSONRequestBody = InteractionIdentityBindInput
+
+// BeginSSHIdentitySetupJSONRequestBody defines body for BeginSSHIdentitySetup for application/json ContentType.
+type BeginSSHIdentitySetupJSONRequestBody = SSHIdentitySetupBeginInput
+
+// CancelSSHIdentitySetupJSONRequestBody defines body for CancelSSHIdentitySetup for application/json ContentType.
+type CancelSSHIdentitySetupJSONRequestBody = CancelSSHIdentitySetupJSONBody
 
 // CopyIntegrationDefinitionConfigurationJSONRequestBody defines body for CopyIntegrationDefinitionConfiguration for application/json ContentType.
 type CopyIntegrationDefinitionConfigurationJSONRequestBody = IntegrationDefinitionConfigurationCopyInput
@@ -21029,6 +23613,30 @@ type RebindIntegrationDefinitionConsumersJSONRequestBody = ManagedConfigurationR
 
 // SaveIntegrationDefinitionDraftJSONRequestBody defines body for SaveIntegrationDefinitionDraft for application/json ContentType.
 type SaveIntegrationDefinitionDraftJSONRequestBody = ManagedConfigurationDraftSaveInput
+
+// RepairManagedKubernetesFileCleanupJSONRequestBody defines body for RepairManagedKubernetesFileCleanup for application/json ContentType.
+type RepairManagedKubernetesFileCleanupJSONRequestBody = RepairManagedKubernetesFileCleanupJSONBody
+
+// SubmitManagedKubernetesStreamInputJSONRequestBody defines body for SubmitManagedKubernetesStreamInput for application/json ContentType.
+type SubmitManagedKubernetesStreamInputJSONRequestBody = KubernetesStreamInputSubmit
+
+// OpenManagedKubernetesPortForwardConnectionJSONRequestBody defines body for OpenManagedKubernetesPortForwardConnection for application/json ContentType.
+type OpenManagedKubernetesPortForwardConnectionJSONRequestBody OpenManagedKubernetesPortForwardConnectionJSONBody
+
+// CloseManagedKubernetesPortForwardConnectionJSONRequestBody defines body for CloseManagedKubernetesPortForwardConnection for application/json ContentType.
+type CloseManagedKubernetesPortForwardConnectionJSONRequestBody = CloseManagedKubernetesPortForwardConnectionJSONBody
+
+// StopManagedKubernetesStreamJSONRequestBody defines body for StopManagedKubernetesStream for application/json ContentType.
+type StopManagedKubernetesStreamJSONRequestBody = StopManagedKubernetesStreamJSONBody
+
+// StopManagedKubernetesToolJSONRequestBody defines body for StopManagedKubernetesTool for application/json ContentType.
+type StopManagedKubernetesToolJSONRequestBody = StopManagedKubernetesToolJSONBody
+
+// RepairManagedKubernetesStagingCleanupJSONRequestBody defines body for RepairManagedKubernetesStagingCleanup for application/json ContentType.
+type RepairManagedKubernetesStagingCleanupJSONRequestBody = RepairManagedKubernetesStagingCleanupJSONBody
+
+// RepairManagedKubernetesCaptureJSONRequestBody defines body for RepairManagedKubernetesCapture for application/json ContentType.
+type RepairManagedKubernetesCaptureJSONRequestBody = RepairManagedKubernetesCaptureJSONBody
 
 // ApproveManagedConfigurationGitWriteBackJSONRequestBody defines body for ApproveManagedConfigurationGitWriteBack for application/json ContentType.
 type ApproveManagedConfigurationGitWriteBackJSONRequestBody = ConfigurationWriteBackDecisionInput
@@ -21053,6 +23661,18 @@ type RevokePersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCre
 
 // TestPersonalIntegrationCredentialJSONRequestBody defines body for TestPersonalIntegrationCredential for application/json ContentType.
 type TestPersonalIntegrationCredentialJSONRequestBody = PersonalIntegrationCredentialTestInput
+
+// BeginManagedKubernetesResourceMaterialJSONRequestBody defines body for BeginManagedKubernetesResourceMaterial for application/json ContentType.
+type BeginManagedKubernetesResourceMaterialJSONRequestBody = KubernetesResourceMaterialBeginInput
+
+// CancelManagedKubernetesResourceMaterialJSONRequestBody defines body for CancelManagedKubernetesResourceMaterial for application/json ContentType.
+type CancelManagedKubernetesResourceMaterialJSONRequestBody = PersonalIntegrationCredentialRevokeInput
+
+// BeginManagedKubernetesIdentitySetupJSONRequestBody defines body for BeginManagedKubernetesIdentitySetup for application/json ContentType.
+type BeginManagedKubernetesIdentitySetupJSONRequestBody = KubernetesIdentitySetupBeginInput
+
+// CancelManagedKubernetesIdentitySetupJSONRequestBody defines body for CancelManagedKubernetesIdentitySetup for application/json ContentType.
+type CancelManagedKubernetesIdentitySetupJSONRequestBody = PersonalIntegrationCredentialRevokeInput
 
 // ReviseMemoryRecordJSONRequestBody defines body for ReviseMemoryRecord for application/json ContentType.
 type ReviseMemoryRecordJSONRequestBody = MemoryRecordSpecification
@@ -21080,6 +23700,9 @@ type CreateSystemRuntimeSecretDraftJSONRequestBody = RuntimeSecretCreateInput
 
 // ResolveOwnerGateJSONRequestBody defines body for ResolveOwnerGate for application/json ContentType.
 type ResolveOwnerGateJSONRequestBody = GateResolution
+
+// CreatePersonalEmailMailboxConnectionJSONRequestBody defines body for CreatePersonalEmailMailboxConnection for application/json ContentType.
+type CreatePersonalEmailMailboxConnectionJSONRequestBody = PersonalEmailMailboxConnectionInput
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = ProjectInput
@@ -21465,6 +24088,68 @@ func (t *AssistantRunPin) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsIntegrationCredentialDelivery0 returns the union data inside the IntegrationCredentialDelivery as a IntegrationCredentialDelivery0
+func (t IntegrationCredentialDelivery) AsIntegrationCredentialDelivery0() (IntegrationCredentialDelivery0, error) {
+	var body IntegrationCredentialDelivery0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationCredentialDelivery0 overwrites any union data inside the IntegrationCredentialDelivery as the provided IntegrationCredentialDelivery0
+func (t *IntegrationCredentialDelivery) FromIntegrationCredentialDelivery0(v IntegrationCredentialDelivery0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationCredentialDelivery0 performs a merge with any union data inside the IntegrationCredentialDelivery, using the provided IntegrationCredentialDelivery0
+func (t *IntegrationCredentialDelivery) MergeIntegrationCredentialDelivery0(v IntegrationCredentialDelivery0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsIntegrationCredentialDelivery1 returns the union data inside the IntegrationCredentialDelivery as a IntegrationCredentialDelivery1
+func (t IntegrationCredentialDelivery) AsIntegrationCredentialDelivery1() (IntegrationCredentialDelivery1, error) {
+	var body IntegrationCredentialDelivery1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationCredentialDelivery1 overwrites any union data inside the IntegrationCredentialDelivery as the provided IntegrationCredentialDelivery1
+func (t *IntegrationCredentialDelivery) FromIntegrationCredentialDelivery1(v IntegrationCredentialDelivery1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationCredentialDelivery1 performs a merge with any union data inside the IntegrationCredentialDelivery, using the provided IntegrationCredentialDelivery1
+func (t *IntegrationCredentialDelivery) MergeIntegrationCredentialDelivery1(v IntegrationCredentialDelivery1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t IntegrationCredentialDelivery) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *IntegrationCredentialDelivery) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsIntegrationDefinitionConfigurationBinding0 returns the union data inside the IntegrationDefinitionConfigurationBinding as a IntegrationDefinitionConfigurationBinding0
 func (t IntegrationDefinitionConfigurationBinding) AsIntegrationDefinitionConfigurationBinding0() (IntegrationDefinitionConfigurationBinding0, error) {
 	var body IntegrationDefinitionConfigurationBinding0
@@ -21647,6 +24332,184 @@ func (t IntegrationIntegerBound) MarshalJSON() ([]byte, error) {
 }
 
 func (t *IntegrationIntegerBound) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsKubernetesFileSourceList returns the union data inside the KubernetesFileInputList as a KubernetesFileSourceList
+func (t KubernetesFileInputList) AsKubernetesFileSourceList() (KubernetesFileSourceList, error) {
+	var body KubernetesFileSourceList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromKubernetesFileSourceList overwrites any union data inside the KubernetesFileInputList as the provided KubernetesFileSourceList
+func (t *KubernetesFileInputList) FromKubernetesFileSourceList(v KubernetesFileSourceList) error {
+	v.Projection = "SOURCE"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeKubernetesFileSourceList performs a merge with any union data inside the KubernetesFileInputList, using the provided KubernetesFileSourceList
+func (t *KubernetesFileInputList) MergeKubernetesFileSourceList(v KubernetesFileSourceList) error {
+	v.Projection = "SOURCE"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsKubernetesFileCleanupList returns the union data inside the KubernetesFileInputList as a KubernetesFileCleanupList
+func (t KubernetesFileInputList) AsKubernetesFileCleanupList() (KubernetesFileCleanupList, error) {
+	var body KubernetesFileCleanupList
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromKubernetesFileCleanupList overwrites any union data inside the KubernetesFileInputList as the provided KubernetesFileCleanupList
+func (t *KubernetesFileInputList) FromKubernetesFileCleanupList(v KubernetesFileCleanupList) error {
+	v.Projection = "CLEANUP_ONLY"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeKubernetesFileCleanupList performs a merge with any union data inside the KubernetesFileInputList, using the provided KubernetesFileCleanupList
+func (t *KubernetesFileInputList) MergeKubernetesFileCleanupList(v KubernetesFileCleanupList) error {
+	v.Projection = "CLEANUP_ONLY"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t KubernetesFileInputList) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"projection"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t KubernetesFileInputList) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "CLEANUP_ONLY":
+		return t.AsKubernetesFileCleanupList()
+	case "SOURCE":
+		return t.AsKubernetesFileSourceList()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t KubernetesFileInputList) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *KubernetesFileInputList) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsKubernetesFileSourceReadback returns the union data inside the KubernetesFileInputReadback as a KubernetesFileSourceReadback
+func (t KubernetesFileInputReadback) AsKubernetesFileSourceReadback() (KubernetesFileSourceReadback, error) {
+	var body KubernetesFileSourceReadback
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromKubernetesFileSourceReadback overwrites any union data inside the KubernetesFileInputReadback as the provided KubernetesFileSourceReadback
+func (t *KubernetesFileInputReadback) FromKubernetesFileSourceReadback(v KubernetesFileSourceReadback) error {
+	v.Projection = "SOURCE"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeKubernetesFileSourceReadback performs a merge with any union data inside the KubernetesFileInputReadback, using the provided KubernetesFileSourceReadback
+func (t *KubernetesFileInputReadback) MergeKubernetesFileSourceReadback(v KubernetesFileSourceReadback) error {
+	v.Projection = "SOURCE"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsKubernetesFileCleanupReadback returns the union data inside the KubernetesFileInputReadback as a KubernetesFileCleanupReadback
+func (t KubernetesFileInputReadback) AsKubernetesFileCleanupReadback() (KubernetesFileCleanupReadback, error) {
+	var body KubernetesFileCleanupReadback
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromKubernetesFileCleanupReadback overwrites any union data inside the KubernetesFileInputReadback as the provided KubernetesFileCleanupReadback
+func (t *KubernetesFileInputReadback) FromKubernetesFileCleanupReadback(v KubernetesFileCleanupReadback) error {
+	v.Projection = "CLEANUP_ONLY"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeKubernetesFileCleanupReadback performs a merge with any union data inside the KubernetesFileInputReadback, using the provided KubernetesFileCleanupReadback
+func (t *KubernetesFileInputReadback) MergeKubernetesFileCleanupReadback(v KubernetesFileCleanupReadback) error {
+	v.Projection = "CLEANUP_ONLY"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t KubernetesFileInputReadback) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"projection"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t KubernetesFileInputReadback) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "CLEANUP_ONLY":
+		return t.AsKubernetesFileCleanupReadback()
+	case "SOURCE":
+		return t.AsKubernetesFileSourceReadback()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t KubernetesFileInputReadback) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *KubernetesFileInputReadback) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -22302,6 +25165,68 @@ func (t *Run) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsSSHIdentitySetupAdmission0 returns the union data inside the SSHIdentitySetupAdmission as a SSHIdentitySetupAdmission0
+func (t SSHIdentitySetupAdmission) AsSSHIdentitySetupAdmission0() (SSHIdentitySetupAdmission0, error) {
+	var body SSHIdentitySetupAdmission0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSSHIdentitySetupAdmission0 overwrites any union data inside the SSHIdentitySetupAdmission as the provided SSHIdentitySetupAdmission0
+func (t *SSHIdentitySetupAdmission) FromSSHIdentitySetupAdmission0(v SSHIdentitySetupAdmission0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSSHIdentitySetupAdmission0 performs a merge with any union data inside the SSHIdentitySetupAdmission, using the provided SSHIdentitySetupAdmission0
+func (t *SSHIdentitySetupAdmission) MergeSSHIdentitySetupAdmission0(v SSHIdentitySetupAdmission0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSSHIdentitySetupAdmission1 returns the union data inside the SSHIdentitySetupAdmission as a SSHIdentitySetupAdmission1
+func (t SSHIdentitySetupAdmission) AsSSHIdentitySetupAdmission1() (SSHIdentitySetupAdmission1, error) {
+	var body SSHIdentitySetupAdmission1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSSHIdentitySetupAdmission1 overwrites any union data inside the SSHIdentitySetupAdmission as the provided SSHIdentitySetupAdmission1
+func (t *SSHIdentitySetupAdmission) FromSSHIdentitySetupAdmission1(v SSHIdentitySetupAdmission1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSSHIdentitySetupAdmission1 performs a merge with any union data inside the SSHIdentitySetupAdmission, using the provided SSHIdentitySetupAdmission1
+func (t *SSHIdentitySetupAdmission) MergeSSHIdentitySetupAdmission1(v SSHIdentitySetupAdmission1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SSHIdentitySetupAdmission) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SSHIdentitySetupAdmission) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsTelegramSubscriptionEnableInput returns the union data inside the TelegramSubscriptionInput as a TelegramSubscriptionEnableInput
 func (t TelegramSubscriptionInput) AsTelegramSubscriptionEnableInput() (TelegramSubscriptionEnableInput, error) {
 	var body TelegramSubscriptionEnableInput
@@ -22732,6 +25657,15 @@ type ServerInterface interface {
 	// (POST /api/v1/integration-connections/{connectionRef}/email-mailbox/drafts)
 	CreateEmailMailboxDraft(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params CreateEmailMailboxDraftParams)
 
+	// (DELETE /api/v1/integration-connections/{connectionRef}/email-mailbox/ownership)
+	RevokeEmailMailboxOwnership(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params RevokeEmailMailboxOwnershipParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/email-mailbox/ownership)
+	GetEmailMailboxOwnership(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef)
+
+	// (PUT /api/v1/integration-connections/{connectionRef}/email-mailbox/ownership)
+	ConfigureEmailMailboxOwnership(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params ConfigureEmailMailboxOwnershipParams)
+
 	// (POST /api/v1/integration-connections/{connectionRef}/email-mailbox/preview)
 	PreviewEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params PreviewEmailMailboxConfigurationParams)
 
@@ -22743,6 +25677,18 @@ type ServerInterface interface {
 
 	// (POST /api/v1/integration-connections/{connectionRef}/interaction-identities)
 	BindInteractionIdentity(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BindInteractionIdentityParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/ssh-identity-setups)
+	GetSSHIdentitySetupByBeginKey(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params GetSSHIdentitySetupByBeginKeyParams)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/ssh-identity-setups)
+	BeginSSHIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BeginSSHIdentitySetupParams)
+
+	// (GET /api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef})
+	GetSSHIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, setupRef SSHIdentitySetupRef)
+
+	// (POST /api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}/cancel)
+	CancelSSHIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, setupRef SSHIdentitySetupRef, params CancelSSHIdentitySetupParams)
 
 	// (POST /api/v1/integration-definition-configurations/copies)
 	CopyIntegrationDefinitionConfiguration(w http.ResponseWriter, r *http.Request, params CopyIntegrationDefinitionConfigurationParams)
@@ -22798,8 +25744,56 @@ type ServerInterface interface {
 	// (GET /api/v1/integration-invocations/{invocationRef}/email-effect-receipt)
 	GetEmailEffectReceipt(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef)
 
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs)
+	ListManagedKubernetesFileInputs(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, params ListManagedKubernetesFileInputsParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef})
+	GetManagedKubernetesFileInput(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, sourceRef string, params GetManagedKubernetesFileInputParams)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}/cleanup-repair)
+	RepairManagedKubernetesFileCleanup(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, sourceRef string, params RepairManagedKubernetesFileCleanupParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input)
+	GetManagedKubernetesStreamInput(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params GetManagedKubernetesStreamInputParams)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input)
+	SubmitManagedKubernetesStreamInput(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params SubmitManagedKubernetesStreamInputParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/output)
+	ReadManagedKubernetesStreamOutput(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params ReadManagedKubernetesStreamOutputParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connection)
+	GetManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params GetManagedKubernetesPortForwardConnectionParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections)
+	ListManagedKubernetesPortForwardConnections(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params ListManagedKubernetesPortForwardConnectionsParams)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections)
+	OpenManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params OpenManagedKubernetesPortForwardConnectionParams)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections/{connectionRef}/close)
+	CloseManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, connectionRef KubernetesPortForwardConnectionRef, params CloseManagedKubernetesPortForwardConnectionParams)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/stop)
+	StopManagedKubernetesStream(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, streamRef KubernetesStreamInputRef, params StopManagedKubernetesStreamParams)
+
+	// (GET /api/v1/integration-invocations/{invocationRef}/kubernetes-tool)
+	GetManagedKubernetesTool(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef)
+
+	// (POST /api/v1/integration-invocations/{invocationRef}/kubernetes-tool/stop)
+	StopManagedKubernetesTool(w http.ResponseWriter, r *http.Request, invocationRef IntegrationInvocationRef, params StopManagedKubernetesToolParams)
+
 	// (DELETE /api/v1/interaction-identities/{identityRef})
 	RevokeInteractionIdentity(w http.ResponseWriter, r *http.Request, identityRef InteractionIdentityRef, params RevokeInteractionIdentityParams)
+
+	// (GET /api/v1/kubernetes-captures/{captureRef})
+	GetManagedKubernetesCaptureStatus(w http.ResponseWriter, r *http.Request, captureRef string, params GetManagedKubernetesCaptureStatusParams)
+
+	// (POST /api/v1/kubernetes-captures/{captureRef}/cleanup-repair)
+	RepairManagedKubernetesStagingCleanup(w http.ResponseWriter, r *http.Request, captureRef string, params RepairManagedKubernetesStagingCleanupParams)
+
+	// (POST /api/v1/kubernetes-captures/{captureRef}/repair)
+	RepairManagedKubernetesCapture(w http.ResponseWriter, r *http.Request, captureRef string, params RepairManagedKubernetesCaptureParams)
 
 	// (GET /api/v1/managed-configuration-git-write-backs/{proposalRef})
 	GetManagedConfigurationGitWriteBack(w http.ResponseWriter, r *http.Request, proposalRef WriteBackProposalRef)
@@ -22854,6 +25848,24 @@ type ServerInterface interface {
 
 	// (POST /api/v1/me/integration-connections/{connectionRef}/credential/test)
 	TestPersonalIntegrationCredential(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params TestPersonalIntegrationCredentialParams)
+
+	// (GET /api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials)
+	GetManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params GetManagedKubernetesResourceMaterialParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials)
+	BeginManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BeginManagedKubernetesResourceMaterialParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials/{materialRef}/cancel)
+	CancelManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, materialRef string, params CancelManagedKubernetesResourceMaterialParams)
+
+	// (GET /api/v1/me/integration-connections/{connectionRef}/kubernetes-setups)
+	GetManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params GetManagedKubernetesIdentitySetupParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/kubernetes-setups)
+	BeginManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, params BeginManagedKubernetesIdentitySetupParams)
+
+	// (POST /api/v1/me/integration-connections/{connectionRef}/kubernetes-setups/{setupRef}/cancel)
+	CancelManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request, connectionRef ConnectionRef, setupRef string, params CancelManagedKubernetesIdentitySetupParams)
 
 	// (GET /api/v1/memory-records)
 	ListMemoryRecords(w http.ResponseWriter, r *http.Request, params ListMemoryRecordsParams)
@@ -22935,6 +25947,15 @@ type ServerInterface interface {
 
 	// (POST /api/v1/owner-gates/{gateRef}/resolution)
 	ResolveOwnerGate(w http.ResponseWriter, r *http.Request, gateRef GateRef, params ResolveOwnerGateParams)
+
+	// (GET /api/v1/personal-email-mailboxes)
+	ListMyEmailMailboxes(w http.ResponseWriter, r *http.Request, params ListMyEmailMailboxesParams)
+
+	// (POST /api/v1/personal-email-mailboxes)
+	CreatePersonalEmailMailboxConnection(w http.ResponseWriter, r *http.Request, params CreatePersonalEmailMailboxConnectionParams)
+
+	// (GET /api/v1/personal-email-mailboxes/mutation-receipt)
+	GetPersonalEmailMailboxMutationReceipt(w http.ResponseWriter, r *http.Request, params GetPersonalEmailMailboxMutationReceiptParams)
 
 	// (GET /api/v1/platform-capabilities)
 	ListPlatformCapabilities(w http.ResponseWriter, r *http.Request)
@@ -23235,6 +26256,15 @@ type ServerInterface interface {
 
 	// (GET /api/v1/runs/{runRef}/graph)
 	GetRunGraph(w http.ResponseWriter, r *http.Request, runRef RunRef)
+
+	// (GET /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-captures)
+	ListManagedKubernetesCaptures(w http.ResponseWriter, r *http.Request, runRef RunRef, nodeRef OpaqueRef, params ListManagedKubernetesCapturesParams)
+
+	// (GET /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-stream-inputs)
+	ListManagedKubernetesStreamInputs(w http.ResponseWriter, r *http.Request, runRef RunRef, nodeRef OpaqueRef, params ListManagedKubernetesStreamInputsParams)
+
+	// (GET /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-tools)
+	ListManagedKubernetesTools(w http.ResponseWriter, r *http.Request, runRef RunRef, nodeRef OpaqueRef, params ListManagedKubernetesToolsParams)
 
 	// (GET /api/v1/runs/{runRef}/runtime-revision-diff)
 	GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Request, runRef RunRef, params GetRuntimeRevisionDiffParams)
@@ -32302,6 +35332,250 @@ func (siw *ServerInterfaceWrapper) CreateEmailMailboxDraft(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// RevokeEmailMailboxOwnership operation middleware
+func (siw *ServerInterfaceWrapper) RevokeEmailMailboxOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RevokeEmailMailboxOwnershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeEmailMailboxOwnership(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEmailMailboxOwnership operation middleware
+func (siw *ServerInterfaceWrapper) GetEmailMailboxOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEmailMailboxOwnership(w, r, connectionRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ConfigureEmailMailboxOwnership operation middleware
+func (siw *ServerInterfaceWrapper) ConfigureEmailMailboxOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ConfigureEmailMailboxOwnershipParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ConfigureEmailMailboxOwnership(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PreviewEmailMailboxConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) PreviewEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -32626,6 +35900,316 @@ func (siw *ServerInterfaceWrapper) BindInteractionIdentity(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BindInteractionIdentity(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSSHIdentitySetupByBeginKey operation middleware
+func (siw *ServerInterfaceWrapper) GetSSHIdentitySetupByBeginKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSSHIdentitySetupByBeginKeyParams
+
+	// ------------- Required query parameter "beginIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "beginIdempotencyKey", r.URL.Query(), &params.BeginIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "beginIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "beginIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSSHIdentitySetupByBeginKey(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginSSHIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) BeginSSHIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BeginSSHIdentitySetupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch SSHSetupIfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginSSHIdentitySetup(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSSHIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) GetSSHIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "setupRef" -------------
+	var setupRef SSHIdentitySetupRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "setupRef", r.PathValue("setupRef"), &setupRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "setupRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSSHIdentitySetup(w, r, connectionRef, setupRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelSSHIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) CancelSSHIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "setupRef" -------------
+	var setupRef SSHIdentitySetupRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "setupRef", r.PathValue("setupRef"), &setupRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "setupRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelSSHIdentitySetupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelSSHIdentitySetup(w, r, connectionRef, setupRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -34440,6 +38024,1113 @@ func (siw *ServerInterfaceWrapper) GetEmailEffectReceipt(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListManagedKubernetesFileInputs operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedKubernetesFileInputs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedKubernetesFileInputsParams
+
+	// ------------- Optional query parameter "cleanupOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cleanupOnly", r.URL.Query(), &params.CleanupOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cleanupOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cleanupOnly", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedKubernetesFileInputs(w, r, invocationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesFileInput operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesFileInput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sourceRef" -------------
+	var sourceRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceRef", r.PathValue("sourceRef"), &sourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesFileInputParams
+
+	// ------------- Optional query parameter "cleanupOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cleanupOnly", r.URL.Query(), &params.CleanupOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cleanupOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cleanupOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cleanupIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cleanupIdempotencyKey", r.URL.Query(), &params.CleanupIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cleanupIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cleanupIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesFileInput(w, r, invocationRef, sourceRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RepairManagedKubernetesFileCleanup operation middleware
+func (siw *ServerInterfaceWrapper) RepairManagedKubernetesFileCleanup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sourceRef" -------------
+	var sourceRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sourceRef", r.PathValue("sourceRef"), &sourceRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sourceRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RepairManagedKubernetesFileCleanupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RepairManagedKubernetesFileCleanup(w, r, invocationRef, sourceRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesStreamInput operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesStreamInput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesStreamInputParams
+
+	// ------------- Optional query parameter "submissionIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "submissionIdempotencyKey", r.URL.Query(), &params.SubmissionIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "submissionIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "submissionIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesStreamInput(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitManagedKubernetesStreamInput operation middleware
+func (siw *ServerInterfaceWrapper) SubmitManagedKubernetesStreamInput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SubmitManagedKubernetesStreamInputParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitManagedKubernetesStreamInput(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReadManagedKubernetesStreamOutput operation middleware
+func (siw *ServerInterfaceWrapper) ReadManagedKubernetesStreamOutput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReadManagedKubernetesStreamOutputParams
+
+	// ------------- Required query parameter "generation" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "generation", r.URL.Query(), &params.Generation, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "generation"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "generation", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "afterSequence" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "afterSequence", r.URL.Query(), &params.AfterSequence, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "afterSequence"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "afterSequence", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReadManagedKubernetesStreamOutput(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesPortForwardConnection operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesPortForwardConnectionParams
+
+	// ------------- Optional query parameter "connectionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "connectionRef", r.URL.Query(), &params.ConnectionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connectionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "openIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "openIdempotencyKey", r.URL.Query(), &params.OpenIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "openIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "openIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesPortForwardConnection(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListManagedKubernetesPortForwardConnections operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedKubernetesPortForwardConnections(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedKubernetesPortForwardConnectionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedKubernetesPortForwardConnections(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// OpenManagedKubernetesPortForwardConnection operation middleware
+func (siw *ServerInterfaceWrapper) OpenManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params OpenManagedKubernetesPortForwardConnectionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.OpenManagedKubernetesPortForwardConnection(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CloseManagedKubernetesPortForwardConnection operation middleware
+func (siw *ServerInterfaceWrapper) CloseManagedKubernetesPortForwardConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef KubernetesPortForwardConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CloseManagedKubernetesPortForwardConnectionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CloseManagedKubernetesPortForwardConnection(w, r, invocationRef, streamRef, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopManagedKubernetesStream operation middleware
+func (siw *ServerInterfaceWrapper) StopManagedKubernetesStream(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "streamRef" -------------
+	var streamRef KubernetesStreamInputRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "streamRef", r.PathValue("streamRef"), &streamRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "streamRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StopManagedKubernetesStreamParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopManagedKubernetesStream(w, r, invocationRef, streamRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesTool operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesTool(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesTool(w, r, invocationRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopManagedKubernetesTool operation middleware
+func (siw *ServerInterfaceWrapper) StopManagedKubernetesTool(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invocationRef" -------------
+	var invocationRef IntegrationInvocationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invocationRef", r.PathValue("invocationRef"), &invocationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invocationRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StopManagedKubernetesToolParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopManagedKubernetesTool(w, r, invocationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RevokeInteractionIdentity operation middleware
 func (siw *ServerInterfaceWrapper) RevokeInteractionIdentity(w http.ResponseWriter, r *http.Request) {
 
@@ -34537,6 +39228,279 @@ func (siw *ServerInterfaceWrapper) RevokeInteractionIdentity(w http.ResponseWrit
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeInteractionIdentity(w, r, identityRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesCaptureStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesCaptureStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "captureRef" -------------
+	var captureRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "captureRef", r.PathValue("captureRef"), &captureRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "captureRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesCaptureStatusParams
+
+	// ------------- Optional query parameter "repairIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repairIdempotencyKey", r.URL.Query(), &params.RepairIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repairIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repairIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cleanupIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cleanupIdempotencyKey", r.URL.Query(), &params.CleanupIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cleanupIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cleanupIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesCaptureStatus(w, r, captureRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RepairManagedKubernetesStagingCleanup operation middleware
+func (siw *ServerInterfaceWrapper) RepairManagedKubernetesStagingCleanup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "captureRef" -------------
+	var captureRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "captureRef", r.PathValue("captureRef"), &captureRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "captureRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RepairManagedKubernetesStagingCleanupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RepairManagedKubernetesStagingCleanup(w, r, captureRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RepairManagedKubernetesCapture operation middleware
+func (siw *ServerInterfaceWrapper) RepairManagedKubernetesCapture(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "captureRef" -------------
+	var captureRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "captureRef", r.PathValue("captureRef"), &captureRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "captureRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RepairManagedKubernetesCaptureParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RepairManagedKubernetesCapture(w, r, captureRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -36051,6 +41015,524 @@ func (siw *ServerInterfaceWrapper) TestPersonalIntegrationCredential(w http.Resp
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TestPersonalIntegrationCredential(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesResourceMaterial operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesResourceMaterialParams
+
+	// ------------- Optional query parameter "materialRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "materialRef", r.URL.Query(), &params.MaterialRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "materialRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "materialRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "beginIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "beginIdempotencyKey", r.URL.Query(), &params.BeginIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "beginIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "beginIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesResourceMaterial(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginManagedKubernetesResourceMaterial operation middleware
+func (siw *ServerInterfaceWrapper) BeginManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BeginManagedKubernetesResourceMaterialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginManagedKubernetesResourceMaterial(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelManagedKubernetesResourceMaterial operation middleware
+func (siw *ServerInterfaceWrapper) CancelManagedKubernetesResourceMaterial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "materialRef" -------------
+	var materialRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "materialRef", r.PathValue("materialRef"), &materialRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "materialRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelManagedKubernetesResourceMaterialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelManagedKubernetesResourceMaterial(w, r, connectionRef, materialRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetManagedKubernetesIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) GetManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetManagedKubernetesIdentitySetupParams
+
+	// ------------- Optional query parameter "setupRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "setupRef", r.URL.Query(), &params.SetupRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "setupRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "setupRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "beginIdempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "beginIdempotencyKey", r.URL.Query(), &params.BeginIdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "beginIdempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "beginIdempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetManagedKubernetesIdentitySetup(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginManagedKubernetesIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) BeginManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BeginManagedKubernetesIdentitySetupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginManagedKubernetesIdentitySetup(w, r, connectionRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelManagedKubernetesIdentitySetup operation middleware
+func (siw *ServerInterfaceWrapper) CancelManagedKubernetesIdentitySetup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "connectionRef" -------------
+	var connectionRef ConnectionRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "connectionRef", r.PathValue("connectionRef"), &connectionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "setupRef" -------------
+	var setupRef string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "setupRef", r.PathValue("setupRef"), &setupRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "setupRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelManagedKubernetesIdentitySetupParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelManagedKubernetesIdentitySetup(w, r, connectionRef, setupRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -38439,6 +43921,197 @@ func (siw *ServerInterfaceWrapper) ResolveOwnerGate(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ResolveOwnerGate(w, r, gateRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyEmailMailboxes operation middleware
+func (siw *ServerInterfaceWrapper) ListMyEmailMailboxes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMyEmailMailboxesParams
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyEmailMailboxes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePersonalEmailMailboxConnection operation middleware
+func (siw *ServerInterfaceWrapper) CreatePersonalEmailMailboxConnection(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreatePersonalEmailMailboxConnectionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePersonalEmailMailboxConnection(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPersonalEmailMailboxMutationReceipt operation middleware
+func (siw *ServerInterfaceWrapper) GetPersonalEmailMailboxMutationReceipt(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPersonalEmailMailboxMutationReceiptParams
+
+	// ------------- Required query parameter "operation" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "operation", r.URL.Query(), &params.Operation, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "operation"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operation", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "idempotencyKey" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "idempotencyKey", r.URL.Query(), &params.IdempotencyKey, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "idempotencyKey"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "idempotencyKey", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPersonalEmailMailboxMutationReceipt(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -47548,6 +53221,216 @@ func (siw *ServerInterfaceWrapper) GetRunGraph(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListManagedKubernetesCaptures operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedKubernetesCaptures(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "nodeRef" -------------
+	var nodeRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "nodeRef", r.PathValue("nodeRef"), &nodeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "nodeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedKubernetesCapturesParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedKubernetesCaptures(w, r, runRef, nodeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListManagedKubernetesStreamInputs operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedKubernetesStreamInputs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "nodeRef" -------------
+	var nodeRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "nodeRef", r.PathValue("nodeRef"), &nodeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "nodeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedKubernetesStreamInputsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedKubernetesStreamInputs(w, r, runRef, nodeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListManagedKubernetesTools operation middleware
+func (siw *ServerInterfaceWrapper) ListManagedKubernetesTools(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runRef" -------------
+	var runRef RunRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runRef", r.PathValue("runRef"), &runRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "nodeRef" -------------
+	var nodeRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "nodeRef", r.PathValue("nodeRef"), &nodeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "nodeRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListManagedKubernetesToolsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListManagedKubernetesTools(w, r, runRef, nodeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRuntimeRevisionDiff operation middleware
 func (siw *ServerInterfaceWrapper) GetRuntimeRevisionDiff(w http.ResponseWriter, r *http.Request) {
 
@@ -54520,10 +60403,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credential-receipt", wrapper.GetEmailMailboxCredentialReceipt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/credentials", wrapper.ListEmailMailboxCredentials)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/drafts", wrapper.CreateEmailMailboxDraft)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership", wrapper.RevokeEmailMailboxOwnership)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership", wrapper.GetEmailMailboxOwnership)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/ownership", wrapper.ConfigureEmailMailboxOwnership)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/email-mailbox/preview", wrapper.PreviewEmailMailboxConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/grants", wrapper.ChangeIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.ListInteractionIdentities)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/interaction-identities", wrapper.BindInteractionIdentity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/ssh-identity-setups", wrapper.GetSSHIdentitySetupByBeginKey)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/ssh-identity-setups", wrapper.BeginSSHIdentitySetup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}", wrapper.GetSSHIdentitySetup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}/cancel", wrapper.CancelSSHIdentitySetup)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/copies", wrapper.CopyIntegrationDefinitionConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/drafts", wrapper.CreateIntegrationDefinitionDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-definition-configurations/openapi-inspections", wrapper.InspectOpenAPIIntegration)
@@ -54542,7 +60432,23 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-grant-candidates/projects", wrapper.ListIntegrationGrantProjectCandidates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-grant-candidates/recipients", wrapper.ListIntegrationGrantRecipientCandidates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/email-effect-receipt", wrapper.GetEmailEffectReceipt)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs", wrapper.ListManagedKubernetesFileInputs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}", wrapper.GetManagedKubernetesFileInput)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}/cleanup-repair", wrapper.RepairManagedKubernetesFileCleanup)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input", wrapper.GetManagedKubernetesStreamInput)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input", wrapper.SubmitManagedKubernetesStreamInput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/output", wrapper.ReadManagedKubernetesStreamOutput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connection", wrapper.GetManagedKubernetesPortForwardConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections", wrapper.ListManagedKubernetesPortForwardConnections)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections", wrapper.OpenManagedKubernetesPortForwardConnection)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections/{connectionRef}/close", wrapper.CloseManagedKubernetesPortForwardConnection)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/stop", wrapper.StopManagedKubernetesStream)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-tool", wrapper.GetManagedKubernetesTool)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/integration-invocations/{invocationRef}/kubernetes-tool/stop", wrapper.StopManagedKubernetesTool)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/interaction-identities/{identityRef}", wrapper.RevokeInteractionIdentity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/kubernetes-captures/{captureRef}", wrapper.GetManagedKubernetesCaptureStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kubernetes-captures/{captureRef}/cleanup-repair", wrapper.RepairManagedKubernetesStagingCleanup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kubernetes-captures/{captureRef}/repair", wrapper.RepairManagedKubernetesCapture)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/managed-configuration-git-write-backs/{proposalRef}", wrapper.GetManagedConfigurationGitWriteBack)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configuration-git-write-backs/{proposalRef}/approve", wrapper.ApproveManagedConfigurationGitWriteBack)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/managed-configuration-git-write-backs/{proposalRef}/cancel", wrapper.CancelManagedConfigurationGitWriteBack)
@@ -54561,6 +60467,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential", wrapper.ConfigurePersonalIntegrationCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential/revoke", wrapper.RevokePersonalIntegrationCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/credential/test", wrapper.TestPersonalIntegrationCredential)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials", wrapper.GetManagedKubernetesResourceMaterial)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials", wrapper.BeginManagedKubernetesResourceMaterial)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials/{materialRef}/cancel", wrapper.CancelManagedKubernetesResourceMaterial)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups", wrapper.GetManagedKubernetesIdentitySetup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups", wrapper.BeginManagedKubernetesIdentitySetup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/me/integration-connections/{connectionRef}/kubernetes-setups/{setupRef}/cancel", wrapper.CancelManagedKubernetesIdentitySetup)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records", wrapper.ListMemoryRecords)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}", wrapper.GetMemoryRecord)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/memory-records/{recordRef}/archive", wrapper.ArchiveMemoryRecord)
@@ -54588,6 +60500,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}", wrapper.GetOwnerGate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/repository-bundle", wrapper.GetOwnerGateRepositoryBundle)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/owner-gates/{gateRef}/resolution", wrapper.ResolveOwnerGate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/personal-email-mailboxes", wrapper.ListMyEmailMailboxes)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/personal-email-mailboxes", wrapper.CreatePersonalEmailMailboxConnection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/personal-email-mailboxes/mutation-receipt", wrapper.GetPersonalEmailMailboxMutationReceipt)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/platform-capabilities", wrapper.ListPlatformCapabilities)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/project-memberships", wrapper.ListOrganizationProjectMemberships)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects", wrapper.ListProjects)
@@ -54688,6 +60603,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runRef}/commands", wrapper.CommandRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/events", wrapper.ListRunEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/graph", wrapper.GetRunGraph)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-captures", wrapper.ListManagedKubernetesCaptures)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-stream-inputs", wrapper.ListManagedKubernetesStreamInputs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-tools", wrapper.ListManagedKubernetesTools)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runRef}/runtime-revision-diff", wrapper.GetRuntimeRevisionDiff)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.DiscardRuntimeEnvironmentDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runtime-environment-drafts/{draftRef}", wrapper.GetRuntimeEnvironmentDraft)

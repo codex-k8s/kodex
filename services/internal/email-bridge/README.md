@@ -4,8 +4,8 @@ title: Email bridge
 type: service
 status: approved
 owner: developer
-version: 1.2.1
-updated: 2026-11-14
+version: 1.2.2
+updated: 2026-11-15
 ---
 
 # Email bridge #1037
@@ -106,6 +106,13 @@ BODY.PEEK не выставляет read flag; UID EXPUNGE не удаляет �
   бюджеты test runner 60/90/60 секунд, без контейнеров PostgreSQL.
 - `make test-email-bridge`: fake protocols и durable receipts под race с
   disposable PostgreSQL; migration up/status/up, бюджет component suite 90 секунд.
+- `KODEX_TEST_POSTGRES_STORAGE=ram make test-email-bridge`: тот же полный suite
+  без pull и anonymous disk volume; exact cached PG18.3 получает read-only root,
+  tmpfs512MiB и cgroup1GiB/1CPU с фактическим readback. Для ограниченной сборки
+  `KODEX_EMAIL_BRIDGE_TEST_GO_PARALLELISM=1` задаёт один Go build slot; допустимы1/2.
+- `make test-personal-email-protocol-native`: loopback Gmail/Timeweb TLS names,
+  SMTP AUTH PLAIN/IMAP LOGIN, CA/SNI negatives и отсутствие message effects под
+  race; in-memory owner/receipts не доказывают реальный аккаунт или durable БД.
 - Для узкой проверки с той же disposable БД runner принимает Go test regexp:
   `bash scripts/tests/email-bridge-test.sh '^TestPostgresReceiptCompletionAfterCancellation$'`.
 - `make check-email-bridge-codegen`: воспроизводимый OpenAPI/JSON Schema codegen.

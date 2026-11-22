@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
@@ -20,6 +21,11 @@ type fakeRepository struct {
 // Claim returns the synthetic due versions without changing their ownership state.
 // RU: Claim возвращает синтетические версии к очистке, не меняя их состояние владения.
 func (repository *fakeRepository) Claim(context.Context, string, int, int64) ([]Claim, error) {
+	for index := range repository.claims {
+		if repository.claims[index].AuthorizedUntil.IsZero() {
+			repository.claims[index].AuthorizedUntil = time.Now().Add(time.Minute)
+		}
+	}
 	return repository.claims, nil
 }
 
@@ -48,6 +54,20 @@ type fakeObjects struct {
 func (objects *fakeObjects) Delete(_ context.Context, key, version string) error {
 	if objects.events != nil {
 		*objects.events = append(*objects.events, "delete")
+	}
+	objects.deleteKey, objects.deleteVersion = key, version
+	return objects.deleteErr
+}
+
+// CheckDeleteOnce attests only the synthetic adapter capability.
+// CheckDeleteOnce подтверждает только synthetic adapter capability.
+func (objects *fakeObjects) CheckDeleteOnce(context.Context) error { return nil }
+
+// DeleteOnce records the optional exact one-attempt path independently of ordinary scheduled IO.
+// DeleteOnce фиксирует optional exact one-attempt path отдельно от ordinary scheduled IO.
+func (objects *fakeObjects) DeleteOnce(ctx context.Context, key, version string) error {
+	if objects.events != nil {
+		*objects.events = append(*objects.events, "delete-once")
 	}
 	objects.deleteKey, objects.deleteVersion = key, version
 	return objects.deleteErr
@@ -135,5 +155,73 @@ func TestProcessDoesNotTombstoneUncertainHeadFailure(t *testing.T) {
 	processed, err := NewProcessor(repository, objects).Process(context.Background(), "worker-1", 10, 60)
 	if err == nil || !errors.Is(err, objectstorage.ErrUnavailable) || processed != 0 || len(repository.finalized) != 0 {
 		t.Fatalf("uncertain readback was tombstoned: processed=%d err=%v finalized=%d", processed, err, len(repository.finalized))
+	}
+}
+
+// TestManualClaimNeverReplaysAnAdmittedDelete distinguishes fresh custody, unknown replay and
+// successful absence without substituting the ordinary retrying deletion path.
+// TestManualClaimNeverReplaysAnAdmittedDelete различает fresh custody, unknown replay и successful
+// absence без подмены обычным retrying deletion path.
+func TestManualClaimNeverReplaysAnAdmittedDelete(t *testing.T) {
+	for _, test := range []struct {
+		name               string
+		reconcile          bool
+		deleteErr, headErr error
+		want               string
+		completed          int
+	}{
+		{"first", false, nil, objectstorage.ErrNotFound, "[delete-once head finalize]", 1},
+		{"unknown-first", false, objectstorage.ErrUnavailable, nil, "[delete-once]", 0},
+		{"unknown-still-present", true, nil, nil, "[head]", 0},
+		{"unknown-absent-unqualified", true, nil, objectstorage.ErrNotFound, "[head]", 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			events := []string{}
+			repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "art", RevisionID: "revision", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 4, Manual: true, ReconcileOnly: test.reconcile}}, events: &events}
+			objects := &fakeObjects{deleteErr: test.deleteErr, headErr: test.headErr, events: &events}
+			completed, err := NewProcessor(repository, objects).Process(t.Context(), "owner", 1, 60)
+			if completed != test.completed || fmt.Sprint(events) != test.want || (err == nil) != (test.completed == 1) {
+				t.Fatalf("unexpected manual custody: events=%v completed=%d failed=%t", events, completed, err != nil)
+			}
+		})
+	}
+}
+
+// TestExpiredManualAdmissionNeverCallsStorage proves delayed claim ACK grants no late credit.
+// TestExpiredManualAdmissionNeverCallsStorage доказывает отсутствие late credit после delayed claim ACK.
+func TestExpiredManualAdmissionNeverCallsStorage(t *testing.T) {
+	events := []string{}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "art", RevisionID: "revision", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 4, Manual: true, AuthorizedUntil: time.Now().Add(-time.Second)}}, events: &events}
+	completed, err := NewProcessor(repository, &fakeObjects{events: &events}).Process(t.Context(), "owner", 1, 60)
+	if completed != 0 || !errors.Is(err, ErrLostClaim) || len(events) != 0 {
+		t.Fatal("expired custody reached storage")
+	}
+}
+
+// qualifiedManualObjects exposes only an explicitly qualified local exact-version absence proof.
+// RU: qualifiedManualObjects предоставляет лишь явно квалифицированный local exact-version absence proof.
+type qualifiedManualObjects struct{ *fakeObjects }
+
+// VerifyVersionAbsent proves the expected immutable fixture coordinates after its simulated deletion.
+// RU: VerifyVersionAbsent доказывает ожидаемые immutable fixture coordinates после simulated deletion.
+func (objects qualifiedManualObjects) VerifyVersionAbsent(ctx context.Context, key, version string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if key != "org/file" || version != "v7" || !errors.Is(objects.headErr, objectstorage.ErrNotFound) {
+		return objectstorage.ErrConflict
+	}
+	return nil
+}
+
+// TestManualQualifiedAbsenceAllowsHeadOnlyRecovery keeps Delete disabled while finalizing proven absence.
+// RU: TestManualQualifiedAbsenceAllowsHeadOnlyRecovery завершает доказанное отсутствие без нового Delete.
+func TestManualQualifiedAbsenceAllowsHeadOnlyRecovery(t *testing.T) {
+	events := []string{}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "art", RevisionID: "revision", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 4, Manual: true, ReconcileOnly: true}}, events: &events}
+	objects := qualifiedManualObjects{fakeObjects: &fakeObjects{headErr: objectstorage.ErrNotFound, events: &events}}
+	n, err := NewProcessor(repository, objects).Process(t.Context(), "owner", 1, 60)
+	if n != 1 || err != nil || fmt.Sprint(events) != "[head finalize]" {
+		t.Fatal("qualified reconciliation did not finalize", err)
 	}
 }

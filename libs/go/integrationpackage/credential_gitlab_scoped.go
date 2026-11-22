@@ -7,6 +7,18 @@ const CredentialResourcePermissionGitLabScopedV2 = "GITLAB_SCOPED_RESOURCE_V2"
 // CredentialResourcePermissionContractForProfile resolves a registered scoped successor or the unchanged legacy contract; an unknown profile never removes a required check.
 // CredentialResourcePermissionContractForProfile разрешает registered scoped successor либо прежний legacy contract; неизвестный profile не снимает обязательную проверку.
 func CredentialResourcePermissionContractForProfile(definitionKey, capabilityKey, profile string) (CredentialResourcePermissionContract, bool) {
+	if definitionKey == SSHManagedDefinitionKey || definitionKey == SSHExecuteDefinitionKey {
+		if profile != CredentialResourcePermissionSSHScopedV1 {
+			return CredentialResourcePermissionContract{}, false
+		}
+		return sshPermissionContract(definitionKey, capabilityKey)
+	}
+	if definitionKey == KubernetesDefinitionKey {
+		if profile != CredentialResourcePermissionKubernetesScopedV1 {
+			return CredentialResourcePermissionContract{}, false
+		}
+		return kubernetesPermissionContract(definitionKey, capabilityKey)
+	}
 	if definitionKey == "github" && profile == CredentialResourcePermissionGitHubScopedV1 {
 		risk := gitHubScopedCapabilityRisk(capabilityKey)
 		if risk == "" {

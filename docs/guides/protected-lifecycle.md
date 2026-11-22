@@ -4,11 +4,88 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.96
-updated: 2026-11-15
+version: 1.1.106
+updated: 2026-11-22
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Идентификатор новой защищённой операции проверяется сквозь все фактические
+consumer: canonical registry, proof policy, target admission и доменный handler.
+Генерация JSON сама по себе не доказывает, что локальный authorizer принимает
+синтаксис имени или что worker имеет зарегистрированный producer. В частности,
+технические operation/permission keys сохраняют закрытую грамматику допуска;
+новое неопубликованное имя исправляют во всех producer и consumer, а не расширяют
+общий validator ради совпадения одного fixture. Регрессия запускает production
+startup authorizer с generated policy и настоящими client operation maps,
+проверяет exact caller/method/permission и отказ посторонней workload. Этот факт
+не заменяет проверку signed grant, owner state и конечного RPC пути.
+
+Удаление уже принятого временного payload и его служебная квитанция не являются
+новой выдачей native effect либо live output. Такой переход выполняется только
+по отдельному текущему owner claim/fence, точной версии объекта и неизменным
+source pins; прежний live delivery deadline не продлевается и не используется
+как разрешение новой доставки. Общий guard отделяет закрытый набор полей очистки
+от state, tuple, digest, ACK и authority полей: добавленное в будущем поле по
+умолчанию остаётся неизменным. Успех требует подтверждения удаления точной
+версии, а не только отправки Delete. Metadata принятых байтов сохраняются;
+очистка не делает неподтверждённый хвост частью результата и не отменяет
+возможность опубликовать поздно подтверждённый префикс.
+
+Сборка сохранённого результата не требует копировать полный transcript в память.
+Она читает только закреплённые версии и ограниченные frame buffers, проверяет
+дайджест каждого frame и всего канала и использует закрытый временный файл с
+общей квотой текущих физических байтов. Временный файл не доказывает durable
+acceptance: потеря процесса оставляет исходные stage и канонические квитанции
+источником восстановления. Перед закрытием зависимостей завершаются все readers
+и writers; публикация использует прежний inspect/AV/prepared-content/adoption
+путь, а недоступная безопасная файловая система закрывает readiness этого пути.
+Завершение origin turn не завершает его canonical invocation. `READY` и
+`RUNNING` с точными organization/run/node/root связями остаются активной работой
+root, даже когда Human Gate уже `APPROVED` либо операция не требует Gate.
+Счётчик root одинаков для обычного adapter, KUBE и SSH; имя purpose не выбирает
+отдельную семантику завершения. Он не выдаёт effect authority и не создаёт новый
+turn. `WAITING_APPROVAL` сохраняет прежний OPEN Gate consumer. `SUCCEEDED`,
+`FAILED` и `CANCELLED` не считаются незавершённой работой: результат мог быть
+прочитан origin, а поздний результат проходит существующий idempotent scheduler.
+`UNKNOWN_OUTCOME` не добавляется в этот счётчик и не создаёт auto continuation.
+Ребро `CONTINUES` другого invocation того же origin не означает потребления
+ещё ожидающего sibling: READY/RUNNING проверяются отдельно по каждой owner row.
+
+Вид credentials является явным закрытым вариантом текущего authoritative package
+и binding. Отсутствие вида в сохранённой квитанции означает неизвестные metadata,
+а не TOKEN, отсутствие credentials либо право generic setup. Сохранённые квитанции
+и их байты не переписываются; отображение допускает UNKNOWN с причиной обновления.
+Setup и исполнение независимо требуют свежего известного вида, точных package pins
+и текущего owner binding. Broker-owned identity передаётся только как purpose/ref/
+revision; отсутствие этого варианта не заменяется фиктивным Secret descriptor.
+Списки, адресное чтение и personal catalog применяют один вывод из точного пакета,
+не присваивая старой immutable revision вид текущего shipped package.
+Общие grant/capability/input checks переиспользуются после закрытого допуска
+соответствующего вида credentials. TOKEN presence guard остаётся на ordinary
+entry и не служит проверкой наличия broker-owned identity; purpose consumer
+не создаёт фиктивный TOKEN descriptor ради прохождения общего validator.
+
+Отзыв текущего владельца ресурса ограждает уже выданные READ leases вместе с
+очередью и открытыми Gate. Проверка только после общей отмены запуска может
+скрыть незакрытый owner transition; native-сценарий отзывает владельца при
+работающем root и проверяет отказ полного допустимого stale completion.
+Лимит maintenance batch не является границей authority: новый READ completion
+повторяет текущую owner/pin проверку до invocation lock, даже если строка ещё не
+попала в очередной batch. Проверка охватывает и частичные данные в FAILED/UNKNOWN:
+флаг Success не определяет наличие READ bytes. Пустая failure metadata остаётся
+отдельным завершением lease. Историческая успешная квитанция проходит прежнее
+exact replay сравнение. Это локальное завершение READ authority не доказывает остановку
+внешнего изменения: начатые mutations и UNKNOWN сохраняют прежние факты и запрет resend.
+
+Forward recovery частично завершённого cohort не требует запуска прежних
+writers ради нового admission. Узкая явно разрешённая следующая попытка хранит
+исходный immutable plan и backup boundary, меняет только заранее определённое
+имя Job и получает отдельные intent/UID/readbacks. Перед её единственным create
+нужны exact failed parent Job/Pod join, stopped cohort и текущий catalog/history
+своего промежуточного head и mode. Неизвестный ACK, отсутствие Job либо истечение
+времени не возвращают create credit. Терминальные consumers разрешают только
+выбранную устойчиво признанную попытку; исходная failure history сохраняется.
 
 Исправление конфигурации после успешного DDL не переписывает исходный migration
 plan либо уже записанный префикс журнала. Узкий repair задаёт отдельные source,
@@ -41,6 +118,21 @@ Provider path с CONNECT доказывается отдельным bounded nat
 настоящий gateway и TLS server: ephemeral CA, exact SNI, redirect rejection,
 credential redaction и отсутствие replay после неопределённого ответа.
 Test-only DNS/dial mapping не появляется в поставляемом binary либо API config.
+
+Чистый EOF внешнего HTTP response не доказывает успешное завершение, если
+request context либо pin deadline уже истекли. Обёртка ответа проверяет lifetime
+до и после чтения, прежде чем отменить собственный cleanup timer: HTTP/2 peer
+может завершить body без transport error одновременно с отменой запроса.
+Частичные bytes сохраняются только внутри защищённой boundary вместе с ошибкой;
+они не дают нового output credit или успешного terminal receipt. Проверяются
+настоящий TLS путь и детерминированная последовательность cancel → bytes+EOF.
+
+Digest результата связывает bytes, но не заменяет проверку семантики квитанции.
+Подтверждение Complete сохраняет присланный observed outcome либо явно разрешённый
+terminal override владельца. При закрытии потока локальные revoke/cancel не
+переписывают подтверждённый удалённый exit; UNKNOWN не повышается до SUCCESS по
+одному совпадению JSON digest. Более известное историческое состояние требует
+отдельного типизированного readback с собственным доказательством происхождения.
 
 Наличие provider response field проверяется отдельно от его нулевого значения.
 Explicit `null` у используемых координат не превращается в отсутствие optional
@@ -121,6 +213,39 @@ replicas только по текущему Job UID, известному execut
 Незнакомая команда, дополнительные args, работающий контейнер и чужой lineage
 по-прежнему закрыто отклоняются. Такое исключение не выдаёт migration/check PASS
 и не разрешает повтор DDL. Матрица: [#1977](../operations/control-plane-immutable-migration-1855.md#serving-lineage-и-сохранённая-история-jobs--1977).
+
+У краткоживущего join witness сохраняется исходный monotonic ceiling до начала
+blocking read/dry-run. Его проверяют заново после каждого blocking участка,
+после durable INTENT перед внешним CAS и перед записью ACK, если между join и
+ACK выполнялись другие чтения. Новое owner allowance и повторный wall timestamp
+не продлевают первоначальный join. Истечение до INTENT не создаёт effect;
+после INTENT оставляет закрытый UNKNOWN/readback, без автоматического resubmit.
+
+Один durable journal обслуживается единственным in-flight async переходом,
+включая status/reconciliation. Process-exclusive lock файла не сериализует
+параллельные вызовы на том же handle. Конкурентный или reentrant caller получает
+явный BUSY, а не очередь после потенциального UNKNOWN. После await заново
+сверяются prefix/pending INTENT; положительный BEFORE не разрешает вторую
+физическую CAS-попытку. Матрица и regressions:
+[#2067](../operations/paired-token-release-2067.md).
+
+В парном обновлении длительный server dry-run и полный снимок owner получают
+до выдачи первого короткого native witness. После него повторно проверяются
+точные spec/UID, свежесть исходного owner и закрытая граница API. Resume ACK
+закрепляет Pod UID последнего готового readback с неменьшим resourceVersion.
+Подмена Pod с неизменным Deployment RV проверяется отдельно по исходным
+STOP UID и по содержимому обеих resume квитанций при завершении пары.
+Native join сопоставляет sandbox, сохраняющий возможность исполнения в
+защищённом namespace, с точным API Pod UID и именем до и после чтения CRI.
+Снимок до чтения одновременно задаёт lineage Deployment. Для её UID,
+включая API terminal Pod, требуется полное отсутствие в CRI.
+[Матрица #2067](../operations/paired-token-release-2067.md).
+
+Парное восстановление API Service и rollback используют общую блокировку
+перехода. INTENT восстановления запрещает rollback этой пары до отдельной
+повторной изоляции с новым допуском. Потеря ответа оставляет один INTENT.
+Положительный ACK требует exact Service postimage и готовых EndpointSlice,
+привязанных к тем же Pod Gateway. [Матрица #2067](../operations/paired-token-release-2067.md#восстановление-api-service-после-парного-обновления).
 
 Новый reader/issuer, отсутствующий в установленном профиле, получает отдельный
 протокол ввода: assigned UID, exact spec/image и dormant replicas0 связываются с
@@ -1509,3 +1634,87 @@ CRI/containerd snapshots всех закреплённых nodes, при отс�
 UNKNOWN разрешается отдельным readback исходного journal, без нового намерения
 или force. Scope, пример и матрица:
 [Evicted metadata recovery](../operations/evicted-pod-metadata-recovery-2033.md).
+
+
+## Восстановление сохранения принятого вывода Kubernetes
+
+Это технический lifecycle существующей artifact task, а не повтор invocation.
+Инициатор: исходный пользователь → Tool `capture_statuses` до первой revision →
+`GET /api/v1/kubernetes-captures/{captureRef}` → CAG typed client →
+`ManagedKubernetesCaptureService.GetManagedKubernetesCaptureStatus` → CP
+разрешает capture через прежние stream/effect/child/plan/invocation/root и
+проверяет original root actor, tenant/project и текущий `run.view`.
+Публичный ответ не содержит task binding, fence, storage locator или bytes.
+
+Явное восстановление → `POST .../{captureRef}/repair` с пустым body,
+`If-Match` и idempotency → тот же owner resolver → дополнительный canonical
+`artifact.upload` → прежняя capture task переходит из `WAITING_OWNER` в `READY`.
+Новая попытка и её fence назначаются штатным artifact-retention claim. Полный
+`attempt_count` и task generation монотонны; отдельный server-owned baseline
+ограничивает новый цикл тремя техническими попытками. Repair не обнуляет
+историю, не меняет immutable source, prepared-content intent или native graph.
+Неизвестный результат прежнего PUT допускает только точный Head/Get readback,
+не новый PUT. Исходный actor проверяется заново до возврата repair receipt. Из canonical
+`requireAccessUntil` сохраняется earliest finite bound каждого required permission;
+ожидание root/stream/capture/idempotency lock и COMMIT ACK не продлевает этот bound,
+даже если к тому времени появился новый unbounded alternative. После блокирующих
+чтений и перед COMMIT permission проверяется заново; после COMMIT истёкший bound
+не выдаёт metadata/receipt. Для отказанного Refresh PWA удаляет cached view и
+repair affordance, включая fallback из Tool props; следующий явный Get может
+вернуть вид только после нового допуска.
+
+| Переход | Условие и результат | Событие / авторитетное чтение |
+| --- | --- | --- |
+| Get / Tool discovery | Exact original root, tenant/project, current visibility; только safe metadata | События нет; Tool Get/List и capture Get |
+| Repair | Original root + `run.view` + `artifact.upload` проверяются до OCC/idem; только retained current `WAITING_OWNER` без active attempt | Owner transaction: READY + новый repair generation + неизменяемый idem receipt и audit; доменного execution/turn event нет, capture Get |
+| Same-key replay / потерянный ACK | Тот же actor/key/intent после fresh owner visibility; старый receipt, новый цикл не создаётся | Одно Get с исходным key; автоматического POST нет |
+| Claim / renew | Прежний artifact-retention lifecycle, новая attempt/fence; native lease не продлевается | Capture Get; самостоятельного execution event нет |
+| Retry exhaustion | Три попытки нового цикла; общий счётчик сохраняется | WAITING_OWNER, Tool/capture Get; без owner Gate и без turn continuation |
+| Publication | Все прежние immutable version/hash, AV, provenance и adoption checks | Canonical artifact lifecycle и capture Get; не native SUCCESS |
+| Stop / revoke execution | Execution закрывается прежним owner graph; принятый ACK-prefix не стирается и repair не открывает native transport | Прежний execution event/read path и capture/artifact history |
+| Retention expiry / superseded source / чужой actor | Закрытый отказ, counters/source не меняются | Capture Get по текущим правам; repair event отсутствует |
+
+Статус cleanup после исчерпания его отдельной квоты, полный purge/restore graph
+и установочная проверка worker/authority остаются самостоятельными обязательными
+частями unit; этот repair-путь не выдаёт их готовность из одного publication receipt.
+
+
+## Repairable publication и cleanup prepared content
+
+`WAITING_OWNER` у публикации не превращает её immutable one-PUT prepared intent
+в мусор. Если повторная owner attempt использует тот же уникальный intent,
+cleanup не удаляет и не маскирует его объект: новый PUT после unknown исхода
+не разрешается, а `CLEANED` не является подходящим replay для публикации.
+Prepared output освобождается после принятой публикации либо необратимых
+`REJECTED`/`SUPERSEDED`, при закрытом writer и отсутствии active attempt.
+Явное восстановление удаления меняет только cleanup cycle; общий счётчик,
+точный object receipt, предыдущие fences и accepted stream facts сохраняются.
+
+Проверки различают два сценария: восстановимая публикация сохраняет unknown
+prepared и затем сверяет прежнюю версию без нового PUT; obsolete publication
+освобождает только свой prepared object, не лишая successor accepted source.
+
+
+### Необратимая попытка и отдельная custody сверки
+
+Новая owner/lease generation после потерянного ACK не разрешает повторять
+необратимое внешнее действие. До IO owner устойчиво связывает attempt с exact
+immutable intent и версией объекта; ключ этой попытки не зависит от последующей
+worker generation. Смена custody выдаёт только право на авторитетную сверку уже
+допущенного действия. Ещё не начатые отдельные версии могут получить свои новые
+bounded attempts прежнего намерения без сброса прежней истории.
+
+Если SDK или adapter умеет retry, для такой attempt используется отдельный
+закрытый режим того же клиента с одной request attempt; fallback на обычный
+retrying метод запрещён. Обычные unrelated consumers сохраняют прежние retry
+гарантии. Pending intent/receipt удерживается до terminal owner reconciliation,
+а terminal readback сохраняет безопасную историю попыток после удаления locators.
+
+
+Параллельный purge родительского проекта не является запасным путём повторного
+внешнего Delete после UNKNOWN. Создание manual intent сериализуется project lock
+раньше собственных idempotency/aggregate locks; Trash/Purge/automatic due под
+exclusive project lock проверяет свежую pending custody. До terminal сверки
+сохраняются прежний project lifecycle и доступный readback с закрытой причиной,
+без выдачи owner abandonment либо нового effect. Другой явный typed intent
+требует отдельного источника полномочий и не возникает автоматически из retry.

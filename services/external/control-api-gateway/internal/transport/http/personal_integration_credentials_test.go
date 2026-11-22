@@ -19,6 +19,7 @@ import (
 // отсутствующим значением, проверяя required defaults штатной ProtoJSON projection.
 func personalCredentialHTTPFixture() *cp.PersonalIntegrationCredentialView {
 	return &cp.PersonalIntegrationCredentialView{ConnectionRef: "int_fixture01", BindingRef: "ipc_fixture01", Version: 4, ConnectionVersion: 7,
+		CredentialDeliveryKind: cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN, BindingGeneration: 1,
 		Policy: cp.IntegrationCredentialPolicy_INTEGRATION_CREDENTIAL_POLICY_INITIATOR_REQUIRED,
 		State:  cp.PersonalIntegrationCredentialState_PERSONAL_INTEGRATION_CREDENTIAL_STATE_NOT_CONFIGURED}
 }

@@ -28,6 +28,27 @@ for (const width of [1440, 390]) {
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
       if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
+      if (url.pathname === "/api/v1/provider-definitions") {
+        expect(route.request().method()).toBe("GET");
+        await route.fulfill({
+          json: {
+            items: [
+              {
+                key: current.providerDefinitionKey,
+                name: "Синтетический провайдер",
+                description: "",
+                authorizationMethods: ["API_KEY"],
+                modelIds: [current.id],
+                defaultModelId: current.id,
+                available: true,
+                ready: true,
+                readinessBlockers: [],
+              },
+            ],
+          },
+        });
+        return;
+      }
       if (url.pathname === "/api/v1/model-capabilities") {
         expect(url.searchParams.get("providerDefinitionKey")).toBe(
           "openai-codex",

@@ -5,6 +5,7 @@ import {
 import type {
   EmailMailboxCredential,
   EmailMailboxCredentialKind,
+  EmailMailboxOwnership,
   IntegrationConnection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { etag, idempotencyKey, mutate } from "@/shared/api/mutation";
@@ -44,15 +45,33 @@ export class MailboxCredentialMismatch extends Error {
   }
 }
 
+export function mailboxCredentialOwnerEligible(
+  connection: IntegrationConnection,
+  ownership: EmailMailboxOwnership | undefined,
+): boolean {
+  return (
+    connection.definitionKey === "email" &&
+    ["NOT_CONNECTED", "CONNECTED", "DEGRADED"].includes(connection.state) &&
+    !!ownership &&
+    ownership.connectionRef === connection.ref &&
+    ownership.connectionVersion === connection.version &&
+    ownership.deliveryKind === "MAILBOX_CONFIGURATION" &&
+    ownership.ownerEligible &&
+    ownership.state === "ACTIVE" &&
+    Number.isSafeInteger(ownership.generation) &&
+    ownership.generation > 0
+  );
+}
+
 export async function prepareMailboxCredential(
   connection: IntegrationConnection,
   kind: EmailMailboxCredentialKind,
   value: string,
+  ownership: EmailMailboxOwnership,
   pending?: MailboxCredentialAttempt,
 ): Promise<MailboxCredentialAttempt> {
   if (
-    connection.definitionKey !== "email" ||
-    !connection.nextActions.includes("CONFIGURE_CREDENTIAL") ||
+    !mailboxCredentialOwnerEligible(connection, ownership) ||
     !validMailboxCredential(kind, value)
   )
     throw new Error("Mailbox credential input is invalid");
@@ -60,13 +79,18 @@ export async function prepareMailboxCredential(
   // Сохраняем асинхронную границу для очистки ввода до отправки команды.
   await Promise.resolve();
   if (pending) {
-    if (pending.connectionRef !== connection.ref || pending.kind !== kind)
+    if (
+      pending.connectionRef !== connection.ref ||
+      pending.kind !== kind ||
+      pending.ownerGeneration !== ownership.generation
+    )
       throw new MailboxCredentialMismatch();
     return pending;
   }
   return {
     connectionRef: connection.ref,
     connectionVersion: connection.version,
+    ownerGeneration: ownership.generation,
     kind,
     key: idempotencyKey(),
   };
@@ -77,7 +101,11 @@ export async function saveMailboxCredential(
   value: string,
   signal: AbortSignal,
 ): Promise<EmailMailboxCredential> {
-  if (!validMailboxCredential(attempt.kind, value))
+  if (
+    !validMailboxCredential(attempt.kind, value) ||
+    !Number.isSafeInteger(attempt.ownerGeneration) ||
+    attempt.ownerGeneration < 1
+  )
     throw new Error("Mailbox credential input is invalid");
   const result = await mutate(
     (headers) =>

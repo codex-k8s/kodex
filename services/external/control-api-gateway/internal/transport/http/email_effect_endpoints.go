@@ -55,7 +55,7 @@ func (server *Server) GetEmailEffectReceipt(w http.ResponseWriter, r *http.Reque
 // потребляет свежее точное разрешение reconciliation в boundary и поручает решение владельцу. Pins
 // receipt и outcome ответа обязаны совпасть; путь записывает решение без повторной отправки почты.
 func (server *Server) ReconcileEmailEffect(w http.ResponseWriter, r *http.Request, ref generated.EmailEffectReceiptRef, p generated.ReconcileEmailEffectParams) {
-	body, ok := decodeJSON[generated.EmailReconciliationInput](w, r)
+	body, ok := decodeMailboxJSON[generated.EmailReconciliationInput](w, r)
 	if !ok {
 		return
 	}

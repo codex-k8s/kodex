@@ -109,6 +109,7 @@ interface State {
   recipientContextKey: Ref<string>;
   capabilityContextKey: Ref<string>;
   approvalScopePaths: Ref<string[]>;
+  kubernetesNamespace: Ref<string>;
   selectedApprovalPolicy: Ref<
     IntegrationCapability["approvalPolicy"] | undefined
   >;
@@ -554,4 +555,35 @@ it("Human Scoped требует явную область и смена policy �
   state.submit();
   const saved = emit.mock.calls.find(([name]) => name === "save");
   expect(saved?.[1]).not.toHaveProperty("approvalScopePaths");
+});
+
+it("Kubernetes требует явную namespace и очищает её при смене capability", async () => {
+  const { state, emit } = await panel({
+    ...connection,
+    definitionKey: "kubernetes-managed",
+    publicConfiguration: { target_ref: "target_example" },
+    credentialDelivery: {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "KUBERNETES_TARGET",
+    },
+  });
+  state.capabilityCandidate.value = {
+    ...capability,
+    capability: {
+      ...capability.capability,
+      operation: "kubernetes.get",
+      resourceKind: "KUBERNETES_TARGET",
+    },
+  };
+  emit.mockClear();
+  state.submit();
+  expect(emit.mock.calls.some(([name]) => name === "save")).toBe(false);
+  state.kubernetesNamespace.value = "example";
+  state.submit();
+  expect(emit).toHaveBeenCalledWith(
+    "save",
+    expect.objectContaining({ kubernetesNamespace: "example" }),
+  );
+  state.clearCapability();
+  expect(state.kubernetesNamespace.value).toBe("");
 });

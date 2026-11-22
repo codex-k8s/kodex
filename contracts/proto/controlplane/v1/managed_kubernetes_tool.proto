@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes_capture_public.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Исходный инициатор и текущая видимость run/Connection проверяются владельцем.
+// Этот интерфейс закрытия не выдаёт права на запуск и работает до создания stream.
+service ManagedKubernetesToolService {
+  rpc ListManagedKubernetesTools(ListManagedKubernetesToolsRequest) returns (ListManagedKubernetesToolsResponse);
+  rpc GetManagedKubernetesTool(GetManagedKubernetesToolRequest) returns (GetManagedKubernetesToolResponse);
+  rpc StopManagedKubernetesTool(StopManagedKubernetesToolRequest) returns (StopManagedKubernetesToolResponse);
+}
+
+enum ManagedKubernetesToolState {
+  MANAGED_KUBERNETES_TOOL_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_TOOL_STATE_READY = 1;
+  MANAGED_KUBERNETES_TOOL_STATE_WAITING_APPROVAL = 2;
+  MANAGED_KUBERNETES_TOOL_STATE_RUNNING = 3;
+  MANAGED_KUBERNETES_TOOL_STATE_SUCCEEDED = 4;
+  MANAGED_KUBERNETES_TOOL_STATE_FAILED = 5;
+  MANAGED_KUBERNETES_TOOL_STATE_REJECTED = 6;
+  MANAGED_KUBERNETES_TOOL_STATE_CANCELLED = 7;
+  MANAGED_KUBERNETES_TOOL_STATE_UNKNOWN_OUTCOME = 8;
+}
+
+// Состояние владельца не доказывает native join, remote exit или полноту output.
+// Ни credentials, ни private arguments/results в проекцию не входят.
+enum ManagedKubernetesToolSafeReasonCode {
+  MANAGED_KUBERNETES_TOOL_SAFE_REASON_CODE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_TOOL_SAFE_REASON_CODE_NONE = 1;
+  MANAGED_KUBERNETES_TOOL_SAFE_REASON_CODE_PORT_FORWARD_PROFILE_UNSUPPORTED = 2;
+}
+
+message ManagedKubernetesToolView {
+  string invocation_ref = 1;
+  string run_ref = 2;
+  string node_ref = 3;
+  string connection_ref = 4;
+  string target_ref = 5;
+  int64 target_revision = 6;
+  string operation = 7;
+  ManagedKubernetesToolState state = 8;
+  int64 version = 9;
+  bool waiting_for_gate = 10;
+  ManagedKubernetesToolSafeReasonCode safe_reason_code = 11;
+  repeated ManagedKubernetesCaptureSummary capture_statuses = 12;
+}
+
+message ListManagedKubernetesToolsRequest {
+  string run_ref = 1;
+  string node_ref = 2;
+  PageRequest page = 3;
+}
+message ListManagedKubernetesToolsResponse {
+  repeated ManagedKubernetesToolView items = 1;
+  PageInfo page = 2;
+}
+message GetManagedKubernetesToolRequest {
+  string invocation_ref = 1;
+}
+message GetManagedKubernetesToolResponse {
+  ManagedKubernetesToolView view = 1;
+}
+message StopManagedKubernetesToolRequest {
+  string invocation_ref = 1;
+  // Expected version относится к invocation; stream не обязан существовать.
+  MutationContext mutation = 2;
+}
+message StopManagedKubernetesToolResponse {
+  ManagedKubernetesToolView view = 1;
+}

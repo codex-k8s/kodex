@@ -84,6 +84,13 @@ func (repository *Repository) changeEmailMailbox(ctx context.Context, tx pgx.Tx,
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if input.Kind == command.CreateEmailMailboxDraft || input.Kind == command.SaveEmailMailboxDraft {
+		owner, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		if owner.state != "ACTIVE" {
+			return commandOutcome{}, errs.ErrForbidden
+		}
 		specification, err := emailpolicy.DecodeSpecification(payload.Managed.ContentFormat, payload.Managed.Content)
 		if err != nil {
 			return commandOutcome{}, errs.ErrInvalid
@@ -158,9 +165,16 @@ func (repository *Repository) validateEmailMailboxRevision(ctx context.Context, 
 	if err := tx.QueryRow(ctx, queryEmailCredentialLock, current.organizationID, connectionRef).Scan(&connectionID, &connectionVersion); err != nil {
 		return nil, errs.ErrUnavailable
 	}
+	owner, err := requireEmailMailboxManagerTx(ctx, tx, current, connectionRef)
+	if err != nil {
+		return nil, err
+	}
+	if owner.state != "ACTIVE" {
+		return invalid(emailpolicy.DiagnosticCredential)
+	}
 	mailbox, err := emailpolicy.MaterializeMailbox(specification, emailpolicy.MailboxBinding{
 		Ref: mailboxRef, OrganizationRef: current.organizationRef, ConnectionRef: connectionRef,
-		Revision: revision.Revision, CredentialGeneration: connectionVersion,
+		Revision: revision.Revision, CredentialGeneration: connectionVersion, CredentialOwnerGeneration: owner.owner.Generation,
 	})
 	if err != nil {
 		return invalid(emailpolicy.DiagnosticConfiguration)

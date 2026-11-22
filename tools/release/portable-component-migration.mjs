@@ -1,6 +1,15 @@
+import {workflowFileProvenanceMigration,isWorkflowFileProvenanceMigrationProfile} from './workflow-file-provenance-migration-contract.mjs';
+import {artifactGrantCatalogRequired,artifactGrantCatalogReceipt,artifactGrantSchemaCommand,artifactGrantSchemaJobName} from './artifact-retention-grant-catalog.mjs';
+import {personalArtifactGrantRepairSpec} from './personal-integrations-artifact-grant-repair.mjs';
+import {personalArtifactSocketRepairSpec} from './personal-integrations-artifact-socket-repair.mjs';
+import {personalIntegrationsArtifactSpecMatches} from './personal-integrations-artifact-spec.mjs';
+import {legacyPersonalStagedInputsSchema,personalStagedInputsSchema,stageArtifactRetentionIssuerSpec,stagePersonalIntegrationsControlPlaneSpec} from './artifact-retention-issuer-inputs.mjs';
+import {isPersonalIntegrationsMigrationProfile,requirePersonalIntegrationsDeliveryPrerequisite,validPersonalIntegrationsAuthoritySchemaHeads} from './personal-integrations-migration-contract.mjs';
 import {telegramStagedPolicyProtocol} from './telegram-cp-policy.mjs';
 import {telegramDeploymentInputs} from './telegram-runtime-inputs.mjs';
 import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
+import {personalIntegrationsAuthorityReadbackContract} from './authority-personal-integrations-source.mjs';
+import {stagePersonalIntegrationsCPPolicy,ensurePersonalIntegrationsPolicyProjection,readPersonalIntegrationsPolicyProjection} from './personal-integrations-cp-policy.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import { createHash } from 'node:crypto';
 import { fingerprint, withPrivatePatchFile } from './scoped-release.mjs';
@@ -14,13 +23,22 @@ const sha = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const revision = value => typeof value === 'string' && /^[a-f0-9]{40}$/.test(value) && value !== '0'.repeat(40);
 const uid = value => typeof value === 'string' && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(value);
 const image = value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$/.test(value) && !value.includes('/../');
+const integrationGatewayShutdownGraceSeconds = 60;
 // Ограниченный полный manifest: единый byte budget publisher и consumer.
 export const componentImageLockMaxBytes = 128 << 10;
 export const componentImageLockMaxBase64 = 4 * Math.ceil(componentImageLockMaxBytes / 3);
+const extendedComponentImageLockMaxBytes = 640 << 10;
 export const componentPublicationMaxBytes = 2 << 20;
 export const componentMigrationSchema = 'kodex.portable-component-migration/v1';
 export const componentMigrationCohortSchema = 'kodex.portable-component-migration/v2';
 const profiles = Object.freeze({
+  [workflowFileProvenanceMigration.profile]: Object.freeze({schema:componentMigrationCohortSchema,
+    before:workflowFileProvenanceMigration.before,after:workflowFileProvenanceMigration.after,contract:'WORKFLOW_FILE_PROVENANCE_UPGRADE',
+    components:Object.freeze(['control-plane']),maintenanceOnly:Object.freeze(['control-api-gateway'])}),
+  'personal-integrations': Object.freeze({schema:componentMigrationCohortSchema,before:20261114140000,after:20261114170000,
+    contract:'PERSONAL_INTEGRATIONS_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center','secret-broker','email-bridge','egress-gateway','artifact-retention'])}),
+  'personal-integrations-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114140000,after:20261114170000,
+    contract:'PERSONAL_INTEGRATIONS_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center','secret-broker','email-bridge','egress-gateway','artifact-retention'])}),
   'telegram-notifications': Object.freeze({schema:componentMigrationCohortSchema,before:20261114130000,after:20261114140000,
     contract:'TELEGRAM_NOTIFICATIONS_UPGRADE',introduced:'interaction-gateway',components:Object.freeze(['control-plane','control-api-gateway','staff-control-center','egress-gateway','interaction-gateway'])}),
   'telegram-notifications-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261114130000,after:20261114140000,
@@ -36,7 +54,7 @@ const profiles = Object.freeze({
   'github-repository-scope-backup': Object.freeze({schema:componentMigrationCohortSchema,before:20261113000100,after:20261114120000,
     contract:'GITHUB_REPOSITORY_SCOPE_UPGRADE',components:Object.freeze(['control-plane','runtime-controller','integration-gateway','control-api-gateway','staff-control-center'])}),
 });
-const componentSources = Object.freeze({'control-plane':'services/internal/control-plane/',
+const componentSources = Object.freeze({'artifact-retention':'services/jobs/artifact-retention/','secret-broker':'services/internal/secret-broker/','email-bridge':'services/internal/email-bridge/','control-plane':'services/internal/control-plane/',
   'egress-gateway':'services/external/egress-gateway/','interaction-gateway':'services/external/interaction-gateway/',
   'runtime-controller':'services/internal/runtime-controller/','integration-gateway':'services/external/integration-gateway/',
   'control-api-gateway':'services/external/control-api-gateway/','staff-control-center':'services/staff/control-center/'});
@@ -44,18 +62,33 @@ const names = Object.keys(componentSources);
 
 // Реестр закрыт: имя schema или произвольный массив компонентов не добавляют профиль.
 export const isComponentMigrationProfile = profile => Object.hasOwn(profiles,profile);
+const supportsRoutineAPIRestoration=profile=>isWorkflowFileProvenanceMigrationProfile(profile)||
+  ['sentry-observability','sentry-observability-backup'].includes(profile);
 export const isComponentMigrationPublication = value => value?.schema === componentMigrationSchema || value?.schema === componentMigrationCohortSchema;
+// Personal cohort и 051 сохраняют полный Git manifest от исходного release lock.
+// Aggregate budget и прежние профили сохраняют свои отдельные пределы.
+export function componentImageLockBudget(profile) {
+  requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
+  const extended=isPersonalIntegrationsMigrationProfile(profile)||isWorkflowFileProvenanceMigrationProfile(profile);
+  const bytes=extended?extendedComponentImageLockMaxBytes:componentImageLockMaxBytes;
+  return {bytes,base64:4*Math.ceil(bytes/3)};
+}
 export function componentMigrationNames(profile) {
   requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
   return [...profiles[profile].components];
 }
+// Сервис, который только останавливается, участвует в handoff без новой публикации образа.
+export function componentMigrationHandoffNames(profile) {
+  return [...componentMigrationNames(profile),...(profiles[profile].maintenanceOnly??[])];
+}
+
 // Producer использует тот же закрытый профиль и корни исходников, что consumer.
 export function componentMigrationConfiguration(profile) {
   requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
   return {...structuredClone(profiles[profile]),sources:{...componentSources}};
 }
 export function componentMigrationTargetNames(profile) {
-  return [...new Set([...componentMigrationNames(profile),'control-api-gateway'])];
+  return [...new Set([...componentMigrationHandoffNames(profile),'control-api-gateway'])];
 }
 
 // Только installation profile: его producer deployment_profile.py использует
@@ -73,7 +106,7 @@ function installationProfileFingerprint(profile) {
 export function componentMigrationPublication(value, source, profile = 'workspace-unbound-stop') {
   requireValue(Buffer.byteLength(JSON.stringify(value)??'') <= componentPublicationMaxBytes, 'COMPONENT_MIGRATION_PUBLICATION_TOO_LARGE');
   requireValue(isComponentMigrationProfile(profile),'COMPONENT_MIGRATION_PROFILE_INVALID');
-  const configuration=profiles[profile], componentsNames=configuration.components;
+  const configuration=profiles[profile], componentsNames=configuration.components,lockBudget=componentImageLockBudget(profile);
   const extended=configuration.schema === componentMigrationCohortSchema;
   requireValue(fields(value, ['schema','profile','context','clusterUID','namespaceUID','baseSourceSHA','baseReleaseLockSHA256',
     'schemaHeadsBefore','schemaHeadsAfter','runtimeABI','runnerInput','registry','repositoryPrefix','nodeUIDs','components',...(extended?['baseSchemaHeads']:[]),...(configuration.introduced?['introducedReceiver']:[])]) &&
@@ -92,8 +125,8 @@ export function componentMigrationPublication(value, source, profile = 'workspac
   // Seal описывает исходную полную установку. Текущий predecessor проверяется
   // отдельно полным PG catalog; после043 исходный seal042 не переписывается.
   if (extended) requireValue(fields(value.baseSchemaHeads,schemaKeys) &&
-    [20261112000100,20261113000100].includes(value.baseSchemaHeads['control-plane']) &&
-    schemaKeys.filter(k=>k!=='control-plane').every(k=>value.baseSchemaHeads[k]===value.schemaHeadsBefore[k]),'COMPONENT_MIGRATION_BASE_SCHEMA_INVALID');
+    (isPersonalIntegrationsMigrationProfile(profile)?[20261112000100,20261113000100,20261114140000]:[20261112000100,20261113000100]).includes(value.baseSchemaHeads['control-plane']) &&
+    ((isPersonalIntegrationsMigrationProfile(profile)||isWorkflowFileProvenanceMigrationProfile(profile))?validPersonalIntegrationsAuthoritySchemaHeads(value.baseSchemaHeads,value.schemaHeadsBefore,value.schemaHeadsAfter):schemaKeys.filter(k=>k!=='control-plane').every(k=>value.baseSchemaHeads[k]===value.schemaHeadsBefore[k])),'COMPONENT_MIGRATION_BASE_SCHEMA_INVALID');
   requireValue(Array.isArray(value.nodeUIDs) && value.nodeUIDs.length > 0 && value.nodeUIDs.length <= 64 &&
     value.nodeUIDs.every(uid) && new Set(value.nodeUIDs).size === value.nodeUIDs.length &&
     Array.isArray(value.components) && value.components.length === componentsNames.length &&
@@ -101,9 +134,9 @@ export function componentMigrationPublication(value, source, profile = 'workspac
   const components = value.components.map(part => {
     requireValue(fields(part,['component','expectedImageRef','componentLockRawBase64','componentLockSHA256','nodeProof']) &&
       image(part.expectedImageRef) && sha(part.componentLockSHA256) && typeof part.componentLockRawBase64 === 'string' &&
-      part.componentLockRawBase64.length <= componentImageLockMaxBase64, 'COMPONENT_MIGRATION_LOCK_INVALID');
+      part.componentLockRawBase64.length <= lockBudget.base64, 'COMPONENT_MIGRATION_LOCK_INVALID');
     const raw = Buffer.from(part.componentLockRawBase64,'base64');
-    requireValue(raw.length > 0 && raw.length <= componentImageLockMaxBytes && raw.toString('base64') === part.componentLockRawBase64 &&
+    requireValue(raw.length > 0 && raw.length <= lockBudget.bytes && raw.toString('base64') === part.componentLockRawBase64 &&
       createHash('sha256').update(raw).digest('hex') === part.componentLockSHA256, 'COMPONENT_MIGRATION_LOCK_HASH_INVALID');
     let lock;
     try { lock = JSON.parse(raw.toString('utf8')); } catch { throw Error('COMPONENT_MIGRATION_LOCK_INVALID'); }
@@ -181,12 +214,14 @@ export function componentMigrationTarget(target, publication, observed) {
       !actual.metadata.deletionTimestamp && actual.status?.conditions?.some(v => v.type === 'Ready' && v.status === 'True')))), 'COMPONENT_MIGRATION_TARGET_MISMATCH');
   const gateway = observed.deployments.find(d => d.metadata.name === 'control-api-gateway');
   const readers=observed.maintenanceReaders,opened=observed.apiRestoration;
-  if(opened)requireValue(['sentry-observability','sentry-observability-backup'].includes(publication.profile)&&!readers&&
+  if(opened)requireValue(supportsRoutineAPIRestoration(publication.profile)&&!readers&&
     opened.uid===gateway.metadata.uid&&opened.proof?.deploymentUID===gateway.metadata.uid&&
     opened.proof.specSHA256===fingerprint(gateway.spec)&&fingerprint(opened.spec)===fingerprint(gateway.spec)&&
     opened.replicas===gateway.spec.replicas&&opened.replicas===opened.proof.replicas&&Number.isSafeInteger(opened.replicas)&&opened.replicas>=1&&opened.replicas<=8,
     'COMPONENT_MIGRATION_API_RESTORATION_INVALID');
-  else requireValue(gateway.spec.replicas===0 || profiles[publication.profile].introduced&&['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&
+  else requireValue(gateway.spec.replicas===0 ||
+    (isPersonalIntegrationsMigrationProfile(publication.profile)?['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY'].includes(readers?.state):
+      profiles[publication.profile].introduced&&['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state))&&
     readers.sourceSHA===observed.sourceRevision&&readers.deploymentUID===gateway.metadata.uid&&
     fingerprint(readers.spec)===fingerprint(gateway.spec),'COMPONENT_MIGRATION_MAINTENANCE_REQUIRED');
   return {...validated,targetSHA256:scope.digest};
@@ -194,14 +229,33 @@ export function componentMigrationTarget(target, publication, observed) {
 
 // Предыдущие env/volumes/sidecars остаются точными; только source/image пары
 // изменяются между stopped template и возобновлением исходного числа реплик.
-export function planComponentMigrationHandoff(publication, deployments, source, runtimeInputs) {
+export function planComponentMigrationHandoff(publication, deployments, source, runtimeInputs, personalInputs) {
   const validated = componentMigrationPublication(publication,source,publication.profile);
   requireValue(!runtimeInputs||profiles[publication.profile].introduced&&runtimeInputs.sourceSHA===source.revision&&
     ['kodex.telegram-runtime-inputs/v1','kodex.telegram-runtime-inputs/v2'].includes(runtimeInputs.schema),'TELEGRAM_RUNTIME_INPUT_SCOPE_INVALID');
+  requireValue(!personalInputs||isPersonalIntegrationsMigrationProfile(publication.profile)&&
+    [legacyPersonalStagedInputsSchema,personalStagedInputsSchema].includes(personalInputs.schema)&&personalInputs.sourceSHA===source.revision&&
+    personalInputs.issuerInputs?.sourceSHA===source.revision&&personalInputs.authority?.schema==='kodex.personal-integrations-authority-image/v1'&&
+    personalInputs.authority.sourceSHA===source.revision&&sha(personalInputs.authority.publicationSHA256)&&sha(personalInputs.authority.nodeProofSHA256),
+    'PERSONAL_INTEGRATIONS_STAGED_INPUTS_REJECTED');
   return {schema:'kodex.component-migration-handoff/v1',publicationSHA256:validated.digest,
+    ...(personalInputs?{personalInputsSHA256:fingerprint(personalInputs)}:{}),
     ...(profiles[publication.profile].introduced?{introducedReadiness:telegramStagedPolicyProtocol}:{}),
     ...(runtimeInputs?{runtimeInputsSHA256:fingerprint(runtimeInputs)}:{}),
-    components:validated.components.map(part => {
+    components:componentMigrationHandoffNames(publication.profile).map(name => {
+      const part=validated.components.find(entry=>entry.component===name);
+      if(!part){
+        const matches=deployments.filter(d=>d.kind==='Deployment'&&d.metadata.name===name&&d.metadata.namespace==='kodex-system');
+        requireValue(matches.length===1,'COMPONENT_MIGRATION_HANDOFF_SCOPE_INVALID');
+        const before=matches[0], spec=before.spec;
+        const mains=spec?.template?.spec?.containers?.filter(c=>c.name===name);
+        requireValue(uid(before.metadata.uid)&&/^\d+$/.test(before.metadata.resourceVersion??'')&&
+          spec?.replicas===0&&!spec.paused&&before.status?.observedGeneration>=before.metadata.generation&&
+          ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k=>(before.status[k]??0)===0)&&
+          mains?.length===1&&image(mains[0].image),'COMPONENT_MIGRATION_HANDOFF_HEALTH_REQUIRED');
+        return {name,uid:before.metadata.uid,replicas:0,maintenance:true,maintenanceOnly:true,
+          beforeSpec:structuredClone(spec),stoppedSpec:structuredClone(spec),stagedSpec:structuredClone(spec),resumedSpec:structuredClone(spec)};
+      }
       const matches = deployments.filter(d => d.kind === 'Deployment' && d.metadata.name === part.component && d.metadata.namespace === 'kodex-system');
       requireValue(matches.length === 1,'COMPONENT_MIGRATION_HANDOFF_SCOPE_INVALID');
       const before = matches[0], count = before.spec?.replicas;
@@ -213,10 +267,22 @@ export function planComponentMigrationHandoff(publication, deployments, source, 
         ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(k => (before.status[k] ?? (maintenance||introduced?0:undefined)) === count), 'COMPONENT_MIGRATION_HANDOFF_HEALTH_REQUIRED');
       if(introduced)requireValue(before.metadata.uid===proof.deploymentUID&&fingerprint(before.spec)===proof.specSHA256,'TELEGRAM_INTRODUCTION_HANDOFF_CHANGED');
       const stopped = structuredClone(before.spec);stopped.replicas=0;
-      const staged = structuredClone(stopped);
+      let staged = structuredClone(stopped);
       const mains = staged.template.spec.containers.filter(c => c.name === part.component);
       requireValue(mains.length === 1 && mains[0].image === part.expectedImageRef,'COMPONENT_MIGRATION_HANDOFF_PREDECESSOR_INVALID');
       mains[0].image=part.imageRef;
+      if(personalInputs&&part.component==='artifact-retention')staged=stageArtifactRetentionIssuerSpec(stopped,personalInputs.issuerInputs,part.imageRef,personalInputs.authority.imageRef,personalInputs.schema);
+      if(personalInputs&&part.component==='control-plane'){
+        requireValue(personalInputs.cpPolicy?.deploymentUID===before.metadata.uid,'PERSONAL_INTEGRATIONS_CP_POLICY_SCOPE_CHANGED');
+        staged=stagePersonalIntegrationsCPPolicy(stagePersonalIntegrationsControlPlaneSpec(staged),personalInputs.cpPolicy);
+      }
+      if(personalInputs&&part.component==='integration-gateway'){
+        const pod=staged.template.spec,grace=pod.terminationGracePeriodSeconds??30;
+        requireValue(Number.isSafeInteger(grace)&&grace>=0,'PERSONAL_INTEGRATIONS_GATEWAY_SHUTDOWN_GRACE_INVALID');
+        // Повторяет минимальный бюджет canonical lifecycle patch и сохраняет
+        // больший ранее настроенный срок для положительного process join.
+        pod.terminationGracePeriodSeconds=Math.max(grace,integrationGatewayShutdownGraceSeconds);
+      }
       const annotations = introduced ? {} : (staged.template.metadata ??= {});
       const values = annotations.annotations ??= {};
       if(!introduced)delete values['kodex.dev/component-image-profile-sha256'];
@@ -256,7 +322,12 @@ export function componentServingInventory(list, name, deploymentUID) {
         ['up-sentry-observability','up-sentry-observability-backup-maintenance'].includes(main.args[0]) &&
         ['control-plane-migrate-20261114130000','control-plane-migrate-20261114130000-attempt2'].includes(job.metadata.name) ||
         ['up-telegram-notifications','up-telegram-notifications-backup-maintenance'].includes(main.args[0]) &&
-        ['control-plane-migrate-20261114140000','control-plane-migrate-20261114140000-attempt2'].includes(job.metadata.name));
+        ['control-plane-migrate-20261114140000','control-plane-migrate-20261114140000-attempt2'].includes(job.metadata.name) ||
+        ['up-personal-integrations','up-personal-integrations-backup-maintenance'].includes(main.args[0]) &&
+        ['control-plane-migrate-20261114170000','control-plane-migrate-20261114170000-attempt2'].includes(job.metadata.name) ||
+        main.args[0]===artifactGrantSchemaCommand&&job.metadata.name===artifactGrantSchemaJobName&&
+        sha(job.metadata.annotations?.['kodex.dev/artifact-grant-schema-release']) ||
+        main.args[0]===workflowFileProvenanceMigration.command&&job.metadata.name==='control-plane-migrate-'+workflowFileProvenanceMigration.after);
     const bootstrap=labels['app.kubernetes.io/component'] === 'broker-bootstrap' && job.metadata.name === 'control-plane-broker-bootstrap' &&
       spec?.serviceAccountName === 'control-plane-broker-bootstrap' && main?.name === 'bootstrap' &&
       Array.isArray(main.args) && main.args.length === 2 && main.args[0] === 'broker' && main.args[1] === 'bootstrap';
@@ -282,37 +353,58 @@ export function componentServingInventory(list, name, deploymentUID) {
 
 // Spec и annotations соседних workloads не входят в namespace discovery.
 // Полные Pod/Job читаются отдельно и связываются с UID/lineage первого snapshot.
-export function readComponentServingInventory(kube, name, deploymentUID) {
-  const validName=value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]{0,252}$/.test(value);
-  const projection='{range .items[*]}{.kind}{"\\t"}{.metadata.name}{"\\t"}{.metadata.uid}{"\\t"}' +
-    '{.metadata.labels.app\\.kubernetes\\.io/name}{"\\t"}{.metadata.namespace}{"\\t"}{.metadata.ownerReferences}{"\\n"}{end}';
-  const metadata=() => {
-    const text=kube(['-n','kodex-system','get','replicasets,pods,jobs','-o','jsonpath='+projection]);
-    requireValue(Buffer.byteLength(text) < 1 << 20, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
-    const lines=text.split('\n').filter(line => line !== '');
-    requireValue(lines.length <= 4096, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
-    const items=lines.map(line => {
-      const fields=line.split('\t'), [kind,resourceName,resourceUID,app,namespace,owners]=fields;
-      requireValue(fields.length === 6 && ['Pod','ReplicaSet','Job'].includes(kind) && namespace === 'kodex-system' &&
-        validName(resourceName) && resourceUID && !/\s/.test(resourceUID), 'COMPONENT_MIGRATION_METADATA_INVALID');
-      const ownerReferences=owners ? JSON.parse(owners) : [];
-      requireValue(Array.isArray(ownerReferences), 'COMPONENT_MIGRATION_METADATA_INVALID');
-      return {kind,metadata:{name:resourceName,uid:resourceUID,namespace,labels:{'app.kubernetes.io/name':app},ownerReferences}};
-    });
-    requireValue(new Set(items.map(r => r.kind+'/'+r.metadata.name)).size === items.length, 'COMPONENT_MIGRATION_METADATA_INVALID');
-    return items;
-  };
-  const scoped=items => {
-    const sets=items.filter(r => r.kind === 'ReplicaSet' && r.metadata.ownerReferences.some(o =>
-      o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID));
-    const owners=new Set(sets.map(r => r.metadata.uid));
-    const pods=items.filter(r => r.kind === 'Pod' && (r.metadata.labels['app.kubernetes.io/name'] === name ||
-      r.metadata.ownerReferences.some(o => o.kind === 'ReplicaSet' && o.controller === true && owners.has(o.uid))));
-    const jobs=new Set(pods.flatMap(p => p.metadata.ownerReferences.filter(o => o.kind === 'Job' && o.controller === true).map(o => o.name)));
-    return [...sets,...pods,...items.filter(r => r.kind === 'Job' && jobs.has(r.metadata.name))]
-      .sort((a,b) => (a.kind+'/'+a.metadata.name).localeCompare(b.kind+'/'+b.metadata.name));
-  };
-  const first=scoped(metadata()), items=first.filter(r => r.kind === 'ReplicaSet'), jobs=new Map();
+const validName=value => typeof value === 'string' && /^[a-z0-9][a-z0-9.-]{0,252}$/.test(value);
+const namespaceMetadataProjection='{range .items[*]}{.kind}{"\\t"}{.metadata.name}{"\\t"}{.metadata.uid}{"\\t"}' +
+    '{.metadata.labels.app\\.kubernetes\\.io/name}{"\\t"}{.metadata.namespace}{"\\t"}{.metadata.ownerReferences}';
+function readComponentNamespaceMetadata(kube,withVersion=false){
+  const projection=namespaceMetadataProjection+(withVersion?'{"\\t"}{.metadata.resourceVersion}':'')+'{"\\n"}{end}';
+  const text=kube(['-n','kodex-system','get','replicasets,pods,jobs','-o','jsonpath='+projection]);
+  requireValue(Buffer.byteLength(text) < 1 << 20, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
+  const lines=text.split('\n').filter(line => line !== '');
+  requireValue(lines.length <= 4096, 'COMPONENT_MIGRATION_METADATA_BOUND_EXCEEDED');
+  const items=lines.map(line => {
+    const fields=line.split('\t'), [kind,resourceName,resourceUID,app,namespace,owners,resourceVersion]=fields;
+    requireValue(fields.length === (withVersion ? 7 : 6) && ['Pod','ReplicaSet','Job'].includes(kind) && namespace === 'kodex-system' &&
+      (!withVersion || typeof resourceVersion === 'string' && /^[0-9]+$/.test(resourceVersion)) && validName(resourceName) && resourceUID && !/\s/.test(resourceUID), 'COMPONENT_MIGRATION_METADATA_INVALID');
+    const ownerReferences=owners ? JSON.parse(owners) : [];
+    requireValue(Array.isArray(ownerReferences), 'COMPONENT_MIGRATION_METADATA_INVALID');
+    return {kind,metadata:{name:resourceName,uid:resourceUID,namespace,labels:{'app.kubernetes.io/name':app},ownerReferences,...(withVersion?{resourceVersion}:{})}};
+  });
+  requireValue(new Set(items.map(r => r.kind+'/'+r.metadata.name)).size === items.length, 'COMPONENT_MIGRATION_METADATA_INVALID');
+  return items;
+}
+
+export function scopeComponentNamespaceMetadata(items,name,deploymentUID){
+  const sets=items.filter(r => r.kind === 'ReplicaSet' && r.metadata.ownerReferences.some(o =>
+    o.kind === 'Deployment' && o.controller === true && o.uid === deploymentUID));
+  const owners=new Set(sets.map(r => r.metadata.uid));
+  const pods=items.filter(r => r.kind === 'Pod' && (r.metadata.labels['app.kubernetes.io/name'] === name ||
+    r.metadata.ownerReferences.some(o => o.kind === 'ReplicaSet' && o.controller === true && owners.has(o.uid))));
+  const jobs=new Set(pods.flatMap(p => p.metadata.ownerReferences.filter(o => o.kind === 'Job' && o.controller === true).map(o => o.name)));
+  return [...sets,...pods,...items.filter(r => r.kind === 'Job' && jobs.has(r.metadata.name))]
+    .sort((a,b) => (a.kind+'/'+a.metadata.name).localeCompare(b.kind+'/'+b.metadata.name));
+}
+
+// Общая exact discovery проверка для прежнего kubectl reader и отдельного
+// metadata-only adapter. Наличие metadata не заменяет полный Pod/Job read.
+export function verifyComponentServingPodDiscovery(pin,pod,{scopeProof=false}={}){
+  requireValue(pod?.kind === 'Pod' && pod.metadata?.namespace === pin.metadata.namespace && pod.metadata.name === pin.metadata.name &&
+    pod.metadata.uid === pin.metadata.uid && (pod.metadata.labels?.['app.kubernetes.io/name'] ?? '') === pin.metadata.labels['app.kubernetes.io/name'] &&
+    (!scopeProof || pod.metadata.resourceVersion === pin.metadata.resourceVersion) &&
+    fingerprint(pod.metadata.ownerReferences ?? []) === fingerprint(pin.metadata.ownerReferences), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+  return pod;
+}
+
+export function verifyComponentServingJobDiscovery(pin,owner,job,{scopeProof=false}={}){
+  requireValue(pin.metadata.uid === owner.uid, 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+  if(job)requireValue(job.kind === 'Job' && job.metadata?.name === owner.name && job.metadata.namespace === 'kodex-system' &&
+    job.metadata.uid === owner.uid && (!scopeProof || job.metadata.resourceVersion === pin.metadata.resourceVersion), 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+  return job;
+}
+
+export function readComponentServingInventory(kube,name,deploymentUID,{scopeProof=false}={}) {
+  const metadata=()=>scopeComponentNamespaceMetadata(readComponentNamespaceMetadata(kube,scopeProof),name,deploymentUID);
+  const first=metadata(), items=first.filter(r => r.kind === 'ReplicaSet'), jobs=new Map();
   const full=(kind,resourceName) => {
     requireValue(['pod','job'].includes(kind) && validName(resourceName), 'COMPONENT_MIGRATION_METADATA_INVALID');
     const text=kube(['-n','kodex-system','get',kind,resourceName,'--ignore-not-found=true','-o','jsonpath={@}']);
@@ -321,22 +413,20 @@ export function readComponentServingInventory(kube, name, deploymentUID) {
   };
   for (const pin of first.filter(r => r.kind === 'Pod')) {
     const pod=full('pod',pin.metadata.name);
-    requireValue(pod?.kind === 'Pod' && pod.metadata?.namespace === pin.metadata.namespace && pod.metadata.name === pin.metadata.name &&
-      pod.metadata.uid === pin.metadata.uid && (pod.metadata.labels?.['app.kubernetes.io/name'] ?? '') === pin.metadata.labels['app.kubernetes.io/name'] &&
-      fingerprint(pod.metadata.ownerReferences ?? []) === fingerprint(pin.metadata.ownerReferences), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+    verifyComponentServingPodDiscovery(pin,pod,{scopeProof});
     items.push(pod);
     for (const owner of pod.metadata.ownerReferences ?? []) if (owner.controller === true && owner.kind === 'Job' && !jobs.has(owner.name)) {
       const pin=first.find(r => r.kind === 'Job' && r.metadata.name === owner.name);
       if (!pin) {jobs.set(owner.name,undefined);continue;}
-      requireValue(pin.metadata.uid === owner.uid, 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+      verifyComponentServingJobDiscovery(pin,owner,undefined,{scopeProof});
       const job=full('job',owner.name);
-      if (job) requireValue(job.kind === 'Job' && job.metadata?.name === owner.name && job.metadata.namespace === 'kodex-system' &&
-        job.metadata.uid === owner.uid, 'COMPONENT_MIGRATION_JOB_DISCOVERY_CHANGED');
+      verifyComponentServingJobDiscovery(pin,owner,job,{scopeProof});
       jobs.set(owner.name,job);
     }
   }
-  requireValue(fingerprint(scoped(metadata())) === fingerprint(first), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
-  return componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
+  requireValue(fingerprint(metadata()) === fingerprint(first), 'COMPONENT_MIGRATION_POD_DISCOVERY_CHANGED');
+  const inventory=componentServingInventory({items:[...items,...[...jobs.values()].filter(Boolean)]},name,deploymentUID);
+  return scopeProof?{...inventory,scopeSHA256:fingerprint(first)}:inventory;
 }
 
 // Pending reader не получает READY, но его наблюдаемый Pod проверяется
@@ -377,12 +467,51 @@ export function componentServingReady(actual,pods,expectedReplicas) {
 
 // Journal принадлежит исходному migration protocol. Пара не получает ни собственного
 // DDL/retry loop, ни права оживить прежний бинарник после успешного forward043.
-export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair,egressRevisionRepair,validateEgressRevisionRepair}) {
-  const namespace='kodex-system', names=componentMigrationNames(plan.imageEvidence.profile);
+// Сверяем весь уже обследованный cohort после финального owner readback
+// двумя bounded списками. Identity, точный spec и readiness каждого активного
+// Pod проверяются ещё раз, без повторного чтения terminal history по одному.
+export function verifyPersonalReaderSnapshots(kube,snapshots){
+  const load=(kind,expected)=>{
+    const output=kube(['-n','kodex-system','get',kind,...expected.map(item=>item.metadata.name),'-o','json']);
+    requireValue(Buffer.byteLength(output) < 8 << 20, 'COMPONENT_MIGRATION_OBJECT_BOUND_EXCEEDED');
+    const list=JSON.parse(output);
+    const items=list.items??[list];
+    requireValue(items.length===expected.length&&new Set(items.map(item=>item.metadata?.name)).size===items.length,
+      'PERSONAL_INTEGRATIONS_COHORT_READERS_CHANGED');
+    return new Map(items.map(item=>[item.metadata.name,item]));
+  };
+  const deployments=load('deployments',snapshots.map(state=>state.actual));
+  const pods=load('pods',snapshots.flatMap(state=>state.pods));
+  const namespaceMetadata=readComponentNamespaceMetadata(kube,true);
+  for(const state of snapshots){
+    const name=state.actual.metadata.name, d=deployments.get(name);
+    requireValue(state.scopeSHA256===fingerprint(scopeComponentNamespaceMetadata(namespaceMetadata,name,state.actual.metadata.uid)),
+      'PERSONAL_INTEGRATIONS_COHORT_READERS_CHANGED');
+    requireValue(d?.kind==='Deployment'&&d.metadata?.uid===state.actual.metadata.uid&&d.metadata.namespace==='kodex-system'&&!d.metadata.deletionTimestamp&&
+      fingerprint(d.metadata.annotations??{})===fingerprint(state.actual.metadata.annotations??{})&&
+      fingerprint(d.metadata.labels??{})===fingerprint(state.actual.metadata.labels??{})&&
+      fingerprint(d.spec)===fingerprint(state.actual.spec)&&d.status?.replicas===state.actual.status?.replicas&&
+      d.status?.updatedReplicas===state.actual.status?.updatedReplicas&&d.metadata.generation===state.actual.metadata.generation,
+      'PERSONAL_INTEGRATIONS_COHORT_READERS_CHANGED');
+    const current=state.pods.map(before=>{
+      const pod=pods.get(before.metadata.name);
+      requireValue(pod?.kind==='Pod'&&pod.metadata?.uid===before.metadata.uid&&pod.metadata.namespace==='kodex-system'&&
+        pod.metadata.resourceVersion===before.metadata.resourceVersion&&
+        fingerprint(pod.metadata.ownerReferences)===fingerprint(before.metadata.ownerReferences)&&
+        fingerprint(pod.metadata.labels)===fingerprint(before.metadata.labels),'PERSONAL_INTEGRATIONS_COHORT_READERS_CHANGED');
+      return pod;
+    });
+    requireValue(componentServingReady(d,current,state.actual.spec.replicas),'PERSONAL_INTEGRATIONS_COHORT_READERS_NOT_READY');
+  }
+}
+
+export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,readOwnerSQL,validateInputs,activePods,wait,clock,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,readPersonalAuthority,bindPersonalExecutor=()=>{},validateHandoff=async()=>{},prepareRuntimeInputs,readCPProjection,apiRestoration,effectiveHandoff,effectiveInputs,observabilityRepair,validateObservabilityRepair,egressRevisionRepair,validateEgressRevisionRepair,verifyReaderSnapshots}) {
+  const namespace='kodex-system', names=componentMigrationHandoffNames(plan.imageEvidence.profile);
+  const personal=isPersonalIntegrationsMigrationProfile(plan.imageEvidence.profile);
   const workers=names.filter(name=>name!=='control-plane');
   const originals=plan.componentHandoff.components.map(c => ({kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,resourceVersion:'1',generation:1},
     spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
-  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+  requireValue(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs,plan.personalIntegrationsInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
   if(effectiveHandoff)requireValue(effectiveInputs&&fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,effectiveInputs))===fingerprint(effectiveHandoff),'TELEGRAM_PORT_REPAIR_HANDOFF_INVALID');
   const repairBound='TELEGRAM_OBSERVABILITY_REPAIR_BOUND',repairComplete='TELEGRAM_OBSERVABILITY_REPAIR_COMPLETE';
   const repairEvents=()=>journal.events.filter(e=>e.type===repairBound);
@@ -401,9 +530,14 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     const expected=part(name), actual=JSON.parse(kube(['-n',namespace,'get','deployment',name,'-o','json']));
     requireValue(actual.metadata.uid === expected.uid,'COMPONENT_MIGRATION_HANDOFF_UID_CHANGED');
     const stages=expected.maintenance?['stoppedSpec','stagedSpec']:expected.introduced?['stoppedSpec','stagedSpec','resumedSpec']:['beforeSpec','stoppedSpec','stagedSpec','resumedSpec'];
-    let stage=stages.find(k => fingerprint(expected[k]) === fingerprint(actual.spec));
+    let stage=stages.find(k => personalIntegrationsArtifactSpecMatches({profile:plan.imageEvidence.profile,name,
+      beforeSpec:expected.beforeSpec,expectedSpec:expected[k],authorityImage:plan.personalIntegrationsInputs?.authority.imageRef},actual.spec));
+    if(!stage&&personal&&name==='artifact-retention'){
+      const repaired=personalArtifactGrantRepairSpec(plan,journal.events,actual)??personalArtifactSocketRepairSpec(plan,journal.events,actual);
+      if(repaired&&fingerprint(repaired)===fingerprint(actual.spec))stage='resumedSpec';
+    }
     const opened=apiRestoration&&name==='control-api-gateway';
-    if(opened){requireValue(['sentry-observability','sentry-observability-backup'].includes(plan.imageEvidence.profile)&&expected.maintenance===true&&apiRestoration.uid===expected.uid&&
+    if(opened){requireValue(supportsRoutineAPIRestoration(plan.imageEvidence.profile)&&expected.maintenance===true&&apiRestoration.uid===expected.uid&&
       fingerprint(apiRestoration.spec)===fingerprint({...expected.stagedSpec,replicas:apiRestoration.replicas}),'COMPONENT_MIGRATION_API_RESTORATION_INVALID');
       if(fingerprint(apiRestoration.spec)===fingerprint(actual.spec))stage='apiOpenedSpec';
     }
@@ -411,18 +545,21 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     if(!stage&&name==='control-plane'&&profiles[plan.imageEvidence.profile].introduced&&typeof readCPProjection==='function'){
       const admitted=readCPProjection();stage=['stagedSpec','resumedSpec'].find(key=>fingerprint(admitted[key])===fingerprint(actual.spec));
     }
-    if(!stage&&expected.maintenance&&profiles[plan.imageEvidence.profile].introduced&&typeof readMaintenanceReaders==='function'){
+    if(!stage&&expected.maintenance&&(personal||profiles[plan.imageEvidence.profile].introduced)&&typeof readMaintenanceReaders==='function'){
       readers=readMaintenanceReaders();
-      requireValue(['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'].includes(readers?.state)&&readers.sourceSHA===plan.source.revision&&
-        readers.deploymentUID===expected.uid&&fingerprint(readers.spec)===fingerprint(actual.spec),'TELEGRAM_API_READERS_REQUIRED');
+      const states=personal?['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY']:['ISOLATED_READERS_STARTING','ISOLATED_READERS_READY','RESTORED_READERS_READY'];
+      requireValue(states.includes(readers?.state)&&readers.sourceSHA===plan.source.revision&&readers.deploymentUID===expected.uid&&
+        fingerprint(readers.spec)===fingerprint(actual.spec),personal?'PERSONAL_INTEGRATIONS_API_READERS_REQUIRED':'TELEGRAM_API_READERS_REQUIRED');
       stage=readers.state==='RESTORED_READERS_READY'?'restoredReadersSpec':'isolatedReadersSpec';
     }
-    if(expected.introduced&&stage==='stoppedSpec'&&journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'&&e.name===name))stage='stagedSpec';
+    if(stage==='stoppedSpec'&&journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'&&e.name===name&&
+      (expected.introduced||expected.maintenanceOnly&&e.noEffect===true)))stage='stagedSpec';
     requireValue(stage,'COMPONENT_MIGRATION_HANDOFF_SPEC_CHANGED');
-    const pods=activePods(readComponentServingInventory(kube,name,expected.uid),expected.uid);
+    const inventory=readComponentServingInventory(kube,name,expected.uid,{scopeProof:!!verifyReaderSnapshots});
+    const pods=activePods(inventory,expected.uid);
     const joined=actual.status?.observedGeneration >= actual.metadata.generation && !(actual.status.replicas ?? 0) && pods.length === 0;
     const ready=componentServingReady(actual,pods,opened?apiRestoration.replicas:readers?actual.spec.replicas:expected.replicas);
-    return {actual,stage,joined,ready,...(readers?{readers}: {})};
+    return {actual,stage,joined,ready,pods,scopeSHA256:inventory.scopeSHA256,...(readers?{readers}: {})};
   };
   const inspect = () => names.map(name => {
     const state=observe(name);
@@ -443,8 +580,9 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     // Введённый receiver уже имеет новый exact image/spec. Его handoff —
     // durable принятие существующего dormant0; patch нарушил бы creator proof,
     // обязательный перед следующим107 CAS. Ни replicas, ни READY не меняются.
-    if(expected.introduced&&stage==='stagedSpec'&&fingerprint(wanted)===fingerprint(state.actual.spec)){
+    if((expected.introduced||expected.maintenanceOnly)&&stage==='stagedSpec'&&fingerprint(wanted)===fingerprint(state.actual.spec)){
       requireValue(state.joined,'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+      if(expected.maintenanceOnly)gate();
       journal.append({type,name,stage,resourceVersion:state.actual.metadata.resourceVersion,noEffect:true});return;
     }
     const patch=[{op:'test',path:'/metadata/uid',value:expected.uid},{op:'test',path:'/metadata/resourceVersion',value:state.actual.metadata.resourceVersion},
@@ -471,7 +609,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       fingerprint(postgresIdentity()) === fingerprint(plan.postgres),'MIGRATION_PRECONDITION_SOURCE_CHANGED');
     requireValue(typeof readOwnerSQL === 'function','COMPONENT_MIGRATION_DATABASE_READER_REQUIRED');
     const proof=readOwnerSQL(sql);
-    requireValue(proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === Number(plan.migrationVersion) &&
+    requireValue(proof.database === 'control_plane' && proof.readOnly === 'on' && proof.gooseVersion === (result.servingSchema?.version??Number(plan.migrationVersion)) &&
       ['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions',
         'pendingPromotions','activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks'].every(k => proof[k] === 0), 'MIGRATION_OWNER_PRECONDITION_FAILED');
     // После подтверждённого запуска нового CP его обычный outbox loop снова
@@ -516,6 +654,134 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       proof.ownerScope.targetSHA256===(proof.authorityTargetSHA256??proof.targetSHA256)&&sha(terminalSHA256)&&terminalSHA256===fingerprint(body),
       'TELEGRAM_EGRESS_TERMINAL_REQUIRED');
     deliveryFresh(proof);return proof;
+  };
+  const personalReadersBound='PERSONAL_INTEGRATIONS_READERS_BOUND';
+  const personalReaderVerified='PERSONAL_INTEGRATIONS_READER_AUTHORITY_VERIFIED';
+  // Время добавляет durable journal. Оно не является частью owner binding.
+  const personalEventBody=({at,...event})=>event;
+  const personalProofFresh=proof=>{
+    const observed=Date.parse(proof.observedAt),now=Date.now();
+    requireValue(observed<=now+5000&&now-observed<=30000,'PERSONAL_INTEGRATIONS_AUTHORITY_READBACK_STALE');
+  };
+  const personalAuthority=async(purpose,api)=>{
+    requireValue(typeof readPersonalAuthority==='function','PERSONAL_INTEGRATIONS_AUTHORITY_READER_REQUIRED');
+    const terminal=purpose==='terminal',proof=await readPersonalAuthority(purpose,{plan,events:journal.events});
+    const {deliverySHA256,terminalSHA256,...body}=proof??{},proofSHA256=terminal?terminalSHA256:deliverySHA256;
+    const required=personalIntegrationsAuthorityReadbackContract(),target=plan.portableTarget;
+    const after=terminal?'RETIRED':'PENDING_AUTHORITY';
+    requireValue(proof?.state===after&&proof.policyRevision===110&&uid(proof.operationID)&&
+      proof.sourceSHA===plan.source.revision&&proof.ownerScope?.context===plan.context&&proof.ownerScope.kubeconfig===plan.kubeconfig&&
+      proof.targetSHA256===plan.personalIntegrationsPrerequisites?.owner107?.targetSHA256&&
+      proof.ownerScope.targetSHA256===proof.targetSHA256&&proof.migrationTargetSHA256===fingerprint(target)&&
+      proof.migrationPlanSHA256===fingerprint(plan)&&proof.apiTargetSHA256===plan.apiMaintenance?.apiTargetSHA256&&
+      proof.trafficPlanSHA256===api.trafficPlanSHA256&&proof.serviceUID===api.serviceUID&&
+      ['artifactRetention','controlPlane'].every((key,index)=>{
+        const reader=part(['artifact-retention','control-plane'][index]);
+        return proof[key]?.uid===reader.uid&&proof[key]?.stagedSpecSHA256===fingerprint(reader.stagedSpec);
+      })&&Object.entries(required).every(([key,value])=>proof[key]===value)&&
+      Number.isSafeInteger(proof.registryRevision)&&proof.registryRevision>0&&Number.isSafeInteger(proof.snapshotRevision)&&proof.snapshotRevision>0&&
+      (!terminal||Number.isSafeInteger(proof.actualReadbackCount)&&proof.actualReadbackCount>=required.expectedReadbackCount&&proof.actualReadbackCount<=384)&&
+      [proof.bindingSHA256,proof.policySHA256,proof.registrySHA256,proof.snapshotSHA256,proof.planSHA256,proof.freshPlanSHA256].every(sha)&&
+      sha(proofSHA256)&&proofSHA256===fingerprint(body),'PERSONAL_INTEGRATIONS_AUTHORITY_READBACK_REJECTED');
+    personalProofFresh(proof);
+    const previous=journal.events.findLast(row=>row.type===personalReaderVerified);
+    requireValue(!previous||proof.snapshotRevision>previous.snapshotRevision||
+      proof.snapshotRevision===previous.snapshotRevision&&proof.snapshotSHA256===previous.snapshotSHA256,
+      'PERSONAL_INTEGRATIONS_AUTHORITY_EPOCH_REGRESSED');
+    const pins=Object.fromEntries(['bindingSHA256','operationID','policySHA256','registryRevision','registrySHA256','planSHA256',
+      'targetSHA256','migrationPlanSHA256','apiTargetSHA256','trafficPlanSHA256','serviceUID'].map(key=>[key,proof[key]]));
+    return {proof,proofSHA256,binding:{type:personalReadersBound,openPlanSHA256:api.openPlanSHA256,...pins}};
+  };
+  const personalAPI=allowPending=>{
+    const api=observe('control-api-gateway');
+    requireValue(api.stage==='isolatedReadersSpec'&&sha(api.readers?.openPlanSHA256)&&
+      (api.readers.state==='ISOLATED_READERS_READY'&&api.ready||allowPending&&api.readers.state==='ISOLATED_READERS_STARTING'),
+      'PERSONAL_INTEGRATIONS_API_READERS_REQUIRED');
+    return api.readers;
+  };
+  const personalResumeIntent=name=>name==='control-plane'?'RESUME_INTENT':'PAIR_RESUME_INTENT';
+  const personalStarted=(name,state,binding)=>state.stage==='resumedSpec'&&
+    journal.events.some(e=>e.type===personalResumeIntent(name)&&e.name===name)&&
+    journal.events.some(e=>e.type===personalReaderVerified&&e.name===name&&e.operationID===binding?.operationID);
+  const personalHandoff=()=>{
+    requireValue(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'&&e.publicationSHA256===plan.componentHandoff.publicationSHA256),
+      'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+    readJob(true);
+    const result=readJob();
+    requireValue(result.status==='PASS'&&result.schemaPostcondition==='PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
+    validateInputs();
+  };
+  const startPersonalReaders=async()=>{
+    requireValue(typeof readPersonalAuthority==='function','PERSONAL_INTEGRATIONS_AUTHORITY_READER_REQUIRED');
+    requireValue(!artifactGrantCatalogRequired(plan)||artifactGrantCatalogReceipt(plan,journal.events),
+      'PERSONAL_ARTIFACT_GRANT_CATALOG_RECEIPT_REQUIRED');
+    personalHandoff();
+    const api=personalAPI(true),readerNames=names.filter(name=>!part(name).maintenance);
+    const bindings=journal.events.filter(e=>e.type===personalReadersBound);
+    requireValue(bindings.length<=1,'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+    let binding=bindings.length?personalEventBody(bindings[0]):undefined;
+    if(binding)requireValue(binding.openPlanSHA256===api.openPlanSHA256,'PERSONAL_INTEGRATIONS_API_READERS_SCOPE_CHANGED');
+    const pending=readerNames.filter(name=>{
+      const state=observe(name);
+      if(personalStarted(name,state,binding))return false;
+      requireValue(state.stage==='stagedSpec'&&state.joined,'COMPONENT_MIGRATION_UNOWNED_HANDOFF');
+      return true;
+    });
+    if(!binding)schemaReady();
+    for(const name of pending){
+      const current=await personalAuthority('delivered',personalAPI(true));
+      if(!binding){binding=current.binding;journal.append(binding);}
+      requireValue(fingerprint(current.binding)===fingerprint(binding),'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+      journal.append({type:personalReaderVerified,name,operationID:binding.operationID,deliverySHA256:current.proofSHA256,
+        snapshotRevision:current.proof.snapshotRevision,snapshotSHA256:current.proof.snapshotSHA256});
+      await transition(name,'resumedSpec',personalResumeIntent(name),()=>{
+        requireValue(personalAPI(true).openPlanSHA256===binding.openPlanSHA256,'PERSONAL_INTEGRATIONS_API_READERS_SCOPE_CHANGED');
+        personalProofFresh(current.proof);
+        bindPersonalExecutor();
+      });
+    }
+    personalAPI(true);
+    return {status:'READERS_STARTED_PENDING_READINESS',schemaPostcondition:'PASS',pairReady:false,
+      gatewayMaintenance:true,apiReadersIsolated:true,forwardOnly:true};
+  };
+  const joinPersonalReaders=async()=>{
+    requireValue(typeof readPersonalAuthority==='function','PERSONAL_INTEGRATIONS_AUTHORITY_READER_REQUIRED');
+    personalHandoff();
+    const api=personalAPI(false),bindings=journal.events.filter(e=>e.type===personalReadersBound);
+    requireValue(bindings.length===1,'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+    const binding=personalEventBody(bindings[0]);
+    const readerNames=names.filter(name=>!part(name).maintenance);
+    const readyReader=name=>{
+      const state=observe(name);
+      requireValue(personalStarted(name,state,binding)&&state.ready,'PERSONAL_INTEGRATIONS_COHORT_READERS_NOT_READY');
+      return state;
+    };
+    const snapshots=readerNames.map(readyReader);
+    const terminal=await personalAuthority('terminal',api);
+    requireValue(fingerprint(terminal.binding)===fingerprint(binding),'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+    if(verifyReaderSnapshots){
+      verifyReaderSnapshots(snapshots);
+      // Этот reader повторно проверяет Service, exact OPEN и весь serving
+      // inventory CAG. Второй обход тех же Pod через observe не требуется.
+      requireValue(fingerprint(readMaintenanceReaders())===fingerprint(api),'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+    }else{
+      requireValue(personalAPI(false).openPlanSHA256===api.openPlanSHA256,'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+      readerNames.forEach(readyReader);
+    }
+    personalProofFresh(terminal.proof);
+    const accepted={type:'PERSONAL_INTEGRATIONS_TERMINAL_ACCEPTED',operationID:binding.operationID,bindingSHA256:binding.bindingSHA256,
+      snapshotRevision:terminal.proof.snapshotRevision,snapshotSHA256:terminal.proof.snapshotSHA256};
+    const previous=journal.events.filter(row=>row.type===accepted.type);
+    requireValue(previous.length<=1&&(!previous.length||fingerprint(personalEventBody(previous[0]))===fingerprint(accepted)),
+      'PERSONAL_INTEGRATIONS_AUTHORITY_BINDING_CHANGED');
+    if(!previous.length){bindPersonalExecutor();personalProofFresh(terminal.proof);journal.append(accepted);}
+    for(const name of readerNames){
+      const type=name==='control-plane'?'RESUME_ACK':'PAIR_RESUME_ACK';
+      if(!journal.events.some(e=>e.type===type&&e.name===name))journal.append({type,name});
+    }
+    return {status:'RESUMED',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,
+      gatewayMaintenance:true,apiReadersIsolated:true,authorityOperationID:binding.operationID,
+      authorityTerminalSHA256:terminal.proofSHA256,forwardOnly:true};
   };
   // Исправление уже принятого reader не создаёт новый install/authority intent.
   // Полный schema/owner drain и изоляция API обязательны также при повторном apply.
@@ -595,6 +861,14 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
   };
   return {
     inspect,
+    requireStagedArtifactCatalog(checkSchema=false){
+      requireValue(artifactGrantCatalogRequired(plan)&&names.every(name=>{
+        const state=observe(name);
+        return state.stage==='stagedSpec'&&state.joined&&!state.ready;
+      }),
+        'PERSONAL_ARTIFACT_GRANT_CATALOG_STAGED_JOIN_REQUIRED');
+      if(checkSchema)schemaReady();
+    },
     prepareObservabilityRepair(){
       repairPreflight();
       requireValue(!repairEvents().length&&!observabilityRepair,'TELEGRAM_OBSERVABILITY_REPAIR_ALREADY_BOUND');
@@ -624,6 +898,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       }
     },
     async stopController() {
+      requirePersonalIntegrationsDeliveryPrerequisite(plan.imageEvidence.profile,'stopController');
       for(const name of workers) {
         // Внешний API уже закрыт проверенным maintenance target. Его нулевые
         // replicas сохраняются; ACK подтверждает join, не выдуманный patch.
@@ -633,17 +908,27 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       }
     },
     async handoff() {
+      requirePersonalIntegrationsDeliveryPrerequisite(plan.imageEvidence.profile,'handoff');
       schemaReady();
       const cp=observeCP();
       requireValue(['STOPPED','STAGED'].includes(cp.stage) && cp.joined && journal.events.some(e => e.type === 'STOP_ACK'),'MIGRATION_STOP_JOIN_REQUIRED');
       for(const name of workers)requireValue(observe(name).joined&&journal.events.some(e=>e.type==='PAIR_STOP_ACK'&&e.name===name),
         'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
+      if(personal){await validateHandoff();bindPersonalExecutor();}
       if(plan.telegramInputs){requireValue(typeof prepareRuntimeInputs==='function','TELEGRAM_RUNTIME_INPUT_PREPARATION_REQUIRED');prepareRuntimeInputs();}
       for(const name of workers){
         requireValue(observe(name).joined&&journal.events.some(e=>e.type==='PAIR_STOP_ACK'&&e.name===name),'COMPONENT_MIGRATION_CONTROLLER_JOIN_REQUIRED');
         await transition(name,'stagedSpec','PAIR_HANDOFF_INTENT');
       }
-      await transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT');
+      const checkStopped=()=>{
+        const state=observeCP();
+        requireValue(['STOPPED','STAGED'].includes(state.stage)&&state.joined,'MIGRATION_STOP_JOIN_REQUIRED');
+        validateInputs();
+      };
+      if(personal)ensurePersonalIntegrationsPolicyProjection(plan,journal,kube,checkStopped);
+      await transition('control-plane','stagedSpec','PAIR_HANDOFF_INTENT',()=>{
+        if(personal)readPersonalIntegrationsPolicyProjection(plan,journal.events,kube);
+      });
       journal.append({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
       return {status:'STAGED',schemaPostcondition:'PASS',cpStage:observeCP().stage,forwardOnly:true};
     },
@@ -651,6 +936,7 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
     // всего exact cohort предшествует ожиданию readiness; Service остаётся
     // изолированным. STARTED не заменяет ACK готовности или terminal107.
     async startReaders() {
+      if(personal)return startPersonalReaders();
       const introduced=profiles[plan.imageEvidence.profile].introduced;
       requireValue(introduced&&typeof readAuthorityDelivery==='function'&&typeof readCPProjection==='function',
         'TELEGRAM_AUTHORITY_DELIVERY_REQUIRED');
@@ -722,6 +1008,8 @@ export function componentMigrationLifecycle({plan,kube,journal,readJob,observeCP
       return {status:'READERS_STARTED_PENDING_RETIRE',cpStage:'UPGRADED',schemaPostcondition:'PASS',pairReady:true,gatewayMaintenance:true,apiReadersIsolated:true,forwardOnly:true};
     },
     async resume() {
+      if(personal)return joinPersonalReaders();
+      requirePersonalIntegrationsDeliveryPrerequisite(plan.imageEvidence.profile,'resume');
       // После terminal107 и собственного RESTORED новые writers уже обслуживают
       // пользователей. Read/rejoin не требует остановки их обычной работы и
       // не выдаёт ни одного patch; все owned spec/Pod и schema proofs сохраняются.

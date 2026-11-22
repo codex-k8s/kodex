@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import {isWorkflowFileProvenanceMigrationProfile} from './workflow-file-provenance-migration-contract.mjs';
+import {personalMigrationRetryJob} from './personal-integrations-migration-recovery.mjs';
+import {isPersonalIntegrationsMigrationProfile,requirePersonalIntegrationsDeliveryPrerequisite} from './personal-integrations-migration-contract.mjs';
 import {telegramPortRepairCodes} from './telegram-port-repair.mjs';
 import { isComponentMigrationProfile } from './portable-component-migration.mjs';
 import { execFileSync } from 'node:child_process';
@@ -100,10 +103,11 @@ function normalizedMigrationPodSpec(value) {
   if (pod?.serviceAccount === pod?.serviceAccountName) delete pod.serviceAccount;
   return pod;
 }
-export function migrationReadback(job, plan, logs, pods = [], operation = 'up') {
+export function migrationReadback(job, plan, logs, pods = [], operation = 'up', attempt = 1) {
   const { version: migrationVersion, annotation } = profileFor(plan.profile);
   ensure(['up','check'].includes(operation) && (operation === 'up' || (isImmutableMigrationProfile(plan.profile) && plan.version === 2)), 'MIGRATION_OPERATION_INVALID');
-  const expectedJob = operation === 'check' ? plan.checkJob : plan.job;
+  ensure(attempt===1||attempt===2&&operation==='up'&&isPersonalIntegrationsMigrationProfile(plan.profile),'MIGRATION_ATTEMPT_INVALID');
+  const expectedJob = operation === 'check' ? plan.checkJob : attempt===2?personalMigrationRetryJob(plan):plan.job;
   ensure(job?.metadata?.name === expectedJob.metadata.name && job.metadata.namespace === namespace && job.metadata.annotations?.[annotation] === fingerprint(plan) && job.metadata.uid, 'MIGRATION_JOB_SCOPE_MISMATCH');
   ensure(fingerprint(normalizedMigrationPodSpec(job.spec?.template?.spec)) === fingerprint(normalizedMigrationPodSpec(expectedJob.spec.template.spec)), 'MIGRATION_JOB_SPEC_CHANGED');
   const completed = job.status?.conditions?.some((c) => c.type === 'Complete' && c.status === 'True');
@@ -114,26 +118,56 @@ export function migrationReadback(job, plan, logs, pods = [], operation = 'up') 
   const exact = executed && (operation === 'check' ? (logs ?? '').trim() === 'PostgreSQL connection check completed' :
     (backupReceipt ? (logs ?? '').trim().split('\n').includes(backupReceipt) : new RegExp(`(?:migrated database to version:|current version:)\\s*${migrationVersion}(?:\\s|$)`).test(logs ?? '')));
   return { status: completed ? exact ? 'PASS' : 'READBACK_UNCONFIRMED' : failed ? 'FAIL' : 'RUNNING', jobName: job.metadata.name, jobUID: job.metadata.uid, sourceRevision: plan.source.revision,
-    ...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
+    ...(attempt===2?{attempt:2}:{}),...(operation === 'check' ? {operation} : {migrationVersion:completed && exact ? migrationVersion : undefined}) };
 }
 async function main() {
   const args = process.argv.slice(2); const phase = args.shift(); const options = {};
   while (args.length) { const key = args.shift(); ensure(/^--[a-z-]+$/.test(key ?? '') && args.length && !(key in options), 'ARGUMENT_INVALID'); options[key] = args.shift(); }
-  ensure(['plan','apply','inspect','stop','resume','check','handoff','activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha','--telegram-port-repair-plan','--telegram-port-repair-executor-sha','--telegram-observability-repair-plan','--telegram-egress-revision-repair-plan','--telegram-egress-revision-candidate'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
+  const socketRepairPhases=['plan-artifact-socket-repair','apply-artifact-socket-repair'];
+  const grantRepairPhases=['plan-artifact-grant-repair','apply-artifact-grant-repair'];
+  const grantCatalogPhases=['plan-artifact-grant-catalog','apply-artifact-grant-catalog'];
+  const artifactRepairPhases=[...socketRepairPhases,...grantRepairPhases,...grantCatalogPhases];
+  const grantCatalog=grantCatalogPhases.includes(phase);
+  const stagedCatalog=grantCatalog&&!options['--personal-executor-sha'];
+  const grantRepair=grantRepairPhases.includes(phase);
+  const artifactRepair=artifactRepairPhases.includes(phase);
+  ensure([...artifactRepairPhases,'plan','apply','retry','inspect','stop','resume','abort','check','handoff','activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase) && Object.keys(options).every((k) => ['--context','--kubeconfig','--source','--revision','--profile','--plan','--evidence','--evidence-read-only','--confirm','--base-render','--publication-plan','--publication-evidence','--predecessor-plan','--predecessor-evidence','--revalidate-postcondition-revision','--component-publication','--portable-target','--backup-maintenance-plan','--backup-maintenance-evidence','--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence','--api-open-plan','--api-open-evidence','--cp-projection-plan','--cp-projection-evidence','--api-restore-plan','--api-restore-evidence','--api-isolation-plan','--api-isolation-evidence','--api-close-plan','--api-close-evidence','--personal-prerequisites','--personal-executor-sha','--personal-artifact-socket-repair-sha','--personal-artifact-grant-repair-sha','--personal-artifact-grant-inputs','--artifact-grant-catalog-inputs','--artifact-grant-catalog-plan-sha','--api-restoration-open-plan','--api-restoration-open-evidence','--api-restoration-source-sha','--telegram-port-repair-plan','--telegram-port-repair-executor-sha','--telegram-observability-repair-plan','--telegram-egress-revision-repair-plan','--telegram-egress-revision-candidate'].includes(k)) && options['--plan'], 'ARGUMENT_INVALID');
   const profile = options['--profile'] ?? 'legacy'; const { version: migrationVersion, annotation, file } = profileFor(profile);
+  ensure(phase!=='abort'||isWorkflowFileProvenanceMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
+  ensure(!options['--personal-executor-sha']||isPersonalIntegrationsMigrationProfile(profile)&&(artifactRepair||['inspect','handoff','start-readers','resume'].includes(phase))&&/^[a-f0-9]{40}$/.test(options['--personal-executor-sha']),'PHASE_ARGUMENT_INVALID');
+  const approvedArtifactRepair=options['--personal-artifact-socket-repair-sha'];
+  ensure(socketRepairPhases.includes(phase)?isPersonalIntegrationsMigrationProfile(profile)&&options['--personal-executor-sha']&&
+    (phase==='apply-artifact-socket-repair'?/^[a-f0-9]{64}$/.test(approvedArtifactRepair??''):!approvedArtifactRepair):!approvedArtifactRepair,
+    'PHASE_ARGUMENT_INVALID');
+  const approvedGrantRepair=options['--personal-artifact-grant-repair-sha'];
+  const grantInputs=options['--personal-artifact-grant-inputs'];
+  ensure(grantRepair?isPersonalIntegrationsMigrationProfile(profile)&&options['--personal-executor-sha']&&grantInputs?.startsWith('/')&&
+    (phase==='apply-artifact-grant-repair'?/^[a-f0-9]{64}$/.test(approvedGrantRepair??''):!approvedGrantRepair):
+    !grantInputs&&!approvedGrantRepair,'PHASE_ARGUMENT_INVALID');
+  const catalogInputs=options['--artifact-grant-catalog-inputs'];
+  const approvedCatalog=options['--artifact-grant-catalog-plan-sha'];
+  ensure(grantCatalog?profile==='personal-integrations-backup'&&(stagedCatalog?!catalogInputs:catalogInputs?.startsWith('/'))&&
+    (phase==='apply-artifact-grant-catalog'?/^[a-f0-9]{64}$/.test(approvedCatalog??''):!approvedCatalog):
+    !catalogInputs&&!approvedCatalog,'PHASE_ARGUMENT_INVALID');
   ensure(!options['--revalidate-postcondition-revision'] || (phase==='inspect' && profile==='repository-bundle' &&
     /^[a-f0-9]{40}$/.test(options['--revalidate-postcondition-revision'])), 'PHASE_ARGUMENT_INVALID');
   ensure(!['stop','resume','check'].includes(phase) || isImmutableMigrationProfile(profile), 'PHASE_ARGUMENT_INVALID');
   const migrationPath = `services/internal/control-plane/cmd/cli/migrations/${file}`;
   const context = options['--context']; ensure(/^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? '') && (!/prod(?:uction)?/i.test(context) || isComponentMigrationProfile(profile)), 'STAGING_CONTEXT_REQUIRED');
-  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply','stop','resume','check','handoff','activate','start-readers','apply-observability-repair','apply-egress-revision-repair'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
+  ensure(phase === 'plan' ? options['--source'] && options['--revision'] && !options['--confirm'] && !options['--evidence'] : !options['--source'] && !options['--revision'] && !options['--base-render'] && options['--evidence'] && options['--confirm'] === (['apply-artifact-grant-catalog','apply-artifact-grant-repair','apply-artifact-socket-repair','apply','retry','stop','resume','abort','check','handoff','activate','start-readers','apply-observability-repair','apply-egress-revision-repair'].includes(phase) ? 'APPLY-STAGING-CP-MIGRATION' : undefined), 'PHASE_ARGUMENT_INVALID');
   ensure(phase === 'plan' && isImmutableMigrationProfile(profile) ? !!options['--predecessor-plan'] === !!options['--predecessor-evidence'] :
     !options['--predecessor-plan'] && !options['--predecessor-evidence'], 'PHASE_ARGUMENT_INVALID');
   ensure(requiresBackupMaintenance(profile) && phase==='plan' ? options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'] : !options['--backup-maintenance-plan'] && !options['--backup-maintenance-evidence'],'PHASE_ARGUMENT_INVALID');
   const componentInput = options['--component-publication'] || options['--portable-target'];
   ensure(!componentInput || phase === 'plan' && isComponentMigrationProfile(profile) && options['--component-publication'] && options['--portable-target'], 'PHASE_ARGUMENT_INVALID');
   ensure(phase !== 'handoff' || isComponentMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
+  ensure(!options['--api-close-plan']&&!options['--api-close-evidence']||phase==='plan'&&['personal-integrations','personal-integrations-backup'].includes(profile)&&options['--api-close-plan']&&options['--api-close-evidence'],'PHASE_ARGUMENT_INVALID');
+  ensure(!options['--personal-prerequisites']||phase==='plan'&&['personal-integrations','personal-integrations-backup'].includes(profile),'PHASE_ARGUMENT_INVALID');
+  ensure(phase!=='plan'||!['personal-integrations','personal-integrations-backup'].includes(profile)||options['--personal-prerequisites'],'PERSONAL_INTEGRATIONS_RELEASE_CONFIGURATION_REQUIRED');
   const telegramProfile=['telegram-notifications','telegram-notifications-backup'].includes(profile);
+  const personalProfile=isPersonalIntegrationsMigrationProfile(profile);
+  ensure(phase!=='retry'||personalProfile,'PHASE_ARGUMENT_INVALID');
+  ensure(options['--evidence-read-only']===undefined||personalProfile&&phase==='inspect'&&options['--evidence-read-only']==='true','PHASE_ARGUMENT_INVALID');
   ensure(!options['--telegram-port-repair-plan']||telegramProfile&&['handoff','resume','inspect','activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase),telegramPortRepairCodes.phaseRejected);
   ensure(!options['--telegram-port-repair-executor-sha']||options['--telegram-port-repair-plan']&&/^[a-f0-9]{40}$/.test(options['--telegram-port-repair-executor-sha']),'TELEGRAM_EXECUTOR_SOURCE_REJECTED');
   const observabilityRepairPhase=['plan-observability-repair','apply-observability-repair'].includes(phase);
@@ -145,15 +179,22 @@ async function main() {
   ensure(phase==='plan-egress-revision-repair'?!!options['--telegram-egress-revision-candidate']:!options['--telegram-egress-revision-candidate'],'PHASE_ARGUMENT_INVALID');
   const activationInputs=['--authority-plan','--authority-evidence','--authority-status-plan','--authority-status-evidence'];
   const activationProvided=activationInputs.some(key=>options[key]);
-  ensure((!['activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase)&&!activationProvided)||telegramProfile&&['activate','inspect','resume','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+  const personalReaders=personalProfile&&(artifactRepair&&!stagedCatalog||['start-readers','resume'].includes(phase));
+  const legacyActivation=['activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase);
+  ensure(personalReaders?activationInputs.every(key=>options[key]):
+    (!legacyActivation&&!activationProvided)||telegramProfile&&['activate','inspect','resume','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase)&&activationInputs.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
   for(const group of [['--api-open-plan','--api-open-evidence'],['--cp-projection-plan','--cp-projection-evidence'],['--api-restore-plan','--api-restore-evidence']]){
-    ensure(!group.some(key=>options[key])||telegramProfile&&['activate','inspect','resume','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase)&&group.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
+    const telegramInput=telegramProfile&&['activate','inspect','resume','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase);
+    const personalInput=personalProfile&&group[0]==='--api-open-plan'&&(artifactRepair&&!stagedCatalog||['inspect','resume','start-readers'].includes(phase));
+    ensure(!group.some(key=>options[key])||(telegramInput||personalInput)&&group.every(key=>options[key]),'PHASE_ARGUMENT_INVALID');
   }
-  ensure(!['activate','start-readers','plan-observability-repair','apply-observability-repair','plan-egress-revision-repair','apply-egress-revision-repair'].includes(phase)||options['--api-open-plan']&&options['--cp-projection-plan'],'PHASE_ARGUMENT_INVALID');
+  ensure(personalReaders?options['--api-open-plan']&&options['--api-open-evidence']:
+    !legacyActivation||options['--api-open-plan']&&options['--cp-projection-plan'],'PHASE_ARGUMENT_INVALID');
 
   ensure(isImmutableMigrationProfile(profile) && phase === 'plan'
     ? options['--base-render'] && (componentInput ? !options['--publication-plan'] && !options['--publication-evidence'] : options['--publication-plan'] && options['--publication-evidence'])
     : !options['--publication-plan'] && !options['--publication-evidence'], 'PHASE_ARGUMENT_INVALID');
+  if(!artifactRepair) requirePersonalIntegrationsDeliveryPrerequisite(profile,phase);
   const kube = (argv, input) => { try { return execFileSync('kubectl', [...(options['--kubeconfig'] ? ['--kubeconfig',options['--kubeconfig']] : []),'--context',context,'--request-timeout=30s',...argv], { input, encoding:'utf8', timeout:35000, maxBuffer:4<<20, stdio:['pipe','pipe','pipe'] }); } catch { throw new Error('KUBERNETES_OPERATION_UNKNOWN'); } };
   const get = (kind,name) => JSON.parse(kube(['-n',namespace,'get',kind,name,'-o','json']));
   const optional = (kind,name) => { const raw = kube(['-n',namespace,'get',kind,name,'--ignore-not-found=true','-o','json']); return raw.trim() ? JSON.parse(raw) : undefined; };

@@ -1,4 +1,5 @@
 """Пустой bootstrap создаётся один раз, опубликованные почтовые credentials не заменяются."""
+import base64
 import copy
 import json
 from types import SimpleNamespace
@@ -15,6 +16,12 @@ def fixture():
 
 def published():
     value = copy.deepcopy(fixture()[1]);value.pop('stringData');value['data'] = {'mailboxes.json': 'c3ludGhldGlj'};value['metadata']['uid'] = 'synthetic-uid'
+    return value
+
+
+def created():
+    value = published()
+    value['data']['mailboxes.json'] = base64.b64encode(fixture()[1]['stringData']['mailboxes.json'].encode()).decode()
     return value
 
 
@@ -42,13 +49,33 @@ class EmailBootstrap(unittest.TestCase):
 
     def test_missing_seed_create_and_lost_response_reconcile_without_second_write(self):
         for code in [0, 1]:
-            responses = [SimpleNamespace(returncode=0, stdout=b''), SimpleNamespace(returncode=code, stdout=b''), SimpleNamespace(returncode=0, stdout=json.dumps(published()).encode())]
+            responses = [SimpleNamespace(returncode=0, stdout=b''), SimpleNamespace(returncode=code, stdout=json.dumps(created()).encode() if code == 0 else b''), SimpleNamespace(returncode=0, stdout=json.dumps(published()).encode())]
             with patch.object(projection.subprocess, 'run', side_effect=responses) as run:
                 projection.reconcile(fixture(), 'synthetic-context')
             writes = [call for call in run.call_args_list if 'create' in call.args[0]]
             self.assertEqual(len(writes), 1)
             self.assertEqual(json.loads(writes[0].kwargs['input']), fixture()[1])
             self.assertNotIn('apply', writes[0].args[0])
+
+    def test_successful_create_pins_ack_uid_before_replacement_readback(self):
+        replacement = published();replacement['metadata']['uid'] = 'replacement-uid'
+        responses = [SimpleNamespace(returncode=0, stdout=b''), SimpleNamespace(returncode=0, stdout=json.dumps(created()).encode()), SimpleNamespace(returncode=0, stdout=json.dumps(replacement).encode())]
+        with patch.object(projection.subprocess, 'run', side_effect=responses) as run, self.assertRaisesRegex(Rejected, 'EMAIL_BOOTSTRAP_UID_CHANGED'):
+            projection.reconcile(fixture(), 'synthetic-context')
+        writes = [call for call in run.call_args_list if 'create' in call.args[0]]
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0].args[0][-2:], ['-o', 'json'])
+
+    def test_invalid_successful_ack_never_falls_back_to_get_adoption(self):
+        missing = created();missing['metadata'].pop('uid')
+        foreign = created();foreign['metadata']['namespace'] = 'foreign'
+        body = created();body['data']['mailboxes.json'] = base64.b64encode(b'changed').decode()
+        for raw in (b'', b'{', b'null', json.dumps(missing).encode(), json.dumps(foreign).encode(), json.dumps(body).encode()):
+            with self.subTest(variant=len(raw)):
+                responses = [SimpleNamespace(returncode=0, stdout=b''), SimpleNamespace(returncode=0, stdout=raw)]
+                with patch.object(projection.subprocess, 'run', side_effect=responses) as run, self.assertRaisesRegex(Rejected, 'EMAIL_BOOTSTRAP_CREATE_ACK_REJECTED'):
+                    projection.reconcile(fixture(), 'synthetic-context')
+                self.assertEqual(run.call_count, 2)
 
     def test_preflight_is_server_dry_run_only_and_unowned_secret_rejects(self):
         responses = [SimpleNamespace(returncode=0, stdout=b''), SimpleNamespace(returncode=0, stdout=b'')]

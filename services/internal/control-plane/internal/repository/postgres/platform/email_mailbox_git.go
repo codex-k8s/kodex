@@ -106,6 +106,12 @@ var queryEmailMailboxPublicationBindings string
 //go:embed sql/email_mailbox_ui_binding.sql
 var queryEmailMailboxUIBinding string
 
+// queryEmailMailboxGitConnectionClaimed prevents first import from claiming a connection with a different configuration lineage, including an unbound UI draft.
+// queryEmailMailboxGitConnectionClaimed запрещает первому импорту занять подключение с другой историей конфигурации, включая непривязанный черновик UI.
+//
+//go:embed sql/email_mailbox_git_connection_claimed.sql
+var queryEmailMailboxGitConnectionClaimed string
+
 // mailboxGitSource Carries a locked source mailbox key, configuration ownership, connection
 // identity and version for import reconciliation. It contains no credential values or external
 // authority token.
@@ -240,10 +246,9 @@ func (repository *Repository) importGitMailboxes(ctx context.Context, input api.
 		if exists && source.managedBy != "GIT" {
 			continue
 		}
-		var connectionID string
-		var connectionVersion int64
-		if err := tx.QueryRow(ctx, queryEmailCredentialLock, current.organizationID, mailbox.ConnectionId).Scan(&connectionID, &connectionVersion); err != nil {
-			return errs.ErrNotFound
+		owner, err := readEmailCredentialOwnerTx(ctx, tx, current, mailbox.ConnectionId, current.actorRef)
+		if err != nil {
+			return err
 		}
 		var uiBound bool
 		if err := tx.QueryRow(ctx, queryEmailMailboxUIBinding, current.organizationID, mailbox.ConnectionId).Scan(&uiBound); err != nil {
@@ -252,16 +257,34 @@ func (repository *Repository) importGitMailboxes(ctx context.Context, input api.
 		if uiBound {
 			continue
 		}
-		set, revision, mailboxRef, err := repository.importGitMailboxRevision(ctx, tx, current, input, mailbox, source.ref)
-		if err != nil {
-			return err
+		// An installation-managed source can publish only through a service identity explicitly configured by an active user.
+		// Источник установки публикует только через служебную личность, явно настроенную активным пользователем.
+		if !owner.initiatorActive || owner.initiator.SubjectKind != "SERVICE" || owner.initiator.SubjectID != current.actorID ||
+			owner.state != "ACTIVE" || !owner.owner.SubjectActive || owner.owner.Policy != entity.IntegrationCredentialProjectShared ||
+			owner.owner.SubjectKind != "SERVICE" || owner.owner.Generation < 1 {
+			return errs.ErrForbidden
 		}
-		materialized, err := emailpolicy.MaterializeMailbox(mailboxSpecification(mailbox), emailpolicy.MailboxBinding{Ref: mailboxRef, OrganizationRef: current.organizationRef, ConnectionRef: mailbox.ConnectionId, Revision: next, CredentialGeneration: connectionVersion + 1})
+		if mailbox.CredentialOwnerGeneration != owner.owner.Generation || mailbox.Enabled && !owner.connectionEnabled {
+			return errs.ErrConflict
+		}
+		if !exists {
+			var claimed bool
+			if err := tx.QueryRow(ctx, queryEmailMailboxGitConnectionClaimed, current.organizationID, owner.connectionID).Scan(&claimed); err != nil {
+				return errs.ErrUnavailable
+			}
+			if claimed {
+				return errs.ErrConflict
+			}
+		}
+		if effects[mailbox.ConnectionId].setID != "" {
+			return errs.ErrConflict
+		}
+		set, revision, materialized, err := repository.importGitMailboxRevision(ctx, tx, current, input, mailbox, source.ref, owner, next)
 		if err != nil {
 			return err
 		}
 		configuration.Mailboxes = append(configuration.Mailboxes, materialized)
-		effects[mailbox.ConnectionId] = mailboxGitEffect{connectionRef: mailbox.ConnectionId, connectionID: connectionID, version: connectionVersion, setID: set.id, revisionID: revision.RefID}
+		effects[mailbox.ConnectionId] = mailboxGitEffect{connectionRef: mailbox.ConnectionId, connectionID: owner.connectionID, version: owner.connectionVersion, setID: set.id, revisionID: revision.RefID}
 	}
 	var acceptedRaw []byte
 	var acceptedDigest string
@@ -349,7 +372,7 @@ func (repository *Repository) importGitMailboxes(ctx context.Context, input api.
 // mailbox, ограничивает спецификацию, создаёт дочернюю JSON-ревизию с хешем, проверяет и публикует
 // её, продвигает совпавший Git source. Записи принадлежат транзакции вызывающего; иное владение
 // или устаревший source отклоняется.
-func (repository *Repository) importGitMailboxRevision(ctx context.Context, tx pgx.Tx, current scope, input api.Configuration, mailbox api.Mailbox, existingRef string) (managedSet, lockedManagedRevision, string, error) {
+func (repository *Repository) importGitMailboxRevision(ctx context.Context, tx pgx.Tx, current scope, input api.Configuration, mailbox api.Mailbox, existingRef string, owner emailCredentialOwnerRow, publicationRevision int64) (managedSet, lockedManagedRevision, api.Mailbox, error) {
 	var set managedSet
 	var err error
 	sourceRevision := strconv.FormatInt(input.Revision, 10) + ":" + api.Digest(input)
@@ -358,58 +381,67 @@ func (repository *Repository) importGitMailboxRevision(ctx context.Context, tx p
 	} else {
 		ref, refErr := newRef("mcfg")
 		if refErr != nil {
-			return set, lockedManagedRevision{}, "", errs.ErrUnavailable
+			return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrUnavailable
 		}
 		set, err = scanManagedSet(tx.QueryRow(ctx, queryManagedConfigurationInsertSet, pgx.StrictNamedArgs{"configuration_ref": ref, "organization_id": current.organizationID, "project_ref": "", "kind": "EMAIL_MAILBOX", "name": mailbox.Id, "managed_by": "GIT", "source": input.Source, "source_revision": sourceRevision, "actor_id": current.actorID}))
 	}
 	if err != nil {
-		return set, lockedManagedRevision{}, "", err
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
 	}
 	var connectionRef, mailboxRef string
 	if existingRef == "" {
 		mailboxRef, err = newMailboxRef()
 		if err != nil {
-			return set, lockedManagedRevision{}, "", err
+			return set, lockedManagedRevision{}, api.Mailbox{}, err
 		}
 		if tag, err := tx.Exec(ctx, queryEmailMailboxConfigurationInsertOwner, current.organizationID, set.Ref, mailbox.ConnectionId, mailboxRef); err != nil || tag.RowsAffected() != 1 {
-			return set, lockedManagedRevision{}, "", errs.ErrUnavailable
+			return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryEmailMailboxGitSourceInsert, input.Source, mailbox.Id, set.id); err != nil {
-			return set, lockedManagedRevision{}, "", errs.ErrUnavailable
+			return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrUnavailable
 		}
 	} else if err := tx.QueryRow(ctx, queryEmailMailboxConfigurationOwner, current.organizationID, set.Ref).Scan(&connectionRef, &mailboxRef); err != nil || connectionRef != mailbox.ConnectionId {
-		return set, lockedManagedRevision{}, "", errs.ErrConflict
+		return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrConflict
 	}
 	specification := mailboxSpecification(mailbox)
-	if emailpolicy.BoundSpecification(specification) != nil {
-		return set, lockedManagedRevision{}, "", errs.ErrInvalid
+	materialized, err := emailpolicy.MaterializeMailbox(specification, emailpolicy.MailboxBinding{
+		Ref: mailboxRef, OrganizationRef: current.organizationRef, ConnectionRef: mailbox.ConnectionId,
+		Revision: publicationRevision, CredentialGeneration: owner.connectionVersion + 1,
+		CredentialOwnerGeneration: owner.owner.Generation,
+	})
+	if err != nil {
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
+	}
+	// Validate descriptors even for a disabled desired mailbox before publishing its revision.
+	// Проверка дескрипторов обязательна и для выключенного ящика до публикации ревизии.
+	credentialCheck := materialized
+	credentialCheck.Enabled = true
+	if _, err := emailCredentialDigests(ctx, tx, api.Configuration{Mailboxes: []api.Mailbox{credentialCheck}}); err != nil {
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
 	}
 	raw, err := json.Marshal(specification)
 	if err != nil {
-		return set, lockedManagedRevision{}, "", errs.ErrInvalid
+		return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrInvalid
 	}
 	digest := sha256.Sum256(raw)
 	ref, err := newRef("mrev")
 	if err != nil {
-		return set, lockedManagedRevision{}, "", errs.ErrUnavailable
+		return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrUnavailable
 	}
 	created, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationInsertRevision, pgx.StrictNamedArgs{"revision_ref": ref, "organization_id": current.organizationID, "configuration_set_id": set.id, "content_format": "JSON", "content": string(raw), "digest": hex.EncodeToString(digest[:]), "parent_revision_id": set.currentRevisionID, "actor_id": current.actorID}))
 	if err != nil {
-		return set, lockedManagedRevision{}, "", err
-	}
-	if _, err := repository.validateEmailMailboxRevision(ctx, tx, current, set, created.ManagedConfigurationRevision); err != nil {
-		return set, lockedManagedRevision{}, "", err
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
 	}
 	if _, err := scanManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationValidateRevision, pgx.StrictNamedArgs{"revision_id": created.internalID, "state": "VALID", "diagnostics": "[]"})); err != nil {
-		return set, lockedManagedRevision{}, "", err
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
 	}
 	published, version, updated, err := scanPublishedManagedRevision(tx.QueryRow(ctx, queryManagedConfigurationPublishRevision, pgx.StrictNamedArgs{"configuration_set_id": set.id, "revision_id": created.internalID, "expected_version": set.Version}))
 	if err != nil {
-		return set, lockedManagedRevision{}, "", err
+		return set, lockedManagedRevision{}, api.Mailbox{}, err
 	}
 	if tag, err := tx.Exec(ctx, queryEmailMailboxGitSourceUpdate, set.id, input.Source, sourceRevision); err != nil || tag.RowsAffected() != 1 {
-		return set, lockedManagedRevision{}, "", errs.ErrConflict
+		return set, lockedManagedRevision{}, api.Mailbox{}, errs.ErrConflict
 	}
 	set.Version, set.UpdatedAt = version, updated
-	return set, lockedManagedRevision{ManagedConfigurationRevision: published.ManagedConfigurationRevision, RefID: published.internalID}, mailboxRef, nil
+	return set, lockedManagedRevision{ManagedConfigurationRevision: published.ManagedConfigurationRevision, RefID: published.internalID}, materialized, nil
 }

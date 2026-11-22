@@ -4,6 +4,6 @@ SELECT grant_row.ref, grant_row.version, grant_row.capability_key, grant_row.app
 FROM control_plane.integration_grants grant_row
 JOIN control_plane.integration_connections connection ON connection.id=grant_row.connection_id
  AND connection.organization_id=grant_row.organization_id
-WHERE grant_row.organization_id=$1::uuid AND connection.ref=$2
+WHERE grant_row.organization_id=$1::uuid AND connection.ref=$2 AND connection.definition_key<>'kubernetes-managed'
  AND grant_row.target_kind='AGENT' AND grant_row.target_ref=$3
 ORDER BY grant_row.capability_key;

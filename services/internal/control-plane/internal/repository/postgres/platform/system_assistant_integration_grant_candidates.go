@@ -62,6 +62,13 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 	if err != nil {
 		return result, err
 	}
+	configuration := map[string]string{}
+	if definition.Metadata.Key == "kubernetes-managed" {
+		configuration, _, _, err = integrationCandidateScope(ctx, tx, current, integrationCandidateRow{ConnectionRef: connectionRef, RecipientKind: "AGENT", RecipientRef: target.ref})
+		if err != nil {
+			return result, err
+		}
+	}
 	rows, err := tx.Query(ctx, querySystemAssistantIntegrationGrantsCurrent, current.organizationID, connectionRef, target.ref)
 	if err != nil {
 		return result, errs.ErrUnavailable
@@ -84,6 +91,12 @@ func (repository *Repository) GetSystemAssistantIntegrationGrantCandidates(ctx c
 			continue
 		}
 		item := grants[capability.Key]
+		if definition.Metadata.Key == "kubernetes-managed" {
+			item.ResourceScope, item.ResourceScopeDigest, err = projectAssistantPublicResourceScope(definition, capability, configuration)
+			if err != nil {
+				return result, err
+			}
+		}
 		item.CurrentApprovalScopePaths = append([]string{}, item.CurrentApprovalScopePaths...)
 		item.Grantable = connectionReady && target.ready
 		item.Reason = "READY"

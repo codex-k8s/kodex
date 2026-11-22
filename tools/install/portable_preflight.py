@@ -11,6 +11,8 @@ import subprocess
 
 import yaml
 import provider_sandbox_profile
+import ssh_identity_profile
+import ssh_qualification_profile
 import image_policy_inputs
 from deployment_profile import Rejected, require, https_endpoint, read_render_profile, verify_proxy_controller, verify_proxy_pods
 
@@ -75,6 +77,8 @@ def main():
                 "RENDER_DIGEST_MISMATCH")
         resources = list(filter(None, yaml.safe_load_all(raw)))
         provider_sandbox_profile.validate_render(resources)
+        ssh_identity_profile.validate_render(resources)
+        ssh_qualification_profile.validate_render(resources)
         image_policy_inputs.validate_render(resources)
         profile = read_render_profile(resources)
         if args.plan:

@@ -8,7 +8,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/httpserver v0.0.0-00010101000000-000000000000
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0-00010101000000-000000000000
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
-	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0-00010101000000-000000000000
+	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.25.0

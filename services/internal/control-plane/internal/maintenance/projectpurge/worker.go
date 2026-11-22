@@ -62,6 +62,11 @@ type source interface {
 	// ProjectPurgeObjectIsShared checks whether another retained owner reference makes deletion of the exact object key ambiguous; errors must block the effect.
 	// ProjectPurgeObjectIsShared проверяет, делает ли другая удержанная ссылка владельца удаление точного ключа объекта неоднозначным; ошибка должна блокировать действие.
 	ProjectPurgeObjectIsShared(context.Context, platform.ProjectPurgeCandidate, string) (bool, error)
+	// ProjectPurgeKubernetesObjectReceipt resolves the exact immutable owner receipt for a staged
+	// object; UNKNOWN source and ambiguous project provenance must refuse the physical effect.
+	// ProjectPurgeKubernetesObjectReceipt разрешает exact immutable owner receipt staged object;
+	// UNKNOWN source и неоднозначное project provenance запрещают физическое действие.
+	ProjectPurgeKubernetesObjectReceipt(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (objectstorage.Receipt, error)
 	// ProjectPurgeArchiveIsOwned confirms candidate ownership of an archive item through server-managed lineage before the processor uses the archive store.
 	// ProjectPurgeArchiveIsOwned подтверждает владение кандидата архивным элементом через серверный lineage до обращения процессора к архивному хранилищу.
 	ProjectPurgeArchiveIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error)
@@ -230,6 +235,7 @@ func (processor *Processor) deleteObject(ctx context.Context, candidate platform
 		return errors.New("project purge object escaped project scope")
 	}
 	store := processor.objects
+	var expectedKubernetesReceipt *objectstorage.Receipt
 	switch {
 	case strings.HasPrefix(item.Target, artifactPrefix):
 	case strings.HasPrefix(item.Target, "organizations/"+candidate.OrganizationRef+"/subjects/"):
@@ -244,7 +250,11 @@ func (processor *Processor) deleteObject(ctx context.Context, candidate platform
 		}
 		store = processor.archives
 	default:
-		return errors.New("project purge object escaped project scope")
+		expected, err := processor.source.ProjectPurgeKubernetesObjectReceipt(ctx, candidate, item)
+		if err != nil || expected.Key != item.Target || expected.VersionID != item.Version || expected.VersionID == "" || expected.ETag == "" {
+			return errors.New("project purge Kubernetes object ownership is unconfirmed")
+		}
+		expectedKubernetesReceipt = &expected
 	}
 	shared, err := processor.source.ProjectPurgeObjectIsShared(ctx, candidate, item.Target)
 	if err != nil || shared {
@@ -254,7 +264,7 @@ func (processor *Processor) deleteObject(ctx context.Context, candidate platform
 	if errors.Is(err, objectstorage.ErrNotFound) {
 		return nil
 	}
-	if err != nil || receipt.Key != item.Target || item.Version != "" && receipt.VersionID != item.Version {
+	if err != nil || receipt.Key != item.Target || item.Version != "" && receipt.VersionID != item.Version || expectedKubernetesReceipt != nil && receipt != *expectedKubernetesReceipt {
 		return errors.New("project purge object readback failed")
 	}
 	if err := store.Delete(ctx, item.Target, receipt.VersionID); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {

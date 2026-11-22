@@ -16,6 +16,8 @@ type PersonalIntegrationCredentialTestSpec struct {
 	GitHubDiscoveryPage                                             int
 	AllowedReadCapabilityKeys                                       []string
 	AllowedObservationProfiles, AllowedDeniedWriteCapabilityKeys    []string
+	BrokerPurpose                                                   IntegrationBrokerIdentityPurpose
+	BrokerTargetRef                                                 string
 }
 
 // PersonalIntegrationCredentialTestSnapshot pins one verification to self ownership, exact binding
@@ -28,6 +30,8 @@ type PersonalIntegrationCredentialTestSnapshot struct {
 	PersonalIntegrationCredentialTestSpec
 	OrganizationID, SubjectID, ConnectionRef, BindingRef, CredentialRef string
 	BindingVersion, BindingGeneration                                   int64
+	Kind                                                                IntegrationCredentialKind
+	BrokerIdentityRef                                                   string
 }
 
 // PersonalIntegrationCredentialTestOutcome separates observed authentication rejection from a

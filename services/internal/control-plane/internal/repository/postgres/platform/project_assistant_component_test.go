@@ -3,7 +3,9 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"encoding/json"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -77,6 +79,77 @@ var queryProjectAssistantPurgeReadback string
 //go:embed testdata/sql/project_assistant_archived_fixture.sql
 var queryProjectAssistantArchivedFixture string
 
+// assertProjectAssistantPurgeGraph reconciles the runtime-visible project closure with the
+// shipped catalog proof for schema049 or schema051. The older inverse projection remains exact on schema041.
+// Both paths use the isolated database selected by the caller and reject other migration tips.
+// assertProjectAssistantPurgeGraph сверяет видимое runtime замыкание проекта с поставляемым
+// доказательством каталога схемы049 или схемы051. На схеме041 сохраняет точную обратную проекцию.
+// Оба пути работают с изолированной БД вызывающего и отклоняют другие версии миграций.
+func assertProjectAssistantPurgeGraph(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+	t.Helper()
+	admin := evidenceRetentionAdministrator(t, ctx, pool.Config().ConnConfig)
+	var version int64
+	if err := admin.QueryRow(ctx, "SELECT max(version_id) FROM public.goose_db_version WHERE is_applied").Scan(&version); err != nil {
+		t.Fatal("read exact disposable project assistant schema")
+	}
+	var nodes, edges, serverEdges int
+	var nodeDigest, edgeDigest, serverDigest string
+	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&nodes, &nodeDigest, &edges, &edgeDigest, &serverEdges, &serverDigest); err != nil {
+		t.Fatal("read project purge graph")
+	}
+	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", nodes, nodeDigest, edges, edgeDigest)
+	switch version {
+	case 20261111000200:
+		if nodes != 111 || nodeDigest != "3eb558fae167872ba6bd17bc68f7a303" || edges != 308 ||
+			edgeDigest != "d6aa5b9aa21c5e065c3106f2a6119e0f" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
+			t.Fatal("native schema041 project closure or inverse010 projection changed")
+		}
+	case 20261114170000, 20261121000200:
+		filename, profile := "personal-integrations-migration-postcondition.sql", "PERSONAL_INTEGRATIONS_V1"
+		if version == 20261121000200 {
+			filename, profile = "workflow-file-provenance-migration-postcondition.sql", "WORKFLOW_FILE_PROVENANCE_051"
+		}
+		proofSQL, err := os.ReadFile("../../../../../../../tools/release/" + filename)
+		if err != nil {
+			t.Fatal("read shipped current project closure proof")
+		}
+		results, err := admin.PgConn().Exec(ctx, string(proofSQL)).ReadAll()
+		if err != nil {
+			t.Fatal("execute read-only project closure proof")
+		}
+		var document []byte
+		for _, result := range results {
+			if len(result.Rows) == 0 {
+				continue
+			}
+			if document != nil || len(result.Rows) != 1 || len(result.Rows[0]) != 1 || len(result.Rows[0][0]) > 1<<20 {
+				t.Fatal("unexpected current catalog proof response")
+			}
+			document = result.Rows[0][0]
+		}
+		var proof struct {
+			Profile, Database, ReadOnly string
+			GooseVersion                int64
+			HistoryMatches              bool
+			SchemaMatches               bool
+			PublicSequenceSafe          bool
+			SchemaCatalog               struct {
+				PurgeNodeCount, PurgeEdgeCount             int
+				PurgeNodeFingerprint, PurgeEdgeFingerprint string
+			}
+		}
+		if json.Unmarshal(document, &proof) != nil || proof.Profile != profile ||
+			proof.Database != admin.Config().Database || proof.ReadOnly != "on" || proof.GooseVersion != version ||
+			!proof.HistoryMatches || !proof.SchemaMatches || !proof.PublicSequenceSafe ||
+			proof.SchemaCatalog.PurgeNodeCount != nodes || proof.SchemaCatalog.PurgeEdgeCount != edges ||
+			proof.SchemaCatalog.PurgeNodeFingerprint != nodeDigest || proof.SchemaCatalog.PurgeEdgeFingerprint != edgeDigest {
+			t.Fatal("current project closure differs from the verified release catalog")
+		}
+	default:
+		t.Fatal("unsupported disposable project assistant schema")
+	}
+}
+
 // TestProjectAssistantProfilesComponent verifies assistant ownership and deletion against the exact current migration graph in an isolated database.
 // TestProjectAssistantProfilesComponent проверяет владение помощниками и удаление по точному графу текущих миграций в изолированной БД.
 func TestProjectAssistantProfilesComponent(t *testing.T) {
@@ -88,18 +161,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	var graphNodes, graphEdges, serverEdges int
-	var graphNodeDigest, graphEdgeDigest, serverDigest string
-	if err := pool.QueryRow(ctx, queryProjectAssistantPurgeGraph).Scan(&graphNodes, &graphNodeDigest, &graphEdges, &graphEdgeDigest, &serverEdges, &serverDigest); err != nil {
-		t.Fatal("read project purge graph")
-	}
-	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Полный actual041111/308 закреплён независимо от явно названной inverse010 проекции284.
-	// Полный shape также проверяется shipped current postcondition до запуска component suite.
-	if graphNodes != 111 || graphNodeDigest != "3eb558fae167872ba6bd17bc68f7a303" || graphEdges != 308 ||
-		graphEdgeDigest != "d6aa5b9aa21c5e065c3106f2a6119e0f" || serverEdges != 284 || serverDigest != "6bf6ad76d8c7ae66e07f75ecf719fdd6" {
-		t.Fatal("project assistant purge graph changed")
-	}
+	assertProjectAssistantPurgeGraph(t, ctx, pool)
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)

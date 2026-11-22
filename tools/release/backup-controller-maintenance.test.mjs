@@ -4,7 +4,7 @@ import {uid} from './fixtures/authority-catalog-synthetic.mjs';
 import {backupMaintenanceFixture as setup} from './fixtures/backup-controller-maintenance-synthetic.mjs';
 import {fingerprint} from './scoped-release.mjs';
 import {canonicalPostgresBackupBoundarySHA256} from './backup-postgres-boundary.mjs';
-import {backupControllerMaintenanceHeader,readBackupProducerInventory,requireBackupProducerBoundary,requireStoppedBackupController,planBackupControllerMaintenance,backupControllerMaintenanceStep} from './backup-controller-maintenance.mjs';
+import {backupControllerMaintenanceHeader,readBackupProducerInventory,requireBackupProducerBoundary,requireStoppedBackupController,requireResumedBackupController,planBackupControllerMaintenance,backupControllerMaintenanceStep} from './backup-controller-maintenance.mjs';
 
 
 test('stop/resume сохраняет template, scoped journal и точный positive join',async()=>{
@@ -12,11 +12,15 @@ test('stop/resume сохраняет template, scoped journal и точный po
  assert.equal((await f.step('apply',f.stop,journal)).state,'CONVERGING');assert.equal(f.state.effects,1);
  assert.throws(()=>requireStoppedBackupController(f.deployment,f.resources(),{plan:f.stop,events:journal.events},f.inventory()),/NOT_STOPPED|STOP_REQUIRED/);
  f.converge();assert.equal((await f.step('status',f.stop,journal)).state,'STOPPED');
+ assert.throws(()=>requireResumedBackupController(f.stop,f.deployment,f.resources()),/CONTROLLER_NOT_RESUMED/);
  const proof=requireStoppedBackupController(f.deployment,f.resources(),{plan:f.stop,events:journal.events},f.inventory());assert.equal(proof.planSHA256,fingerprint(f.stop));
  const resume=planBackupControllerMaintenance(f.deployment,f.target,f.observed,f.sourceSHA,'resume',{plan:f.stop,events:journal.events},f.inventory()),resumeJournal=f.journal(resume);
  f.state.gateValid=false;await assert.rejects(f.step('apply',resume,resumeJournal),/GATE_CHANGED/);assert.equal(f.state.effects,1);
  f.state.gateValid=true;assert.equal((await f.step('apply',resume,resumeJournal)).state,'CONVERGING');f.converge();
  assert.equal((await f.step('status',resume,resumeJournal)).state,'RESUMED');assert.deepEqual(f.deployment.spec,before);assert.equal(f.state.effects,2);
+ requireResumedBackupController(f.stop,f.deployment,f.resources());
+ const replaced=structuredClone(f.deployment);replaced.metadata.uid=uid(404);
+ assert.throws(()=>requireResumedBackupController(f.stop,replaced,f.resources()),/CONTROLLER_NOT_RESUMED/);
 });
 
 test('потерянный ACK разрешается readback без второго scale и без переписывания истории',async()=>{

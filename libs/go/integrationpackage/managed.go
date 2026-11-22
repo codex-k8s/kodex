@@ -50,7 +50,7 @@ func ValidateExecutableRevision(candidate, shipped Package) error {
 		return errExecutableRevision
 	}
 	if candidate.Metadata.Origin == Origin {
-		if _, ok := ResolveShippedRevision(shipped, candidate.Metadata.Version, candidate.Digest); !ok {
+		if !matchesShippedRevision(shipped, candidate.Metadata.Version, candidate.Digest) {
 			return errExecutableRevision
 		}
 		return nil

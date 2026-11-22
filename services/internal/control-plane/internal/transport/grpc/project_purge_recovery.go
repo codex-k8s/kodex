@@ -16,7 +16,7 @@ import (
 // доступность решения и версии владельца без выполнения очистки.
 func castProjectPurgeRecovery(item entity.ProjectPurgeRecovery) *cp.ProjectPurgeRecovery {
 	return &cp.ProjectPurgeRecovery{ProjectRef: item.ProjectRef, Version: item.Version, SnapshotDigest: item.SnapshotDigest,
-		State: item.State, UnknownContentCount: item.UnknownContentCount, CleanupPendingCount: item.CleanupPendingCount,
+		ReasonCode: item.ReasonCode, State: item.State, UnknownContentCount: item.UnknownContentCount, CleanupPendingCount: item.CleanupPendingCount,
 		ProjectPresent: item.ProjectPresent, CanResolve: item.CanResolve, ResolutionRef: item.ResolutionRef, ProjectVersion: item.ProjectVersion}
 }
 

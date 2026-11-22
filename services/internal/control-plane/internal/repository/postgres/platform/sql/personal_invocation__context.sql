@@ -5,7 +5,7 @@ SELECT invocation.id::text,connection.id::text,connection.ref,connection.credent
        subject.id::text,subject.ref,subject.kind,root.source,
        control_plane.integration_connection_configuration_ready(connection.id),
        subject.active AND control_plane.catalog_resource_visible(connection.organization_id,
-         subject.id,'integration.manage','INTEGRATION',connection.id,NULL,connection.created_by,
+         subject.id,CASE WHEN connection.definition_key IN('kubernetes-managed','ssh-managed','ssh-execute') THEN 'integration.view' ELSE 'integration.manage' END,'INTEGRATION',connection.id,NULL,connection.created_by,
          '{}'::jsonb,statement_timestamp())
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.integration_connections connection ON connection.id=invocation.connection_id

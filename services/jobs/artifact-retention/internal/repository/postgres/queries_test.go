@@ -10,10 +10,10 @@ import (
 func TestClaimQueryKeepsBoundedFencedLifecycle(t *testing.T) {
 	for _, fragment := range []string{
 		"FOR UPDATE OF artifact SKIP LOCKED",
-		"LIMIT @batch_size",
+		"LIMIT @batch_size::integer",
 		"content.object_version",
 		"retention_claim_generation + 1",
-		"@lease_seconds * interval '1 second'",
+		"@lease_seconds::integer * interval '1 second'",
 		"artifact_has_retained_revisions(artifact.id)",
 		"control_plane.artifact_heads",
 		"content.revision_id=revision.id",

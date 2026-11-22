@@ -22,6 +22,9 @@ import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import type { AppProblem } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import KubernetesToolPanel from "./KubernetesToolPanel.vue";
+import KubernetesCaptureHistoryPanel from "./KubernetesCaptureHistoryPanel.vue";
+import KubernetesStreamInputPanel from "./KubernetesStreamInputPanel.vue";
 import RuntimeRevisionDiffPanel from "./RuntimeRevisionDiffPanel.vue";
 import RunPromptPreview from "./RunPromptPreview.vue";
 import RunTranscript from "./RunTranscript.vue";
@@ -189,6 +192,25 @@ function formatTokenCount(value: number): string {
         </div>
         <StatusBadge :state="node.state" />
       </header>
+
+      <KubernetesToolPanel
+        v-if="sessionNode"
+        :run-ref="run.ref"
+        :node-ref="node.ref"
+        :show-captures="false"
+      />
+
+      <KubernetesCaptureHistoryPanel
+        v-if="sessionNode"
+        :run-ref="run.ref"
+        :node-ref="node.ref"
+      />
+
+      <KubernetesStreamInputPanel
+        v-if="sessionNode"
+        :run-ref="run.ref"
+        :node-ref="node.ref"
+      />
 
       <details
         v-if="sessionNode"

@@ -8,7 +8,13 @@ import type {
   EmailMailboxCredentialReference,
   EmailMailboxOperation,
   EmailMailboxApprovalPolicy,
+  EmailMailboxProviderProfile,
 } from "@/shared/api/generated/openapi/types.gen";
+import {
+  emailMailboxOperations,
+  mailboxProviderProfile,
+  mailboxApprovalProfile,
+} from "../email-provider-profile";
 
 const props = defineProps<{
   value: EmailMailboxSpecification;
@@ -43,29 +49,20 @@ const credentialFields = {
   username: "USERNAME",
   secret: "AUTH_SECRET",
 } as const;
-const operations: EmailMailboxOperation[] = [
-  "HEALTH",
-  "MAILBOXES",
-  "LIST",
-  "SEARCH",
-  "FETCH",
-  "DOWNLOAD",
-  "SEND",
-  "REPLY",
-  "REPLY_ALL",
-  "FORWARD",
-  "DELETE",
-  "RECEIPT",
-  "THREAD",
-  "ATTACHMENTS",
-  "MARK_READ",
-  "MARK_UNREAD",
-  "MOVE",
-  "ARCHIVE",
-  "DRAFT_CREATE",
-  "DRAFT_UPDATE",
-  "DRAFT_DELETE",
-];
+const operations = emailMailboxOperations;
+function chooseProfile(event: Event): void {
+  if (!props.disabled)
+    emit(
+      "change",
+      mailboxProviderProfile(
+        props.value,
+        text(event) as EmailMailboxProviderProfile,
+      ),
+    );
+}
+function chooseApprovalProfile(): void {
+  if (!props.disabled) emit("change", mailboxApprovalProfile(props.value));
+}
 function set<K extends keyof EmailMailboxSpecification>(
   key: K,
   value: EmailMailboxSpecification[K],
@@ -161,6 +158,36 @@ function policy(
 
 <template>
   <fieldset class="mailbox-fields" :disabled="disabled">
+    <label class="field" :for="`${fieldPrefix}-provider-profile`"
+      ><span>{{ $t("personalEmail.profile") }}</span
+      ><select
+        :id="`${fieldPrefix}-provider-profile`"
+        :value="value.providerProfile ?? 'CUSTOM'"
+        @change="chooseProfile"
+      >
+        <option
+          v-for="profile in [
+            'CUSTOM',
+            'TIMEWEB_PASSWORD',
+            'GMAIL_APP_PASSWORD',
+          ] as const"
+          :key="profile"
+          :value="profile"
+        >
+          {{ $t(`personalEmail.profiles.${profile}`) }}
+        </option>
+      </select></label
+    >
+    <p v-if="value.providerProfile === 'GMAIL_APP_PASSWORD'" role="note">
+      {{ $t("personalEmail.gmailHelp") }}
+    </p>
+    <p v-if="value.providerProfile === 'TIMEWEB_PASSWORD'" role="note">
+      {{ $t("personalEmail.timewebHelp") }}
+    </p>
+    <p>{{ $t("personalEmail.policyHelp") }}</p>
+    <button class="button" type="button" @click="chooseApprovalProfile">
+      {{ $t("personalEmail.applyProfile") }}
+    </button>
     <label class="checkbox"
       ><input
         type="checkbox"
@@ -379,7 +406,9 @@ function policy(
           >
             <option value=""></option>
             <option value="DENY">{{ $t("mailbox.deny") }}</option>
-            <option value="ALLOW">{{ $t("mailbox.allow") }}</option>
+            <option value="ALLOW">
+              {{ $t("personalEmail.profilePolicy") }}
+            </option>
             <option value="HUMAN_GATE">{{ $t("mailbox.gate") }}</option>
           </select></label
         >

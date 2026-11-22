@@ -15,6 +15,7 @@ import (
 	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/sshcompose"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -1141,6 +1142,9 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		return nil, errs.ErrUnavailable
 	}
 	if principal.CallerWorkload == "integration-gateway" {
+		if err := repository.settleEmailPendingTx(ctx, tx, scope, ""); err != nil {
+			return nil, err
+		}
 		if err := enqueueManagedMCPHealthRefresh(ctx, tx, scope, limit); err != nil {
 			return nil, err
 		}
@@ -1161,6 +1165,8 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		configuration                                                              []byte
 		credential                                                                 entity.IntegrationCredentialRevision
 		credentialCreatedAt                                                        *time.Time
+		credentialKind, inputDigest                                                string
+		source                                                                     sharedHealthCredentialSnapshot
 	}
 	candidates := make([]candidate, 0, limit)
 	for rows.Next() {
@@ -1171,6 +1177,9 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 			&item.credential.Ref, &item.credential.Revision, &item.credential.SecretRef,
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion,
 			&item.credential.ContentSHA256, &item.credentialCreatedAt,
+			&item.credentialKind, &item.inputDigest, &item.source.identityID, &item.source.tokenPresent,
+			&item.source.identity.Ref, &item.source.identity.Revision, &item.source.identity.Purpose, &item.source.identity.TargetRef, &item.source.createdAt,
+			&item.source.serviceRef, &item.source.serviceActive,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1191,6 +1200,14 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 		if !exists || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
 			return nil, errs.ErrForbidden
 		}
+		item.source.configuration = item.configuration
+		source, err := sharedHealthCredentialFromSnapshot(scope.organizationID, item.connectionRef, definition, item.source, time.Now().UTC())
+		if err != nil {
+			return nil, err
+		}
+		if item.credentialKind != string(source.delivery.Kind) || !validSharedHealthInputDigest(item.inputDigest) {
+			return nil, errs.ErrUnavailable
+		}
 		leaseRef, _ := newRef("lea")
 		fence, _ := newRef("fnc")
 		digest := sha256.Sum256([]byte(fence))
@@ -1209,7 +1226,22 @@ func (repository *Repository) ClaimIntegrationConnectionTests(ctx context.Contex
 			"configuration": configuration, "leaseRef": leaseRef, "fence": fence,
 			"generation": generation, "expiresAt": expiresAt,
 		}
-		attachIntegrationClaimCredential(claim, definition.RequiresConnectionCredential(), &item.credential, item.credentialCreatedAt)
+		claim["credentialDeliveryKind"] = string(source.delivery.Kind)
+		claim["inputDigest"] = item.inputDigest
+		switch source.delivery.Kind {
+		case integrationpackage.CredentialDeliveryToken:
+			attachIntegrationClaimCredential(claim, definition.RequiresConnectionCredential(), &item.credential, item.credentialCreatedAt)
+		case integrationpackage.CredentialDeliveryBrokerIdentity:
+			if source.identity == nil || generation != 1 {
+				return nil, errs.ErrUnavailable
+			}
+			claim["brokerIdentityPurpose"] = string(source.identity.Purpose)
+			claim["brokerIdentityRef"] = source.identity.Ref
+			claim["brokerIdentityRevision"] = source.identity.Revision
+		case integrationpackage.CredentialDeliveryNone:
+		default:
+			return nil, errs.ErrUnavailable
+		}
 		result = append(result, claim)
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -1249,17 +1281,24 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		healthCredentialInvalid = report.CredentialInvalid()
 	}
 	var testID, connectionID, connectionRef, storedDigest, state, leaseRef string
-	var definitionKey, connectionState, purpose, definitionVersion, definitionDigest string
+	var definitionKey, connectionState, purpose, definitionVersion, definitionDigest, credentialKind string
 	var connectionEnabled bool
 	var attempt int
 	var createdAt time.Time
 	var generation int64
 	var expiresAt time.Time
-	if err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(
+	err := tx.QueryRow(ctx, queryWorkersCompleteintegrationtestSelectIntegrationConnectionTestsOrganizationIdRef, scope.organizationID, payload.TestRef, input.Principal.CallerWorkload).Scan(
 		&testID, &connectionID, &connectionRef, &storedDigest, &generation, &state, &leaseRef, &expiresAt,
-		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled, &purpose, &definitionVersion, &definitionDigest,
-	); err != nil {
+		&attempt, &createdAt, &definitionKey, &connectionState, &connectionEnabled, &purpose, &definitionVersion, &definitionDigest, &credentialKind,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
+	}
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if credentialKind != string(integrationpackage.CredentialDeliveryNone) && credentialKind != string(integrationpackage.CredentialDeliveryToken) {
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	digest := sha256.Sum256([]byte(payload.Fence))
 	if state != "CLAIMED" || leaseRef != payload.LeaseRef || generation != payload.Generation || storedDigest != hex.EncodeToString(digest[:]) || time.Now().After(expiresAt) {
@@ -1285,7 +1324,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 			testID, leaseRef, generation).Scan(&requeuedRef); err != nil || requeuedRef != payload.TestRef {
 			return commandOutcome{}, errs.ErrConflict
 		}
-		item, err := readConnection(ctx, tx, scope, connectionRef)
+		item, err := repository.readConnection(ctx, tx, scope, connectionRef)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -1312,7 +1351,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	if purpose == "MANAGED_MCP_REFRESH" && payload.Success && connectionState == "CONNECTED" {
-		item, err := readConnection(ctx, tx, scope, connectionRef)
+		item, err := repository.readConnection(ctx, tx, scope, connectionRef)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -1326,7 +1365,7 @@ func (repository *Repository) completeIntegrationConnectionTest(ctx context.Cont
 	if err := advanceMailboxObservation(ctx, tx, scope.organizationID, connectionID, item.Version-1, item.Version); err != nil {
 		return commandOutcome{}, err
 	}
-	item, err := readConnection(ctx, tx, scope, connectionRef)
+	item, err = repository.readConnection(ctx, tx, scope, connectionRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1395,14 +1434,30 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	if err != nil {
 		return nil, err
 	}
+	if err := lockKubernetesInvocationSourceTx(ctx, tx, scope.organizationID, input["connection_ref"]); err != nil {
+		return nil, err
+	}
 	var runID, nodeID, connectionID, grantID, grantRef, projectID, rootRunID, initiatorRef, agentID string
 	var definitionKey, definitionVersion, definitionDigest, connectionName, risk, approvalPolicy, resourceKind, resourceScopeDigest string
 	var encodedScope []byte
 	var connectionSnapshot []byte
 	var grantVersion int64
 	var approvalScopePaths []string
+	kubernetesNamespace := ""
+	if _, known := integrationpackage.KubernetesOperationByKey(input["capability_key"]); known {
+		parsed, _, parseErr := managedkubernetes.DecodeOperationInput(input["capability_key"], encodedInput)
+		if parseErr != nil {
+			return nil, errs.ErrInvalid
+		}
+		kubernetesNamespace = parsed.Namespace
+		if input["capability_key"] == "kubernetes.list.all-namespaces" || input["capability_key"] == "kubernetes.watch.all-namespaces" {
+			kubernetesNamespace = "@all-namespaces"
+		} else if kubernetesNamespace == "" {
+			kubernetesNamespace = "@cluster"
+		}
+	}
 	err = tx.QueryRow(ctx, queryWorkersResolveintegrationinvocationSelectRunsIdOrganizationIdRef,
-		scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"],
+		scope.organizationID, input["run_ref"], input["node_ref"], input["connection_ref"], input["capability_key"], kubernetesNamespace,
 	).Scan(
 		&runID, &nodeID, &connectionID, &grantID, &grantRef, &projectID, &rootRunID,
 		&definitionKey, &definitionVersion, &definitionDigest, &connectionName, &risk, &approvalPolicy,
@@ -1417,13 +1472,17 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	}
 	initiatorScope := scope
 	initiatorScope.actorRef = initiatorRef
-	if err := repository.requireAccess(ctx, tx, initiatorScope, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); err != nil {
-		return nil, errs.ErrForbidden
-	}
 	definition, packageErr := repository.integrationPackage(ctx, tx, scope.organizationID, input["connection_ref"], definitionKey, definitionVersion, definitionDigest)
 	capability, capabilityExists := definition.Capability(input["capability_key"])
 	if packageErr != nil || !capabilityExists || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest ||
 		capability.Risk != risk || !capability.AllowsApprovalPolicy(approvalPolicy) || capability.ResourceScope.Kind != resourceKind || grantVersion < 1 {
+		return nil, errs.ErrForbidden
+	}
+	permission := integrationInvocationActorPermission(definition)
+	if accessErr := repository.requireAccess(ctx, tx, initiatorScope, permission, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: input["connection_ref"]}); accessErr != nil {
+		if accessInfrastructureFailure(accessErr) {
+			return nil, accessErr
+		}
 		return nil, errs.ErrForbidden
 	}
 	legacyRework, reworkErr := isLegacyReworkNodeTx(ctx, tx, scope, nodeID)
@@ -1452,7 +1511,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 	if definition.ValidateInvocationApprovalPolicy(capability, approvalPolicy, canonicalInput) != nil {
 		return nil, errs.ErrForbidden
 	}
-	if len(encodedInput) > 64<<10 && (definitionKey != "github" || capability.Operation != "github.repository.content.update") {
+	if len(encodedInput) > 64<<10 && (definitionKey != "github" || capability.Operation != "github.repository.content.update") && definitionKey != integrationpackage.KubernetesDefinitionKey {
 		return nil, errs.ErrInvalid
 	}
 	var resourceScope map[string]string
@@ -1494,6 +1553,8 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		intentParts = append(intentParts, sshComposeAdmissionDigest(*sshSnapshot))
 	}
 	mailboxGate := false
+	var emailMailbox *emailpolicy.MailboxProjection
+	var emailOwner *emailCredentialOwnerRow
 	if definitionKey == "email" {
 		mailbox, err := repository.readEmailMailbox(ctx, tx, scope, resourceScope["mailbox_id"], 0)
 		if err != nil {
@@ -1502,6 +1563,14 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		if mailbox.ConnectionRef != input["connection_ref"] {
 			return nil, errs.ErrForbidden
 		}
+		if err := emailpolicy.ValidateCommandApprovalPolicy(mailbox, capability.Operation, canonicalInput, approvalPolicy); err != nil {
+			return nil, err
+		}
+		owner, err := requireEmailCredentialOwnerTx(ctx, tx, scope, input["connection_ref"], initiatorRef, 0)
+		if err != nil {
+			return nil, err
+		}
+		emailMailbox, emailOwner = &mailbox, &owner
 		intentParts = append(intentParts, mailbox.SourceDigest)
 		mailboxGate, err = emailpolicy.CommandRequiresGate(mailbox, capability.Operation, "", canonicalInput)
 		if err != nil {
@@ -1515,7 +1584,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		effectKey = "eff_" + sshcompose.Digest([]byte(strings.Join([]string{projectID, sshSnapshot.Target.Ref, sshSnapshot.MergedSHA, sshSnapshot.BundleSHA256}, "\x00")))[:32]
 	}
 	state := "READY"
-	if approvalPolicy == "HUMAN_EACH_EFFECT" || mailboxGate {
+	if approvalPolicy == "HUMAN_EACH_EFFECT" && !(definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey && definition.Spec.Adapter == "KUBERNETES") || mailboxGate {
 		state = "WAITING_APPROVAL"
 	}
 	var approvalScopeID string
@@ -1542,6 +1611,15 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		if scopeErr != nil && !errors.Is(scopeErr, pgx.ErrNoRows) {
 			return nil, serializableTransactionError(scopeErr, errs.ErrUnavailable)
 		}
+		if approvalScopeID != "" && emailMailbox != nil && emailOwner != nil {
+			matches, err := emailApprovalScopeMatchesTx(ctx, tx, scope, approvalScopeID, *emailOwner, *emailMailbox)
+			if err != nil {
+				return nil, err
+			}
+			if !matches {
+				approvalScopeID = ""
+			}
+		}
 		state = "WAITING_APPROVAL"
 		if approvalScopeID != "" {
 			state = "READY"
@@ -1559,6 +1637,7 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		grantVersion: grantVersion, approvalPolicy: approvalPolicy, idempotencyKey: input["idempotency_key"],
 		intentDigest: intentDigestHex, intentParts: intentParts, allowPending: state == "WAITING_APPROVAL",
 		connectionSnapshotDigest: hex.EncodeToString(snapshotDigest[:]),
+		definitionKey:            definitionKey,
 	}
 	if nativePending {
 		rejoined, rejoinErr := repository.rejoinPendingInvocationTx(ctx, tx, scope, pendingRequest)
@@ -1602,8 +1681,19 @@ func (repository *Repository) resolveIntegrationInvocationTx(ctx context.Context
 		return nil, serializableTransactionError(err, mapWriteError(err))
 	}
 	if resolvedRef == invocationRef {
-		if err := repository.pinPersonalInvocationCredentialTx(ctx, tx, scope.organizationID, resolvedRef); err != nil {
-			return nil, err
+		var pinErr error
+		if definitionKey == "email" {
+			pinErr = repository.pinEmailInvocationMailboxTx(ctx, tx, scope, resolvedRef)
+		} else {
+			pinErr = repository.pinPersonalInvocationCredentialTx(ctx, tx, scope.organizationID, resolvedRef)
+		}
+		if pinErr != nil {
+			return nil, pinErr
+		}
+		if definitionKey == integrationpackage.KubernetesDefinitionKey && resourceKind == "KUBERNETES_TARGET" && capability.Operation == "kubernetes.cp.upload" {
+			if err := repository.pinKubernetesFileInvocationOriginTx(ctx, tx, scope.organizationID, resolvedRef, canonicalInput); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if sshSnapshot != nil && resolvedRef == invocationRef {
@@ -1747,17 +1837,38 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := repository.claimOrdinaryIntegrationInvocationsTx(ctx, tx, scope, principal, instance, limit, route, sshLane)
+	if err != nil {
+		return nil, err
+	}
+	if tx.Commit(ctx) != nil {
+		return nil, errs.ErrUnavailable
+	}
+	return result, nil
+}
+
+// claimOrdinaryIntegrationInvocationsTx reuses the existing ordinary/SSH_COMPOSE selector under the caller's transaction.
+// SSH_TARGET is a separate fixed purpose, never an interpretation of the legacy sshLane switch.
+// claimOrdinaryIntegrationInvocationsTx использует existing ordinary/SSH_COMPOSE selector в транзакции caller.
+// SSH_TARGET является отдельным fixed purpose, не интерпретацией legacy sshLane switch.
+func (repository *Repository) claimOrdinaryIntegrationInvocationsTx(ctx context.Context, tx pgx.Tx, scope scope, principal value.Principal, instance string, limit int32, route string, sshLane bool) ([]map[string]any, error) {
+	var err error
 	if _, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsExpireStaleInvocationLeases, scope.organizationID, principal.CallerWorkload); err != nil {
 		return nil, errs.ErrUnavailable
 	}
 	if err := repository.expireQueuedIntegrationApprovalsTx(ctx, tx, scope, principal.CallerWorkload, route, sshLane); err != nil {
 		return nil, err
 	}
+	if principal.CallerWorkload == "integration-gateway" && !sshLane {
+		if err := repository.settleEmailPendingTx(ctx, tx, scope, ""); err != nil {
+			return nil, err
+		}
+	}
 	candidateLimit := limit
 	if sshLane {
 		candidateLimit = sshComposeAdmissionScanLimit
 	}
-	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, candidateLimit, principal.CallerWorkload, route, sshLane, "")
+	rows, err := tx.Query(ctx, queryWorkersClaimintegrationinvocationsSelectIntegrationInvocationsOrganizationIdState, scope.organizationID, candidateLimit, principal.CallerWorkload, route, sshLane, "", false, false, false)
 	if err != nil {
 		return nil, errs.ErrUnavailable
 	}
@@ -1814,9 +1925,6 @@ func (repository *Repository) claimIntegrationInvocations(ctx context.Context, p
 		if len(result) >= int(limit) {
 			break
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return nil, errs.ErrConflict
 	}
 	return result, nil
 }
@@ -1898,6 +2006,18 @@ func (repository *Repository) completeIntegrationInvocationTx(ctx context.Contex
 	}
 	if (operation == repositoryBundleOperation) != bundle {
 		return commandOutcome{}, errs.ErrForbidden
+	}
+	var brokerOwned bool
+	if err := tx.QueryRow(ctx, queryIntegrationInvocationBrokerKind, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "invocation_ref": payload.InvocationRef}).Scan(&brokerOwned); err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if brokerOwned {
+		return commandOutcome{}, errs.ErrForbidden
+	}
+	if (payload.Success || payload.ResultSummary != "") && strings.HasPrefix(operation, "email.") {
+		if err := repository.requireEmailReadCompletionMailboxTx(ctx, tx, scope, payload.InvocationRef); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	personalPin, err := repository.lockPersonalInvocationCompletion(ctx, tx, scope, input.Principal.CallerWorkload, payload)
 	if err != nil {

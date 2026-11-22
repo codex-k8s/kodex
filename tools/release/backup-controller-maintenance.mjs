@@ -1,3 +1,4 @@
+import {requirePersonalIntegrationsDeliveryPrerequisite} from './personal-integrations-migration-contract.mjs';
 import {randomUUID} from 'node:crypto';
 import {fingerprint} from './scoped-release.mjs';
 import {portableRunnerTarget} from './portable-runner-target.mjs';
@@ -77,6 +78,17 @@ export function requireBackupProducerBoundary(inventory,deploymentUID,stopped=fa
 const active=(deployment,resources)=>activeDeploymentPods(componentServingInventory(resources,name,deployment.metadata.uid),deployment.metadata.uid);
 const stopped=(deployment,resources)=>deployment.spec.replicas===0&&deployment.status?.observedGeneration>=deployment.metadata.generation&&
  ['replicas','updatedReplicas','readyReplicas','availableReplicas'].every(key=>(deployment.status[key]??0)===0)&&active(deployment,resources).length===0;
+// Scale-down maintenance не меняет template. Возврат serving replica и
+// положительная готовность проверяются по первоначальному Deployment.
+export function requireResumedBackupController(plan,deployment,resources){
+ validate(plan);
+ fail(plan.action==='stop'&&deployment?.apiVersion==='apps/v1'&&deployment.kind==='Deployment'&&
+  deployment.metadata.namespace===namespace&&deployment.metadata.name===name&&deployment.metadata.uid===plan.deploymentUID&&
+  !deployment.metadata.deletionTimestamp&&same(deployment.spec,plan.beforeSpec)&&
+  same(deployment.metadata.annotations??{},plan.beforeAnnotations)&&
+  componentServingReady(deployment,active(deployment,resources),plan.replicas),
+  'PERSONAL_INTEGRATIONS_BACKUP_CONTROLLER_NOT_RESUMED');
+}
 function validate(plan){
  fail(plan?.executorSHA===undefined||plan.action==='resume'&&/^[a-f0-9]{40}$/.test(plan.executorSHA)&&plan.executorSHA!==plan.sourceSHA,'BACKUP_MAINTENANCE_EXECUTOR_INVALID');
  fail(plan?.schema==='kodex.backup-controller-maintenance-plan/v1'&&['stop','resume'].includes(plan.action)&&uuid(plan.maintenanceID)&&uuid(plan.deploymentUID)&&
@@ -119,6 +131,7 @@ export function planBackupControllerMaintenance(deployment,target,observed,sourc
 // Caller передаёт fresh target/owner gate: для resume он дополнительно доказывает
 // CANONICAL_BACKUP043/044 и terminal cleanup. Сохранённый boolean не является gate.
 export async function backupControllerMaintenanceStep({phase,plan,journal,get,resources,producerInventory,patch,gate}){
+ if(phase==='apply')requirePersonalIntegrationsDeliveryPrerequisite(plan?.migrationProfile,'backup-maintenance');
  validate(plan);fail(['apply','status'].includes(phase),'BACKUP_MAINTENANCE_PHASE_INVALID');
  fail(Array.isArray(journal?.events)&&journal.events[0]?.type==='HEADER'&&Object.entries(backupControllerMaintenanceHeader(plan)).every(([key,value])=>journal.events[0][key]===value),'BACKUP_MAINTENANCE_JOURNAL_INVALID');
  const current=get();fail(current.kind==='Deployment'&&current.metadata.name===name&&current.metadata.namespace===namespace&&current.metadata.uid===plan.deploymentUID&&!current.metadata.deletionTimestamp,'BACKUP_MAINTENANCE_UID_CHANGED');

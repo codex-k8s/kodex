@@ -5,6 +5,10 @@ ENV GOTOOLCHAIN=local
 ARG VERSION=dev
 WORKDIR /workspace
 
+COPY libs/go/controlplaneapi/go.mod libs/go/controlplaneapi/
+COPY libs/go/controlplaneclient/go.mod libs/go/controlplaneclient/
+COPY libs/go/internalrpcauth/go.mod libs/go/internalrpcauth/
+COPY libs/go/managedkubernetes/go.mod libs/go/managedkubernetes/
 COPY libs/go/httpserver/go.mod libs/go/httpserver/
 COPY libs/go/grpcserver/go.mod libs/go/grpcserver/
 COPY libs/go/objectstorage/go.mod libs/go/objectstorage/go.sum libs/go/objectstorage/
@@ -16,6 +20,10 @@ WORKDIR /workspace/services/jobs/artifact-retention
 RUN go mod download
 
 WORKDIR /workspace
+COPY libs/go/controlplaneapi/ libs/go/controlplaneapi/
+COPY libs/go/controlplaneclient/ libs/go/controlplaneclient/
+COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
+COPY libs/go/managedkubernetes/ libs/go/managedkubernetes/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/objectstorage/ libs/go/objectstorage/

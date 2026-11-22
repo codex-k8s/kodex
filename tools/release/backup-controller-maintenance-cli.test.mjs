@@ -1,7 +1,12 @@
+import {planComponentAPIMaintenance} from './component-api-maintenance.mjs';
+import {planComponentAPITraffic} from './component-api-traffic.mjs';
+import {planWorkflowFileUnboundAPI,readWorkflowFileUnboundAPI} from './workflow-file-provenance-unbound-api.mjs';
+import {syntheticMigrationBaseline} from './fixtures/migration-api-terminal-synthetic.mjs';
+import {workflowFileProvenanceMigration,workflowFileAbortIntent,workflowFileAbortAck} from './workflow-file-provenance-migration-contract.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,dirname} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
@@ -17,7 +22,7 @@ import {githubRepositoryScopeCatalog} from './github-repository-scope-catalog.ge
 import {sentryObservabilityCatalog} from './sentry-observability-catalog.gen.mjs';
 import {backupMigrationProfile} from './backup-migration-registry.mjs';
 import {backupMaintenanceFixture,backupMaintenanceKube} from './fixtures/backup-controller-maintenance-synthetic.mjs';
-import {backupMigrationInspectReferences,backupMigrationInspectArguments,backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance} from './backup-controller-maintenance-cli.mjs';
+import {backupMigrationInspectReferences,backupMigrationInspectArguments,backupPostgresIdentity,readCanonicalBackupOwner,readBackupMigrationJobPods,verifyBackupMigrationScope,readBackupCleanupTerminal,requireOpenBackupBoundary,readStoppedBackupMaintenance,readWorkflowFileUnboundBackupTerminal,readBackupMigrationPlan} from './backup-controller-maintenance-cli.mjs';
 
 const cli=fileURLToPath(new URL('./backup-controller-maintenance-cli.mjs',import.meta.url));
 const hash=raw=>createHash('sha256').update(raw).digest('hex');
@@ -330,4 +335,203 @@ test('real CLI backup107 resume закрепляет receipts и отверга�
  result=stopAttempt.run('plan',['--action','stop','--target',join(stopAttempt.directory,'target.json'),'--evidence',join(stopAttempt.directory,'evidence.jsonl'),
   '--migration-profile','telegram-notifications-backup',...Object.entries(refs).flat()]);
  assert.notEqual(result.status,0);assert.match(result.stderr,/INSPECT_INPUT_INVALID/);assert.equal(stopAttempt.read().effects,0);
+});
+
+
+test('051 backup возвращается только после закрытого отказа и подтверждённого старого CP',async()=>{
+ const f=backupMaintenanceFixture(),journal=f.journal(f.stop);
+ await f.step('apply',f.stop,journal);f.converge();await f.step('status',f.stop,journal);
+ const {profile,before,after}=workflowFileProvenanceMigration;
+ f.stop.migrationProfile=profile;
+ f.stop.postgresBackend={systemIdentifier:'9007199254740993',databaseOID:'16384',database:'control_plane',port:'5432',serverAddress:null,serverPort:null};
+ const closed={plan:f.stop,events:journal.events};
+ closed.events[0]={type:'HEADER',...backupControllerMaintenanceHeader(f.stop)};
+ const migration={profile,migrationVersion:String(after),source:{revision:f.sourceSHA},portableTarget:f.target,
+  postgres:f.postgres,postgresBackend:f.stop.postgresBackend,job:{metadata:{name:'migration-051'}},checkJob:{metadata:{name:'check-051'}}};
+ const now=()=>Date.parse('2026-11-22T12:00:00Z'),observedAt=new Date(now()).toISOString();
+ const identity={gooseVersion:before,schemaCatalogSHA256:'a'.repeat(64),jobs:[
+  {name:'check-051',jobUID:'check-uid',podUID:'check-pod',outcome:'FAILED'},{name:'migration-051',outcome:'NOT_CREATED'}]};
+ const events=[{type:'HEADER',planSHA256:fingerprint(migration)},{type:'CHECK_CREATE_INTENT',jobName:'check-051'},
+  {type:workflowFileAbortIntent,identity},{type:workflowFileAbortAck,abortSHA256:fingerprint(identity)}];
+ const owner={schemaVersion:before,canonicalBackup:true,schemaCatalogSHA256:identity.schemaCatalogSHA256,observedAt};
+ const state={deployment:f.deployment,rs:f.rs,pods:[],extra:[],postgres:f.postgres};
+ const kube=(args,input)=>backupMaintenanceKube(state,args,input);
+ const inspect={status:'ABORTED_NOT_APPLIED',evidenceReadOnly:true,cpReady:true,cpStage:'BEFORE',sourceRevision:f.sourceSHA,
+  abortSHA256:fingerprint(identity),abortPostcondition:{...identity,observedAt}};
+ const verify=(snapshot=inspect,journalRows=events)=>readBackupCleanupTerminal({kube,closed,migration,events:journalRows,owner,now,inspect:async()=>snapshot});
+ assert.equal((await verify()).cleanupTerminal,true);
+ for(const mutation of [{evidenceReadOnly:false},{cpReady:false},{status:'FAIL',operation:'check'},
+  {abortSHA256:'0'.repeat(64)},{abortPostcondition:{...inspect.abortPostcondition,observedAt:'2026-11-22T11:59:00Z'}}])
+  await assert.rejects(verify({...inspect,...mutation}),/CLEANUP_NOT_TERMINAL/);
+ await assert.rejects(verify(inspect,events.slice(0,-1)),/CLEANUP_NOT_TERMINAL/);
+});
+
+test('051 backup CLI возвращает unbound старый backup и до PATCH закрывает migration boundary',async t=>{
+ const profile=workflowFileProvenanceMigration.profile;
+ const f=setup(t,profile),state=f.read();
+ state.ownerVersion=workflowFileProvenanceMigration.before;
+ state.ownerProof={profile:'WORKFLOW_FILE_PROVENANCE_BACKUP_051',database:'control_plane',readOnly:'on',
+  gooseVersion:state.ownerVersion,serverVersionNum:180003,backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,
+  schemaMatches:true,historyMatches:true,artifactPredecessorApplied:true,
+  schemaCatalog:{catalogDigest:'58532c2f03d49c8499e9113ce9e6d5a687c92d41581641885bf98396d4ec6ab2'}};
+ f.store(state);
+ let result=f.prepare();assert.equal(result.status,0,result.stderr);
+ result=f.apply();assert.equal(result.status,0,result.stderr);
+ const stop=f.plan(),stopPath=join(f.directory,'plan.json'),stopEvidence=join(f.directory,'evidence.jsonl');
+ const resumePath=join(f.directory,'resume.json'),resumeEvidence=join(f.directory,'resume.jsonl');
+ const run=(phase,extra)=>spawnSync(process.execPath,[cli,phase,'--context',state.context,
+  '--kubeconfig','/synthetic/explicit config','--plan',resumePath,...extra],{
+   encoding:'utf8',timeout:30000,env:{PATH:join(f.directory,'bin')+':'+dirname(process.execPath)+':/usr/bin:/bin',HOME:f.directory,LANG:'C.UTF-8'}});
+ result=run('plan',['--action','resume','--unbound-workflow-file-provenance','true','--target',join(f.directory,'target.json'),
+  '--evidence',resumeEvidence,'--stopped-plan',stopPath,'--stopped-evidence',stopEvidence]);
+ assert.equal(result.status,0,result.stderr);
+ const plan=JSON.parse(readFileSync(resumePath,'utf8'));
+ assert.equal(plan.resumeUnbound,true);
+ const apply=()=>run('apply',['--evidence',resumeEvidence,'--approved-plan-sha',fingerprint(plan)]);
+ const foreign=f.read();
+ foreign.extra.push({kind:'Pod',metadata:{name:'migration-with-changed-label',uid:'10000000-0000-4000-8000-000000000995',resourceVersion:'1',namespace:'kodex-system',
+  ownerReferences:[{kind:'Job',name:'control-plane-migrate-20261121000200',uid:'10000000-0000-4000-8000-000000000996',controller:true}]}});
+ f.store(foreign);result=apply();
+ assert.notEqual(result.status,0);assert.match(result.stderr,/UNBOUND_WRITER_FOUND/);assert.equal(f.read().effects,1);
+ foreign.extra=[];f.store(foreign);
+ result=apply();assert.equal(result.status,0,result.stderr);
+ assert.equal(JSON.parse(result.stdout).state,'RESUMED');
+ const events=readFileSync(stopEvidence,'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(events.filter(e=>e.type==='BACKUP_RESUME_INTENT'&&e.outcome==='UNBOUND_NOT_APPLIED').length,1);
+ assert.equal(events.some(e=>e.type==='BACKUP_MIGRATION_BOUND'),false);
+ assert.throws(()=>requireOpenBackupBoundary(events,'c'.repeat(64)),/BOUNDARY_CLOSED/);
+ assert.equal(f.read().effects,2);
+ result=apply();assert.equal(result.status,0,result.stderr);assert.equal(f.read().effects,2);
+ assert.equal(stop.sourceSHA,plan.sourceSHA);
+ const restored=f.read(),kube=(args,input)=>backupMaintenanceKube(restored,args,input);
+ assert.equal((await readWorkflowFileUnboundBackupTerminal(kube,stop,events)).outcome,'UNBOUND_NOT_APPLIED');
+ const altered=structuredClone(events);altered.find(e=>e.type==='BACKUP_RESUME_INTENT').owner.schemaCatalogSHA256='0'.repeat(64);
+ await assert.rejects(readWorkflowFileUnboundBackupTerminal(kube,stop,altered),/UNBOUND_TERMINAL_CHANGED/);
+});
+
+test('051 backup CLI запечатывает не начатый stop без PATCH и отказывает после INTENT',async t=>{
+ const setup051=()=>{
+  const f=setup(t,workflowFileProvenanceMigration.profile),state=f.read();
+  state.ownerVersion=workflowFileProvenanceMigration.before;
+  state.ownerProof={profile:'WORKFLOW_FILE_PROVENANCE_BACKUP_051',database:'control_plane',readOnly:'on',
+   gooseVersion:state.ownerVersion,serverVersionNum:180003,backupQualification:'CANONICAL_BACKUP',publicSequenceSafe:true,
+   schemaMatches:true,historyMatches:true,artifactPredecessorApplied:true,
+   schemaCatalog:{catalogDigest:'58532c2f03d49c8499e9113ce9e6d5a687c92d41581641885bf98396d4ec6ab2'}};
+  state.backupSessions=1;f.store(state);
+  const prepared=f.prepare();assert.equal(prepared.status,0,prepared.stderr);
+  const evidencePath=join(f.directory,'evidence.jsonl');
+  const cancel=()=>f.run('cancel-stop',['--evidence',evidencePath,'--approved-plan-sha',fingerprint(f.plan())]);
+  return {...f,evidencePath,cancel};
+ };
+ const f=setup051();
+ const foreign=f.read();
+ foreign.extra.push({kind:'Pod',metadata:{name:'migration-with-changed-label',uid:'10000000-0000-4000-8000-000000000995',resourceVersion:'1',namespace:'kodex-system',
+  ownerReferences:[{kind:'Job',name:'control-plane-migrate-20261121000200',uid:'10000000-0000-4000-8000-000000000996',controller:true}]}});
+ f.store(foreign);
+ const rejected=f.cancel();assert.notEqual(rejected.status,0);assert.match(rejected.stderr,/UNBOUND_WRITER_FOUND/);
+ foreign.extra=[];f.store(foreign);
+ for(let i=0;i<2;i++){
+  const result=f.cancel();assert.equal(result.status,0,result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout),{state:'BEFORE',outcome:'UNBOUND_NOT_STARTED',boundaryClosed:true});
+ }
+ const blocked=f.apply();assert.match(blocked.stderr,/BOUNDARY_CLOSED/);assert.equal(f.read().effects,0);
+ const events=readFileSync(f.evidencePath,'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(events.filter(e=>e.type==='BACKUP_RESUME_INTENT'&&e.outcome==='UNBOUND_NOT_STARTED').length,1);
+ assert.throws(()=>requireOpenBackupBoundary(events,'c'.repeat(64)),/BOUNDARY_CLOSED/);
+ const preserved=f.read(),kube=(args,input)=>backupMaintenanceKube(preserved,args,input);
+ assert.equal((await readWorkflowFileUnboundBackupTerminal(kube,f.plan(),events)).outcome,'UNBOUND_NOT_STARTED');
+ await assert.rejects(readWorkflowFileUnboundBackupTerminal(kube,f.plan(),events.filter(e=>e.type!=='BACKUP_RESUME_INTENT')),
+  /UNBOUND_TERMINAL_REQUIRED/);
+ await verifyEarlyRestoreReadback(f,kube);
+ const started=setup051();
+ const known=started.apply();assert.equal(known.status,0,known.stderr);
+ const tooLate=started.cancel();assert.notEqual(tooLate.status,0);assert.match(tooLate.stderr,/STOP_ALREADY_STARTED/);
+ assert.equal(started.read().effects,1);
+});
+
+
+// Чтение проверяет тот же журнал, который записала команда CLI.
+async function verifyEarlyRestoreReadback(f,backupKube){
+ const namespace='kodex-system',gateway='control-api-gateway',sourceSHA=f.plan().sourceSHA;
+ const uid=n=>'20000000-0000-4000-8000-'+String(n).padStart(12,'0');
+ const resource=(name,id)=>{
+  const d=structuredClone(f.f.deployment);
+  Object.assign(d.metadata,{name,namespace,uid:uid(id)});
+  d.metadata.labels['app.kubernetes.io/name']=name;
+  d.spec.template.spec.containers[0].name=name;
+  return d;
+ };
+ const cp=resource('control-plane',1),api=resource(gateway,2);
+ const service={apiVersion:'v1',kind:'Service',metadata:{name:gateway,namespace,uid:uid(3),resourceVersion:'20',labels:api.metadata.labels},
+  spec:{type:'ClusterIP',clusterIP:'192.0.2.1',selector:{'app.kubernetes.io/name':gateway},ports:[{port:8443,targetPort:'https'}]}};
+ const target={...f.f.target,resources:[cp,api,service].map(r=>({apiVersion:r.apiVersion,kind:r.kind,name:r.metadata.name,uid:r.metadata.uid}))};
+ const observed=f.f.observed,items=[];
+ const serving=(d,id)=>{
+  const set={kind:'ReplicaSet',metadata:{uid:uid(id),name:d.metadata.name+'-rs',namespace,
+   ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}};
+  const pod={kind:'Pod',metadata:{uid:uid(id+1),name:d.metadata.name+'-0',namespace,labels:d.metadata.labels,
+   ownerReferences:[{kind:'ReplicaSet',uid:set.metadata.uid,controller:true}]},spec:structuredClone(d.spec.template.spec),
+   status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],containerStatuses:d.spec.template.spec.containers.map(c=>({name:c.name,ready:true,imageID:c.image}))}};
+  items.push(set,pod);
+ };
+ serving(cp,8);
+ const kube=(args,input)=>{
+  const [kind,name]=args.slice(args.indexOf('get')+1);
+  if(args.includes('get')){
+   if(kind==='deployment'&&name===cp.metadata.name)return JSON.stringify(cp);
+   if(kind==='deployment'&&name===gateway)return JSON.stringify(api);
+   if(kind==='pod'&&items.some(r=>r.kind==='Pod'&&r.metadata.name===name))
+    return JSON.stringify(items.find(r=>r.kind==='Pod'&&r.metadata.name===name));
+   if(kind==='replicasets,pods,jobs')return backupKube(args,input)+items.map(r=>[r.kind,r.metadata.name,r.metadata.uid,
+    r.metadata.labels?.['app.kubernetes.io/name']??'',namespace,JSON.stringify(r.metadata.ownerReferences)].join('\t')).join('\n')+'\n';
+  }
+  return backupKube(args,input);
+ };
+ const earlyRecovery={...planWorkflowFileUnboundAPI(kube,target,observed,sourceSHA,f.plan().planPath),
+  isolationEvidencePath:join(f.directory,'isolated.jsonl')};
+ const close=planComponentAPIMaintenance(api,target,observed,sourceSHA,'close',undefined,undefined,service);
+ const event=(p,schema)=>({type:'HEADER',schema,planSHA256:fingerprint(p),maintenanceID:p.maintenanceID});
+ const apiSchema='kodex.component-api-maintenance-evidence/v1';
+ const closed={plan:close,events:[event(close,apiSchema),{type:'INTENT',step:'apply'},
+  {type:'OBSERVED',state:'CLOSED',deploymentUID:close.deploymentUID,maintenanceID:close.maintenanceID}]};
+ const apiReady=structuredClone(api.status);
+ api.spec=close.afterSpec;api.metadata.annotations=close.afterAnnotations;
+ api.status={observedGeneration:api.metadata.generation,replicas:0,updatedReplicas:0,readyReplicas:0,availableReplicas:0};
+ const {baselineSHA256,...base}=syntheticMigrationBaseline(target);
+ base.policyRevision=110;const authority={...base,baselineSHA256:fingerprint(base)};
+ const isolationPlan=planComponentAPITraffic({service,deployment:api,resources:observed.resources,target,observed,sourceSHA,
+  action:'isolate',closed,migrationRestore:{profile:workflowFileProvenanceMigration.profile,authority,earlyRecovery,
+   closedPlanPath:join(f.directory,'closed.json'),closedEvidencePath:join(f.directory,'closed.jsonl')}});
+ service.spec=isolationPlan.afterSpec;service.metadata.annotations=isolationPlan.afterAnnotations;
+ const isolated={plan:isolationPlan,service,slices:{items:[]},pods:{items:[]},
+  events:[event(isolationPlan,'kodex.component-api-traffic-evidence/v1'),{type:'INTENT',step:'apply'},
+   {type:'OBSERVED',state:'ISOLATED',serviceUID:service.metadata.uid,maintenanceID:isolationPlan.maintenanceID}]};
+ const open=planComponentAPIMaintenance(api,target,observed,sourceSHA,'open',closed,isolated);
+ const opened={plan:open,events:[event(open,apiSchema),{type:'INTENT',step:'apply'},
+  {type:'OBSERVED',state:'OPEN',deploymentUID:open.deploymentUID,maintenanceID:open.maintenanceID}]};
+ api.spec=open.afterSpec;api.metadata.annotations=open.afterAnnotations;
+ api.status=apiReady;serving(api,10);
+ const verify=()=>readWorkflowFileUnboundAPI({kube,isolation:isolated,closed,opened,observed,readAuthority:()=>authority});
+ const proof=await verify();
+ assert.equal(proof.backup.outcome,'UNBOUND_NOT_STARTED');
+ assert.equal(proof.controlPlane.uid,cp.metadata.uid);
+ assert.equal(proof.apiSpecSHA256,fingerprint(close.beforeSpec));
+ cp.spec.strategy={type:'Recreate'};
+ await assert.rejects(verify(),/EARLY_CONTROL_PLANE_CHANGED/);
+}
+
+test('backup читает полный personal migration plan своим bounded nofollow parser',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'kodex-backup-full-plan-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));
+ const path=join(directory,'migration.json'),manifest='a'.repeat(3_428_400);
+ writeFileSync(path,JSON.stringify({manifest}),{mode:0o600});
+ assert.equal((await readBackupMigrationPlan(path,'personal-integrations-backup')).manifest.length,manifest.length);
+ await assert.rejects(readBackupMigrationPlan(path,'sentry-observability-backup'),/EDGE_PRIVATE_FILE_REQUIRED/);
+ const link=join(directory,'fake.json');symlinkSync(path,link);
+ assert.throws(()=>readBackupMigrationPlan(link,'personal-integrations-backup'),/ELOOP/);
+ writeFileSync(path,JSON.stringify({manifest:'a'.repeat(4<<20)}),{mode:0o600});
+ assert.throws(()=>readBackupMigrationPlan(path,'personal-integrations-backup'),/AUTHORITY_PRIVATE_INPUT_REQUIRED/);
+ const pinned=backupMigrationInspectArguments({profile:'personal-integrations-backup',context:'strict',kubeconfig:'/synthetic/config',
+  migrationPlanPath:path,migrationEvidencePath:join(directory,'migration.jsonl'),executorSHA:'a'.repeat(40),inspectionSource:'/synthetic/operator'});
+ assert.equal(pinned[0],'/synthetic/operator/tools/release/control-plane-migration.mjs');
+ assert.equal(pinned[pinned.indexOf('--personal-executor-sha')+1],'a'.repeat(40));
 });

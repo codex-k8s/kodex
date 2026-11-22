@@ -4,12 +4,14 @@ import { KeyRound, Save } from "@lucide/vue";
 import type {
   EmailMailboxCredential,
   EmailMailboxCredentialKind,
+  EmailMailboxOwnership,
   IntegrationConnection,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, AppProblem } from "@/shared/api/problem";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import {
   MailboxCredentialMismatch,
+  mailboxCredentialOwnerEligible,
   mailboxCredentialLimits,
   prepareMailboxCredential,
   saveMailboxCredential,
@@ -25,6 +27,7 @@ import {
 
 const props = defineProps<{
   connection: IntegrationConnection;
+  ownership?: EmailMailboxOwnership;
   disabled?: boolean;
 }>();
 const fieldPrefix = `mailbox-credential-${useId()}`;
@@ -38,16 +41,23 @@ const receipt = ref<EmailMailboxCredential>();
 const problem = ref<AppProblem>();
 let controller: AbortController | undefined;
 let generation = 0;
-const allowed = computed(
+const allowed = computed(() =>
+  mailboxCredentialOwnerEligible(props.connection, props.ownership),
+);
+const stalePending = computed(
   () =>
-    props.connection.definitionKey === "email" &&
-    props.connection.nextActions.includes("CONFIGURE_CREDENTIAL"),
+    !!pending.value &&
+    !!props.ownership &&
+    props.ownership.connectionRef === props.connection.ref &&
+    props.ownership.connectionVersion === props.connection.version &&
+    pending.value.ownerGeneration !== props.ownership.generation,
 );
 const canSave = computed(
   () =>
     allowed.value &&
     !busy.value &&
     !props.disabled &&
+    !stalePending.value &&
     validMailboxCredential(kind.value, value.value) &&
     (!receipt.value ||
       props.connection.version >= receipt.value.connectionVersion),
@@ -80,6 +90,7 @@ function restore(): void {
   }
 }
 watch(() => props.connection.ref, restore);
+watch(() => props.ownership?.generation, restore);
 onMounted(restore);
 watch(
   allowed,
@@ -95,7 +106,7 @@ watch(kind, () => {
 onBeforeUnmount(clear);
 
 async function save(): Promise<void> {
-  if (!canSave.value) return;
+  if (!canSave.value || !props.ownership) return;
   const current = ++generation;
   const active = new AbortController();
   const previousAttempt = pending.value;
@@ -112,6 +123,7 @@ async function save(): Promise<void> {
       props.connection,
       kind.value,
       secret,
+      props.ownership,
       previousAttempt,
     );
     if (current !== generation || active.signal.aborted) return;
@@ -152,7 +164,14 @@ async function save(): Promise<void> {
 }
 
 async function recover(): Promise<void> {
-  if (busy.value || props.disabled || !pending.value) return;
+  if (
+    busy.value ||
+    props.disabled ||
+    !pending.value ||
+    stalePending.value ||
+    !allowed.value
+  )
+    return;
   const attempt = pending.value;
   const current = ++generation;
   controller?.abort();
@@ -185,6 +204,15 @@ async function recover(): Promise<void> {
       emit("busy", false);
     }
   }
+}
+
+// Удаляется только локальная metadata другого доказанного owner epoch. Ни
+// сохранённый Secret, ни история предыдущей записи не объявляются отменёнными.
+function discardStale(): void {
+  if (!stalePending.value || !pending.value || busy.value || props.disabled)
+    return;
+  forgetMailboxCredential(pending.value, window.sessionStorage);
+  restore();
 }
 </script>
 
@@ -256,11 +284,22 @@ async function recover(): Promise<void> {
     <button
       v-if="pending"
       class="button"
-      :disabled="busy || disabled"
+      :disabled="busy || disabled || stalePending || !allowed"
       @click="recover"
     >
       {{ $t("mailboxCredential.recover") }}
     </button>
+    <div v-if="stalePending" role="alert">
+      <p>{{ $t("personalEmail.staleCredential") }}</p>
+      <button
+        class="button"
+        type="button"
+        :disabled="busy || disabled"
+        @click="discardStale"
+      >
+        {{ $t("personalEmail.discardStaleCredential") }}
+      </button>
+    </div>
     <dl v-if="receipt" class="mailbox-credential__receipt" aria-live="polite">
       <dt>{{ $t("mailboxCredential.name") }}</dt>
       <dd>

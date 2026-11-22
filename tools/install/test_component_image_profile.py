@@ -12,6 +12,7 @@ import component_image_profile as profile
 from deployment_profile import Rejected
 import test_egress_secret_access
 import test_authority_registry
+import test_ssh_identity_profile
 import yaml
 
 
@@ -238,6 +239,7 @@ class Tests(unittest.TestCase):
         resources,value,digest,lock_raw,raw=fixture()
         from test_clamav_profile import fixture as scanner_fixture
         resources += scanner_fixture()
+        resources.append(test_ssh_identity_profile.broker_fixture())
         with tempfile.TemporaryDirectory()as directory:
             root=Path(directory);binary=root/'bin';binary.mkdir()
             previous=root/'old.json';previous.write_bytes(raw);target=root/'target.json';target.write_bytes(raw)

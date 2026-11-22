@@ -94,6 +94,21 @@ func runPostgres(ctx context.Context, command string, output io.Writer, dependen
 	if err := dependencies.migrate(ctx, database, command); err != nil {
 		return cliFailure(stageMigration, err)
 	}
+	if command == workflowFileProvenanceCommand {
+		if _, err := fmt.Fprintln(output, workflowFileProvenanceReceipt); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
+	if command == artifactRetentionGrantCommand {
+		if _, err := fmt.Fprintln(output, artifactRetentionGrantCompleted); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
+	if command == personalIntegrationsBackupUpgradeCommand {
+		if _, err := fmt.Fprintln(output, personalIntegrationsBackupUpgradeReceipt); err != nil {
+			return cliFailure(stageOutput, err)
+		}
+	}
 	if command == githubBackupUpgradeCommand {
 		if _, err := fmt.Fprintln(output, githubBackupUpgradeCompleted); err != nil {
 			return cliFailure(stageOutput, err)
@@ -134,6 +149,15 @@ func applyPostgresMigrations(ctx context.Context, database *sql.DB, command stri
 	if command == "status" {
 		return goose.StatusContext(ctx, database, "migrations")
 	}
+	if command == workflowFileProvenanceCommand {
+		return upgradeWorkflowFileProvenance(ctx, database)
+	}
+	if command == artifactRetentionGrantCommand {
+		return upgradeArtifactRetentionGrant(ctx, database)
+	}
+	if command == personalIntegrationsUpgradeCommand || command == personalIntegrationsBackupUpgradeCommand {
+		return upgradePersonalIntegrationCohort(ctx, database, command == personalIntegrationsBackupUpgradeCommand)
+	}
 	if command == githubBackupUpgradeCommand {
 		return upgradeGitHubWithBackupCompatibility(ctx, database)
 	}
@@ -153,4 +177,16 @@ func applyPostgresMigrations(ctx context.Context, database *sql.DB, command stri
 		return upgradeWorkspaceWithBackupCompatibility(ctx, database)
 	}
 	return goose.UpContext(ctx, database, "migrations")
+}
+
+// readControlPlaneSchemaHead reads the durable Goose head without initializing or modifying the version table.
+// readControlPlaneSchemaHead читает зафиксированную версию Goose без создания или изменения таблицы версий.
+func readControlPlaneSchemaHead(ctx context.Context, database *sql.DB) (int64, error) {
+	selector, err := workspaceBackupStatements.ReadFile("workspace_backup_sql/version.sql")
+	if err != nil {
+		return 0, err
+	}
+	var version int64
+	err = database.QueryRowContext(ctx, string(selector)).Scan(&version)
+	return version, err
 }

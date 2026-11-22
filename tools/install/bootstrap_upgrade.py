@@ -33,6 +33,7 @@ FORWARD_CONTRACTS = {
     20261108000100: (20261107000100, 'authority-proof-counter-', 'validAuthorityProofCounter'),
     20261109000100: (20261108000100, 'integration-resource-policies-', 'validIntegrationResourcePolicies'),
 }
+WORKFLOW_FILE_PROVENANCE_SCHEMA = 20261121000200
 
 
 def sha(raw):
@@ -58,9 +59,11 @@ def validate(profile):
     keys = {'control-plane', 'internal-rpc-authority', 'email-bridge'}
     require(isinstance(before, dict) and isinstance(after, dict) and set(before) == set(after) == keys and
             all(type(v) is int and v > 0 for heads in (before, after) for v in heads.values()), 'UPGRADE_SCHEMA_PINS_REJECTED')
-    contract = FORWARD_CONTRACTS.get(after['control-plane'])
+    target = after['control-plane']
+    contract = FORWARD_CONTRACTS.get(target)
     if image_only:
-        require(contract is not None and before == after, 'UPGRADE_SCHEMA_PATH_REJECTED')
+        composed_backup = target == WORKFLOW_FILE_PROVENANCE_SCHEMA and profile['schema_profile'] == 'backup'
+        require((contract is not None or composed_backup) and before == after, 'UPGRADE_SCHEMA_PATH_REJECTED')
     else:
         require(contract is not None and before['control-plane'] == contract[0] and
                 all(before[key] == after[key] for key in keys - {'control-plane'}), 'UPGRADE_SCHEMA_PATH_REJECTED')
@@ -185,26 +188,41 @@ def render_profile(resources):
 
 
 def schema_proof(state, mode, version):
-    """Исполняет fixed READ ONLY proof закреплённого target033/034 и exact validator; пароль/DSN не читаются."""
+    """Исполняет закреплённый READ ONLY proof и exact validator без чтения пароля или DSN."""
     directory = Path(__file__).resolve().parent.parent / 'release'
     require(mode in ('plain', 'backup'), 'UPGRADE_SCHEMA_PROFILE_REJECTED')
-    require(type(version) is int and version in FORWARD_CONTRACTS, 'UPGRADE_SCHEMA_PATH_REJECTED')
-    _, prefix, validator = FORWARD_CONTRACTS[version]
-    query = (directory / (prefix + ('backup-' if mode == 'backup' else '') + 'migration-postcondition.sql')).read_bytes()
-    result = subprocess.run(['kubectl', '--context', state.context, '--request-timeout=15s', '-n', 'kodex-system',
+    require(type(version) is int, 'UPGRADE_SCHEMA_PATH_REJECTED')
+    if version == WORKFLOW_FILE_PROVENANCE_SCHEMA:
+        require(mode == 'backup', 'UPGRADE_SCHEMA_PATH_REJECTED')
+        query_file = 'workflow-file-provenance-backup-migration.sql'
+        validator_file = 'workflow-file-provenance-migration-contract.mjs'
+        function = 'validWorkflowFileProvenanceComposedPostcondition'
+    else:
+        require(version in FORWARD_CONTRACTS, 'UPGRADE_SCHEMA_PATH_REJECTED')
+        _, prefix, validator = FORWARD_CONTRACTS[version]
+        query_file = prefix + ('backup-' if mode == 'backup' else '') + 'migration-postcondition.sql'
+        validator_file = 'control-plane-immutable-migration.mjs'
+        function = validator + ('Backup' if mode == 'backup' else '') + 'MigrationPostcondition'
+    query = (directory / query_file).read_bytes()
+    kubeconfig = ['--kubeconfig', str(state.kubeconfig)] if state.kubeconfig is not None else []
+    result = subprocess.run(['kubectl', *kubeconfig, '--context', state.context, '--request-timeout=15s', '-n', 'kodex-system',
                              'exec', '-i', 'kodex-postgresql-0', '--', 'psql', '-XqAt', '-U', 'postgres', '-d', 'control_plane',
                              '-v', 'ON_ERROR_STOP=1'], input=query, capture_output=True, timeout=25)
     require(result.returncode == 0 and len(result.stdout) <= 1 << 20, 'UPGRADE_SCHEMA_CATALOG_REJECTED')
-    function = validator + ('Backup' if mode == 'backup' else '') + 'MigrationPostcondition'
-    verifier = "import {" + function + " as valid} from './control-plane-immutable-migration.mjs';let raw='';for await(const chunk of process.stdin)raw+=chunk;if(!valid(JSON.parse(raw)))process.exit(1);"
+    verifier = ("import {" + function + " as valid} from './" + validator_file + "';"
+                "let raw='';for await(const chunk of process.stdin)raw+=chunk;if(!valid(JSON.parse(raw)))process.exit(1);")
     checked = subprocess.run(['node', '--input-type=module', '-e', verifier], cwd=directory,
                              input=result.stdout, capture_output=True, timeout=10)
     require(checked.returncode == 0, 'UPGRADE_SCHEMA_CATALOG_REJECTED')
     return sha(result.stdout)
 
 
-def verify_apply(state, resources, receipt):
+def verify_apply(state, resources, receipt, *, adoption_dossier=None, adoption_phase=None):
     """До первой rollout mutation проверяет genuine composite receipt, cluster/Jobs и exact target catalog."""
+    if isinstance(receipt, dict) and receipt.get('origin') == completion.ADOPTION_ORIGIN:
+        from bootstrap_migration_rollout import verify_apply as verify_adoption
+        return verify_adoption(state, resources, receipt, adoption_dossier, adoption_phase)
+    require(adoption_dossier is None and adoption_phase is None, 'MIGRATED_ROLLOUT_RECEIPT_REQUIRED')
     require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN), 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
     profile, _ = render_profile(resources)
     require(receipt['origin'] == (IMAGE_ORIGIN if profile['schema'] == IMAGE_SCHEMA else ORIGIN),
@@ -351,6 +369,9 @@ def main():
         parser.add_argument('--' + flag, type=Path)
     parser.add_argument('--previous-receipt-sha256')
     parser.add_argument('--context')
+    parser.add_argument('--kubeconfig', type=Path)
+    parser.add_argument('--migration-adoption-dossier', type=Path)
+    parser.add_argument('--migration-adoption-phase', choices=('begin', 'commit', 'readback'))
     completion.add_arguments(parser)
     args = parser.parse_args()
     try:
@@ -359,20 +380,32 @@ def main():
                     all(v is None for v in (args.profile, args.previous_render, args.target_render, args.previous_receipt,
                                            args.previous_receipt_sha256, args.output)), 'UPGRADE_APPLY_ARGUMENTS_REQUIRED')
             receipt = completion.from_arguments(args)
-            require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN), 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+            require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN, completion.ADOPTION_ORIGIN),
+                    'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+            require((receipt['origin'] == completion.ADOPTION_ORIGIN) ==
+                    (args.migration_adoption_dossier is not None and args.migration_adoption_phase is not None)
+                    and ((args.migration_adoption_dossier is None) == (args.migration_adoption_phase is None)),
+                    'MIGRATED_ROLLOUT_EXPLICIT_SCOPE_REQUIRED')
+            require(receipt['origin'] != completion.ADOPTION_ORIGIN or
+                    (args.kubeconfig is not None and args.migration_adoption_dossier.is_absolute()),
+                    'MIGRATED_ROLLOUT_EXPLICIT_SCOPE_REQUIRED')
             raw = completion.private_bytes(args.render, 8 << 20)
             completion.verify_render_pin(receipt, sha(raw))
             resources = decode_render(raw)
-            state = State(args.context);state.discover(resources)
-            print(json.dumps(verify_apply(state, resources, receipt)))
+            state = State(args.context, args.kubeconfig);state.discover(resources)
+            print(json.dumps(verify_apply(state, resources, receipt,
+                adoption_dossier=args.migration_adoption_dossier, adoption_phase=args.migration_adoption_phase)))
             return
         require(args.previous_render is not None and args.output is not None and
                 args.bootstrap_completion_receipt is None and args.bootstrap_completion_sha256 is None and
-                not args.allow_reconciled_bootstrap_completion, 'UPGRADE_PREPARATION_ARGUMENTS_REQUIRED')
+                not args.allow_reconciled_bootstrap_completion and
+                args.migration_adoption_dossier is None and args.migration_adoption_phase is None,
+                'UPGRADE_PREPARATION_ARGUMENTS_REQUIRED')
         previous_raw = completion.private_bytes(args.previous_render, 8 << 20)
         if args.mode == 'prepare':
             require(args.profile is not None and args.target_render is not None and args.render is None and
-                    args.previous_receipt is None and args.previous_receipt_sha256 is None and args.context is None,
+                    args.previous_receipt is None and args.previous_receipt_sha256 is None and args.context is None and
+                    args.kubeconfig is None,
                     'UPGRADE_PREPARE_ARGUMENTS_REQUIRED')
             profile = json.loads(completion.private_bytes(args.profile, 16384), object_pairs_hook=completion.unique_object)
             resources = prepare(previous_raw, completion.private_bytes(args.target_render, 8 << 20), profile)
@@ -392,7 +425,7 @@ def main():
             require(sha(previous_raw) == profile['previous_render_sha256'], 'UPGRADE_PREVIOUS_RENDER_DRIFT')
             previous = completion.load(args.previous_receipt, args.previous_receipt_sha256, True)
             completion.verify_render_pin(previous, sha(previous_raw))
-            state = State(args.context); state.discover(resources)
+            state = State(args.context, args.kubeconfig); state.discover(resources)
             receipt = capture(state, resources, decode_render(previous_raw), previous, args.previous_receipt_sha256,
                               image_render_inputs=image_render_inputs)
             write_new(args.output, (json.dumps(receipt, sort_keys=True) + '\n').encode())

@@ -83,3 +83,44 @@ func TestImageSupplyChainWorkerOperationsAreExact(t *testing.T) {
 		})
 	}
 }
+
+// TestManagedKubernetesPurposeOperationsStayDisjoint materializes the exact broker/gateway profiles.
+// Existing runtime Claim remains the sole registered worker claim, while owner result readback is private.
+// TestManagedKubernetesPurposeOperationsStayDisjoint материализует exact broker/gateway profiles.
+// Existing runtime Claim остаётся единственным registered worker claim; owner result readback приватен.
+func TestManagedKubernetesPurposeOperationsStayDisjoint(t *testing.T) {
+	broker, gateway := SecretBrokerOperations(), IntegrationGatewayOperations()
+	expectedBroker := map[string]string{
+		"platform.runtime.kubernetes.resolve":          controlplanev1.ManagedKubernetesOwnerService_ResolveManagedKubernetesOperation_FullMethodName,
+		"platform.runtime.kubernetes.children.prepare": controlplanev1.ManagedKubernetesOwnerService_PrepareManagedKubernetesChildren_FullMethodName,
+		"platform.runtime.kubernetes.effect.begin":     controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesEffect_FullMethodName,
+		"platform.runtime.kubernetes.effect.complete":  controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesEffect_FullMethodName,
+		"platform.runtime.kubernetes.stream.open":      controlplanev1.ManagedKubernetesOwnerService_OpenManagedKubernetesStream_FullMethodName,
+		"platform.runtime.kubernetes.stream.close":     controlplanev1.ManagedKubernetesOwnerService_CloseManagedKubernetesStream_FullMethodName,
+		"platform.runtime.kubernetes.frame.begin":      controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesFrame_FullMethodName,
+		"platform.runtime.kubernetes.frame.complete":   controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesFrame_FullMethodName,
+	}
+	for operation, method := range expectedBroker {
+		if broker[operation] != method || gateway[operation] != "" {
+			t.Fatal("broker graph operation missing or widened to gateway")
+		}
+	}
+	for operation, method := range map[string]string{
+		"platform.runtime.kubernetes.renew":       controlplanev1.ManagedKubernetesOwnerService_RenewManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.complete":    controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.read":        controlplanev1.ManagedKubernetesOwnerService_GetManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.input.claim": controlplanev1.ManagedKubernetesOwnerService_ClaimManagedKubernetesInputFrame_FullMethodName,
+	} {
+		if gateway[operation] != method || broker[operation] != "" {
+			t.Fatal("gateway finalization operation missing or widened to broker")
+		}
+	}
+	for operation, method := range gateway {
+		if method == controlplanev1.ManagedKubernetesOwnerService_ClaimManagedKubernetesInvocations_FullMethodName {
+			t.Fatal("competing Kubernetes worker claim registered", operation)
+		}
+	}
+	if gateway["platform.runtime.integrations.claim"] != controlplanev1.RuntimeWorkService_ClaimIntegrationInvocations_FullMethodName {
+		t.Fatal("single runtime claim profile lost")
+	}
+}

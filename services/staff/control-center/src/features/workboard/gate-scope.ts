@@ -1,3 +1,4 @@
+import { validKubernetesChildGate } from "./kubernetes-child-gate";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 
 const invalidGateScope = "Invalid owner gate scope";
@@ -8,6 +9,7 @@ export function hasValidGateScope(
   organizationRef?: string,
 ): boolean {
   if (
+    !validKubernetesChildGate(gate) ||
     typeof gate.organizationRef !== "string" ||
     !gate.organizationRef.trim() ||
     (organizationRef !== undefined && gate.organizationRef !== organizationRef)

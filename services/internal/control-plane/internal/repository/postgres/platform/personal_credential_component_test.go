@@ -337,6 +337,7 @@ func assertPersonalCredentialCatalog(t *testing.T, ctx context.Context, pool *pg
 	if err != nil || created.Connection == nil {
 		t.Fatal("create second catalog Connection", err)
 	}
+	assertCredentialDeliveryMetadataViews(t, ctx, service, owner, *created.Connection)
 	owner.Permission = "platform.personal-integrations.list"
 	filter := query.PersonalIntegrationConnectionFilter{Query: "Personal catalog fixture", Page: query.Page{Size: 1}}
 	first, token, err := service.ListPersonalIntegrationConnections(ctx, owner, filter)
@@ -349,8 +350,8 @@ func assertPersonalCredentialCatalog(t *testing.T, ctx context.Context, pool *pg
 		t.Fatal("eligible personal catalog continuation failed", err)
 	}
 	for _, item := range append(first, next...) {
-		if !item.Available {
-			t.Fatal("enabled fixture adapter was reported unavailable")
+		if !item.Available || item.CredentialDelivery.Kind != integrationpackage.CredentialDeliveryToken || item.CredentialDelivery.BrokerPurpose != "" {
+			t.Fatal("enabled fixture adapter lost exact credential delivery metadata")
 		}
 		if item.Ref == connection.Ref {
 			if item.Credential == nil || item.Credential.Ref != firstBinding.Ref || item.Credential.SubjectID != firstBinding.SubjectID ||
@@ -418,4 +419,27 @@ func historicalGitLabPersonalFixture(t *testing.T, current integrationpackage.Pa
 		t.Fatal("historical GitLab fixture unavailable")
 	}
 	return previous
+}
+
+// assertCredentialDeliveryMetadataViews checks actual list/detail/definition producers against
+// the exact connection package pins, independently of transport-only caster fixtures.
+// assertCredentialDeliveryMetadataViews проверяет actual list/detail/definition producers
+// по exact connection package pins независимо от transport-only caster fixtures.
+func assertCredentialDeliveryMetadataViews(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, connection entity.IntegrationConnection) {
+	t.Helper()
+	owner.Permission = "platform.query.integration-definitions.list"
+	definitions, _, _, err := service.ListIntegrationDefinitions(ctx, owner, query.Filter{Query: connection.DefinitionKey, Page: query.Page{Size: 100}})
+	if err != nil || len(definitions) != 1 || definitions[0].Key != connection.DefinitionKey || definitions[0].CredentialDelivery.Kind != integrationpackage.CredentialDeliveryToken {
+		t.Fatal("definition list lost exact package credential kind", err)
+	}
+	owner.Permission = "platform.query.integration-connections.get"
+	detail, err := service.GetIntegrationConnection(ctx, owner, connection.Ref)
+	if err != nil || detail.DefinitionVersion != connection.DefinitionVersion || detail.DefinitionDigest != connection.DefinitionDigest || detail.CredentialDelivery.Kind != integrationpackage.CredentialDeliveryToken {
+		t.Fatal("connection detail lost exact package credential kind", err)
+	}
+	owner.Permission = "platform.query.integration-connections.list"
+	items, _, err := service.ListIntegrationConnections(ctx, owner, query.Filter{Query: connection.Name, Page: query.Page{Size: 100}})
+	if err != nil || len(items) != 1 || items[0].Ref != connection.Ref || items[0].DefinitionVersion != detail.DefinitionVersion || items[0].DefinitionDigest != detail.DefinitionDigest || items[0].CredentialDelivery != detail.CredentialDelivery {
+		t.Fatal("connection list differs from exact detail credential metadata", err)
+	}
 }

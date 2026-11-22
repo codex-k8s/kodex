@@ -316,6 +316,8 @@ INTEGRATION_GRANT_UPDATED:
   other: Integration permission updated
 INTEGRATION_CONNECTION_TEST_COMPLETED:
   other: Connection test completed
+INTEGRATION_CONNECTION_TEST_PROBE_ADMITTED:
+  other: Connection test granted limited access for verification
 INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED:
   other: Connection test retry scheduled
 INTEGRATION_TEST_SUCCEEDED:
@@ -334,6 +336,30 @@ PERSONAL_INTEGRATION_CREDENTIAL_CONFIGURED:
   other: Personal key saved and masked; access verification required
 PERSONAL_INTEGRATION_CREDENTIAL_REVOKED:
   other: Personal key revoked for new calls
+KUBERNETES_CAPTURE_REPAIR_QUEUED:
+  other: Kubernetes capture repair queued
+KUBERNETES_CHILD_GATE_APPROVE:
+  other: Allow this Kubernetes action to proceed
+KUBERNETES_CHILD_GATE_CANCEL:
+  other: Cancel the pending Kubernetes action
+KUBERNETES_CHILD_GATE_REJECT:
+  other: Deny permission for this Kubernetes action
+KUBERNETES_IDENTITY_SETUP_CANCELLED:
+  other: Kubernetes access setup cancelled; a possible write outcome is retained for reconciliation
+KUBERNETES_IDENTITY_SETUP_PREPARED:
+  other: Kubernetes access setup prepared; upload the file using the local command
+KUBERNETES_IDENTITY_UPLOAD_CLAIMED:
+  other: A worker received bounded admission for Kubernetes access setup
+KUBERNETES_STAGING_CLEANUP_REPAIR_QUEUED:
+  other: Repair of Kubernetes staging cleanup queued
+KUBERNETES_TOOL_STOPPED:
+  other: Stop request for the Kubernetes action recorded
+SSH_IDENTITY_SETUP_CANCELLED:
+  other: SSH access setup cancellation request recorded
+SSH_IDENTITY_SETUP_EVIDENCE_RECORDED:
+  other: SSH access setup verification result recorded
+SSH_IDENTITY_SETUP_PREPARED:
+  other: SSH access setup prepared
 PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED:
   other: Personal key verification queued
 PERSONAL_INTEGRATION_CREDENTIAL_TEST_COMPLETED:
@@ -944,12 +970,16 @@ EMAIL_MAILBOX_GIT_PUBLICATION_PENDING:
   other: Mailbox configuration from Git is awaiting delivery
 EMAIL_MAILBOX_GIT_SOURCE_RECORDED:
   other: Mailbox Git source recorded
+EMAIL_MAILBOX_OWNERSHIP_CHANGED:
+  other: Mailbox ownership updated
 EMAIL_MAILBOX_PUBLICATION_FAILED:
   other: Mailbox configuration delivery failed
 EMAIL_MAILBOX_PUBLICATION_PENDING:
   other: Mailbox configuration is awaiting delivery
 EMAIL_MAILBOX_PUBLICATION_READY:
   other: Mailbox configuration delivery confirmed
+PERSONAL_EMAIL_MAILBOX_METADATA_ACCESS_ASSIGNED:
+  other: Access to personal mailbox metadata granted
 RUNTIME_SECRET_DRAFT_CHANGED:
   other: Secret draft changed
 INTERACTION_AUTHORITY_CHANGED:
@@ -1091,3 +1121,9 @@ INFERENCE_CACHE_POLICY_UNSUPPORTED:
   other: The model route does not support the required cache policy
 CONTEXT_WINDOW_IMAGE_UNSUPPORTED:
   other: The selected image has no verified context budget support. Select a new verified RoleImage or inherit the catalog window.
+
+KUBERNETES_CONFIGURATION_PLAN_UNSUPPORTED:
+  other: Configure the exact Kubernetes namespace and grant in connection settings. Assistant configuration plans do not support these grants yet.
+
+KUBERNETES_STAGING_QUOTA_EXCEEDED:
+  other: "Kubernetes staging storage quota is exhausted. Wait for confirmed cleanup or resolve its failure; no payload was resent."

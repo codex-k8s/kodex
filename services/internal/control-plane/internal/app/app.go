@@ -60,7 +60,7 @@ const maximumSecretFileBytes = 64 << 10
 // Run загружает конфигурацию и создаёт owner, storage и identity зависимости, выполняет bootstrap
 // и broker/outbox проверки до запуска workers; shutdown снимает readiness, останавливает workers и
 // выполняет отдельно ограниченные HTTP, gRPC и worker cleanup.
-func Run(lifecycle, shutdownBase context.Context, version string) error {
+func Run(lifecycle, shutdownBase context.Context, version string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -71,7 +71,12 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err != nil {
 		return err
 	}
-	defer pool.Close()
+	dependenciesJoined := true
+	defer func() {
+		if dependenciesJoined {
+			pool.Close()
+		}
+	}()
 	accessKey, err := readBoundedFile(config.ObjectStorageAccessKeyFile)
 	if err != nil {
 		return startupFailure(stageReadObjectStorageAccessKey, err)
@@ -100,6 +105,21 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err != nil {
 		return startupFailure(stageConstructPlatformRepository, err)
 	}
+	if config.KubernetesCaptureSpoolRoot != "" {
+		spoolDirectory, err := repository.ConfigureKubernetesCaptureSpool(startup, config.KubernetesCaptureSpoolRoot)
+		if err != nil {
+			return errors.New("configure Kubernetes capture spool failed")
+		}
+		defer func() {
+			if !dependenciesJoined {
+				return
+			}
+			if err := spoolDirectory.Close(); err != nil {
+				dependenciesJoined = false
+				resultErr = errors.Join(resultErr, err)
+			}
+		}()
+	}
 	if err := repository.ConfigureInteractionPublicOrigin(config.InteractionPublicOrigin); err != nil {
 		return err
 	}
@@ -112,6 +132,9 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err := configureModelProvider(repository, config); err != nil {
 		return err
 	}
+	if err := configureKubernetesOperator(repository, config); err != nil {
+		return err
+	}
 	if err := repository.ConfigureProjectPurgeStorage(config.ObjectStorageEndpoint, config.ObjectStorageRegion, config.ObjectStorageBucket, config.ObjectStorageUsePathStyle); err != nil {
 		return startupFailure(stageConfigureProjectPurgeStorage, err)
 	}
@@ -120,6 +143,9 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	}
 	if err := repository.ConfigureRuntimeSecrets(config.RuntimeSecretNamespace); err != nil {
 		return startupFailure(stageConfigureRuntimeSecrets, err)
+	}
+	if err := configureSSHIdentitySetup(repository, config); err != nil {
+		return errors.New("configure SSH identity setup failed")
 	}
 	if err := configureOIDCIdentityPolicy(repository, config); err != nil {
 		return errors.New("configure OIDC identity policy failed")
@@ -200,7 +226,11 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err != nil {
 		return startupFailure(stageConstructProviderCredentialMaterializerClient, err)
 	}
-	defer providerControl.Close()
+	defer func() {
+		if dependenciesJoined {
+			providerControl.Close()
+		}
+	}()
 	providerMaterializer, err := providercredentialclient.New(providerControl)
 	if err != nil {
 		return startupFailure(stageConstructProviderCredentialMaterializerAdapter, err)
@@ -220,6 +250,9 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	integrationEgressProjection.ready = service.Ready
 	if err := service.Bootstrap(startup); err != nil {
 		return startupFailure(stageBootstrapPlatform, err)
+	}
+	if err := repository.RegisterKubernetesOperator(startup); err != nil {
+		return errors.New("register managed Kubernetes operator registry")
 	}
 	roleEnvironmentCatalog, err := loadRoleEnvironmentCatalog(config)
 	if err != nil {
@@ -241,7 +274,11 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 		if err != nil {
 			return startupFailure(stageConstructTrustedClusterReader, err)
 		}
-		defer verifier.Close()
+		defer func() {
+			if dependenciesJoined {
+				verifier.Close()
+			}
+		}()
 		refreshOIDC = verifier.Refresh
 	} else {
 		workerGrantTrustFiles := workerGrantTrustFilesFor(config)
@@ -260,12 +297,20 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 		if err != nil {
 			return startupFailure(stageConstructAuthorityProofResolver, err)
 		}
-		defer proofService.Close()
+		defer func() {
+			if dependenciesJoined {
+				proofService.Close()
+			}
+		}()
 		authority, err := authorityclient.DialLocal(startup, authorityclient.LocalConfig{SocketPath: config.AuthorityVerifierSocket, ExpectedServerUID: config.AuthorityVerifierUID, ExpectedServerGID: config.AuthorityVerifierGID, DialTimeout: 2 * time.Second})
 		if err != nil {
 			return startupFailure(stageConnectAuthorizationVerifier, err)
 		}
-		defer authority.Close()
+		defer func() {
+			if dependenciesJoined {
+				authority.Close()
+			}
+		}()
 		refreshOIDC = proofService.RefreshOIDC
 		verifiedUnary = authorityclient.VerifierUnaryServerInterceptor(authority.Verifier())
 		verifiedStream = authorityclient.VerifierStreamServerInterceptor(authority.Verifier(), controlplanev1.RuntimeWorkService_StreamExecutionArtifact_FullMethodName)
@@ -292,7 +337,11 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	if err != nil {
 		return startupFailure(stageConstructNATSPublisher, err)
 	}
-	defer publisher.Close()
+	defer func() {
+		if dependenciesJoined {
+			publisher.Close()
+		}
+	}()
 	if err := publisher.Check(startup); err != nil {
 		return startupFailure(stageVerifyNATSStream, err)
 	}
@@ -308,6 +357,7 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 		return startupFailure(stageConstructRoleImageTransport, err)
 	}
 	serverOptions := append(transportOptions,
+		grpc.WaitForHandlers(true),
 		grpc.MaxRecvMsgSize(8<<20),
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
@@ -326,6 +376,9 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	grpcServer := grpc.NewServer(serverOptions...)
 	controlplanev1.RegisterPlatformQueryServiceServer(grpcServer, transport)
 	controlplanev1.RegisterPersonalIntegrationCredentialServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedSSHIdentitySetupServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedSSHOwnerServiceServer(grpcServer, transport)
+	controlplanev1.RegisterPersonalEmailMailboxServiceServer(grpcServer, transport)
 	sttv1.RegisterTranscriptionPolicyProjectionServiceServer(grpcServer, transport)
 	if config.RPCProfile == transportprofile.TrustedCluster {
 		sttv1.RegisterTranscriptionAuthorityServiceServer(grpcServer, transport)
@@ -341,6 +394,15 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	controlplanev1.RegisterRuntimeSecretDraftWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterWorkspaceVolumeWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesFileServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesOwnerServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesIdentitySetupServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesResourceMaterialServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesStreamInputServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesToolServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesCaptureServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesStreamOutputServiceServer(grpcServer, transport)
+	controlplanev1.RegisterManagedKubernetesPortForwardConnectionServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterAccessServiceServer(grpcServer, transport)
 	controlplanev1.RegisterOIDCSessionServiceServer(grpcServer, transport)
@@ -383,8 +445,10 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	}
 	readiness := serviceruntime.NewReadiness()
 	technical := technicalServer(config.TechnicalListen, readiness, metrics)
+	grpcLifecycle := newControlPlaneGRPCLifecycle(grpcServer, listener)
+	dependenciesJoined = false
 	workers := serviceruntime.StartWorkers(lifecycle,
-		serveGRPC(grpcServer, listener),
+		grpcLifecycle.serve,
 		serveHTTP(technical),
 		monitorReadiness(service, repository, publisher, readiness, slog.Default(), config),
 		emailProjection.Run,
@@ -409,9 +473,13 @@ func Run(lifecycle, shutdownBase context.Context, version string) error {
 	workers.Stop()
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
 		serviceruntime.ShutdownOperation{Name: "technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown},
-		serviceruntime.ShutdownOperation{Name: "gRPC server", Timeout: config.ShutdownTimeout, Run: func(ctx context.Context) error { return gracefulStop(ctx, grpcServer) }},
+		serviceruntime.ShutdownOperation{Name: "gRPC server", Timeout: config.ShutdownTimeout, Run: grpcLifecycle.shutdown},
 		serviceruntime.ShutdownOperation{Name: "workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
+	dependenciesJoined = grpcLifecycle.joined() && workers.Joined()
+	if !dependenciesJoined {
+		shutdownErr = errors.Join(shutdownErr, errors.New(controlPlaneRPCUnjoined))
+	}
 	if err := errors.Join(workerErr, shutdownErr); err != nil {
 		return startupFailure(stageServiceLifecycle, err)
 	}
@@ -549,23 +617,6 @@ func technicalServer(address string, readiness *serviceruntime.Readiness, metric
 		metrics.PrometheusHandler().ServeHTTP(writer, request)
 	}))
 	return &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 3 * time.Second, WriteTimeout: 3 * time.Second, IdleTimeout: 30 * time.Second}
-}
-
-// serveGRPC returns a worker that waits for Serve or caller cancellation; server shutdown and
-// joining the serving goroutine remain the composition-root responsibility.
-// serveGRPC возвращает worker ожидания Serve либо отмены caller; shutdown сервера и ожидание
-// serving goroutine остаются ответственностью composition root.
-func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve(listener) }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
 }
 
 // serveHTTP returns a worker that treats normal HTTP server closure as success or returns
@@ -728,21 +779,5 @@ func runOutboxRelay(store outboxStore, publisher rawPublisher, finalizeBase cont
 				timer.Reset(config.RelayPollInterval)
 			}
 		}
-	}
-}
-
-// gracefulStop attempts gRPC graceful shutdown until the caller budget expires, then forces Stop
-// and returns the context error.
-// gracefulStop пытается выполнить graceful shutdown gRPC до истечения бюджета caller, затем
-// принудительно вызывает Stop и возвращает ошибку context.
-func gracefulStop(ctx context.Context, server *grpc.Server) error {
-	done := make(chan struct{})
-	go func() { server.GracefulStop(); close(done) }()
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		server.Stop()
-		return ctx.Err()
 	}
 }

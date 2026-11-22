@@ -6,6 +6,11 @@ set -euo pipefail
 fail() { printf 'Portable release failed: %s\n' "$*" >&2; exit 1; }
 mode=""
 context=""
+kubeconfig=""
+migration_adoption_dossier=""
+migration_adoption=false
+kubeconfig_arguments=()
+adoption_arguments=()
 render=""
 expected_sha=""
 preimage=""
@@ -36,6 +41,8 @@ assistant_readback_arguments=()
 
 while (($#)); do
   case "$1" in
+    --kubeconfig) [[ -n "${2:-}" ]] || fail 'explicit kubeconfig is required'; kubeconfig="${2:-}"; shift 2 ;;
+    --migration-adoption-dossier) [[ -n "${2:-}" ]] || fail 'migration adoption dossier is required'; migration_adoption_dossier="${2:-}"; shift 2 ;;
     --assistant-readback-transport) assistant_readback_transport="${2:-}"; shift 2 ;;
     --mode) mode="${2:-}"; shift 2 ;;
     --context) context="${2:-}"; shift 2 ;;
@@ -63,6 +70,7 @@ while (($#)); do
     --buildkit-runtime-profile) buildkit_profile="${2:-}"; shift 2 ;;
     --oidc-ca-file|--ingress-deployment|--ingress-controller|--ingress-namespace|--ingress-service) arguments+=("$1" "${2:-}"); shift 2 ;;
     --help)
+      printf '%s\n' '  [--kubeconfig <absolute-file> --migration-adoption-dossier <absolute-private-json>; migrated-schema adoption]'
       printf '%s\n' '  [--assistant-readback-transport api-proxy|port-forward; default api-proxy]'
       printf '%s\n' 'Usage: portable-release.sh --mode plan|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback --render <yaml> --render-sha256 <64-hex> [--context <exact-context>]' \
         '  [--oidc-ca-file <pem>] [--ingress-controller <name> --ingress-namespace <name>]' \
@@ -96,6 +104,13 @@ case "$artifact_antivirus_mode" in required|disabled) ;; *) fail 'Artifact antiv
 [[ "$expected_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact render digest is required'
 [[ -f "$render" && ! -L "$render" ]] || fail 'regular render file is required'
 [[ "$mode" == plan || -n "$context" ]] || fail 'exact context is required'
+if [[ -n "$kubeconfig" ]]; then
+  [[ "$kubeconfig" == /* && -f "$kubeconfig" && ! -L "$kubeconfig" ]] || fail 'explicit kubeconfig must be an absolute regular file'
+  export KUBECONFIG="$kubeconfig"
+  kubeconfig_arguments=(--kubeconfig "$kubeconfig")
+fi
+[[ -z "$migration_adoption_dossier" || "$migration_adoption_dossier" == /* ]] || fail 'migration adoption dossier must be absolute'
+[[ -z "$migration_adoption_dossier" ]] || adoption_arguments=(--migration-adoption-dossier "$migration_adoption_dossier")
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 umask 077
 temporary=$(mktemp -d)
@@ -146,18 +161,42 @@ if [[ -n "$completion_receipt$completion_sha" || "$allow_reconciled_completion" 
   case "$mode" in upgrade|preflight|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback) ;; *) fail 'completion receipt requires continuation or readback' ;; esac
   [[ -n "$completion_receipt" && "$completion_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact completion receipt is required'
   # Проверка private mode/owner/hash до snapshot: cp не должен легализовать открытый input.
-  python3 - "$root/tools/install" "$completion_receipt" "$completion_sha" "$allow_reconciled_completion" <<'PYLOAD'
+  completion_origin=$(python3 - "$root/tools/install" "$completion_receipt" "$completion_sha" "$allow_reconciled_completion" <<'PYLOAD'
 import sys
 sys.path.insert(0,sys.argv[1])
 import bootstrap_completion
-bootstrap_completion.load(sys.argv[2],sys.argv[3],sys.argv[4]=='true')
+receipt = bootstrap_completion.load(sys.argv[2],sys.argv[3],sys.argv[4]=='true')
+print('adoption' if receipt['origin'] == bootstrap_completion.ADOPTION_ORIGIN else 'legacy')
 PYLOAD
+  )
+  [[ "$completion_origin" != adoption ]] || migration_adoption=true
   cp -- "$completion_receipt" "$temporary/bootstrap-completion.json"
   completion_arguments=(--bootstrap-completion-receipt "$temporary/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
   [[ "$allow_reconciled_completion" != true ]] || completion_arguments+=(--allow-reconciled-bootstrap-completion)
 fi
-if [[ "$mode" == upgrade ]]; then
-  python3 "$root/tools/install/bootstrap_upgrade.py" verify-apply --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}"
+if [[ "$migration_adoption" == true ]]; then
+  case "$mode" in upgrade|preflight|readback) ;; *) fail 'migration adoption requires upgrade or its preflight/readback' ;; esac
+fi
+verify_migration_adoption() {
+  local phase=$1
+  python3 "$root/tools/install/bootstrap_upgrade.py" verify-apply \
+    --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}" \
+    "${kubeconfig_arguments[@]}" "${adoption_arguments[@]}" --migration-adoption-phase "$phase"
+}
+if [[ "$migration_adoption" == true || -n "$migration_adoption_dossier" ]]; then
+  adoption_phase=begin
+  [[ "$mode" != readback ]] || adoption_phase=readback
+  adoption_result=$(verify_migration_adoption "$adoption_phase")
+  if [[ "$adoption_phase" == begin ]]; then
+    adoption_status=$(jq -er '.status | select(. == "MIGRATED_ROLLOUT_VERIFIED" or . == "MIGRATED_ROLLOUT_COMMITTED")' <<<"$adoption_result") || fail 'migration adoption begin status rejected'
+    if [[ "$adoption_status" == MIGRATED_ROLLOUT_COMMITTED ]]; then
+      # Повтор exact committed release — только проверка, даже при исходном upgrade.
+      mode=readback
+      verify_migration_adoption readback
+    fi
+  fi
+elif [[ "$mode" == upgrade ]]; then
+  python3 "$root/tools/install/bootstrap_upgrade.py" verify-apply --render "$temporary/render.yaml" --context "$context" "${completion_arguments[@]}" "${kubeconfig_arguments[@]}"
 fi
 if ((${#provider_profile_arguments[@]})); then
   python3 "$root/tools/install/provider_sandbox_profile.py" --check --render "$temporary/render.yaml" --profile "${provider_profile_arguments[1]}"
@@ -166,6 +205,8 @@ python3 "$root/tools/install/image_policy_inputs.py" --check --mode "$image_poli
 timeout 60s python3 "$root/tools/install/portable_preflight.py" --plan \
   --render "$temporary/render.yaml" --sha256 "$expected_sha"
 python3 "$root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile" --render "$temporary/render.yaml"
+python3 -B "$root/tools/install/ssh_identity_profile.py" --check --render "$temporary/render.yaml"
+python3 -B "$root/tools/install/ssh_qualification_profile.py" --check --render "$temporary/render.yaml"
 python3 "$root/tools/install/native_integration_egress.py" --check --render "$temporary/render.yaml"
 python3 "$root/tools/install/observability_qualification.py" --check --render "$temporary/render.yaml"
 [[ "$mode" != plan ]] || exit 0
@@ -224,14 +265,17 @@ if [[ "$mode" == apply || "$mode" == upgrade || "$mode" == resume-authority-boot
     if [[ "$phase" == apply ]]; then phase_arguments=(--bootstrap-completion-output "$preimage/bootstrap-completion.json"); fi
     "$root/tools/install/deploy-platform.sh" --context "$context" --mode "$phase" \
       --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" \
-      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}" "${assistant_readback_arguments[@]}"
+      --portable-inventory "$preimage/resource-inventory.json" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${previous_arguments[@]}" "${completion_arguments[@]}" "${phase_arguments[@]}" "${assistant_readback_arguments[@]}" "${kubeconfig_arguments[@]}" "${adoption_arguments[@]}"
   done
 fi
 if [[ "$mode" == apply && -f "$preimage/bootstrap-completion.json" ]]; then
   completion_sha=$(sha256sum "$preimage/bootstrap-completion.json" | awk '{print $1}')
   completion_arguments=(--bootstrap-completion-receipt "$preimage/bootstrap-completion.json" --bootstrap-completion-sha256 "$completion_sha")
 fi
+if [[ "$migration_adoption" == true ]]; then
+  verify_migration_adoption readback
+fi
 timeout 180s python3 "$root/tools/install/portable_state.py" readback \
   --context "$context" --render "$temporary/render.yaml" "${completion_arguments[@]}"
 "$root/tools/install/deploy-platform.sh" --context "$context" --mode readback \
-  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${completion_arguments[@]}" "${assistant_readback_arguments[@]}"
+  --render "$temporary/render.yaml" --public-tls-mode "$tls_mode" --clamav-mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --clamav-storage-profile "$clamav_storage_profile" "${arguments[@]}" "${completion_arguments[@]}" "${assistant_readback_arguments[@]}" "${kubeconfig_arguments[@]}" "${adoption_arguments[@]}"

@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { renderAuthorityPolicyEnvironment, verifyAuthorityPolicyEnvironment, readAuthorityPolicyEnvironment, verifyAuthorityPolicyEnvironmentReadback } from "./authority-policy-environment.mjs";
 
+import {personalIntegrationsAuthorityTransition, planPersonalIntegrationsAuthorityRegistry, validatePersonalIntegrationsAuthorityPolicy, validatePersonalIntegrationsAuthorityRegistry, verifyPersonalIntegrationsAuthorityPolicy} from "./authority-personal-integrations-source.mjs";
+import {authorityPolicyReadbackContract, authorityPolicySource, authorityPolicyTransitionConfiguration, isPortableAuthorityTransition, validateAuthorityPolicy} from "./authority-catalog-transition.mjs";
+import {telegramRegistrySource} from "./authority-telegram-transition.mjs";
+
 const source = readFileSync(new URL("../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",import.meta.url),"utf8");
 const environment = {oidcIssuer:"https://sso.fixture.test/realms/kodex",oidcAudience:"kodex-control-api"};
 test("public CP config is source-bound and drift is rejected",()=>{
@@ -37,4 +41,34 @@ test("foreign issuer, audience and incomplete rendering are rejected",()=>{
   assert.throws(()=>renderAuthorityPolicyEnvironment(source,{...environment,oidcAudience:"foreign"}));
   assert.throws(()=>renderAuthorityPolicyEnvironment(source,{...environment,oidcIssuer:"http://sso.fixture.test/realms/kodex"}));
   assert.throws(()=>renderAuthorityPolicyEnvironment(source.replace('"control-plane.oidc"','"__KODEX_UNKNOWN__"'),environment),/UNRESOLVED_TEMPLATE/);
+});
+
+test("политика личных интеграций закрепляет 107→110 и точные байты каждого окружения",()=>{
+  const sources=verifyPersonalIntegrationsAuthorityPolicy();
+  assert.equal(sources.addedOperations.length,77);
+  for(const [role,revision] of [["predecessor",107],["desired",110]]){
+    const materialized=renderAuthorityPolicyEnvironment(sources[role].raw,environment);
+    assert.equal(validatePersonalIntegrationsAuthorityPolicy(materialized.raw,role,environment).revision,revision);
+    assert.equal(authorityPolicySource(role,personalIntegrationsAuthorityTransition).raw,sources[role].raw);
+    assert.equal(validateAuthorityPolicy(materialized.raw,role,{profile:personalIntegrationsAuthorityTransition,environment}).revision,revision);
+    assert.throws(()=>validatePersonalIntegrationsAuthorityPolicy(materialized.raw+" ",role,environment),/POLICY_RENDER_CHANGED/);
+    assert.throws(()=>validatePersonalIntegrationsAuthorityPolicy(materialized.raw,role,{...environment,oidcIssuer:"https://other.example.invalid/realms/kodex"}),/POLICY_RENDER_CHANGED/);
+  }
+});
+
+test("реестр личных интеграций добавляет обязательный issuer в следующий revision",()=>{
+  const baseline=telegramRegistrySource("desired").raw;
+  const planned=planPersonalIntegrationsAuthorityRegistry(baseline);
+  assert.equal(planned.revision,planned.predecessorRevision+1);
+  assert.equal(planned.registeredReadbackCount,18);
+  assert.equal(planned.expectedReadbackCount,16);
+  assert.equal(validatePersonalIntegrationsAuthorityRegistry(planned.raw,baseline).sha256,planned.sha256);
+  assert.throws(()=>validatePersonalIntegrationsAuthorityRegistry(planned.raw+'\n',baseline),/REGISTRY_RENDER_CHANGED/);
+  assert.deepEqual(authorityPolicyReadbackContract(personalIntegrationsAuthorityTransition),{
+    registeredReadbackCount:18,expectedReadbackCount:16,requiredReadbackTargetsSHA256:planned.requiredReadbackTargetsSHA256,
+  });
+  assert.equal(authorityPolicyTransitionConfiguration(personalIntegrationsAuthorityTransition).desiredRevision,110);
+  assert.equal(isPortableAuthorityTransition(personalIntegrationsAuthorityTransition),false);
+  assert.throws(()=>planPersonalIntegrationsAuthorityRegistry(baseline.replace("interaction-gateway","other-gateway")),/REGISTRY_CLOSURE_REJECTED/);
+  assert.throws(()=>planPersonalIntegrationsAuthorityRegistry(baseline+"\nversion: 1\n"),/REGISTRY_PARSE_REJECTED/);
 });

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -42,6 +43,8 @@ type preparedContentRequest struct {
 	FileName, MediaType, Digest, ScanState, PreviewState string
 	SizeBytes                                            int64
 	Body                                                 io.Reader
+	CaptureTask                                          *managedkubernetes.CaptureTaskBinding `json:"-"`
+	FileSource                                           *kubernetesFilePreparedSource         `json:"-"`
 }
 
 // preparedContent holds ledger identity, prepared artifact/revision references, generation and the
@@ -134,17 +137,20 @@ func preparedContentRequestDigest(request preparedContentRequest) string {
 }
 
 // validPreparedContentRequest checks UUIDs, lowercase digests, bounded source references,
-// version/target consistency and a nonnil reader with declared size from zero to one MiB, clean
+// version/target consistency and a nonnil reader with declared size within its closed profile (ordinary one MiB, FILE sixteen MiB), clean
 // scan and closed preview states; it does not authorize the caller.
 // validPreparedContentRequest проверяет UUID, строчные дайджесты, ограниченные ссылки источника,
-// согласованность версий/target и ненулевой reader с размером от нуля до одного MiB, CLEAN и
+// согласованность версий/target и ненулевой reader с размером closed profile (ordinary один MiB, FILE шестнадцать MiB), CLEAN и
 // закрытым набором preview states; не авторизует caller.
 func validPreparedContentRequest(request preparedContentRequest) bool {
 	b := request.Binding
-	for _, id := range []string{b.ActorID, b.OrganizationID, b.ProjectID} {
+	for _, id := range []string{b.ActorID, b.OrganizationID} {
 		if uuid.Validate(id) != nil {
 			return false
 		}
+	}
+	if b.ProjectID == "" && (b.SourceProfile != "KUBERNETES_OUTPUT" || b.ProjectRef != "") || b.ProjectID != "" && uuid.Validate(b.ProjectID) != nil {
+		return false
 	}
 	if b.TargetArtifactID != "" && uuid.Validate(b.TargetArtifactID) != nil {
 		return false
@@ -154,25 +160,48 @@ func validPreparedContentRequest(request preparedContentRequest) bool {
 			return false
 		}
 	}
-	for _, ref := range []string{b.OrganizationRef, b.ProjectRef, b.SourceProfileRef, b.SourceLeaseRef, b.SourceRunRef, b.OperationKey} {
+	for _, ref := range []string{b.OrganizationRef, b.SourceProfileRef, b.SourceLeaseRef, b.SourceRunRef, b.OperationKey} {
 		if len(ref) < 1 || len(ref) > 96 || strings.ContainsAny(ref, "/\\\x00") {
 			return false
 		}
 	}
-	if b.SourceProfile != "SYSTEM" && b.SourceProfile != "PROJECT" {
+	if b.ProjectID != "" && (len(b.ProjectRef) < 1 || len(b.ProjectRef) > 96 || strings.ContainsAny(b.ProjectRef, "/\\\x00")) {
+		return false
+	}
+	if b.SourceProfile != "SYSTEM" && b.SourceProfile != "PROJECT" && b.SourceProfile != "KUBERNETES_OUTPUT" && b.SourceProfile != "KUBERNETES_FILE_SOURCE" {
+		return false
+	}
+	if b.SourceProfile == "KUBERNETES_OUTPUT" {
+		if request.CaptureTask == nil || request.CaptureTask.Validate() != nil || request.CaptureTask.CaptureRef != b.SourceProfileRef || request.CaptureTask.SnapshotDigest != b.SourceContextDigest {
+			return false
+		}
+	} else if request.CaptureTask != nil {
+		return false
+	}
+	if b.SourceProfile == "KUBERNETES_FILE_SOURCE" {
+		if request.FileSource == nil || !validKubernetesFilePreparedBinding(b, *request.FileSource) {
+			return false
+		}
+	} else if request.FileSource != nil {
 		return false
 	}
 	if b.SourceProfileVersion < 1 || b.SourceLeaseGeneration < 1 || b.ExpectedArtifactVersion < 0 {
 		return false
 	}
-	if (b.TargetArtifactID == "") != (b.TargetArtifactRef == "") || (b.TargetArtifactID != "" &&
+	if b.SourceProfile != "KUBERNETES_OUTPUT" && (b.TargetArtifactID == "") != (b.TargetArtifactRef == "") || b.SourceProfile == "KUBERNETES_OUTPUT" && !validKubernetesCapturePreparedBinding(b) || (b.TargetArtifactID != "" &&
 		(b.SourceRevisionRef == "" || b.ExpectedArtifactVersion < 1)) {
 		return false
 	}
 	if len(b.IntentOperation) < 1 || len(b.IntentOperation) > 128 || len(b.IdempotencyKey) < 1 || len(b.IdempotencyKey) > 200 {
 		return false
 	}
-	return request.Body != nil && request.SizeBytes >= 0 && request.SizeBytes <= 1<<20 &&
+	maximum := int64(1 << 20)
+	if b.SourceProfile == "KUBERNETES_OUTPUT" {
+		maximum = maximumArtifactBytes
+	} else if b.SourceProfile == "KUBERNETES_FILE_SOURCE" {
+		maximum = 16 << 20
+	}
+	return request.Body != nil && request.SizeBytes >= 0 && request.SizeBytes <= maximum &&
 		objectstorage.ValidDigest(request.Digest) && request.Digest == strings.ToLower(request.Digest) &&
 		utf8.ValidString(request.FileName) && utf8.RuneCountInString(request.FileName) >= 1 && utf8.RuneCountInString(request.FileName) <= 255 &&
 		len(request.MediaType) >= 1 && len(request.MediaType) <= 160 && request.ScanState == "CLEAN" &&
@@ -205,10 +234,48 @@ func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 }
 
 // preparedContentSeekableBody reads at most declared size plus one byte, verifies exact size and
-// SHA-256 and returns an in-memory seekable reader required by signed object Put.
+// SHA-256 and returns the seekable reader required by signed object Put. Capture and FILE borrow their
+// owned anonymous spool without a transcript-sized copy; its owner closes that file only after
+// the synchronous scan/one-PUT path returns. Legacy profiles retain the one-MiB memory copy.
 // preparedContentSeekableBody читает не более заявленного размера плюс один байт, проверяет точные
-// размер и SHA-256 и возвращает seekable reader в памяти для подписанного object Put.
-func preparedContentSeekableBody(request preparedContentRequest) (*bytes.Reader, error) {
+// размер и SHA-256 и возвращает seekable reader для подписанного object Put. Capture и FILE заимствуют
+// owned anonymous spool без transcript-sized copy; owner закрывает файл лишь после synchronous
+// scan/one-PUT path. Legacy profiles сохраняют one-MiB memory copy.
+func preparedContentSeekableBody(request preparedContentRequest) (io.ReadSeeker, error) {
+	if request.CaptureTask != nil || request.FileSource != nil {
+		var reader io.ReadSeeker
+		var size int64
+		switch owned := request.Body.(type) {
+		case *bytes.Reader:
+			if owned != nil {
+				reader, size = owned, owned.Size()
+			}
+		case *kubernetesCaptureSpoolReader:
+			if owned != nil && owned.spool != nil {
+				reader, size = owned, owned.Size()
+			}
+		}
+		maximum := maximumArtifactBytes
+		if request.FileSource != nil {
+			maximum = 16 << 20
+		}
+		if reader == nil || request.SizeBytes < 0 || request.SizeBytes > maximum || size != request.SizeBytes {
+			return nil, errs.ErrInvalid
+		}
+		if _, err := reader.Seek(0, io.SeekStart); err != nil {
+			return nil, errs.ErrInvalid
+		}
+		hash := sha256.New()
+		count, err := io.Copy(hash, io.LimitReader(reader, request.SizeBytes+1))
+		_, seekErr := reader.Seek(0, io.SeekStart)
+		if err != nil || seekErr != nil {
+			return nil, errs.ErrUnavailable
+		}
+		if count != request.SizeBytes || "sha256:"+hex.EncodeToString(hash.Sum(nil)) != request.Digest {
+			return nil, errs.ErrInvalid
+		}
+		return reader, nil
+	}
 	if request.Body == nil || request.SizeBytes < 0 || request.SizeBytes > 1<<20 {
 		return nil, errs.ErrInvalid
 	}
@@ -242,6 +309,9 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 		return preparedContent{}, err
 	}
 	if scan.Infected {
+		if request.CaptureTask != nil {
+			return preparedContent{}, errors.Join(errs.ErrInvalid, errKubernetesCaptureContentRejected)
+		}
 		return preparedContent{}, errs.ErrInvalid
 	}
 	scanJSON, err := artifactAntivirusJSON(scan)
@@ -250,6 +320,11 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	}
 	request.ScanState = artifactAdmissionState(request.ScanState, scan)
 	b := request.Binding
+	if request.FileSource != nil {
+		var stop context.CancelFunc
+		ctx, stop = context.WithDeadline(ctx, request.FileSource.authorizedUntil)
+		defer stop()
+	}
 	requestDigest := preparedContentRequestDigest(request)
 	artifactRef := b.TargetArtifactRef
 	if artifactRef == "" {
@@ -258,13 +333,23 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	revisionRef := "arv_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	contentRef := "pfcnt_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	key := "organizations/" + b.OrganizationRef + "/projects/" + b.ProjectRef + "/artifacts/" + artifactRef + "/" + revisionRef + "/" + strings.TrimPrefix(request.Digest, "sha256:")
+	if b.SourceProfile == "KUBERNETES_OUTPUT" {
+		key = "organizations/" + b.OrganizationRef + "/kubernetes-captures/" + b.SourceProfileRef + "/" + revisionRef + "/" + strings.TrimPrefix(request.Digest, "sha256:")
+	}
+	if request.FileSource != nil {
+		key = "organizations/" + b.OrganizationRef + "/kubernetes-file-inputs/" + b.SourceProfileRef + "/" + revisionRef + "/" + strings.TrimPrefix(request.Digest, "sha256:")
+	}
 	var targetID any
 	if b.TargetArtifactID != "" {
 		targetID = b.TargetArtifactID
 	}
+	var projectID any
+	if b.ProjectID != "" {
+		projectID = b.ProjectID
+	}
 	var id string
-	err = repository.pool.QueryRow(ctx, queryPreparedContentInsert, pgx.StrictNamedArgs{
-		"ref": contentRef, "organization_id": b.OrganizationID, "project_id": b.ProjectID, "origin_project_ref": b.ProjectRef, "actor_id": b.ActorID,
+	insertArgs := pgx.StrictNamedArgs{
+		"ref": contentRef, "organization_id": b.OrganizationID, "project_id": projectID, "origin_project_ref": b.ProjectRef, "actor_id": b.ActorID,
 		"intent_operation": b.IntentOperation, "idempotency_key": b.IdempotencyKey, "intent_digest": b.IntentDigest, "request_digest": requestDigest,
 		"operation_key": b.OperationKey, "source_profile": b.SourceProfile, "source_profile_ref": b.SourceProfileRef,
 		"source_profile_version": b.SourceProfileVersion, "source_context_digest": b.SourceContextDigest,
@@ -274,7 +359,12 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 		"prepared_artifact_ref": artifactRef, "prepared_revision_ref": revisionRef, "file_name": request.FileName, "media_type": request.MediaType,
 		"digest": request.Digest, "size_bytes": request.SizeBytes, "scan_state": request.ScanState, "preview_state": request.PreviewState, "object_key": key,
 		"antivirus_report": scanJSON,
-	}).Scan(&id)
+	}
+	if request.FileSource != nil {
+		id, err = repository.reserveKubernetesFilePrepared(ctx, *request.FileSource, b, insertArgs)
+	} else {
+		err = repository.pool.QueryRow(ctx, queryPreparedContentInsert, insertArgs).Scan(&id)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		content, state, storedDigest, readErr := scanPreparedContent(repository.pool.QueryRow(ctx, queryPreparedContentReplay, pgx.StrictNamedArgs{
 			"organization_id": b.OrganizationID, "actor_id": b.ActorID, "intent_operation": b.IntentOperation,
@@ -287,12 +377,23 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 			return preparedContent{}, errs.ErrIdempotencyReuse
 		}
 		if state != "STAGED" {
+			if (b.SourceProfile == "KUBERNETES_OUTPUT" || b.SourceProfile == "KUBERNETES_FILE_SOURCE") && (state == "UNKNOWN" || state == "IN_FLIGHT") {
+				return repository.reconcileKubernetesPreparedContent(ctx, content, requestDigest, b.SourceProfile)
+			}
+			return preparedContent{}, errs.ErrConflict
+		}
+		if request.CaptureTask != nil && !validKubernetesOutputObject(content.Prepared.ObjectKey, strings.TrimPrefix(request.Digest, "sha256:"), uint32(request.SizeBytes), objectstorage.Receipt{Key: content.Prepared.ObjectKey, VersionID: content.Prepared.ObjectVersion, ETag: content.Prepared.ObjectETag, Digest: content.Prepared.Digest, SizeBytes: content.Prepared.SizeBytes}) {
 			return preparedContent{}, errs.ErrConflict
 		}
 		return content, nil
 	}
 	if err != nil {
 		return preparedContent{}, errs.ErrUnavailable
+	}
+	if request.FileSource != nil {
+		if err := repository.linkKubernetesFilePrepared(ctx, *request.FileSource, b.OrganizationID, id); err != nil {
+			return preparedContent{}, err
+		}
 	}
 	writer, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
@@ -305,13 +406,29 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 		defer stop()
 		_ = tx.Rollback(cleanup)
 	}()
+	if err := lockKubernetesPreparedProjectTx(writer, tx, b); err != nil {
+		return preparedContent{}, err
+	}
 	if err := tx.QueryRow(writer, queryPreparedContentWriterLock, pgx.StrictNamedArgs{"id": id}).Scan(&id); err != nil {
 		return preparedContent{}, errs.ErrConflict
+	}
+	if request.CaptureTask != nil {
+		if err := currentKubernetesCaptureWriter(writer, tx, *request.CaptureTask); err != nil {
+			return preparedContent{}, err
+		}
+	}
+	if request.FileSource != nil {
+		if err := currentKubernetesFileWriter(writer, tx, *request.FileSource, b.OrganizationID, id); err != nil {
+			return preparedContent{}, err
+		}
 	}
 	putContext, stopPut := context.WithTimeout(writer, 30*time.Second)
 	receipt, putErr := repository.objects.Put(putContext, objectstorage.PutInput{Key: key, MediaType: request.MediaType,
 		Digest: request.Digest, SizeBytes: request.SizeBytes, Body: body})
 	stopPut()
+	if putErr == nil && request.CaptureTask != nil && !validKubernetesOutputObject(key, strings.TrimPrefix(request.Digest, "sha256:"), uint32(request.SizeBytes), receipt) {
+		putErr = errs.ErrConflict
+	}
 	state := "UNKNOWN"
 	if putErr == nil && exactPreparedReceipt(receipt, key, request.Digest, request.SizeBytes) {
 		head, headErr := repository.objects.Head(writer, key, receipt.VersionID)

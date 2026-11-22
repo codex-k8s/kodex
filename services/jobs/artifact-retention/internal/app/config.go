@@ -10,6 +10,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 
+	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
@@ -25,6 +26,7 @@ const (
 // Config holds the bounded process, PostgreSQL, object-storage and cleanup settings.
 // RU: Config хранит ограниченные настройки процесса, PostgreSQL, объектного хранилища и очистки.
 type Config struct {
+	RPCProfile                     string        `env:"KODEX_RPC_PROFILE"`
 	Environment                    string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TechnicalListen                string        `env:"ARTIFACT_RETENTION_TECHNICAL_LISTEN"`
 	InstanceID                     string        `env:"ARTIFACT_RETENTION_INSTANCE_ID"`
@@ -46,30 +48,46 @@ type Config struct {
 	ReadinessInterval              time.Duration `env:"ARTIFACT_RETENTION_READINESS_INTERVAL"`
 	ClaimLease                     time.Duration `env:"ARTIFACT_RETENTION_CLAIM_LEASE"`
 	BatchSize                      int           `env:"ARTIFACT_RETENTION_BATCH_SIZE"`
+	ControlPlaneTarget             string        `env:"ARTIFACT_RETENTION_CONTROL_PLANE_TARGET"`
+	ControlPlaneTLSServerName      string        `env:"ARTIFACT_RETENTION_CONTROL_PLANE_TLS_SERVER_NAME"`
+	ControlPlaneCAFile             string        `env:"ARTIFACT_RETENTION_CONTROL_PLANE_CA_FILE"`
+	ControlPlaneCertificateFile    string        `env:"ARTIFACT_RETENTION_CONTROL_PLANE_CERTIFICATE_FILE"`
+	ControlPlanePrivateKeyFile     string        `env:"ARTIFACT_RETENTION_CONTROL_PLANE_PRIVATE_KEY_FILE"`
+	ApplicationGrantFile           string        `env:"ARTIFACT_RETENTION_APPLICATION_GRANT_FILE"`
+	CaptureTimeout                 time.Duration `env:"ARTIFACT_RETENTION_CAPTURE_TIMEOUT"`
+	CapturePollInterval            time.Duration `env:"ARTIFACT_RETENTION_CAPTURE_POLL_INTERVAL"`
+	CaptureLease                   time.Duration `env:"ARTIFACT_RETENTION_CAPTURE_LEASE"`
 }
 
 // loadConfig applies documented defaults, parses environment overrides and rejects invalid deployment settings.
 // RU: loadConfig применяет исходные значения, читает переопределения окружения и отклоняет неверные настройки deploy.
 func loadConfig() (Config, error) {
 	config := Config{
-		TechnicalListen:            ":9090",
-		InstanceID:                 "artifact-retention-0",
-		PostgresDSNFile:            "/var/run/secrets/kodex/artifact-retention/postgres-runtime/dsn",
-		PostgresCAFile:             "/var/run/config/kodex/artifact-retention/postgres/ca.pem",
-		PostgresTLSServerName:      "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
-		PostgresMaxConnections:     2,
-		ObjectStorageRegion:        "us-east-1",
-		ObjectStorageBucket:        "kodex-artifacts",
-		ObjectStorageAccessKeyFile: "/var/run/secrets/kodex/artifact-retention/object-storage/access-key-id",
-		ObjectStorageSecretKeyFile: "/var/run/secrets/kodex/artifact-retention/object-storage/secret-access-key",
-		ObjectStorageUsePathStyle:  true,
-		StartupTimeout:             30 * time.Second,
-		ShutdownTimeout:            20 * time.Second,
-		OperationTimeout:           20 * time.Second,
-		PollInterval:               30 * time.Second,
-		ReadinessInterval:          10 * time.Second,
-		ClaimLease:                 2 * time.Minute,
-		BatchSize:                  32,
+		TechnicalListen:             ":9090",
+		InstanceID:                  "artifact-retention-0",
+		PostgresDSNFile:             "/var/run/secrets/kodex/artifact-retention/postgres-runtime/dsn",
+		PostgresCAFile:              "/var/run/config/kodex/artifact-retention/postgres/ca.pem",
+		PostgresTLSServerName:       "control-plane-postgresql-rw.kodex-system.svc.cluster.local",
+		PostgresMaxConnections:      2,
+		ObjectStorageRegion:         "us-east-1",
+		ObjectStorageBucket:         "kodex-artifacts",
+		ObjectStorageAccessKeyFile:  "/var/run/secrets/kodex/artifact-retention/object-storage/access-key-id",
+		ObjectStorageSecretKeyFile:  "/var/run/secrets/kodex/artifact-retention/object-storage/secret-access-key",
+		ObjectStorageUsePathStyle:   true,
+		StartupTimeout:              30 * time.Second,
+		ShutdownTimeout:             20 * time.Second,
+		OperationTimeout:            20 * time.Second,
+		PollInterval:                30 * time.Second,
+		ReadinessInterval:           10 * time.Second,
+		ClaimLease:                  2 * time.Minute,
+		BatchSize:                   32,
+		ControlPlaneTarget:          "control-plane.kodex-system.svc:8443",
+		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
+		ControlPlaneCAFile:          "/var/run/config/kodex/artifact-retention/control-plane/ca.pem",
+		ControlPlaneCertificateFile: "/var/run/secrets/kodex/artifact-retention/workload-tls/tls.crt",
+		ControlPlanePrivateKeyFile:  "/var/run/secrets/kodex/artifact-retention/workload-tls/tls.key",
+		ApplicationGrantFile:        "/var/run/secrets/kodex/artifact-retention/application-grant/application-grant.jws",
+		CaptureTimeout:              90 * time.Second, CapturePollInterval: 2 * time.Second, CaptureLease: 3 * time.Minute,
 	}
 	if err := env.ParseWithOptions(&config, env.Options{}); err != nil {
 		return Config{}, err
@@ -83,19 +101,26 @@ func loadConfig() (Config, error) {
 // validate closes on unsafe transport, nonabsolute protected paths, unbounded timeouts or claim sizes.
 // RU: validate отклоняет небезопасный transport, нестрогие защищённые пути, чрезмерные сроки и размеры claim.
 func (config Config) validate() error {
+	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
+		return errors.New("artifact-retention RPC profile is invalid")
+	}
 	if config.Environment != "staging" && config.Environment != "production" {
 		return errors.New("artifact-retention environment is invalid")
 	}
 	if _, _, err := net.SplitHostPort(config.TechnicalListen); err != nil {
 		return errors.New("artifact-retention technical endpoint is invalid")
 	}
-	for _, path := range []string{config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile} {
+	if _, _, err := net.SplitHostPort(config.ControlPlaneTarget); err != nil {
+		return errors.New("artifact-retention owner endpoint is invalid")
+	}
+	for _, path := range []string{config.PostgresDSNFile, config.PostgresCAFile, config.ObjectStorageAccessKeyFile, config.ObjectStorageSecretKeyFile, config.ControlPlaneCAFile, config.ControlPlaneCertificateFile, config.ControlPlanePrivateKeyFile, config.ApplicationGrantFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("artifact-retention protected file path is invalid")
 		}
 	}
 	if strings.TrimSpace(config.InstanceID) == "" || len(config.InstanceID) > 128 ||
-		strings.TrimSpace(config.PostgresTLSServerName) == "" || strings.ContainsAny(config.PostgresTLSServerName, "*/") {
+		strings.TrimSpace(config.PostgresTLSServerName) == "" || strings.ContainsAny(config.PostgresTLSServerName, "*/") ||
+		strings.TrimSpace(config.ControlPlaneTLSServerName) == "" || strings.ContainsAny(config.ControlPlaneTLSServerName, "*/") {
 		return errors.New("artifact-retention identity is invalid")
 	}
 	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
@@ -113,7 +138,10 @@ func (config Config) validate() error {
 		config.OperationTimeout < time.Second || config.OperationTimeout > time.Minute ||
 		config.PollInterval < time.Second || config.PollInterval > 24*time.Hour ||
 		config.ReadinessInterval < time.Second || config.ReadinessInterval > time.Minute ||
-		config.ClaimLease <= config.OperationTimeout || config.ClaimLease > 10*time.Minute {
+		config.ClaimLease <= config.OperationTimeout || config.ClaimLease > 10*time.Minute ||
+		config.CaptureTimeout < time.Second || config.CaptureTimeout > 90*time.Second ||
+		config.CapturePollInterval < time.Second || config.CapturePollInterval > time.Minute ||
+		config.CaptureLease <= config.CaptureTimeout || config.CaptureLease > 5*time.Minute {
 		return errors.New("artifact-retention lifecycle configuration is invalid")
 	}
 	return nil

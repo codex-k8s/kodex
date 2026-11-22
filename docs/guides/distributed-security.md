@@ -4,11 +4,18 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.81
+version: 1.7.90
 updated: 2026-11-22
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
+
+Если старый consumer игнорирует новые поля ответа допуска, presence deadline
+в новом ответе недостаточно. Запрос явно объявляет закрытую поддерживаемую
+версию контракта; отсутствие либо неизвестная версия отклоняются до расхода
+одноразового admission. Новый consumer отдельно отклоняет ответ старого owner
+без deadline. Проверка обеих смешанных версий предшествует projected-key read
+и внешнему dispatch; это gate приложения, а не неподтверждённое правило broker.
 
 Срок нового внешнего dispatch и срок приёмки результата уже допущенного эффекта
 не смешиваются. Personal TOKEN admission получает конечный серверный deadline
@@ -20,12 +27,36 @@ admission не создаёт новый dispatch. Durable receipt/reconciliatio
 прежний owner lease/fence/generation и не выдаёт новые credentials.
 Карта и ограничения: [персональный TOKEN allowance](../operations/personal-token-allowance-2033.md).
 
-Если старый consumer игнорирует новые поля ответа допуска, presence deadline
-в новом ответе недостаточно. Запрос явно объявляет закрытую поддерживаемую
-версию контракта; отсутствие либо неизвестная версия отклоняются до расхода
-одноразового admission. Новый consumer отдельно отклоняет ответ старого owner
-без deadline. Проверка обеих смешанных версий предшествует projected-key read
-и внешнему dispatch; это gate приложения, а не неподтверждённое правило broker.
+
+При чтении защищённого результата срок текущего разрешения сохраняется до
+фактической выдачи. Для allow-only engine среди уже действующих разрешающих
+альтернатив выбирается поздний `ValidUntil`; действующая бессрочная альтернатива
+означает отсутствие этого ограничения. Будущая привязка не продлевает текущий
+допуск. Несколько обязательных permissions, lease, parent и runtime deadline
+ограничивают выдачу своим минимумом. Wall timestamp преобразуется в monotonic
+bound при evaluation; lock wait, storage GET, COMMIT acknowledgement и повторное
+чтение не продлевают первоначальное окно. Финальная проверка выполняется после
+блокирующих действий и COMMIT до передачи результата. Контур включает настоящее
+истечение ACL при Connection wait либо задержанном подтверждении COMMIT, а не
+только проверку просроченного запроса на входе. Матрицы: SSH048 и Kubernetes OUTPUT.
+
+Тот же срок ограничивает выдачу pre-Start credit, а не только чтение результата.
+Owner сохраняет минимум действующих обязательных permissions и execution lease
+в immutable attempt до первого внешнего действия. Успешный COMMIT с поздним ACK
+не выдаёт credit после этого срока; metadata read сохраняет UNREPORTED без
+признака допуска. Новая действующая ACL alternative либо повторный Get не
+продлевает прежнюю attempt. Позднее внешнее observation можно записать privately,
+но atomic publication требует живого исходного deadline на финальном UPDATE.
+Recovery, читающий исходную recipe, сохраняет также срок original-resource view
+и повторно проверяет именно её owner/project eligibility перед использованием.
+
+Проверка RPC admission использует настоящий producer registry соответствия
+operation/permission → full method. Fixture, которая вручную повторяет строку
+из handler, не доказывает достижимость установленного пути: обе копии могут
+одинаково расходиться с профилем клиента. Positive test проходит registry →
+interceptor → handler; соседний method и прежнее незарегистрированное имя
+остаются отрицательными случаями. Исправление имени не добавляет alias либо
+fallback к прежней authority. Матрица: [managed Kubernetes](../operations/managed-kubernetes-2145.md).
 
 Предел архива проверяется до обработки расширений контейнерного формата.
 Высокоуровневый tar decoder может прочитать весь PAX/GNU payload до выдачи
@@ -806,6 +837,24 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
 
+Сохранённый результат внешнего READ не сохраняет полномочия на повторную
+выдачу. Fresh owner eligibility пересекается с текущей аутентификацией выбранной
+provider identity и проверкой её точных прав, если источник допускает отзыв
+независимо от Kodex. Проверка не повторяет исходное чтение либо mutation:
+для Kubernetes это private credential reload, subject и exact SSAR, а не новый
+resource GET. Данные выдаются лишь под коротким output credit; expired/unknown/
+revoked закрывают выдачу без подмены identity общим ключом. WRITE receipt
+содержит только разрешённые metadata эффекта и не даёт read-through-write.
+
+Согласованный план сохраняет полное исходное наблюдение ресурса, включая
+схему, содержимое, состояние и известные identity witnesses. После ожидания
+Human Gate новое наблюдение проверяется против сохранённого до Begin;
+совпадение адреса либо opaque plan digest не разрешает заменить остальные pins.
+Owner readback передаёт эти данные явно, consumer отвергает пропуск или
+повреждение и не восстанавливает их из свежего discovery. Optional witness
+не превращается в обязательное дополнительное чтение; два известных разных
+значения требуют нового допуска, отсутствие значения не доказывает стабильность.
+
 В object-storage adapter один immutable `Put` не повторяется скрыто внутри
 SDK при HTTP-ошибке или обрыве после передачи тела: неизвестный исход принадлежит
 owner intent/receipt lifecycle, а не автоматическому повтору записи. Retry
@@ -1019,6 +1068,15 @@ session являются разными слоями. Срок одного сл
 конкретного browser client задаётся per-client и подтверждается точным
 readback одновременно с realm default.
 
+Для локального CLI cookie domain не закрепляет TCP-port. Защищённый credential
+snapshot дополнительно хранит canonical origin (scheme/host/port), который
+проверяется до первого сетевого запроса и сохраняется при rotation. Initial
+bearer file связывается с тем же origin; другой port даже того же hostname не
+становится допустимым получателем token/cookies. Успешный bootstrap требует
+проверенного session metadata readback после POST до фиксации private state;
+один HTTP204 не доказывает пригодность нового credential. Эти условия не
+заменяют серверную проверку actor, tenant, Origin/CSRF и текущих permissions.
+
 Прежняя bearer-backed sliding API session имеет отдельный idle TTL и абсолютную границу срока
 проверенного bearer. Renewal разрешён только после успешной проверки session
 cookie, подписи и expiry bearer, `subject`, organization, OIDC `sid`, session
@@ -1163,7 +1221,6 @@ readiness path. Перед изменением writer/backend оператор 
 выполняет drain/join и только затем меняет профиль. Gateway проверяет withdrawal
 и expiry непосредственно перед effect; lost response остаётся UNKNOWN.
 Operator attestation и independently observed evidence различаются в результате.
-
 
 При расширении Git-области discovery хранит только координаты ресурса. ID,
 canonical name и успешный публичный GET не заменяют текущую принадлежность
@@ -1704,6 +1761,34 @@ OPTION` или право менять пароль другого principal.
 либо через сверку точного provider receipt. Completion связывается с конкретными
 lease, fence и поколением, а срок внешнего вызова оставляет время для записи
 исхода. Это правило одинаково для сообщений, почты и остальных write adapters.
+
+Один вызов метода SDK не доказывает одну сетевую попытку: встроенные повторы
+по `Retry-After`, транспортные повторы и перенаправления проверяются отдельно.
+Если owner разрешил только одну отправку, adapter явно отключает эти повторы
+и не выполняет автоматический read/recreate после неоднозначного ответа.
+Проверка использует настоящий ограниченный HTTP/TLS transport с подсчётом
+запросов при `429`, `503` и потере ACK; fake client не доказывает эту границу.
+Контрольный тест штатного SDK должен воспроизвести повтор, иначе оснастка
+может скрывать причину дефекта. Последующий `GET 404` не доказывает отсутствие
+ещё выполняющегося удалённого `Create` и не закрывает неизвестный material receipt.
+Использованный SDK client с внутренними atomics/locks не копируется: отдельный
+purpose request builder сохраняет точные TLS/auth pins и общий rate limiter,
+не меняя общий client параллельных consumers.
+
+Завершённый успешный HTTP ACK с недопустимым body не классифицируется как
+потеря сетевого ACK: owner сохраняет отдельный terminal rejection и bounded
+witness без raw body. Повторное чтение не принимает исправленный ACK либо иной
+UID для того же intent. Истечение lease или crash без completion не доказывает
+ни транспортную ошибку, ни отсутствие captured rejection. Следующее observation
+допускается только после durable classified outcome каждого прежнего attempt;
+unreported outcome остаётся закрытым. Worker сообщает transport-lost-ACK только
+после cancel/join исходного запроса, а не по одному сигналу deadline.
+
+Монотонная история защиты и отозванных pins привязывается к проверенной корневой
+identity ресурса, а не только к его переименуемому ref. Новый alias того же
+ClusterUID/NodeUID не начинает историю заново, не снимает protected names и не
+восстанавливает отозванный key либо поколение. Для проверки недостаточно сравнить
+текущий файл: owner читает принятую persistent историю всех aliases.
 
 ## Очистка materialization при позднем producer
 
@@ -2987,6 +3072,26 @@ GitHub проверяет свежие metadata репозитория и точ
 заменяет защиту веток на стороне GitHub. Merge и deploy сохраняют отдельные
 Human Gate. Матрица: [#1967](../operations/github-autonomous-pdlc-1967.md).
 
+### Неизменяемая версия private output
+
+Private frame staging не является публикацией artifact или антивирусным допуском.
+До единственного object PUT owner фиксирует intent; timeout/lost receipt не
+разрешает повторную запись, вывод об отсутствии объекта или ACK. Поздние known/
+unknown факты сохраняются независимо от текущего допуска. Выдача `ACCEPTED`
+повторяет полный current owner/child/pin/frame predicate под canonical lock chain;
+старый snapshot после смены delivery ordinal не сохраняет право выдачи.
+
+Непустой VersionID сам по себе не доказывает immutable version. Для S3
+`suspended`/unversioned `null` — изменяемая версия: последующий PUT того же key
+заменяет её содержимое, сохраняя key и VersionID. Такие receipt запрещены на
+границе known immutable output вместе с empty/непредставимым VersionID.
+`HeadBucket` подтверждает доступность bucket, но не включённый versioning.
+Полный readiness рабочего пути обязан проверять versioning и прочие storage
+условия, а конкретный write — exact key/version/ETag/digest/size. Успех local
+in-memory fixture не подтверждает S3 durability. Официальные источники:
+[поведение suspended versioning](https://docs.aws.amazon.com/AmazonS3/latest/userguide/AddingObjectstoVersionSuspendedBuckets.html)
+и [GetBucketVersioning](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketVersioning.html).
+
 ### Типизированный контейнер с исходными файлами
 
 CLEAN JSON/Base64 либо archive-контейнер не является допуском decoded members.
@@ -3058,7 +3163,6 @@ Restart после reboot допускается только для existing ex
 подтверждённого durable successful receipt; reserved/unknown попытка не
 возобновляется автоматически.
 
-
 Отзыв actor access проверяется для каждого скрыто используемого integration
 source, а не только для основного target. Успешный прежний receipt и agent READ
 binds не заменяют текущий canonical actor ACL источника; worker подтверждает
@@ -3073,3 +3177,75 @@ Transient failure, отмена, serialization и lock contention не стан�
 неограниченно следующие допустимые вызовы. Возврат доступа не снимает marker
 автоматически. Owner Cancel закрывает исполнение, но не доказывает отсутствие
 внешнего эффекта и не превращает UNKNOWN в подтверждённый terminal outcome.
+
+При подключении SSH или Kubernetes broker identity срок подготовки, preflight
+и допуска к записи ограничивается минимальным действующим сроком всех
+необходимых разрешений исходного пользователя. При shared-настройке учитываются
+`integration.view`, `integration.manage` и `organization.manage`. Владелец
+состояния проверяет допуск до и после фиксации транзакции, а срок попытки
+хранится в ledger. Подтверждение транзакции после срока не выдаёт брокеру
+допуск. Поздний receipt сохраняется как факт и не возобновляет право на запись
+или подключение credential.
+
+Для выполнения назначенного Kubernetes capability инициатору требуется
+`integration.view`, действующий точный grant и проверенный root/RuntimeRevision;
+право редактирования Connection `integration.manage` не подменяет этот допуск.
+Одинаковый предикат применяется при создании invocation, claim/renew и перед
+owner effect. Технический broker не наследует полномочия владельца платформы.
+Тот же KUBE-only use predicate обязателен в effective capabilities, свежей
+RuntimeRevision, personal launch preflight и immutable invocation credential pin. Внутренний SQL projection видимости не требует
+management повторно после actor/grant admission. Discriminator сам по себе не
+выдаёт authority: последующая exact package/delivery validation обязательна.
+Legacy TOKEN-профили сохраняют прежний management predicate.
+HumanGate относится к одному immutable child и не создаёт новый lease либо
+общий допуск к соседним ресурсам. Отзыв прав, expiry и terminal закрывают также
+связанные ожидающие уведомления: возможная начатая отправка остаётся UNKNOWN,
+а подтверждённые отправки и receipts не переписываются.
+
+Генерация mutation из наблюдённого JSON обязана сохранять точные числовые
+значения незатронутых полей, включая целые числа вне точного диапазона float64.
+Успешная проверка схемы не доказывает сохранность значения. Нельзя пропускать
+целые контейнеры или массивы через теряющий точность generic diff и затем
+выдавать результат за узкую одобренную команду. Используется точное построение
+разрешённых полей либо квалифицированный lossless механизм; тест проверяет
+фактический wire и результат применения patch, включая соседние поля и элементы.
+
+### Локальное завершение и удалённый факт потока
+
+У внешнего потока remote exit/status, локальное закрытие, положительный join и
+полнота доставки являются разными фактами. Итог вышестоящего owner graph должен
+проверять сохранённый typed terminal receipt исходного effect/stream, а не
+считать remote SUCCESS доказательством локального COMPLETED. Это относится и к
+нулевому выводу: отсутствие frames не доказывает успешную доставку либо join.
+При LOST/неподтверждённом join удалённый известный исход сохраняется без
+повышения внешнего результата до SUCCESS. Частичный неизменяемый artifact может
+сохранить подтверждённый префикс после Stop, но не заменяет полноту результата.
+
+
+## Поздний rejoin многофазного подписанного допуска
+
+Исходные prerequisite refs, owner/role/material receipts и accepted cohort
+закрепляются до первого эффекта и сохраняются при rejoin. Совпадение двух
+свежих замен не доказывает прежнюю custody. После CAS нельзя повторно применять
+predicate прежнего registry либо generation0: нужен отдельный forward reader,
+связывающий exact intent/UID, operation/registry/base и фактический owner SQL.
+
+Стабильный допуск читателя не замораживает snapshot первой delivery phase.
+Монотонный owner protocol вправе пройти следующие SWITCH/RETIRE epochs той же
+operation; изменение epoch допускается только с причинным owner readback.
+Счётчик ACK может уменьшиться лишь на новой epoch, а числовая generation Secret
+не заменяет подписанный required membership. Metadata custody и readiness
+являются разными доказательствами.
+
+Runtime phase, уже удерживающая journal lock, передаёт свой проверенный
+plan/events в read-only consumer. Повторный вызов внешнего inspect того же
+журнала под lock не является проверкой свежести и запрещён. До внешнего открытия
+API сохраняются physical isolation и отдельный fresh signed owner terminal.
+
+Новый workload с platform-worker grant требует полного server-owned допуска:
+локальный signer allowlist, exact producer/operation policy, public trust projection,
+включённый durable generation registry и совместимый closed watermark CHECK.
+Готовность signer или подписанный authority snapshot не заменяют owner admission
+прикладного grant. Новая регистрация вводится forward-only миграцией без сброса
+поколений, instance high-watermarks, прежних ACL/RLS и backup authority.
+Отсутствующая регистрация остаётся отказом; v1 fallback не обходит этот контракт.

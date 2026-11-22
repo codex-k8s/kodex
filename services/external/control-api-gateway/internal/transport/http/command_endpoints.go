@@ -630,7 +630,7 @@ func (server *Server) CommandIntegrationConnection(w http.ResponseWriter, r *htt
 // ChangeIntegrationGrant copies approval scope paths and maps requested policy/targets into the dedicated owner grant command with mutation pins. Enum lookup alone is not validation, and caller-supplied policy cannot itself authorize execution.
 // ChangeIntegrationGrant копирует approval scope paths и преобразует запрошенные policy и targets в отдельную grant-команду владельца с mutation pins. Enum lookup не заменяет проверку, входная policy сама выполнение не разрешает.
 func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.ChangeIntegrationGrantParams) {
-	body, ok := decodeJSON[generated.IntegrationGrantInput](w, r)
+	body, ok := decodeIntegrationGrantJSON[generated.IntegrationGrantInput](w, r)
 	if !ok {
 		return
 	}
@@ -642,7 +642,7 @@ func (server *Server) ChangeIntegrationGrant(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths,
+	response, err := server.control.Command.ChangeIntegrationGrant(r.Context(), &controlplanev1.ChangeIntegrationGrantRequest{Mutation: m, ConnectionRef: ref, CapabilityKey: body.CapabilityKey, AgentRef: stringValue(body.AgentRef), WorkflowRef: stringValue(body.WorkflowRef), Enabled: body.Enabled, ApprovalScopePaths: approvalScopePaths, KubernetesNamespace: stringValue(body.KubernetesNamespace), KubernetesGrantRef: stringValue(body.KubernetesGrantRef),
 		ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+string(body.ApprovalPolicy)])})
 	writeRPCResult(w, http.StatusOK, response, err, "connection", "")
 }

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Проверка ввода Kubernetes-инструмента</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, ref } from "vue";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import RunSessionDetailsDialog from "../../src/features/runs/RunSessionDetailsDialog.vue";
+      import { syntheticCatalogRun } from "./catalog-run";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const run = {
+        ...syntheticCatalogRun(1, "prj_synthetic"),
+        state: "RUNNING",
+        title: "Активная сессия",
+      };
+      const node = {
+        ref: "nod_synthetic",
+        runRef: run.ref,
+        type: "AGENT_EXECUTION",
+        state: "RUNNING",
+        displayName: "Текущая сессия",
+        attempt: 1,
+        artifactRefs: [],
+        childRunRefs: [],
+        createdAt: "2026-11-15T00:00:00Z",
+        nextActions: [],
+      };
+      const visible = ref(true);
+      createApp({
+        render: () =>
+          visible.value
+            ? h(RunSessionDetailsDialog, {
+                run,
+                node,
+                nodes: [node],
+                events: [],
+                artifacts: [],
+                onClose: () => {
+                  visible.value = false;
+                },
+              })
+            : h("p", "Сессия закрыта"),
+      })
+        .use(i18n)
+        .mount("#app");
+    </script>
+  </body>
+</html>

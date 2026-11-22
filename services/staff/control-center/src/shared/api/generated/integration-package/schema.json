@@ -88,7 +88,9 @@
             "CONTEXT7",
             "SENTRY",
             "OBSERVABILITY",
-            "SSH_COMPOSE"
+            "SSH_COMPOSE",
+            "SSH_TARGET",
+            "KUBERNETES"
           ]
         },
         "adapterOwner": {
@@ -144,7 +146,128 @@
             "$ref": "#/$defs/capability"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "credential"
+            ],
+            "properties": {
+              "credential": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "BROKER_IDENTITY"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "oneOf": [
+              {
+                "properties": {
+                  "adapter": {
+                    "const": "KUBERNETES"
+                  },
+                  "credential": {
+                    "type": "object",
+                    "properties": {
+                      "brokerPurpose": {
+                        "const": "KUBERNETES_TARGET"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "adapter": {
+                    "const": "SSH_TARGET"
+                  },
+                  "credential": {
+                    "type": "object",
+                    "properties": {
+                      "brokerPurpose": {
+                        "const": "SSH_TARGET"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "adapter"
+            ],
+            "properties": {
+              "adapter": {
+                "const": "KUBERNETES"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credential"
+            ],
+            "properties": {
+              "credential": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "brokerPurpose"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "BROKER_IDENTITY"
+                  },
+                  "brokerPurpose": {
+                    "const": "KUBERNETES_TARGET"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "adapter"
+            ],
+            "properties": {
+              "adapter": {
+                "const": "SSH_TARGET"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "credential"
+            ],
+            "properties": {
+              "credential": {
+                "type": "object",
+                "required": [
+                  "kind",
+                  "brokerPurpose"
+                ],
+                "properties": {
+                  "kind": {
+                    "const": "BROKER_IDENTITY"
+                  },
+                  "brokerPurpose": {
+                    "const": "SSH_TARGET"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "$defs": {
@@ -263,7 +386,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "secretKey",
         "kind"
       ],
       "properties": {
@@ -273,10 +395,52 @@
         "kind": {
           "enum": [
             "TOKEN",
-            "PASSWORD"
+            "PASSWORD",
+            "BROKER_IDENTITY"
+          ]
+        },
+        "brokerPurpose": {
+          "enum": [
+            "KUBERNETES_TARGET",
+            "SSH_TARGET"
           ]
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "secretKey"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "TOKEN",
+                "PASSWORD"
+              ]
+            }
+          },
+          "not": {
+            "required": [
+              "brokerPurpose"
+            ]
+          }
+        },
+        {
+          "required": [
+            "brokerPurpose"
+          ],
+          "properties": {
+            "kind": {
+              "const": "BROKER_IDENTITY"
+            }
+          },
+          "not": {
+            "required": [
+              "secretKey"
+            ]
+          }
+        }
+      ]
     },
     "networkDestination": {
       "type": "object",
@@ -403,7 +567,8 @@
             "EMAIL_SENDER",
             "MATTERMOST_CHANNEL",
             "HTTPS_RESOURCE",
-            "SSH_TARGET"
+            "SSH_TARGET",
+            "KUBERNETES_TARGET"
           ]
         },
         "connectionFields": {
@@ -437,9 +602,6 @@
             "properties": {
               "maxAttempts": {
                 "const": 1
-              },
-              "idempotency": {
-                "const": "EFFECT_KEY"
               }
             }
           },
@@ -451,11 +613,33 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "required": [
+              "leaseProfile"
+            ],
+            "properties": {
+              "leaseProfile": {
+                "const": "SSH_COMPOSE_V1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "idempotency": {
+                "const": "EFFECT_KEY"
+              }
+            }
+          }
         }
       ],
       "properties": {
         "leaseProfile": {
-          "const": "SSH_COMPOSE_V1"
+          "enum": [
+            "SSH_COMPOSE_V1",
+            "MANAGED_KUBERNETES_V1"
+          ]
         },
         "idempotency": {
           "enum": [

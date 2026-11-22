@@ -19,7 +19,7 @@ for profile in web-only web-with-mattermost; do
     --slurpfile resources "$temporary_directory/resources.json" \
     --slurpfile projections "$repository_root/tools/install/secret-projections.json" '
     . as $registry | $resources[0] as $resources | $projections[0].secrets as $secrets |
-    ["email-bridge", "interaction-gateway"] as $workloads |
+    ["artifact-retention", "email-bridge", "interaction-gateway"] as $workloads |
     def target($workload): [$registry.targets[] | select(.workload_id == $workload)];
     def delivery_names($target): [
       $target.auth_private_key.secret_name, $target.manifest_trust.secret_name,
@@ -36,7 +36,14 @@ for profile in web-only web-with-mattermost; do
             any(.podSelector.matchExpressions[]?;
               .key == "app.kubernetes.io/name" and .operator == "In" and
               (.values | index($workload)) != null))));
-    $registry.version == 1 and $registry.source_revision == 8 and
+    $registry.version == 1 and $registry.source_revision == 9 and
+    any($resources[]; .kind == "Certificate" and
+      .metadata.namespace == "kodex-system" and
+      .metadata.name == "internal-rpc-authority-artifact-retention-workload" and
+      .spec.issuerRef == {name: "kodex-installation-ca", kind: "Issuer"} and
+      .spec.privateKey == {algorithm: "ECDSA", size: 256, rotationPolicy: "Always"} and
+      .spec.uris == ["spiffe://kodex.local/ns/kodex-system/sa/artifact-retention"] and
+      .spec.secretName == "internal-rpc-authority-artifact-retention-workload-tls") and
     all($workloads[]; . as $workload |
       target($workload) as $targets |
       ($targets | length) == 1 and $targets[0].role == "AUTHORIZATION_ISSUER" and

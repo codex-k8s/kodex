@@ -47,7 +47,7 @@ func TestPersonalCredentialRotationAndRevokeKeepsHistory(t *testing.T) {
 	if err != nil || replacement.State != "CHECK_REQUIRED" || replacement.Generation != revoked.Generation+1 || replacement.Credential.Ref != credential.Ref {
 		t.Fatal("replacement after revoke did not create a fresh unverified generation")
 	}
-	selection, err := ResolveIntegrationCredential(requirement, initiator, original.Credential, &replacement, now)
+	selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(original.Credential), &replacement, now)
 	if err != nil || selection.Credential != nil || selection.Problem != entity.IntegrationCredentialCheckRequired {
 		t.Fatal("replacement silently reused old verification or shared credential")
 	}

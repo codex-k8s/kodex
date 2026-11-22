@@ -4,7 +4,7 @@ INSERT INTO control_plane.integration_grants(
 	risk,resource_kind,resource_scope,resource_scope_digest,definition_version,definition_digest,approval_scope_paths
 )
 VALUES($1,$2::uuid,$3::uuid,$4,$5,$6,true,$7,$8::uuid,$9,$10,$11,$12,$13,$14,$15::text[])
-ON CONFLICT(connection_id,capability_key,target_kind,target_ref) DO UPDATE SET
+ON CONFLICT(connection_id,capability_key,target_kind,target_ref) WHERE resource_kind<>'KUBERNETES_TARGET' DO UPDATE SET
 	enabled=true,
 	approval_policy=EXCLUDED.approval_policy,
 	risk=EXCLUDED.risk,

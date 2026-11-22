@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.20
-updated: 2026-11-13
+version: 1.2.23
+updated: 2026-11-22
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -115,6 +115,14 @@ SQL не собирается конкатенацией пользовател�
 - Для аргументов используется `pgx.StrictNamedArgs`, чтобы отсутствующее или
   лишнее имя закрыто отклонялось. Обычный `pgx.NamedArgs` не используется для
   production query: он допускает отсутствующие и игнорирует лишние аргументы.
+- SQL-тип входного placeholder соответствует передаваемому Go-типу. Если
+  `int64` сравнивается с текстовым полем JSON, параметр вводится как
+  `@revision::bigint::text`, а не `@revision::text`: `pgx` выбирает codec по
+  parameter OID подготовленного statement и не обязан преобразовывать число
+  в Go-строку. Native-проверка исполняет запрос с фактическими typed args;
+  успешный DDL либо mock boolean не доказывает правильное кодирование. Путь
+  `ExtendedQueryBuilder.Build` и `pgtype.Map` проверен через Context7
+  `/jackc/pgx`; локальный consumer использует зафиксированную версию модуля.
 - `scan.go` проверяет nullable/required поля и вызывает constructors value
   objects/entities.
 - Поврежденное состояние БД не пропускается в домен как частично валидная
@@ -166,6 +174,21 @@ reader не превращается в успешный ответ и не от
 - Retry serialization/deadlock выполняется ограниченно и только для доказанно
   идемпотентной операции.
 
+При `READ COMMITTED` ожидание блокировки внутри `UPDATE` не обновляет снимок
+остальных таблиц для условия `NOT EXISTS`. Если переход общего агрегата зависит
+от отсутствия открытых дочерних объектов, сначала отдельным запросом блокируется
+существующая строка общего владельца, затем следующим запросом проверяется
+условие. Все конкурирующие writers используют ту же блокировку и согласованный
+порядок её захвата; отдельный lock без участия остальных writers недостаточен.
+В trigger проверяются фактические правила снимков его SQL statements; перенос
+проверки в helper сам по себе не доказывает свежесть. Это правило не переносится
+на `REPEATABLE READ`/`SERIALIZABLE` как обещание нового снимка после lock.
+Проверка удерживает реальную блокировку другой транзакцией, подтверждает ожидание
+через `pg_blocking_pids` и проверяет оба зафиксированных результата. Открытый
+соседний Human Gate сохраняет `WAITING_HUMAN`, закрытие последнего снимает только
+это ожидание. Основание: [PostgreSQL18](https://www.postgresql.org/docs/18/transaction-iso.html#XACT-READ-COMMITTED);
+воспроизводимый сценарий: [#2145](../operations/managed-kubernetes-2145.md#capacity-и-остановка-worker).
+
 Startup bootstrap с несколькими репликами также получает SERIALIZABLE snapshot до
 ожидания owner-row lock. Блокировка неизменённой строки не обновляет snapshot:
 последующий reconcile изменённой строки может завершиться 40001. Типизированная
@@ -214,6 +237,12 @@ retry не увеличивается. Jitter ограничивается ос�
 проверяются на настоящем disposable PostgreSQL, включая40001 на audit/commit,
 точные bytes/digest и cardinality committed grant/audit. Известный abort
 не разрешает повторять неизвестный commit либо скрывать cleanup failure.
+
+Для составного proof нескольких database bound native identity внутри каждого
+snapshot не заменяет заключительную сверку обоих database OID и SystemID.
+Pod/StatefulSet может остаться прежним после DROP/RESTORE одной БД. Финальная
+общая read-only epoch-сверка и Pod/owner checks выполняются до выдачи proof и
+внутри его исходного deadline; новый read не продлевает прежнее полномочие.
 
 Составной авторитетный snapshot не читается несколькими независимыми
 statement через pool. Если aggregate собирается из основной строки и дочерних
@@ -519,3 +548,27 @@ bootstrap readback и отсутствие legacy объектов. Upgrade-path
 
 Связанные документы: `REPO-DOC-001`, `GO-DOC-001`, `GUIDE-DOC-003`,
 `INFRA-DOC-001`.
+
+## Проверка полного набора SQL-привилегий
+
+`has_table_privilege` и аналогичные функции PostgreSQL трактуют строку нескольких
+прав через запятую как наличие хотя бы одного права. Readiness, migration proof
+и проверки ACL, которым нужен весь набор, проверяют каждое право отдельно с AND
+либо отвергают наличие любого недостающего права. Список в одном вызове не
+доказывает полноту допуска. Отрицательная component-проверка использует отдельное
+подключение с непривилегированным `session_user`: поочерёдно снимает каждое право
+и проверяет закрытый отказ, затем восстанавливает только это право. `SET ROLE`
+не меняет `session_user`; owner/superuser не подходит для такой проверки.
+
+Минимальный `GRANT SELECT,INSERT` не снимает `UPDATE`/`DELETE`, полученные новой
+таблицей через `ALTER DEFAULT PRIVILEGES`. Для immutable pin/receipt-таблиц миграция
+сначала явно снимает все права у `PUBLIC` и runtime, затем выдаёт только нужный
+набор. Readiness либо component-регрессия проверяет и необходимые, и лишние
+effective права, включая column-level mutation и grant option. Необходимость
+`UPDATE` для `FOR UPDATE`/`FOR SHARE` проверяется по фактическим lock aliases:
+блокировка связанного owner-агрегата не требует права менять каждый JOIN pin.
+Обычный mutation trigger не заменяет минимальный ACL, а отдельные purge права
+и граф не выводятся из runtime grant.
+
+Источник: [PostgreSQL 18, функции проверки доступа](https://www.postgresql.org/docs/18/functions-info.html#FUNCTIONS-INFO-ACCESS).
+Матрица исполнения: [Kubernetes gateway](../operations/kubernetes-gateway-stream-consumer-2145.md).

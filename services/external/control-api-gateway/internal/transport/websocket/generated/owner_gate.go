@@ -27,6 +27,7 @@ type OwnerGate struct {
 	ResolutionAttachmentSetRef *string                        `json:"resolutionAttachmentSetRef,omitempty"`
 	SourceAttachmentSetRef     *string                        `json:"sourceAttachmentSetRef,omitempty"`
 	DecisionConsequences       []OwnerGateDecisionConsequence `json:"decisionConsequences"`
+	KubernetesChild            *KubernetesOwnerGateChild      `json:"kubernetesChild,omitempty"`
 	IntegrationIntent          *IntegrationIntent             `json:"integrationIntent,omitempty"`
 	NextActions                []NextAction                   `json:"nextActions"`
 }

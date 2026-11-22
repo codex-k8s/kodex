@@ -78,6 +78,26 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.artifacts.kubernetes-capture.finalize",
+      "source_binding_sha256": "2d1fe1a02d1a8115a3b477fac3439b4e071091463b2ce97666dd62a24c0abab3",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.artifacts.kubernetes-capture.get",
+      "source_binding_sha256": "e4ee043e468aaa28a8d2f77cb8d4c6f18e9d8e3d71bb729b811c3fb93711ecf5",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.artifacts.kubernetes-capture.readiness",
+      "source_binding_sha256": "c1d8bd6eb8959afa41aefe6997290e621746e81f6b7ba47b82efb1789dfa33ac",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.artifacts.kubernetes-capture.renew",
+      "source_binding_sha256": "3e4e7e3feff6a91bee7ce58be88834b9435c6560aac3c69c21b33e0f17def1ef",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.assistant.conversations.archive",
       "source_binding_sha256": "51ade091b48288ae6eb4070b16761a2c2781e399accadc31232743da2a58278f",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
@@ -1133,6 +1153,36 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.email-mailboxes.mine.create",
+      "source_binding_sha256": "7f58375011715db63e507b7f9635a558f0ebc6f32bfd17c488d5f1a657f511e7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.email-mailboxes.mine.list",
+      "source_binding_sha256": "0c180584c36779c158af4d76bfed71069891470d460a1dd36fa21c939075ffda",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.email-mailboxes.ownership.configure",
+      "source_binding_sha256": "c648f7fd313d5d914ac630fb283a95a2e720be15eaa87150d037bf2d8a925dcb",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.email-mailboxes.ownership.read",
+      "source_binding_sha256": "9f450b619ad20d23584466473967bf1cc3c7498460012002410d1ec212e802e1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.email-mailboxes.ownership.revoke",
+      "source_binding_sha256": "d593f23e052ed0932c871322e3d5a9991e454d2e93b1bd3eeddb58ca926d6574",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.email-mailboxes.receipts.read",
+      "source_binding_sha256": "b9fd4b57fcb63085fae31bd21ec047a563eeef8956bd8b9f5c368725989752c6",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.email.authorization.resolve",
       "source_binding_sha256": "c4716ff473128680cba69307df8a46acb9817f5ff82e12601a64bda54e9ecb1d",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
@@ -1165,6 +1215,141 @@
     {
       "operation_id": "platform.integrations.credential-policy.set",
       "source_binding_sha256": "161f5d4ca939a7e4738333f7cc77fc5cfc667838e1f8a5af75c4579aaa3032ed",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.capture.cleanup.repair",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED",
+      "source_binding_sha256": "92e8e9a89d3d88e07508991f5aa141f994258e91d4c8951cba271c0e1c47f8cf"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.capture.get",
+      "source_binding_sha256": "7e5e6d7c20bfcb98189bad31d507711b6569850a8ac273651990c9fe139a4a25",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.capture.list",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED",
+      "source_binding_sha256": "08b47c29c7700a3f1c8c390a6889f85eeadd558a6f7eec5c999598f31b3283f9"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.capture.repair",
+      "source_binding_sha256": "48ccb8377b063f7f818746d7680924d5fd74f4edd7524557b1afc300e266a1e8",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.file.get",
+      "source_binding_sha256": "d3dd28665af1cbab1d2db3e631494c1bed0968b6b7fd5b18919490692a1a26ec",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.file.list",
+      "source_binding_sha256": "fc0dd8db5a1c05b96d5e69d631b4ece872f11823786ea32c0f01d32797ed76d9",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.input.get",
+      "source_binding_sha256": "567f5037810fb6a9691d9d9f750a0c4d02f377473f48a2e1b9ec18ffc05b8d9b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.input.list",
+      "source_binding_sha256": "9b2bf3c1a5028897a9b02c737f960f933ba682464206d8aeaeb0767433b74374",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.input.stop",
+      "source_binding_sha256": "d7be36eb54d9873ba9dbdf3867d50794bdb0c45420b3eeb086b5649a6652740b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.input.submit",
+      "source_binding_sha256": "5ab0bdf5535079f628179a69d0cdb098636b53c3fd2b374ec3e05581aa6c4c4e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.material.begin",
+      "source_binding_sha256": "9bd9b5748f5da6ff821b94e1ef4daeddac2ee46cd9326e32e92fab18ae40d156",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.material.cancel",
+      "source_binding_sha256": "07103f9b9b6965f41fc36cd3c2d5c909ca1f3c693c50c8efe605b6f928017862",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.material.get",
+      "source_binding_sha256": "f5c6db3a439a8344c5dcff081105d238c0b3ea4ef1cbe593513bb5ff26d17d57",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.output.read",
+      "source_binding_sha256": "acc9ba2e578e8b51b7ef86f8e6eb61a4eabcea3effb55f3e01d34d126c86f084",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.port-forward.close",
+      "source_binding_sha256": "2d34821d37be207b825a8a22a8509516e1a9f7decc9cdda3447fd9fe54b7306e",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.port-forward.get",
+      "source_binding_sha256": "e1f8f59c8bf43081073608d8914c93d213bb24246b11f09dfa80e798d129528d",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.port-forward.list",
+      "source_binding_sha256": "5f11579cf071a2b8181984a2f1021e324788d7d1ff73228bd68e977f9c39b824",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.port-forward.open",
+      "source_binding_sha256": "9b9f2e7384e194d6570182b1ffe5dc81564c831d578a86135c48e5187341896a",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.setup.begin",
+      "source_binding_sha256": "576e9d41f2895739d06cdf28683251c22991f2df6c2793ab34a95378a3272482",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.setup.cancel",
+      "source_binding_sha256": "428446574fbed79be6faf71f521f8e60681dec12215a903daa9f5cb75c907877",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.setup.get",
+      "source_binding_sha256": "a933655ca69a6344ac33f820787575dcf963d6ca363cfe52586077ec04d77ac1",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.tool.get",
+      "source_binding_sha256": "1f87fb42ffae85cb2b7b204a779a81384d4cf8fdabc07d239e90c75e1c0fb800",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.tool.list",
+      "source_binding_sha256": "25a0a33e9c2ba82871203017c190ca6b75f2a26d8b89f76d0c8d59bc8ef65f48",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.kubernetes.tool.stop",
+      "source_binding_sha256": "b0ebd4716d6ae77538d869c863c1cf7dfcb37f8532bccb80e3e1eb3707eaf5de",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.ssh.setup.begin",
+      "source_binding_sha256": "83476a0655592468def4e51920a562cf1fcc8da6ba27be0da2d5a6fc18267de7",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.ssh.setup.cancel",
+      "source_binding_sha256": "3a7880c9ccd6d45a254ae6cd2f266de5ea41245ba960860ce29a39afb9ffc283",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.integrations.ssh.setup.get",
+      "source_binding_sha256": "a7a8634ebf3e952489f1d2182f930e4a69d26e014dd9fe48eebba90f5682ca46",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
@@ -2174,6 +2359,126 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.runtime.integrations.delivery.check",
+      "source_binding_sha256": "483db541bc51bf6d552deb2afa81422699257079e330918da49ce58e74c4d26a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.cancel",
+      "source_binding_sha256": "9b8387266d64e08ebf91dc51f98508c640277854b409ae4dd8011ce2680a3ee2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.children.prepare",
+      "source_binding_sha256": "ea35e6a64f5633a5b27c51bd2377d288a44356db528788ccd11dff45c9185ed6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.complete",
+      "source_binding_sha256": "84ebc895e7ca4097bdc8bd4de9951f01cdb7bc10fdb4a402c460572190216a26",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.effect.begin",
+      "source_binding_sha256": "01796a0a070805be287cdaf55bd392bedf26cdb137af48bf115e139d5aedc5a9",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.effect.complete",
+      "source_binding_sha256": "b0cd0fbb9d5b14f55fd1b6f6ca0ae45553a569c2c5942ff97ee51b4ab5f9b4dc",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.file.prepare",
+      "source_binding_sha256": "f39f478dd0f2cb4647e83376a2afca3ea6d1788b838ce90fd02c85ed2f323657",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.frame.begin",
+      "source_binding_sha256": "4e8107507cfd186d057fd51dfd91a24ca135b58625fc67394e9097230680b75f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.frame.complete",
+      "source_binding_sha256": "0570dd9595c86c6b196a5ec0bb9fcbba8d755e566e19b86dbcfc0d605b7ac9a2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.health.begin",
+      "source_binding_sha256": "4e0cb2f874c5d6359251f5063446805e81712ccb51544c568e4fdc37972592b3",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.health.complete",
+      "source_binding_sha256": "480ef80c78f36dc95ce8fbcce835e068d00fb88fd4770845c9e5b5aeb8e948db",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.input.claim",
+      "source_binding_sha256": "fdbf023f05c228a968c9174abb6a9dde475806431b27213cdbe094b0b8b24c04",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.invocation.read",
+      "source_binding_sha256": "e81654c0f2213906300495b6e0e2cb99418e37e7fbee32ccaaf32ec70b66b54f",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.output.accept",
+      "source_binding_sha256": "69a468e88c8b42bc2d55e75c3c821ce3a04b8fbdc3b8e843afd0438e037c30a7",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.output.read",
+      "source_binding_sha256": "df4290ae7d82be5e62453f33268450c2a06eae601c0e95744e8006cb2be04e9d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.read",
+      "source_binding_sha256": "815fb9bb412f260667b8fc8cb88f42dab1ff945a4299e5e9a560a4b45a7c46b6",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.readiness",
+      "source_binding_sha256": "fbdfd7b4eebddef6ce85af6d86afef3cf95265150c3269454f78bd6fde5f7fb5",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.renew",
+      "source_binding_sha256": "03c29ca2dc2be0826019412a69ee816c90655fad75441c64a3b58ecbbc307f7a",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.resolve",
+      "source_binding_sha256": "9b8da6d00e44c9adda97c1c865edf81ddcdc2b93292325b9a97091d3ae14bedd",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.setup.claim",
+      "source_binding_sha256": "c07f341aad964983b9b815b7cc3a685208b177a21d9e3bc84412d21ea76898fb",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.setup.complete",
+      "source_binding_sha256": "1c7caba7ade558ee2e7f64430816732214d7d5dcbf4301e39f01ef816b203ca5",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.setup.resolve",
+      "source_binding_sha256": "7ada369c8f2525fc47123715cc2444a55ffeb8b2eb0e2efa7d80c20e1d1f3d82",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.stream.close",
+      "source_binding_sha256": "29285cfd46fc17bc340ebe6cc4d8b8cfc8eca5ef6fa72140dde401701f58fc0b",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.kubernetes.stream.open",
+      "source_binding_sha256": "28f95d231ab0313890e42e2ff52021ab01dbb499c945f76a72712a6c34ffefa5",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.runtime.provider-credential.refresh.commit",
       "source_binding_sha256": "8ae6928e6ea4e128448a2c9ead86d608dde9375d5a0d79bca474a108b7567fa9",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
@@ -2216,6 +2521,51 @@
     {
       "operation_id": "platform.runtime.ssh-compose.renew",
       "source_binding_sha256": "41ee71b69afa060cfa00fd336dc143fdc354f593bad6f2cbdc75c5b2ad81b426",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.execution.begin",
+      "source_binding_sha256": "eed852461189d8cf99553dcfa01563a9d93a1d8706bf375370eab04f8b9f0186",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.execution.complete",
+      "source_binding_sha256": "396467b640f46253b297b7ff12cb155681bea6deadf48333f0861da4e66efc7d",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.execution.get",
+      "source_binding_sha256": "b5cece99bcaa72008430d0e1955b43b180ce90714507b49afcb58ce7bb45ed13",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.health.begin",
+      "source_binding_sha256": "c221c8ad6696fd42c6108e946fad15813c0765f07a491e5c0216f4c0abd92e90",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.health.complete",
+      "source_binding_sha256": "5dbf9bbbdf854723f9cb193ce714bb0f36142f0e4245730a274adda180325a49",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.invocation.read",
+      "source_binding_sha256": "617ca7f795b673ec50e3aeba6309b7f1b3b9a37ca259362fbe6a547fee674c6c",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.setup.claim",
+      "source_binding_sha256": "bf9fbed47b9fb96e65ae10c7e21beef9b801ccb55998c0c145c28e27f2ce9fde",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.setup.complete",
+      "source_binding_sha256": "52659c2173f81b1b4cf5ca20f0a2518c7bae42347ba2c0a3fb807a99395a40c8",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.runtime.ssh.setup.resolve",
+      "source_binding_sha256": "38f19b38e23886871f6d2e538a316eca4fa9cd2b1f73ccfdc6046babf0a0fc2c",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {

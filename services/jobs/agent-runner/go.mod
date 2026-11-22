@@ -3,22 +3,23 @@ module github.com/codex-k8s/kodex/services/jobs/agent-runner
 go 1.26.10
 
 require (
-	github.com/BurntSushi/toml v1.6.0
 	github.com/codex-k8s/kodex/libs/go/internalrpcauth v0.0.0
 	github.com/codex-k8s/kodex/libs/go/observability v0.0.0
 	github.com/codex-k8s/kodex/libs/go/runtimecontract v0.0.0
-	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
-	github.com/google/uuid v1.6.0
 	go.yaml.in/yaml/v2 v2.4.3
 	golang.org/x/sys v0.48.0
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/managedkubernetes v0.0.0 // indirect
+	github.com/codex-k8s/kodex/libs/go/managedssh v0.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/getkin/kin-openapi v0.149.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.3.0 // indirect
@@ -33,6 +34,9 @@ require (
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/valyala/fastjson v1.6.10 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	k8s.io/apimachinery v0.36.3 // indirect
+	k8s.io/klog/v2 v2.140.0 // indirect
+	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 )
 
 require (
@@ -84,3 +88,7 @@ replace github.com/codex-k8s/kodex/libs/go/securefile => ../../../libs/go/secure
 replace github.com/codex-k8s/kodex/libs/go/serviceruntime => ../../../libs/go/serviceruntime
 
 replace github.com/codex-k8s/kodex/libs/go/integrationpackage => ../../../libs/go/integrationpackage
+
+replace github.com/codex-k8s/kodex/libs/go/managedkubernetes => ../../../libs/go/managedkubernetes
+
+replace github.com/codex-k8s/kodex/libs/go/managedssh => ../../../libs/go/managedssh

@@ -1,0 +1,57 @@
+[
+  {
+    "name": "input-data",
+    "direction": "INPUT",
+    "action": 2,
+    "generation": "1",
+    "slot": 0,
+    "nativeOrdinal": "0",
+    "connectionRef": "kpf_AAAAAAAAAAAAAAAAAAAAAAAA",
+    "bodyBase64": "AP8H",
+    "rawBase64": "S1BGAQIAAAAAAAAAAAEca3BmX0FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQQAAAAAAAAAAAP8H"
+  },
+  {
+    "name": "input-half",
+    "direction": "INPUT",
+    "action": 3,
+    "generation": "9007199254740991",
+    "slot": 15,
+    "nativeOrdinal": "0",
+    "connectionRef": "kpf_BBBBBBBBBBBBBBBBBBBBBBBB",
+    "bodyBase64": "",
+    "rawBase64": "S1BGAQMPAB////////8ca3BmX0JCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQgAAAAAAAAAA"
+  },
+  {
+    "name": "output-data-bigint",
+    "direction": "OUTPUT",
+    "action": 2,
+    "generation": "9007199254740993",
+    "slot": 15,
+    "nativeOrdinal": "9007199254740993",
+    "connectionRef": "kpf_CCCCCCCCCCCCCCCCCCCCCCCC",
+    "bodyBase64": "c3ludGhldGljLXByaXZhdGUtdGNwAP8=",
+    "rawBase64": "S1BGAQIPACAAAAAAAAEca3BmX0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQwAgAAAAAAABc3ludGhldGljLXByaXZhdGUtdGNwAP8="
+  },
+  {
+    "name": "output-half",
+    "direction": "OUTPUT",
+    "action": 3,
+    "generation": "2",
+    "slot": 0,
+    "nativeOrdinal": "3",
+    "connectionRef": "kpf_DDDDDDDDDDDDDDDDDDDDDDDD",
+    "bodyBase64": "",
+    "rawBase64": "S1BGAQMAAAAAAAAAAAIca3BmX0RERERERERERERERERERERERERERERERAAAAAAAAAAD"
+  },
+  {
+    "name": "output-close-bigint",
+    "direction": "OUTPUT",
+    "action": 4,
+    "generation": "9223372036854775807",
+    "slot": 3,
+    "nativeOrdinal": "9223372036854775807",
+    "connectionRef": "kpf_EEEEEEEEEEEEEEEEEEEEEEEE",
+    "bodyBase64": "",
+    "rawBase64": "S1BGAQQDf/////////8ca3BmX0VFRUVFRUVFRUVFRUVFRUVFRUVFRUVFRX//////////"
+  }
+]

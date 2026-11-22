@@ -4,6 +4,7 @@ import {
   constants,
   fstatSync,
   fsyncSync,
+  linkSync,
   openSync,
   readSync,
   realpathSync,
@@ -71,23 +72,37 @@ export function requireSession(condition, message) {
   if (!condition) throw new Error(`Owner session acceptance ${message}`);
 }
 
-export function exactOrigin(value) {
+export const ownerLocalRuntimeOriginProfile = "OWNER_LOCAL_RUNTIME";
+
+export function exactOrigin(value, originProfile = "ACCEPTANCE") {
   const url = new URL(value);
   requireSession(
-    url.protocol === "https:" &&
+    ["ACCEPTANCE", ownerLocalRuntimeOriginProfile].includes(originProfile) &&
+      url.protocol === "https:" &&
       url.pathname === "/" &&
       !url.username &&
       !url.password &&
       !url.search &&
       !url.hash &&
-      !/prod(?:uction)?/i.test(url.hostname),
+      (originProfile === ownerLocalRuntimeOriginProfile ||
+        !/prod(?:uction)?/i.test(url.hostname)),
     "origin is invalid",
   );
   return url.origin;
 }
 
-export function selectedSessionCookies(storage, origin, now = Date.now()) {
-  origin = exactOrigin(origin);
+export function selectedSessionCookies(
+  storage,
+  origin,
+  now = Date.now(),
+  originProfile = "ACCEPTANCE",
+) {
+  origin = exactOrigin(origin, originProfile);
+  requireSession(
+    originProfile !== ownerLocalRuntimeOriginProfile ||
+      storage?.runtimeOrigin === origin,
+    "runtime state origin is invalid",
+  );
   requireSession(Array.isArray(storage?.cookies), "cookies are absent");
   const hostname = new URL(origin).hostname;
   const selected = sessionCookieNames.map((name) => {
@@ -118,9 +133,14 @@ export function selectedSessionCookies(storage, origin, now = Date.now()) {
   return [...selected, ...proxySessionCookies(storage.cookies, origin, now)];
 }
 
-export function sessionHeaders(storage, origin, now = Date.now()) {
-  origin = exactOrigin(origin);
-  const selected = selectedSessionCookies(storage, origin, now);
+export function sessionHeaders(
+  storage,
+  origin,
+  now = Date.now(),
+  originProfile = "ACCEPTANCE",
+) {
+  origin = exactOrigin(origin, originProfile);
+  const selected = selectedSessionCookies(storage, origin, now, originProfile);
   return {
     Accept: "application/json",
     Origin: origin,
@@ -268,7 +288,11 @@ export function readAuthenticatedState(path) {
 }
 
 // Только owner-private каталог; rename не проходит через symlink цели.
-export function writeAuthenticatedState(path, value) {
+export function writeAuthenticatedState(
+  path,
+  value,
+  { createOnly = false } = {},
+) {
   const directory = openDirectory(path);
   const temporary = `${dirname(path)}/.${basename(path)}.${randomUUID()}.tmp`;
   let created = false;
@@ -309,7 +333,10 @@ export function writeAuthenticatedState(path, value) {
     } finally {
       closeSync(output);
     }
-    renameSync(temporary, path);
+    if (createOnly) {
+      linkSync(temporary, path);
+      unlinkSync(temporary);
+    } else renameSync(temporary, path);
     created = false;
     fsyncSync(directory);
     requireSession(

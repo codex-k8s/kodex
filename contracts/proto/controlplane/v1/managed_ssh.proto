@@ -1,0 +1,309 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Отдельный purpose-specific owner setup. Actor, organization, target и policy
+// разрешаются через transport/current owner state, а не request fields.
+// Первые три RPC доступны только control-api-gateway, последние — secret-broker.
+// Private key bytes не пересекают ни один owner RPC.
+service ManagedSSHIdentitySetupService {
+  rpc BeginSSHIdentitySetup(BeginSSHIdentitySetupRequest) returns (BeginSSHIdentitySetupResponse);
+  rpc GetSSHIdentitySetup(GetSSHIdentitySetupRequest) returns (GetSSHIdentitySetupResponse);
+  rpc CancelSSHIdentitySetup(CancelSSHIdentitySetupRequest) returns (CancelSSHIdentitySetupResponse);
+  rpc ResolveSSHIdentityUpload(ResolveSSHIdentityUploadRequest) returns (ResolveSSHIdentityUploadResponse);
+  rpc ClaimSSHIdentityUpload(ClaimSSHIdentityUploadRequest) returns (ClaimSSHIdentityUploadResponse);
+  rpc CompleteSSHIdentityUpload(CompleteSSHIdentityUploadRequest) returns (CompleteSSHIdentityUploadResponse);
+}
+
+enum ManagedSSHIdentitySetupState {
+  MANAGED_SSH_IDENTITY_SETUP_STATE_UNSPECIFIED = 0;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_PREPARED = 1;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_ATTEMPTING = 2;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_UNKNOWN = 3;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_UNREPORTED = 4;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_ACK_REJECTED = 5;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_COMPLETED = 6;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_CANCELLED = 7;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_EXPIRED = 8;
+  MANAGED_SSH_IDENTITY_SETUP_STATE_QUARANTINED = 9;
+}
+
+enum ManagedSSHIdentityUploadMode {
+  MANAGED_SSH_IDENTITY_UPLOAD_MODE_UNSPECIFIED = 0;
+  MANAGED_SSH_IDENTITY_UPLOAD_MODE_WRITE = 1;
+  MANAGED_SSH_IDENTITY_UPLOAD_MODE_OBSERVE = 2;
+}
+
+// Safe view не содержит Kubernetes locator, hashes, raw permit либо private key.
+// Закрытие setup grant не доказывает отсутствие отдалённого material effect.
+message ManagedSSHIdentitySetupView {
+  string ref = 1;
+  string connection_ref = 2;
+  string identity_ref = 3;
+  string target_ref = 4;
+  string reason_code = 5;
+  int64 version = 6;
+  int64 connection_version = 7;
+  int64 binding_version = 8;
+  int64 binding_generation = 9;
+  int64 identity_revision = 10;
+  IntegrationCredentialPolicy policy = 11;
+  ManagedSSHIdentitySetupState state = 12;
+  google.protobuf.Timestamp expires_at = 13;
+}
+
+message BeginSSHIdentitySetupRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  int64 expected_connection_version = 3;
+  string content_sha256 = 4;
+  uint32 content_bytes = 5;
+}
+
+// Только первый Begin возвращает permit для direct browser→broker upload.
+// Idempotent replay возвращает reconcile_only без повторной выдачи permit.
+message BeginSSHIdentitySetupResponse {
+  ManagedSSHIdentitySetupView setup = 1;
+  bytes upload_permit = 2;
+  string upload_origin = 3;
+  string upload_tls_server_name = 4;
+  bool reconcile_only = 5;
+}
+
+message GetSSHIdentitySetupRequest {
+  string connection_ref = 1;
+  oneof selector {
+    string setup_ref = 2;
+    string begin_idempotency_key = 3;
+  }
+}
+message GetSSHIdentitySetupResponse { ManagedSSHIdentitySetupView setup = 1; }
+
+message CancelSSHIdentitySetupRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string setup_ref = 3;
+}
+message CancelSSHIdentitySetupResponse { ManagedSSHIdentitySetupView setup = 1; }
+
+// Private coordinates доступны только защищённому broker workload. Purpose
+// фиксирован SSH_TARGET самим протоколом; TOKEN/KUBE substitution не существует.
+message ManagedSSHIdentityPreparation {
+  string identity_revision_ref = 1;
+  string target_ref = 2;
+  int64 revision = 3;
+  string namespace = 4;
+  string content_sha256 = 5;
+}
+
+message ResolveSSHIdentityUploadRequest {
+  string setup_ref = 1;
+  string permit_sha256 = 2;
+}
+message ResolveSSHIdentityUploadResponse {
+  string setup_ref = 1;
+  string snapshot_digest = 2;
+  ManagedSSHIdentityPreparation preparation = 3;
+  uint32 content_bytes = 4;
+  string authentication_sha256 = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  ManagedSSHIdentityUploadMode mode = 7;
+}
+
+message ClaimSSHIdentityUploadRequest {
+  string setup_ref = 1;
+  string permit_sha256 = 2;
+  string snapshot_digest = 3;
+  string workload_instance = 4;
+  string content_sha256 = 5;
+  string authentication_sha256 = 6;
+}
+message ClaimSSHIdentityUploadResponse {
+  string setup_ref = 1;
+  string snapshot_digest = 2;
+  string attempt_ref = 3;
+  string workload_instance = 4;
+  int64 generation = 5;
+  string fence = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  ManagedSSHIdentityUploadMode mode = 8;
+  ManagedSSHIdentityPreparation preparation = 9;
+  string authentication_sha256 = 10;
+}
+
+// Locator — owner-private факт материала, не разрешение на чтение сотруднику.
+// UID/resourceVersion opaque и обязательны, замена объекта не усыновляется.
+message ManagedSSHIdentityLocator {
+  ManagedSSHIdentityPreparation preparation = 1;
+  string authentication_sha256 = 2;
+  string secret_name = 3;
+  string secret_uid = 4;
+  string secret_resource_version = 5;
+}
+
+message ManagedSSHIdentityUnknownOutcome {}
+message ManagedSSHIdentityRejectedAcknowledgement {
+  string response_sha256 = 1;
+  bool truncated = 2;
+  string observed_uid = 3;
+}
+
+// UNKNOWN допускает лишь original joined transport ambiguity. UNREPORTED после
+// expiry не получает OBSERVE. ACK_REJECTED закрывает все последующие attempts;
+// противоречивый late ACK quarantines исходную revision, не новую credential.
+message CompleteSSHIdentityUploadRequest {
+  string setup_ref = 1;
+  string attempt_ref = 2;
+  string workload_instance = 3;
+  string fence = 4;
+  int64 generation = 5;
+  oneof outcome {
+    ManagedSSHIdentityLocator identity = 6;
+    ManagedSSHIdentityUnknownOutcome unknown = 7;
+    ManagedSSHIdentityRejectedAcknowledgement rejected_acknowledgement = 8;
+  }
+}
+message CompleteSSHIdentityUploadResponse { ManagedSSHIdentitySetupView setup = 1; }
+
+// Broker-only health owner: исходный claim, private material admission и exact completion.
+// Health не выдаёт resource grants и не принимает private key bytes.
+service ManagedSSHOwnerService {
+ rpc BeginSSHIdentityHealthProbe(BeginSSHIdentityHealthProbeRequest) returns (BeginSSHIdentityHealthProbeResponse);
+ rpc CompleteSSHIdentityHealthProbe(CompleteSSHIdentityHealthProbeRequest) returns (CompleteSSHIdentityHealthProbeResponse);
+ rpc BeginSSHExecution(BeginSSHExecutionRequest) returns (BeginSSHExecutionResponse);
+ rpc CompleteSSHExecution(CompleteSSHExecutionRequest) returns (CompleteSSHExecutionResponse);
+ rpc GetSSHExecution(GetSSHExecutionRequest) returns (GetSSHExecutionResponse);
+ // Только runtime-controller: результат исходного вызова под действующей execution lease.
+ rpc ReadManagedSSHInvocation(ReadManagedSSHInvocationRequest) returns (ReadManagedSSHInvocationResponse);
+}
+
+message ManagedSSHHealthBinding {
+ string workload_instance = 1;
+ string connection_test_ref = 2;
+ string lease_ref = 3;
+ string fence = 4;
+ int64 generation = 5;
+ string input_digest = 6;
+}
+message BeginSSHIdentityHealthProbeRequest { ManagedSSHHealthBinding binding = 1; }
+message BeginSSHIdentityHealthProbeResponse {
+ string attempt_ref = 1;
+ string snapshot_digest = 2;
+ ManagedSSHIdentityLocator identity = 3;
+ string transport_mode = 4;
+ google.protobuf.Timestamp expires_at = 5;
+}
+enum ManagedSSHHealthOutcome {
+ MANAGED_SSH_HEALTH_OUTCOME_UNSPECIFIED = 0;
+ MANAGED_SSH_HEALTH_OUTCOME_AUTHENTICATED = 1;
+ MANAGED_SSH_HEALTH_OUTCOME_AUTH_REJECTED = 2;
+ MANAGED_SSH_HEALTH_OUTCOME_UNAVAILABLE = 3;
+}
+message CompleteSSHIdentityHealthProbeRequest {
+ ManagedSSHHealthBinding binding = 1;
+ string attempt_ref = 2;
+ string snapshot_digest = 3;
+ ManagedSSHHealthOutcome outcome = 4;
+ string observed_subject_digest = 5;
+ google.protobuf.Timestamp qualified_until = 6;
+}
+message CompleteSSHIdentityHealthProbeResponse {
+ string test_ref = 1;
+ string state = 2;
+ bool applied = 3;
+}
+
+// Исходный invocation claim; endpoint, actor и credential не выбираются request.
+message ManagedSSHExecutionBinding {
+ string workload_instance = 1;
+ string invocation_ref = 2;
+ string lease_ref = 3;
+ string fence = 4;
+ int64 generation = 5;
+ string input_digest = 6;
+}
+message BeginSSHExecutionRequest { ManagedSSHExecutionBinding binding = 1; }
+message ManagedSSHReceiptSource {
+ string invocation_ref = 1;
+ string operation = 2;
+ bytes canonical_input = 3;
+}
+message BeginSSHExecutionResponse {
+ string attempt_ref = 1;
+ string invocation_ref = 2;
+ string snapshot_digest = 3;
+ string operation = 4;
+ string input_digest = 5;
+ string subject_digest = 6;
+ ManagedSSHIdentityLocator identity = 7;
+ string transport_mode = 8;
+ bytes canonical_input = 9;
+ google.protobuf.Timestamp expires_at = 10;
+ ManagedSSHReceiptSource receipt_source = 11;
+}
+enum ManagedSSHExecutionOutcome {
+ MANAGED_SSH_EXECUTION_OUTCOME_UNSPECIFIED = 0;
+ MANAGED_SSH_EXECUTION_OUTCOME_SUCCEEDED = 1;
+ MANAGED_SSH_EXECUTION_OUTCOME_FAILED = 2;
+ MANAGED_SSH_EXECUTION_OUTCOME_UNKNOWN = 3;
+}
+message CompleteSSHExecutionRequest {
+ ManagedSSHExecutionBinding binding = 1;
+ string attempt_ref = 2;
+ string snapshot_digest = 3;
+ ManagedSSHExecutionOutcome outcome = 4;
+ bytes result_json = 5;
+ string result_digest = 6;
+}
+// Metadata не возвращает admission и не подтверждает remote quiescence.
+message ManagedSSHExecutionReceipt {
+ string attempt_ref = 1;
+ string snapshot_digest = 2;
+ string state = 3;
+ bool recorded = 4;
+ bool applied = 5;
+ ManagedSSHExecutionOutcome outcome = 6;
+ string result_digest = 7;
+ google.protobuf.Timestamp authorized_until = 8;
+ string owner_state = 9;
+}
+message CompleteSSHExecutionResponse {
+ ManagedSSHExecutionReceipt receipt = 1;
+ bytes result_json = 2;
+}
+message GetSSHExecutionRequest { ManagedSSHExecutionBinding binding = 1; }
+message GetSSHExecutionResponse { ManagedSSHExecutionReceipt receipt = 1; }
+
+// Runtime result не содержит private material либо новый effect grant.
+enum ManagedSSHInvocationState {
+ MANAGED_SSH_INVOCATION_STATE_UNSPECIFIED = 0;
+ MANAGED_SSH_INVOCATION_STATE_READY = 1;
+ MANAGED_SSH_INVOCATION_STATE_RUNNING = 2;
+ MANAGED_SSH_INVOCATION_STATE_WAITING_APPROVAL = 3;
+ MANAGED_SSH_INVOCATION_STATE_SUCCEEDED = 4;
+ MANAGED_SSH_INVOCATION_STATE_FAILED = 5;
+ MANAGED_SSH_INVOCATION_STATE_REJECTED = 6;
+ MANAGED_SSH_INVOCATION_STATE_CANCELLED = 7;
+ MANAGED_SSH_INVOCATION_STATE_UNKNOWN_OUTCOME = 8;
+}
+message ReadManagedSSHInvocationRequest {
+ string invocation_ref = 1;
+ string lease_ref = 2;
+ string fence = 3;
+ int64 generation = 4;
+ string runtime_input_digest = 5;
+}
+message ReadManagedSSHInvocationResponse {
+ string invocation_ref = 1;
+ ManagedSSHInvocationState state = 2;
+ string result_summary = 3;
+ string safe_error_code = 4;
+ string effect_receipt_ref = 5;
+ string result_digest = 6;
+ bool waiting_for_gate = 7;
+}

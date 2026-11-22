@@ -32,6 +32,9 @@ const (
 	// commandUp selects forward Goose migration application; rollback and historical migration rewriting are not exposed through this selector.
 	// commandUp выбирает применение миграций Goose вперёд; откат и переписывание истории через этот селектор не предоставляются.
 	commandUp command = "up"
+	// commandUpArtifactRetentionIssuer selects the isolated forward issuer migration for an existing installation.
+	// commandUpArtifactRetentionIssuer выбирает отдельную прямую миграцию издателя для существующей установки.
+	commandUpArtifactRetentionIssuer command = "up-artifact-retention-issuer"
 	// commandStatus selects Goose migration-status output without applying migration steps through the status branch.
 	// commandStatus выбирает вывод статуса миграций Goose без применения шагов миграции в ветви статуса.
 	commandStatus command = "status"
@@ -138,6 +141,8 @@ func run(ctx context.Context, arguments []string) error {
 			return errors.New("apply legacy provenance migration failed")
 		}
 		return repairLegacyProvenance(ctx, database, proof, os.Stdout)
+	case commandUpArtifactRetentionIssuer:
+		return upArtifactRetentionIssuer(ctx, database)
 	case commandUp:
 		if err := goose.UpContext(ctx, database, "migrations"); err != nil {
 			return fmt.Errorf("apply internal-rpc-authority migrations: %w", err)
@@ -170,7 +175,7 @@ func parseCommand(arguments []string) (command, error) {
 		return "", errors.New(cliUsage)
 	}
 	switch command(arguments[0]) {
-	case commandUp, commandStatus, commandFreshnessStatus, commandFreshnessWatch, commandRotationStatus:
+	case commandUp, commandUpArtifactRetentionIssuer, commandStatus, commandFreshnessStatus, commandFreshnessWatch, commandRotationStatus:
 		return command(arguments[0]), nil
 	default:
 		return "", errors.New(cliUsage)
@@ -179,7 +184,7 @@ func parseCommand(arguments []string) (command, error) {
 
 // cliUsage is the fixed English diagnostic for unsupported CLI command shapes, listing the supported operations and their explicit confirmation arguments without interpolating environment or credential values.
 // cliUsage — фиксированная английская диагностика неподдерживаемой формы команды CLI с перечислением операций и явных аргументов подтверждения без подстановки окружения или реквизитов.
-const cliUsage = "usage: internal-rpc-authority-cli <up|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS|rotation-status|rotation-watch --operation-id UUID|rotation-abort --intent-id UUID --source-revision NUMBER --source-digest-sha256 SHA256 --confirm ABORT-STAGING-AUTHORITY-ROTATION>"
+const cliUsage = "usage: internal-rpc-authority-cli <up|up-artifact-retention-issuer|status|freshness-status|freshness-watch|freshness-activate --expected-version 1 --activation-id UUID --confirm ACTIVATE-STAGING-AUTHORITY-FRESHNESS|rotation-status|rotation-watch --operation-id UUID|rotation-abort --intent-id UUID --source-revision NUMBER --source-digest-sha256 SHA256 --confirm ABORT-STAGING-AUTHORITY-ROTATION>"
 
 // migrationStatus asks Goose to report the embedded migration set's status through the supplied database and context, wrapping a failure without applying migrations itself.
 // migrationStatus запрашивает у Goose статус встроенного набора миграций через переданные БД и контекст, оборачивая ошибку без самостоятельного применения миграций.

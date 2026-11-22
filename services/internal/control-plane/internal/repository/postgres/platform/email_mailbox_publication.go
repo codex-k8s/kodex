@@ -96,6 +96,13 @@ func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, c
 	if expectedConnectionVersion != connectionVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	owner, err := requireEmailMailboxManagerTx(ctx, tx, current, payload.ConnectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if owner.state != "ACTIVE" && !unbinding {
+		return commandOutcome{}, errs.ErrForbidden
+	}
 	if unbinding {
 		view, err := repository.emailMailboxViewTx(ctx, tx, current, payload.ConnectionRef, connectionVersion, "", "")
 		if err != nil {
@@ -108,7 +115,7 @@ func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, c
 	configuration := api.Configuration{Version: "email-bridge/v1", Revision: nextRevision, ManagedBy: "ui", Source: "control-plane", Mailboxes: []api.Mailbox{}}
 	var previous []byte
 	var previousDigest string
-	err := tx.QueryRow(ctx, queryEmailConfigurationDocumentRead).Scan(&previous, &previousDigest)
+	err = tx.QueryRow(ctx, queryEmailConfigurationDocumentRead).Scan(&previous, &previousDigest)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
@@ -117,8 +124,15 @@ func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, c
 		if api.Decode(previous, &accepted) != nil || api.Digest(accepted) != previousDigest {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		eligible, err := readEmailConfigurationOwnersTx(ctx, tx, accepted)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		for _, mailbox := range accepted.Mailboxes {
 			if mailbox.TenantId != current.organizationRef || mailbox.ConnectionId != payload.ConnectionRef {
+				if !eligible[[2]string{mailbox.TenantId, mailbox.ConnectionId}] {
+					mailbox.Enabled = false
+				}
 				configuration.Mailboxes = append(configuration.Mailboxes, mailbox)
 			}
 		}
@@ -159,7 +173,7 @@ func (repository *Repository) bindEmailMailbox(ctx context.Context, tx pgx.Tx, c
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		mailbox, err := emailpolicy.MaterializeMailbox(specification, emailpolicy.MailboxBinding{Ref: mailboxRef, OrganizationRef: current.organizationRef,
-			ConnectionRef: payload.ConnectionRef, Revision: nextRevision, CredentialGeneration: connectionVersion + 1})
+			ConnectionRef: payload.ConnectionRef, Revision: nextRevision, CredentialGeneration: connectionVersion + 1, CredentialOwnerGeneration: owner.owner.Generation})
 		if err != nil {
 			return commandOutcome{}, err
 		}

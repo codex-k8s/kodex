@@ -1478,7 +1478,8 @@ paths:
           schema: { type: string, maxLength: 128 }
         - name: minimumContextTokens
           in: query
-          schema: { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
+          schema:
+            { type: integer, format: int64, minimum: 0, maximum: 1000000000000 }
         - name: inputModality
           in: query
           schema: { type: string, maxLength: 128 }
@@ -1493,7 +1494,8 @@ paths:
           schema: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
         - name: cache
           in: query
-          schema: { type: string, enum: [NONE, IMPLICIT, EXPLICIT, BOTH, UNKNOWN] }
+          schema:
+            { type: string, enum: [NONE, IMPLICIT, EXPLICIT, BOTH, UNKNOWN] }
         - name: groupBy
           in: query
           schema: { type: string, enum: [PROVIDER, FAMILY] }
@@ -1564,7 +1566,13 @@ paths:
         - name: definitionKey
           in: query
           required: false
-          schema: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
+          schema:
+            {
+              type: string,
+              minLength: 1,
+              maxLength: 96,
+              pattern: "^[a-z][a-z0-9-]{0,95}$",
+            }
         - { $ref: "#/components/parameters/Query" }
         - { $ref: "#/components/parameters/PageSize" }
         - { $ref: "#/components/parameters/PageToken" }
@@ -2122,6 +2130,532 @@ paths:
                     { $ref: "#/components/schemas/RuntimeSecretRebindResult" },
                 },
             }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-tools:
+    get:
+      tags: [Integrations]
+      operationId: listManagedKubernetesTools
+      description: Вызовы точного узла, включая ожидание Human Gate до создания потока. Проверяются исходный инициатор и текущая видимость запуска и подключения.
+      parameters:
+        - { $ref: "#/components/parameters/RunRef" }
+        - name: nodeRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: pageToken
+          in: query
+          schema: { type: string, maxLength: 96 }
+      responses:
+        "200":
+          description: Безопасная страница состояний владельца
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesToolPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-captures:
+    get:
+      tags: [Artifacts]
+      operationId: listManagedKubernetesCaptures
+      description: Сохранённые результаты exact run/node для исходного root actor с текущим run.view, в том числе после утраты integration.view и до первой ArtifactRevision. Не выдаёт execution или download authority.
+      parameters:
+        - { $ref: "#/components/parameters/RunRef" }
+        - name: nodeRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: pageToken
+          in: query
+          schema: { type: string, maxLength: 96 }
+      responses:
+        "200":
+          description: Безопасная страница сохранённой истории
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesCapturePage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/kubernetes-captures/{captureRef}:
+    get:
+      tags: [Artifacts]
+      operationId: getManagedKubernetesCaptureStatus
+      description: Состояние сохранения исходного output, доступное original root actor с текущим run.view. Не выдаёт native credit, private storage locator или task fence.
+      parameters:
+        - name: captureRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              pattern: "^koc_[A-Za-z0-9_-]{8,89}$",
+              maxLength: 96,
+            }
+        - name: repairIdempotencyKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: cleanupIdempotencyKey
+          in: query
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        "200":
+          description: Текущее состояние и квитанция исходного repair key без повторной mutation
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesCaptureReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/kubernetes-captures/{captureRef}/repair:
+    post:
+      tags: [Artifacts]
+      operationId: repairManagedKubernetesCapture
+      description: Новый ограниченный цикл только технического artifact task после WAITING_OWNER. Требуются original root actor, run.view и artifact.upload. Счётчик attempts не обнуляется; native invocation не возобновляется. После неизвестного ответа допускается один Get с исходным key без повторной отправки.
+      parameters:
+        - name: captureRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              pattern: "^koc_[A-Za-z0-9_-]{8,89}$",
+              maxLength: 96,
+            }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Квитанция нового цикла и текущее состояние; не завершение публикации
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesCaptureReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/kubernetes-captures/{captureRef}/cleanup-repair:
+    post:
+      tags: [Artifacts]
+      operationId: repairManagedKubernetesStagingCleanup
+      description: Восстановление до 100 исчерпанных eligible immutable cleanup reservations. Требуются original root actor, текущие run.view и artifact.upload. If-Match задаёт cleanup.version, не capture version. Общие attempts сохраняются; квота освобождается только после подтверждённого exact удаления. Native и публикация не возобновляются. Неизвестный ACK сверяется Get с cleanupIdempotencyKey, без повторной отправки.
+      parameters:
+        - name: captureRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              pattern: "^koc_[A-Za-z0-9_-]{8,89}$",
+              maxLength: 96,
+            }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Квитанция cleanup цикла; не подтверждение удаления либо освобождения квоты
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesCaptureReadback" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs:
+    get:
+      tags: [Integrations]
+      operationId: listManagedKubernetesFileInputs
+      description: Исходный инициатор читает provenance и прогресс закреплённых FILE источников. Подготовку и повтор байтов этот запрос не запускает.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: cleanupOnly
+          in: query
+          schema: { type: boolean, default: false }
+          description: Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+      responses:
+        "200":
+          description: Только metadata; READY источника не подтверждает выполнение копирования
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesFileInputList" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}:
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesFileInput
+      description: Exact source read после current original-root и artifact visibility. Нет bytes, storage locator, credentials либо нового допуска исполнения.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: cleanupOnly
+          in: query
+          schema: { type: boolean, default: false }
+          description: Minimal original-root/run.view cleanup projection без artifact/hash/file/path; не source authority.
+        - name: sourceRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              minLength: 12,
+              maxLength: 96,
+              pattern: "^kfs_[A-Za-z0-9_-]+$",
+            }
+        - name: cleanupIdempotencyKey
+          in: query
+          schema: { type: string, minLength: 8, maxLength: 128 }
+          description: Exact original-key receipt readback только при cleanupOnly=true; не повтор repair.
+      responses:
+        "200":
+          description: Explicit SOURCE либо CLEANUP_ONLY metadata projection
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesFileInputReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-file-inputs/{sourceRef}/cleanup-repair:
+    post:
+      tags: [Integrations]
+      operationId: repairManagedKubernetesFileCleanup
+      description: Команда доступна в опубликованных профилях с repairAvailable в ответе чтения. Original root actor с current run.view и scoped artifact.upload восстанавливает только exhausted eligible cleanup. Один normalized object, без source read/PUT/native. If-Match=cleanup.version. Потерянный ответ проверяется через cleanupOnly Get с исходным ключом.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: sourceRef
+          in: path
+          required: true
+          schema:
+            {
+              type: string,
+              minLength: 12,
+              maxLength: 96,
+              pattern: "^kfs_[A-Za-z0-9_-]+$",
+            }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Bounded cleanup cycle принят; deletion/quota release/native join не подтверждаются
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesFileCleanupReadback" }
+        "503": { $ref: "#/components/responses/Problem" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-tool:
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesTool
+      description: Точное состояние владельца без приватных аргументов, результатов или ключей исполнения.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+      responses:
+        "200":
+          description: Текущее состояние, не подтверждение остановки удалённого процесса
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesToolView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-tool/stop:
+    post:
+      tags: [Integrations]
+      operationId: stopManagedKubernetesTool
+      description: Закрытие одного вызова, включая Gate до первого потока. Не отменяет весь запуск и не выдаёт новых прав. Потерянный ответ сверяется точным Get; автоматический повтор запрещён.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Авторитетное закрытое состояние вызова
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesToolView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/runs/{runRef}/nodes/{nodeRef}/kubernetes-stream-inputs:
+    get:
+      tags: [Integrations]
+      operationId: listManagedKubernetesStreamInputs
+      description: Ограниченная страница потоков точного run/node до terminal tool result. Owner проверяет current original root/run/node visibility; Submit дополнительно требует current selected grant/source/live lease. Известная ссылка не выдаёт полномочия.
+      parameters:
+        - { $ref: "#/components/parameters/RunRef" }
+        - name: nodeRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: pageToken
+          in: query
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "200":
+          description: Только safe owner metadata; первый произвольный child не выбирается
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesStreamInputPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/output:
+    get:
+      tags: [Integrations]
+      operationId: readManagedKubernetesStreamOutput
+      description: Следующий сохранённый и подтверждённый OUTPUT исходного пользователя. Две текущие owner-проверки вокруг storage read; Stop закрывает live выдачу. Не выдаёт native credit, не ACKs TCP и не возобновляет исполнение.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: streamRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        - name: generation
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[1-9][0-9]{0,18}$", maxLength: 19 }
+        - name: afterSequence
+          in: query
+          required: true
+          schema:
+            { type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19 }
+      responses:
+        "200":
+          description: Один bounded кадр либо явное состояние; завершение stream не является business SUCCESS
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesStreamOutputReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/input:
+    parameters:
+      - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+      - name: streamRef
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesStreamInput
+      description: Safe current view и optional original-key submission metadata после потерянного Submit ACK. Чтение не восстанавливает payload и не продлевает delivery grant.
+      parameters:
+        - name: submissionIdempotencyKey
+          in: query
+          schema:
+            {
+              type: string,
+              minLength: 8,
+              maxLength: 128,
+              pattern: "^[A-Za-z0-9._:-]+$",
+            }
+      responses:
+        "200":
+          description: Metadata без private bytes либо нового разрешения write
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesStreamInputReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Integrations]
+      operationId: submitManagedKubernetesStreamInput
+      description: Один bounded private INPUT; sequence назначает owner под OCC/idempotency. FILE_CONTENT разрешён только server-derived pinned artifact reader, CONTROL не является raw command. Неопределённый ответ не разрешает автоматический повтор payload.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KubernetesStreamInputSubmit" }
+      responses:
+        "201":
+          description: Owner submission metadata; ACKNOWLEDGED означает local transport write, не remote execution success
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesStreamInputReadback" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/stop:
+    post:
+      tags: [Integrations]
+      operationId: stopManagedKubernetesStream
+      description: Closure-only исходного tool invocation/stream под current original-root visibility и OCC. Не требует сохранения отозванного execution grant, не отменяет весь Run и не утверждает остановку удалённого процесса. Потерянный ACK сверяется exact Get; автоматический повтор Stop запрещён.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: streamRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Авторитетное owner metadata; не подтверждение remote process stop либо local transport join
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KubernetesStreamInputView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections:
+    parameters:
+      - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+      - name: streamRef
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+    get:
+      tags: [Integrations]
+      operationId: listManagedKubernetesPortForwardConnections
+      description: Страница соединений одного исходного PF stream. Owner проверяет current original-root visibility, не выбирает произвольное первое соединение и отдельно раскрывает максимум 16 одновременно активных. История закрытых соединений не расходует active quota.
+      parameters:
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 32, default: 16 }
+        - name: pageToken
+          in: query
+          schema:
+            { $ref: "#/components/schemas/KubernetesPortForwardConnectionRef" }
+      responses:
+        "200":
+          description: Безопасные owner metadata и текущий budget, не target READY либо native join
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesPortForwardConnectionPage",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Integrations]
+      operationId: openManagedKubernetesPortForwardConnection
+      description: Explicit approved slot под current original-root/grant/source/lease и INPUT OCC. Ref/generation и canonical OPEN envelope назначает owner через existing one-attempt INPUT ledger. Lost ACK разрешает один exact Get по original key, не новый Open. До ACK OPEN Close возвращает pending/conflict; новая generation не заменяет неизвестный результат.
+      parameters:
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [slot]
+              properties:
+                slot: { type: integer, minimum: 0, maximum: 15 }
+      responses:
+        "201":
+          description: Owner connection и immutable OPEN submission; PREPARED не доказывает TCP connect
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesPortForwardConnectionOpened",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connection:
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesPortForwardConnection
+      description: Ровно один selector connectionRef либо original openIdempotencyKey. Locator/key не являются authority. Возвращает metadata без TCP bytes, requeue, нового requestID либо продления credit.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: streamRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        - name: connectionRef
+          in: query
+          schema:
+            { $ref: "#/components/schemas/KubernetesPortForwardConnectionRef" }
+        - name: openIdempotencyKey
+          in: query
+          schema:
+            {
+              type: string,
+              minLength: 8,
+              maxLength: 128,
+              pattern: "^[A-Za-z0-9._:-]+$",
+            }
+      responses:
+        "200":
+          description: Exact owner connection и optional immutable submission metadata
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesPortForwardConnectionReadback",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-invocations/{invocationRef}/kubernetes-streams/{streamRef}/port-forward-connections/{connectionRef}/close:
+    post:
+      tags: [Integrations]
+      operationId: closeManagedKubernetesPortForwardConnection
+      description: Closure ровно одной owner incarnation под original-root visibility и INPUT OCC, без отмены siblings либо whole Run. Current execution authority позволяет один staged native CLOSE; после её утраты остаётся лишь owner CAS без нового effect. CLOSED не доказывает native join, FIN или remote success. Lost ACK сверяется exact Get, без автоматического Close retry.
+      parameters:
+        - { $ref: "#/components/parameters/IntegrationInvocationRef" }
+        - name: streamRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        - name: connectionRef
+          in: path
+          required: true
+          schema:
+            { $ref: "#/components/schemas/KubernetesPortForwardConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Owner closure и optional native CLOSE submission; NativeJoined остаётся отдельным фактом
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesPortForwardConnectionClosed",
+                }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/integration-invocations/{invocationRef}/email-effect-receipt:
     get:
@@ -2940,6 +3474,128 @@ paths:
             application/json:
               schema:
                 { $ref: "#/components/schemas/RuntimeSecretDraftImpactPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/personal-email-mailboxes/mutation-receipt:
+    get:
+      tags: [EmailMailbox]
+      operationId: getPersonalEmailMailboxMutationReceipt
+      description: Квитанция закрытой setup operation текущего actor. Исторический результат не выдаёт нового согласия; отсутствие не доказывает отсутствие commit выполняющегося запроса.
+      parameters:
+        - name: operation
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/PersonalEmailMailboxMutationOperation" }
+        - name: idempotencyKey
+          in: query
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Собственная immutable setup receipt без credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PersonalEmailMailboxMutationReceipt" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/personal-email-mailboxes:
+    get:
+      tags: [EmailMailbox]
+      operationId: listMyEmailMailboxes
+      description: Только текущие собственные mailbox connections; фильтрация owner и visibility предшествует pagination. Generic token catalog не используется.
+      parameters:
+        [
+          { $ref: "#/components/parameters/Query" },
+          { $ref: "#/components/parameters/PageSize" },
+          { $ref: "#/components/parameters/PageToken" },
+        ]
+      responses:
+        "200":
+          description: Собственные настройки почты без credentials
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyEmailMailboxPage" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [EmailMailbox]
+      operationId: createPersonalEmailMailboxConnection
+      description: Создаёт собственный фиксированный EMAIL_HTTPS Connection и exact resource metadata ACL. Project, agent, grant и service-setup права не назначаются.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonalEmailMailboxConnectionInput" }
+      responses:
+        "201":
+          description: Создано собственное подключение; credentials, публикация и проверка входа ещё обязательны
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MyEmailMailbox" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-connections/{connectionRef}/email-mailbox/ownership:
+    get:
+      tags: [EmailMailbox]
+      operationId: getEmailMailboxOwnership
+      parameters:
+        [{ $ref: "#/components/parameters/ConnectionRef" }]
+      responses:
+        "200":
+          description: Текущие safe metadata владельца настройки
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailMailboxOwnership" }
+        default: { $ref: "#/components/responses/Problem" }
+    put:
+      tags: [EmailMailbox]
+      operationId: configureEmailMailboxOwnership
+      description: Явный self либо активная SERVICE identity после disable/drain; прежние descriptor generations не усыновляются.
+      parameters:
+        [
+          { $ref: "#/components/parameters/ConnectionRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EmailMailboxOwnershipInput" }
+      responses:
+        "200":
+          description: Новое поколение владельца; новые credentials и публикация ещё обязательны
+          headers:
+            ETag:
+              description: Новая версия integration connection
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailMailboxOwnership" }
+        default: { $ref: "#/components/responses/Problem" }
+    delete:
+      tags: [EmailMailbox]
+      operationId: revokeEmailMailboxOwnership
+      description: Отзывает будущие Begin без удаления истории или заявления об отмене уже начатого внешнего эффекта.
+      parameters:
+        [
+          { $ref: "#/components/parameters/ConnectionRef" },
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      responses:
+        "200":
+          description: Доступ отозван
+          headers:
+            ETag:
+              description: Новая версия integration connection
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EmailMailboxOwnership" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/integration-connections/{connectionRef}/email-mailbox/configurations:
     get:
@@ -4946,6 +5602,89 @@ paths:
               schema: { $ref: "#/components/schemas/Schedule" }
         default: { $ref: "#/components/responses/Problem" }
 
+  /api/v1/integration-connections/{connectionRef}/ssh-identity-setups:
+    post:
+      tags: [Integrations]
+      operationId: beginSSHIdentitySetup
+      description: >-
+        Создаёт purpose-specific metadata intent. Private key передаётся напрямую broker,
+        не этому API. If-Match задаёт binding version (0 для отсутствующего personal binding,
+        Connection version для PROJECT_SHARED); Connection OCC дополнительно обязателен в теле.
+        Replay не возвращает permit повторно. Actor, policy, target и namespace назначает owner.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/SSHSetupIfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SSHIdentitySetupBeginInput" }
+      responses:
+        "200":
+          description: Первый admission либо safe metadata replay без нового permit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSHIdentitySetupAdmission" }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Integrations]
+      operationId: getSSHIdentitySetupByBeginKey
+      description: Читает собственный исходный Begin receipt без восстановления permit и без повторного material write.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - name: beginIdempotencyKey
+          in: query
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Актуальная safe metadata исходного setup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSHIdentitySetup" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}:
+    get:
+      tags: [Integrations]
+      operationId: getSSHIdentitySetup
+      description: Читает текущий собственный setup по exact ref; закрытый исход не подтверждает отсутствие orphan material.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/SSHIdentitySetupRef" }
+      responses:
+        "200":
+          description: Safe metadata без физических Secret pins и key material
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSHIdentitySetup" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/integration-connections/{connectionRef}/ssh-identity-setups/{setupRef}/cancel:
+    post:
+      tags: [Integrations]
+      operationId: cancelSSHIdentitySetup
+      description: Закрывает setup grants; не утверждает отмену уже отправленного Create и не удаляет неизвестный orphan.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/SSHIdentitySetupRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { type: object, additionalProperties: false, maxProperties: 0 }
+      responses:
+        "200":
+          description: Safe metadata закрытого setup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSHIdentitySetup" }
+        default: { $ref: "#/components/responses/Problem" }
+
   /api/v1/integration-connections/{connectionRef}/credential-policy:
     put:
       tags: [Integrations]
@@ -5163,6 +5902,168 @@ paths:
             application/json:
               schema:
                 { $ref: "#/components/schemas/PersonalIntegrationCredential" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/me/integration-connections/{connectionRef}/kubernetes-setups:
+    post:
+      tags: [Integrations]
+      operationId: beginManagedKubernetesIdentitySetup
+      description: >-
+        Готовит одноразовую загрузку из локального CLI прямо в broker по доверенному TLS route.
+        API принимает только размер и SHA256; kubeconfig и другие credential bytes запрещены.
+        Owner определяет subject, policy, target и private storage. Повтор возвращает только metadata.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/KubernetesIdentitySetupBeginInput" }
+      responses:
+        "201":
+          description: Одноразовый admission либо metadata ранее принятого setup
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesIdentitySetupAdmission",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesIdentitySetup
+      description: >-
+        Читает собственный setup по ровно одному selector; lost Begin ACK можно найти по исходному
+        idempotency key без восстановления permit. Результат не содержит private material pins.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - name: setupRef
+          in: query
+          schema: { type: string, minLength: 12, maxLength: 96 }
+        - name: beginIdempotencyKey
+          in: query
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Безопасное состояние setup; COMPLETED ещё требует проверки target RBAC
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesIdentitySetupView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/me/integration-connections/{connectionRef}/kubernetes-setups/{setupRef}/cancel:
+    post:
+      tags: [Integrations]
+      operationId: cancelManagedKubernetesIdentitySetup
+      description: Закрывает setup authority и attempts, сохраняя late material facts без повторного Create.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - name: setupRef
+          in: path
+          required: true
+          schema: { type: string, minLength: 12, maxLength: 96 }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialRevokeInput",
+              }
+      responses:
+        "200":
+          description: Setup закрыт; отсутствие неизвестного внешнего эффекта не утверждается
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesIdentitySetupView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials:
+    post:
+      tags: [Integrations]
+      operationId: beginManagedKubernetesResourceMaterial
+      description: >-
+        Готовит actor-local private artifact для одной операции Secret. API принимает только
+        safe destination metadata, SHA256 и размер. Values передаются локальным CLI прямо broker TLS;
+        AVAILABLE не означает создание Secret, target readiness либо разрешение отдельного эффекта.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/KubernetesResourceMaterialBeginInput",
+              }
+      responses:
+        "201":
+          description: Первый одноразовый upload admission либо safe metadata ранее созданного artifact
+          content:
+            application/json:
+              schema:
+                {
+                  $ref: "#/components/schemas/KubernetesResourceMaterialAdmission",
+                }
+        default: { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Integrations]
+      operationId: getManagedKubernetesResourceMaterial
+      description: >-
+        Читает actor-local artifact по ровно одному materialRef либо original Begin idempotency key.
+        Никогда не восстанавливает raw permit, values, content hash либо private storage locator.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - name: materialRef
+          in: query
+          schema: { type: string, minLength: 12, maxLength: 96 }
+        - name: beginIdempotencyKey
+          in: query
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        "200":
+          description: Safe metadata; version относится к artifact и возвращается также в ETag
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesResourceMaterialView" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/me/integration-connections/{connectionRef}/kubernetes-resource-materials/{materialRef}/cancel:
+    post:
+      tags: [Integrations]
+      operationId: cancelManagedKubernetesResourceMaterial
+      description: Закрывает future artifact use, сохраняя immutable факты ранее начатых эффектов.
+      parameters:
+        - { $ref: "#/components/parameters/ConnectionRef" }
+        - name: materialRef
+          in: path
+          required: true
+          schema: { type: string, minLength: 12, maxLength: 96 }
+        - { $ref: "#/components/parameters/IdempotencyKey" }
+        - { $ref: "#/components/parameters/IfMatch" }
+        - { $ref: "#/components/parameters/CsrfToken" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              {
+                $ref: "#/components/schemas/PersonalIntegrationCredentialRevokeInput",
+              }
+      responses:
+        "200":
+          description: Future artifact use закрыт; отмена уже совершённого target эффекта не утверждается
+          content:
+            application/json:
+              schema:
+                { $ref: "#/components/schemas/KubernetesResourceMaterialView" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/integration-definitions:
     get:
@@ -8667,8 +9568,7 @@ paths:
             ETag: { schema: { type: string, pattern: '^"[1-9][0-9]*"$' } }
           content:
             application/json:
-              schema:
-                { $ref: "#/components/schemas/TelegramSubscription" }
+              schema: { $ref: "#/components/schemas/TelegramSubscription" }
         default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/interaction-deliveries:
     get:
@@ -8684,8 +9584,7 @@ paths:
           description: Страница статусов после актуальной проверки project, connection и Run eligibility
           content:
             application/json:
-              schema:
-                { $ref: "#/components/schemas/InteractionDeliveryPage" }
+              schema: { $ref: "#/components/schemas/InteractionDeliveryPage" }
         default: { $ref: "#/components/responses/Problem" }
 
 components:
@@ -8779,6 +9678,22 @@ components:
           maxLength: 128,
           pattern: "^[A-Za-z0-9._:-]+$",
         }
+    SSHIdentitySetupRef:
+      name: setupRef
+      in: path
+      required: true
+      schema:
+        {
+          type: string,
+          pattern: "^ssu_[a-f0-9]{32}$",
+          minLength: 36,
+          maxLength: 36,
+        }
+    SSHSetupIfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string, pattern: '^"(0|[1-9][0-9]*)"$' }
     IfMatch:
       name: If-Match
       in: header
@@ -9147,7 +10062,12 @@ components:
       additionalProperties: false
       required: [items]
       properties:
-        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/InteractionDeliveryView" } }
+        items:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/InteractionDeliveryView" },
+          }
         nextPageToken: { type: string, maxLength: 512 }
     TelegramSubscriptionInput:
       oneOf:
@@ -9156,7 +10076,8 @@ components:
     TelegramSubscriptionEnableInput:
       type: object
       additionalProperties: false
-      required: [enabled, connectionRef, eventTypes, durationSeconds, maxEffects]
+      required:
+        [enabled, connectionRef, eventTypes, durationSeconds, maxEffects]
       properties:
         enabled: { type: boolean, enum: [true] }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -9177,17 +10098,58 @@ components:
     TelegramSubscription:
       type: object
       additionalProperties: false
-      required: [ref, projectRef, connectionRef, version, enabled, state, eventTypes, scopeDigest, botId, chatDisplay, topicDisplay, expiresAt, maxEffects, usedEffects, updatedAt, canManage]
+      required:
+        [
+          ref,
+          projectRef,
+          connectionRef,
+          version,
+          enabled,
+          state,
+          eventTypes,
+          scopeDigest,
+          botId,
+          chatDisplay,
+          topicDisplay,
+          expiresAt,
+          maxEffects,
+          usedEffects,
+          updatedAt,
+          canManage,
+        ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         enabled: { type: boolean }
-        state: { type: string, enum: [ACTIVE, DISABLED, EXPIRED, EXHAUSTED, SCOPE_REVOKED] }
-        eventTypes: { type: array, minItems: 1, maxItems: 3, uniqueItems: true, items: { type: string, enum: [FINISHED, FAILED, HUMAN_GATE] } }
+        state:
+          {
+            type: string,
+            enum: [ACTIVE, DISABLED, EXPIRED, EXHAUSTED, SCOPE_REVOKED],
+          }
+        eventTypes:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 3,
+            uniqueItems: true,
+            items: { type: string, enum: [FINISHED, FAILED, HUMAN_GATE] },
+          }
         scopeDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
-        botId: { type: integer, format: int64, minimum: 1, maximum: 4503599627370495 }
+        botId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 4503599627370495,
+          }
         chatDisplay: { type: string, minLength: 1, maxLength: 24 }
         topicDisplay: { type: string, minLength: 1, maxLength: 10 }
         expiresAt: { $ref: "#/components/schemas/Timestamp" }
@@ -9198,15 +10160,49 @@ components:
     InteractionDeliveryView:
       type: object
       additionalProperties: false
-      required: [ref, version, connectionRef, runRef, gateRef, eventType, state, attempt, retryable, safeErrorCode, createdAt, availableAt, receiptRef]
+      required:
+        [
+          ref,
+          version,
+          connectionRef,
+          runRef,
+          gateRef,
+          eventType,
+          state,
+          attempt,
+          retryable,
+          safeErrorCode,
+          createdAt,
+          availableAt,
+          receiptRef,
+        ]
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
-        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         runRef: { $ref: "#/components/schemas/OpaqueRef" }
         gateRef: { type: string, maxLength: 96 }
         eventType: { type: string, enum: ["", FINISHED, FAILED, HUMAN_GATE] }
-        state: { type: string, enum: [WAITING_APPROVAL, DUE, CLAIMED, SUCCEEDED, FAILED, CANCELLED, UNKNOWN_OUTCOME] }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                WAITING_APPROVAL,
+                DUE,
+                CLAIMED,
+                SUCCEEDED,
+                FAILED,
+                CANCELLED,
+                UNKNOWN_OUTCOME,
+              ],
+          }
         attempt: { type: integer, minimum: 0, maximum: 10 }
         retryable: { type: boolean }
         safeErrorCode: { type: string, maxLength: 96, pattern: "^[A-Z0-9_]*$" }
@@ -11795,6 +12791,15 @@ components:
           projectVersion,
         ]
       properties:
+        reasonCode:
+          type: string
+          enum:
+            [
+              NONE,
+              KUBERNETES_STAGING_RECONCILIATION_REQUIRED,
+              ARTIFACT_PURGE_RECONCILIATION_REQUIRED,
+            ]
+          description: Закрытая причина. Незавершённый staged object либо manual artifact purge сохраняет прежний lifecycle проекта и достижимый owner readback; повторный Delete не выдаётся.
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         version:
           {
@@ -12463,7 +13468,8 @@ components:
         scanState:
           {
             type: string,
-            enum: ["", PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED],
+            enum:
+              ["", PENDING, SCANNING, CLEAN, NOT_SCANNED, QUARANTINED, FAILED],
           }
         resourceKind:
           { type: string, enum: ["", ARTIFACT, SKILL_BUNDLE, MEMORY_RECORD] }
@@ -14492,13 +15498,19 @@ components:
         ]
       properties:
         managedBy: { type: string, enum: [git] }
-        sourceRevision: { type: string, pattern: '^[a-f0-9]{40}$' }
-        engineVersion: { type: string, enum: ['1.19.5'] }
+        sourceRevision: { type: string, pattern: "^[a-f0-9]{40}$" }
+        engineVersion: { type: string, enum: ["1.19.5"] }
         runtimePolicies:
           type: array
           maxItems: 128
-          items: { $ref: '#/components/schemas/ModelExecutionPolicy' }
-        key: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
+          items: { $ref: "#/components/schemas/ModelExecutionPolicy" }
+        key:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 96,
+            pattern: "^[a-z][a-z0-9-]{0,95}$",
+          }
         name: { type: string, maxLength: 160 }
         description: { type: string, maxLength: 500 }
         authorizationMethods:
@@ -14539,50 +15551,115 @@ components:
     ModelCacheQualification:
       type: object
       additionalProperties: false
-      required: [mechanism, status, source, backendVersion, evidenceSha256, routeSha256]
+      required:
+        [mechanism, status, source, backendVersion, evidenceSha256, routeSha256]
       properties:
-        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
+        mechanism:
+          {
+            type: string,
+            enum:
+              [
+                NONE,
+                VLLM_CACHE_SALT,
+                OPENAI_PROMPT_CACHE_KEY,
+                ANTHROPIC_EPHEMERAL,
+              ],
+          }
         status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
         source: { type: string, enum: [NONE, DECLARED, OBSERVED] }
         backendVersion: { type: string, maxLength: 64 }
-        evidenceSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
-        routeSha256: { type: string, pattern: '^(?:[a-f0-9]{64})?$' }
+        evidenceSha256: { type: string, pattern: "^(?:[a-f0-9]{64})?$" }
+        routeSha256: { type: string, pattern: "^(?:[a-f0-9]{64})?$" }
     ModelCachePolicy:
       type: object
       additionalProperties: false
-      required: [revision, optimization, reuseScope, noReuse, noStore, required, qualification]
+      required:
+        [
+          revision,
+          optimization,
+          reuseScope,
+          noReuse,
+          noStore,
+          required,
+          qualification,
+        ]
       properties:
         revision: { type: integer, enum: [1] }
-        optimization: { type: string, enum: [PROVIDER_DEFAULT, NO_HINTS, OPTIMIZE] }
+        optimization:
+          { type: string, enum: [PROVIDER_DEFAULT, NO_HINTS, OPTIMIZE] }
         reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION] }
         noReuse: { type: boolean }
         noStore: { type: boolean }
         required: { type: boolean }
-        qualification: { $ref: '#/components/schemas/ModelCacheQualification' }
+        qualification: { $ref: "#/components/schemas/ModelCacheQualification" }
     ModelCacheResolution:
       type: object
       additionalProperties: false
-      required: [mechanism, reuseScope, status, reason, noReuse, noStore, proxyResponseCache, physicalIsolation]
+      required:
+        [
+          mechanism,
+          reuseScope,
+          status,
+          reason,
+          noReuse,
+          noStore,
+          proxyResponseCache,
+          physicalIsolation,
+        ]
       properties:
-        requested: { $ref: '#/components/schemas/ModelCachePolicy' }
-        mechanism: { type: string, enum: [NONE, VLLM_CACHE_SALT, OPENAI_PROMPT_CACHE_KEY, ANTHROPIC_EPHEMERAL] }
-        reuseScope: { type: string, enum: [PROJECT, INITIATOR, SESSION, PROVIDER_BOUNDARY, PROVIDER_ACCOUNT_ROUTING_KEY, PROVIDER_ACCOUNT] }
+        requested: { $ref: "#/components/schemas/ModelCachePolicy" }
+        mechanism:
+          {
+            type: string,
+            enum:
+              [
+                NONE,
+                VLLM_CACHE_SALT,
+                OPENAI_PROMPT_CACHE_KEY,
+                ANTHROPIC_EPHEMERAL,
+              ],
+          }
+        reuseScope:
+          {
+            type: string,
+            enum:
+              [
+                PROJECT,
+                INITIATOR,
+                SESSION,
+                PROVIDER_BOUNDARY,
+                PROVIDER_ACCOUNT_ROUTING_KEY,
+                PROVIDER_ACCOUNT,
+              ],
+          }
         status: { type: string, enum: [SUPPORTED, UNSUPPORTED, UNKNOWN] }
         reason: { type: string, maxLength: 80 }
         noReuse: { type: boolean }
         noStore: { type: boolean }
-        proxyResponseCache: { type: string, enum: [NOT_APPLICABLE, BYPASS_READ_WRITE, UNQUALIFIED] }
+        proxyResponseCache:
+          {
+            type: string,
+            enum: [NOT_APPLICABLE, BYPASS_READ_WRITE, UNQUALIFIED],
+          }
         physicalIsolation: { type: string, enum: [NOT_PROVEN] }
     ModelExecutionPolicy:
       type: object
       additionalProperties: false
-      required: [modelId, contextWindowTokens, maximumOutputTokens, context, cache, eligible]
+      required:
+        [
+          modelId,
+          contextWindowTokens,
+          maximumOutputTokens,
+          context,
+          cache,
+          eligible,
+        ]
       properties:
         modelId: { type: string, maxLength: 128 }
         contextWindowTokens: { type: integer, minimum: 1, maximum: 2000000 }
         maximumOutputTokens: { type: integer, minimum: 1, maximum: 2000000 }
-        context: { $ref: '#/components/schemas/ModelContextPolicy' }
-        cache: { $ref: '#/components/schemas/ModelCacheResolution' }
+        context: { $ref: "#/components/schemas/ModelContextPolicy" }
+        cache: { $ref: "#/components/schemas/ModelCacheResolution" }
         eligible: { type: boolean }
     ModelDiscoverySource:
       type: object
@@ -14624,8 +15701,12 @@ components:
         overlaySha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         catalogSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         retrievedAt: { type: string, format: date-time, maxLength: 40 }
-        projectionSchema: { type: string, enum: ['urn:kodex:contract:model-provider-discovery:v1'] }
-        projectionSchemaSha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        projectionSchema:
+          {
+            type: string,
+            enum: ["urn:kodex:contract:model-provider-discovery:v1"],
+          }
+        projectionSchemaSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
         upstreamSchemaValidation: { type: string, enum: [NOT_PERFORMED] }
     ModelDiscoveryModel:
       type: object
@@ -14997,7 +16078,11 @@ components:
       properties:
         templateDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
         path: { type: string, minLength: 1, maxLength: 128 }
-        stability: { type: string, enum: [STATIC_LITERAL, VERSION_PINNED, TURN_LIVE, UNKNOWN] }
+        stability:
+          {
+            type: string,
+            enum: [STATIC_LITERAL, VERSION_PINNED, TURN_LIVE, UNKNOWN],
+          }
         sensitivity: { type: string, enum: [PRIVATE] }
         trustScope: { type: string, enum: [OWNER_TEMPLATE, DATA_ONLY] }
         sourceDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
@@ -17328,12 +18413,19 @@ components:
       additionalProperties: false
       required: [ref, source, phase, outcome, completeness]
       properties:
-        ref: { type: string, pattern: "^(request|step)_[A-Za-z0-9_-]{8,80}$", maxLength: 88 }
+        ref:
+          {
+            type: string,
+            pattern: "^(request|step)_[A-Za-z0-9_-]{8,80}$",
+            maxLength: 88,
+          }
         source: { $ref: "#/components/schemas/ModelMeasurementSource" }
         phase: { $ref: "#/components/schemas/ModelMeasurementPhase" }
         outcome: { $ref: "#/components/schemas/ModelMeasurementOutcome" }
-        completeness: { $ref: "#/components/schemas/ModelMeasurementCompleteness" }
-        durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
+        completeness:
+          { $ref: "#/components/schemas/ModelMeasurementCompleteness" }
+        durationMs:
+          { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         ttftMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         usage: { $ref: "#/components/schemas/TokenUsage" }
     ModelMeasurementSource:
@@ -17638,6 +18730,9 @@ components:
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         capabilityKey: { type: string, minLength: 1, maxLength: 160 }
         enabled: { type: boolean }
+        kubernetesNamespace:
+          { $ref: "#/components/schemas/KubernetesGrantNamespace" }
+        kubernetesGrantRef: { $ref: "#/components/schemas/OpaqueRef" }
         approvalPolicy:
           { type: string, enum: [NONE, HUMAN_EACH_EFFECT, HUMAN_SCOPED] }
         approvalScopePaths:
@@ -17814,8 +18909,14 @@ components:
           expiresAt,
         ]
       properties:
-        repositoryId: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
-        repositoryFullName: {type: string, minLength: 3, maxLength: 201}
+        repositoryId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        repositoryFullName: { type: string, minLength: 3, maxLength: 201 }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         projectRef: { $ref: "#/components/schemas/OpaqueRef" }
         originRunRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -17979,9 +19080,140 @@ components:
             items:
               { $ref: "#/components/schemas/OwnerGateDecisionConsequence" },
           }
+        kubernetesChild:
+          { $ref: "#/components/schemas/KubernetesOwnerGateChild" }
         integrationIntent: { $ref: "#/components/schemas/IntegrationIntent" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
+    KubernetesOwnerGateChild:
+      type: object
+      additionalProperties: false
+      description: Сохранённое описание одного дочернего действия, без material и execution credit. Решение относится только к этому child исходного plan.
+      required:
+        [
+          planRef,
+          childRef,
+          operation,
+          planDigest,
+          inputDigest,
+          targetRef,
+          targetRevision,
+          resource,
+          intendedName,
+          intendedGenerateName,
+          preview,
+        ]
+      properties:
+        planRef: { $ref: "#/components/schemas/OpaqueRef" }
+        childRef: { $ref: "#/components/schemas/OpaqueRef" }
+        operation: { type: string, pattern: '^kubernetes\.[a-z][a-z.-]{1,63}$' }
+        planDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        inputDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        resource: { $ref: "#/components/schemas/KubernetesOwnerGateResource" }
+        intendedName: { type: string, maxLength: 4096 }
+        intendedGenerateName: { type: string, maxLength: 4096 }
+        preview: { $ref: "#/components/schemas/KubernetesOwnerGatePreview" }
+    KubernetesOwnerGatePreview:
+      type: object
+      additionalProperties: false
+      required: [inputDigest, options, changes, secretMaterialRef, limitations]
+      properties:
+        inputDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        options:
+          type: array
+          maxItems: 128
+          items:
+            { $ref: "#/components/schemas/KubernetesOwnerGatePreviewOption" }
+        changes:
+          type: array
+          maxItems: 2048
+          items:
+            { $ref: "#/components/schemas/KubernetesOwnerGatePreviewChange" }
+        secretMaterialRef: { type: string, maxLength: 96 }
+        limitations:
+          type: array
+          maxItems: 4
+          uniqueItems: true
+          items:
+            {
+              type: string,
+              enum:
+                [
+                  NOT_AUTHORIZED,
+                  SENSITIVE_OR_UNCLASSIFIED_FIELDS_HIDDEN,
+                  PROTECTED_MATERIAL_HIDDEN,
+                  BUDGET_EXCEEDED,
+                  PORT_FORWARD_LOGICAL_STREAM_16_ACTIVE,
+                ],
+            }
+    KubernetesOwnerGatePreviewOption:
+      type: object
+      additionalProperties: false
+      required: [key, kind, valueJson, redacted]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 64 }
+        kind:
+          {
+            type: string,
+            enum: [NONE, STRING, NUMBER, BOOLEAN, ARRAY, OBJECT, "NULL"],
+          }
+        valueJson: { type: string, maxLength: 524288 }
+        redacted: { type: boolean }
+    KubernetesOwnerGatePreviewChange:
+      type: object
+      additionalProperties: false
+      required: [operation, path, from, valueKind, valueJson, redacted]
+      properties:
+        operation:
+          {
+            type: string,
+            enum: [SUBMIT, add, remove, replace, copy, move, test],
+          }
+        path: { type: string, minLength: 1, maxLength: 4096 }
+        from: { type: string, maxLength: 4096 }
+        valueKind:
+          {
+            type: string,
+            enum: [NONE, STRING, NUMBER, BOOLEAN, ARRAY, OBJECT, "NULL"],
+          }
+        valueJson: { type: string, maxLength: 524288 }
+        redacted: { type: boolean }
+    KubernetesOwnerGateResource:
+      type: object
+      additionalProperties: false
+      description: Безопасные координаты из original child observation. Пустые UID/RV у CREATE collection не означают доказанную ABSENT incarnation.
+      required:
+        [
+          group,
+          version,
+          resource,
+          namespace,
+          name,
+          uid,
+          resourceVersion,
+          subresource,
+          namespaced,
+          allNamespaces,
+        ]
+      properties:
+        group: { type: string, maxLength: 253 }
+        version: { type: string, minLength: 1, maxLength: 63 }
+        resource: { type: string, minLength: 1, maxLength: 63 }
+        namespace: { type: string, maxLength: 63 }
+        name: { type: string, maxLength: 4096 }
+        uid: { type: string, maxLength: 36 }
+        resourceVersion: { type: string, maxLength: 256 }
+        subresource: { type: string, maxLength: 32 }
+        namespaced: { type: boolean }
+        allNamespaces: { type: boolean }
     WorkflowReworkStepPreview:
       type: object
       additionalProperties: false
@@ -18142,6 +19374,8 @@ components:
         agentBindings:
           { type: array, items: { $ref: "#/components/schemas/OpaqueRef" } }
         previewAvailable: { type: boolean }
+        captureOrigin:
+          { $ref: "#/components/schemas/KubernetesArtifactCaptureOrigin" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
@@ -18193,7 +19427,104 @@ components:
               INTERACTION_ATTACHMENT,
             ]
         previewAvailable: { type: boolean }
+        captureOrigin:
+          { $ref: "#/components/schemas/KubernetesArtifactCaptureOrigin" }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
+    KubernetesArtifactCaptureOrigin:
+      type: object
+      additionalProperties: false
+      description: Сохранённый owner-ACK prefix. FULL описывает полноту capture, а не успешность удалённой команды; PARTIAL не подтверждает остановку либо join. Поле не выдаёт новые полномочия.
+      required:
+        [
+          invocationRef,
+          streamRef,
+          streamGeneration,
+          captureGeneration,
+          operation,
+          channel,
+          kind,
+          acknowledgedPrefix,
+          outputWatermark,
+          droppedBytes,
+          nativeTerminalKnown,
+          transportJoined,
+          ownerState,
+          localState,
+          remoteOutcome,
+          resource,
+          targetRef,
+          targetRevision,
+          connectionRef,
+          sourceDigest,
+          reasonCode,
+          sealedAt,
+        ]
+      properties:
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        captureGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        operation:
+          {
+            type: string,
+            enum:
+              [
+                kubernetes.exec,
+                kubernetes.attach,
+                kubernetes.debug,
+                kubernetes.logs,
+                kubernetes.watch,
+                kubernetes.watch.all-namespaces,
+                kubernetes.cp.upload,
+                kubernetes.cp.download,
+                kubernetes.port-forward,
+              ],
+          }
+        channel:
+          {
+            type: string,
+            enum: [STDOUT, STDERR, CONTROL, PORT_FORWARD, FILE_CONTENT],
+          }
+        kind: { type: string, enum: [FULL, PARTIAL] }
+        acknowledgedPrefix: { type: string, pattern: "^(0|[1-9][0-9]{0,18})$" }
+        outputWatermark: { type: string, pattern: "^(0|[1-9][0-9]{0,18})$" }
+        droppedBytes: { type: string, pattern: "^(0|[1-9][0-9]{0,18})$" }
+        nativeTerminalKnown: { type: boolean }
+        transportJoined: { type: boolean }
+        ownerState:
+          { type: string, enum: [COMPLETED, CANCELED, REVOKED, EXPIRED, LOST] }
+        localState:
+          {
+            type: string,
+            enum: [UNKNOWN, COMPLETED, CANCELED, REVOKED, EXPIRED, LOST],
+          }
+        remoteOutcome: { type: string, enum: [SUCCEEDED, FAILED, UNKNOWN] }
+        exitCode: { type: integer, format: int32, minimum: 0 }
+        resource: { $ref: "#/components/schemas/KubernetesOwnerGateResource" }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        sourceDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        reasonCode: { type: string, maxLength: 96 }
+        sealedAt: { $ref: "#/components/schemas/Timestamp" }
     ArtifactRevisionPage:
       type: object
       additionalProperties: false
@@ -18824,7 +20155,13 @@ components:
       properties:
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
-        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
+        definitionKey:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 96,
+            pattern: "^[a-z][a-z0-9-]{0,95}$",
+          }
         name: { type: string, minLength: 1, maxLength: 160 }
         externalAccountMasked: { type: string, maxLength: 200 }
         safeStatusReason:
@@ -19325,7 +20662,13 @@ components:
       additionalProperties: false
       required: [definitionKey, name]
       properties:
-        definitionKey: { type: string, minLength: 1, maxLength: 96, pattern: '^[a-z][a-z0-9-]{0,95}$' }
+        definitionKey:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 96,
+            pattern: "^[a-z][a-z0-9-]{0,95}$",
+          }
         name: { type: string, minLength: 1, maxLength: 160 }
     ProviderApiKeyInput:
       type: object
@@ -19649,6 +20992,7 @@ components:
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
                 SSH_TARGET,
+                KUBERNETES_TARGET,
               ],
           }
         inputFields:
@@ -19721,6 +21065,8 @@ components:
           healthyConnectionCount,
         ]
       properties:
+        credentialDelivery:
+          { $ref: "#/components/schemas/IntegrationCredentialDelivery" }
         nextActions:
           {
             type: array,
@@ -19782,6 +21128,8 @@ components:
                 SSH_COMPOSE,
                 SENTRY,
                 OBSERVABILITY,
+                SSH_TARGET,
+                KUBERNETES,
               ],
           }
         adapterOwner:
@@ -19838,6 +21186,7 @@ components:
                 EMAIL_SENDER,
                 HTTPS_RESOURCE,
                 SSH_TARGET,
+                KUBERNETES_TARGET,
               ],
           }
         values:
@@ -19981,11 +21330,75 @@ components:
             maxItems: 100,
             items: { type: string, maxLength: 262144 },
           }
+    EmailMailboxProviderProfile:
+      type: string
+      enum: [CUSTOM, TIMEWEB_PASSWORD, GMAIL_APP_PASSWORD]
+      description: Явный профиль SMTP/IMAP endpoints; пароль приложения Gmail не заявляет OAuth/XOAUTH2 lifecycle или успешный вход.
+    EmailMailboxOwnership:
+      type: object
+      additionalProperties: false
+      required: [connectionRef, connectionVersion, deliveryKind, policy, state, generation, ownerEligible]
+      properties:
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        deliveryKind: { type: string, enum: [MAILBOX_CONFIGURATION] }
+        ownerEligible:
+          type: boolean
+          description: Текущая eligibility владельца и конфигуратора; не grant и не разрешение внешней операции.
+        policy: { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+        state: { type: string, enum: [UNCONFIGURED, ACTIVE, REVOKED] }
+        generation: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        serviceSubjectRef: { $ref: "#/components/schemas/OpaqueRef" }
+    PersonalEmailMailboxMutationOperation:
+      type: string
+      enum: [CREATE, CONFIGURE, REVOKE]
+    PersonalEmailMailboxMutationReceipt:
+      type: object
+      additionalProperties: false
+      required: [operation]
+      minProperties: 2
+      maxProperties: 2
+      properties:
+        operation: { $ref: "#/components/schemas/PersonalEmailMailboxMutationOperation" }
+        mailbox: { $ref: "#/components/schemas/MyEmailMailbox" }
+        ownership: { $ref: "#/components/schemas/EmailMailboxOwnership" }
+    PersonalEmailMailboxConnectionInput:
+      type: object
+      additionalProperties: false
+      required: [name, sender]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160, description: До160 Unicode codepoints в исходном вводе; имя сохраняется без пробелов по краям. }
+        sender: { type: string, format: email, minLength: 1, maxLength: 320 }
+    EmailMailboxOwnershipInput:
+      type: object
+      additionalProperties: false
+      required: [policy]
+      description: INITIATOR_REQUIRED назначает только текущего USER и запрещает serviceSubjectRef; PROJECT_SHARED требует явный serviceSubjectRef. Owner проверяет выбранный вариант до idempotency replay.
+      properties:
+        policy: { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+        serviceSubjectRef: { $ref: "#/components/schemas/OpaqueRef" }
+    MyEmailMailbox:
+      type: object
+      additionalProperties: false
+      required: [ownership, name, enabled, available]
+      properties:
+        ownership: { $ref: "#/components/schemas/EmailMailboxOwnership" }
+        name: { type: string, maxLength: 200 }
+        enabled: { type: boolean }
+        available: { type: boolean }
+    MyEmailMailboxPage:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 100, items: { $ref: "#/components/schemas/MyEmailMailbox" } }
+        nextPageToken: { type: string, maxLength: 4096 }
     EmailMailboxSpecification:
       type: object
       additionalProperties: false
       description: Только редактируемые поля; неполный DRAFT допустим, полноценную пригодность проверяет owner при validate/publish/bind.
       properties:
+        providerProfile: { $ref: "#/components/schemas/EmailMailboxProviderProfile" }
         enabled: { type: boolean }
         receiveProtocol:
           { $ref: "#/components/schemas/EmailMailboxReceiveProtocol" }
@@ -20302,6 +21715,152 @@ components:
             minimum: 1,
             maximum: 9007199254740991,
           }
+    SSHIdentitySetupBeginInput:
+      type: object
+      additionalProperties: false
+      required: [expectedConnectionVersion, contentSHA256, contentBytes]
+      properties:
+        expectedConnectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        contentSHA256:
+          {
+            type: string,
+            pattern: "^[a-f0-9]{64}$",
+            minLength: 64,
+            maxLength: 64,
+          }
+        contentBytes: { type: integer, minimum: 1, maximum: 16384 }
+    SSHIdentitySetup:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          ref,
+          connectionRef,
+          identityRef,
+          targetRef,
+          reasonCode,
+          version,
+          connectionVersion,
+          bindingVersion,
+          bindingGeneration,
+          identityRevision,
+          policy,
+          state,
+          expiresAt,
+        ]
+      properties:
+        ref: { type: string, pattern: "^ssu_[a-f0-9]{32}$" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        identityRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        reasonCode:
+          type: string
+          enum:
+            [
+              PREPARED,
+              ATTEMPTING,
+              MATERIAL_UNKNOWN,
+              MISSING_COMPLETION,
+              ACK_REJECTED,
+              COMPLETED,
+              CANCELLED,
+              EXPIRED,
+              STALE_OWNER,
+              MATERIAL_RECORDED_NO_ATTACHMENT,
+              QUARANTINED,
+              SETUP_EXPIRED,
+              SETUP_EXPIRED_WITH_MATERIAL_UNRESOLVED,
+              OWNER_REVOKED,
+              OWNER_REPLACED,
+            ]
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        connectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        bindingVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        bindingGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        identityRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        policy: { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                PREPARED,
+                ATTEMPTING,
+                UNKNOWN,
+                UNREPORTED,
+                ACK_REJECTED,
+                COMPLETED,
+                CANCELLED,
+                EXPIRED,
+                QUARANTINED,
+              ],
+          }
+        expiresAt: { type: string, format: date-time }
+    SSHIdentitySetupAdmission:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [setup, reconcileOnly, upload]
+          properties:
+            setup: { $ref: "#/components/schemas/SSHIdentitySetup" }
+            reconcileOnly: { type: boolean, enum: [false] }
+            upload:
+              type: object
+              additionalProperties: false
+              required: [origin, tlsServerName, permit]
+              properties:
+                origin: { type: string, format: uri, maxLength: 512 }
+                tlsServerName: { type: string, minLength: 1, maxLength: 253 }
+                permit:
+                  {
+                    type: string,
+                    pattern: "^[A-Za-z0-9_-]{43}$",
+                    minLength: 43,
+                    maxLength: 43,
+                    readOnly: true,
+                  }
+        - type: object
+          additionalProperties: false
+          required: [setup, reconcileOnly]
+          properties:
+            setup: { $ref: "#/components/schemas/SSHIdentitySetup" }
+            reconcileOnly: { type: boolean, enum: [true] }
     IntegrationCredentialPolicyInput:
       type: object
       additionalProperties: false
@@ -20322,6 +21881,10 @@ components:
           available,
         ]
       properties:
+        kubernetesSetupRequirements:
+          { $ref: "#/components/schemas/KubernetesIdentitySetupRequirements" }
+        credentialDelivery:
+          { $ref: "#/components/schemas/IntegrationCredentialDelivery" }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         connectionVersion: { type: integer, format: int64, minimum: 1 }
         name: { type: string, minLength: 1, maxLength: 160 }
@@ -20332,7 +21895,7 @@ components:
           { $ref: "#/components/schemas/PersonalIntegrationCredential" }
         available:
           type: boolean
-          description: Адаптер включён и поддерживает настройку ключа; false не скрывает собственный ключ для отзыва и не заменяет проверку полномочий.
+          description: Адаптер включён и тип личных реквизитов подтверждён; false не скрывает собственную привязку для отзыва и не заменяет проверку полномочий.
     IntegrationApprovalConsent:
       type: object
       additionalProperties: false
@@ -20393,6 +21956,41 @@ components:
           maxItems: 100
           items: { $ref: "#/components/schemas/PersonalIntegrationConnection" }
         nextPageToken: { type: string, maxLength: 512 }
+    IntegrationCredentialDelivery:
+      description: >-
+        Только owner-derived metadata выбранного представления. Отсутствие поля
+        означает UNKNOWN, не NONE и не разрешение выбрать TOKEN. BROKER_IDENTITY
+        использует purpose-specific protected setup и не выдаёт generic Secret descriptor.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [NONE, TOKEN] }
+        - type: object
+          additionalProperties: false
+          required: [kind, brokerPurpose]
+          properties:
+            kind: { type: string, enum: [BROKER_IDENTITY] }
+            brokerPurpose:
+              { type: string, enum: [KUBERNETES_TARGET, SSH_TARGET] }
+    IntegrationBrokerIdentityMetadata:
+      type: object
+      additionalProperties: false
+      description: >-
+        Безопасные metadata собственной или явно выбранной PROJECT_SHARED identity.
+        Ref и revision не являются grant; Secret ref, UID, resourceVersion,
+        content digest, kubeconfig и private key никогда не входят в это представление.
+      required: [ref, revision]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        revision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
     PersonalIntegrationCredential:
       type: object
       additionalProperties: false
@@ -20409,6 +22007,17 @@ components:
           deniedCapabilityKeys,
         ]
       properties:
+        credentialDelivery:
+          { $ref: "#/components/schemas/IntegrationCredentialDelivery" }
+        brokerIdentity:
+          { $ref: "#/components/schemas/IntegrationBrokerIdentityMetadata" }
+        bindingGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
         connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
         bindingRef: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
@@ -20434,7 +22043,8 @@ components:
           type: array
           maxItems: 256
           items: { type: string, minLength: 1, maxLength: 100 }
-        githubDiscovery: {$ref: "#/components/schemas/GitHubRepositoryDiscoveryPage"}
+        githubDiscovery:
+          { $ref: "#/components/schemas/GitHubRepositoryDiscoveryPage" }
         deniedCapabilityKeys:
           type: array
           maxItems: 256
@@ -20444,33 +22054,45 @@ components:
       additionalProperties: false
       required: [id, fullName, ownerKind, private, archived, canRead, canPush]
       properties:
-        id: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
-        fullName: {type: string, minLength: 3, maxLength: 201}
-        ownerKind: {type: string, enum: [User, Organization]}
-        private: {type: boolean}
-        archived: {type: boolean}
-        canRead: {type: boolean}
-        canPush: {type: boolean}
+        id:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        fullName: { type: string, minLength: 3, maxLength: 201 }
+        ownerKind: { type: string, enum: [User, Organization] }
+        private: { type: boolean }
+        archived: { type: boolean }
+        canRead: { type: boolean }
+        canPush: { type: boolean }
     GitHubRepositoryDiscoveryPage:
       type: object
       additionalProperties: false
       required: [identityId, login, page, nextPage, items]
       properties:
-        identityId: {type: integer, format: int64, minimum: 1, maximum: 9007199254740991}
-        login: {type: string, minLength: 1, maxLength: 100}
-        page: {type: integer, minimum: 1, maximum: 10000}
-        nextPage: {type: integer, minimum: 0, maximum: 10000}
+        identityId:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        login: { type: string, minLength: 1, maxLength: 100 }
+        page: { type: integer, minimum: 1, maximum: 10000 }
+        nextPage: { type: integer, minimum: 0, maximum: 10000 }
         items:
           type: array
           maxItems: 100
-          items: {$ref: "#/components/schemas/GitHubDiscoveredRepository"}
+          items: { $ref: "#/components/schemas/GitHubDiscoveredRepository" }
     PersonalIntegrationCredentialTestInput:
       type: object
       additionalProperties: false
       required: [expectedConnectionVersion]
       properties:
-        expectedConnectionVersion: {type: integer, format: int64, minimum: 1}
-        githubDiscoveryPage: {type: integer, minimum: 1, maximum: 10000}
+        expectedConnectionVersion: { type: integer, format: int64, minimum: 1 }
+        githubDiscoveryPage: { type: integer, minimum: 1, maximum: 10000 }
     PersonalIntegrationCredentialCreateInput:
       type: object
       additionalProperties: false
@@ -20488,6 +22110,1359 @@ components:
       type: object
       additionalProperties: false
       properties: {}
+    KubernetesResourceMaterialBeginInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          expectedVersion,
+          expectedConnectionVersion,
+          operation,
+          namespace,
+          name,
+          generateName,
+          secretType,
+          patchType,
+          contentSHA256,
+          contentBytes,
+        ]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Текущая personal binding version либо shared Connection version; eligibility заново разрешает owner.
+        expectedConnectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        operation:
+          {
+            type: string,
+            enum:
+              [
+                kubernetes.create,
+                kubernetes.replace,
+                kubernetes.apply,
+                kubernetes.edit,
+                kubernetes.patch,
+              ],
+          }
+        namespace: { type: string, minLength: 1, maxLength: 63 }
+        name: { type: string, maxLength: 253 }
+        generateName:
+          {
+            type: string,
+            maxLength: 253,
+            description: "Только CREATE, ровно один name/generateName.",
+          }
+        secretType:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 253,
+            description: Тип Secret; service-account-token закрыто запрещён.,
+          }
+        patchType:
+          {
+            type: string,
+            enum: ["", JSON, MERGE, STRATEGIC],
+            description: Непустой native dialect только для PATCH.,
+          }
+        contentSHA256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        contentBytes: { type: integer, minimum: 1, maximum: 1048576 }
+    KubernetesCaptureSummary:
+      type: object
+      additionalProperties: false
+      required:
+        [captureRef, streamRef, captureGeneration, version, state, reasonCode]
+      properties:
+        captureRef:
+          { type: string, pattern: "^koc_[A-Za-z0-9_-]{8,89}$", maxLength: 96 }
+        streamRef: { $ref: "#/components/schemas/OpaqueRef" }
+        captureGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                READY,
+                CLAIMED,
+                COMPLETE,
+                UNKNOWN,
+                REJECTED,
+                WAITING_OWNER,
+                SUPERSEDED,
+              ],
+          }
+        reasonCode:
+          {
+            type: string,
+            enum:
+              [
+                "",
+                CAPTURE_ELIGIBILITY_CHANGED,
+                CAPTURE_SOURCE_INVALID,
+                CAPTURE_STORAGE_UNKNOWN,
+                CAPTURE_RETRY_EXHAUSTED,
+                CAPTURE_RETENTION_EXPIRED,
+                CAPTURE_CONTENT_REJECTED,
+                CAPTURE_SUPERSEDED,
+              ],
+          }
+    KubernetesCapturedArtifact:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          channel,
+          artifactRef,
+          revisionRef,
+          digest,
+          sizeBytes,
+          captureGeneration,
+          partial,
+        ]
+      properties:
+        channel:
+          {
+            type: string,
+            enum: [CONTROL, STDOUT, STDERR, FILE_CONTENT, PORT_FORWARD],
+          }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        revisionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        digest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        sizeBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 536870912 }
+        captureGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        partial: { type: boolean }
+    KubernetesCaptureStatus:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          summary,
+          invocationRef,
+          runRef,
+          nodeRef,
+          operation,
+          kind,
+          attemptCount,
+          repairGeneration,
+          sealedAt,
+          artifacts,
+        ]
+      properties:
+        summary: { $ref: "#/components/schemas/KubernetesCaptureSummary" }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        operation: { type: string, minLength: 1, maxLength: 96 }
+        kind: { type: string, enum: [NONE, EMPTY, FULL, PARTIAL] }
+        attemptCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        repairGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        sealedAt: { type: string, format: date-time }
+        retainUntil: { type: string, format: date-time }
+        cleanup: { $ref: "#/components/schemas/KubernetesStagingCleanupStatus" }
+        artifacts:
+          {
+            type: array,
+            maxItems: 5,
+            items: { $ref: "#/components/schemas/KubernetesCapturedArtifact" },
+          }
+    KubernetesCaptureRepairReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        [captureRef, repairGeneration, version, attemptCount, acceptedAt]
+      properties:
+        captureRef:
+          { type: string, pattern: "^koc_[A-Za-z0-9_-]{8,89}$", maxLength: 96 }
+        repairGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 2,
+            maximum: 9007199254740991,
+          }
+        attemptCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        acceptedAt: { type: string, format: date-time }
+    KubernetesCapturePage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/KubernetesCaptureStatus" }
+        nextPageToken: { type: string, maxLength: 96 }
+    KubernetesCaptureReadback:
+      type: object
+      additionalProperties: false
+      required: [view]
+      properties:
+        view: { $ref: "#/components/schemas/KubernetesCaptureStatus" }
+        repairReceipt:
+          { $ref: "#/components/schemas/KubernetesCaptureRepairReceipt" }
+        cleanupReceipt:
+          { $ref: "#/components/schemas/KubernetesStagingCleanupRepairReceipt" }
+    KubernetesStagingCleanupStatus:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          version,
+          repairGeneration,
+          outstandingCount,
+          outstandingBytes,
+          exhaustedCount,
+          eligibleExhaustedCount,
+        ]
+      properties:
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        repairGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        outstandingCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        outstandingBytes:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        exhaustedCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        eligibleExhaustedCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+    KubernetesStagingCleanupRepairReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          captureRef,
+          version,
+          repairGeneration,
+          repairedCount,
+          remainingExhaustedCount,
+          acceptedAt,
+        ]
+      properties:
+        captureRef:
+          { type: string, pattern: "^koc_[A-Za-z0-9_-]{8,89}$", maxLength: 96 }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 2,
+            maximum: 9007199254740991,
+          }
+        repairGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        repairedCount:
+          { type: integer, format: int64, minimum: 1, maximum: 100 }
+        remainingExhaustedCount:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        acceptedAt: { type: string, format: date-time }
+    KubernetesFileInputList:
+      oneOf:
+        - { $ref: "#/components/schemas/KubernetesFileSourceList" }
+        - { $ref: "#/components/schemas/KubernetesFileCleanupList" }
+      discriminator:
+        propertyName: projection
+        mapping:
+          SOURCE: "#/components/schemas/KubernetesFileSourceList"
+          CLEANUP_ONLY: "#/components/schemas/KubernetesFileCleanupList"
+    KubernetesFileSourceList:
+      type: object
+      additionalProperties: false
+      required: [projection, items]
+      properties:
+        projection: { type: string, enum: [SOURCE] }
+        items:
+          {
+            type: array,
+            maxItems: 256,
+            items: { $ref: "#/components/schemas/KubernetesFileInputView" },
+          }
+    KubernetesFileCleanupList:
+      type: object
+      additionalProperties: false
+      required: [projection, items]
+      properties:
+        projection: { type: string, enum: [CLEANUP_ONLY] }
+        items:
+          {
+            type: array,
+            maxItems: 256,
+            items: { $ref: "#/components/schemas/KubernetesFileCleanupView" },
+          }
+    KubernetesFileInputReadback:
+      oneOf:
+        - { $ref: "#/components/schemas/KubernetesFileSourceReadback" }
+        - { $ref: "#/components/schemas/KubernetesFileCleanupReadback" }
+      discriminator:
+        propertyName: projection
+        mapping:
+          SOURCE: "#/components/schemas/KubernetesFileSourceReadback"
+          CLEANUP_ONLY: "#/components/schemas/KubernetesFileCleanupReadback"
+    KubernetesFileSourceReadback:
+      type: object
+      additionalProperties: false
+      required: [projection, view]
+      properties:
+        projection: { type: string, enum: [SOURCE] }
+        view: { $ref: "#/components/schemas/KubernetesFileInputView" }
+    KubernetesFileCleanupReadback:
+      type: object
+      additionalProperties: false
+      required: [projection, cleanupView]
+      properties:
+        projection: { type: string, enum: [CLEANUP_ONLY] }
+        cleanupView: { $ref: "#/components/schemas/KubernetesFileCleanupView" }
+        cleanupReceipt:
+          { $ref: "#/components/schemas/KubernetesFileCleanupRepairReceipt" }
+    KubernetesFileCleanupView:
+      type: object
+      additionalProperties: false
+      required: [sourceRef, invocationRef, cleanup]
+      properties:
+        sourceRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kfs_[A-Za-z0-9_-]+$",
+          }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        cleanup: { $ref: "#/components/schemas/KubernetesStagingCleanupStatus" }
+        repairAvailable:
+          type: boolean
+          description: Доступность команды в профиле шлюза. При отсутствии поля команда недоступна. Права пользователя проверяются отдельно при вызове.
+    KubernetesFileCleanupRepairReceipt:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          sourceRef,
+          version,
+          repairGeneration,
+          repairedCount,
+          remainingExhaustedCount,
+          acceptedAt,
+        ]
+      properties:
+        sourceRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kfs_[A-Za-z0-9_-]+$",
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 2,
+            maximum: 9007199254740991,
+          }
+        repairGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        repairedCount: { type: integer, format: int64, minimum: 1, maximum: 1 }
+        remainingExhaustedCount:
+          { type: integer, format: int64, minimum: 0, maximum: 1 }
+        acceptedAt: { type: string, format: date-time }
+    KubernetesFileInputView:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          sourceRef,
+          invocationRef,
+          planRef,
+          childRef,
+          streamRef,
+          state,
+          version,
+          artifactRef,
+          artifactRevisionRef,
+          artifactSHA256,
+          artifactSizeBytes,
+          transferFormat,
+          normalizedSHA256,
+          normalizedSizeBytes,
+          normalizationRevision,
+          stagedBytes,
+          acknowledgedBytes,
+          eofAcknowledged,
+          reason,
+          createdAt,
+          hardDeadline,
+          cleanup,
+        ]
+      properties:
+        sourceRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kfs_[A-Za-z0-9_-]+$",
+          }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        planRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kpl_[A-Za-z0-9_-]+$",
+          }
+        childRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kch_[A-Za-z0-9_-]+$",
+          }
+        streamRef:
+          { type: string, maxLength: 96, pattern: "^(|kst_[A-Za-z0-9_-]+)$" }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                PREPARING,
+                READY,
+                UNKNOWN,
+                REJECTED,
+                CANCELLED,
+                TRANSFERRED,
+                EXPIRED,
+              ],
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactRevisionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactSHA256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        artifactSizeBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 16777216 }
+        transferFormat: { type: string, enum: [FILE, TAR] }
+        normalizedSHA256: { type: string, pattern: "^(|[a-f0-9]{64})$" }
+        normalizedSizeBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 16777216 }
+        normalizationRevision: { type: integer, minimum: 0, maximum: 1 }
+        stagedBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 16777216 }
+        acknowledgedBytes:
+          { type: integer, format: int64, minimum: 0, maximum: 16777216 }
+        eofAcknowledged: { type: boolean }
+        reason:
+          {
+            type: string,
+            enum:
+              [
+                NONE,
+                SOURCE_UNAVAILABLE,
+                SOURCE_CHANGED,
+                PERMISSION_LOST,
+                CONTENT_REJECTED,
+                INPUT_UNKNOWN,
+                CANCELLED,
+                EXPIRED,
+              ],
+          }
+        createdAt: { type: string, format: date-time }
+        hardDeadline: { type: string, format: date-time }
+        cleanup:
+          nullable: true
+          allOf:
+            [{ $ref: "#/components/schemas/KubernetesStagingCleanupStatus" }]
+          description: Null означает недоступный port; нулевые physical counters не фабрикуются.
+    KubernetesToolView:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          invocationRef,
+          runRef,
+          nodeRef,
+          connectionRef,
+          targetRef,
+          targetRevision,
+          operation,
+          state,
+          version,
+          waitingForGate,
+          safeReasonCode,
+          captureStatuses,
+        ]
+      properties:
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRef: { type: string, minLength: 1, maxLength: 96 }
+        targetRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        operation: { type: string, minLength: 1, maxLength: 96 }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                READY,
+                WAITING_APPROVAL,
+                RUNNING,
+                SUCCEEDED,
+                FAILED,
+                REJECTED,
+                CANCELLED,
+                UNKNOWN_OUTCOME,
+              ],
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        waitingForGate: { type: boolean }
+        safeReasonCode:
+          type: string
+          enum: [NONE, KUBERNETES_PORT_FORWARD_PROFILE_UNSUPPORTED]
+          description: Закрытая сохранённая причина отказа до создания stream; не provider diagnostic и не разрешение retry.
+        captureStatuses:
+          {
+            type: array,
+            maxItems: 256,
+            items: { $ref: "#/components/schemas/KubernetesCaptureSummary" },
+          }
+    KubernetesToolPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/KubernetesToolView" },
+          }
+        nextPageToken: { type: string, maxLength: 96 }
+    KubernetesStreamOutputFrame:
+      type: object
+      additionalProperties: false
+      required: [stageRef, sequence, channel, payloadDigest, payloadBase64]
+      properties:
+        stageRef:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kof_[A-Za-z0-9_-]{8,92}$",
+          }
+        sequence: { type: string, pattern: "^[1-9][0-9]{0,18}$", maxLength: 19 }
+        channel:
+          {
+            type: string,
+            enum: [STDOUT, STDERR, CONTROL, PORT_FORWARD, FILE_CONTENT],
+          }
+        payloadDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        payloadBase64:
+          { type: string, format: byte, minLength: 4, maxLength: 43692 }
+    KubernetesStreamOutputReadback:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          invocationRef,
+          streamRef,
+          generation,
+          afterSequence,
+          outputWatermark,
+          status,
+          authorizedUntil,
+          nativeTerminalKnown,
+          transportJoined,
+          droppedBytes,
+        ]
+      properties:
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamRef: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        generation:
+          { type: string, pattern: "^[1-9][0-9]{0,18}$", maxLength: 19 }
+        afterSequence:
+          { type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19 }
+        outputWatermark:
+          { type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19 }
+        status: { type: string, enum: [WAITING, FRAME, ENDED, INCOMPLETE] }
+        authorizedUntil: { type: string, format: date-time }
+        nativeTerminalKnown: { type: boolean }
+        transportJoined: { type: boolean }
+        droppedBytes:
+          { type: string, pattern: "^(0|[1-9][0-9]{0,18})$", maxLength: 19 }
+        frame: { $ref: "#/components/schemas/KubernetesStreamOutputFrame" }
+    KubernetesStreamInputRef:
+      type: string
+      minLength: 12
+      maxLength: 96
+      pattern: "^kst_[A-Za-z0-9_-]{8,92}$"
+    KubernetesStreamInputChannel:
+      type: string
+      enum: [STDIN, TERMINAL_RESIZE, PORT_FORWARD, FILE_CONTENT, CONTROL]
+    KubernetesPortForwardConnectionRef:
+      type: string
+      pattern: "^kpf_[A-Za-z0-9_-]{24}$"
+      minLength: 28
+      maxLength: 28
+    KubernetesPortForwardConnectionView:
+      type: object
+      additionalProperties: false
+      description: Без TCP bytes и authority. Owner closure, local write/read-end и positive native pair join — разные факты; remote FIN/RST и remote success не выводятся из этих metadata.
+      required:
+        [
+          connectionRef,
+          invocationRef,
+          streamRef,
+          streamGeneration,
+          generation,
+          slot,
+          state,
+          inputVersion,
+          localWriteClosed,
+          readEndObserved,
+          nativeJoined,
+          hardDeadline,
+          reasonCode,
+        ]
+      properties:
+        connectionRef:
+          { $ref: "#/components/schemas/KubernetesPortForwardConnectionRef" }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamRef: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        streamGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        generation:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        slot: { type: integer, minimum: 0, maximum: 15 }
+        state:
+          {
+            type: string,
+            enum:
+              [PREPARED, OPENING, OPEN, CLOSED, UNKNOWN, CANCELLED, EXPIRED],
+          }
+        inputVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        localWriteClosed: { type: boolean }
+        readEndObserved: { type: boolean }
+        nativeJoined: { type: boolean }
+        hardDeadline: { $ref: "#/components/schemas/Timestamp" }
+        reasonCode: { type: string, maxLength: 96 }
+    KubernetesPortForwardMapping:
+      type: object
+      additionalProperties: false
+      description: Числовая TCP mapping из original immutable owner input; не caller override и не разрешение открыть listener.
+      required: [port, targetPort]
+      properties:
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        targetPort: { type: integer, minimum: 1, maximum: 65535 }
+    KubernetesPortForwardConnectionProfile:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          protocol,
+          maximumActiveConnections,
+          activeConnections,
+          admissionReasonCode,
+          ports,
+          timeoutSeconds,
+        ]
+      properties:
+        protocol:
+          {
+            type: string,
+            enum: ["", PORT_FORWARD_SPDY_V1, PORT_FORWARD_WEBSOCKET_V4],
+          }
+        maximumActiveConnections: { type: integer, minimum: 16, maximum: 16 }
+        activeConnections: { type: integer, minimum: 0, maximum: 16 }
+        admissionReasonCode: { type: string, maxLength: 96 }
+        ports:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { $ref: "#/components/schemas/KubernetesPortForwardMapping" }
+        timeoutSeconds: { type: integer, minimum: 1, maximum: 300 }
+    KubernetesPortForwardConnectionPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken, profile]
+      properties:
+        items:
+          {
+            type: array,
+            maxItems: 32,
+            items:
+              {
+                $ref: "#/components/schemas/KubernetesPortForwardConnectionView",
+              },
+          }
+        nextPageToken: { type: string, maxLength: 28 }
+        profile:
+          {
+            $ref: "#/components/schemas/KubernetesPortForwardConnectionProfile",
+          }
+    KubernetesPortForwardConnectionReadback:
+      type: object
+      additionalProperties: false
+      required: [connection]
+      properties:
+        connection:
+          { $ref: "#/components/schemas/KubernetesPortForwardConnectionView" }
+        submission:
+          { $ref: "#/components/schemas/KubernetesStreamInputSubmission" }
+    KubernetesPortForwardConnectionOpened:
+      type: object
+      additionalProperties: false
+      required: [connection, input, submission]
+      properties:
+        connection:
+          { $ref: "#/components/schemas/KubernetesPortForwardConnectionView" }
+        input: { $ref: "#/components/schemas/KubernetesStreamInputView" }
+        submission:
+          { $ref: "#/components/schemas/KubernetesStreamInputSubmission" }
+    KubernetesPortForwardConnectionClosed:
+      type: object
+      additionalProperties: false
+      required: [connection, input]
+      properties:
+        connection:
+          { $ref: "#/components/schemas/KubernetesPortForwardConnectionView" }
+        input: { $ref: "#/components/schemas/KubernetesStreamInputView" }
+        submission:
+          { $ref: "#/components/schemas/KubernetesStreamInputSubmission" }
+    KubernetesStreamInputSubmission:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          ref,
+          invocationRef,
+          streamRef,
+          generation,
+          sequence,
+          channel,
+          payloadDigest,
+          byteCount,
+          endOfInput,
+          state,
+        ]
+      properties:
+        ref:
+          {
+            type: string,
+            minLength: 12,
+            maxLength: 96,
+            pattern: "^kif_[A-Za-z0-9_-]{8,92}$",
+          }
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamRef: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        generation:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        sequence:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        channel: { $ref: "#/components/schemas/KubernetesStreamInputChannel" }
+        payloadDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        byteCount: { type: integer, format: int64, minimum: 0, maximum: 32768 }
+        endOfInput: { type: boolean }
+        state:
+          {
+            type: string,
+            enum: [QUEUED, CLAIMED, ACKNOWLEDGED, UNKNOWN, REJECTED, CANCELLED],
+          }
+    KubernetesStreamInputView:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          invocationRef,
+          streamRef,
+          runRef,
+          nodeRef,
+          generation,
+          operation,
+          namespace,
+          podName,
+          container,
+          state,
+          version,
+          inputChannels,
+          closedInputChannels,
+          maximumFrameBytes,
+          maximumTotalBytes,
+          maximumStagedBytes,
+          maximumStagedObjects,
+          acknowledgedSequence,
+          hardDeadline,
+          reasonCode,
+          resource,
+          targetRef,
+          targetRevision,
+          connectionRef,
+        ]
+      properties:
+        invocationRef: { $ref: "#/components/schemas/OpaqueRef" }
+        streamRef: { $ref: "#/components/schemas/KubernetesStreamInputRef" }
+        runRef: { $ref: "#/components/schemas/OpaqueRef" }
+        nodeRef: { $ref: "#/components/schemas/OpaqueRef" }
+        generation:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        operation: { type: string, minLength: 1, maxLength: 96 }
+        namespace: { type: string, minLength: 1, maxLength: 63 }
+        podName: { type: string, maxLength: 253 }
+        container: { type: string, maxLength: 63 }
+        state:
+          {
+            type: string,
+            enum:
+              [PREPARED, ACTIVE, COMPLETED, CANCELED, REVOKED, EXPIRED, LOST],
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        inputChannels:
+          {
+            type: array,
+            maxItems: 7,
+            uniqueItems: true,
+            items:
+              { $ref: "#/components/schemas/KubernetesStreamInputChannel" },
+          }
+        closedInputChannels:
+          {
+            type: array,
+            maxItems: 7,
+            uniqueItems: true,
+            items:
+              { $ref: "#/components/schemas/KubernetesStreamInputChannel" },
+          }
+        maximumFrameBytes:
+          { type: integer, format: int64, minimum: 1, maximum: 32768 }
+        maximumTotalBytes:
+          { type: integer, format: int64, minimum: 1, maximum: 268435456 }
+        maximumStagedBytes:
+          { type: integer, format: int64, minimum: 1, maximum: 1073741824 }
+        maximumStagedObjects:
+          { type: integer, format: int64, minimum: 1, maximum: 32768 }
+        acknowledgedSequence:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        pending:
+          { $ref: "#/components/schemas/KubernetesStreamInputSubmission" }
+        hardDeadline: { type: string, format: date-time }
+        resource: { $ref: "#/components/schemas/KubernetesOwnerGateResource" }
+        targetRef: { type: string, minLength: 1, maxLength: 96 }
+        targetRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        reasonCode:
+          { type: string, maxLength: 96, pattern: "^$|^KUBERNETES_[A-Z_]+$" }
+    KubernetesStreamInputPage:
+      type: object
+      additionalProperties: false
+      required: [items, nextPageToken]
+      properties:
+        items:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/KubernetesStreamInputView" },
+          }
+        nextPageToken: { type: string, maxLength: 2048 }
+    KubernetesStreamInputReadback:
+      type: object
+      additionalProperties: false
+      required: [view]
+      properties:
+        view: { $ref: "#/components/schemas/KubernetesStreamInputView" }
+        submission:
+          { $ref: "#/components/schemas/KubernetesStreamInputSubmission" }
+    KubernetesStreamInputSubmit:
+      description: >-
+        PORT_FORWARD содержит base64 от binary frame: byte0 — zero-based mapping
+        slot0..15, затем не менее одного TCP byte. Exact owner profile дополнительно
+        ограничивает slot. Empty EndOfInput закрывает весь tunnel. FILE_CONTENT и
+        CONTROL публично запрещены.
+      type: object
+      additionalProperties: false
+      required: [channel, payloadBase64, payloadDigest, endOfInput]
+      properties:
+        channel: { type: string, enum: [STDIN, TERMINAL_RESIZE, PORT_FORWARD] }
+        payloadBase64:
+          {
+            type: string,
+            maxLength: 43692,
+            pattern: "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          }
+        payloadDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        endOfInput: { type: boolean }
+    KubernetesResourceMaterialView:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          materialRef,
+          connectionRef,
+          connectionVersion,
+          identityRef,
+          identityRevision,
+          targetRef,
+          namespace,
+          name,
+          generateName,
+          operation,
+          secretType,
+          patchType,
+          state,
+          expiresAt,
+          version,
+          reasonCode,
+          credentialPolicy,
+          bindingVersion,
+        ]
+      properties:
+        materialRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        identityRef: { $ref: "#/components/schemas/OpaqueRef" }
+        identityRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        namespace: { type: string, minLength: 1, maxLength: 63 }
+        name: { type: string, maxLength: 253 }
+        generateName: { type: string, maxLength: 253 }
+        operation:
+          {
+            type: string,
+            enum:
+              [
+                kubernetes.create,
+                kubernetes.replace,
+                kubernetes.apply,
+                kubernetes.edit,
+                kubernetes.patch,
+              ],
+          }
+        secretType: { type: string, minLength: 1, maxLength: 253 }
+        patchType: { type: string, enum: ["", JSON, MERGE, STRATEGIC] }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                PREPARED,
+                ATTEMPTING,
+                AVAILABLE,
+                UNKNOWN,
+                ACK_REJECTED,
+                CANCELLED,
+                EXPIRED,
+                CONSUMED,
+              ],
+          }
+        expiresAt: { type: string, format: date-time }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        reasonCode:
+          {
+            type: string,
+            enum:
+              [
+                "",
+                MATERIAL_EXPIRED_PENDING_CLOSURE,
+                MATERIAL_COMPLETION_REQUIRED,
+                MATERIAL_ACK_REJECTED,
+                MATERIAL_ACK_CONFLICT,
+                MATERIAL_SOURCE_CHANGED,
+                MATERIAL_CANCELLED,
+                MATERIAL_CONSUMED,
+                MATERIAL_UNAVAILABLE,
+                MATERIAL_OBSERVATION_ABSENT,
+              ],
+          }
+        credentialPolicy:
+          { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+        bindingVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+    KubernetesResourceMaterialAdmission:
+      type: object
+      additionalProperties: false
+      required: [material, reconcileOnly]
+      properties:
+        material:
+          { $ref: "#/components/schemas/KubernetesResourceMaterialView" }
+        reconcileOnly: { type: boolean }
+        uploadPermit:
+          { type: string, format: byte, minLength: 44, maxLength: 44 }
+        endpoint:
+          { $ref: "#/components/schemas/KubernetesIdentityUploadEndpoint" }
+    KubernetesIdentitySetupBeginInput:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          expectedVersion,
+          expectedConnectionVersion,
+          contentSHA256,
+          contentBytes,
+        ]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Для личного setup текущая binding version либо явный ноль отсутствия binding; для shared текущая Connection version.
+        expectedConnectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        contentSHA256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        contentBytes: { type: integer, minimum: 1, maximum: 1048576 }
+    KubernetesIdentitySetupRequirements:
+      type: object
+      additionalProperties: false
+      description: Безопасные требования scoped подключения для локального экспорта до Begin. Отсутствие означает недоступность требований; эти метаданные не выдают доступ к target и не заменяют проверки владельца.
+      required:
+        [
+          targetRef,
+          targetRevision,
+          canonicalContext,
+          connectionVersion,
+          credentialPolicy,
+        ]
+      properties:
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        targetRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        canonicalContext:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 256,
+            pattern: '^[^\s\x00-\x1F\x7F-\x9F]+$',
+          }
+        connectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        credentialPolicy:
+          { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+    KubernetesIdentitySetupView:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          setupRef,
+          connectionRef,
+          connectionVersion,
+          bindingGeneration,
+          identityRef,
+          identityRevision,
+          targetRef,
+          state,
+          expiresAt,
+          reasonCode,
+          version,
+          credentialPolicy,
+          bindingVersion,
+          canonicalContext,
+        ]
+      properties:
+        setupRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionRef: { $ref: "#/components/schemas/OpaqueRef" }
+        connectionVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        bindingGeneration:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+        identityRef: { $ref: "#/components/schemas/OpaqueRef" }
+        identityRevision:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        targetRef: { $ref: "#/components/schemas/OpaqueRef" }
+        canonicalContext:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 256,
+            pattern: '^[^\s\x00-\x1F\x7F-\x9F]+$',
+          }
+        state:
+          {
+            type: string,
+            enum:
+              [
+                PREPARED,
+                ATTEMPTING,
+                COMPLETED,
+                CANCELLED,
+                EXPIRED,
+                UNKNOWN,
+                ACK_REJECTED,
+              ],
+          }
+        expiresAt: { type: string, format: date-time }
+        reasonCode:
+          {
+            type: string,
+            enum:
+              [
+                "",
+                SETUP_EXPIRED_PENDING_CLOSURE,
+                SETUP_COMPLETION_REQUIRED,
+                SETUP_ACK_REJECTED,
+                SETUP_ACK_CONFLICT,
+              ],
+          }
+        version:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            maximum: 9007199254740991,
+          }
+        credentialPolicy:
+          { type: string, enum: [INITIATOR_REQUIRED, PROJECT_SHARED] }
+        bindingVersion:
+          {
+            type: integer,
+            format: int64,
+            minimum: 0,
+            maximum: 9007199254740991,
+          }
+    KubernetesIdentityUploadEndpoint:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          serverOrigin,
+          tlsServerName,
+          certificateAuthorityPem,
+          certificateAuthoritySHA256,
+          addressIPs,
+        ]
+      properties:
+        serverOrigin: { type: string, format: uri, maxLength: 2048 }
+        tlsServerName: { type: string, minLength: 1, maxLength: 253 }
+        certificateAuthorityPem:
+          { type: string, format: byte, maxLength: 131072 }
+        certificateAuthoritySHA256: { type: string, pattern: "^[a-f0-9]{64}$" }
+        addressIPs:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { type: string, maxLength: 45 }
+    KubernetesIdentitySetupAdmission:
+      type: object
+      additionalProperties: false
+      required: [setup, reconcileOnly]
+      properties:
+        setup: { $ref: "#/components/schemas/KubernetesIdentitySetupView" }
+        reconcileOnly: { type: boolean }
+        uploadPermit:
+          { type: string, format: byte, minLength: 44, maxLength: 44 }
+        endpoint:
+          { $ref: "#/components/schemas/KubernetesIdentityUploadEndpoint" }
     IntegrationCredentialInput:
       type: object
       additionalProperties: false
@@ -20547,6 +23522,12 @@ components:
           credentialPolicy,
         ]
       properties:
+        kubernetesSetupRequirements:
+          { $ref: "#/components/schemas/KubernetesIdentitySetupRequirements" }
+        credentialDelivery:
+          { $ref: "#/components/schemas/IntegrationCredentialDelivery" }
+        brokerIdentity:
+          { $ref: "#/components/schemas/IntegrationBrokerIdentityMetadata" }
         ref: { $ref: "#/components/schemas/OpaqueRef" }
         version: { type: integer, format: int64, minimum: 1 }
         definitionKey: { type: string, maxLength: 100 }
@@ -20636,10 +23617,19 @@ components:
         agentRef: { $ref: "#/components/schemas/OpaqueRef" }
         workflowRef: { $ref: "#/components/schemas/OpaqueRef" }
         enabled: { type: boolean }
+        kubernetesNamespace:
+          { $ref: "#/components/schemas/KubernetesGrantNamespace" }
+        kubernetesGrantRef: { $ref: "#/components/schemas/OpaqueRef" }
         approvalScopePaths:
           type: array
           maxItems: 16
           items: { type: string, minLength: 2, maxLength: 256 }
+    KubernetesGrantNamespace:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?|@cluster|@all-namespaces)$"
+      description: Только для Kubernetes. Явный namespace либо отдельная cluster/all-namespaces область; не wildcard и не источник полномочий.
     AssistantPlanOperation:
       type: object
       additionalProperties: false

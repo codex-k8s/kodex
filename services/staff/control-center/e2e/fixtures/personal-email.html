@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Личная почта — synthetic проверка</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp } from "vue";
+      import { createRouter, createMemoryHistory } from "vue-router";
+      import { i18n } from "../../src/app/i18n/index";
+      import { loadRuntimeConfig } from "../../src/shared/config/runtime";
+      import { configureApiClient } from "../../src/shared/api/client";
+      import PersonalEmailFixture from "./PersonalEmailFixture.vue";
+      import "../../src/app/styles/base.css";
+      await loadRuntimeConfig();
+      configureApiClient();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/", component: PersonalEmailFixture },
+          {
+            path: "/integrations",
+            name: "integrations",
+            component: PersonalEmailFixture,
+          },
+        ],
+      });
+      const connectionRef = new URL(location.href).searchParams.get(
+        "connectionRef",
+      );
+      await router.push(
+        connectionRef
+          ? {
+              name: "integrations",
+              query: { section: "personal", connectionRef },
+            }
+          : "/",
+      );
+      await router.isReady();
+      createApp(PersonalEmailFixture).use(router).use(i18n).mount("#app");
+    </script>
+  </body>
+</html>

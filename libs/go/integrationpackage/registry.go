@@ -81,6 +81,9 @@ const (
 	// AdapterSSHCompose selects only owner-signed bounded Compose release operations.
 	// AdapterSSHCompose выбирает только ограниченные Compose-операции с owner permit.
 	AdapterSSHCompose AdapterKey = "SSH_COMPOSE"
+	// AdapterKubernetes selects the typed private broker lane, never generic token/HTTP dispatch.
+	// AdapterKubernetes выбирает typed private broker lane, не generic token/HTTP dispatch.
+	AdapterKubernetes AdapterKey = "KUBERNETES"
 
 	// AdapterSentry selects only registered project-scoped Sentry operations.
 	// AdapterSentry выбирает только зарегистрированные операции Sentry в выбранном проекте.
@@ -183,6 +186,8 @@ var adapterRegistry = map[AdapterKey]AdapterDescriptor{
 	AdapterSentry:        {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterContext7:      {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 	AdapterSSHCompose:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterSSHTarget:     {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
+	AdapterKubernetes:    {Owner: OwnerIntegrationGateway, Route: RouteManagedMCP, Readiness: ReadinessReady},
 }
 
 // Adapter looks up one registered descriptor without inventing an owner or execution route for unknown keys.
@@ -235,7 +240,7 @@ var (
 	resourceKinds = map[ResourceKind]struct{}{
 		"SYNTHETIC_JOURNAL": {}, "GITHUB_REPOSITORY": {}, "GITHUB_SCOPE": {}, "GITLAB_PROJECT": {}, "GITLAB_SCOPE": {},
 		"JIRA_PROJECT": {}, "CONFLUENCE_SPACE": {}, "EMAIL_SENDER": {},
-		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {}, "SSH_TARGET": {},
+		"MATTERMOST_CHANNEL": {}, "HTTPS_RESOURCE": {}, "SSH_TARGET": {}, "KUBERNETES_TARGET": {},
 	}
 )
 

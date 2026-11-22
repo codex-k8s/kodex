@@ -8,13 +8,13 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './stable-inventory.mjs';
-import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockMaxBytes,componentImageLockMaxBase64,componentPublicationMaxBytes} from './portable-component-migration.mjs';
+import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockBudget,componentImageLockMaxBytes,componentImageLockMaxBase64,componentPublicationMaxBytes} from './portable-component-migration.mjs';
 import {validateStableReceipt} from './stable-image-publication.mjs';
 import {createComponentImageLock,validateComponentPublicationConfiguration} from './component-publication.mjs';
 const sha=x=>createHash('sha256').update(x).digest('hex'),revision='a'.repeat(40),uid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 const cli=fileURLToPath(new URL('./component-publication.mjs',import.meta.url));
 function fixture(profile='github-repository-scope'){
-  const cfg=componentMigrationConfiguration(profile),baseHeads={'control-plane':20261112000100,'internal-rpc-authority':2,'email-bridge':3};
+  const cfg=componentMigrationConfiguration(profile),baseHeads={'control-plane':20261112000100,'internal-rpc-authority':profile.startsWith('personal-integrations')?20261115000200:2,'email-bridge':3};
   const config={schema:'kodex.component-publication-config/v1',profile,sourceSHA:revision,sourceCheckout:'/private/source',context:'k3d-fixture',
     clusterUID:uid(1),namespaceUID:uid(2),baseSourceSHA:'b'.repeat(40),baseReleaseLockSHA256:'c'.repeat(64),baseReleaseLock:'/private/base.json',
     baseSchemaHeads:baseHeads,schemaHeadsBefore:{...baseHeads,'control-plane':cfg.before},schemaHeadsAfter:{...baseHeads,'control-plane':cfg.after},
@@ -249,4 +249,35 @@ test('046 closed5 publisher сохраняет introduced0 proof и actual same 
    assert.throws(()=>componentMigrationPublication(publication,{revision},'github-repository-scope'));
   }finally{rmSync(f.directory,{recursive:true,force:true});}
  }
+});
+
+// Реальный cohort содержит1514 CP paths; manifest сохраняется во всех четырёх
+// полях и не превращается в один неподтверждённый caller digest.
+test('personal046→049 сохраняет1514 paths с finite640KiB; старые профили остаются128KiB',()=>{
+ for(const profile of ['personal-integrations','personal-integrations-backup']){
+  const f=setup(profile);
+  try{
+   const component=f.config.components[0],manifest=[component.anchor,...Array.from({length:1513},(_,i)=>
+    'services/internal/control-plane/internal/production/'+String(i).padStart(4,'0')+'_'+'x'.repeat(34)+'.go')].sort();
+   f.change({manifests:{'services/internal/control-plane/':manifest}});
+   const prepared=f.run('prepare','prepared.json');assert.equal(prepared.code,0,prepared.out);
+   const part=f.prepared().publication.components[0],raw=Buffer.from(part.componentLockRawBase64,'base64'),lock=JSON.parse(raw);
+   assert.ok(raw.length>568574);assert.ok(raw.length<=640<<10);
+   for(const paths of [lock.compatibility.changed_files,lock.compatibility.production_files,lock.compatibility.verified_cohort.changed_files,lock.compatibility.verified_cohort.production_files])assert.deepEqual(paths,manifest);
+   assert.equal(f.run('qualify','publication.json',['--approved-plan-sha',fingerprint(f.prepared())]).code,0);
+   const publication=JSON.parse(readFileSync(join(f.directory,'publication.json')));
+   assert.equal(componentMigrationPublication(publication,{revision},profile).components.length,9);
+   assert.throws(()=>componentMigrationPublication(publication,{revision:'f'.repeat(40)},profile),/PROVENANCE_INVALID/);
+   for(const length of [componentImageLockBudget(profile).bytes+1,componentImageLockBudget(profile).bytes+3]){
+    const bad=structuredClone(publication),bytes=Buffer.alloc(length,32);bad.components[0].componentLockRawBase64=bytes.toString('base64');bad.components[0].componentLockSHA256=sha(bytes);
+    assert.throws(()=>componentMigrationPublication(bad,{revision},profile),/LOCK_(?:HASH_)?INVALID/);
+   }
+   const pulls=f.state().pulls;assert.equal(f.run('readback','readback.json').code,0);assert.equal(f.state().pulls,pulls);
+   f.change({manifests:{'services/internal/control-plane/':[component.anchor,...Array.from({length:2000},(_,i)=>'services/internal/control-plane/internal/production/'+String(i).padStart(4,'0')+'_'+'x'.repeat(34)+'.go')].sort()}});
+   const rejected=f.run('prepare','oversize.json');assert.notEqual(rejected.code,0);assert.match(rejected.out,/LOCK_TOO_LARGE/);assert.equal(existsSync(join(f.directory,'oversize.json')),false);
+  }finally{rmSync(f.directory,{recursive:true,force:true});}
+ }
+ for(const profile of ['workspace-unbound-stop','github-repository-scope','telegram-notifications','sentry-observability'])assert.deepEqual(componentImageLockBudget(profile),{bytes:128<<10,base64:4*Math.ceil((128<<10)/3)});
+ assert.throws(()=>componentImageLockBudget('personal-integrations-foreign'),/PROFILE_INVALID/);
+ assert.equal(componentPublicationMaxBytes,2<<20);
 });

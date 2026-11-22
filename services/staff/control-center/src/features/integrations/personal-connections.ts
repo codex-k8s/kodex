@@ -1,5 +1,10 @@
+import { isSSHBrokerDefinition } from "./ssh-identity-setup-context";
 import { computed, onScopeDispose, ref } from "vue";
 import * as api from "./personal-connections-api";
+import {
+  personalCredentialDelivery,
+  personalCredentialMetadataRefreshRequired,
+} from "./credential-delivery";
 import type {
   PersonalIntegrationConnection,
   PersonalIntegrationCredential,
@@ -28,13 +33,26 @@ export function personalConnectionAllows(
       credential.credentialConfigured &&
       credential.state !== "REVOKED"
     );
+  const delivery = personalCredentialDelivery(connection);
   if (
+    !delivery ||
+    delivery.kind === "NONE" ||
     connection.policy !== "INITIATOR_REQUIRED" ||
     !connection.available ||
     credential?.state === "CHECKING"
   )
     return false;
-  if (action === "SAVE") return true;
+  if (
+    isSSHBrokerDefinition(connection.definitionKey) &&
+    (delivery.kind !== "BROKER_IDENTITY" ||
+      delivery.brokerPurpose !== "SSH_TARGET")
+  )
+    return false;
+  if (action === "SAVE")
+    return (
+      delivery.kind === "TOKEN" &&
+      !isSSHBrokerDefinition(connection.definitionKey)
+    );
   return (
     connection.enabled &&
     !!credential?.credentialConfigured &&
@@ -210,6 +228,13 @@ export function usePersonalConnections(port: PersonalConnectionsAPI = api) {
           if (!current(operation.epoch)) return;
           apply(connection, credential);
         }
+        if (
+          personalCredentialDelivery({ ...connection, credential })?.kind !==
+          "TOKEN"
+        ) {
+          requiresRefresh.value = true;
+          throw new Error(personalCredentialMetadataRefreshRequired);
+        }
         credential = await port.savePersonalConnection(
           connection,
           credential,
@@ -232,7 +257,9 @@ export function usePersonalConnections(port: PersonalConnectionsAPI = api) {
       }
       if (current(operation.epoch) && credential) {
         apply(connection, credential);
-        success.value = action;
+        if (!personalCredentialDelivery({ ...connection, credential }))
+          requiresRefresh.value = true;
+        else success.value = action;
       }
     } catch (error) {
       if (current(operation.epoch)) {

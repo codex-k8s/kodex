@@ -22,6 +22,21 @@ var projectGitHubScopeIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
 // projectAssistantPublicResourceScope hashes only a validated public GitHub boundary: frozen owner/repository coordinates or the successor ALL_ACCESSIBLE/SELECTED scope. It rejects malformed modes and extra selector fields; metadata never grants execution authority.
 // projectAssistantPublicResourceScope хеширует только проверенную публичную область GitHub: frozen owner/repository либо successor ALL_ACCESSIBLE/SELECTED. Отклоняет неверные режимы и лишние поля селектора; metadata не выдают право исполнения.
 func projectAssistantPublicResourceScope(definition integrationpackage.Package, capability integrationpackage.Capability, configuration map[string]string) (map[string]string, string, error) {
+	if definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey {
+		if definition.Spec.Adapter != "KUBERNETES" || capability.ResourceScope.Kind != "KUBERNETES_TARGET" || definition.ValidateConfiguration(configuration) != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		values, err := capability.ResourceScopeValues(configuration)
+		if err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		encoded, err := json.Marshal(values)
+		if err != nil {
+			return nil, "", errs.ErrUnavailable
+		}
+		sum := sha256.Sum256(encoded)
+		return values, hex.EncodeToString(sum[:]), nil
+	}
 	if definition.Metadata.Key != "github" {
 		return nil, "", nil
 	}

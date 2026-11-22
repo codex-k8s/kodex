@@ -394,7 +394,7 @@ func TestEmailTypedMailboxAndEffect(t *testing.T) {
 	if err != nil || !strings.Contains(result.Summary, `"message_id":"msg-1"`) || strings.Contains(result.Summary, "provider_debug") {
 		t.Fatalf("email send = %#v, %v", result, err)
 	}
-	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "NONE" {
+	if send.Risk != "SENSITIVE" || send.ApprovalPolicy != "HUMAN_EACH_EFFECT" {
 		t.Fatalf("email send policy = %s/%s", send.Risk, send.ApprovalPolicy)
 	}
 }
@@ -469,11 +469,9 @@ func testAdapter(t *testing.T) *Adapter {
 	}
 }
 
-// invocationRequest derives canonical input/scope digests and provider-specific public settings from a shipped capability for isolated adapter tests.
-// RU: invocationRequest выводит канонические input/scope хеши и публичные provider-настройки из поставляемой capability для изолированных тестов адаптера.
-// Its grant, lease and execution identifiers are synthetic test data, not owner-issued authorization or a substitute for an approved live invocation.
-// RU: Grant, lease и execution идентификаторы — синтетические тестовые данные, а не owner-авторизация либо замена одобренного живого вызова.
-func invocationRequest(t *testing.T, definition integrationpackage.Package, capabilityKey string, input map[string]any, credential *CredentialRevision) Request {
+// invocationFixtureDefinition resolves the fixed historical repository fixture once when requested; it changes no adapter registry, current authorization or request-local validation.
+// RU: invocationFixtureDefinition разрешает закреплённое историческое определение оснастки, не меняя registry адаптера, текущие полномочия либо проверку каждого запроса.
+func invocationFixtureDefinition(t *testing.T, definition integrationpackage.Package, capabilityKey string) integrationpackage.Package {
 	t.Helper()
 	if definition.Metadata.Key == "github" && definition.Metadata.Version == "6.5.0" && capabilityKey != "github.identity.read" && capabilityKey != "github.repository.list" {
 		previous, ok := integrationpackage.ResolveShippedRevision(definition, "6.4.0", "bd6d504e4fc1d19d5c083f8585115c04ec75852b7879ad19ed54dc41cbe9a1da")
@@ -482,6 +480,16 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		}
 		definition = previous
 	}
+	return definition
+}
+
+// invocationRequest derives canonical input/scope digests and provider-specific public settings from a shipped capability for isolated adapter tests.
+// RU: invocationRequest выводит канонические input/scope хеши и публичные provider-настройки из поставляемой capability для изолированных тестов адаптера.
+// Its grant, lease and execution identifiers are synthetic test data, not owner-issued authorization or a substitute for an approved live invocation.
+// RU: Grant, lease и execution идентификаторы — синтетические тестовые данные, а не owner-авторизация либо замена одобренного живого вызова.
+func invocationRequest(t *testing.T, definition integrationpackage.Package, capabilityKey string, input map[string]any, credential *CredentialRevision) Request {
+	t.Helper()
+	definition = invocationFixtureDefinition(t, definition, capabilityKey)
 	capability, ok := definition.Capability(capabilityKey)
 	if !ok {
 		t.Fatal("capability is missing")

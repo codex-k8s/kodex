@@ -608,6 +608,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 	if descriptor.FullName() == "controlplane.v1.RunEvent" {
 		projectRunEventServiceCode(value)
 	}
+	if err := normalizeKubernetesCaptureOrigin(value, descriptor); err != nil {
+		return err
+	}
 	return normalizeIntegrationShape(value, descriptor)
 }
 
@@ -823,6 +826,9 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 // normalizeProtoField recursively normalizes maps and ordinary message objects, preserving well-known arbitrary JSON values, and handles closed enum projections and exact safe integer conversion. Only integration minimum/maximum may retain signed out-of-safe-range integers as strings; non-map message JSON passes through here, so this helper is not a universal schema validator.
 // normalizeProtoField рекурсивно нормализует map и обычные message-объекты, сохраняя well-known произвольный JSON, и преобразует закрытые enum и точные безопасные целые. Только integration minimum/maximum могут сохранить signed целые вне безопасного диапазона строкой; message JSON не в форме map здесь проходит без изменений, поэтому helper не заменяет всю проверку схемы.
 func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, error) {
+	if result, handled, err := normalizeKubernetesCaptureOrdinal(value, field); handled {
+		return result, err
+	}
 	if field.IsMap() {
 		items, ok := value.(map[string]any)
 		if !ok {
@@ -1015,7 +1021,7 @@ var enumPrefixes = []string{
 	"AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_",
 	"RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_",
 	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_", "RUN_MESSAGE_PHASE_",
-	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
+	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_", "KUBERNETES_ARTIFACT_CAPTURE_KIND_",
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
 	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_", "ASSISTANT_SCOPE_",
 	"PROVIDER_ACCOUNT_STATE_", "PROVIDER_AUTHORIZATION_METHOD_", "PROVIDER_AUTHORIZATION_STATE_",

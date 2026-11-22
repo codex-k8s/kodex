@@ -128,7 +128,7 @@ func (repository *Repository) writeBackSource(ctx context.Context, tx pgx.Tx, cu
 	if repository.requireAccess(ctx, tx, current, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: source.ConnectionRef}) != nil {
 		return source, entity.ManagedConfigurationSourceWork{}, "", "", errs.ErrForbidden
 	}
-	connection, err := readConnection(ctx, tx, current, source.ConnectionRef)
+	connection, err := repository.readConnection(ctx, tx, current, source.ConnectionRef)
 	if err != nil {
 		return source, entity.ManagedConfigurationSourceWork{}, "", "", err
 	}

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Email bridge",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "HTTPS bridge #1037; SMTP/POP, authority и durable receipts. Body и query не являются источником полномочий."
   },
   "servers": [
@@ -565,6 +565,14 @@
             "format": "int64",
             "minimum": 1,
             "description": "Назначаемое producer поколение credential binding подключения; поколения отдельных descriptors независимы."
+          },
+          "credential_owner_generation": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "x-go-type-skip-optional-pointer": true,
+            "description": "Назначаемое mailbox owner поколение владения credentials; отсутствие сохраняется только в исторической конфигурации и не разрешает новый effect."
           }
         },
         "required": [

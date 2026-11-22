@@ -65,6 +65,9 @@ const (
 // contexts и объединяет ошибки; readiness не доказывает готовность remote owner и завершение draft
 // recovery, а context budgets не прерывают игнорирующие их callbacks.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
+	var rpc *brokerGRPCComponent
+	var sshUpload *sshIdentityUploadComponent
+	var kubernetesUpload *kubernetesIdentityUpload
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -77,6 +80,10 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	logger := telemetry.Logger(os.Stdout)
 	methods := map[string]string{
+		secretbrokerv1.ManagedKubernetesService_ExecuteManagedKubernetesOperation_FullMethodName:                         "kubernetes_execute",
+		secretbrokerv1.ManagedKubernetesService_ExchangeManagedKubernetesStream_FullMethodName:                           "kubernetes_exchange",
+		secretbrokerv1.ManagedKubernetesService_CancelManagedKubernetesOperation_FullMethodName:                          "kubernetes_cancel",
+		secretbrokerv1.ManagedKubernetesService_CheckManagedKubernetesReadiness_FullMethodName:                           "kubernetes_readiness",
 		secretbrokerv1.SecretBrokerService_CreateSecret_FullMethodName:                                                   "create",
 		secretbrokerv1.SecretBrokerService_RotateSecret_FullMethodName:                                                   "rotate",
 		secretbrokerv1.SecretBrokerService_RevealSecret_FullMethodName:                                                   "reveal",
@@ -111,12 +118,15 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		return errors.New("register secret draft recovery metrics")
 	}
 	defer func() {
-		trace, cancelTrace := context.WithTimeout(shutdownBase, 5*time.Second)
-		resultErr = errors.Join(resultErr, telemetry.ShutdownTracing(trace))
-		cancelTrace()
-		sentry, cancelSentry := context.WithTimeout(shutdownBase, 5*time.Second)
-		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
-		cancelSentry()
+		resultErr = errors.Join(resultErr, closeBrokerDependency(func() error {
+			trace, cancelTrace := context.WithTimeout(shutdownBase, 5*time.Second)
+			traceErr := telemetry.ShutdownTracing(trace)
+			cancelTrace()
+			sentry, cancelSentry := context.WithTimeout(shutdownBase, 5*time.Second)
+			sentryErr := telemetry.FlushSentry(sentry)
+			cancelSentry()
+			return errors.Join(traceErr, sentryErr)
+		}, rpc, sshUpload, kubernetesUpload))
 	}()
 	control, err := controlplaneclient.Dial(startup, controlplaneclient.Config{ServiceIdentity: true,
 		RPCProfile: config.RPCProfile, CallerWorkload: "secret-broker",
@@ -124,17 +134,28 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		CAFile: config.ControlPlaneCAFile, ClientCertificateFile: config.ControlPlaneCertificateFile,
 		ClientPrivateKeyFile: config.ControlPlanePrivateKeyFile, ApplicationGrantFile: config.ApplicationGrantFile,
 		ExpectedIssuerUID: issuerUID, ExpectedIssuerGID: issuerGID, DialTimeout: config.RequestTimeout,
-		Operations: secretBrokerOperations(),
+		Operations: controlplaneclient.SecretBrokerOperations(),
 	})
 	if err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, control.Close()) }()
+	defer func() {
+		resultErr = errors.Join(resultErr, closeBrokerDependency(control.Close, rpc, sshUpload, kubernetesUpload))
+	}()
 	owner, err := controlowner.New(control, config.ClaimantID)
 	if err != nil {
 		return err
 	}
 	store, err := kubernetesstore.InCluster(config.RuntimeNamespace)
+	if err != nil {
+		return err
+	}
+	sshUpload, err = newSSHIdentityUpload(config, owner, store, logger)
+	if err != nil {
+		return err
+	}
+	defer sshUpload.close()
+	kubernetesUpload, err = newKubernetesIdentityUpload(config, owner, control)
 	if err != nil {
 		return err
 	}
@@ -157,7 +178,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	if err != nil {
 		return err
 	}
-	defer func() { resultErr = errors.Join(resultErr, providerCredentials.Close()) }()
+	defer func() {
+		resultErr = errors.Join(resultErr, closeBrokerDependency(providerCredentials.Close, rpc, sshUpload, kubernetesUpload))
+	}()
 	if err := configureModelProvider(providerCredentials, config.ModelProviderConfigurationFile); err != nil {
 		return err
 	}
@@ -177,7 +200,9 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		if err != nil {
 			return errors.New("connect provider credential authorization verifier")
 		}
-		defer func() { resultErr = errors.Join(resultErr, verifier.Close()) }()
+		defer func() {
+			resultErr = errors.Join(resultErr, closeBrokerDependency(verifier.Close, rpc, sshUpload, kubernetesUpload))
+		}()
 		admission = routeProtectedUnary(authorityclient.VerifierUnaryServerInterceptor(verifier.Verifier()))
 		securityCheckers = append(securityCheckers, providerVerifierReadiness{client: verifier.Verifier()})
 		tlsConfig, err := serverTLS(config)
@@ -186,16 +211,54 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		}
 		transportOptions = append(transportOptions, grpc.Creds(credentials.NewTLS(tlsConfig)))
 	}
+	sshHealth, err := newSSHIdentityHealth(config, owner, store)
+	if err != nil {
+		return err
+	}
+	var sshHealthOption transportgrpc.Option
+	if sshHealth != nil {
+		sshHealthOption = transportgrpc.WithSSHIdentityHealth(sshHealth)
+	}
+	sshExecution, err := newSSHIdentityExecution(config, owner, store)
+	if err != nil {
+		return err
+	}
+	var sshExecutionOption transportgrpc.Option
+	if sshExecution != nil {
+		sshExecutionOption = transportgrpc.WithSSHIdentityExecution(sshExecution)
+	}
+	if kubernetesUpload != nil {
+		if err := kubernetesUpload.configureOperations(lifecycle, owner, config.KubernetesIdentityNamespace); err != nil {
+			return err
+		}
+		defer func() {
+			stop, cancel := context.WithTimeout(shutdownBase, config.ShutdownTimeout)
+			defer cancel()
+			resultErr = errors.Join(resultErr, kubernetesUpload.streams.Close(stop))
+		}()
+	}
 	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
+		sshHealthOption, sshExecutionOption,
 		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts),
 		transportgrpc.WithProviderRenewalOwner(owner),
 		transportgrpc.WithCatalogLogger(logger))
 	if err != nil {
 		return err
 	}
+	if kubernetesUpload != nil {
+		transportgrpc.WithKubernetesHealth(kubernetesUpload.health)(handler)
+		transportgrpc.WithKubernetesOperations(kubernetesUpload.operations)(handler)
+		transportgrpc.WithKubernetesStreams(kubernetesUpload.streams)(handler)
+	}
+	rpc, err = newBrokerGRPCComponent(lifecycle, config.ShutdownTimeout)
+	if err != nil {
+		return err
+	}
+	defer rpc.requests.StopAdmission()
 	serverOptions := append(transportOptions,
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
+			rpc.unary,
 			metrics.UnaryServerInterceptor(),
 			telemetry.UnaryServerInterceptor(methods),
 			admission,
@@ -216,12 +279,22 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	)
 	grpcServer := grpc.NewServer(serverOptions...)
 	secretbrokerv1.RegisterSecretBrokerServiceServer(grpcServer, handler)
+	secretbrokerv1.RegisterManagedSSHServiceServer(grpcServer, handler)
 	secretbrokerv1.RegisterRuntimeCredentialProjectionServiceServer(grpcServer, handler)
+	secretbrokerv1.RegisterManagedKubernetesServiceServer(grpcServer, handler)
 	sttv1.RegisterTranscriptionCredentialProjectionServiceServer(grpcServer, handler)
 	controlplanev1.RegisterProviderCredentialMaterializerServiceServer(grpcServer, handler)
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen for secret broker gRPC")
+	}
+	rpc.server, rpc.listener = grpcServer, listener
+	defer listener.Close()
+	if kubernetesUpload != nil {
+		if err := kubernetesUpload.bind(); err != nil {
+			return err
+		}
+		defer kubernetesUpload.close()
 	}
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(false, "infrastructure_starting")
@@ -233,15 +306,35 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 			return err
 		}
 	}
-	if err := errors.Join(store.Check(startup), providerCredentials.Check(startup)); err != nil {
+	var kubernetesStartupErr error
+	if kubernetesUpload != nil {
+		kubernetesStartupErr = kubernetesUpload.Check(startup)
+	}
+	if err := errors.Join(store.Check(startup), providerCredentials.Check(startup), kubernetesStartupErr); err != nil {
 		_ = listener.Close()
 		return errors.Join(errors.New("secret broker local infrastructure startup barrier failed"), err)
+	}
+	if sshUpload != nil {
+		if err := sshUpload.Check(startup); err != nil {
+			_ = listener.Close()
+			return err
+		}
+		if err := sshUpload.bind(); err != nil {
+			_ = listener.Close()
+			return err
+		}
 	}
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
 	readinessCheckers := append([]checker{store, providerCredentials}, securityCheckers...)
-	workers := serviceruntime.StartWorkers(lifecycle,
-		serveGRPC(grpcServer, listener),
+	if sshUpload != nil {
+		readinessCheckers = append(readinessCheckers, sshUpload)
+	}
+	if kubernetesUpload != nil {
+		readinessCheckers = append(readinessCheckers, kubernetesUpload)
+	}
+	workerSet := []serviceruntime.Worker{
+		rpc.worker(shutdownBase),
 		serveHTTP(technical),
 		monitorReadiness(readiness, metrics, logger, config.RequestTimeout, readinessCheckers...),
 		reconciler.Worker(),
@@ -250,10 +343,17 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 				logger.Warn("secret draft recovery cycle failed", "error_class", secretdraft.RecoveryFailureClass(err), "stage", secretdraft.RecoveryFailureStage(err))
 			}
 		}),
-	)
+	}
+	if sshUpload != nil {
+		workerSet = append(workerSet, sshUpload.worker(shutdownBase))
+	}
+	if kubernetesUpload != nil {
+		workerSet = append(workerSet, kubernetesUpload.Worker(), kubernetesUpload.streamWorker(shutdownBase))
+	}
+	workers := serviceruntime.StartWorkers(lifecycle, workerSet...)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	shutdownErr := serviceruntime.RunShutdown(shutdownBase,
-		serviceruntime.ShutdownOperation{Name: "secret broker gRPC server", Timeout: config.ShutdownTimeout, Run: func(context.Context) error { grpcServer.GracefulStop(); return nil }},
+		serviceruntime.ShutdownOperation{Name: "secret broker gRPC server", Timeout: config.ShutdownTimeout, Run: rpc.wait},
 		serviceruntime.ShutdownOperation{Name: "secret broker technical HTTP server", Timeout: config.ShutdownTimeout, Run: technical.Shutdown},
 		serviceruntime.ShutdownOperation{Name: "secret broker workers", Timeout: config.ShutdownTimeout, Run: workers.Wait},
 	)
@@ -289,6 +389,11 @@ func (checker providerVerifierReadiness) Check(ctx context.Context) error {
 func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
+		case secretbrokerv1.ManagedKubernetesService_ExecuteManagedKubernetesOperation_FullMethodName,
+			secretbrokerv1.ManagedKubernetesService_ExchangeManagedKubernetesStream_FullMethodName,
+			secretbrokerv1.ManagedKubernetesService_CancelManagedKubernetesOperation_FullMethodName,
+			secretbrokerv1.ManagedKubernetesService_CheckManagedKubernetesReadiness_FullMethodName:
+			return protected(ctx, request, info, handler)
 		case controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
 			controlplanev1.ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
@@ -375,14 +480,6 @@ func monitorReadiness(readiness *serviceruntime.Readiness, metrics *sharedobserv
 	}
 }
 
-// secretBrokerOperations delegates to the shared closed operation-to-method registry rather than
-// maintaining a second local source of authority mappings.
-// secretBrokerOperations использует общий закрытый operation-to-method registry вместо второго локального
-// источника authority mappings.
-func secretBrokerOperations() map[string]string {
-	return controlplaneclient.SecretBrokerOperations()
-}
-
 // technicalServer constructs but does not start the health/readiness/metrics HTTP server with fixed
 // request/header limits and the supplied lifecycle base; these probes are not business RPC authorization.
 // technicalServer создаёт, но не запускает health/readiness/metrics HTTP server с фиксированными
@@ -401,24 +498,6 @@ func technicalServer(lifecycle context.Context, config Config, readiness *servic
 	mux.Handle("/metrics", metrics.PrometheusHandler())
 	return &http.Server{Addr: config.TechnicalListen, Handler: mux, BaseContext: func(net.Listener) context.Context { return lifecycle },
 		ReadHeaderTimeout: 3 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
-}
-
-// serveGRPC wraps Serve in a caller-owned worker and waits for its result; on cancellation it calls
-// GracefulStop and joins Serve, so a nonreturning graceful stop is not forcibly bounded here.
-// serveGRPC оборачивает Serve в caller-owned worker и ждёт результата; при отмене вызывает GracefulStop и
-// присоединяет Serve, поэтому зависший graceful stop здесь принудительно не ограничивается.
-func serveGRPC(server *grpc.Server, listener net.Listener) serviceruntime.Worker {
-	return func(ctx context.Context) error {
-		done := make(chan error, 1)
-		go func() { done <- server.Serve(listener) }()
-		select {
-		case err := <-done:
-			return err
-		case <-ctx.Done():
-			server.GracefulStop()
-			return <-done
-		}
-	}
 }
 
 // serveHTTP starts ListenAndServe, treats ErrServerClosed as success and closes the server on

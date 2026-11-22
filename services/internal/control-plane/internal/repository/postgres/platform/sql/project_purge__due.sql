@@ -1,8 +1,9 @@
 -- name: project_purge__due :many
 WITH candidates AS MATERIALIZED (
     SELECT id FROM control_plane.projects
-    WHERE lifecycle='TRASHED' AND purge_after<=statement_timestamp()
-    ORDER BY purge_after,id FOR UPDATE SKIP LOCKED LIMIT @limit
+    WHERE id=ANY(@project_ids::uuid[]) AND lifecycle='TRASHED' AND purge_after<=statement_timestamp()
+      AND control_plane.kubernetes_project_unreconciled_count(organization_id,id)=0
+    ORDER BY purge_after,id FOR UPDATE
 ), changed AS (
     UPDATE control_plane.projects project
     SET lifecycle='PURGE_PENDING', version=version+1, updated_at=statement_timestamp()

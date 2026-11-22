@@ -320,7 +320,15 @@ async function confirmLifecycle(): Promise<void> {
     purgeConfirmation.value = "";
     applyRealtimeSnapshot();
   } catch (error) {
-    lifecycleProblem.value = asProblem(error);
+    const failure = asProblem(error);
+    lifecycleProblem.value = failure;
+    if (
+      failure.code === "KUBERNETES_STAGING_RECONCILIATION_REQUIRED" ||
+      failure.code === "ARTIFACT_PURGE_RECONCILIATION_REQUIRED"
+    ) {
+      lifecycleTarget.value = undefined;
+      openRecovery(target);
+    }
   } finally {
     lifecycleBusy.value = false;
   }

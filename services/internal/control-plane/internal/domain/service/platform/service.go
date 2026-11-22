@@ -1519,9 +1519,9 @@ func (service *Service) executeResolved(ctx context.Context, input command.Comma
 		}
 		intentPayload = struct {
 			ConnectionRef, Name, Kind, Digest string
-			Generation                        int64
+			Generation, OwnerGeneration       int64
 		}{
-			payload.ConnectionRef, payload.Credential.Name, payload.Credential.Kind, payload.Credential.ContentSHA256, payload.Credential.Generation,
+			payload.ConnectionRef, payload.Credential.Name, payload.Credential.Kind, payload.Credential.ContentSHA256, payload.Credential.Generation, payload.OwnerGeneration,
 		}
 	}
 	if input.Kind == command.ConfigureConnectionCredential {
@@ -1759,7 +1759,7 @@ func knownCommand(kind command.Kind) bool {
 	if kind == command.TestPersonalIntegrationCredential || kind == command.CompletePersonalIntegrationCredentialTest {
 		return true
 	}
-	if kind == command.SetIntegrationCredentialPolicy || kind == command.RevokeIntegrationApprovalConsent {
+	if kind == command.SetIntegrationCredentialPolicy || kind == command.RevokeIntegrationApprovalConsent || kind == command.ConfigureEmailMailboxOwnership || kind == command.RevokeEmailMailboxOwnership || kind == command.CreatePersonalEmailMailboxConnection {
 		return true
 	}
 	if kind == command.CreatePersonalIntegrationCredential || kind == command.ConfigurePersonalIntegrationCredential || kind == command.RevokePersonalIntegrationCredential {

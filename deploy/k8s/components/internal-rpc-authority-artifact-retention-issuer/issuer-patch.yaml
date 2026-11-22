@@ -1,0 +1,108 @@
+# Идентичность workload и опорные элементы порядка; общие поля подключаются Kustomize components.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-retention
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: internal-rpc-authority-socket-init
+        volumeMounts:
+        - name: internal-rpc-authority-sockets
+          mountPath: /run/kodex
+      containers:
+      - name: artifact-retention
+        env:
+        - name: INTERNAL_RPC_AUTHORITY_ISSUER_SOCKET
+          value: /run/kodex/internal-rpc-authority/issuer.sock
+        - name: INTERNAL_RPC_AUTHORITY_LOCAL_ROLE
+          value: issuer
+        volumeMounts:
+        - name: internal-rpc-authority-sockets
+          mountPath: /run/kodex
+          readOnly: true
+      - name: internal-rpc-authority-issuer
+        env:
+        - name: DEPLOYMENT_ENVIRONMENT
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        - name: OTEL_EXPORTER_OTLP_TLS_SERVER_NAME
+        - name: OTEL_EXPORTER_OTLP_CA_FILE
+        - name: OTEL_TRACES_SAMPLER_ARG
+        - name: SENTRY_DSN_FILE
+        - name: SENTRY_EXPECTED_HOST
+        - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_ID
+          value: artifact-retention
+        - name: INTERNAL_RPC_AUTHORITY_WORKLOAD_SPIFFE_ID
+          value: spiffe://kodex.local/ns/kodex-system/sa/artifact-retention
+        - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_ADDRESS
+        - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_TLS_SERVER_NAME
+        - name: INTERNAL_RPC_AUTHORITY_READBACK_ATTESTOR_CA_FILE
+        - name: INTERNAL_RPC_AUTHORITY_RESTORE_CONTROLLER_CA_FILE
+        - name: INTERNAL_RPC_AUTHORITY_TECHNICAL_LISTEN
+        - name: INTERNAL_RPC_AUTHORITY_STARTUP_TIMEOUT
+        - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_UID
+          value: '10001'
+        - name: INTERNAL_RPC_AUTHORITY_EXPECTED_PEER_GID
+          value: '10001'
+        - name: INTERNAL_RPC_AUTHORITY_POSTGRES_DSN_FILE
+        - name: INTERNAL_RPC_AUTHORITY_POSTGRES_EXPECTED_SESSION_USER
+          valueFrom:
+            secretKeyRef:
+              name: internal-rpc-authority-artifact-retention-issuer-postgresql
+        volumeMounts:
+        - name: internal-rpc-authority-sockets
+          mountPath: /run/kodex
+      - name: platform-worker-grant-agent
+        env:
+        - name: PLATFORM_WORKER_GRANT_WORKLOAD_ID
+          value: artifact-retention
+        - name: PLATFORM_WORKER_GRANT_OUTPUT_FILE
+          value: /var/run/secrets/kodex/artifact-retention/application-grant/application-grant.jws
+        volumeMounts:
+        - name: application-grant
+          mountPath: /var/run/secrets/kodex/artifact-retention/application-grant
+      volumes:
+      - name: authority-bootstrap-roots
+      - name: platform-worker-grant-signer
+        secret:
+          secretName: artifact-retention-platform-worker-grant-signer
+          defaultMode: 292
+      - name: internal-rpc-authority-sockets
+        emptyDir:
+          sizeLimit: 32Mi
+      - name: internal-rpc-authority-snapshot
+      - name: internal-rpc-authority-manifest-trust
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-manifest-trust
+      - name: internal-rpc-authority-proof-trust
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-proof-trust
+      - name: internal-rpc-authority-issuer-key
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-key
+      - name: internal-rpc-authority-workload-tls
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-workload-tls
+      - name: internal-rpc-authority-readback-attestor-ca
+      - name: internal-rpc-authority-restore-controller-ca
+      - name: internal-rpc-authority-restore-controller-certificate
+      - name: internal-rpc-authority-restore-role-trust
+      - name: internal-rpc-authority-postgresql
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-postgresql
+      - name: internal-rpc-authority-postgresql-ca
+      - name: internal-rpc-authority-observability
+      - name: internal-rpc-authority-sentry-dsn
+      - name: authority-readback-credential
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-readback-credential
+      - name: authority-readback-possession
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-readback-possession
+      - name: authority-restore-credential
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-restore-credential
+      - name: authority-restore-ack
+        secret:
+          secretName: internal-rpc-authority-artifact-retention-issuer-restore-ack

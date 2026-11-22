@@ -1,6 +1,11 @@
+import {personalIntegrationsArtifactAPISpec} from './personal-integrations-artifact-spec.mjs';
 import {telegramAuthorityReadbackContract} from './authority-telegram-transition.mjs';
+import {personalIntegrationsAuthorityReadbackContract} from './authority-personal-integrations-source.mjs';
 import test from 'node:test';
 import {componentCohortFixture as fixture,replaceComponentLock as replaceLock} from './fixtures/component-cohort-synthetic.mjs';
+import {personalIntegrationsStagedInputsFixture} from './fixtures/personal-integrations-staged-inputs-synthetic.mjs';
+import {artifactGrantSchemaVersion} from './artifact-retention-grant-catalog.mjs';
+import {personalStagedInputsSchema} from './artifact-retention-issuer-inputs.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdtempSync,rmSync,chmodSync} from 'node:fs';
@@ -9,8 +14,11 @@ import {join,dirname} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fingerprint} from './scoped-release.mjs';
 import {activeDeploymentPods} from './stable-archive-transition.mjs';
-import {waitMigrationMaintenance} from './control-plane-immutable-migration.mjs';
-import {componentMigrationPublication,componentMigrationTarget,componentMigrationNames,
+import {privateJournal} from '../dev/role-image-acceptance.mjs';
+import {waitMigrationMaintenance,immutableMigrationProfile,validImmutableMigrationPostcondition} from './control-plane-immutable-migration.mjs';
+import {backupMigrationProfile} from './backup-migration-registry.mjs';
+import {validateRoutineMigrationIsolation} from './component-migration-api-admission.mjs';
+import {componentMigrationPublication,componentMigrationTarget,componentMigrationNames,componentMigrationHandoffNames,
   planComponentMigrationHandoff,componentMigrationLifecycle} from './portable-component-migration.mjs';
 
 const revision='a'.repeat(40);
@@ -61,11 +69,14 @@ test('044: handoff сохраняет env и maintenance API=0 вместо не
 
 // Исполняется lifecycle с настоящим discovery/join и файловым CAS primitive.
 // Только Kubernetes API и PostgreSQL transport заменены ограниченной оснасткой.
-function lifecycleFixture(profile='github-repository-scope',{boundedReadback=false}={}) {
-  const f=fixture(profile),handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
+function lifecycleFixture(profile='github-repository-scope',{boundedReadback=false,stagedInputsSchema}={}) {
+  const personal=profile==='personal-integrations'||stagedInputsSchema!==undefined;
+  const f=personal?personalIntegrationsStagedInputsFixture(profile,stagedInputsSchema):fixture(profile);
+  const handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision},undefined,f.inputs);
   const drain=readFileSync(new URL('./portable-component-migration-drain.sql',import.meta.url));
   const postgres={pod:'kodex-postgresql-0',uid:uuid(30),ownerUID:uuid(31)};
-  const plan={source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
+  const plan={profile,source:{revision},portableTarget:f.target,imageEvidence:f.value,componentHandoff:handoff,migrationVersion:String(f.value.schemaHeadsAfter['control-plane']),postgres,
+    ...(f.inputs?{personalIntegrationsInputs:f.inputs}:{}),
     componentDrainSQLSHA256:createHash('sha256').update(drain).digest('hex')};
   const apps=new Map(f.deployments.map(d=>[d.metadata.name,structuredClone(d)]));
   const events=[],patches=[],faults={blocked:'',lostACK:'',schema:false,postcondition:true,activeEffects:0,claimSessions:0,mutatePod:undefined,authorityDelivery:null,apiReaders:null,activeInteractionDeliveries:0,cpProjection:null,policyReady:false,
@@ -81,15 +92,24 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
     return [set,...Array.from({length:count},(_,index)=>({kind:'Pod',metadata:{name:name+'-'+index,uid:rsUID+'-'+index,namespace:'kodex-system',
       labels:{'app.kubernetes.io/name':name},ownerReferences:[{kind:'ReplicaSet',uid:rsUID,name:set.metadata.name,controller:true}]},
       spec:structuredClone(app.spec.template.spec),status:{phase:'Running',conditions:[{type:'Ready',status:'True'}],
+        initContainerStatuses:(app.spec.template.spec.initContainers??[]).map(c=>({name:c.name,imageID:c.image,state:{terminated:{exitCode:0}}})),
         containerStatuses:app.spec.template.spec.containers.map(c=>({name:c.name,ready:name!=='control-plane'||!profile.startsWith('telegram')||app.spec.template.spec.containers[0].image===f.value.components[0].expectedImageRef||faults.policyReady,imageID:c.image,state:{running:{}}}))}})).map(p=>{
           if(name==='control-plane')faults.mutatePod?.(p);
+          if(name==='artifact-retention')faults.mutateArtifactPod?.(p);
           return p;
         })];
   });
+  let policyConfigMap;
   const kube=(args,input)=>{
+    if(personal&&(args.includes('configmap')||args.includes('create'))){
+      if(args.includes('get'))return policyConfigMap?JSON.stringify(policyConfigMap):'';
+      const body=JSON.parse(input);
+      if(args.includes('--dry-run=server'))return JSON.stringify(body);
+      policyConfigMap={...body,metadata:{...body.metadata,uid:uuid(901)}};return JSON.stringify(policyConfigMap);
+    }
     if(args.includes('exec')) {
       assert.ok(Buffer.from(input).equals(drain));
-      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:f.value.schemaHeadsAfter['control-plane'],
+      return JSON.stringify({profile:'PORTABLE_COMPONENT_DRAIN_V1',database:'control_plane',readOnly:'on',gooseVersion:faults.gooseVersion??f.value.schemaHeadsAfter['control-plane'],
         ...Object.fromEntries(['activeRuntimeRuns','activeRunNodes','activeSessionTurns','claimedRuntimeLeases','openBuilds','pendingAdmissions','pendingPromotions',
           'activeArchiveTasks','activeModelCatalogTasks','activeRenewalTasks','activeRuntimeLeases','oldClaimSessions','activeIntegrationInvocations',
           'activeIntegrationConnectionTests','activePersonalCredentialTests','activeRepositoryBundles','activeConfigurationSources','activeConfigurationWritebacks'].map(k=>[k,0])),
@@ -128,14 +148,14 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
   const observeCP=()=>{const app=apps.get('control-plane'),part=handoff.components[0];
     return {stage:fingerprint(app.spec)===fingerprint(part.stoppedSpec)?'STOPPED':'STAGED',joined:app.spec.replicas===0};};
   const lifecycleInputs={plan,kube,journal:{events,append:e=>events.push(e)},observeCP,
-    readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL'}),
+    readJob:()=>({status:faults.schema?'PASS':'UNKNOWN',schemaPostcondition:faults.postcondition?'PASS':'FAIL',servingSchema:faults.servingSchema}),
     preconditionSQL:()=>{throw Error('PREDECESSOR_MUST_NOT_RUN_AFTER_DDL');},drainSQL:()=>drain,
     readOwnerSQL:sql=>JSON.parse(kube(['exec'],sql)),readAuthorityDelivery:async()=>{faults.beforeAuthorityRead?.();return faults.authorityDelivery;},readMaintenanceReaders:()=>{faults.beforeAPIRead?.();return faults.apiReaders;},readCPProjection:required=>{if(!faults.cpProjection&&required!==false)throw Error('TELEGRAM_CP_PROJECTION_REQUIRED');return faults.cpProjection;},
     postgresIdentity:()=>postgres,validateInputs:()=>{},activePods:activeDeploymentPods,
     wait:boundedReadback?waitMigrationMaintenance:async(observe,ready,code)=>{const value=observe();if(!ready(value))throw Error(code);return value;},
     clock:boundedReadback?{now:()=>elapsed,sleep:async ms=>{elapsed+=ms;},budget:1000}:{}};
   const lifecycle=componentMigrationLifecycle(lifecycleInputs);
-  return {lifecycle,rebuild:extra=>componentMigrationLifecycle({...lifecycleInputs,...extra}),apps,events,patches,faults,plan,projectCP:()=>{
+  return {lifecycle,rebuild:extra=>componentMigrationLifecycle({...lifecycleInputs,...extra}),apps,events,patches,faults,plan,status,projectCP:()=>{
       const part=handoff.components[0];faults.cpProjection={stagedSpec:structuredClone(part.stagedSpec),resumedSpec:structuredClone(part.resumedSpec)};
       for(const spec of [faults.cpProjection.stagedSpec,faults.cpProjection.resumedSpec])spec.template.spec.containers[0].env.push({name:'POLICY_REVISION',value:'107'});
       apps.get('control-plane').spec=structuredClone(faults.cpProjection.stagedSpec);status(apps.get('control-plane'));faults.policyReady=true;
@@ -145,6 +165,122 @@ function lifecycleFixture(profile='github-repository-scope',{boundedReadback=fal
     },
     stopCP:()=>{apps.get('control-plane').spec=structuredClone(handoff.components[0].stoppedSpec);status(apps.get('control-plane'));events.push({type:'STOP_ACK'});}};
 }
+
+// Проверяет запуск exact049 readers с отдельным signed owner transport.
+// Нулевые staged Deployments соответствуют ранее принятому handoff.
+function personalReaderFixture(t){
+ const f=lifecycleFixture('personal-integrations'),{plan}=f;
+ const hash=x=>createHash('sha256').update(x).digest('hex');
+ const targetSHA256=hash('authority'),apiTargetSHA256=hash('api'),trafficPlanSHA256=hash('traffic'),serviceUID=uuid(51);
+ Object.assign(plan,{context:'k3d-fixture',kubeconfig:'/private/config',
+  personalIntegrationsPrerequisites:{owner107:{targetSHA256}},apiMaintenance:{apiTargetSHA256}});
+ for(const part of plan.componentHandoff.components){
+  const app=f.apps.get(part.name);app.spec=structuredClone(part.stagedSpec);f.status(app);
+ }
+ f.faults.schema=true;
+ f.events.push({type:'PAIR_HANDOFF_ACK',publicationSHA256:plan.componentHandoff.publicationSHA256});
+ const directory=mkdtempSync(join(tmpdir(),'kodex-personal-reader-journal-'));
+ const journal=privateJournal(join(directory,'migration.jsonl'),{kind:'CONTROL_PLANE_MIGRATION',planSHA256:fingerprint(plan)});
+ t.after(()=>{journal.close();rmSync(directory,{recursive:true,force:true});});
+ for(const row of f.events)journal.append(row);
+ f.events=journal.events;
+ const gateway=f.apps.get('control-api-gateway');
+ gateway.spec.replicas=2;f.status(gateway);
+ f.faults.apiReaders={state:'ISOLATED_READERS_STARTING',sourceSHA:revision,trafficPlanSHA256,serviceUID,
+  deploymentUID:gateway.metadata.uid,spec:structuredClone(gateway.spec),openPlanSHA256:hash('open')};
+ const proofReads=[],executorBinds=[];
+ const lifecycle=f.rebuild({journal,bindPersonalExecutor:()=>executorBinds.push({patches:f.patches.length,proofReads:proofReads.length}),readPersonalAuthority:async(purpose,migration)=>{
+  assert.equal(migration.plan,plan);assert.equal(migration.events,f.events);
+  proofReads.push(purpose);
+  const identity=name=>{const part=plan.componentHandoff.components.find(x=>x.name===name);return {uid:part.uid,stagedSpecSHA256:fingerprint(part.stagedSpec)};};
+  const body={state:purpose==='delivered'?'PENDING_AUTHORITY':'RETIRED',policyRevision:110,
+   sourceSHA:revision,operationID:uuid(52),policySHA256:hash('policy'),registryRevision:4,registrySHA256:hash('registry'),
+   snapshotRevision:purpose==='terminal'?10:8,snapshotSHA256:hash(purpose==='terminal'?'retired-snapshot':'delivered-snapshot'),
+   bindingSHA256:hash('same accepted operation and registry'),planSHA256:hash('rotate-plan'),freshPlanSHA256:hash('status-plan'),
+   ownerScope:{context:plan.context,kubeconfig:plan.kubeconfig,targetSHA256},targetSHA256,apiTargetSHA256,trafficPlanSHA256,serviceUID,
+   migrationTargetSHA256:fingerprint(plan.portableTarget),migrationPlanSHA256:fingerprint(plan),
+   artifactRetention:identity('artifact-retention'),controlPlane:identity('control-plane'),
+   observedAt:new Date().toISOString(),...personalIntegrationsAuthorityReadbackContract(),
+   ...(purpose==='terminal'?{actualReadbackCount:18}:{})};
+  f.faults.mutatePersonalProof?.(body,purpose,proofReads.length);
+  return {...body,[purpose==='delivered'?'deliverySHA256':'terminalSHA256']:fingerprint(body)};
+ }});
+ return {...f,lifecycle,proofReads,executorBinds};
+}
+
+test('ART050: штатный допуск требует join всех девяти и учитывает только проверенный переход 049→050',async()=>{
+ const f=lifecycleFixture('personal-integrations-backup',{stagedInputsSchema:personalStagedInputsSchema});
+ for(const part of f.plan.componentHandoff.components){
+  const app=f.apps.get(part.name);app.spec=structuredClone(part.stagedSpec);f.status(app);
+ }
+ assert.equal(f.apps.get('artifact-retention').spec.template.spec.securityContext.fsGroup,29000);
+ f.faults.schema=true;
+ f.lifecycle.requireStagedArtifactCatalog(true);
+ const readers=f.rebuild({readPersonalAuthority:()=>{assert.fail('authority read before ART050 receipt');}});
+ await assert.rejects(()=>readers.startReaders(),/ARTIFACT_GRANT_CATALOG_RECEIPT_REQUIRED/);
+ f.faults.blocked='artifact-retention';
+ assert.throws(()=>f.lifecycle.requireStagedArtifactCatalog(true),/STAGED_JOIN_REQUIRED/);
+ f.faults.blocked='';
+ f.faults.gooseVersion=artifactGrantSchemaVersion;
+ assert.throws(()=>f.lifecycle.requireStagedArtifactCatalog(true),/OWNER_PRECONDITION_FAILED/);
+ f.faults.servingSchema={version:artifactGrantSchemaVersion};
+ f.lifecycle.requireStagedArtifactCatalog(true);
+ assert.deepEqual(f.patches,[]);
+});
+
+test('049: executor binding допускается только после fresh owner proof перед effect',async t=>{
+ const f=personalReaderFixture(t);f.faults.mutatePersonalProof=body=>{body.observedAt=new Date(Date.now()-31000).toISOString();};
+ await assert.rejects(()=>f.lifecycle.startReaders(),/READBACK_STALE/);
+ assert.deepEqual(f.executorBinds,[]);assert.deepEqual(f.patches,[]);
+ f.faults.mutatePersonalProof=undefined;await f.lifecycle.startReaders();
+ assert.equal(f.executorBinds[0].patches,0);assert.equal(f.executorBinds[0].proofReads,2);
+ assert.equal(f.executorBinds.length,8);
+ f.faults.apiReaders.state='ISOLATED_READERS_READY';await f.lifecycle.resume();
+ assert.equal(f.executorBinds.length,9);assert.equal(f.executorBinds.at(-1).patches,8);
+ await f.lifecycle.resume();assert.equal(f.executorBinds.length,9);
+});
+
+test('049: запускается весь cohort из exact staged, API изолирован до свежего terminal110',async t=>{
+ const f=personalReaderFixture(t);
+ f.faults.lostACK='runtime-controller';
+ await assert.rejects(()=>f.lifecycle.startReaders(),/SYNTHETIC_RESPONSE_LOST/);
+ assert.deepEqual(f.patches,['control-plane','runtime-controller']);
+ const result=await f.lifecycle.startReaders();
+ assert.equal(result.apiReadersIsolated,true);assert.equal(result.pairReady,false);
+ const expected=f.plan.componentHandoff.components.filter(part=>!part.maintenance).map(part=>part.name);
+ assert.deepEqual(f.patches,expected);
+ assert.equal(f.proofReads.length,expected.length);
+ assert.ok(f.events.every(row=>row.type!=='RESUME_ACK'&&row.type!=='PAIR_RESUME_ACK'));
+ await f.lifecycle.startReaders();assert.deepEqual(f.patches,expected);
+ f.faults.apiReaders.state='ISOLATED_READERS_READY';
+ f.faults.mutateArtifactPod=pod=>{pod.status.initContainerStatuses[0].imageID='foreign';};
+ await assert.rejects(()=>f.lifecycle.resume(),/COHORT_READERS_NOT_READY/);
+ assert.ok(f.events.every(row=>row.type!=='RESUME_ACK'&&row.type!=='PAIR_RESUME_ACK'));
+ f.faults.mutateArtifactPod=undefined;
+ f.faults.mutatePersonalProof=(body,purpose)=>{if(purpose==='terminal')body.actualReadbackCount=15;};
+ await assert.rejects(()=>f.lifecycle.resume(),/AUTHORITY_READBACK_REJECTED/);
+ f.faults.mutatePersonalProof=undefined;
+ assert.equal((await f.lifecycle.resume()).pairReady,true);
+ assert.equal((await f.lifecycle.resume()).pairReady,true);
+ const accepted=f.events.filter(row=>row.type==='PERSONAL_INTEGRATIONS_TERMINAL_ACCEPTED');
+ assert.equal(accepted.length,1);assert.equal(typeof accepted[0].at,'string');
+ assert.equal(f.proofReads.at(-1),'terminal');assert.deepEqual(f.patches,expected);
+});
+
+test('049: свежий отдельный допуск перед каждым reader, чужой либо просроченный owner блокирует start',async t=>{
+ for(const change of [
+  body=>{body.operationID=uuid(999);},
+  body=>{body.observedAt=new Date(Date.now()-31000).toISOString();},
+  body=>{body.artifactRetention.stagedSpecSHA256='f'.repeat(64);},
+  body=>{body.migrationPlanSHA256='f'.repeat(64);},
+  body=>{body.snapshotRevision--;},
+ ]){
+  const f=personalReaderFixture(t);
+  f.faults.mutatePersonalProof=(body,purpose,count)=>{if(count===2)change(body);};
+  await assert.rejects(()=>f.lifecycle.startReaders(),/AUTHORITY_(BINDING_CHANGED|READBACK_REJECTED|READBACK_STALE|EPOCH_REGRESSED)/);
+  assert.deepEqual(f.patches,['control-plane']);
+ }
+});
 
 test('045: исчезновение Pod после принятого PATCH повторяет только полный READ, без второго effect',async()=>{
   const f=lifecycleFixture('sentry-observability-backup',{boundedReadback:true});
@@ -665,4 +801,116 @@ test('046 late egress repair требует fresh terminal107, без fallback �
   await assert.rejects(()=>f.prepare().prepareEgressRevisionRepair());
   await assert.rejects(()=>f.egressLifecycle().repairEgressRevision());assert.equal(f.patches.length,count);
  }
+});
+
+
+test('051: план закрепляет остановленный API без выпуска или патча его образа',()=>{
+  const profile='workflow-file-provenance-backup';
+  const f=fixture(profile);
+  assert.deepEqual(componentMigrationNames(profile),['control-plane']);
+  assert.deepEqual(componentMigrationHandoffNames(profile),['control-plane','control-api-gateway']);
+  assert.equal(componentMigrationPublication(f.value,{revision},profile).components.length,1);
+  assert.ok(componentMigrationTarget(f.target,f.value,f.observed));
+  const handoff=planComponentMigrationHandoff(f.value,f.deployments,{revision});
+  assert.equal(handoff.components.length,2);
+  const [cp,api]=handoff.components;
+  assert.equal(cp.name,'control-plane');
+  assert.notEqual(cp.stoppedSpec.template.spec.containers[0].image,cp.stagedSpec.template.spec.containers[0].image);
+  assert.equal(api.name,'control-api-gateway');
+  assert.equal(api.maintenanceOnly,true);
+  assert.equal(api.replicas,0);
+  for(const field of ['stoppedSpec','stagedSpec','resumedSpec']) assert.deepEqual(api[field],api.beforeSpec);
+  for(const mutate of [
+    apps=>apps.pop(),apps=>{apps.push(structuredClone(apps[1]));},
+    apps=>{apps[1].spec.replicas=1;},
+    apps=>{apps[1].status.readyReplicas=1;},
+    apps=>{apps[1].spec.template.spec.containers[0].image='registry.example.invalid/base/control-api-gateway:latest';},
+  ]){
+    const apps=structuredClone(f.deployments);
+    mutate(apps);
+    assert.throws(()=>planComponentMigrationHandoff(f.value,apps,{revision}));
+  }
+  const drift=structuredClone(f.observed);
+  drift.deployments[1].metadata.uid=uuid(200);
+  assert.throws(()=>componentMigrationTarget(f.target,f.value,drift));
+});
+
+test('051 lifecycle: новый Control Plane и отключённый API проходят handoff без изменения API',async()=>{
+  const f=lifecycleFixture('workflow-file-provenance-backup');
+  const gateway=structuredClone(f.apps.get('control-api-gateway'));
+  f.faults.blocked='control-api-gateway';
+  await assert.rejects(()=>f.lifecycle.stopController(),/CONTROLLER_STOP_TIMEOUT/);
+  f.faults.blocked='';
+  await f.lifecycle.stopController();
+  f.lifecycle.requireStopped();
+  f.stopCP();
+  await assert.rejects(()=>f.lifecycle.handoff(),/POSTCONDITION_REQUIRED/);
+  f.faults.schema=true;
+  f.faults.claimSessions=1;
+  await assert.rejects(()=>f.lifecycle.handoff(),/OWNER_PRECONDITION_FAILED/);
+  f.faults.claimSessions=0;
+  await f.lifecycle.handoff();
+  assert.equal(f.events.filter(event=>event.type==='PAIR_HANDOFF_INTENT'&&event.name==='control-api-gateway'&&event.noEffect===true).length,1);
+  f.faults.lostACK='control-plane';
+  await assert.rejects(()=>f.lifecycle.resume(),/RESPONSE_LOST/);
+  f.lifecycle.inspect();
+  assert.equal((await f.lifecycle.resume()).gatewayMaintenance,true);
+  assert.deepEqual(f.apps.get('control-api-gateway'),gateway);
+  assert.deepEqual(f.patches,['control-plane','control-plane']);
+  assert.equal(f.lifecycle.inspect().find(part=>part.name==='control-api-gateway').stage,'stagedSpec');
+});
+
+
+test('051: отдельная команда, SQL и backup receipt, прежнее доказательство authority 106 закрыто',()=>{
+ const profile='workflow-file-provenance-backup';
+ const migration=immutableMigrationProfile(profile),backup=backupMigrationProfile(profile);
+ assert.equal(migration.executionCommand,'up-workflow-file-provenance');
+ assert.equal(migration.previousVersion,backup.before);
+ assert.equal(migration.version,String(backup.after));
+ assert.equal(migration.preconditionFile,backup.files.before);
+ assert.equal(migration.postconditionFile,backup.files.after);
+ assert.equal(backup.receipt,'Workflow file provenance migration completed at version 20261121000200');
+ assert.equal(validImmutableMigrationPostcondition(profile,{artifactPredecessorApplied:false}),false);
+ assert.throws(()=>validateRoutineMigrationIsolation({action:'isolate',
+  migrationRestore:{profile,closedPlanPath:'/private/api-close.json',closedEvidencePath:'/private/api-close.jsonl',
+   authority:{policyRevision:106}}}),/WORKFLOW_FILE_PROVENANCE_AUTHORITY_110_REQUIRED/);
+});
+
+// Существующий intent уже принят API: повторный handoff присоединяет тот же
+// ART UID, не повторяет PATCH, не меняет planned hashes и оставляет CAG=0.
+test('049: ART: API defaults rejoin committed intent без второго PATCH',async()=>{
+ const f=lifecycleFixture('personal-integrations');
+ f.plan.personalIntegrationsPrerequisites={owner107:{targetSHA256:f.plan.personalIntegrationsInputs.cpPolicy.targetSHA256}};
+ await f.lifecycle.stopController();f.stopCP();f.faults.schema=true;
+ const planHash=fingerprint(f.plan),art=f.plan.componentHandoff.components.find(c=>c.name==='artifact-retention');
+ for(const part of f.plan.componentHandoff.components.filter(c=>c.name!=='control-plane')){
+  f.apps.get(part.name).spec=structuredClone(part.stagedSpec);f.status(f.apps.get(part.name));
+  f.events.push({type:'PAIR_HANDOFF_INTENT',name:part.name,stage:'stagedSpec'});
+ }
+ const app=f.apps.get('artifact-retention');
+ app.spec=personalIntegrationsArtifactAPISpec({profile:'personal-integrations',name:art.name,beforeSpec:art.beforeSpec,expectedSpec:art.stagedSpec,authorityImage:f.plan.personalIntegrationsInputs.authority.imageRef});
+ f.status(app);
+ assert.notEqual(fingerprint(app.spec),fingerprint(art.stagedSpec));
+ const writes=f.patches.length,bindings=[];let validated=0;
+ const lifecycle=f.rebuild({validateHandoff:async()=>{validated++;assert.equal(f.patches.length,writes);},bindPersonalExecutor:()=>bindings.push(validated)});
+ const result=await lifecycle.handoff();assert.equal(result.status,'STAGED');
+ assert.equal(validated,1);assert.deepEqual(bindings,[1]);
+ assert.deepEqual(f.patches.slice(writes),['control-plane']);
+ assert.equal(f.patches.filter(n=>n==='artifact-retention').length,1); // Только прежний STOP.
+ assert.equal(f.apps.get('control-api-gateway').spec.replicas,0);assert.equal(fingerprint(f.plan),planHash);
+ assert.equal(lifecycle.inspect().find(c=>c.name==='artifact-retention').stage,'stagedSpec');
+ app.spec.template.spec.containers[1].imagePullPolicy='Always';
+ await assert.rejects(()=>lifecycle.handoff(),/HANDOFF_SPEC_CHANGED/);
+ assert.equal(validated,1);assert.deepEqual(f.patches.slice(writes),['control-plane']);
+});
+
+test('049: ART: successor handoff не связывает executor до schema/join/original owner proof',async()=>{
+ const f=lifecycleFixture('personal-integrations');await f.lifecycle.stopController();f.stopCP();
+ let reads=0,binds=0;const writes=f.patches.length;
+ const lifecycle=f.rebuild({validateHandoff:async()=>{reads++;throw Error('SYNTHETIC_ORIGINAL_OWNER_CHANGED');},bindPersonalExecutor:()=>binds++});
+ await assert.rejects(()=>lifecycle.handoff(),/POSTCONDITION_REQUIRED/);assert.equal(reads,0);
+ f.faults.schema=true;f.faults.blocked='integration-gateway';
+ await assert.rejects(()=>lifecycle.handoff(),/CONTROLLER_JOIN_REQUIRED/);assert.equal(reads,0);
+ f.faults.blocked='';await assert.rejects(()=>lifecycle.handoff(),/ORIGINAL_OWNER_CHANGED/);
+ assert.equal(reads,1);assert.equal(binds,0);assert.equal(f.patches.length,writes);
 });

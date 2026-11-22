@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 )
 
@@ -33,14 +34,20 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 	}
 }
 
-// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery checks the closed 21-entry owner registry and
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery checks the closed owner registry and
 // exact renewal/secret/projection/draft RPC mappings, not live authorization effectiveness.
-// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery проверяет закрытый 21-entry owner registry и
+// TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery проверяет закрытый реестр владельца и
 // exact renewal/secret/projection/draft RPC mappings, не live authorization effectiveness.
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
-	operations := secretBrokerOperations()
-	if len(operations) != 21 ||
+	operations := controlplaneclient.SecretBrokerOperations()
+	if len(operations) != 43 ||
+		operations["platform.runtime.kubernetes.health.begin"] != controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesHealthProbe_FullMethodName ||
+		operations["platform.runtime.kubernetes.health.complete"] != controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesHealthProbe_FullMethodName ||
+		operations["platform.runtime.kubernetes.setup.resolve"] != controlplanev1.ManagedKubernetesIdentitySetupService_ResolveManagedKubernetesIdentityUpload_FullMethodName ||
+		operations["platform.runtime.kubernetes.setup.claim"] != controlplanev1.ManagedKubernetesIdentitySetupService_ClaimManagedKubernetesIdentityUpload_FullMethodName ||
+		operations["platform.runtime.kubernetes.setup.complete"] != controlplanev1.ManagedKubernetesIdentitySetupService_CompleteManagedKubernetesIdentityUpload_FullMethodName ||
+		operations["platform.runtime.kubernetes.readiness"] != controlplanev1.ManagedKubernetesOwnerService_CheckManagedKubernetesOwnerReadiness_FullMethodName ||
 		operations["platform.credential-projections.ssh-compose.resolve"] != controlplanev1.RuntimeSecretWorkService_ResolveSSHComposeCredentialProjection_FullMethodName ||
 		operations["platform.provider-accounts.credential.renewal.authorize"] != controlplanev1.ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName ||
 		operations["platform.provider-accounts.credential.renewal.validate"] != controlplanev1.ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName ||

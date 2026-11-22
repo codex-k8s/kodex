@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -133,9 +134,12 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 		if err := auditPersonalCredentialWork(ctx, tx, current, job.ref, "platform.personal-integration-tests.claim", "i18n:PERSONAL_INTEGRATION_CREDENTIAL_TEST_CLAIMED"); err != nil {
 			return nil, err
 		}
-		dispatchUntil := expires
-		if !input.accessUntil.IsZero() && input.accessUntil.Before(dispatchUntil) {
-			dispatchUntil = input.accessUntil
+		dispatchUntil := expires.UTC()
+		if input.binding.Kind == entity.IntegrationCredentialToken {
+			dispatchUntil = expires
+			if !input.accessUntil.IsZero() && input.accessUntil.Before(dispatchUntil) {
+				dispatchUntil = input.accessUntil
+			}
 		}
 		claim := map[string]any{"testRef": job.ref, "connectionRef": job.connectionRef, "definitionKey": input.definition.Metadata.Key,
 			"definitionVersion": input.definition.Metadata.Version, "definitionDigest": input.definition.Digest, "definitionPackage": asJSON(input.definition),
@@ -144,7 +148,30 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 		claim["personalReadProbeCapabilityKeys"] = append([]string(nil), job.snapshot.AllowedReadCapabilityKeys...)
 		claim["personalObservationProfiles"] = append([]string(nil), job.snapshot.AllowedObservationProfiles...)
 		claim["personalDeniedWriteCapabilityKeys"] = append([]string(nil), job.snapshot.AllowedDeniedWriteCapabilityKeys...)
-		attachIntegrationClaimCredential(claim, true, input.binding.Credential, &input.binding.Credential.CreatedAt)
+		snapshotBytes, err := json.Marshal(job.snapshot)
+		if err != nil {
+			return nil, errs.ErrUnavailable
+		}
+		snapshotHash := sha256.Sum256(snapshotBytes)
+		claim["inputDigest"] = hex.EncodeToString(snapshotHash[:])
+		switch input.binding.Kind {
+		case entity.IntegrationCredentialToken:
+			if input.binding.Credential == nil || input.binding.BrokerIdentity != nil {
+				return nil, errs.ErrUnavailable
+			}
+			claim["credentialDeliveryKind"] = "TOKEN"
+			attachIntegrationClaimCredential(claim, true, input.binding.Credential, &input.binding.Credential.CreatedAt)
+		case entity.IntegrationCredentialBrokerIdentity:
+			if input.binding.Credential != nil || input.binding.BrokerIdentity == nil || !input.binding.BrokerIdentity.ValidMetadata() || (input.binding.BrokerPurpose != entity.IntegrationBrokerIdentityKubernetes && input.binding.BrokerPurpose != entity.IntegrationBrokerIdentitySSH) {
+				return nil, errs.ErrUnavailable
+			}
+			claim["credentialDeliveryKind"] = "BROKER_IDENTITY"
+			claim["brokerIdentityPurpose"] = string(input.binding.BrokerPurpose)
+			claim["brokerIdentityRef"] = input.binding.BrokerIdentity.Ref
+			claim["brokerIdentityRevision"] = input.binding.BrokerIdentity.Revision
+		default:
+			return nil, errs.ErrUnavailable
+		}
 		result = append(result, claim)
 		if len(result) == int(limit) {
 			break
@@ -157,6 +184,10 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 	// Поздний claim ACK не выдаёт expired allowance; durable lease остаётся для обычного owner expiry.
 	currentClaims := result[:0]
 	for _, claim := range result {
+		if claim["credentialDeliveryKind"] == "BROKER_IDENTITY" {
+			currentClaims = append(currentClaims, claim)
+			continue
+		}
 		until, ok := claim["expiresAt"].(time.Time)
 		if ok && time.Now().Before(until) {
 			currentClaims = append(currentClaims, claim)
@@ -198,6 +229,9 @@ func (repository *Repository) BeginPersonalIntegrationCredentialProbe(ctx contex
 	if err != nil {
 		return empty, err
 	}
+	if job.snapshot.Kind != entity.IntegrationCredentialToken {
+		return empty, errs.ErrForbidden
+	}
 	if job.state != "CLAIMED" || !personalCredentialTestLease(job, payload, time.Now().UTC()) {
 		return empty, errs.ErrForbidden
 	}
@@ -227,7 +261,7 @@ func (repository *Repository) BeginPersonalIntegrationCredentialProbe(ctx contex
 	if until.IsZero() || !time.Now().Before(until) {
 		return empty, errs.ErrForbidden
 	}
-	tag, err := tx.Exec(ctx, queryPersonalCredentialTestBegin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "id": job.id, "version": job.version, "authorized_until": until})
+	tag, err := tx.Exec(ctx, queryPersonalCredentialTokenProbeBegin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "id": job.id, "version": job.version, "authorized_until": until})
 	if err != nil {
 		return empty, errs.ErrUnavailable
 	}
@@ -289,6 +323,11 @@ func (repository *Repository) completePersonalCredentialTest(ctx context.Context
 	job, err := repository.lockPersonalCredentialTest(ctx, tx, current.organizationID, payload.TestRef)
 	if err != nil {
 		return commandOutcome{}, err
+	}
+	if job.snapshot.Kind != entity.IntegrationCredentialToken {
+		// Broker identity facts are admitted and completed only by the purpose-specific private owner path.
+		// Broker identity facts допускает и завершает лишь purpose-specific private owner path.
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	if job.state != "PROBING" || !personalCredentialTestLease(job, payload, time.Now().UTC()) {
 		return commandOutcome{}, errs.ErrForbidden

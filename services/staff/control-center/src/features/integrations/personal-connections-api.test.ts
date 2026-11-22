@@ -35,6 +35,7 @@ import {
   revokePersonalConnection,
 } from "./personal-connections-api";
 const connection: PersonalIntegrationConnection = {
+  credentialDelivery: { kind: "TOKEN" },
   connectionRef: "int_fixture01",
   connectionVersion: 7,
   name: "GitLab",
@@ -44,6 +45,8 @@ const connection: PersonalIntegrationConnection = {
   enabled: true,
 };
 const credential: PersonalIntegrationCredential = {
+  credentialDelivery: { kind: "TOKEN" },
+  bindingGeneration: 2,
   connectionRef: connection.connectionRef,
   connectionVersion: 7,
   bindingRef: "ipc_fixture01",
@@ -86,6 +89,72 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("личные подключения: HTTP boundary", () => {
+  it("не вызывает TOKEN endpoint при missing/broker kind", async () => {
+    const signal = new AbortController().signal;
+    const missing = { ...credential };
+    delete missing.credentialDelivery;
+    delete missing.bindingGeneration;
+    await expect(
+      savePersonalConnection(
+        connection,
+        missing,
+        "synthetic-private-key",
+        signal,
+      ),
+    ).rejects.toThrow();
+    const delivery = {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "SSH_TARGET",
+    } as const;
+    await expect(
+      savePersonalConnection(
+        { ...connection, credentialDelivery: delivery },
+        { ...credential, credentialDelivery: delivery },
+        "synthetic-private-key",
+        signal,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      savePersonalConnection(
+        { ...connection, definitionKey: "ssh-managed" },
+        credential,
+        "synthetic-private-key",
+        signal,
+      ),
+    ).rejects.toThrow();
+    expect(sdk.configurePersonalIntegrationCredential).not.toHaveBeenCalled();
+  });
+
+  it("принимает успешный revoke с сохранёнными metadata immutable credential", async () => {
+    sdk.revokePersonalIntegrationCredential.mockResolvedValueOnce({
+      data: {
+        ...credential,
+        version: 4,
+        state: "REVOKED",
+        credentialConfigured: true,
+      },
+      response: new Response(),
+    });
+    const result = await revokePersonalConnection(
+      connection,
+      credential,
+      new AbortController().signal,
+    );
+    expect(result.state).toBe("REVOKED");
+    expect(result.credentialConfigured).toBe(true);
+  });
+
+  it("не присваивает TOKEN metadata сохранённому receipt без kind", () => {
+    const retained = { ...credential };
+    delete retained.credentialDelivery;
+    delete retained.bindingGeneration;
+    const before = JSON.stringify(retained);
+    const view = personalCredentialView(retained, connection);
+    expect(view.credentialDelivery).toBeUndefined();
+    expect(view.bindingGeneration).toBeUndefined();
+    expect(JSON.stringify(retained)).toBe(before);
+  });
+
   it("отправляет закрытые адреса, разные OCC, CSRF и idempotency без owner selector", async () => {
     const signal = new AbortController().signal;
     await createPersonalConnection(connection, signal);
@@ -250,5 +319,72 @@ describe("личные подключения: HTTP boundary", () => {
     await expect(
       loadPersonalConnections("", undefined, new AbortController().signal),
     ).rejects.toThrow();
+  });
+});
+
+describe("Kubernetes pre-Begin requirements survive the actual personal SDK projection", () => {
+  const requirements = {
+    targetRef: "ktg_fixture01",
+    targetRevision: 2,
+    canonicalContext: "operator-context",
+    connectionVersion: 7,
+    credentialPolicy: "INITIATOR_REQUIRED" as const,
+  };
+  const kube: PersonalIntegrationConnection = {
+    ...connection,
+    definitionKey: "kubernetes-managed",
+    credentialDelivery: {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "KUBERNETES_TARGET",
+    },
+    kubernetesSetupRequirements: requirements,
+  };
+  it("preserves safe requirements before any personal credential exists", async () => {
+    sdk.listPersonalIntegrationConnections.mockResolvedValue({
+      data: { items: [kube] },
+      response: new Response(),
+    });
+    const page = await loadPersonalConnections(
+      "",
+      undefined,
+      new AbortController().signal,
+    );
+    expect(page.items[0]?.kubernetesSetupRequirements).toEqual(requirements);
+    expect(page.items[0]?.credential).toBeUndefined();
+  });
+  it("rejects stale, malformed and foreign-purpose requirements without inventing a context", async () => {
+    for (const changed of [
+      {
+        ...kube,
+        kubernetesSetupRequirements: { ...requirements, connectionVersion: 6 },
+      },
+      {
+        ...kube,
+        kubernetesSetupRequirements: {
+          ...requirements,
+          canonicalContext: "bad\ncontext",
+        },
+      },
+      {
+        ...kube,
+        kubernetesSetupRequirements: { ...requirements, extra: true },
+      },
+      { ...kube, credentialDelivery: { kind: "TOKEN" } },
+      {
+        ...kube,
+        credentialDelivery: {
+          kind: "BROKER_IDENTITY",
+          brokerPurpose: "SSH_TARGET",
+        },
+      },
+    ]) {
+      sdk.listPersonalIntegrationConnections.mockResolvedValue({
+        data: { items: [changed] },
+        response: new Response(),
+      });
+      await expect(
+        loadPersonalConnections("", undefined, new AbortController().signal),
+      ).rejects.toThrow();
+    }
   });
 });

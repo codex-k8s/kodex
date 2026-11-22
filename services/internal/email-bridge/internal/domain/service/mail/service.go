@@ -160,6 +160,9 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
+	if !mailboxReadCreditLive(ctx) {
+		return api.Result{}, errs.Unavailable
+	}
 	scope := receipt.Scope{Tenant: mailbox.TenantId, Mailbox: mailbox.Id}
 	if command.Operation == api.OperationMark {
 		return api.Result{}, errs.Unsupported
@@ -189,7 +192,7 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 			if len(allowed) == 0 {
 				return api.Result{}, errs.Denied
 			}
-			return s.Provider.Read(ctx, mailbox, command)
+			return s.readWithCredit(ctx, mailbox, command)
 		}
 		return api.Result{Status: "ok", Mailboxes: []string{mailbox.Id}}, nil
 	}
@@ -197,10 +200,14 @@ func (s *Service) Execute(ctx context.Context, caller, token string, command api
 		if err := s.Receipts.Ready(ctx); err != nil {
 			return api.Result{}, err
 		}
-		return s.Provider.Probe(ctx, mailbox), nil
+		result := s.Provider.Probe(ctx, mailbox)
+		if result.Status == "ready" && !mailboxReadCreditLive(ctx) {
+			return api.Result{}, errs.Unavailable
+		}
+		return result, nil
 	}
 	if !Mutation(command.Operation) {
-		return s.Provider.Read(ctx, mailbox, command)
+		return s.readWithCredit(ctx, mailbox, command)
 	}
 	if s.CompletionBase == nil || s.CompletionBase.Err() != nil || s.Effects == nil || s.Ledger == nil || s.Reports == nil {
 		return api.Result{}, errs.Unavailable

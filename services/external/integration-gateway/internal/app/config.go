@@ -27,6 +27,7 @@ const (
 // loadConfig applies deployment environment overrides before validation; integration-specific policy remains in owner claims and adapters.
 // RU: loadConfig применяет переменные развёртывания до валидации; политика конкретной интеграции остаётся в owner claims и адаптерах.
 type Config struct {
+	SSHInvocationCapacity            uint32        `env:"INTEGRATION_GATEWAY_SSH_INVOCATION_CAPACITY"`
 	SecretBrokerTarget               string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TARGET"`
 	SecretBrokerTLSServerName        string        `env:"INTEGRATION_GATEWAY_SECRET_BROKER_TLS_SERVER_NAME"`
 	RPCProfile                       string        `env:"KODEX_RPC_PROFILE"`
@@ -93,6 +94,9 @@ func loadConfig() (Config, error) {
 // The optional local OpenAPI route requires the trusted-cluster profile, its exact HTTPS host and a normalized absolute CA path.
 // RU: Необязательный локальный OpenAPI-маршрут требует trusted-cluster профиля, точного HTTPS-хоста и нормализованного абсолютного пути CA.
 func (config Config) validate() error {
+	if config.SSHInvocationCapacity > 4 {
+		return errors.New("SSH invocation capacity is invalid")
+	}
 	if err := integration.ValidateObservabilityQualificationConfiguration(config.ObservabilityQualificationFile, config.ObservabilityQualificationSHA256); err != nil {
 		return err
 	}

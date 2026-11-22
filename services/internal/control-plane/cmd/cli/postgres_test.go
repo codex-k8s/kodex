@@ -125,7 +125,7 @@ func TestPostgresCheckOnlyProbesOnce(t *testing.T) {
 // TestPostgresCommandsPreserveCallerAndNeverRetryMigration даёт всем командам один ограниченный ping;
 // up/status сохраняют исходный context и однократно выполняют callback даже при временной ошибке SQL.
 func TestPostgresCommandsPreserveCallerAndNeverRetryMigration(t *testing.T) {
-	for _, command := range []string{"up", "status"} {
+	for _, command := range []string{"up", "status", artifactRetentionGrantCommand, workflowFileProvenanceCommand} {
 		t.Run(command, func(t *testing.T) {
 			fixture := &postgresProbeFixture{t: t, ping: func(ctx context.Context) error {
 				deadline, ok := ctx.Deadline()
@@ -325,5 +325,26 @@ func TestSentryBackupCLIReceipt(t *testing.T) {
 				t.Fatal("backup maintenance lifecycle changed")
 			}
 		})
+	}
+}
+
+// TestWorkflowFileProvenanceReceipt checks the fixed success acknowledgement after one admitted command.
+// TestWorkflowFileProvenanceReceipt проверяет фиксированное подтверждение после одного разрешённого вызова.
+func TestWorkflowFileProvenanceReceipt(t *testing.T) {
+	fixture := &postgresProbeFixture{t: t, ping: func(context.Context) error { return nil }}
+	calls := 0
+	dependencies := postgresProbeDependencies(t, fixture, func(_ context.Context, _ *sql.DB, command string) error {
+		if command != workflowFileProvenanceCommand {
+			t.Fatal("workflow file provenance command changed")
+		}
+		calls++
+		return nil
+	})
+	var output bytes.Buffer
+	if err := runPostgres(t.Context(), workflowFileProvenanceCommand, &output, dependencies); err != nil {
+		t.Fatal("run workflow file provenance command", err)
+	}
+	if calls != 1 || output.String() != workflowFileProvenanceReceipt+"\n" {
+		t.Fatal("missing or repeated workflow file provenance acknowledgement")
 	}
 }

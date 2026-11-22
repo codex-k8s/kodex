@@ -6,7 +6,8 @@ FROM control_plane.artifact_revisions revision
 JOIN control_plane.artifact_heads head ON head.id=revision.artifact_id
 JOIN control_plane.artifact_revision_content receipt ON receipt.revision_id=revision.id
 WHERE content.id=@id AND content.organization_id=@organization_id AND revision.id=@revision_id
- AND head.organization_id=content.organization_id AND head.project_id=content.project_id
+ AND head.organization_id=content.organization_id
+ AND(head.project_id=content.project_id OR(content.source_profile='KUBERNETES_OUTPUT' AND head.project_id IS NULL AND content.project_id IS NULL))
  AND head.ref=content.prepared_artifact_ref
  AND (content.target_artifact_id IS NULL OR content.target_artifact_id=head.id)
  AND (content.target_artifact_id IS NULL OR revision.ref=content.prepared_revision_ref)
@@ -16,4 +17,11 @@ WHERE content.id=@id AND content.organization_id=@organization_id AND revision.i
  AND content.antivirus_report=receipt.antivirus_report
  AND receipt.object_key=content.object_key AND receipt.object_version=content.object_version
  AND receipt.object_etag=content.object_etag AND receipt.digest=content.digest AND receipt.size_bytes=content.size_bytes
- AND content.state='STAGED' AND content.plan_revision_id IS NOT NULL AND content.available_until>clock_timestamp();
+ AND content.state='STAGED' AND content.available_until>clock_timestamp()
+ AND(content.plan_revision_id IS NOT NULL OR(content.source_profile='KUBERNETES_OUTPUT' AND EXISTS(
+  SELECT 1 FROM control_plane.kubernetes_capture_artifact_revisions saved
+  JOIN control_plane.kubernetes_output_captures capture ON capture.id=saved.capture_id AND capture.organization_id=saved.organization_id
+  WHERE saved.prepared_content_id=content.id AND saved.revision_id=revision.id AND saved.artifact_id=head.id
+   AND capture.ref=content.source_profile_ref AND capture.snapshot_digest=content.source_context_digest
+   AND capture.capture_generation=content.source_profile_version AND capture.state='CLAIMED'
+   AND saved.channel=substring(content.operation_key FROM 19))));

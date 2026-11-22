@@ -33,8 +33,8 @@ const personalCredentialProbeContractVersion uint32 = 1
 // processPersonalCredentialTests берёт по одному заданию, не расходуя finite lease в локальном batch.
 // Owner admission расходуется перед pinned READ batch и не повторяется после lost ACK; metrics
 // учитывают начатую verification даже при последующей ошибке owner completion.
-func processPersonalCredentialTests(ctx context.Context, client cp.PersonalIntegrationCredentialServiceClient, adapter personalCredentialProbeAdapter, config Config, record func(bool)) (int, error) {
-	if client == nil || adapter == nil || record == nil {
+func processPersonalCredentialTests(ctx context.Context, client cp.PersonalIntegrationCredentialServiceClient, adapter personalCredentialProbeAdapter, config Config, record func(bool), brokerConsumers ...*brokerIdentityConsumers) (int, error) {
+	if client == nil || adapter == nil || record == nil || len(brokerConsumers) > 1 {
 		return 0, errors.New("personal credential verifier is unavailable")
 	}
 	claims, err := client.ClaimPersonalIntegrationCredentialTests(ctx, &cp.ClaimPersonalIntegrationCredentialTestsRequest{WorkloadInstance: config.InstanceID, Limit: 1})
@@ -48,6 +48,17 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 		return 0, nil
 	}
 	claim := claims.Claims[0]
+	kind, err := healthClaimRepresentation(claim)
+	if err != nil || kind == cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_NONE {
+		return 0, brokerIdentityWorkUnavailable
+	}
+	if kind == cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY {
+		var consumers *brokerIdentityConsumers
+		if len(brokerConsumers) == 1 {
+			consumers = brokerConsumers[0]
+		}
+		return runBrokerIdentityProbe(ctx, consumers, claim, true, config, record)
+	}
 	lease := claim.GetLease()
 	observed := time.Now()
 	if lease == nil || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil || lease.GetGeneration() != 1 || lease.GetRef() == "" || lease.GetFence() == "" || claim.GetTestRef() == "" || claim.GetCredentialRevision() == nil ||

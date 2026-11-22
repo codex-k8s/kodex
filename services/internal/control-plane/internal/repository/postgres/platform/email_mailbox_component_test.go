@@ -2,8 +2,10 @@ package platform
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/netip"
 	"slices"
 	"strings"
@@ -271,6 +273,64 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 	}
 	mailbox.Revision = 1
 	git := api.Configuration{Version: "email-bridge/v1", Revision: 1, ManagedBy: "git", Source: "git/mailbox-owner-fixture", Mailboxes: []api.Mailbox{mailbox}}
+	raw, err = json.Marshal(git)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.InitializeEmailConfiguration(ctx, raw); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("Git adopted a personal mailbox: %v", err)
+	}
+	personalPassword := mailbox.Smtp.Secret
+	mailbox = configureGitMailboxFixture(t, ctx, repository, service, owner, mailbox, "lifecycle")
+	connectionRef = mailbox.ConnectionId
+	git.Mailboxes = []api.Mailbox{mailbox}
+	staleOwner := git
+	staleOwner.Mailboxes = slices.Clone(git.Mailboxes)
+	staleOwner.Mailboxes[0].CredentialOwnerGeneration--
+	raw, err = json.Marshal(staleOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.InitializeEmailConfiguration(ctx, raw); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("Git accepted a stale mailbox owner generation: %v", err)
+	}
+	foreignCredential := git
+	foreignCredential.Mailboxes = slices.Clone(git.Mailboxes)
+	foreignCredential.Mailboxes[0].Smtp.Secret = personalPassword
+	raw, err = json.Marshal(foreignCredential)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.InitializeEmailConfiguration(ctx, raw); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("Git accepted credentials from a personal mailbox: %v", err)
+	}
+	shared, err := service.GetIntegrationConnection(ctx, owner, connectionRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabledResult, err := service.Execute(ctx, command.Command{Kind: command.SetConnectionEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "git-mailbox-lifecycle-disable-before-import", ExpectedVersion: &shared.Version},
+		Payload:  command.ConnectionInput{Ref: connectionRef, Enabled: false}})
+	if err != nil || disabledResult.Connection == nil || disabledResult.Connection.Enabled {
+		t.Fatalf("disable shared mailbox before import: %v", err)
+	}
+	raw, err = json.Marshal(git)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.InitializeEmailConfiguration(ctx, raw); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("Git queued an enabled mailbox on a disabled connection: %v", err)
+	}
+	after, err := service.GetIntegrationConnection(ctx, owner, connectionRef)
+	if err != nil || after.Enabled || after.Version != disabledResult.Connection.Version {
+		t.Fatalf("rejected Git import changed the disabled connection: %v", err)
+	}
+	enabled, err := service.Execute(ctx, command.Command{Kind: command.SetConnectionEnabled, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "git-mailbox-lifecycle-enable-after-reject", ExpectedVersion: &after.Version},
+		Payload:  command.ConnectionInput{Ref: connectionRef, Enabled: true}})
+	if err != nil || enabled.Connection == nil || !enabled.Connection.Enabled {
+		t.Fatalf("enable shared mailbox for import: %v", err)
+	}
 	importGit := func(configuration api.Configuration) {
 		t.Helper()
 		raw, err := json.Marshal(configuration)
@@ -301,6 +361,33 @@ func testEmailMailboxOwner(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatalf("Git binding before delivery: %v", err)
 	}
 	completeGit()
+	accepted, err := repository.EmailConfiguration(ctx)
+	if err != nil || len(accepted.Mailboxes) != 1 ||
+		accepted.Mailboxes[0].ConnectionId != connectionRef ||
+		accepted.Mailboxes[0].CredentialOwnerGeneration != mailbox.CredentialOwnerGeneration {
+		t.Fatalf("Git publication lost its verified owner generation: %v", err)
+	}
+	ownershipRead, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ownershipRead.Rollback(ctx)
+	eligibility, err := readEmailConfigurationOwnersTx(ctx, ownershipRead, accepted)
+	if err != nil || !eligibility[[2]string{mailbox.TenantId, connectionRef}] {
+		t.Fatalf("published Git mailbox is not eligible for projection: %v", err)
+	}
+	if err := ownershipRead.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+	foreignSource := git
+	foreignSource.Source = "git/other-mailbox-owner-fixture"
+	raw, err = json.Marshal(foreignSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.InitializeEmailConfiguration(ctx, raw); !errors.Is(err, errs.ErrConflict) {
+		t.Fatalf("another Git source claimed the same connection: %v", err)
+	}
 	gitView, err := service.GetEmailMailboxConfiguration(ctx, owner, connectionRef, "", "")
 	if err != nil || gitView.Configuration.ManagedBy != "GIT" || gitView.Revision.State != "PUBLISHED" || gitView.Publication == nil || gitView.Publication.State != "READY" {
 		t.Fatalf("Git safe lineage readback: %v", err)
@@ -363,6 +450,85 @@ FROM control_plane.email_mailbox_publications p JOIN control_plane.integration_c
 	if err := repository.pool.QueryRow(ctx, `SELECT failure_code FROM control_plane.email_mailbox_publications WHERE ref='mailpub_expiredfixture1046' AND state='FAILED'`).Scan(&failure); err != nil || failure != "EMAIL_MAILBOX_DELIVERY_EXPIRED" {
 		t.Fatalf("durable expired outcome: %v", err)
 	}
+}
+
+// configureGitMailboxFixture uses the same disable, select-service, configure-credentials and enable
+// commands as an owner. Its dedicated connection shares neither a personal binding nor descriptors.
+// configureGitMailboxFixture вызывает штатные команды отключения, выбора service, настройки credentials
+// и включения. Выделенное подключение не наследует личную привязку или дескрипторы.
+func configureGitMailboxFixture(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, mailbox api.Mailbox, fixtureKey string) api.Mailbox {
+	t.Helper()
+	resolved, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serviceRef := "svc_email_git_" + fixtureKey
+	fixtureID := "git-mailbox-" + fixtureKey
+	if _, err := repository.pool.Exec(ctx, `INSERT INTO control_plane.subjects(ref,organization_id,issuer,external_subject_digest,display_name,kind)
+SELECT $1,id,'example.invalid',$3,'Git mailbox fixture','SERVICE'
+FROM control_plane.organizations WHERE ref=$2`, serviceRef, resolved.AuthorityTenant, fmt.Sprintf("%x", sha256.Sum256([]byte(serviceRef)))); err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: fixtureID + "-connection"},
+		Payload: command.ConnectionInput{DefinitionKey: "email", Name: "Git mailbox fixture " + fixtureKey, PublicConfiguration: map[string]any{
+			"base_url": "https://email-bridge.kodex-system.svc.cluster.local", "mailbox_id": fixtureID, "from_address": mailbox.Sender,
+		}}})
+	if err != nil || created.Connection == nil {
+		t.Fatalf("create Git mailbox connection: %v", err)
+	}
+	connection := *created.Connection
+	setEnabled := func(key string, enabled bool) {
+		t.Helper()
+		result, err := service.Execute(ctx, command.Command{Kind: command.SetConnectionEnabled, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: fixtureID + "-" + key, ExpectedVersion: &connection.Version},
+			Payload:  command.ConnectionInput{Ref: connection.Ref, Enabled: enabled}})
+		if err != nil || result.Connection == nil || result.Connection.Enabled != enabled {
+			t.Fatalf("set Git mailbox enabled=%t: %v", enabled, err)
+		}
+		connection = *result.Connection
+	}
+	setEnabled("disable-git-mailbox", false)
+	ownershipOperator := owner
+	ownershipOperator.Permission = "platform.email-mailboxes.ownership.configure"
+	selected, err := service.Execute(ctx, command.Command{Kind: command.ConfigureEmailMailboxOwnership, Principal: ownershipOperator,
+		Mutation: value.Mutation{IdempotencyKey: fixtureID + "-select-owner", ExpectedVersion: &connection.Version},
+		Payload:  command.EmailMailboxOwnershipInput{ConnectionRef: connection.Ref, Policy: entity.IntegrationCredentialProjectShared, ServiceSubjectRef: serviceRef}})
+	if err != nil || selected.EmailMailboxOwnership == nil || !selected.EmailMailboxOwnership.OwnerEligible {
+		t.Fatalf("select explicit Git mailbox service owner: %v", err)
+	}
+	connection.Version = selected.EmailMailboxOwnership.ConnectionVersion
+	setEnabled("enable-git-mailbox", true)
+	credentialOperator := owner
+	credentialOperator.Permission = "platform.command.email-mailbox.configure-credential"
+	credential := func(kind string, valueBytes []byte) api.Descriptor {
+		t.Helper()
+		stored, err := service.ConfigureEmailMailboxCredential(ctx, credentialOperator,
+			value.Mutation{IdempotencyKey: fixtureID + "-" + kind, ExpectedVersion: &connection.Version}, connection.Ref, kind, valueBytes)
+		if err != nil {
+			t.Fatalf("configure Git mailbox %s descriptor: %v", kind, err)
+		}
+		connection.Version = stored.ConnectionVersion
+		return api.Descriptor{Name: stored.Name, Generation: stored.Generation}
+	}
+	ca := credential("CA_CERTIFICATE", personalEmailFixtureCA(t))
+	user := credential("USERNAME", []byte("git-mailbox@example.invalid"))
+	password := credential("AUTH_SECRET", []byte("synthetic-git-mailbox-credential"))
+	mailbox.Id, mailbox.TenantId, mailbox.ConnectionId = fixtureID, resolved.AuthorityTenant, connection.Ref
+	mailbox.CredentialOwnerGeneration = selected.EmailMailboxOwnership.Generation
+	mailbox.CredentialGeneration = connection.Version
+	mailbox.Smtp.Ca, mailbox.Smtp.Username, mailbox.Smtp.Secret = ca, user, password
+	if mailbox.Imap != nil {
+		endpoint := *mailbox.Imap
+		endpoint.Ca, endpoint.Username, endpoint.Secret = ca, user, password
+		mailbox.Imap = &endpoint
+	}
+	if mailbox.Pop != nil {
+		endpoint := *mailbox.Pop
+		endpoint.Ca, endpoint.Username, endpoint.Secret = ca, user, password
+		mailbox.Pop = &endpoint
+	}
+	return mailbox
 }
 
 // mailboxOwnerResolver provides a fixed public-address resolver for mailbox policy fixtures

@@ -3,6 +3,8 @@ import {telegramPolicyTransition,advanceTelegramRegistry,validateTelegramRegistr
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
 import {authorityReadbackContract} from './authority-readback-targets.mjs';
+import {privateJournal} from '../dev/role-image-acceptance.mjs';
+import {personalIntegrationsRotationProtocol,personalIntegrationsRotationJobCustody,validatePersonalIntegrationsRotationJournal} from './personal-integrations-rotation-journal.mjs';
 import {materializeAuthorityJobDefaults} from './authority-job-defaults.mjs';
 import {execFileSync} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
@@ -17,14 +19,17 @@ import {readSourceMigrationReceipt} from './authority-source-migration-receipt.m
 import {workloadPods} from '../dev/component-manifest.mjs';
 import {catalogPolicyTransition, catalogPolicySource, validateCatalogPolicy, isPortableAuthorityTransition, authorityPolicySource, validateAuthorityPolicy, authorityPolicyTransitionConfiguration, authorityPolicyReadbackContract, readAuthorityPrivateJSON, readCatalogTarget, catalogKubeconfig, verifyCatalogTransition, readCatalogMaintenance, verifyCatalogAdmission, writeAuthorityPrivatePlan, syncAuthorityJournalDirectory, parseAuthorityPrivateJSON, readAuthorityPrivateText} from './authority-catalog-transition.mjs';
 import {renderAuthorityPolicyEnvironment} from './authority-policy-environment.mjs';
+import {personalIntegrationsAuthorityTransition,planPersonalIntegrationsAuthorityRegistry,validatePersonalIntegrationsAuthorityRegistry} from './authority-personal-integrations-source.mjs';
 import {isProvenStoppedPod} from './stable-archive-transition.mjs';
 
 const namespace='kodex-system';
+const rotationEvidenceRejected='ROTATION_EVIDENCE_REJECTED';
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 const sha=/^[a-f0-9]{64}$/;
 const revision=/^[1-9][0-9]{0,15}$/;
 const policySHA256='763028a7176c8c3394d0a01686b8d66a3a7cc465af90c2480a06064816b5e504';
 const portableAuthorityImage=value=>typeof value==='string'&&/^[a-z0-9][a-z0-9.-]*(?::[1-9][0-9]{0,4})?\/[a-z0-9][a-z0-9._/-]*\/internal-rpc-authority@sha256:[a-f0-9]{64}$/.test(value)&&!value.includes('..');
+const isRotationPortable=profile=>isPortableAuthorityTransition(profile)||profile===personalIntegrationsAuthorityTransition;
 const planActionNeedsAdmission=action=>['rotate','abort'].includes(action);
 function requireValue(ok,code){if(!ok)throw new Error(code);}
 // Структурированный вывод Kubernetes сохраняет пустые TSV columns и исходные bytes.
@@ -115,7 +120,7 @@ export function normalizeRotationPrerequisiteSpec(policy){
 export function rotationPrerequisiteSpecSHA256(policy){return fingerprint(normalizeRotationPrerequisiteSpec(policy));}
 
 export function createRotationJob(template,plan){
- const portable=isPortableAuthorityTransition(plan.policyTransition?.profile);
+ const portable=isRotationPortable(plan.policyTransition?.profile);
  validateRotationTemplate(template,portable);
  requireValue(plan.version===3&&uuid.test(plan.intentID)&&['status','abort','rotate'].includes(plan.action)&&/^[a-f0-9]{40}$/.test(plan.revision)&&
   (portable?typeof plan.source==='string'&&resolve(plan.source)===plan.source:/^\/srv\/kodex-dev\/[A-Za-z0-9._-]+$/.test(plan.source)),'INVALID_ROTATION_PLAN');
@@ -300,6 +305,16 @@ export function validateRetiredCatalogOwnerState(state,plan,identity,readers,now
 export async function readCatalogAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,catalogPolicyTransition);}
 export async function readTelegramAuthorityTerminal(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition);}
 export async function readTelegramAuthorityDelivered(input,kube,io={}){return readPortableAuthorityTerminal(input,kube,io,telegramPolicyTransition,'delivered');}
+// Новые личные readers используют отдельный fixed owner/late custody protocol;
+// прежние Telegram helpers и admission predicates не расширяются.
+export async function readPersonalIntegrationsAuthorityDelivered(input,kube,io={}){
+ const {readPersonalIntegrationsAuthorityLate}=await import('./personal-integrations-authority-late.mjs');
+ return readPersonalIntegrationsAuthorityLate(input,kube,io,'delivered');
+}
+export async function readPersonalIntegrationsAuthorityTerminal(input,kube,io={}){
+ const {readPersonalIntegrationsAuthorityLate}=await import('./personal-integrations-authority-late.mjs');
+ return readPersonalIntegrationsAuthorityLate(input,kube,io,'terminal');
+}
 async function readPortableAuthorityTerminal({plan,events,freshPlan,freshEvents,admissionProof,now=Date.now()},kube,io,profile,purpose='terminal'){
  const configuration=authorityPolicyTransitionConfiguration(profile);
  if(profile===telegramPolicyTransition)requireValue(plan?.introducedReceiver?.sourceSHA===plan.revision&&plan.introducedReceiver.state==='PENDING_AUTHORITY','TELEGRAM_INTRODUCTION_REQUIRED');
@@ -389,11 +404,12 @@ export async function main(args,io={}){
  const inspect=io.inspectSource??inspectSource;
  const executeKube=io.run??((command,argv,input)=>runRaw(command,argv,input,io.execFileSync??execFileSync));
  const command=args.shift(),options={};requireValue(['plan','apply','observe','resume'].includes(command),'INVALID_COMMAND');
- while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--introduced-plan','--introduced-evidence','--introduced-publication','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
+ while(args.length){const key=args.shift();requireValue(['--context','--kubeconfig','--portable-target','--policy-transition','--introduced-plan','--introduced-evidence','--introduced-publication','--personal-prerequisites','--migration-plan','--migration-evidence','--maintenance-plan','--maintenance-evidence','--traffic-plan','--traffic-evidence','--source','--revision','--action','--registry-file','--source-delivery-plan','--source-migration-receipt','--output','--plan','--evidence','--intent-id','--source-revision','--source-digest-sha256','--confirm','--k3s-sudo'].includes(key)&&!options[key],'INVALID_ARGUMENT');options[key]=key==='--k3s-sudo'?true:args.shift();}
  const loadedPlan=command==='plan'?null:readAuthorityPrivateJSON(options['--plan']);
  const profile=options['--policy-transition']??loadedPlan?.policyTransition?.profile;
- requireValue(profile===undefined||isPortableAuthorityTransition(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
- const catalog=isPortableAuthorityTransition(profile);
+ requireValue(profile===undefined||isRotationPortable(profile),'CATALOG_POLICY_TRANSITION_REQUIRED');
+ const catalog=isRotationPortable(profile),personal=profile===personalIntegrationsAuthorityTransition;
+ requireValue(personal||!['--personal-prerequisites','--migration-plan','--migration-evidence'].some(key=>options[key]),'PERSONAL_INTEGRATIONS_ROTATION_PROFILE_REQUIRED');
  requireValue(profile===telegramPolicyTransition||!['--introduced-plan','--introduced-evidence','--introduced-publication'].some(key=>options[key]),'TELEGRAM_INTRODUCTION_PROFILE_REQUIRED');
  requireValue(typeof options['--context']==='string'&&/^[A-Za-z0-9_.:@/-]{1,160}$/.test(options['--context'])&&(catalog||!/prod/i.test(options['--context'])),'EXACT_STAGING_CONTEXT_REQUIRED');
  const kubeconfig=catalog?catalogKubeconfig(options['--kubeconfig']):options['--kubeconfig'];
@@ -443,8 +459,25 @@ export async function main(args,io={}){
    cliCommand:template.spec.template.spec.containers[0].command,source:options['--source'],revision:options['--revision'],action:options['--action'],
    ...(sourceProfile?{sourceDelivery,sourceDeliveryPlanSHA256:fingerprint(sourceDelivery),sourceMigrationReceipt,sourceMigrationReceiptSHA256:fingerprint(sourceMigrationReceipt),publisherExecutableSHA256:sourceDelivery.capability.publisherSHA256}:{}),
    ...(catalog?{policyTransition:catalogTarget.transition,kubeconfig,
-     ...(planActionNeedsAdmission(options['--action'])?{maintenance:await readCatalogMaintenance(options['--maintenance-plan'],options['--maintenance-evidence'],argv=>kube(...argv),
+     ...(!personal&&planActionNeedsAdmission(options['--action'])?{maintenance:await readCatalogMaintenance(options['--maintenance-plan'],options['--maintenance-evidence'],argv=>kube(...argv),
        {trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence']})}:{})}:{})};
+  if(personal){
+   plan.personalRotationProtocol=personalIntegrationsRotationProtocol;
+   requireValue(plan.action!=='abort','PERSONAL_INTEGRATIONS_ROTATION_ABORT_UNQUALIFIED');
+   const {capturePersonalIntegrationsOwnerScope}=await import('./personal-integrations-authority-owner.mjs');
+   plan.ownerScope=(io.capturePersonalOwnerScope??capturePersonalIntegrationsOwnerScope)(plan,(argv,input)=>kubeInput(input,...argv),{inspectSource:inspect});
+   if(plan.action==='rotate'){
+    const {readPersonalIntegrationsReleaseReferences}=await import('./personal-integrations-deployment-inputs.mjs');
+    const {readPersonalIntegrationsStagedAdmission}=await import('./personal-integrations-staged-admission.mjs');
+    plan.personalIntegrationsRelease=readPersonalIntegrationsReleaseReferences(options['--personal-prerequisites']);
+    plan.personalIntegrationsAdmission={planPath:options['--maintenance-plan'],evidencePath:options['--maintenance-evidence'],
+     trafficPlanPath:options['--traffic-plan'],trafficEvidencePath:options['--traffic-evidence'],
+     migrationPlanPath:options['--migration-plan'],migrationEvidencePath:options['--migration-evidence']};
+    plan.maintenance=await (io.readPersonalStagedAdmission??readPersonalIntegrationsStagedAdmission)({...plan.personalIntegrationsRelease,sourceSHA:plan.revision,
+     authorityTarget:plan.policyTransition.targetProfile,target:plan.personalIntegrationsRelease.authorityTarget,
+     admission:plan.personalIntegrationsAdmission},argv=>kube(...argv));
+   }
+  }
   if(profile===telegramPolicyTransition&&plan.action==='status'){
    const {captureTelegramOwnerScope}=await import('./telegram-authority-owner.mjs');
    plan.ownerScope=captureTelegramOwnerScope(plan,(argv,input)=>kubeInput(input,...argv),{inspectSource:inspect});
@@ -462,14 +495,14 @@ export async function main(args,io={}){
    const policyRaw=catalog?renderAuthorityPolicyEnvironment(sourcePolicyRaw,plan.policyTransition.environment).raw:sourcePolicyRaw;
    const desiredPolicy=validateRotationPolicy(policyRaw,plan.policyTransition),previousPolicy=validatePredecessorPolicy(liveRegistry.data?.['authority-policy.json'],plan.policyTransition);
    const registrySource=readFileSync(registryFile,'utf8');
-   const advance=profile===telegramPolicyTransition?{raw:advanceTelegramRegistry(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource),previous:deriveRegistryRotationIdentity(liveRegistry.data?.['key-delivery-targets.yaml'])}:deriveCanonicalRegistryAdvance(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource);
+   const advance=personal?{raw:planPersonalIntegrationsAuthorityRegistry(liveRegistry.data?.['key-delivery-targets.yaml']).raw,previous:deriveRegistryRotationIdentity(liveRegistry.data?.['key-delivery-targets.yaml'])}:profile===telegramPolicyTransition?{raw:advanceTelegramRegistry(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource),previous:deriveRegistryRotationIdentity(liveRegistry.data?.['key-delivery-targets.yaml'])}:deriveCanonicalRegistryAdvance(liveRegistry.data?.['key-delivery-targets.yaml'],registrySource);
    const desiredData=structuredClone(liveRegistry.data);desiredData['key-delivery-targets.yaml']=advance.raw;desiredData['authority-policy.json']=policyRaw;
    requireValue(fingerprint(liveRegistry.data)!==fingerprint(desiredData),'ROTATION_REGISTRY_MUST_ADVANCE');
 	   const previousIdentity=advance.previous;
 	   const identity=deriveRegistryRotationIdentity(desiredData['key-delivery-targets.yaml']);
 	   requireValue(identity.sourceRevision===previousIdentity.sourceRevision+1,'ROTATION_REGISTRY_REVISION_MUST_ADVANCE');
 	   plan.ownerOperationID=identity.ownerOperationID;
-	   plan.registry={uid:liveRegistry.metadata.uid,resourceVersion:liveRegistry.metadata.resourceVersion,
+	   plan.registry={...(personal?{predecessorRaw:liveRegistry.data['key-delivery-targets.yaml']}:{}),uid:liveRegistry.metadata.uid,resourceVersion:liveRegistry.metadata.resourceVersion,
 	    currentDataSHA256:fingerprint(liveRegistry.data),desiredData,desiredDataSHA256:fingerprint(desiredData),sourceFile:registryFile.slice(plan.source.length+1),
 	    previousSourceRevision:previousIdentity.sourceRevision,previousSourceDigestSHA256:previousIdentity.sourceDigestSHA256,
 	    sourceRevision:identity.sourceRevision,sourceDigestSHA256:identity.sourceDigestSHA256,
@@ -483,6 +516,11 @@ export async function main(args,io={}){
  }else plan=loadedPlan;
  if(profile===telegramPolicyTransition&&plan.action==='status'){
   const {validateTelegramOwnerScope}=await import('./telegram-authority-owner.mjs');validateTelegramOwnerScope(plan.ownerScope,plan);
+ }
+ if(personal){
+  requireValue(plan.personalRotationProtocol===personalIntegrationsRotationProtocol,'PERSONAL_INTEGRATIONS_ROTATION_PROTOCOL_REQUIRED');
+  requireValue(plan.action!=='abort','PERSONAL_INTEGRATIONS_ROTATION_ABORT_UNQUALIFIED');
+  const {validatePersonalIntegrationsOwnerScope}=await import('./personal-integrations-authority-owner.mjs');validatePersonalIntegrationsOwnerScope(plan.ownerScope,plan);
  }
  if(catalog&&planActionNeedsAdmission(plan.action))verifyCatalogAdmission(plan.maintenance,plan.policyTransition);
  if(profile===telegramPolicyTransition&&plan.action==='rotate')requireValue(plan.introducedReceiver?.schema==='kodex.telegram-introduced-receiver/v1'&&
@@ -506,7 +544,7 @@ export async function main(args,io={}){
   (!sourceProfile||(plan.sourceDeliveryPlanSHA256===fingerprint(sourceDelivery)&&plan.sourceMigrationReceiptSHA256===fingerprint(sourceMigrationReceipt)&&plan.publisherExecutableSHA256===sourceDelivery.capability.publisherSHA256)),'ROTATION_PLAN_DRIFT');
  requireValue(inspect(plan.source).revision===plan.revision,'EXACT_SOURCE_REQUIRED');const job=createRotationJob(template,plan);
 	if(plan.action==='rotate'){
-   requireValue(canonicalRegistryMatches(plan.registry.desiredData['key-delivery-targets.yaml'],readFileSync(`${plan.source}/${plan.registry.sourceFile}`,'utf8'))&&
+   requireValue((personal?Boolean(validatePersonalIntegrationsAuthorityRegistry(plan.registry.desiredData['key-delivery-targets.yaml'],plan.registry.predecessorRaw)):canonicalRegistryMatches(plan.registry.desiredData['key-delivery-targets.yaml'],readFileSync(`${plan.source}/${plan.registry.sourceFile}`,'utf8')))&&
     (catalog?renderAuthorityPolicyEnvironment(readFileSync(`${plan.source}/${plan.registry.policySourceFile}`,'utf8'),plan.policyTransition.environment).raw:readFileSync(`${plan.source}/${plan.registry.policySourceFile}`,'utf8'))===plan.registry.desiredData['authority-policy.json'],'ROTATION_REGISTRY_SOURCE_DRIFT');
   }
 	if(command==='plan'){
@@ -514,27 +552,49 @@ export async function main(args,io={}){
 	 verifyRotationJobReadback(dryRun,job);
 	 if(catalog)writeAuthorityPrivatePlan(options['--output'],plan);else writeFileSync(options['--output'],JSON.stringify(plan,null,2)+'\n',{flag:'wx',mode:0o600});process.stdout.write(`Authority rotation plan: ${fingerprint(plan)}\n`);return;
 	}
- let fd;const evidence=record=>{if(fd===undefined)return;writeSync(fd,JSON.stringify({at:new Date().toISOString(),intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,...record})+'\n');fsyncSync(fd);};
+ const personalLock=personal&&['apply','resume'].includes(command)?privateJournal(options['--evidence']+'.custody',
+  {schema:'kodex.personal-integrations-authority-journal-custody/v1',planSHA256:fingerprint(plan)}):undefined;
+ let fd,personalEvents=[];
+ try{
+ const evidence=record=>{
+  if(fd===undefined)return;
+  const row={at:new Date().toISOString(),intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,...record};
+  if(personal){requireValue(personalEvents.length<16384,'PERSONAL_INTEGRATIONS_ROTATION_JOURNAL_BOUND_EXCEEDED');writeFileSync(fd,JSON.stringify(row)+'\n');}
+  else writeSync(fd,JSON.stringify(row)+'\n');
+  fsyncSync(fd);if(personal)personalEvents.push(row);
+ };
  const requireAdmission=async()=>{
    if(!catalog)return;
    requireValue(plan.maintenance,'CATALOG_API_ADMISSION_PROOF_REQUIRED');
+   if(personal){
+    const {readPersonalIntegrationsRotationAdmission}=await import('./personal-integrations-rotation-admission.mjs');
+    await (io.readPersonalRotationAdmission??readPersonalIntegrationsRotationAdmission)(plan,(argv,input)=>kubeInput(input,...argv));return;
+   }
    verifyCatalogTransition(plan.policyTransition,readCatalogTarget(targetProfile,options['--context'],get,profile).transition);
    const fresh=await readCatalogMaintenance(plan.maintenance.planPath,plan.maintenance.evidencePath,argv=>kube(...argv),plan.maintenance);
    verifyCatalogAdmission(fresh,plan.policyTransition);
    requireValue(fingerprint(fresh)===fingerprint(plan.maintenance),'CATALOG_API_ADMISSION_DRIFT');
  };
 	 if(command==='apply'){
-  requireValue(options['--confirm']===(profile===telegramPolicyTransition?'APPLY-PORTABLE-TELEGRAM-AUTHORITY':catalog?'APPLY-PORTABLE-CATALOG-AUTHORITY':'APPLY-STAGING-AUTHORITY-ROTATION'),'STAGING_CONFIRMATION_REQUIRED');
+  requireValue(options['--confirm']===(personal?'APPLY-PERSONAL-INTEGRATIONS-AUTHORITY':profile===telegramPolicyTransition?'APPLY-PORTABLE-TELEGRAM-AUTHORITY':catalog?'APPLY-PORTABLE-CATALOG-AUTHORITY':'APPLY-STAGING-AUTHORITY-ROTATION'),'STAGING_CONFIRMATION_REQUIRED');
   requireValue(!kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json'),'EXISTING_OPERATION_REQUIRES_RESUME');
   if(catalog)syncAuthorityJournalDirectory(options['--evidence']);
   fd=openSync(options['--evidence'],'wx',0o600);if(catalog)syncAuthorityJournalDirectory(options['--evidence']);evidence({status:'INTENT',action:plan.action,planSHA256:fingerprint(plan)});
 	 }
 	 if(command==='resume'){
 	  requireValue(options['--evidence'],'ROTATION_EVIDENCE_REQUIRED');
-	  fd=openSync(options['--evidence'],constants.O_APPEND|constants.O_WRONLY|constants.O_NOFOLLOW);
+	  fd=openSync(options['--evidence'],constants.O_APPEND|(personal?constants.O_RDWR:constants.O_WRONLY)|constants.O_NOFOLLOW);
 	  const evidenceStat=fstatSync(fd),expectedUID=process.getuid?.();
 	  requireValue(evidenceStat.isFile()&&(evidenceStat.mode&0o777)===0o600&&
-	   (expectedUID===undefined||evidenceStat.uid===expectedUID),'ROTATION_EVIDENCE_REJECTED');
+	   (expectedUID===undefined||evidenceStat.uid===expectedUID),rotationEvidenceRejected);
+   if(personal){
+    requireValue(evidenceStat.nlink===1&&evidenceStat.size<=8<<20,rotationEvidenceRejected);
+    const raw=readFileSync(fd,'utf8');requireValue(raw.endsWith('\n'),rotationEvidenceRejected);
+    personalEvents=raw.trimEnd().split('\n').map(parseAuthorityPrivateJSON);
+    validatePersonalIntegrationsRotationJournal(plan,personalEvents);
+    const rawJob=kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json');
+    personalIntegrationsRotationJobCustody(plan,personalEvents,rawJob?parseAuthorityPrivateJSON(rawJob):null,job);
+   }
 	  evidence({status:'RESUME',action:plan.action,planSHA256:fingerprint(plan)});
 	 }
 	 if((command==='apply'||command==='resume')&&plan.action==='rotate'){
@@ -572,21 +632,28 @@ export async function main(args,io={}){
 	 }
 	 if(command==='apply'||command==='resume'){
 	  const existingJob=kube('get','job',job.metadata.name,'-n',namespace,'--ignore-not-found','-o','json');
+   if(personal)personalIntegrationsRotationJobCustody(plan,personalEvents,existingJob?parseAuthorityPrivateJSON(existingJob):null,job);
 	  if(!existingJob){
 	   if(planActionNeedsAdmission(plan.action))await requireAdmission();
+    if(personal)evidence({status:'INTENT',operation:'CREATE'});
 	   try{
-	   const argv=[...kubeArgs,'create','-f','-'];
-	   if(options['--k3s-sudo'])executeKube('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job));
-	   else executeKube('kubectl',argv,JSON.stringify(job));
+	   const argv=[...kubeArgs,'create','-f','-',...(personal?['-o','json']:[])];
+    const result=options['--k3s-sudo']?executeKube('sudo',['-n','k3s','kubectl',...argv],JSON.stringify(job)):
+     executeKube('kubectl',argv,JSON.stringify(job));
+    if(personal){const created=parseAuthorityPrivateJSON(result);verifyRotationJobReadback(created,job);
+     requireValue(uuid.test(created.metadata.uid),'CATALOG_AUTHORITY_JOB_REPLACED');
+     evidence({status:'APPLIED',operation:'CREATE',jobUID:created.metadata.uid});}
 	   }catch{evidence({status:'UNKNOWN',operation:'CREATE'});}
 	  }
 	 }
- try{
+ {
   const created=get('job',job.metadata.name);verifyRotationJobReadback(created,job);
+  if(personal&&personalEvents.length)personalIntegrationsRotationJobCustody(plan,personalEvents,created,job);
   const result=classifyRotationStatus(created,created.status?.succeeded===1?kube('logs',`job/${job.metadata.name}`,'-n',namespace,'-c','migrate'):'');
   if(fd!==undefined)evidence({status:result.phase,jobUID:created.metadata.uid,rotationStatus:result.state?.status});
   process.stdout.write(JSON.stringify({intentID:plan.intentID,ownerOperationID:plan.ownerOperationID,job:job.metadata.name,jobUID:created.metadata.uid,...result})+'\n');
   if(result.phase==='FAILED')process.exitCode=1;
- }finally{if(fd!==undefined)closeSync(fd);}
+ }
+ }finally{try{if(fd!==undefined)closeSync(fd);}finally{personalLock?.close();}}
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main(process.argv.slice(2)).catch(error=>{process.stderr.write(`Authority rotation transition failed: ${/^[A-Z0-9_]+$/.test(error.message)?error.message:'OPERATION_FAILED'}\n`);process.exitCode=1;});

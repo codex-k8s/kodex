@@ -39,7 +39,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	if err != nil {
 		t.Fatalf("resolve legacy fixture scope: %v", err)
 	}
-	connection, err = readConnection(ctx, repository.pool, currentScope, connection.Ref)
+	connection, err = repository.readConnection(ctx, repository.pool, currentScope, connection.Ref)
 	if err != nil {
 		t.Fatalf("legacy fixture readback: %v", err)
 	}
@@ -117,7 +117,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "email-producer-agent", "Email operator")
 	granted, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-grant", ExpectedVersion: &connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
 	if err != nil || granted.Connection == nil {
 		t.Fatalf("grant email: %v", err)
 	}
@@ -196,14 +196,14 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	preflightRevoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-revoke", ExpectedVersion: &granted.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
 	if err != nil || preflightRevoked.Connection == nil {
 		t.Fatalf("revoke idle email preflight grant: %v", err)
 	}
 	denyOldSend("email-producer-preflight-revoked-send")
 	granted, err = service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-preflight-regrant", ExpectedVersion: &preflightRevoked.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}})
 	if err != nil || granted.Connection == nil {
 		t.Fatalf("regrant idle email preflight authority: %v", err)
 	}
@@ -237,11 +237,15 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	invocation, err := service.ResolveIntegrationInvocation(ctx, runtime, map[string]string{
 		"run_ref": stringMap(execution, "runRef"), "node_ref": stringMap(execution, "nodeRef"), "connection_ref": connection.Ref,
 		"capability_key": "email.message.send", "idempotency_key": "email-producer-send"}, bounded)
-	if err != nil || stringMap(invocation, "state") != "READY" || stringMap(invocation, "gateRef") != "" {
-		t.Fatalf("mailbox ALLOW unexpectedly required gate: %v", err)
+	if err != nil || stringMap(invocation, "state") != "WAITING_APPROVAL" || stringMap(invocation, "gateRef") == "" {
+		t.Fatalf("mailbox ALLOW bypassed the mandatory send gate: %v", err)
 	}
+	if pending, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-before-approve", 32); err != nil || len(pending) != 0 {
+		t.Fatalf("unapproved mailbox work was claimed: count=%d err=%v", len(pending), err)
+	}
+	approveEmailFixtureGate(t, ctx, service, owner, invocation, "email-producer-send-approve")
 	claims, err = service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-gateway", 32)
-	if err != nil || len(claims) != 1 {
+	if err != nil || len(claims) != 1 || stringMap(claims[0], "invocationRef") != stringMap(invocation, "invocationRef") {
 		t.Fatalf("claim email effect: %d %v", len(claims), err)
 	}
 	claim := claims[0]
@@ -259,22 +263,13 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	input = query.EmailAuthorization{Binding: binding, MailboxRef: mailbox.Id, ConfigurationRevision: mailbox.Revision,
 		Operation: "send", Sender: mailbox.Sender, Folder: mailbox.Folder, SemanticInputDigest: api.Digest(semantic), EffectKey: semantic.EffectKey}
 	decision, err = service.ResolveEmailAuthorization(ctx, email, input)
-	if err != nil || !decision.Allowed || decision.GateApproved || decision.Policy != "allow" || decision.AgentRef != agent.Ref || decision.ProjectRef != project.Project.Ref {
-		t.Fatalf("authorize mailbox ALLOW send without gate: %v", err)
+	if err != nil || !decision.Allowed || !decision.GateApproved || decision.Policy != "allow" || decision.AgentRef != agent.Ref || decision.ProjectRef != project.Project.Ref {
+		t.Fatalf("authorize mailbox ALLOW send with exact approval: %v", err)
 	}
 	checkApprovedRead := func() query.EmailAuthorization {
 		// Mailbox Human Gate действует независимо от generic approvalPolicy=NONE.
 		// До решения READ не попал в claim выше; после решения выдаётся ровно один раз.
-		readGate, err := service.GetOwnerGate(ctx, owner, stringMap(readInvocation, "gateRef"))
-		if err != nil {
-			t.Fatalf("read mailbox approval gate: %v", err)
-		}
-		approvedRead, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
-			Mutation: value.Mutation{IdempotencyKey: "email-producer-read-approve", ExpectedVersion: &readGate.Version},
-			Payload:  command.GateResolutionInput{GateRef: readGate.Ref, Decision: "APPROVE"}})
-		if err != nil || approvedRead.Gate == nil || approvedRead.Gate.State != "APPROVED" {
-			t.Fatalf("approve mailbox gate with generic NONE policy: %v", err)
-		}
+		approveEmailFixtureGate(t, ctx, service, owner, readInvocation, "email-producer-read-approve")
 		readClaims, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-approved-read", 32)
 		if err != nil || len(readClaims) != 1 || stringMap(readClaims[0], "invocationRef") != stringMap(readInvocation, "invocationRef") {
 			t.Fatalf("claim approved mailbox gate: count=%d err=%v", len(readClaims), err)
@@ -366,7 +361,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-revoke", ExpectedVersion: &granted.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})
 	if err != nil || revoked.Connection == nil {
 		t.Fatalf("revoke email grant: %v", err)
 	}
@@ -375,7 +370,7 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-regrant", ExpectedVersion: &revoked.Connection.Version},
-		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("pending email effect allowed grant replacement: %v", err)
 	}
 	unchanged, err := service.GetIntegrationConnection(ctx, owner, connection.Ref)
@@ -388,5 +383,27 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	replay, err = service.Execute(ctx, report)
 	if err != nil || replay.EmailReceipt == nil || replay.EmailReceipt.Ref != first.EmailReceipt.Ref {
 		t.Fatalf("revocation destroyed immutable receipt read: %v", err)
+	}
+}
+
+// approveEmailFixtureGate approves one exact owner Gate through the public mutation and checks
+// that an integration proposal was still waiting before the decision.
+// approveEmailFixtureGate одобряет один точный owner Gate штатной командой и проверяет, что
+// предложение интеграции ожидало решения и сохраняло тот же Gate.
+func approveEmailFixtureGate(t *testing.T, ctx context.Context, service *platformservice.Service, owner value.Principal, invocation map[string]any, key string) {
+	t.Helper()
+	ref := stringMap(invocation, "gateRef")
+	if ref == "" || stringMap(invocation, "state") != "WAITING_APPROVAL" {
+		t.Fatal("email fixture invocation did not wait for the owner gate")
+	}
+	gate, err := service.GetOwnerGate(ctx, owner, ref)
+	if err != nil || gate.Ref != ref || gate.State != "OPEN" {
+		t.Fatalf("read exact open email gate: %v", err)
+	}
+	approved, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &gate.Version},
+		Payload:  command.GateResolutionInput{GateRef: ref, Decision: "APPROVE"}})
+	if err != nil || approved.Gate == nil || approved.Gate.Ref != ref || approved.Gate.State != "APPROVED" {
+		t.Fatalf("approve exact email gate: %v", err)
 	}
 }

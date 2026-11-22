@@ -48,10 +48,13 @@ func integrationContinuationTask(snapshot integrationContinuationSnapshot) (stri
 	var outcome string
 	switch decision.Decision {
 	case "APPROVE":
-		if snapshot.State != "SUCCEEDED" && snapshot.State != "FAILED" {
+		if snapshot.State != "SUCCEEDED" && snapshot.State != "FAILED" && snapshot.State != "CANCELLED" {
 			return "", errs.ErrConflict
 		}
 		outcome = "The owner approved this invocation and its terminal result is now available."
+		if snapshot.State == "CANCELLED" {
+			outcome = "The owner previously approved this invocation, but it was subsequently cancelled. The previous approval is historical and does not authorize repeating the cancelled external action."
+		}
 	case "REJECT":
 		if snapshot.State != "REJECTED" {
 			return "", errs.ErrConflict

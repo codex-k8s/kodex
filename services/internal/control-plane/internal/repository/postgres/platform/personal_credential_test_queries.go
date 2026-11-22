@@ -56,6 +56,12 @@ var queryPersonalCredentialTestClaim string
 //go:embed sql/personal_credential_test__begin.sql
 var queryPersonalCredentialTestBegin string
 
+// queryPersonalCredentialTokenProbeBegin consumes a TOKEN claim only while its fresh allowance and original lease are live; broker health keeps the separate original owner query.
+// queryPersonalCredentialTokenProbeBegin расходует TOKEN claim лишь при действующих fresh allowance и original lease; broker health сохраняет отдельный исходный owner query.
+//
+//go:embed sql/personal_credential_test__begin_token.sql
+var queryPersonalCredentialTokenProbeBegin string
+
 // queryPersonalCredentialTestFinish closes one expected job version and clears all live lease coordinates.
 // queryPersonalCredentialTestFinish закрывает одну ожидаемую версию задания и очищает все действующие координаты аренды.
 //

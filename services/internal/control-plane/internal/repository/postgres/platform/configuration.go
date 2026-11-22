@@ -423,10 +423,11 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	if input.Kind == command.CreateConnection {
-		payload.Name = strings.TrimSpace(payload.Name)
-		if payload.Name == "" || len(payload.Name) > 160 {
+		name, validName := normalizedIntegrationConnectionName(payload.Name)
+		if !validName {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		payload.Name = name
 		definition, exists := repository.integrationDefinitions[payload.DefinitionKey]
 		if !exists {
 			return commandOutcome{}, errs.ErrNotFound
@@ -463,7 +464,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		credentialPolicy := entity.IntegrationCredentialProjectShared
 		// New typed personal integrations start with the initiator key; a shared service identity requires the separate disabled/drained owner policy command.
 		// Новые typed personal integrations начинают с ключа инициатора; shared service identity требует отдельной owner policy команды после disable/drain.
-		if githubScopedDefinition(definition) || definition.Spec.Adapter == string(integrationpackage.AdapterSentry) || definition.Spec.Adapter == string(integrationpackage.AdapterObservability) {
+		if githubScopedDefinition(definition) || definition.Spec.Adapter == string(integrationpackage.AdapterSentry) || definition.Spec.Adapter == string(integrationpackage.AdapterObservability) || definition.Spec.Adapter == string(integrationpackage.AdapterSSHTarget) || definition.Spec.Adapter == string(integrationpackage.AdapterEmailHTTPS) {
 			credentialPolicy = entity.IntegrationCredentialInitiatorRequired
 		}
 		err := tx.QueryRow(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionsRefDefinitionKeyState,
@@ -476,7 +477,12 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if json.Unmarshal(config, &item.PublicConfiguration) != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		item, err = readConnection(ctx, tx, scope, ref)
+		if payload.DefinitionKey == "email" {
+			if _, err := tx.Exec(ctx, queryEmailCredentialOwnerInitialize, pgx.StrictNamedArgs{"connection_id": connectionID, "organization_id": scope.organizationID, "subject_id": scope.actorID}); err != nil {
+				return commandOutcome{}, mapWriteError(err)
+			}
+		}
+		item, err = repository.readConnection(ctx, tx, scope, ref)
 		if err != nil {
 			return commandOutcome{}, err
 		}
@@ -512,6 +518,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
+		if locked.definitionKey == "email" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		if locked.credentialPolicy != entity.IntegrationCredentialProjectShared {
 			return commandOutcome{}, errs.ErrConflict
 		}
@@ -519,7 +528,9 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		if !definition.RequiresConnectionCredential() || payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
+		delivery, knownDelivery := definition.ConnectionCredentialDelivery()
+		if !knownDelivery || delivery.Kind != integrationpackage.CredentialDeliveryToken || delivery.BrokerPurpose != "" ||
+			payload.MaterializationRef == "" || len(payload.MaterializationRef) > 128 ||
 			!validIntegrationCredentialInput(true, credential) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
@@ -541,7 +552,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		} else if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		item, readErr := readConnection(ctx, tx, scope, updatedRef)
+		item, readErr := repository.readConnection(ctx, tx, scope, updatedRef)
 		if readErr != nil {
 			return commandOutcome{}, readErr
 		}
@@ -555,7 +566,24 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if err != nil {
 			return commandOutcome{}, err
 		}
-		if locked.credentialPolicy != entity.IntegrationCredentialProjectShared {
+		if locked.definitionKey == "email" {
+			owner, ownerErr := requireEmailMailboxManagerTx(ctx, tx, scope, payload.Ref)
+			if ownerErr != nil {
+				return commandOutcome{}, ownerErr
+			}
+			if owner.state != "ACTIVE" || !owner.owner.SubjectActive {
+				return commandOutcome{}, errs.ErrForbidden
+			}
+			var configured bool
+			if err := tx.QueryRow(ctx, queryEmailConnectionTestSetup, pgx.StrictNamedArgs{
+				"organization_id": scope.organizationID, "connection_id": owner.connectionID, "actor_id": scope.actorID,
+			}).Scan(&configured); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if !configured {
+				return commandOutcome{}, errs.ErrConflict
+			}
+		} else if locked.credentialPolicy != entity.IntegrationCredentialProjectShared {
 			return commandOutcome{}, errs.ErrConflict
 		}
 		var activeSSHDependency bool
@@ -573,6 +601,10 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 		if !found || health.Risk != "READ" || health.ApprovalPolicy != "NONE" {
 			return commandOutcome{}, errs.ErrForbidden
 		}
+		healthSource, err := repository.readSharedHealthCredentialSourceTx(ctx, tx, scope.organizationID, locked.id, payload.Ref, definition)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		var connectionID string
 		err = tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdateIntegrationConnectionsStateLastTestSummaryVersion, scope.organizationID, payload.Ref, *input.Mutation.ExpectedVersion).Scan(&connectionID, &item.Ref, &item.DefinitionKey, &item.Name, &item.State, &item.MaskedCredentialsState, &item.LastTestSummary, &item.Enabled, &item.Version, &item.LastTestedAt, &item.CreatedAt, &item.UpdatedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -585,7 +617,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, err
 		}
 		testRef, _ := newRef("tst")
-		if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionTestsRefConnectionIdCreatedBy, testRef, scope.organizationID, connectionID, scope.actorID); err != nil {
+		if _, err := tx.Exec(ctx, queryConfigurationChangeconnectionInsertIntegrationConnectionTestsRefConnectionIdCreatedBy, testRef, scope.organizationID, connectionID, scope.actorID, string(healthSource.delivery.Kind), healthSource.delivery.BrokerPurpose, healthSource.identityID); err != nil {
 			return commandOutcome{}, mapWriteError(err)
 		}
 	} else {
@@ -601,6 +633,12 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if !payload.Enabled {
+			if err := repository.cancelSSHIdentityDependenciesTx(ctx, tx, scope, payload.Ref, ""); err != nil {
+				return commandOutcome{}, err
+			}
+			if err := cancelKubernetesIdentitySetupsTx(ctx, tx, scope.organizationID, payload.Ref, ""); err != nil {
+				return commandOutcome{}, err
+			}
 			if err := repository.invalidateSSHComposeDependencies(ctx, tx, scope.organizationID, scope.actorID, scope.correlationRef, payload.Ref, "", ""); err != nil {
 				return commandOutcome{}, err
 			}
@@ -616,7 +654,7 @@ func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, s
 			}
 		}
 	}
-	item, err := readConnection(ctx, tx, scope, item.Ref)
+	item, err := repository.readConnection(ctx, tx, scope, item.Ref)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -703,10 +741,11 @@ func (repository *Repository) updateIntegrationConnection(
 	if locked.version != *mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
-	payload.Name = strings.TrimSpace(payload.Name)
+	name, validName := normalizedIntegrationConnectionName(payload.Name)
+	payload.Name = name
 	definition, packageErr := repository.integrationPackage(ctx, tx, current.organizationID, payload.Ref, locked.definitionKey, locked.definitionVersion, locked.definitionDigest)
 	configuration, valid := integrationConfigurationValues(definition, payload.PublicConfiguration)
-	if payload.Name == "" || len(payload.Name) > 160 || packageErr != nil || !valid ||
+	if !validName || packageErr != nil || !valid ||
 		definition.Metadata.Version != locked.definitionVersion || definition.Digest != locked.definitionDigest ||
 		definition.ValidateConfiguration(configuration) != nil || payload.CredentialRevision != nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -732,6 +771,9 @@ func (repository *Repository) updateIntegrationConnection(
 	if activeEffects != 0 {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	if err := repository.cancelSSHIdentityDependenciesTx(ctx, tx, current, payload.Ref, ""); err != nil {
+		return commandOutcome{}, err
+	}
 	var updatedRef string
 	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionUpdate, pgx.StrictNamedArgs{
 		"connection_id": locked.id, "expected_version": locked.version,
@@ -751,7 +793,7 @@ func (repository *Repository) updateIntegrationConnection(
 	if err := repository.invalidateSSHComposeDependencies(ctx, tx, current.organizationID, current.actorID, current.correlationRef, payload.Ref, "", ""); err != nil {
 		return commandOutcome{}, err
 	}
-	item, err := readConnection(ctx, tx, current, updatedRef)
+	item, err := repository.readConnection(ctx, tx, current, updatedRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -794,8 +836,11 @@ func (repository *Repository) deleteIntegrationConnection(
 	if activeEffects != 0 || activeGrants != 0 {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	item, err := readConnection(ctx, tx, current, payload.Ref)
+	item, err := repository.readConnection(ctx, tx, current, payload.Ref)
 	if err != nil {
+		return commandOutcome{}, err
+	}
+	if err := repository.cancelSSHIdentityDependenciesTx(ctx, tx, current, payload.Ref, ""); err != nil {
 		return commandOutcome{}, err
 	}
 	if err := tx.QueryRow(ctx, queryConfigurationChangeconnectionDelete, pgx.StrictNamedArgs{
@@ -931,15 +976,25 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	} else if len(payload.ApprovalScopePaths) != 0 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if err := requireIntegrationGrantPolicyChangeIdle(ctx, tx, scope.organizationID, connectionID, payload); err != nil {
-		return commandOutcome{}, err
+	if capability.ResourceScope.Kind != "KUBERNETES_TARGET" {
+		if err := requireIntegrationGrantPolicyChangeIdle(ctx, tx, scope.organizationID, connectionID, payload); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	configuration := map[string]string{}
 	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	resourceScope, err := capability.ResourceScopeValues(configuration)
+	if capability.ResourceScope.Kind == "KUBERNETES_TARGET" {
+		resourceScope, err = capability.KubernetesResourceScope(configuration, payload.KubernetesNamespace)
+	} else if payload.KubernetesNamespace != "" || capability.ResourceScope.Kind != "KUBERNETES_TARGET" && payload.KubernetesGrantRef != "" {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	if err != nil {
+		if capability.ResourceScope.Kind == "KUBERNETES_TARGET" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	encodedScope, err := json.Marshal(resourceScope)
@@ -948,7 +1003,12 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	}
 	scopeDigest := sha256.Sum256(encodedScope)
 	var grantRef string
-	if payload.Enabled {
+	if capability.ResourceScope.Kind == "KUBERNETES_TARGET" {
+		grantRef, err = changeKubernetesGrantTx(ctx, tx, scope, connectionID, definition, capability, payload, targetType, targetRef, encodedScope, hex.EncodeToString(scopeDigest[:]))
+		if err != nil {
+			return commandOutcome{}, err
+		}
+	} else if payload.Enabled {
 		grantRef, _ = newRef("grt")
 		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantInsertIntegrationGrantsRefConnectionIdTargetKind,
 			grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef,
@@ -971,6 +1031,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if err := repository.invalidateSSHComposeDependencies(ctx, tx, scope.organizationID, scope.actorID, scope.correlationRef, "", "", grantRef); err != nil {
 		return commandOutcome{}, err
 	}
+	if err := repository.closeSSHExecutionDependenciesTx(ctx, tx, scope, payload.ConnectionRef, "", "", grantRef); err != nil {
+		return commandOutcome{}, err
+	}
 	if err := repository.cancelConfigurationWriteBacks(ctx, tx, scope, "", payload.ConnectionRef); err != nil {
 		return commandOutcome{}, err
 	}
@@ -987,7 +1050,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if err := advanceMailboxObservation(ctx, tx, scope.organizationID, connectionID, connectionVersion, connectionVersion+1); err != nil {
 		return commandOutcome{}, err
 	}
-	connection, err := readConnection(ctx, tx, scope, payload.ConnectionRef)
+	connection, err := repository.readConnection(ctx, tx, scope, payload.ConnectionRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}

@@ -1,0 +1,49 @@
+syntax = "proto3";
+package secretbroker.v1;
+option go_package = "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1;secretbrokerv1";
+
+// Purpose-specific health использует original claim. Endpoint, credential и actor
+// разрешаются владельцем и operator artifact; private key не пересекает этот RPC.
+service ManagedSSHService {
+ rpc ProbeSSHIdentity(ProbeSSHIdentityRequest) returns (ProbeSSHIdentityResponse);
+ rpc ExecuteSSHIdentity(ExecuteSSHIdentityRequest) returns (ExecuteSSHIdentityResponse);
+ rpc ReconcileSSHIdentity(ReconcileSSHIdentityRequest) returns (ReconcileSSHIdentityResponse);
+}
+message ManagedSSHHealthBinding {
+ string workload_instance = 1;
+ string connection_test_ref = 2;
+ string lease_ref = 3;
+ string fence = 4;
+ int64 generation = 5;
+ string input_digest = 6;
+}
+message ProbeSSHIdentityRequest { ManagedSSHHealthBinding binding = 1; }
+// Applied относится к исходному health test, не к resource permission либо effect.
+message ProbeSSHIdentityResponse {string test_ref=1;string state=2;bool applied=3;}
+
+// Только original owner claim. Raw command и выбор key/endpoint не принимаются.
+message ManagedSSHExecutionBinding {
+ string workload_instance=1;
+ string invocation_ref=2;
+ string lease_ref=3;
+ string fence=4;
+ int64 generation=5;
+ string input_digest=6;
+}
+message ExecuteSSHIdentityRequest { ManagedSSHExecutionBinding binding=1; }
+message ReconcileSSHIdentityRequest { ManagedSSHExecutionBinding binding=1; }
+message ManagedSSHExecutionResult {
+ ManagedSSHExecutionBinding binding=1;
+ string attempt_ref=2;
+ string snapshot_digest=3;
+ string state=4;
+ bool recorded=5;
+ bool applied=6;
+ string outcome=7;
+ string result_digest=8;
+ bytes result_json=9;
+ string owner_state=10;
+}
+message ExecuteSSHIdentityResponse { ManagedSSHExecutionResult result=1; }
+// Metadata only: reconciliation не повторяет Begin, key read либо SSH Start.
+message ReconcileSSHIdentityResponse { ManagedSSHExecutionResult result=1; }

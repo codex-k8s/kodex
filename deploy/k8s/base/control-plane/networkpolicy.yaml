@@ -35,6 +35,10 @@ spec:
               app.kubernetes.io/name: session-archive
         - podSelector:
             matchLabels:
+              app.kubernetes.io/name: artifact-retention
+              app.kubernetes.io/component: retention-job
+        - podSelector:
+            matchLabels:
               app.kubernetes.io/name: role-image-builder
         - podSelector:
             matchLabels:

@@ -103,7 +103,7 @@ func (repository *Repository) ListOwnerGates(ctx context.Context, principal valu
 		if err != nil {
 			return nil, 0, "", err
 		}
-		if err := repository.projectGateIntent(ctx, tx, current, &item, true); err != nil {
+		if err := repository.projectGateIntent(ctx, tx, current, &item, true, kubernetesGatePreviewSummary); err != nil {
 			return nil, 0, "", err
 		}
 		result = append(result, item)

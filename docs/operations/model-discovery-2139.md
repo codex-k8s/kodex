@@ -156,10 +156,15 @@ Default `glm-5.3`; `--default-model glm-5.3-flash` разрешает явный
 Ключ берётся из раздела Personal Coding Plan по
 [официальной инструкции для OpenCode](https://docs.z.ai/devpack/tool/opencode).
 
-Conservative owner ceilings: context1000000, output32768. Это operator limits,
-а не remote quota attestation. Доступные reasoning efforts в справочнике не
-расширяют runtime preference allowlist. Preset сохраняет provider default,
-не отправляет `thinking.disabled` либо неподтверждённый `max` через общий overlay.
+Z.ai публикует окно в 1 млн токенов и верхнюю границу ответа 128K для
+`glm-5.3` и `glm-5.3-flash`. В установленном через preset профиле Kodex
+предел контекста составляет 1 млн токенов, предел ответа — 32 768 токенов.
+Доступность маршрута и квота проверяются отдельно по аккаунту.
+[GLM-5.3](https://docs.z.ai/guides/llm/glm-5.3),
+[GLM-5.3-Flash](https://docs.z.ai/guides/vlm/glm-5.3-flash).
+
+Профиль сохраняет reasoning по умолчанию у провайдера. Допустимые
+пользовательские настройки задаёт закрытый контракт OpenCode adapter Kodex.
 
 Настоящий закреплённый OpenCode прошёл synthetic wire-проверку обоих aliases:
 точный Coding Plan path, два model requests и один managed tool effect на alias,

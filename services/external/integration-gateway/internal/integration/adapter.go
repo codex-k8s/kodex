@@ -582,6 +582,23 @@ func validateExecutionResult(capability integrationpackage.Capability, request R
 // Required shipped destinations except github_git, managed-MCP gateway ownership and the credential-presence contract must match before execution.
 // RU: До исполнения должны совпадать обязательные поставляемые назначения кроме github_git, принадлежность gateway маршрута managed-MCP и договор наличия credential.
 func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.Package, error) {
+	definition, err := adapter.validateExecutableDefinition(request)
+	if err != nil {
+		return integrationpackage.Package{}, err
+	}
+	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
+		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
+	}
+	return definition, nil
+}
+
+// validateExecutableDefinition shares exact package pins and route checks without selecting a
+// credential representation. The ordinary path retains its previous credential presence guard;
+// private broker adapters must enforce their own exact delivery kind and never read token files.
+// validateExecutableDefinition разделяет exact package pins и route checks без выбора credential
+// representation. Ordinary path сохраняет прежний presence guard; private broker adapters
+// проверяют собственный exact delivery kind и не читают token files.
+func (adapter *Adapter) validateExecutableDefinition(request Request) (integrationpackage.Package, error) {
 	shipped, exists := adapter.definitions[request.DefinitionKey]
 	if !exists || len(request.DefinitionPackage) == 0 || len(request.DefinitionPackage) > 256<<10 {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
@@ -600,9 +617,6 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	}
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
-	}
-	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
-		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	return definition, nil
 }
@@ -627,6 +641,21 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	if err != nil {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
 	}
+	return adapter.validateInvocationDefinition(request, definition)
+}
+
+// validateInvocationDefinition shares business grant/capability/input checks after the caller has validated its complete executable package and credential representation. The ordinary entry retains its TOKEN presence guard and legacy error order; the SSH entry supplies only its already checked exact BI package.
+// validateInvocationDefinition разделяет business grant/capability/input checks после проверки caller полного executable package и credential representation. Ordinary entry сохраняет TOKEN presence guard и прежний error order; SSH entry передаёт лишь уже проверенный exact BI package.
+func (adapter *Adapter) validateInvocationDefinition(request Request, definition integrationpackage.Package) (
+	integrationpackage.Package,
+	integrationpackage.Capability,
+	[]byte,
+	map[string]string,
+	error,
+) {
+	if !request.healthCheck && (request.GrantRef == "" || request.GrantVersion < 1) {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_GRANT_INVALID"}
+	}
 	capability, exists := definition.Capability(request.CapabilityKey)
 	if !exists || capability.Operation != request.Operation || capability.Risk != request.Risk ||
 		!capability.AllowsApprovalPolicy(request.ApprovalPolicy) || capability.ResourceScope.Kind != request.ResourceKind ||
@@ -636,6 +665,13 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	expectedProfile := ""
 	if request.PersonalCredentialAdmission {
 		expectedProfile = integrationpackage.CredentialResourcePermissionProfile(definition, capability)
+	}
+	if delivery, known := definition.ConnectionCredentialDelivery(); known && delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity && delivery.BrokerPurpose == "SSH_TARGET" && definition.Spec.Adapter == "SSH_TARGET" &&
+		(definition.Metadata.Key == integrationpackage.SSHManagedDefinitionKey || definition.Metadata.Key == integrationpackage.SSHExecuteDefinitionKey) {
+		if request.PersonalCredentialAdmission || request.Credential != nil || request.EmailExecution != nil {
+			return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		expectedProfile = integrationpackage.CredentialResourcePermissionSSHScopedV1
 	}
 	if request.ResourcePermissionProfile != expectedProfile {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}

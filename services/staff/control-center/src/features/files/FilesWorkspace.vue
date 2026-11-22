@@ -29,6 +29,7 @@ import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
 import ArtifactBindingTargets from "@/features/files/ArtifactBindingTargets.vue";
+import KubernetesCaptureOrigin from "@/features/files/KubernetesCaptureOrigin.vue";
 import ArtifactRevisionHistory from "@/features/files/ArtifactRevisionHistory.vue";
 import { bindingTargetEditable } from "@/features/files/binding-targets";
 import TrashBulkDialog from "@/features/files/TrashBulkDialog.vue";
@@ -1735,6 +1736,7 @@ onBeforeUnmount(() => {
               {{ $t("files.openPreview") }}
             </button>
           </section>
+          <KubernetesCaptureOrigin :origin="selectedArtifact.captureOrigin" />
           <ArtifactRevisionHistory :artifact="selectedArtifact" />
           <section class="file-details__bindings">
             <ArtifactBindingTargets

@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Отдельная artifact task, не original invocation binding и не native execution grant.
+message ManagedKubernetesCaptureTaskBinding {
+  string capture_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  string workload_instance = 5;
+  string snapshot_digest = 6;
+}
+
+enum ManagedKubernetesCaptureState {
+  MANAGED_KUBERNETES_CAPTURE_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_CAPTURE_STATE_READY = 1;
+  MANAGED_KUBERNETES_CAPTURE_STATE_CLAIMED = 2;
+  MANAGED_KUBERNETES_CAPTURE_STATE_COMPLETE = 3;
+  MANAGED_KUBERNETES_CAPTURE_STATE_UNKNOWN = 4;
+  MANAGED_KUBERNETES_CAPTURE_STATE_REJECTED = 5;
+  MANAGED_KUBERNETES_CAPTURE_STATE_WAITING_OWNER = 6;
+  MANAGED_KUBERNETES_CAPTURE_STATE_SUPERSEDED = 7;
+}
+
+enum ManagedKubernetesCaptureKind {
+  MANAGED_KUBERNETES_CAPTURE_KIND_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_CAPTURE_KIND_EMPTY = 1;
+  MANAGED_KUBERNETES_CAPTURE_KIND_FULL = 2;
+  MANAGED_KUBERNETES_CAPTURE_KIND_PARTIAL = 3;
+}
+
+message ManagedKubernetesCapturedArtifact {
+  string channel = 1;
+  string artifact_ref = 2;
+  string revision_ref = 3;
+  string digest = 4;
+  int64 size_bytes = 5;
+  int64 capture_generation = 6;
+  bool partial = 7;
+}
+
+// Только immutable metadata; COMPLETE означает завершённый capture consumer,
+// а не успешный исход native execution. PARTIAL никогда не является FULL transcript.
+message ManagedKubernetesCaptureReceipt {
+  string capture_ref = 1;
+  string stream_ref = 2;
+  string snapshot_digest = 3;
+  string task_binding_digest = 4;
+  int64 task_generation = 5;
+  int64 capture_generation = 6;
+  ManagedKubernetesCaptureState state = 7;
+  ManagedKubernetesCaptureKind kind = 8;
+  repeated ManagedKubernetesCapturedArtifact artifacts = 9;
+  string reason_code = 10;
+}
+
+message FinalizeManagedKubernetesCaptureRequest {
+  ManagedKubernetesCaptureTaskBinding binding = 1;
+}
+message FinalizeManagedKubernetesCaptureResponse {
+  ManagedKubernetesCaptureReceipt receipt = 1;
+}
+message GetManagedKubernetesCaptureRequest {
+  ManagedKubernetesCaptureTaskBinding binding = 1;
+}
+message GetManagedKubernetesCaptureResponse {
+  ManagedKubernetesCaptureReceipt receipt = 1;
+}
+message RenewManagedKubernetesCaptureRequest {
+  ManagedKubernetesCaptureTaskBinding binding = 1;
+}
+message RenewManagedKubernetesCaptureResponse {
+  string lease_ref = 1;
+  int64 generation = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+message CheckManagedKubernetesCaptureReadinessRequest {}
+message CheckManagedKubernetesCaptureReadinessResponse {
+  bool ready = 1;
+  uint32 contract_revision = 2;
+}

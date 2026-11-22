@@ -4,16 +4,19 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.27
-updated: 2026-11-14
+version: 2.2.28
+updated: 2026-11-17
 ---
 
 # Кодификация документов и задач
+
+- `OPS-DOC-2145-CAPTURE-RETENTION` — [Сохранённый Kubernetes OUTPUT: discovery и восстановление cleanup](../operations/kubernetes-capture-retention-2145.md).
 
 - `OPS-DOC-GITHUB-SCOPE-2033` — [Личные репозитории GitHub и область подключения](../operations/github-repository-scope-2033.md).
 
 - `OPS-DOC-PERSONAL-CREDENTIALS-2033` — [Персональные подключения и допуск запуска](../operations/personal-credentials-2033.md) (draft).
 - `OPS-DOC-PERSONAL-TOKEN-ALLOWANCE-2033` — [Конечный допуск персонального TOKEN вызова](../operations/personal-token-allowance-2033.md).
+- `OPS-DOC-PAIRED-TOKEN-RELEASE-2067` — [Read-only план парной поставки CP и Integration Gateway](../operations/paired-token-release-2067.md).
 
 - `RUN-INT-SERVER-2029` — [Опциональные Server/DC-профили Jira и Confluence](../operations/atlassian-server-profiles-2029.md).
 

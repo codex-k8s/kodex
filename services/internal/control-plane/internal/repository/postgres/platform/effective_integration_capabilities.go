@@ -84,7 +84,7 @@ func (repository *Repository) effectiveIntegrationCapabilities(ctx context.Conte
 			return nil, err
 		}
 		item.Grantable = authority.allowed("integration.manage", target.scope)
-		allowed := integrationCapabilityAllowed(authority, capability, target.scope)
+		allowed := integrationCapabilityAllowed(authority, definition, capability, target.scope)
 		if !allowed {
 			item.Reason = capabilityActorDenied
 		} else if grant.eligible {
@@ -130,15 +130,21 @@ func (repository *Repository) agentCapabilityAuthority(ctx context.Context, tx p
 	return repository.runtimeCapabilityAuthority(ctx, tx, current, projectRef, agentRef, requested, grants)
 }
 
-// integrationCapabilityAllowed requires integration.view for READ risk and integration.manage for
-// every other risk through the supplied authority predicate and exact target. It does not inspect
-// a grant, package pin or readiness itself.
-// integrationCapabilityAllowed требует integration.view для риска READ и integration.manage для
-// любого другого риска через переданный предикат полномочий и точную цель. Самостоятельно не
-// проверяет grant, привязку пакета и готовность.
-func integrationCapabilityAllowed(authority capabilityAuthority, capability integrationpackage.Capability, target entity.AccessScope) bool {
+// integrationCapabilityAllowed preserves legacy READ/use policy and the closed Kubernetes/SSH use profiles.
+// The caller supplies a validated pinned package; each purpose still requires its exact registered
+// operation/risk and target permission. Grantability remains a separate management decision.
+// integrationCapabilityAllowed сохраняет legacy READ/use policy и закрытые Kubernetes/SSH use profiles.
+// Caller передаёт validated pinned package; каждый purpose требует exact registered operation/risk и target
+// permission. Возможность изменять grant остаётся отдельным management decision.
+func integrationCapabilityAllowed(authority capabilityAuthority, definition integrationpackage.Package, capability integrationpackage.Capability, target entity.AccessScope) bool {
 	permission := "integration.manage"
-	if capability.Risk == "READ" {
+	if (definition.Metadata.Key == integrationpackage.KubernetesDefinitionKey || definition.Metadata.Key == integrationpackage.SSHManagedDefinitionKey || definition.Metadata.Key == integrationpackage.SSHExecuteDefinitionKey) && integrationInvocationActorPermission(definition) == "integration.view" {
+		registered, known := definition.Capability(capability.Key)
+		if !known || registered.Operation != capability.Operation || registered.Risk != capability.Risk || !registered.CallableByAgent() {
+			return false
+		}
+		permission = "integration.view"
+	} else if capability.Risk == "READ" {
 		permission = "integration.view"
 	}
 	return authority.allowed(permission, target)
@@ -185,7 +191,7 @@ func (repository *Repository) runtimeCapabilityAuthority(ctx context.Context, tx
 		if err != nil {
 			return nil, nil, err
 		}
-		if !integrationCapabilityAllowed(authority, capability, target.scope) {
+		if !integrationCapabilityAllowed(authority, definition, capability, target.scope) {
 			continue
 		}
 		schema, err := capability.InputSchema()

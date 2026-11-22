@@ -439,3 +439,180 @@ for (const width of [390, 2900]) {
     expect(errors).toEqual([]);
   });
 }
+
+for (const [operation, namespace, width] of [
+  ["kubernetes.get", "example", 390],
+  ["kubernetes.list.all-namespaces", "@all-namespaces", 1440],
+] as const) {
+  test(`Kubernetes grant: explicit scope ${operation}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const failures: string[] = [];
+    page.on("pageerror", (error) => failures.push(error.message));
+    await installSyntheticCsrf(page.context(), "a");
+    const kubernetesCapability: IntegrationCapability = {
+      ...capability,
+      key: operation,
+      operation,
+      name: "Прочитать Kubernetes resource",
+      resourceKind: "KUBERNETES_TARGET",
+    };
+    const kubernetesConnection: IntegrationConnection = {
+      ...connection,
+      definitionKey: "kubernetes-managed",
+      credentialPolicy: "INITIATOR_REQUIRED",
+      credentialDelivery: {
+        kind: "BROKER_IDENTITY",
+        brokerPurpose: "KUBERNETES_TARGET",
+      },
+      publicConfiguration: { target_ref: "target_example" },
+      capabilities: [kubernetesCapability],
+      grants: [
+        {
+          ref: "grant_namespace",
+          version: 1,
+          capabilityKey: operation,
+          agentRef: "agent",
+          targetName: "Агент",
+          enabled: true,
+          risk: "READ",
+          approvalPolicy: "NONE",
+          resourceScope: {
+            kind: "KUBERNETES_TARGET",
+            values: { target_ref: "target_example", namespace },
+            digest: "a".repeat(64),
+          },
+        },
+      ],
+    };
+    const pins = {
+      contextDigest: "a".repeat(64),
+      connectionVersion: 3,
+      definitionVersion: "2.3",
+      definitionDigest: "a".repeat(64),
+      projectVersion: 1,
+      recipientVersion: 1,
+    };
+    await page.route("**/*", async (route) => {
+      const url = new URL(route.request().url());
+      if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
+      if (url.pathname === "/e2e/fixtures/resource-selection.json") {
+        await route.fulfill({
+          json: { project, run, connection: kubernetesConnection },
+        });
+        return;
+      }
+      if (url.pathname === "/api/v1/projects") {
+        await route.fulfill({
+          json: { items: [project], total: 1, nextPageToken: "" },
+        });
+        return;
+      }
+      if (url.pathname.startsWith("/api/v1/integration-grant-candidates/")) {
+        const context = Object.fromEntries(
+          ["connectionRef", "projectRef", "recipientKind", "recipientRef"]
+            .filter((key) => url.searchParams.has(key))
+            .map((key) => [key, url.searchParams.get(key)]),
+        );
+        let item;
+        if (url.pathname.endsWith("/connections"))
+          item = {
+            connectionRef: "connection",
+            name: "Кластер",
+            definitionKey: "kubernetes-managed",
+            providerName: "Kubernetes",
+            credentialKind: "BROKER_IDENTITY",
+            resourceScope: { target_ref: "target_example" },
+            grantable: true,
+            usable: false,
+            reason: "READY",
+            pins,
+          };
+        else if (url.pathname.endsWith("/projects"))
+          item = {
+            projectRef: "project",
+            name: "Проект",
+            grantable: true,
+            reason: "READY",
+            pins,
+          };
+        else if (url.pathname.endsWith("/recipients"))
+          item = {
+            recipientRef: "agent",
+            recipientKind: "AGENT",
+            projectRef: "project",
+            name: "Агент",
+            grantable: true,
+            reason: "READY",
+            pins,
+          };
+        else
+          item = {
+            capability: kubernetesCapability,
+            grantable: true,
+            reason: "READY",
+            pins,
+          };
+        await route.fulfill({
+          json: {
+            items: [item],
+            total: 1,
+            context,
+            contextDigest: pins.contextDigest,
+            pins,
+          },
+        });
+        return;
+      }
+      if (["/api/v1/vfs/nodes", "/api/v1/vfs/search"].includes(url.pathname)) {
+        await route.fulfill({
+          json: { items: [], total: 0, nextPageToken: "" },
+        });
+        return;
+      }
+      if (url.pathname.startsWith("/api/")) {
+        failures.push(`Unexpected API: ${url.pathname}`);
+        await route.abort();
+        return;
+      }
+      await route.fulfill({
+        response: await route.fetch({
+          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+        }),
+      });
+    });
+    await page.goto("/e2e/fixtures/resource-selection.html");
+    const fields = page.locator(".grant-form > .field");
+    await choose(fields.nth(0), "Проект");
+    await choose(fields.nth(2), "Агент");
+    await choose(fields.nth(3), "Прочитать Kubernetes resource");
+    const save = page.locator(".grant-form button[type=submit]");
+    await expect(save).toBeDisabled();
+    const namespaceInput = page.getByRole("textbox", {
+      name: "Область разрешения Kubernetes",
+    });
+    await expect(namespaceInput).toBeVisible();
+    await namespaceInput.fill(
+      operation.endsWith("all-namespaces") ? "@cluster" : "*",
+    );
+    await expect(save).toBeDisabled();
+    await namespaceInput.fill(namespace);
+    await expect(save).toBeEnabled();
+    await save.click();
+    await expect(page.locator("#saved-grant-selection")).toContainText(
+      `"kubernetesNamespace":"${namespace}"`,
+    );
+    await expect(page.locator("#saved-grant-selection")).toContainText(
+      '"kubernetesGrantRef":"grant_namespace"',
+    );
+    await fields.nth(3).getByRole("button", { name: "Очистить выбор" }).click();
+    await choose(fields.nth(3), "Прочитать Kubernetes resource");
+    await expect(namespaceInput).toHaveValue("");
+    await expect(save).toBeDisabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    expect(failures).toEqual([]);
+  });
+}

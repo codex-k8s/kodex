@@ -2,8 +2,8 @@ package app
 
 import "testing"
 
-// TestApplyWorkloadProfilePinsKubernetesSecrets checks seven registered issuer/verifier examples for all four derived Secret names and resolver activation. It exercises only local profile data, not Kubernetes objects, Secret contents or every registry entry.
-// TestApplyWorkloadProfilePinsKubernetesSecrets проверяет семь зарегистрированных примеров issuer/verifier по четырём полученным именам Secret и включению resolver. Проверяются только локальные данные профиля, а не объекты Kubernetes, содержимое Secret или все записи реестра.
+// TestApplyWorkloadProfilePinsKubernetesSecrets checks eight registered issuer/verifier examples for all four derived Secret names and resolver activation. It exercises only local profile data, not Kubernetes objects, Secret contents or every registry entry.
+// TestApplyWorkloadProfilePinsKubernetesSecrets проверяет восемь зарегистрированных примеров issuer/verifier по четырём полученным именам Secret и включению resolver. Проверяются только локальные данные профиля, а не объекты Kubernetes, содержимое Secret или все записи реестра.
 func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -31,6 +31,12 @@ func TestApplyWorkloadProfilePinsKubernetesSecrets(t *testing.T) {
 			workloadID: "runtime-controller",
 			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
 			prefix:     "internal-rpc-authority-runtime-controller-issuer",
+		},
+		{
+			name: "artifact retention issuer", mode: ModeIssuer,
+			workloadID: "artifact-retention",
+			spiffeID:   "spiffe://kodex.local/ns/kodex-system/sa/artifact-retention",
+			prefix:     "internal-rpc-authority-artifact-retention-issuer",
 		},
 		{
 			name: "session archive issuer", mode: ModeIssuer,
@@ -94,11 +100,11 @@ func TestApplyWorkloadProfileRejectsUnknownBinding(t *testing.T) {
 	}
 }
 
-// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole checks email and interaction issuers against another workload's SPIFFE identity and their unsupported verifier-mode bindings. All four cases are local registry checks without remote authentication.
-// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole проверяет email- и interaction-issuer с SPIFFE-идентичностью другого workload и с неподдерживаемой привязкой режима verifier. Все четыре случая являются локальными проверками реестра без удалённой аутентификации.
+// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole checks optional issuers against another workload's SPIFFE identity and their unsupported verifier-mode bindings. All cases are local registry checks without remote authentication.
+// TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole проверяет опциональные issuers с SPIFFE-идентичностью другого workload и с неподдерживаемой привязкой режима verifier. Все случаи являются локальными проверками реестра без удалённой аутентификации.
 func TestOptionalIssuerRejectsForeignSPIFFEAndVerifierRole(t *testing.T) {
 	t.Parallel()
-	for _, workload := range []string{"email-bridge", "interaction-gateway"} {
+	for _, workload := range []string{"artifact-retention", "email-bridge", "interaction-gateway"} {
 		for _, config := range []Config{
 			{Mode: ModeIssuer, WorkloadID: workload, WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/control-plane"},
 			{Mode: ModeVerifier, WorkloadID: workload, WorkloadSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/" + workload},

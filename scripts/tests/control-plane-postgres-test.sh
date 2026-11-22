@@ -14,15 +14,45 @@ storage_mode=${KODEX_TEST_POSTGRES_STORAGE:-disk}
 [[ "$storage_mode" == disk || "$storage_mode" == ram ]] || fail 'test PostgreSQL storage must be disk or ram'
 postgres_image='docker.io/library/postgres:18.3-alpine3.23@sha256:54451ecb8ab38c24c3ec123f2fd501303a3a1856a5c66e98cecf2460d5e1e9d7'
 upgrade_container_id=""
+kubernetes_plan_consumer_directory=""
+kubernetes_plan_consumer_required=false
+ssh_gateway_consumer_directory=""
+ssh_gateway_consumer_required=false
+ssh_current_schema_required=false
 test_pattern=${1:-${KODEX_CONTROL_PLANE_TEST_FILTER:-'^(TestSentryObservabilityPersonalProfilesComponent|TestAuthorityProofCounterOwnerConcurrencyComponent|TestRoleImageOwnerTransactionRetryComponent|TestRoleImageOwnerTransactionRetryBoundsComponent|TestInstructionCommandProjectionComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestIntegrationGitHubBackupSchemaProofComponent|TestBootstrapComponent|TestConcurrentBootstrapComponent|TestWorkerGrantInstancesComponent|TestTrustedWorkloadGenerationComponent|TestServiceCredentialColdStartComponent|TestNativeSessionOwnerComponent|TestWorkspaceWriterOwnerComponent|TestWorkspaceUnboundStopOwnerComponent|TestWorkflowWorkspaceOwnerComponent|TestModelDiscoveryEligibilityComponent|TestModelProviderBootstrapComponent|TestModelProviderCatalogComponent|TestModelCatalogBootstrapMethodComponent|TestAssistantCredentialScopesComponent|TestAssistantParallelLifecycleComponent|TestProjectAssistantProfilesComponent|TestOrganizationRoleImagesComponent|TestOrganizationRuntimeEnvironmentComponent|TestOrganizationRuntimeSecretComponent|TestAssistantSystemRunProjectScopeComponent|TestArtifactOptionalRuntimeComponent|TestRuntimeResourceQueueComponent|TestRuntimeTerminalStorageComponent|TestRuntimeSecretDraftReadinessComponent|TestRuntimeOverloadCompletionComponent|TestIntegrationGateFeedbackComponent|TestWorkflowMetadataDraftComponent|TestDeletedEnvironmentSecretRetentionComponent|TestHistoricalEnvironmentSecretAdmissionComponent|TestHistoricalSecretRecoveryConcurrencyComponent|TestWorkflowGateDecisionsComponent|TestCompletionReceiptComponent|TestNativeCompletionCapabilityRevokeComponent|TestUsageCompletenessComponent|TestRepositoryBundlePublicationComponent|TestPersonalGitHubScopedPolicyComponent|TestRepositoryBundlePersonalCredentialComponent|TestCommitAckArtifactComponent|TestOwnerGateExpiryComponent|TestOwnerGateServerCompletionComponent|TestOwnerGateExpiryMigrationProofComponent|TestProjectPurgeAuthorityComponent|TestProjectPurgeAuthorityMigrationProofComponent|TestServerWorkflowMigrationProofComponent|TestOverviewEligibilityComponent|TestWorkflowExceptionContextComponent|TestWorkflowExceptionContextMigrationProofComponent)$'}}
 
 # Оба закрытых upgrade-сценария используют одну и ту же отдельную пустую БД.
 upgrade_timeout=180s
+owner_timeout=120s
+owner_process_timeout=140s
 upgrade_test='^TestWorkflowReviewQAEvidenceForwardUpgrade$'
+if [[ "$test_pattern" == --artifact-retention-grant-upgrade ]]; then
+  upgrade_test='^TestArtifactRetentionGrantCatalogMigration$'
+  test_pattern=--review-qa-upgrade
+elif [[ "$test_pattern" == --artifact-retention-claim-types ]]; then
+  upgrade_test='^TestArtifactRetentionClaimParameterTypes$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --integration-cohort-schema-capture ]]; then
+  [[ "${KODEX_INTEGRATION_COHORT_CAPTURE:-}" == 1 &&
+     -n ${KODEX_INTEGRATION_COHORT_CAPTURE_DIRECTORY:-} && "$storage_mode" == ram ]] || fail 'cohort capture requires explicit private RAM profile'
+  upgrade_timeout=600s
+  upgrade_test='^TestIntegrationCohortCatalogCapture$'
+  test_pattern=--review-qa-upgrade
+fi
 if [[ "$test_pattern" == --telegram-notifications-capture ]]; then
   upgrade_timeout=600s
   [[ -n ${KODEX_TELEGRAM_NOTIFICATIONS_SCHEMA_CAPTURE_DIRECTORY:-} ]] || fail 'Telegram schema capture requires a private capture directory'
   upgrade_test='^TestTelegramNotificationsCatalogCapture$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-integrations-upgrade || "$test_pattern" == --personal-integrations-backup-upgrade ]]; then
+  upgrade_timeout=240s
+  if [[ "$test_pattern" == --personal-integrations-backup-upgrade ]]; then
+    upgrade_test='^TestPersonalIntegrationsBackupUpgrade$'
+  else
+    upgrade_test='^TestPersonalIntegrationsNormalUpgrade$'
+  fi
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --telegram-notifications-upgrade || "$test_pattern" == --telegram-notifications-backup-upgrade ]]; then
@@ -90,7 +120,7 @@ if [[ "$test_pattern" == --artifact-optional-antivirus-upgrade ]]; then
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --integration-resource-policies-upgrade ]]; then
-  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'resource policy recovery requires PostgreSQL dump/restore clients'
+  if ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then fail 'resource policy recovery requires PostgreSQL dump/restore clients'; fi
   upgrade_test='^TestIntegrationResourcePolicyMigration$'
   test_pattern=--review-qa-upgrade
 fi
@@ -99,12 +129,12 @@ if [[ "$test_pattern" == --integration-resource-policies-fresh-install ]]; then
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --authority-proof-counter-upgrade ]]; then
-  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
+  if ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then fail 'proof counter recovery requires PostgreSQL dump/restore clients'; fi
   upgrade_test='^TestAuthorityProofCounterMigration$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --authority-proof-counter-fresh-install ]]; then
-  command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || fail 'proof counter recovery requires PostgreSQL dump/restore clients'
+  if ! command -v pg_dump >/dev/null || ! command -v pg_restore >/dev/null; then fail 'proof counter recovery requires PostgreSQL dump/restore clients'; fi
   upgrade_test='^TestAuthorityProofCounterFreshInstall$'
   test_pattern=--review-qa-upgrade
 fi
@@ -124,19 +154,132 @@ if [[ "$test_pattern" == --personal-credentials-catalog ]]; then
   test_pattern=--review-qa-upgrade
 fi
 volume_owner=false
+owner_test='^TestWorkspaceWriterOwnerComponent$'
+owner_timeout=120s
+# Текущий SSH-профиль использует normal full schema и прежний exact native consumer.
+# Исторический development seed049 остаётся отдельной неизменённой веткой.
+case "$test_pattern" in
+  --ssh-identity-owner-current)
+    [[ ! -v KODEX_CONTROL_PLANE_TEST_FILTER ]] || fail 'current SSH owner profile forbids an external test filter'
+    [[ $# -eq 1 && "$storage_mode" == ram ]] || fail 'current SSH owner profile requires one explicit argument and RAM storage'
+    ssh_gateway_consumer_required=true
+    ssh_current_schema_required=true
+    test_pattern='^TestSSHExecutionOwnerComponent$'
+    ;;
+  --ssh-identity-owner-current*) fail 'current SSH owner profile is invalid' ;;
+esac
+if [[ "$test_pattern" == --workflow-file-provenance-backup ]]; then
+  upgrade_timeout=180s
+  upgrade_test='^TestWorkflowFileProvenanceBackupUpgrade$'
+  volume_owner=true
+  owner_timeout=240s
+  owner_test='^(TestWorkflowExceptionContextComponent|TestWorkflowCaptureProgressComponent)$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --managed-kubernetes-owner-regression || "$test_pattern" == --managed-kubernetes-setup-ledger || "$test_pattern" == --managed-kubernetes-health || "$test_pattern" == --managed-kubernetes-invocation || "$test_pattern" == --managed-kubernetes-output || "$test_pattern" == --managed-kubernetes-port-forward || "$test_pattern" == --managed-kubernetes-file || "$test_pattern" == --managed-kubernetes-capture || "$test_pattern" == --managed-kubernetes-effect-acl || "$test_pattern" == --integration-pending-root-owner-regression ]]; then
+  # Owner Bootstrap обрабатывает все поставляемые определения. SSH_TARGET
+  # допускается с 048, общие health-запросы используют 049.
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^(TestPersonalIntegrationCredentialsComponent|TestKubernetesOperatorRegistryComponent|TestKubernetesIdentitySetupLedgerComponent|TestKubernetesIdentityAcknowledgementOwnerComponent|TestKubernetesIdentityAcknowledgementConflictOwnerComponent)$'
+  if [[ "$test_pattern" == --managed-kubernetes-setup-ledger ]]; then owner_test='^TestKubernetesIdentity(SetupLedger|AcknowledgementOwner|AcknowledgementConflictOwner)Component$'; fi
+  if [[ "$test_pattern" == --managed-kubernetes-health ]]; then owner_test='^TestKubernetes(IdentityHealth|AuthorityFailure)OwnerComponent$'; fi
+  if [[ "$test_pattern" == --managed-kubernetes-effect-acl ]]; then owner_test='^TestKubernetes(EffectACLDeadline|SharedIdentity)OwnerComponent$'; fi
+  if [[ "$test_pattern" == --integration-pending-root-owner-regression ]]; then owner_test='^TestIntegrationPendingRootOwnerComponent$'; fi
+  if [[ "$test_pattern" == --managed-kubernetes-invocation || "$test_pattern" == --managed-kubernetes-output || "$test_pattern" == --managed-kubernetes-port-forward || "$test_pattern" == --managed-kubernetes-file || "$test_pattern" == --managed-kubernetes-capture ]]; then
+    # Полный owner-набор включает последовательные Stop/Gate/continuation fixtures
+    # и два OUTPUT-сценария с настоящим ожиданием expiry. Их бюджет явный и конечный.
+    # Запас внешнего timeout оставляет Go время вывести диагностику зависания.
+    owner_timeout=480s
+    owner_process_timeout=510s
+    owner_test='^(TestKubernetes(Invocation|Grant|ResourcePolicy|Effect|Metadata|ChildGate|Delivery|Input|InputDisclosureDeadline|InputPreludeDeadline|Tool|InvocationStreamResult|CompletionContinuation|ReadinessACL|CaptureSeal|CaptureDeadline|CapturePreparedCleanup|StreamOutput|StreamOutputDeadline|PortForward|PortForwardPreflight|File)OwnerComponent|TestKubernetesInvocationAggregate|TestKubernetesOutputDeadlineNeverWidensNativeCredit|TestKubernetesOutputStageRejectsDamagedReceipt)$'
+    if [[ "$test_pattern" == --managed-kubernetes-port-forward ]]; then owner_test='^TestKubernetesPortForward(Preflight)?OwnerComponent$'; fi
+    if [[ "$test_pattern" == --managed-kubernetes-file ]]; then
+      owner_timeout=120s
+      owner_process_timeout=140s
+      owner_test='^TestKubernetesFileOwnerComponent$'
+    fi
+    if [[ "$test_pattern" == --managed-kubernetes-capture ]]; then
+      owner_timeout=80s
+      owner_process_timeout=100s
+      owner_test='^TestKubernetesCapture(Seal|Deadline|PreparedCleanup)OwnerComponent$'
+    fi
+    kubernetes_plan_consumer_required=true
+    if [[ "$test_pattern" == --managed-kubernetes-output ]]; then
+      owner_timeout=80s
+      owner_process_timeout=100s
+      owner_test='^(TestKubernetesStreamOutput(Deadline)?OwnerComponent|TestAccessDisclosureDeadlineUsesOnlyCurrentWinningAlternatives|TestAccessDisclosureDeadlineRejectsUnresolvedDecision)$'
+    fi
+  fi
+  test_pattern=--review-qa-upgrade
+fi
+owner_go_arguments=()
 if [[ "$test_pattern" == --integration-resource-policies-owner ]]; then
   volume_owner=true
   upgrade_test='^TestIntegrationResourcePolicyOwnerRegressionSeed$'
   owner_test='^(TestScopedIntegrationApprovalComponent|TestIntegrationGateFeedbackComponent|TestIntegrationAutonomousGitHubInvocationComponent|TestIntegrationGitHubHistoricalAdmissionComponent|TestPersonalIntegrationCredentialsComponent|TestIntegrationResourcePoliciesComponent|TestPersonalGitLabScopedPolicyComponent|TestIntegrationHealthSnapshotComponent|TestManagedMCPStartupRecoveryComponent|TestManagedMCPHealthReadbackComponent)$'
   test_pattern=--review-qa-upgrade
 fi
-if [[ "$upgrade_test" != '^TestIntegrationResourcePolicyOwnerRegressionSeed$' ]]; then
-  owner_test='^TestWorkspaceWriterOwnerComponent$'
+if [[ "$test_pattern" == --kubernetes-effect-acl-owner-development ]]; then
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestKubernetes(EffectACLDeadline|NonstreamCredit|SharedIdentity|IdentityHealth|AuthorityFailure|ReadinessACL)OwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --ssh-identity-owner-development ]]; then
+  ssh_gateway_consumer_required=true
+  volume_owner=true
+  # Рабочие выборки SSH используют общий mailbox guard из049.
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^(TestSSHIdentitySetupOwnerComponent|TestSSHIdentityUnreportedObserveOwnerComponent|TestSSHIdentityAuthorityFailureOwnerComponent|TestSSHIdentityRevocationOwnerComponent|TestSSHIdentitySchemaContractOwnerComponent|TestSSHExecution(RevokeContinuation|ReceiptScope|AuthorityDeadline)?OwnerComponent)$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --ssh-integration-pending-root-owner-development ]]; then
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestIntegrationPendingRootOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --ssh-receipt-scope-owner-development ]]; then
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestSSHExecutionReceiptScopeOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --ssh-execution-deadline-owner-development ]]; then
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestSSHExecutionAuthorityDeadlineOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --ssh-identity-revoke-owner-development ]]; then
+  volume_owner=true
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestSSHIdentityRevocationOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --shared-integration-health-development ]]; then
+  volume_owner=true
+  # Общая выборка проверок использует mailbox guard, введённый схемой049.
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^TestSharedIntegrationHealthOwnerComponent$'
+  test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --telegram-notifications-owner ]]; then
   volume_owner=true
   upgrade_test='^TestTelegramNotificationsOwnerSeed$'
   owner_test='^TestTelegramSubscriptionOwnerComponent$'
+  test_pattern=--review-qa-upgrade
+fi
+if [[ "$test_pattern" == --personal-email-owner-development ]]; then
+  # Только функциональная разработка owner path. Этот профиль не заменяет
+  # закрытые full-schema proofs049 и не объявляет predecessor047/048 готовыми.
+  volume_owner=true
+  owner_go_arguments=(-race)
+  # Полный профиль с двумя проверками истечения после COMMIT занял 119 с.
+  owner_timeout=150s
+  upgrade_test='^TestPersonalEmailOwnerDevelopmentSeed$'
+  owner_test='^(TestPersonalEmailMailboxOwnerDevelopmentComponent|TestEmailReceiptDisclosureDeadlineComponent)$'
   test_pattern=--review-qa-upgrade
 fi
 if [[ "$test_pattern" == --authority-proof-counter-owner-regression ]]; then
@@ -247,6 +390,8 @@ if [[ "$storage_mode" == ram ]]; then
 fi
 
 cleanup() {
+  if [[ -n "$kubernetes_plan_consumer_directory" ]]; then rm -rf -- "$kubernetes_plan_consumer_directory"; fi
+  if [[ -n "$ssh_gateway_consumer_directory" ]]; then rm -rf -- "$ssh_gateway_consumer_directory"; fi
   if [[ "$test_pattern" == --review-qa-upgrade || "$storage_mode" == ram ]]; then
     # Новый контур никогда не очищает лишь совпавшее имя после неизвестного create.
     if [[ "$upgrade_container_id" =~ ^[a-f0-9]{64}$ ]]; then
@@ -268,6 +413,27 @@ cleanup() {
   docker stop --time 5 "$container_name" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+if [[ "$ssh_gateway_consumer_required" == true ]]; then
+  [[ ! -v KODEX_SSH_GATEWAY_NATIVE_CONSUMER_BINARY && ! -v KODEX_SSH_GATEWAY_NATIVE_CONSUMER_SHA256 ]] || fail 'external SSH native consumer configuration is forbidden'
+  ssh_gateway_consumer_directory=$(mktemp -d "${TMPDIR:-/tmp}/kodex-ssh-gateway-consumer.XXXXXXXX")
+  chmod 0700 "$ssh_gateway_consumer_directory"
+  # Exact gateway consumer собирается до PostgreSQL и не получает DSN либо key bytes.
+  (cd "$repository_root/services/external/integration-gateway" && timeout 180s go test -race -p 1 -c -o "$ssh_gateway_consumer_directory/consumer.test" ./internal/integration)
+  chmod 0500 "$ssh_gateway_consumer_directory/consumer.test"
+  export KODEX_SSH_GATEWAY_NATIVE_CONSUMER_BINARY="$ssh_gateway_consumer_directory/consumer.test"
+  ssh_gateway_consumer_digest=$(sha256sum "$ssh_gateway_consumer_directory/consumer.test")
+  export KODEX_SSH_GATEWAY_NATIVE_CONSUMER_SHA256="${ssh_gateway_consumer_digest%% *}"
+fi
+if [[ "$kubernetes_plan_consumer_required" == true ]]; then
+    kubernetes_plan_consumer_directory=$(mktemp -d "${TMPDIR:-/tmp}/kodex-kubernetes-plan-consumer.XXXXXXXX")
+    chmod 0700 "$kubernetes_plan_consumer_directory"
+    # Все три exact binaries собираются до Docker; PG budget принадлежит только seed/run.
+    (cd "$repository_root/services/internal/secret-broker" && timeout 180s go test -race -p 1 -c -o "$kubernetes_plan_consumer_directory/consumer.test" ./internal/controlplane)
+    (cd "$repository_root/services/internal/control-plane" && env -u GOFLAGS GOENV=off GOWORK=off timeout 240s go test -p 1 -c -o "$kubernetes_plan_consumer_directory/seed.test" ./cmd/cli)
+    (cd "$repository_root/services/internal/control-plane" && env -u GOFLAGS GOENV=off GOWORK=off timeout 360s go test -race -p 1 -c -o "$kubernetes_plan_consumer_directory/owner.test" ./internal/repository/postgres/platform)
+    (cd "$repository_root/services/internal/control-plane/internal/repository/postgres/platform" && timeout 20s "$kubernetes_plan_consumer_directory/owner.test" -test.v -test.count=1 -test.timeout=20s -test.run='^Test(KubernetesAssignedCapability|IntegrationCapabilityAuthoritySeparates|KubernetesStreamHistory)')
+    export KODEX_KUBERNETES_NATIVE_PLAN_CONSUMER_BINARY="$kubernetes_plan_consumer_directory/consumer.test"
+fi
 
 command -v docker >/dev/null 2>&1 || fail 'docker is required'
 command -v pg_isready >/dev/null 2>&1 || fail 'pg_isready is required'
@@ -397,23 +563,38 @@ run_migration() {
 
 if [[ "$test_pattern" == --review-qa-upgrade ]]; then
   (
-    cd -- "$repository_root/services/internal/control-plane"
-    KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
-      KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
-      env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout="$upgrade_timeout" \
-      ./cmd/cli -run "$upgrade_test"
+    if [[ "$kubernetes_plan_consumer_required" == true ]]; then
+      cd -- "$repository_root/services/internal/control-plane/cmd/cli"
+      KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
+        KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
+        timeout "$upgrade_timeout" "$kubernetes_plan_consumer_directory/seed.test" -test.v -test.count=1 -test.timeout="$upgrade_timeout" -test.run="$upgrade_test"
+    else
+      cd -- "$repository_root/services/internal/control-plane"
+      KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DSN="$dsn" \
+        KODEX_WORKFLOW_REVIEW_QA_UPGRADE_DISPOSABLE=dedicated-loopback-container \
+        env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout="$upgrade_timeout" \
+        ./cmd/cli -run "$upgrade_test"
+    fi
   )
   if [[ "$volume_owner" == true ]]; then
     # Native upgrade проверен выше; release-verifiers прежних схем не расширяются.
     psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
       -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
     (
-      cd -- "$repository_root/services/internal/control-plane"
-      KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
-        KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
-        KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-        env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=120s \
-        ./internal/repository/postgres/platform -run "$owner_test"
+      if [[ "$kubernetes_plan_consumer_required" == true ]]; then
+        cd -- "$repository_root/services/internal/control-plane/internal/repository/postgres/platform"
+        KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+          KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
+          KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
+          timeout "$owner_process_timeout" "$kubernetes_plan_consumer_directory/owner.test" -test.v -test.count=1 -test.timeout="$owner_timeout" -test.run="$owner_test"
+      else
+        cd -- "$repository_root/services/internal/control-plane"
+        KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+          KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
+          KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
+          env -u GOFLAGS GOENV=off GOWORK=off go test "${owner_go_arguments[@]}" -p "$go_parallelism" -v -count=1 -timeout="$owner_timeout" \
+          ./internal/repository/postgres/platform -run "$owner_test"
+      fi
     )
   fi
   exit
@@ -439,7 +620,12 @@ fi
   # неизвестная схема не получает обхода либо fallback к старому профилю.
   schema_version=$(psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" --no-password -X -qAt -v ON_ERROR_STOP=1 \
     -c 'SELECT max(version_id) FILTER (WHERE is_applied) FROM public.goose_db_version')
+  if [[ "$ssh_current_schema_required" == true && "$schema_version" != 20261121000200 ]]; then
+    fail 'current SSH owner profile requires schema 051'
+  fi
   case "$schema_version" in
+    20261121000200) schema_proof=workflow-file-provenance-migration-postcondition.sql; schema_verifier=validWorkflowFileProvenanceMigrationPostcondition ;;
+    20261114170000) schema_proof=personal-integrations-migration-postcondition.sql; schema_verifier=validPersonalIntegrationsMigrationPostcondition ;;
     20261114140000) schema_proof=telegram-notifications-migration-postcondition.sql; schema_verifier=validTelegramNotificationsMigrationPostcondition ;;
     20261114130000) schema_proof=sentry-observability-migration-postcondition.sql; schema_verifier=validSentryObservabilityMigrationPostcondition ;;
     20261114120000) schema_proof=github-repository-scope-migration-postcondition.sql; schema_verifier=validGitHubRepositoryScopeMigrationPostcondition ;;
@@ -499,12 +685,16 @@ fi
   # Эти координаты существуют только внутри disposable контейнера этой оснастки.
   psql "$admin_dsn" --no-password -v ON_ERROR_STOP=1 \
     -c 'CREATE DATABASE control_plane_component_template WITH TEMPLATE control_plane OWNER control_plane_owner' >/dev/null
-  # Полный baseline включает реальные ожидания lease expiry; общий бюджет15m
-  # не меняет локальные deadlines сценариев и не скрывает assertion failures.
+  # Полный последовательный baseline вырабатывает прежние 15m до поздних
+  # сценариев. Бюджет полного прогона отдельный от deadlines отдельных тестов.
+  component_timeout=15m
+  if [[ $# -eq 0 && -z ${KODEX_CONTROL_PLANE_TEST_FILTER:-} ]]; then
+    component_timeout=20m
+  fi
   KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
     KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
     KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
-    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout=15m \
+    env -u GOFLAGS GOENV=off GOWORK=off go test -p "$go_parallelism" -v -count=1 -timeout="$component_timeout" \
       ./internal/repository/postgres/platform -run "$test_pattern"
   # Та же read-only диагностика, которую release использует на staging.
   psql "postgresql://postgres@127.0.0.1:${port}/control_plane?sslmode=disable" \

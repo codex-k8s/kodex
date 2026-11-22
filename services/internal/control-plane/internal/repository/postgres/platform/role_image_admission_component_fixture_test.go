@@ -12,14 +12,14 @@ import (
 )
 
 // newRoleImageAdmissionComponentFixture prepares the existing terminal/expiry fixtures in their
-// original order: repository with synthetic object storage and model defaults, native role-image
+// original order: repository with synthetic object storage and the installed OpenCode descriptor, native role-image
 // configuration, bootstrap, gateway-bound recipe owner proof, resolved principal and service.
 // Each failure remains fatal. On success the caller's already nil pool error stays unchanged.
 // The caller retains its ninety-second context, isolated database and deferred pool Close;
 // B1/B2 commands, claims, terminal/expiry callbacks and every independent assertion stay there.
 // No image-admission/controller grant or real provider/registry connection is introduced.
 // newRoleImageAdmissionComponentFixture готовит прежние terminal/expiry fixtures в исходном
-// порядке: repository с synthetic object storage и model defaults, native role-image config,
+// порядке: repository с synthetic object storage и установленным OpenCode descriptor, native role-image config,
 // bootstrap, gateway-bound proof владельца recipes, resolved principal и service. Каждый отказ
 // остаётся Fatal; при успехе уже nil pool error вызывающего не меняется. Caller сохраняет свой
 // context на девяносто секунд, isolated database и defer pool.Close; B1/B2 commands, claims,
@@ -31,6 +31,7 @@ func newRoleImageAdmissionComponentFixture(t *testing.T, ctx context.Context, po
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentModelProvider(t, r)
 	if err = r.ConfigureRoleImages(syntheticRoleImageComponentConfig()); err != nil {
 		t.Fatal(err)
 	}

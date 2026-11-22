@@ -37,6 +37,24 @@ class NamespaceOwnership(unittest.TestCase):
                 with self.assertRaises(ValueError):subject.ensure(call, 'kodex-trust', receipt)
                 self.assertEqual(len(calls), 1)
 
+    def test_ssh_namespace_requires_exact_creation_identity(self):
+        for replacement in (False, True):
+            calls = []
+            def call(args, value=None):
+                calls.append(args)
+                if len(calls) == 1:
+                    return b''
+                if args[0] == 'create':
+                    self.assertEqual(value['metadata']['name'], 'kodex-ssh-identities')
+                uid = 'replacement' if replacement and len(calls) == 3 else 'original-ssh-uid'
+                return json.dumps({'metadata': {'name': 'kodex-ssh-identities', 'uid': uid,
+                    'labels': {subject.LABEL: 'kodex'}}}).encode()
+            if replacement:
+                with self.assertRaises(ValueError):
+                    subject.ensure(call, 'kodex-ssh-identities')
+            else:
+                subject.ensure(call, 'kodex-ssh-identities')
+
     def test_shared_namespace_rejected_without_any_api_call(self):
         def call(*args):self.fail('API must not be called')
         with self.assertRaises(ValueError):subject.ensure(call, 'kube-system')

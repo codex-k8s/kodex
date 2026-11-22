@@ -68,6 +68,7 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 	admin := workloadBoundaryConnection(t, ctx, port, "postgres", "")
 	owner := workloadBoundaryConnection(t, ctx, port, "internal_rpc_authority_migrator", "internal_rpc_authority_readback_owner")
 	email := workloadBoundaryConnection(t, ctx, port, "ira_email_bridge_issuer_g1", "internal_rpc_authority_issuer")
+	retention := workloadBoundaryConnection(t, ctx, port, "ira_artifact_retention_issuer_g1", "internal_rpc_authority_issuer")
 	issuer := workloadBoundaryConnection(t, ctx, port, "ira_control_plane_issuer_g1", "internal_rpc_authority_issuer")
 	verifier := workloadBoundaryConnection(t, ctx, port, "ira_control_plane_verifier_g1", "internal_rpc_authority_verifier")
 	retired := workloadBoundaryConnection(t, ctx, port, "ira_session_archive_issuer_g1", "internal_rpc_authority_issuer")
@@ -79,6 +80,7 @@ func testWorkloadDatabaseBoundary(t *testing.T, port uint64) {
 		capability string
 	}{
 		{"email", email, "email-bridge", "ISSUER"},
+		{"artifact retention", retention, "artifact-retention", "ISSUER"},
 		{"issuer", issuer, "control-plane", "ISSUER"},
 		{"verifier", verifier, "control-plane", "VERIFIER"},
 	} {

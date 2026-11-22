@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -65,16 +66,36 @@ func (repository *Repository) ListPersonalIntegrationConnections(ctx context.Con
 	}
 	defer rows.Close()
 	items := make([]entity.PersonalIntegrationConnection, 0, filter.Page.Size)
+	seen := make(map[string]bool, filter.Page.Size+1)
 	for rows.Next() {
+		if ctx.Err() != nil {
+			return nil, "", errs.ErrUnavailable
+		}
 		var item entity.PersonalIntegrationConnection
 		var binding personalCredentialRow
+		var definitionVersion, definitionDigest, packageFormat, packageContent string
 		targets := []any{&item.Ref, &item.Name, &item.DefinitionKey, &item.Version, &item.Enabled, &item.Policy, &item.Available}
+		targets = append(targets, &definitionVersion, &definitionDigest, &packageFormat, &packageContent)
 		if err := rows.Scan(append(targets, binding.targets()...)...); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		credential, err := binding.decode()
-		if err != nil || item.Ref == "" || item.Version < 1 || (item.Policy != entity.IntegrationCredentialProjectShared && item.Policy != entity.IntegrationCredentialInitiatorRequired) {
+		if err != nil || item.Ref == "" || seen[item.Ref] || item.Version < 1 || (item.Policy != entity.IntegrationCredentialProjectShared && item.Policy != entity.IntegrationCredentialInitiatorRequired) {
 			return nil, "", errs.ErrUnavailable
+		}
+		seen[item.Ref] = true
+		item.CredentialDelivery, err = repository.credentialDeliveryForExactPackageSnapshot(item.DefinitionKey, definitionVersion, definitionDigest, packageFormat, packageContent)
+		if err != nil {
+			return nil, "", err
+		}
+		switch item.CredentialDelivery.Kind {
+		case integrationpackage.CredentialDeliveryToken:
+		case integrationpackage.CredentialDeliveryBrokerIdentity:
+			if item.CredentialDelivery.BrokerPurpose != string(entity.IntegrationBrokerIdentityKubernetes) && item.CredentialDelivery.BrokerPurpose != string(entity.IntegrationBrokerIdentitySSH) {
+				item.Available = false
+			}
+		default:
+			item.Available = false
 		}
 		if credential.Ref != "" {
 			if credential.OrganizationID != current.organizationID || credential.SubjectID != current.actorID || credential.ConnectionRef != item.Ref ||
@@ -94,6 +115,24 @@ func (repository *Repository) ListPersonalIntegrationConnections(ctx context.Con
 	}
 	rows.Close()
 	items, next := catalogPageWithCursor(current, kind, cursorFilter, items, filter.Page.Size, func(item entity.PersonalIntegrationConnection) string { return item.Ref })
+	refs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Available && item.Policy == entity.IntegrationCredentialInitiatorRequired && item.CredentialDelivery.Kind == "BROKER_IDENTITY" && item.CredentialDelivery.BrokerPurpose == string(entity.IntegrationBrokerIdentityKubernetes) {
+			refs = append(refs, item.Ref)
+		}
+	}
+	requirements, err := readKubernetesSetupRequirements(ctx, tx, current, refs)
+	if err != nil {
+		return nil, "", err
+	}
+	for index := range items {
+		if selected, ok := requirements[items[index].Ref]; ok {
+			if selected.ConnectionVersion != items[index].Version || selected.Policy != items[index].Policy {
+				return nil, "", errs.ErrUnavailable
+			}
+			items[index].KubernetesSetupRequirements = &selected
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, "", errs.ErrUnavailable
 	}

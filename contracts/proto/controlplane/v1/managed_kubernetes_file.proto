@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/timestamp.proto";
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes_capture_public.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Original root actor читает только provenance и прогресс approved immutable FILE source.
+// Материал берёт private owner; bytes, storage locator, credentials и native credit здесь отсутствуют.
+service ManagedKubernetesFileService {
+  // Bounded discovery привязан к исходному invocation; known ref не заменяет current run visibility.
+  rpc ListManagedKubernetesFileInputs(ListManagedKubernetesFileInputsRequest) returns (ListManagedKubernetesFileInputsResponse);
+  // Exact source read не запускает подготовку, повтор PUT либо native stream.
+  rpc GetManagedKubernetesFileInput(GetManagedKubernetesFileInputRequest) returns (GetManagedKubernetesFileInputResponse);
+  // Только исчерпанный cleanup cycle; не Prepare, PUT, source read либо native retry.
+  rpc RepairManagedKubernetesFileCleanup(RepairManagedKubernetesFileCleanupRequest) returns (RepairManagedKubernetesFileCleanupResponse);
+}
+
+// Проекция выбирает форму metadata, но не полномочия. Неизвестная форма закрывается.
+enum ManagedKubernetesFileProjection {
+  MANAGED_KUBERNETES_FILE_PROJECTION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_FILE_PROJECTION_SOURCE = 1;
+  MANAGED_KUBERNETES_FILE_PROJECTION_CLEANUP_ONLY = 2;
+}
+
+// Состояние INPUT material не подтверждает remote exit либо создание целевого файла.
+enum ManagedKubernetesFileInputState {
+  // Неизвестное значение закрыто отклоняется.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_UNSPECIFIED = 0;
+  // Материализация ещё не выдала source для INPUT.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_PREPARING = 1;
+  // Полный нормализованный источник принят владельцем; native credit выдаётся отдельно.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_READY = 2;
+  // Исход единственного storage либо INPUT attempt неизвестен, повтор bytes запрещён.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_UNKNOWN = 3;
+  // Source отклонён до новой native admission; причина закрыта.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_REJECTED = 4;
+  // Родительский stream/invocation закрыт; metadata не доказывает remote join.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_CANCELLED = 5;
+  // Все исходные bytes и EOF имеют owner INPUT ACK; remote exit остаётся отдельным фактом.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_TRANSFERRED = 6;
+  // Исходный срок подготовки либо execution истёк без нового credit.
+  MANAGED_KUBERNETES_FILE_INPUT_STATE_EXPIRED = 7;
+}
+
+// Закрытые причины содержат только безопасную классификацию, без SDK/provider diagnostics.
+enum ManagedKubernetesFileInputReason {
+  // Неизвестная причина закрыто отклоняется.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_UNSPECIFIED = 0;
+  // Дополнительной причины нет.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_NONE = 1;
+  // Exact immutable source недоступен.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_SOURCE_UNAVAILABLE = 2;
+  // Version/ETag/size/digest либо frozen provenance не совпали.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_SOURCE_CHANGED = 3;
+  // Current actor/grant/file authority больше не допускает новые INPUT bytes.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_PERMISSION_LOST = 4;
+  // Source либо нормализованный TAR не прошли closed content/AV policy.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_CONTENT_REJECTED = 5;
+  // Единственная INPUT delivery/write attempt имеет неизвестный исход.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_INPUT_UNKNOWN = 6;
+  // Исходный owner graph отменён; это не remote FIN receipt.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_CANCELLED = 7;
+  // Исходный deadline истёк без продления допуска.
+  MANAGED_KUBERNETES_FILE_INPUT_REASON_EXPIRED = 8;
+}
+
+// Safe immutable source и текущий прогресс связываются сервером с original invocation/child.
+message ManagedKubernetesFileInputView {
+  // Server-assigned source locator, не путь к объекту.
+  string source_ref = 1;
+  // Исходный invocation, разрешённый current root actor.
+  string invocation_ref = 2;
+  // Immutable owner plan, не caller-selected target.
+  string plan_ref = 3;
+  // Exact approved child, которому принадлежит источник.
+  string child_ref = 4;
+  // Назначается после native stream admission; до неё пусто.
+  string stream_ref = 5;
+  // Подготовка/доставка INPUT, без утверждения native outcome.
+  ManagedKubernetesFileInputState state = 6;
+  // Монотонная owner version metadata.
+  int64 version = 7;
+  // Artifact из original frozen catalog и approved CopyProfile.
+  string artifact_ref = 8;
+  // Exact immutable revision; latest update не заменяет этот источник.
+  string artifact_revision_ref = 9;
+  // Исходный SHA256 из approved profile и exact revision, без material values.
+  string artifact_sha256 = 10;
+  // Проверенный размер exact source revision.
+  uint64 artifact_size_bytes = 11;
+  // Закрытый approved FILE либо TAR.
+  string transfer_format = 12;
+  // Digest нормализованного private TAR; пусто до завершения подготовки.
+  string normalized_sha256 = 13;
+  // Полный конечный wire размер, включая TAR headers/padding.
+  uint64 normalized_size_bytes = 14;
+  // Версия общего closed normalizer; ноль до подготовки.
+  uint32 normalization_revision = 15;
+  // Bytes, durable зарезервированные в existing INPUT ledger.
+  uint64 staged_bytes = 16;
+  // Bytes с exact owner INPUT ACK; не локальный counts-only успех.
+  uint64 acknowledged_bytes = 17;
+  // Подтверждение исходного typed EOF, отдельно от native process join.
+  bool eof_acknowledged = 18;
+  // Закрытая безопасная причина без raw upstream ошибки.
+  ManagedKubernetesFileInputReason reason = 19;
+  // Время серверного назначения source intent.
+  google.protobuf.Timestamp created_at = 20;
+  // Immutable execution/source ceiling; metadata не продлевает срок.
+  google.protobuf.Timestamp hard_deadline = 21;
+  // Отсутствие означает недоступный cleanup port, не нулевое число объектов.
+  ManagedKubernetesStagingCleanupStatus cleanup = 22;
+}
+
+// Actor/root разрешается из authenticated transport и owner graph, не request.
+message ListManagedKubernetesFileInputsRequest {
+  // Exact original invocation для bounded discovery, не право доступа по locator.
+  string invocation_ref = 1;
+  // Только minimal original-root/run.view metadata без source provenance либо bytes authority.
+  bool cleanup_only = 2;
+}
+
+// До256 source descriptors; превышение закрыто отклоняется без частичного списка.
+message ListManagedKubernetesFileInputsResponse {
+  // Только source этой exact invocation, без storage/task descriptors.
+  repeated ManagedKubernetesFileInputView items = 1;
+  // Только при CLEANUP_ONLY; SOURCE требует пустого cleanup_items и наоборот.
+  repeated ManagedKubernetesFileCleanupView cleanup_items = 2;
+  ManagedKubernetesFileProjection projection = 3;
+}
+
+// Exact source должен принадлежать указанному original invocation того же root actor.
+message GetManagedKubernetesFileInputRequest {
+  // Immutable original invocation, повторно проверенный owner.
+  string invocation_ref = 1;
+  // Server-assigned source locator, не arbitrary artifact selector.
+  string source_ref = 2;
+  // Точный original-key readback, только при cleanup_only, без повторного repair POST.
+  string cleanup_idempotency_key = 3;
+  bool cleanup_only = 4;
+}
+
+// Readback возвращает только проверенную metadata, без bytes или нового effect.
+message GetManagedKubernetesFileInputResponse {
+  // Current safe source и сохранённые INPUT ACK facts.
+  ManagedKubernetesFileInputView view = 1;
+  ManagedKubernetesFileCleanupRepairReceipt cleanup_receipt = 2;
+  // CLEANUP_ONLY требует cleanup_view и отсутствующего view; SOURCE наоборот.
+  ManagedKubernetesFileCleanupView cleanup_view = 3;
+  ManagedKubernetesFileProjection projection = 4;
+}
+
+// Current original-root/run.view projection: artifact/view/download не требуются и не раскрываются.
+message ManagedKubernetesFileCleanupView {
+  string source_ref = 1;
+  string invocation_ref = 2;
+  ManagedKubernetesStagingCleanupStatus cleanup = 3;
+}
+
+// Квитанция bounded repair, не квитанция удаления либо native process join.
+message ManagedKubernetesFileCleanupRepairReceipt {
+  string source_ref = 1;
+  int64 version = 2;
+  int64 repair_generation = 3;
+  int64 repaired_count = 4;
+  int64 remaining_exhausted_count = 5;
+  google.protobuf.Timestamp accepted_at = 6;
+}
+
+message RepairManagedKubernetesFileCleanupRequest {
+  string invocation_ref = 1;
+  string source_ref = 2;
+  // If-Match относится к cleanup.version; actor/project/fence отсутствуют.
+  MutationContext mutation = 3;
+}
+
+message RepairManagedKubernetesFileCleanupResponse {
+  ManagedKubernetesFileCleanupView cleanup_view = 1;
+  ManagedKubernetesFileCleanupRepairReceipt cleanup_receipt = 2;
+  ManagedKubernetesFileProjection projection = 3;
+}

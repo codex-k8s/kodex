@@ -1,7 +1,8 @@
+import {isWorkflowFileProvenanceMigrationProfile} from '../workflow-file-provenance-migration-contract.mjs';
 import {createHash} from 'node:crypto';
 import {fingerprint} from '../scoped-release.mjs';
 import {telegramIntroductionFixture} from './telegram-introduction-synthetic.mjs';
-import {componentMigrationNames,componentMigrationConfiguration} from '../portable-component-migration.mjs';
+import {componentMigrationNames,componentMigrationHandoffNames,componentMigrationConfiguration} from '../portable-component-migration.mjs';
 const revision='a'.repeat(40);
 const uuid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 
@@ -11,11 +12,15 @@ const uuid=n=>`10000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
 export function componentCohortFixture(migrationProfile='github-repository-scope') {
   const names=componentMigrationNames(migrationProfile),configuration=componentMigrationConfiguration(migrationProfile);
   const baseHeads={'control-plane':20261112000100,'internal-rpc-authority':2,'email-bridge':3};
+  const personal=['personal-integrations','personal-integrations-backup'].includes(migrationProfile);
+  const usesCurrentAuthority=personal||isWorkflowFileProvenanceMigrationProfile(migrationProfile);
+  if(usesCurrentAuthority)Object.assign(baseHeads,{'internal-rpc-authority':20260912000200,'email-bridge':20260905000200});
   const value={schema:'kodex.portable-component-migration/v2',profile:migrationProfile,context:'portable-fixture',
     clusterUID:uuid(1),namespaceUID:uuid(2),baseSourceSHA:'b'.repeat(40),baseReleaseLockSHA256:'c'.repeat(64),
     baseSchemaHeads:baseHeads,schemaHeadsBefore:{...baseHeads,'control-plane':configuration.before},
     schemaHeadsAfter:{...baseHeads,'control-plane':configuration.after},runtimeABI:5,runnerInput:'v10',
     registry:configuration.introduced?'registry.local.kodex':'registry.example.invalid',repositoryPrefix:configuration.introduced?'kodex':'synthetic/upgrade',nodeUIDs:[uuid(3)],components:[]};
+  if(usesCurrentAuthority)for(const heads of [value.schemaHeadsBefore,value.schemaHeadsAfter])heads['internal-rpc-authority']=20261115000200;
   for(const [index,component] of names.entries()) {
     const anchor=configuration.sources[component]+'internal/synthetic.go',changed=[anchor];
     const digest='sha256:'+String(index+1).repeat(64);
@@ -34,11 +39,12 @@ export function componentCohortFixture(migrationProfile='github-repository-scope
       nodes:[{name:'node-0',uid:uuid(3),imageRef:lock.image_ref,repoDigestVerified:true}]};
     value.components.push(part);
   }
-  const deployments=names.map((name,index)=>{
+  const deployments=componentMigrationHandoffNames(migrationProfile).map((name,index)=>{
     const replicas=name==='control-api-gateway'||name===configuration.introduced?0:name==='control-plane'?3:2;
     return {apiVersion:'apps/v1',kind:'Deployment',metadata:{name,namespace:'kodex-system',uid:uuid(10+index),resourceVersion:'1',generation:1,
       labels:{'app.kubernetes.io/name':name,'app.kubernetes.io/part-of':'kodex','kodex.dev/profile':'web-only','kodex.dev/environment':'production'}},
-      spec:{replicas,template:{metadata:{annotations:{synthetic:'retained'}},spec:{containers:[{name,image:value.components[index].expectedImageRef,
+      spec:{replicas,template:{metadata:{annotations:{synthetic:'retained'}},spec:{containers:[{name,image:value.components.find(part=>part.component===name)?.expectedImageRef??
+        `registry.example.invalid/base/${name}@sha256:${'e'.repeat(64)}`,
         env:[{name:'SYNTHETIC',value:'unchanged'}]}]}}},status:{observedGeneration:1,replicas,updatedReplicas:replicas,readyReplicas:replicas,availableReplicas:replicas}};
   });
   if(configuration.introduced){const app=deployments.find(d=>d.metadata.name===configuration.introduced);

@@ -123,27 +123,44 @@ func readEmailDecision(ctx context.Context, tx pgx.Tx, current scope, receiptRef
 // затем run.view на authoritative source run. Возвращает первую access error без изменения и не
 // считает receipt refs, project equality или idempotency полномочиями.
 func (repository *Repository) emailReceiptAccess(ctx context.Context, tx pgx.Tx, current scope, owner emailReceiptOwner, permission string) error {
-	if err := repository.requireAccess(ctx, tx, current, permission, entity.AccessScope{
+	_, err := repository.emailReceiptAccessUntil(ctx, tx, current, owner, permission)
+	return err
+}
+
+// emailReceiptAccessUntil retains the earliest current integration/run allowance for disclosure and reconciliation credit. Zero means both permissions currently have unbounded winning alternatives; durable receipt/report transitions keep using the access-only wrapper.
+// emailReceiptAccessUntil сохраняет наиболее ранний текущий integration/run allowance для disclosure и reconciliation credit. Zero означает текущие неограниченные winning alternatives обоих permissions; durable receipt/report transitions используют прежний access-only wrapper.
+func (repository *Repository) emailReceiptAccessUntil(ctx context.Context, tx pgx.Tx, current scope, owner emailReceiptOwner, permission string) (time.Time, error) {
+	until, err := repository.requireAccessUntil(ctx, tx, current, permission, entity.AccessScope{
 		Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: owner.receipt.ConnectionRef,
-	}); err != nil {
-		return err
+	})
+	if err != nil {
+		return time.Time{}, err
 	}
-	return repository.requireAccess(ctx, tx, current, emailpolicy.PermissionRunView, entity.AccessScope{
+	runUntil, err := repository.requireAccessUntil(ctx, tx, current, emailpolicy.PermissionRunView, entity.AccessScope{
 		Kind: "RESOURCE_INSTANCE", ResourceKind: "RUN", ResourceRef: owner.runRef,
 	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	if !runUntil.IsZero() && (until.IsZero() || runUntil.Before(until)) {
+		until = runUntil
+	}
+	return until, nil
 }
 
 // GetEmailEffectReceipt resolves current principal scope and reads a locked receipt plus latest
-// optional decision within a five-second transaction. Both integration view and source run.view
-// are required before commit. It may show an expired stored decision for owner inspection; this
+// optional decision within a five-second transaction. Current integration/run allowance is retained
+// and checked before/after COMMIT on the original monotonic budget. It may show an expired stored decision for owner inspection; this
 // view neither creates a reconciliation grant nor retries the email effect.
 // GetEmailEffectReceipt разрешает current principal scope и читает locked receipt с latest
-// optional decision в пятисекундной transaction. До commit требуются integration view и source
-// run.view. Может показывать expired stored decision для owner inspection; view не создаёт
+// optional decision в пятисекундной transaction. Current integration/run allowance сохраняется
+// и проверяется до/после COMMIT в исходном monotonic budget. Может показывать expired stored decision для owner inspection; view не создаёт
 // reconciliation grant и не повторяет email effect.
 func (repository *Repository) GetEmailEffectReceipt(ctx context.Context, principal value.Principal, invocationRef string) (entity.EmailEffectReceiptView, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	observed := time.Now()
+	originalExpiry, _ := ctx.Deadline()
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.EmailEffectReceiptView{}, err
@@ -157,15 +174,23 @@ func (repository *Repository) GetEmailEffectReceipt(ctx context.Context, princip
 	if err != nil {
 		return entity.EmailEffectReceiptView{}, err
 	}
-	if err := repository.emailReceiptAccess(ctx, tx, current, owner, emailpolicy.PermissionView); err != nil {
+	accessUntil, err := repository.emailReceiptAccessUntil(ctx, tx, current, owner, emailpolicy.PermissionView)
+	if err != nil {
 		return entity.EmailEffectReceiptView{}, err
 	}
+	until := emailAuthorizationUntil(observed, originalExpiry, accessUntil)
 	decision, err := readEmailDecision(ctx, tx, current, owner.receipt.Ref, "")
 	if err != nil {
 		return entity.EmailEffectReceiptView{}, err
 	}
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailEffectReceiptView{}, concealAccessDenial(err, errs.ErrNotFound)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.EmailEffectReceiptView{}, errs.ErrUnavailable
+	}
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailEffectReceiptView{}, concealAccessDenial(err, errs.ErrNotFound)
 	}
 	return entity.EmailEffectReceiptView{Receipt: owner.receipt, Decision: decision}, nil
 }
@@ -259,18 +284,22 @@ func (repository *Repository) reconcileEmailEffect(ctx context.Context, tx pgx.T
 // receipt binding, then reads the receipt and latest decision under a five-second transaction. An
 // explicit decision ref must match that latest row; all receipt version/digest/external-ref,
 // UNKNOWN/closed-state, nonempty grant and unexpired pins must match. It rechecks access using the
-// decision actor ref and commits before returning. Missing/implicit-expired decisions are
+// decision actor ref and checks the original allowance before/after COMMIT. Usable expiry is clamped
+// by current ACL and stored decision without rewriting facts or treating the RPC timeout as a grant lifetime. Missing/implicit-expired decisions are
 // NotFound, mismatches are Forbidden; it does not consume a grant or resend mail.
 // ResolveEmailReconciliation принимает только unscoped email-bridge reads с допустимой external
 // receipt binding, затем читает receipt и latest decision в пятисекундной transaction. Explicit
 // decision ref обязан совпасть с latest row; должны совпасть все receipt
 // version/digest/external-ref, UNKNOWN/closed-state, nonempty grant и unexpired pins. Повторно
-// проверяет access с decision actor ref и требует commit до возврата. Missing/implicit-expired
+// проверяет access с decision actor ref и исходный allowance до/после COMMIT. Usable expiry ограничен
+// current ACL и stored decision без изменения facts либо использования RPC timeout как grant lifetime. Missing/implicit-expired
 // decisions дают NotFound, mismatches — Forbidden; grant не потребляет и mail повторно не
 // отправляет.
 func (repository *Repository) ResolveEmailReconciliation(ctx context.Context, principal value.Principal, receiptRef, decisionRef, externalRef, digest string) (entity.EmailEffectReceiptView, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	observed := time.Now()
+	originalExpiry, _ := ctx.Deadline()
 	if principal.CallerWorkload != "email-bridge" || principal.ProjectRef != "" {
 		return entity.EmailEffectReceiptView{}, errs.ErrForbidden
 	}
@@ -305,11 +334,23 @@ func (repository *Repository) ResolveEmailReconciliation(ctx context.Context, pr
 	}
 	actorScope := current
 	actorScope.actorRef = decision.ActorRef
-	if err := repository.emailReceiptAccess(ctx, tx, actorScope, owner, emailpolicy.PermissionReconcile); err != nil {
-		return entity.EmailEffectReceiptView{}, errs.ErrForbidden
+	accessUntil, err := repository.emailReceiptAccessUntil(ctx, tx, actorScope, owner, emailpolicy.PermissionReconcile)
+	if err != nil {
+		return entity.EmailEffectReceiptView{}, concealAccessDenial(err, errs.ErrForbidden)
+	}
+	creditUntil := emailAuthorizationUntil(observed, decision.ExpiresAt, accessUntil)
+	until := emailAuthorizationUntil(observed, originalExpiry, creditUntil)
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailEffectReceiptView{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.EmailEffectReceiptView{}, errs.ErrUnavailable
 	}
+	if err := emailAuthorizationCreditError(ctx, until); err != nil {
+		return entity.EmailEffectReceiptView{}, err
+	}
+	bounded := *decision
+	bounded.ExpiresAt = creditUntil
+	decision = &bounded
 	return entity.EmailEffectReceiptView{Receipt: owner.receipt, Decision: decision}, nil
 }

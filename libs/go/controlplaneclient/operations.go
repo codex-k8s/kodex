@@ -1,6 +1,10 @@
 package controlplaneclient
 
-import controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+import (
+	"maps"
+
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+)
 
 // EmailBridgeOperations registers only configuration, authorization and effect-receipt RPCs used by the managed mail bridge.
 // EmailBridgeOperations регистрирует только RPC конфигурации, авторизации и квитанций эффекта управляемого почтового моста.
@@ -40,12 +44,49 @@ func STTPolicyProjectionOperations() map[string]string {
 	return map[string]string{"platform.stt.policy.resolve": "/stt.v1.TranscriptionPolicyProjectionService/ResolveTranscriptionPolicy"}
 }
 
+// KubernetesFileCleanupRepairOperation identifies the owner's command to reconcile exhausted FILE cleanup.
+// KubernetesFileCleanupRepairOperation обозначает команду владельца для сверки исчерпанной очистки FILE.
+const KubernetesFileCleanupRepairOperation = "platform.integrations.kubernetes.file.cleanup.repair"
+
 // ControlAPIGatewayOperations returns the closed owner-facing operation-to-RPC map used by the control API gateway.
 // ControlAPIGatewayOperations возвращает закрытое соответствие операций владельца и RPC для control API gateway.
 func ControlAPIGatewayOperations() map[string]string {
 	return map[string]string{
-		"platform.integration-approval-consents.list":   controlplanev1.PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName,
-		"platform.integration-approval-consents.revoke": controlplanev1.PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName,
+		"platform.integrations.kubernetes.file.list":              controlplanev1.ManagedKubernetesFileService_ListManagedKubernetesFileInputs_FullMethodName,
+		"platform.integrations.kubernetes.file.get":               controlplanev1.ManagedKubernetesFileService_GetManagedKubernetesFileInput_FullMethodName,
+		"platform.integrations.ssh.setup.begin":                   controlplanev1.ManagedSSHIdentitySetupService_BeginSSHIdentitySetup_FullMethodName,
+		"platform.integrations.ssh.setup.get":                     controlplanev1.ManagedSSHIdentitySetupService_GetSSHIdentitySetup_FullMethodName,
+		"platform.integrations.ssh.setup.cancel":                  controlplanev1.ManagedSSHIdentitySetupService_CancelSSHIdentitySetup_FullMethodName,
+		"platform.integrations.kubernetes.output.read":            controlplanev1.ManagedKubernetesStreamOutputService_ReadManagedKubernetesStreamOutput_FullMethodName,
+		"platform.integrations.kubernetes.tool.list":              controlplanev1.ManagedKubernetesToolService_ListManagedKubernetesTools_FullMethodName,
+		"platform.integrations.kubernetes.capture.get":            controlplanev1.ManagedKubernetesCaptureService_GetManagedKubernetesCaptureStatus_FullMethodName,
+		"platform.integrations.kubernetes.capture.list":           controlplanev1.ManagedKubernetesCaptureService_ListManagedKubernetesCaptures_FullMethodName,
+		"platform.integrations.kubernetes.capture.cleanup.repair": controlplanev1.ManagedKubernetesCaptureService_RepairManagedKubernetesStagingCleanup_FullMethodName,
+		"platform.integrations.kubernetes.capture.repair":         controlplanev1.ManagedKubernetesCaptureService_RepairManagedKubernetesCapture_FullMethodName,
+		"platform.integrations.kubernetes.tool.get":               controlplanev1.ManagedKubernetesToolService_GetManagedKubernetesTool_FullMethodName,
+		"platform.integrations.kubernetes.tool.stop":              controlplanev1.ManagedKubernetesToolService_StopManagedKubernetesTool_FullMethodName,
+		"platform.integrations.kubernetes.input.stop":             controlplanev1.ManagedKubernetesStreamInputService_StopManagedKubernetesStream_FullMethodName,
+		"platform.integrations.kubernetes.material.begin":         controlplanev1.ManagedKubernetesResourceMaterialService_BeginManagedKubernetesResourceMaterial_FullMethodName,
+		"platform.integrations.kubernetes.material.get":           controlplanev1.ManagedKubernetesResourceMaterialService_GetManagedKubernetesResourceMaterial_FullMethodName,
+		"platform.integrations.kubernetes.material.cancel":        controlplanev1.ManagedKubernetesResourceMaterialService_CancelManagedKubernetesResourceMaterial_FullMethodName,
+		"platform.integrations.kubernetes.input.list":             controlplanev1.ManagedKubernetesStreamInputService_ListManagedKubernetesStreamInputs_FullMethodName,
+		"platform.integrations.kubernetes.input.get":              controlplanev1.ManagedKubernetesStreamInputService_GetManagedKubernetesStreamInput_FullMethodName,
+		"platform.integrations.kubernetes.input.submit":           controlplanev1.ManagedKubernetesStreamInputService_SubmitManagedKubernetesStreamInput_FullMethodName,
+		"platform.integrations.kubernetes.setup.begin":            controlplanev1.ManagedKubernetesIdentitySetupService_BeginManagedKubernetesIdentitySetup_FullMethodName,
+		"platform.integrations.kubernetes.setup.get":              controlplanev1.ManagedKubernetesIdentitySetupService_GetManagedKubernetesIdentitySetup_FullMethodName,
+		"platform.integrations.kubernetes.setup.cancel":           controlplanev1.ManagedKubernetesIdentitySetupService_CancelManagedKubernetesIdentitySetup_FullMethodName,
+		"platform.integration-approval-consents.list":             controlplanev1.PlatformQueryService_ListIntegrationApprovalConsents_FullMethodName,
+		"platform.integration-approval-consents.revoke":           controlplanev1.PlatformCommandService_RevokeIntegrationApprovalConsent_FullMethodName,
+		"platform.integrations.kubernetes.port-forward.open":      controlplanev1.ManagedKubernetesPortForwardConnectionService_OpenManagedKubernetesPortForwardConnection_FullMethodName,
+		"platform.integrations.kubernetes.port-forward.get":       controlplanev1.ManagedKubernetesPortForwardConnectionService_GetManagedKubernetesPortForwardConnection_FullMethodName,
+		"platform.integrations.kubernetes.port-forward.list":      controlplanev1.ManagedKubernetesPortForwardConnectionService_ListManagedKubernetesPortForwardConnections_FullMethodName,
+		"platform.integrations.kubernetes.port-forward.close":     controlplanev1.ManagedKubernetesPortForwardConnectionService_CloseManagedKubernetesPortForwardConnection_FullMethodName,
+		"platform.email-mailboxes.receipts.read":                  controlplanev1.PersonalEmailMailboxService_GetPersonalEmailMailboxMutationReceipt_FullMethodName,
+		"platform.email-mailboxes.mine.create":                    controlplanev1.PersonalEmailMailboxService_CreatePersonalEmailMailboxConnection_FullMethodName,
+		"platform.email-mailboxes.mine.list":                      controlplanev1.PersonalEmailMailboxService_ListMyEmailMailboxes_FullMethodName,
+		"platform.email-mailboxes.ownership.read":                 controlplanev1.PersonalEmailMailboxService_GetEmailMailboxOwnership_FullMethodName,
+		"platform.email-mailboxes.ownership.configure":            controlplanev1.PersonalEmailMailboxService_ConfigureEmailMailboxOwnership_FullMethodName,
+		"platform.email-mailboxes.ownership.revoke":               controlplanev1.PersonalEmailMailboxService_RevokeEmailMailboxOwnership_FullMethodName,
 
 		"platform.personal-integrations.test":                               controlplanev1.PersonalIntegrationCredentialService_TestPersonalIntegrationCredential_FullMethodName,
 		"platform.personal-integrations.list":                               controlplanev1.PersonalIntegrationCredentialService_ListPersonalIntegrationConnections_FullMethodName,
@@ -386,10 +427,29 @@ func ControlAPIGatewayOperations() map[string]string {
 	}
 }
 
-// SecretBrokerOperations limits broker-side work to credential renewal and runtime-secret task lifecycle methods.
-// SecretBrokerOperations ограничивает работу broker обновлением credentials и методами жизненного цикла runtime-secret задач.
+// SecretBrokerOperations supplies the same closed owner registry to the broker client and the authority generator.
+// SecretBrokerOperations передаёт один закрытый реестр методов владельца клиенту брокера и генератору полномочий.
 func SecretBrokerOperations() map[string]string {
-	return map[string]string{
+	operations := map[string]string{
+		"platform.runtime.kubernetes.file.prepare": controlplanev1.ManagedKubernetesOwnerService_PrepareManagedKubernetesFileInput_FullMethodName,
+		"platform.runtime.ssh.setup.resolve":       controlplanev1.ManagedSSHIdentitySetupService_ResolveSSHIdentityUpload_FullMethodName,
+		"platform.runtime.ssh.setup.claim":         controlplanev1.ManagedSSHIdentitySetupService_ClaimSSHIdentityUpload_FullMethodName,
+		"platform.runtime.ssh.setup.complete":      controlplanev1.ManagedSSHIdentitySetupService_CompleteSSHIdentityUpload_FullMethodName,
+
+		"platform.runtime.kubernetes.resolve":                      controlplanev1.ManagedKubernetesOwnerService_ResolveManagedKubernetesOperation_FullMethodName,
+		"platform.runtime.kubernetes.children.prepare":             controlplanev1.ManagedKubernetesOwnerService_PrepareManagedKubernetesChildren_FullMethodName,
+		"platform.runtime.kubernetes.effect.begin":                 controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesEffect_FullMethodName,
+		"platform.runtime.kubernetes.effect.complete":              controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesEffect_FullMethodName,
+		"platform.runtime.kubernetes.stream.open":                  controlplanev1.ManagedKubernetesOwnerService_OpenManagedKubernetesStream_FullMethodName,
+		"platform.runtime.kubernetes.stream.close":                 controlplanev1.ManagedKubernetesOwnerService_CloseManagedKubernetesStream_FullMethodName,
+		"platform.runtime.kubernetes.frame.begin":                  controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesFrame_FullMethodName,
+		"platform.runtime.kubernetes.frame.complete":               controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesFrame_FullMethodName,
+		"platform.runtime.kubernetes.health.begin":                 controlplanev1.ManagedKubernetesOwnerService_BeginManagedKubernetesHealthProbe_FullMethodName,
+		"platform.runtime.kubernetes.health.complete":              controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesHealthProbe_FullMethodName,
+		"platform.runtime.kubernetes.setup.resolve":                controlplanev1.ManagedKubernetesIdentitySetupService_ResolveManagedKubernetesIdentityUpload_FullMethodName,
+		"platform.runtime.kubernetes.setup.claim":                  controlplanev1.ManagedKubernetesIdentitySetupService_ClaimManagedKubernetesIdentityUpload_FullMethodName,
+		"platform.runtime.kubernetes.setup.complete":               controlplanev1.ManagedKubernetesIdentitySetupService_CompleteManagedKubernetesIdentityUpload_FullMethodName,
+		"platform.runtime.kubernetes.readiness":                    controlplanev1.ManagedKubernetesOwnerService_CheckManagedKubernetesOwnerReadiness_FullMethodName,
 		"platform.provider-accounts.credential.renewal.work.check": controlplanev1.ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName,
 		"platform.provider-accounts.credential.renewal.authorize":  controlplanev1.ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName,
 		"platform.provider-accounts.credential.renewal.validate":   controlplanev1.ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName,
@@ -412,6 +472,9 @@ func SecretBrokerOperations() map[string]string {
 		"platform.runtime-secrets.operations.recover":              controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
 		"platform.runtime-secrets.materialization.recover":         controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
 	}
+	maps.Copy(operations, SSHIdentityHealthOwnerOperations())
+	maps.Copy(operations, SSHExecutionOwnerOperations())
+	return operations
 }
 
 // ProviderCredentialMaterializerOperations registers only the isolated materializer's credential and catalog RPCs.
@@ -456,10 +519,23 @@ func SSHComposeCredentialProjectionOperations() map[string]string {
 	return map[string]string{"platform.ssh-compose.credential.project": "/secretbroker.v1.RuntimeCredentialProjectionService/ProjectSSHComposeCredential"}
 }
 
+// ManagedKubernetesBrokerOperations registers only typed execution and bounded stream RPCs to the broker.
+// ManagedKubernetesBrokerOperations регистрирует лишь typed execution и bounded stream RPC к broker.
+func ManagedKubernetesBrokerOperations() map[string]string {
+	return map[string]string{
+		"kubernetes.execute":         "/secretbroker.v1.ManagedKubernetesService/ExecuteManagedKubernetesOperation",
+		"kubernetes.stream.exchange": "/secretbroker.v1.ManagedKubernetesService/ExchangeManagedKubernetesStream",
+		"kubernetes.cancel":          "/secretbroker.v1.ManagedKubernetesService/CancelManagedKubernetesOperation",
+		"kubernetes.readiness":       "/secretbroker.v1.ManagedKubernetesService/CheckManagedKubernetesReadiness",
+	}
+}
+
 // RuntimeOperations registers exact execution, file, assistant, integration and warm-runtime RPCs for runtime work clients.
 // RuntimeOperations регистрирует точные RPC исполнения, файлов, помощника, интеграций и warm runtime для runtime-клиентов.
 func RuntimeOperations() map[string]string {
 	return map[string]string{
+		"platform.runtime.ssh.invocation.read":                 controlplanev1.ManagedSSHOwnerService_ReadManagedSSHInvocation_FullMethodName,
+		"platform.runtime.kubernetes.invocation.read":          controlplanev1.ManagedKubernetesOwnerService_ReadManagedKubernetesInvocation_FullMethodName,
 		"platform.repository-bundles.prepare":                  controlplanev1.RepositoryBundlePublicationService_PrepareRepositoryBundlePublication_FullMethodName,
 		"platform.runtime.execution.claim":                     controlplanev1.RuntimeWorkService_ClaimExecution_FullMethodName,
 		"platform.runtime.role-image-configuration.get":        controlplanev1.RuntimeWorkService_GetRuntimeEnvironmentRoleImageConfiguration_FullMethodName,
@@ -566,6 +642,14 @@ func SessionArchiveOperations() map[string]string {
 // IntegrationGatewayOperations регистрирует для шлюза задачи Git-конфигурации и методы исполнения runtime-интеграций.
 func IntegrationGatewayOperations() map[string]string {
 	return map[string]string{
+		"platform.runtime.integrations.delivery.check":    controlplanev1.ManagedKubernetesOwnerService_CheckManagedKubernetesOwnerReadiness_FullMethodName,
+		"platform.runtime.kubernetes.renew":               controlplanev1.ManagedKubernetesOwnerService_RenewManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.complete":            controlplanev1.ManagedKubernetesOwnerService_CompleteManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.read":                controlplanev1.ManagedKubernetesOwnerService_GetManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.cancel":              controlplanev1.ManagedKubernetesOwnerService_CancelManagedKubernetesInvocation_FullMethodName,
+		"platform.runtime.kubernetes.output.accept":       controlplanev1.ManagedKubernetesOwnerService_AcceptManagedKubernetesOutputFrame_FullMethodName,
+		"platform.runtime.kubernetes.output.read":         controlplanev1.ManagedKubernetesOwnerService_GetManagedKubernetesOutputFrame_FullMethodName,
+		"platform.runtime.kubernetes.input.claim":         controlplanev1.ManagedKubernetesOwnerService_ClaimManagedKubernetesInputFrame_FullMethodName,
 		"platform.personal-integration-calls.begin":       controlplanev1.PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName,
 		"platform.personal-integration-tests.claim":       controlplanev1.PersonalIntegrationCredentialService_ClaimPersonalIntegrationCredentialTests_FullMethodName,
 		"platform.personal-integration-tests.begin":       controlplanev1.PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName,

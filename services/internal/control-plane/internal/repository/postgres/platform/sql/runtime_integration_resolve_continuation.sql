@@ -17,7 +17,7 @@ SELECT node.id::text,
        gate.version,
        COALESCE(gate.decision,''),
        gate.decision_comment,
-       COALESCE(receipt.ref,''),
+       CASE WHEN invocation.state='SUCCEEDED' THEN COALESCE(receipt.ref,'') ELSE '' END,
        root.workflow_version_id IS NULL AND agent.system_key IS NULL AND run.project_id IS NOT NULL
 FROM control_plane.integration_invocations invocation
 JOIN control_plane.run_nodes node ON node.id=invocation.node_id
@@ -25,6 +25,13 @@ JOIN control_plane.runs run ON run.id=node.run_id
 JOIN control_plane.runs root ON root.id=node.root_run_id
 JOIN control_plane.agents agent ON agent.id=node.agent_id
 JOIN control_plane.owner_gates gate ON gate.integration_invocation_id=invocation.id
+ AND ((@decision_gate_ref='' AND gate.kubernetes_child_id IS NULL)
+   OR (@decision_gate_ref<>'' AND gate.ref=@decision_gate_ref AND gate.kubernetes_child_id IS NOT NULL
+       AND EXISTS(SELECT 1 FROM control_plane.kubernetes_execution_children child
+         JOIN control_plane.kubernetes_execution_plans plan ON plan.id=child.plan_id AND plan.organization_id=child.organization_id
+         WHERE child.id=gate.kubernetes_child_id AND child.organization_id=invocation.organization_id
+           AND plan.invocation_id=invocation.id)
+       AND (gate.state IN('REJECTED','CANCELLED') OR (gate.state='APPROVED' AND invocation.state IN ('SUCCEEDED','FAILED','CANCELLED')))))
 LEFT JOIN control_plane.integration_effect_receipts receipt ON receipt.id=invocation.effect_receipt_id
   AND receipt.invocation_id=invocation.id AND receipt.organization_id=invocation.organization_id
   AND receipt.effect_key=invocation.effect_key AND receipt.input_digest=invocation.input_digest
@@ -55,7 +62,7 @@ WHERE invocation.id=@invocation_id::uuid
       WHERE initiator.id=root.initiated_by AND initiator.organization_id=invocation.organization_id AND initiator.active
         AND control_plane.catalog_resource_visible(invocation.organization_id,initiator.id,'agent.launch','AGENT',target.id,target.project_id,target.owner_id,target.related_ids,statement_timestamp(),false))
   ))
-  AND ((gate.state='APPROVED' AND invocation.state IN ('SUCCEEDED','FAILED'))
+  AND ((gate.state='APPROVED' AND invocation.state IN ('SUCCEEDED','FAILED','CANCELLED'))
     OR (gate.state='REJECTED' AND invocation.state='REJECTED')
     OR (gate.state='CANCELLED' AND invocation.state='CANCELLED'))
   AND NOT EXISTS (

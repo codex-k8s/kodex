@@ -16,7 +16,7 @@ import (
 // TestOrdinaryIntegrationManifestPreservesFullResult checks bounded tasks for every terminal decision without truncating provider bytes, Unicode or exact owner feedback.
 // TestOrdinaryIntegrationManifestPreservesFullResult проверяет ограниченные задачи для всех terminal decisions без усечения provider bytes, Unicode либо точного owner feedback.
 func TestOrdinaryIntegrationManifestPreservesFullResult(t *testing.T) {
-	for _, pair := range [][2]string{{"APPROVE", "SUCCEEDED"}, {"APPROVE", "FAILED"}, {"REJECT", "REJECTED"}, {"CANCEL", "CANCELLED"}} {
+	for _, pair := range [][2]string{{"APPROVE", "SUCCEEDED"}, {"APPROVE", "FAILED"}, {"APPROVE", "CANCELLED"}, {"REJECT", "REJECTED"}, {"CANCEL", "CANCELLED"}} {
 		snapshot := integrationContinuationSnapshot{InvocationRef: "inv_fixture123", State: pair[1],
 			ResultSummary: strings.Repeat("Synthetic data. ", 3000) + "🧪 полный конец",
 			OwnerDecision: integrationContinuationDecision{GateRef: "gat_fixture123", GateVersion: 2, Decision: pair[0], Comment: "Точное замечание\nбез нового разрешения"}}

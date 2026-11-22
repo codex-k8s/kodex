@@ -1,3 +1,18 @@
+import {readWorkflowFileAbortJob,applyWorkflowFileAbort,workflowFileAbortReady} from './workflow-file-provenance-abort.mjs';
+import {workflowFileProvenanceMigration,isWorkflowFileProvenanceMigrationProfile,
+  validWorkflowFileProvenanceBackupMigrationPrecondition,validWorkflowFileProvenanceBackupMigrationPostcondition,
+  validWorkflowFileProvenanceComposedPostcondition,validWorkflowFileProvenancePredecessorCatalog,
+  workflowFileAbortIntent,workflowFileAbortAck,workflowFileUnboundRestoreIntent} from './workflow-file-provenance-migration-contract.mjs';
+import {artifactGrantCatalogReceipt,artifactGrantCatalogRequired,hasPersonalBackupArtifactMigrationChain} from './artifact-retention-grant-catalog.mjs';
+import {readArtifactGrantCatalogCandidate,readArtifactGrantCatalogPostcondition,readStagedArtifactGrantCatalogCandidate,releaseArtifactGrantCatalog} from './artifact-retention-grant-catalog-release.mjs';
+import {readArtifactGrantRepairCandidate,repairPersonalArtifactGrant} from './personal-integrations-artifact-grant-repair.mjs';
+import {repairPersonalArtifactSocket} from './personal-integrations-artifact-socket-repair.mjs';
+import {readPersonalIntegrationsMigrationExecutor,bindPersonalArtifactSocketExecutor,readPersonalIntegrationsPinnedAuthority} from './personal-integrations-executor-source.mjs';
+export {validWorkflowFileProvenanceBackupMigrationPrecondition,validWorkflowFileProvenanceBackupMigrationPostcondition};
+import {personalMigrationAttempt,runPersonalMigrationRetry} from './personal-integrations-migration-recovery.mjs';
+import {readPersonalIntegrationsReleaseReferences,readPersonalIntegrationsDeploymentInputs,bindPersonalIntegrationsDeploymentPlan,
+ revalidatePersonalIntegrationsDeploymentPlan} from './personal-integrations-deployment-inputs.mjs';
+import {isPersonalIntegrationsMigrationProfile,personalIntegrationsDeliveryPrerequisite,requirePersonalIntegrationsDeliveryPrerequisite,verifyPersonalIntegrationsMigrationSources,validPersonalIntegrationsMigrationProof,validPersonalIntegrationsRecoveryProof} from './personal-integrations-migration-contract.mjs';
 import {planTelegramEgressRevisionRepair,readTelegramEgressRevisionRepair,readTelegramEgressRevisionCandidate} from './telegram-egress-revision-repair.mjs';
 import {planTelegramObservabilityRepair,readTelegramObservabilityRepair} from './telegram-observability-repair.mjs';
 import {readTelegramPortRepair,telegramPortRepairCodes,telegramPortRepairBound} from './telegram-port-repair.mjs';
@@ -5,18 +20,19 @@ import {validateKubernetesPortNames} from './kubernetes-port-names.mjs';
 import {readTelegramCPProjection} from './telegram-cp-policy.mjs';
 import {planTelegramRuntimeInputs,verifyTelegramRuntimeInputs,applyTelegramRuntimeInputs} from './telegram-runtime-inputs.mjs';
 import {readTelegramAPIReaders} from './telegram-api-readers.mjs';
+import {readPersonalIntegrationsAPIReaders} from './personal-integrations-api-readers.mjs';
 import {readTelegramAuthorityDelivered,readTelegramAuthorityTerminal} from './authority-rotation-transition.mjs';
-import {readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
+import {readAuthorityPrivateJSON,readAuthorityPrivateText,parseAuthorityPrivateJSON} from './authority-catalog-transition.mjs';
 import {readTelegramIntroducedReceiver,verifyTelegramIntroducedReceiver} from './telegram-introduced-receiver.mjs';
 import {decodeTelegramResourceCreateSource} from './telegram-resource-create.mjs';
 import { telegramNotificationsCatalog } from './telegram-notifications-catalog.gen.mjs';
 import { sentryObservabilityCatalog } from './sentry-observability-catalog.gen.mjs';
-import {readStoppedBackupMaintenance,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
+import {readStoppedBackupMaintenance,readBackupMigrationJobPods,verifyBackupMigrationScope,requireOpenBackupBoundary} from './backup-controller-maintenance-cli.mjs';
 import {backupControllerMaintenanceHeader} from './backup-controller-maintenance.mjs';
 import {requiresBackupMaintenance} from './backup-migration-registry.mjs';
 import { githubRepositoryScopeCatalog } from './github-repository-scope-catalog.gen.mjs';
 import { validatedStablePublication } from './stable-image-publication.mjs';
-import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory,componentServingReady } from './portable-component-migration.mjs';
+import { componentMigrationCohortSchema, isComponentMigrationProfile, isComponentMigrationPublication, componentMigrationNames, componentMigrationHandoffNames, componentMigrationTargetNames, componentMigrationPublication, componentMigrationTarget, planComponentMigrationHandoff, componentMigrationLifecycle, readComponentServingInventory,componentServingReady,verifyPersonalReaderSnapshots } from './portable-component-migration.mjs';
 import { fingerprint } from './scoped-release.mjs';
 import { migrationOwnerDatabase, validateMigrationDatabaseIdentity } from './migration-owner-database.mjs';
 import {isRoutineMigrationAPIRestoreProfile,readMigrationAPIAdmission,verifyMigrationAPIAdmission,readOpenedMigrationAPI,migrationAPIRestorationExecutor} from './component-migration-api-admission.mjs';
@@ -37,6 +53,13 @@ import { authorityProofCounterCatalog } from './authority-proof-counter-catalog.
 const ensure = (ok, code) => { if (!ok) throw new Error(code); };
 const namespace = 'kodex-system';
 const immutableProfiles = {
+  [workflowFileProvenanceMigration.profile]: {anchorProfile:'portable',executionCommand:workflowFileProvenanceMigration.command,
+    version:String(workflowFileProvenanceMigration.after),file:workflowFileProvenanceMigration.migrationFile,
+    annotation:'kodex.dev/cp-workflow-file-provenance-migration-plan',previousVersion:workflowFileProvenanceMigration.before,
+    emptyField:'workspaceVolumeIdle',preconditionFile:workflowFileProvenanceMigration.proofFile,
+    postconditionFile:workflowFileProvenanceMigration.proofFile,requiredMigrations:Object.freeze([workflowFileProvenanceMigration.artifactFile])},
+  'personal-integrations': {anchorProfile:'portable',executionCommand:'up-personal-integrations',version:'20261114170000',file:'20261114170000_personal_email_mailboxes.sql',annotation:'kodex.dev/cp-personal-integrations-migration-plan',previousVersion:20261114140000,emptyField:'schemaMatches',preconditionFile:'personal-integrations-migration-precondition.sql',postconditionFile:'personal-integrations-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114150000_managed_kubernetes.sql','20261114160000_managed_ssh.sql','20261114170000_personal_email_mailboxes.sql'])},
+  'personal-integrations-backup': {anchorProfile:'portable',executionCommand:'up-personal-integrations-backup-maintenance',version:'20261114170000',file:'20261114170000_personal_email_mailboxes.sql',annotation:'kodex.dev/cp-personal-integrations-backup-migration-plan',previousVersion:20261114140000,emptyField:'schemaMatches',preconditionFile:'personal-integrations-backup-migration-precondition.sql',postconditionFile:'personal-integrations-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114150000_managed_kubernetes.sql','20261114160000_managed_ssh.sql','20261114170000_personal_email_mailboxes.sql'])},
   'telegram-notifications': {anchorProfile:'portable',executionCommand:'up-telegram-notifications',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-migration-precondition.sql',postconditionFile:'telegram-notifications-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
   'telegram-notifications-backup': {anchorProfile:'portable',executionCommand:'up-telegram-notifications-backup-maintenance',version:'20261114140000',file:'20261114140000_telegram_project_subscriptions.sql',annotation:'kodex.dev/cp-telegram-notifications-backup-migration-plan',previousVersion:20261114130000,emptyField:'telegramNotificationsAbsent',preconditionFile:'telegram-notifications-backup-migration-precondition.sql',postconditionFile:'telegram-notifications-backup-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114140000_telegram_project_subscriptions.sql'])},
   'sentry-observability': {anchorProfile:'portable',executionCommand:'up-sentry-observability',version:'20261114130000',file:'20261114130000_sentry_personal_credentials.sql',annotation:'kodex.dev/cp-sentry-observability-migration-plan',previousVersion:20261114120000,emptyField:'sentryObservabilityAbsent',preconditionFile:'sentry-observability-migration-precondition.sql',postconditionFile:'sentry-observability-migration-postcondition.sql',requiredMigrations:Object.freeze(['20261114130000_sentry_personal_credentials.sql'])},
@@ -229,7 +252,11 @@ export function planImmutableControlPlaneMigration(before, source, inspect, id, 
 }
 
 // Terminal readback требует один exact Job-owned Pod и фактический imageID, не только logs/Complete.
-export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.job) {
+export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.job, outcome = 'succeeded') {
+  ensure(outcome==='succeeded'||outcome==='failed'&&(
+    isPersonalIntegrationsMigrationProfile(plan.profile)&&expectedJob===plan.job ||
+    isWorkflowFileProvenanceMigrationProfile(plan.profile)&&[plan.job,plan.checkJob].includes(expectedJob)),
+  'MIGRATION_EXECUTION_OUTCOME_INVALID');
   validateCheckIdentity(plan);
   ensure(job.spec.backoffLimit === 0 && job.spec.activeDeadlineSeconds === 300 &&
     job.spec.ttlSecondsAfterFinished === expectedJob.spec.ttlSecondsAfterFinished && !job.spec.suspend && !job.spec.podFailurePolicy && !job.spec.successPolicy &&
@@ -259,7 +286,9 @@ export function immutableMigrationExecution(job, plan, pods, expectedJob = plan.
   const init = pod.status.initContainerStatuses ?? [];
   const initDone = init.length === (expected.initContainers ?? []).length && init.every((item,index) =>
     item.name === expected.initContainers[index].name && item.restartCount === 0 && item.state?.terminated?.exitCode === 0);
-  return pod.status.phase === 'Succeeded' && state.state?.terminated?.exitCode === 0 && initDone &&
+  const finished=state.state?.terminated;
+  return (outcome==='failed'?pod.status.phase==='Failed'&&Number.isInteger(finished?.exitCode)&&finished.exitCode!==0:
+    pod.status.phase==='Succeeded'&&finished?.exitCode===0) && initDone &&
     (state.imageID === digest || state.imageID === `containerd://${digest}` || state.imageID?.endsWith(`@${digest}`));
 }
 
@@ -290,6 +319,15 @@ export async function waitMigrationMaintenance(observe, ready, code, {now = Date
 export async function runImmutableControlPlaneMigration(phase, options, io) {
   const profile = options['--profile'] ?? 'outbox-index';
   const configuration = immutableMigrationProfile(profile);
+  const socketRepair=['plan-artifact-socket-repair','apply-artifact-socket-repair'].includes(phase);
+  const grantRepair=['plan-artifact-grant-repair','apply-artifact-grant-repair'].includes(phase);
+  const schemaRepair=['plan-artifact-grant-catalog','apply-artifact-grant-catalog'].includes(phase);
+  const terminalRepair=isPersonalIntegrationsMigrationProfile(profile)&&phase==='resume';
+  const artifactRepair=socketRepair||grantRepair||schemaRepair;
+  if(artifactRepair)ensure(isPersonalIntegrationsMigrationProfile(profile),'PERSONAL_ARTIFACT_REPAIR_REJECTED');
+  else requirePersonalIntegrationsDeliveryPrerequisite(profile,phase);
+  ensure(phase!=='retry'||isPersonalIntegrationsMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
+  ensure(phase!=='abort'||isWorkflowFileProvenanceMigrationProfile(profile),'PHASE_ARGUMENT_INVALID');
   const {version:migrationVersion,file:migrationFile,annotation} = configuration;
   // Канонический portable сохраняет три replica; прежние stable profiles сохраняют две.
   const anchorReplicas = configuration.anchorProfile === 'portable' ? 3 : 2;
@@ -297,6 +335,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const { kube, clusterUID, privateJSON, writePrivate, renderedBase, migrationReadback } = io;
   const context = options['--context'];
   const retainedPlan = phase === 'plan' ? undefined : privateJSON(options['--plan']);
+  const workflowProvenance=isWorkflowFileProvenanceMigrationProfile(profile);
+  if(workflowProvenance){
+    ensure(options['--kubeconfig']?.startsWith('/')&&(phase==='plan'
+      ? options['--api-isolation-plan']&&options['--api-isolation-evidence']
+      : retainedPlan.apiMaintenance&&retainedPlan.kubeconfig===resolve(options['--kubeconfig'])),
+    'WORKFLOW_FILE_PROVENANCE_MAINTENANCE_SCOPE_REQUIRED');
+  }
+  if(isPersonalIntegrationsMigrationProfile(profile)&&retainedPlan)ensure(
+    retainedPlan.deliveryPrerequisite&&fingerprint(retainedPlan.deliveryPrerequisite)===fingerprint(personalIntegrationsDeliveryPrerequisite),
+    'PERSONAL_INTEGRATIONS_DELIVERY_PROTOCOL_CHANGED');
+  if(isPersonalIntegrationsMigrationProfile(profile))ensure(phase==='plan'
+    ? options['--api-isolation-plan']&&options['--api-isolation-evidence']&&options['--api-close-plan']&&options['--api-close-evidence']
+    : retainedPlan.apiMaintenance,'PERSONAL_INTEGRATIONS_API_ISOLATION_REQUIRED');
+  if(isPersonalIntegrationsMigrationProfile(profile)&&retainedPlan)ensure(typeof options['--kubeconfig']==='string'&&retainedPlan.kubeconfig===resolve(options['--kubeconfig']),'MIGRATION_KUBECONFIG_CHANGED');
   const restoration=!!options['--api-restoration-open-plan'];
   ensure(!!options['--api-isolation-plan']===!!options['--api-isolation-evidence']&&
     (!options['--api-isolation-plan']||phase==='plan'&&isRoutineMigrationAPIRestoreProfile(profile)),
@@ -313,7 +365,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     ? (options['--portable-target'] ? privateJSON(options['--portable-target']) : undefined) : retainedPlan.portableTarget;
   // Для044 прежний CP043 не является допустимым rollback после DDL. Normal и
   // backup требуют одного полного нового cohort, но разные exact schema proofs.
-  ensure(!['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup'].includes(profile) || componentPublication,
+  ensure(!(workflowProvenance||['github-repository-scope','github-repository-scope-backup','sentry-observability','sentry-observability-backup','telegram-notifications','telegram-notifications-backup','personal-integrations','personal-integrations-backup'].includes(profile)) || componentPublication,
     'COMPONENT_MIGRATION_COHORT_REQUIRED');
   ensure(componentPublication ? isComponentMigrationProfile(profile) && portableTarget && context === componentPublication.context
     : context === 'k3d-kodex' && !portableTarget, 'IMMUTABLE_MIGRATION_CONTEXT_INVALID');
@@ -388,15 +440,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const before = (render, anchor) => ({...render, metadata:{...render.metadata,uid:anchor.metadata.uid,resourceVersion:anchor.metadata.resourceVersion}});
   const sourceDigest = source => {
     ensure(inspectSource(source.path).revision === source.revision, 'SOURCE_REVISION_MISMATCH');
+    if(isPersonalIntegrationsMigrationProfile(profile))verifyPersonalIntegrationsMigrationSources(source);
     const bundle = JSON.parse(execFileSync('yq',['-o=json',
       'select(.kind == "Bundle" and .metadata.name == "control-plane-postgresql-ca") | .spec',
       `${source.path}/deploy/k8s/base/platform-state/ca-bundles.yaml`],
     {encoding:'utf8',timeout:5000,maxBuffer:262144,stdio:['ignore','pipe','pipe']}));
     ensure(fingerprint(bundle) === fingerprint(caBundleSpec), 'MIGRATOR_CA_CANONICAL_SOURCE_INVALID');
     const directory = `${source.path}/services/internal/control-plane/cmd/cli/migrations`;
+    const personalBackup=profile==='personal-integrations-backup';
     const names = readdirSync(directory).filter(name => /^\d{14}_.+\.sql$/.test(name)).sort();
-    ensure(names.at(-1) === migrationFile, 'MIGRATION_NOT_SOURCE_HEAD');
+    ensure(personalBackup?hasPersonalBackupArtifactMigrationChain(directory,migrationFile,{allowOriginalHead:phase!=='plan'}):
+      names.at(-1)===migrationFile, 'MIGRATION_NOT_SOURCE_HEAD');
     ensure((configuration.requiredMigrations??[]).every(name=>names.includes(name)),'MIGRATION_SOURCE_CHAIN_INVALID');
+    if(workflowProvenance)ensure(createHash('sha256').update(readFileSync(`${directory}/${workflowFileProvenanceMigration.artifactFile}`)).digest('hex')===
+      workflowFileProvenanceMigration.artifactSHA256,'MIGRATION_SOURCE_CHAIN_INVALID');
     return createHash('sha256').update(readFileSync(`${directory}/${migrationFile}`)).digest('hex');
   };
   const activationAuthority = () => {
@@ -411,6 +468,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
   const readMaintenanceReaders = () => readTelegramAPIReaders({allowPending:['start-readers','plan-observability-repair','apply-observability-repair'].includes(phase),migration:retainedPlan,authority:activationAuthority(),
     openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence'],
     restorePlanPath:options['--api-restore-plan'],restoreEvidencePath:options['--api-restore-evidence'],repairPlanPath:options['--telegram-port-repair-plan'],repairExecutorRevision:options['--telegram-port-repair-executor-sha']},kube);
+  const personalReaders=()=>readPersonalIntegrationsAPIReaders({migration:retainedPlan,allowPending:artifactRepair||['start-readers','inspect'].includes(phase),
+    openPlanPath:options['--api-open-plan'],openEvidencePath:options['--api-open-evidence']},kube);
+  const readPersonalAuthority=async(purpose,migration)=>{
+    const events=path=>readAuthorityPrivateText(path).split('\n').filter(Boolean).map(parseAuthorityPrivateJSON);
+    return readPersonalIntegrationsPinnedAuthority({plan:readAuthorityPrivateJSON(options['--authority-plan']),events:events(options['--authority-evidence']),
+      freshPlan:readAuthorityPrivateJSON(options['--authority-status-plan']),freshEvents:events(options['--authority-status-evidence']),migration},
+      kube,{purpose,executor:personalExecutor,grantRepair,schemaRepair,terminalRepair});
+  };
   const readAuthorityDelivery = async () => {
     const authority=activationAuthority();
     ensure(options['--authority-evidence']&&options['--authority-status-plan']&&options['--authority-status-evidence'],
@@ -432,8 +497,9 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if (isComponentMigrationPublication(evidence)) {
       const sourceRevision = phase === 'plan' ? options['--revision'] : retainedPlan.source.revision;
       const apps = componentMigrationTargetNames(evidence.profile).map(name => get('deployment',name));
-      const readers=phase!=='plan'&&apps.find(d=>d.metadata.name==='control-api-gateway')?.spec.replicas>0&&evidence.introducedReceiver
-        ? readMaintenanceReaders():undefined;
+      const runningAPI=phase!=='plan'&&apps.find(d=>d.metadata.name==='control-api-gateway')?.spec.replicas>0;
+      const readers=runningAPI?(isPersonalIntegrationsMigrationProfile(profile)?personalReaders():
+        evidence.introducedReceiver?readMaintenanceReaders():undefined):undefined;
       const target = componentMigrationTarget(portableTarget,evidence,{sourceRevision,context,clusterUID,namespaceUID:nsUID,
         ...(readers?{maintenanceReaders:readers}:{}),
         installation:get('configmap','kodex-installation-profile'),deployments:apps,nodes:JSON.parse(kube(['get','nodes','-o','json'])).items,apiRestoration});
@@ -520,6 +586,8 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       ensure(validJiraCreateFieldsMigrationPrecondition(result,profile==='jira-create-fields-backup'), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'opencode-native-sessions')
       ensure(validOpenCodeNativeMigrationPrecondition(result), 'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if(workflowProvenance)ensure(validWorkflowFileProvenanceBackupMigrationPrecondition(result,requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
+    if(isPersonalIntegrationsMigrationProfile(profile))ensure(validPersonalIntegrationsMigrationProof(result,profile.endsWith('-backup'),true,requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'telegram-notifications' || profile === 'telegram-notifications-backup') ensure(validTelegramNotificationsMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'sentry-observability' || profile === 'sentry-observability-backup') ensure(validSentryObservabilityMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
     if (profile === 'github-repository-scope' || profile === 'github-repository-scope-backup') ensure(validGitHubRepositoryScopeMigrationPrecondition(result,profile.endsWith('-backup'),requireStopped),'MIGRATION_PREDECESSOR_SCHEMA_INVALID');
@@ -602,6 +670,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     } finally { previous.close(); }
   };
   if (phase === 'plan') {
+    if(isPersonalIntegrationsMigrationProfile(profile))readPersonalIntegrationsMigrationExecutor({source:{revision:options['--revision']}},undefined);
     const anchor = deployment(), render = renderedBase(options['--base-render']);
     const source = {path:options['--source'],revision:options['--revision']};
     const imageEvidence = componentPublication ?? {publicationPlan:privateJSON(options['--publication-plan']),publicationEvidence:readPublication(options['--publication-evidence'])};
@@ -627,8 +696,20 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       anchor:{kind:'Deployment',name:'control-plane',uid:anchor.metadata.uid,resourceVersion:anchor.metadata.resourceVersion,
         specSHA256:fingerprint(anchor.spec),stoppedSpecSHA256:fingerprint({...anchor.spec,replicas:0}),previousImage},
       baseRenderPath:resolve(options['--base-render']),baseRenderSHA256:fingerprint(render),migrationFileSHA256:sourceDigest(source)});
+    if(isPersonalIntegrationsMigrationProfile(profile)){
+      plan.deliveryPrerequisite=personalIntegrationsDeliveryPrerequisite;
+      ensure(typeof options['--kubeconfig']==='string'&&options['--kubeconfig'].startsWith('/'),'PERSONAL_INTEGRATIONS_KUBECONFIG_REQUIRED');
+      plan.kubeconfig=resolve(options['--kubeconfig']);
+    }
+    if(workflowProvenance)plan.kubeconfig=resolve(options['--kubeconfig']);
     if (componentPublication) {
       plan.portableTarget = structuredClone(portableTarget);
+      if(isPersonalIntegrationsMigrationProfile(profile)){
+        ensure(typeof options['--personal-prerequisites']==='string','PERSONAL_INTEGRATIONS_RELEASE_CONFIGURATION_REQUIRED');
+        const references=readPersonalIntegrationsReleaseReferences(resolve(options['--personal-prerequisites']));
+        const qualified=await readPersonalIntegrationsDeploymentInputs({...references,source,target:portableTarget,kubeconfig:plan.kubeconfig},kube);
+        bindPersonalIntegrationsDeploymentPlan(plan,qualified);
+      }
       if(componentPublication.introducedReceiver){
         plan.kubeconfig=resolve(options['--kubeconfig']);
         plan.telegramInputs=planTelegramRuntimeInputs({resources:readRuntimeSource(source),
@@ -636,7 +717,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           installation:get('configmap','kodex-installation-profile'),sourceSHA:source.revision,migrationID:plan.id});
         plan.telegramTrustDependency=metadata('secret','control-plane-interaction-grant-trust');
       }
-      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,componentMigrationNames(profile).map(name=>name==='control-plane'?anchor:get('deployment',name)),source,plan.telegramInputs);
+      plan.componentHandoff = planComponentMigrationHandoff(componentPublication,componentMigrationHandoffNames(profile).map(name=>name==='control-plane'?anchor:get('deployment',name)),source,plan.telegramInputs,plan.personalIntegrationsInputs);
       if(componentPublication.schema === componentMigrationCohortSchema)
         plan.componentDrainSQLSHA256=createHash('sha256').update(drainSQL(source)).digest('hex');
     }
@@ -645,15 +726,24 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     if(configuration.anchorProfile === 'portable') plan.postgresBackend = ownerDatabase.identity(plan.postgres);
     plan.preconditionSQLSHA256 = createHash('sha256').update(preconditionSQL(source)).digest('hex');
     if(configuration.postconditionFile) plan.postconditionSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/${configuration.postconditionFile}`)).digest('hex');
+    let earlyRecovery;
     if(options['--api-isolation-plan']){
-      const current=readMigrationAPIAdmission({isolationPlanPath:resolve(options['--api-isolation-plan']),isolationEvidencePath:resolve(options['--api-isolation-evidence'])},kube,{stopped:true});
+      const current=readMigrationAPIAdmission({isolationPlanPath:resolve(options['--api-isolation-plan']),isolationEvidencePath:resolve(options['--api-isolation-evidence']),
+        ...(isPersonalIntegrationsMigrationProfile(profile)?{profile,closedPlanPath:resolve(options['--api-close-plan']),closedEvidencePath:resolve(options['--api-close-evidence'])}:{})},kube,{stopped:true});
       plan.apiMaintenance=current.admission;verifyMigrationAPIAdmission(plan,current);
+      earlyRecovery=current.isolation.plan.migrationRestore?.earlyRecovery;
+      ensure(!earlyRecovery||earlyRecovery.controlPlane.uid===anchor.metadata.uid&&
+        earlyRecovery.controlPlane.specSHA256===fingerprint(anchor.spec),'WORKFLOW_FILE_PROVENANCE_EARLY_CONTROL_PLANE_CHANGED');
+      ensure(!earlyRecovery||!current.isolation.events.some(event=>event.type===workflowFileUnboundRestoreIntent),
+        'WORKFLOW_FILE_PROVENANCE_ISOLATION_CLOSED');
     }
     if(profile==='workspace-backup') plan.backupACLReadbackSQLSHA256=createHash('sha256').update(readFileSync(`${source.path}/tools/release/workspace-backup-acl-readback.sql`)).digest('hex');
     if(requiresBackupMaintenance(profile)) {
       ensure(options['--backup-maintenance-plan'] && options['--backup-maintenance-evidence'],'MIGRATION_BACKUP_STOP_PROOF_REQUIRED');
       const path=resolve(options['--backup-maintenance-plan']);
       plan.backupMaintenance={planPath:path,evidencePath:resolve(options['--backup-maintenance-evidence']),planSHA256:fingerprint(privateJSON(path))};
+      ensure(!earlyRecovery||fingerprint(plan.backupMaintenance)===fingerprint(earlyRecovery.backupMaintenance),
+        'WORKFLOW_FILE_PROVENANCE_EARLY_RECOVERY_SCOPE_CHANGED');
       backupProof(plan);
     }
     precondition(source,plan.postgres,plan.preconditionSQLSHA256,false,plan.postgresBackend);
@@ -662,6 +752,13 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     return;
   }
   const plan = retainedPlan;
+  const stagedCatalog=schemaRepair&&artifactGrantCatalogRequired(plan);
+  if(schemaRepair)ensure(stagedCatalog===!options['--personal-executor-sha']&&
+    stagedCatalog===!options['--artifact-grant-catalog-inputs'],'PERSONAL_ARTIFACT_GRANT_CATALOG_SOURCE_REJECTED');
+  const personalExecutor=isPersonalIntegrationsMigrationProfile(profile)&&(artifactRepair||['inspect','handoff','start-readers','resume'].includes(phase))
+    ?readPersonalIntegrationsMigrationExecutor(plan,options['--personal-executor-sha']):undefined;
+  if(isPersonalIntegrationsMigrationProfile(profile)&&['check','stop','apply','retry'].includes(phase))
+    readPersonalIntegrationsMigrationExecutor(plan,undefined);
   const portRepair=options['--telegram-port-repair-plan']?readTelegramPortRepair(options['--telegram-port-repair-plan'],{migration:plan,phase,executorRevision:options['--telegram-port-repair-executor-sha']}):undefined;
   ensure(!portRepair||portRepair.repair.migrationPlanPath===resolve(options['--plan'])&&portRepair.repair.migrationEvidencePath===resolve(options['--evidence']),'TELEGRAM_PORT_REPAIR_SCOPE_CHANGED');
   const effectiveInputs=portRepair?.inputs??plan.telegramInputs;
@@ -681,18 +778,31 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     plan.namespaceUID === namespaceUID() && plan.anchor?.kind === 'Deployment' && plan.anchor.name === 'control-plane', 'PLAN_SCOPE_MISMATCH');
   validateCheckIdentity(plan);
   if(configuration.anchorProfile === 'portable') validateMigrationDatabaseIdentity(plan.postgresBackend);
-  if(plan.apiMaintenance)verifyMigrationAPIAdmission(plan,readMigrationAPIAdmission(plan.apiMaintenance,kube));
+  const apiAdmission=plan.apiMaintenance?verifyMigrationAPIAdmission(plan,readMigrationAPIAdmission(plan.apiMaintenance,kube)):undefined;
+  const earlyRecovery=apiAdmission?.isolation?.plan?.migrationRestore?.earlyRecovery;
+  ensure(!earlyRecovery||fingerprint(plan.backupMaintenance)===fingerprint(earlyRecovery.backupMaintenance),
+    'WORKFLOW_FILE_PROVENANCE_EARLY_RECOVERY_SCOPE_CHANGED');
   imageScope(plan.imageEvidence,plan.namespaceUID);
+  if(isPersonalIntegrationsMigrationProfile(profile)&&['check','stop','apply','retry','handoff'].includes(phase)&&!personalExecutor)
+    await revalidatePersonalIntegrationsDeploymentPlan(plan,kube);
   const planSHA256 = fingerprint(plan);
   const revalidationRevision = options['--revalidate-postcondition-revision'];
   ensure(!revalidationRevision || (phase==='inspect' && profile==='repository-bundle' && /^[a-f0-9]{40}$/.test(revalidationRevision)),
     'MIGRATION_REVALIDATION_PHASE_INVALID');
   // После SIGKILL lock сохраняется. Inspect всё равно доступен без записи/снятия lock;
   // mutations закрыты до ручной проверки завершения прежнего процесса владельцем.
-  const readOnly = restoration || !!revalidationRevision || (phase === 'inspect' && existsSync(`${resolve(options['--evidence'])}.lock`));
-  let backupBoundaryJournal,durable;
+  const readOnly = ['plan-artifact-socket-repair','plan-artifact-grant-repair','plan-artifact-grant-catalog'].includes(phase) || restoration || !!revalidationRevision || (phase === 'inspect' &&
+    (options['--evidence-read-only']==='true'||existsSync(`${resolve(options['--evidence'])}.lock`)));
+  let apiIsolationJournal,backupBoundaryJournal,durable;
   try {
-    if(requiresBackupMaintenance(profile) && phase!=='inspect'){
+    if(earlyRecovery&&phase!=='inspect'){
+      const isolation=apiAdmission.isolation.plan;
+      apiIsolationJournal=privateJournal(earlyRecovery.isolationEvidencePath,{schema:'kodex.component-api-traffic-evidence/v1',
+        planSHA256:fingerprint(isolation),maintenanceID:isolation.maintenanceID});
+      ensure(!apiIsolationJournal.events.some(event=>event.type===workflowFileUnboundRestoreIntent),
+        'WORKFLOW_FILE_PROVENANCE_ISOLATION_CLOSED');
+    }
+    if(requiresBackupMaintenance(profile) && !['inspect','plan-artifact-socket-repair','plan-artifact-grant-repair','plan-artifact-grant-catalog'].includes(phase)){
       const closed=privateJSON(plan.backupMaintenance.planPath);
       backupBoundaryJournal=privateJournal(plan.backupMaintenance.evidencePath,backupControllerMaintenanceHeader(closed));
       requireOpenBackupBoundary(backupBoundaryJournal.events,planSHA256);
@@ -701,14 +811,15 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         backupBoundaryJournal.append({type:'BACKUP_MIGRATION_BOUND',migrationPlanSHA256:planSHA256});
     }
     durable=privateJournal(options['--evidence'],{version:1,kind:'CONTROL_PLANE_MIGRATION',planSHA256},{readOnly});
-  } catch(error) { backupBoundaryJournal?.close();throw error; }
+  } catch(error) { backupBoundaryJournal?.close();apiIsolationJournal?.close();throw error; }
   const journal = readOnly ? {events:durable.events,append:()=>{},close:()=>durable.close()} : durable;
-  if(requiresBackupMaintenance(profile) && phase!=='inspect' && journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT')) {
-    journal.close();backupBoundaryJournal.close();throw Error('MIGRATION_BACKUP_RESUME_ALREADY_STARTED');
+  if(requiresBackupMaintenance(profile) && !['inspect','plan-artifact-socket-repair','plan-artifact-grant-repair','plan-artifact-grant-catalog'].includes(phase) && journal.events.some(event=>event.type==='BACKUP_RESUME_INTENT')) {
+    journal.close();backupBoundaryJournal.close();apiIsolationJournal?.close();throw Error('MIGRATION_BACKUP_RESUME_ALREADY_STARTED');
   }
 
   let revalidation;
   try {
+    if(isPersonalIntegrationsMigrationProfile(profile))bindPersonalArtifactSocketExecutor(journal,personalExecutor,{repair:socketRepair,grantRepair,schemaRepair:schemaRepair&&!stagedCatalog,terminalRepair,readOnly:true});
     const repairBound=journal.events.filter(e=>e.type===telegramPortRepairBound);
     ensure(repairBound.length<=1&&(!repairBound.length||portRepair&&repairBound[0].repairSHA256===portRepair.sha256&&repairBound[0].jobUID===portRepair.repair.jobUID),telegramPortRepairCodes.pinRequired);
 
@@ -727,9 +838,14 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     const attempts = journal.events.filter(e => e.type === 'CREATE_INTENT');
     const checks = journal.events.filter(e => e.type === 'CHECK_CREATE_INTENT');
     ensure(attempts.length <= 1 && checks.length <= 1, 'MIGRATION_JOURNAL_INVALID');
+    const recoveryIntents=journal.events.filter(e=>e.type===workflowFileAbortIntent);
+    const recoveryAcks=journal.events.filter(e=>e.type===workflowFileAbortAck);
+    ensure(recoveryIntents.length<=1&&recoveryAcks.length<=recoveryIntents.length,'MIGRATION_JOURNAL_INVALID');
+    ensure(!recoveryIntents.length||workflowProvenance&&['abort','inspect'].includes(phase),'WORKFLOW_FILE_PROVENANCE_ABORT_CLOSED');
+
     const output = result => {
       if (['FAIL','READBACK_UNCONFIRMED'].includes(result.status)) process.exitCode = 1;
-      process.stdout.write(`${JSON.stringify({...result,...(readOnly ? {evidenceReadOnly:true} : {})})}\n`); return result;
+      process.stdout.write(`${JSON.stringify({...result,...(readOnly ? {evidenceReadOnly:true} : {}),...(personalExecutor?{personalExecutor}: {})})}\n`); return result;
     };
     const observeCP = () => {
       const actual = deployment(), marker = actual.metadata.annotations?.[annotation], hash = fingerprint(actual.spec);
@@ -760,35 +876,44 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
           p.status.containerStatuses?.some(c => c.name === 'control-plane' && c.ready && c.imageID?.endsWith(digest)));
       return {actual,stage,joined,ready};
     };
-    const migrationPods = () => JSON.parse(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${plan.job.metadata.name}`,'-o','json'])).items;
+    const selectedAttempt=()=>isPersonalIntegrationsMigrationProfile(profile)?personalMigrationAttempt(plan,journal.events):
+      {attempt:1,job:plan.job,ackType:'CREATE_ACK',readbackType:'READBACK',terminalType:'TERMINAL_READBACK'};
+    const migrationPods = (job=selectedAttempt().job) => JSON.parse(kube(['-n',namespace,'get','pods','-l',`batch.kubernetes.io/job-name=${job.metadata.name}`,'-o','json'])).items;
     const readJob = (terminalOnly = false) => {
-      const actual = optionalJob(plan.job.metadata.name);
+      const selected=selectedAttempt(), expected=selected.job;
+      const actual = optionalJob(expected.metadata.name);
       ensure(actual, 'MIGRATION_JOB_MISSING_AFTER_INTENT');
       ensure(!portRepair||actual.metadata.uid===portRepair.repair.jobUID,telegramPortRepairCodes.jobChanged);
-      const observed = journal.events.find(e => ['CREATE_ACK','READBACK','TERMINAL_READBACK'].includes(e.type) && e.jobUID);
+      const observed = journal.events.find(e => [selected.ackType,selected.readbackType,selected.terminalType].includes(e.type) && e.jobUID);
       ensure(!observed || observed.jobUID === actual.metadata.uid, 'MIGRATION_JOB_REPLACED');
       const pods = migrationPods();
       // Resume сохраняет прежний бинарник даже после failed/unconfirmed DDL, но лишь после
       // авторитетного terminal и доказанного прекращения всех Job-owned процессов.
       if (terminalOnly) {
         ensure(actual.metadata.uid && actual.metadata.annotations?.[annotation] === planSHA256 &&
-          fingerprint(io.normalizePodSpec(actual.spec.template.spec)) === fingerprint(io.normalizePodSpec(plan.job.spec.template.spec)) &&
+          fingerprint(io.normalizePodSpec(actual.spec.template.spec)) === fingerprint(io.normalizePodSpec(expected.spec.template.spec)) &&
           actual.status?.conditions?.filter(c => ['Complete','Failed'].includes(c.type) && c.status === 'True').length === 1 &&
           !actual.status.active && pods.every(p => p.metadata?.uid && p.metadata.namespace === namespace &&
             p.metadata.ownerReferences?.some(o => o.kind === 'Job' && o.controller === true && o.uid === actual.metadata.uid) && isProvenStoppedPod(p)),
         'MIGRATION_TERMINAL_JOIN_REQUIRED');
-        journal.append({type:'TERMINAL_READBACK',jobUID:actual.metadata.uid}); return;
+        journal.append({type:selected.terminalType,jobUID:actual.metadata.uid,...(selected.attempt===2?{attempt:2,jobName:expected.metadata.name}:{})}); return;
       }
       ensure(fingerprint(dependencies()) === fingerprint(plan.dependencies), 'MIGRATION_DEPENDENCY_CHANGED');
-      const logs = actual.status?.succeeded === 1 ? kube(['-n',namespace,'logs',`job/${plan.job.metadata.name}`,'-c','migrate','--limit-bytes=262144']) : '';
-      const result = migrationReadback(actual,plan,logs,pods);
+      const logs = actual.status?.succeeded === 1 ? kube(['-n',namespace,'logs',`job/${expected.metadata.name}`,'-c','migrate','--limit-bytes=262144']) : '';
+      const result = migrationReadback(actual,plan,logs,pods,'up',selected.attempt);
       if(result.status==='PASS' && configuration.postconditionFile) {
         const sql=readFileSync(`${plan.source.path}/tools/release/${configuration.postconditionFile}`);
         ensure(createHash('sha256').update(sql).digest('hex')===(revalidation?.sqlSHA256 ?? plan.postconditionSQLSHA256),'MIGRATION_POSTCONDITION_SOURCE_CHANGED');
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        const proof=ownerDatabase.read(sql,plan.postgres,plan.postgresBackend);
+        const extension=isPersonalIntegrationsMigrationProfile(profile)?artifactGrantCatalogReceipt(plan,journal.events):undefined;
+        const proof=extension?undefined:ownerDatabase.read(sql,plan.postgres,plan.postgresBackend);
         ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
-        ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
+        if(extension){
+          const current=readArtifactGrantCatalogPostcondition(plan,value=>ownerDatabase.read(value,plan.postgres,plan.postgresBackend),extension.sqlSHA256);
+          ensure(current.schemaCatalogSHA256===extension.schemaCatalogSHA256&&current.schemaVersion===extension.schemaVersion,
+            'PERSONAL_ARTIFACT_GRANT_CATALOG_CHANGED');
+          result.servingSchema={version:current.schemaVersion,schemaProofSHA256:current.sqlSHA256,jobUID:extension.jobUID};
+        }else ensure(validImmutableMigrationPostcondition(profile,proof),'MIGRATION_POSTCONDITION_FAILED');
         result.schemaPostcondition='PASS';
         if(restoration)result.restorationPostcondition={observedAt:new Date().toISOString(),profile,
           sqlSHA256:plan.postconditionSQLSHA256,postgresSHA256:fingerprint(plan.postgres),backendSHA256:fingerprint(plan.postgresBackend),
@@ -796,7 +921,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
         if(revalidation) result.revalidation={...revalidation,proof,postgres:plan.postgres,
           execution:pods.map(p=>({podUID:p.metadata.uid,imageID:p.status.containerStatuses.find(c=>c.name==='migrate').imageID}))};
       }
-      journal.append({type:'READBACK',...result}); return result;
+      journal.append({type:selected.readbackType,...result}); return result;
     };
     const noActiveMigrations = () => {
       const jobs = JSON.parse(kube(['-n',namespace,'get','jobs','-l','app.kubernetes.io/name=control-plane,app.kubernetes.io/component=migration','-o','json'])).items;
@@ -823,7 +948,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (plan.componentHandoff) {
         const originals = plan.componentHandoff.components.map(c => ({apiVersion:'apps/v1',kind:'Deployment',metadata:{name:c.name,namespace,uid:c.uid,
           resourceVersion:'1',generation:1},spec:c.beforeSpec,status:{observedGeneration:1,replicas:c.beforeSpec.replicas,updatedReplicas:c.beforeSpec.replicas,readyReplicas:c.beforeSpec.replicas,availableReplicas:c.beforeSpec.replicas}}));
-        ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
+        ensure(fingerprint(planComponentMigrationHandoff(plan.imageEvidence,originals,plan.source,plan.telegramInputs,plan.personalIntegrationsInputs)) === fingerprint(plan.componentHandoff), 'COMPONENT_MIGRATION_HANDOFF_PLAN_DRIFT');
       }
       verifyRuntimeInputs(journal.events.some(e=>e.type==='PAIR_HANDOFF_ACK'));
       if (plan.predecessor) predecessor(plan.predecessor,anchor,plan.predecessor,planSHA256);
@@ -859,9 +984,56 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       try { kube(['-n',namespace,'patch','deployment','control-plane','--type=json','-p',JSON.stringify(patch),'-o','json']); }
       catch(error) { journal.append({type:'UNKNOWN',step,code:error.message}); throw error; }
     };
+    const abortOwnerReadback = () => {
+      verifyInputs(observeCP().actual);
+      noActiveMigrations();
+      const jobReader={optionalJob,readPods:(name,uid)=>readBackupMigrationJobPods(kube,name,uid),
+        annotation,planSHA256,normalize:io.normalizePodSpec,events:journal.events,
+        verifyExecution:(job,pods,expected,outcome)=>immutableMigrationExecution(job,plan,pods,expected,outcome)};
+      const jobs=[
+        readWorkflowFileAbortJob(jobReader,plan.checkJob,checks,['CHECK_CREATE_ACK','CHECK_READBACK'],true),
+        readWorkflowFileAbortJob(jobReader,plan.job,attempts,['CREATE_ACK','READBACK','TERMINAL_READBACK'],false),
+      ];
+      const sql=preconditionSQL(plan.source);
+      ensure(createHash('sha256').update(sql).digest('hex')===plan.preconditionSQLSHA256&&
+        fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_PRECONDITION_SOURCE_CHANGED');
+      const proof=ownerDatabase.read(sql,plan.postgres,plan.postgresBackend);
+      ensure(validWorkflowFileProvenancePredecessorCatalog(proof)&&
+        fingerprint(postgresIdentity())===fingerprint(plan.postgres),'WORKFLOW_FILE_PROVENANCE_ABORT_PREDECESSOR_REQUIRED');
+      const identity={gooseVersion:proof.gooseVersion,schemaCatalogSHA256:fingerprint(proof.schemaCatalog),
+        sqlSHA256:plan.preconditionSQLSHA256,postgresSHA256:fingerprint(plan.postgres),backendSHA256:fingerprint(plan.postgresBackend),jobs};
+      const recorded=journal.events.find(e=>e.type===workflowFileAbortIntent);
+      if(recorded)ensure(fingerprint(identity)===fingerprint(recorded.identity),'WORKFLOW_FILE_PROVENANCE_ABORT_READBACK_CHANGED');
+      return identity;
+    };
+    const abortResult = (state,identity) => ({
+      status:'ABORTED_NOT_APPLIED',cpStage:state.stage,cpReady:state.ready,
+      sourceRevision:plan.source.revision,abortSHA256:fingerprint(identity),
+      abortPostcondition:{...identity,observedAt:new Date().toISOString()},
+      ...(apiRestoration?{apiRestoration:apiRestoration.proof,sourceCompatibility:restorationExecutor}:{}),
+    });
+    if(workflowProvenance&&phase==='abort'){
+      const result=await applyWorkflowFileAbort({journal,observe:observeCP,readProof:abortOwnerReadback,
+        resume:state=>transition('RESUME',state,anchorReplicas),
+        wait:()=>waitMigrationMaintenance(observeCP,workflowFileAbortReady,'MIGRATION_CP_RESUME_TIMEOUT',io.clock)});
+      return output(abortResult(result.state,result.identity));
+    }
+    if(workflowProvenance&&phase==='inspect'&&recoveryIntents.length){
+      const state=observeCP(),identity=abortOwnerReadback();
+      journal.append({type:'INSPECT',stage:state.stage,resourceVersion:state.actual.metadata.resourceVersion,podsGone:state.joined,ready:state.ready});
+      if(!recoveryAcks.length)return output({status:'ABORT_PENDING',cpStage:state.stage,cpReady:state.ready});
+      ensure(workflowFileAbortReady(state)&&recoveryAcks[0].abortSHA256===fingerprint(identity),'WORKFLOW_FILE_PROVENANCE_ABORT_CP_SCOPE_CHANGED');
+      return output(abortResult(state,identity));
+    }
     const pair = plan.componentHandoff ? componentMigrationLifecycle({plan,egressRevisionRepair,validateEgressRevisionRepair:async()=>{ensure((await readEgressRevisionRepair()).sha256===egressRevisionRepair.sha256,'TELEGRAM_EGRESS_REVISION_REPAIR_PIN_REQUIRED');},observabilityRepair,validateObservabilityRepair:()=>{ensure(readObservabilityRepair().sha256===observabilityRepair.sha256,'TELEGRAM_OBSERVABILITY_REPAIR_PIN_REQUIRED');},effectiveHandoff:portRepair?.handoff,effectiveInputs:portRepair?.inputs,kube,journal,readJob,observeCP,preconditionSQL,drainSQL,postgresIdentity,
       readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
-      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readAuthorityTerminal,readMaintenanceReaders,readCPProjection,
+      activePods:activeDeploymentPods,wait:waitMigrationMaintenance,clock:io.clock,apiRestoration,readAuthorityDelivery,readAuthorityTerminal,
+      readMaintenanceReaders:isPersonalIntegrationsMigrationProfile(profile)?personalReaders:readMaintenanceReaders,readCPProjection,readPersonalAuthority,
+      bindPersonalExecutor:()=>bindPersonalArtifactSocketExecutor(journal,personalExecutor,{terminalRepair}),
+      verifyReaderSnapshots:terminalRepair?snapshots=>verifyPersonalReaderSnapshots(kube,snapshots):undefined,
+      validateHandoff:async()=>{
+        if(personalExecutor)await revalidatePersonalIntegrationsDeploymentPlan(plan,kube,{originalOwner:true});
+      },
       prepareRuntimeInputs:()=>{
         if(portRepair&&!journal.events.some(e=>e.type===telegramPortRepairBound)){
           ensure(!journal.events.some(e=>e.type==='PAIR_HANDOFF_INTENT'||e.type==='PAIR_HANDOFF_ACK'||e.type==='TELEGRAM_INPUT_PATCH_INTENT'&&e.resource==='v1|Service|egress-gateway'),telegramPortRepairCodes.lifecycleRejected);
@@ -887,7 +1059,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       // Running exact Job ещё может писать schema/ACL. Возвращается лишь RUNNING;
       // serving inventory и terminal exclusion не используются до его terminal proof.
       if(!revalidationRevision&&(attempts.length||checks.length)){
-        const selected=attempts.length?plan.job:plan.checkJob;
+        const selected=attempts.length?selectedAttempt().job:plan.checkJob;
         const candidate=optionalJob(selected.metadata.name);
         if(candidate&&!candidate.status?.conditions?.some(condition=>['Complete','Failed'].includes(condition.type)&&condition.status==='True')){
           const pending=attempts.length?readJob():readCheck();
@@ -973,6 +1145,61 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       if (pair) await pair.stopController();
       return output({status:'STOPPED',jobName:plan.job.metadata.name,cpStage:state.stage,podsGone:true});
     }
+    const readStagedCatalog=()=>{
+      ensure(pair,'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+      verifyMigrationAPIAdmission(plan,readMigrationAPIAdmission(plan.apiMaintenance,kube,{stopped:true}));
+      backupProof(plan);
+      pair.requireStagedArtifactCatalog();
+    };
+    if(schemaRepair)return output(await releaseArtifactGrantCatalog({migration:plan,journal,kube,readAPI:personalReaders,
+      readAuthority:()=>readPersonalAuthority('terminal',{plan,events:journal.events}),
+      bindExecutor:()=>bindPersonalArtifactSocketExecutor(journal,personalExecutor,{schemaRepair:true}),
+      loadCandidate:()=>stagedCatalog?readStagedArtifactGrantCatalogCandidate(plan,immutableMigrationImage(plan.source,plan.imageEvidence,profile)):
+        readArtifactGrantCatalogCandidate(options['--artifact-grant-catalog-inputs'],plan),
+      readStaged:readStagedCatalog,
+      authorizeStaged:async()=>{
+        await revalidatePersonalIntegrationsDeploymentPlan(plan,kube,{originalOwner:true});
+        pair.requireStagedArtifactCatalog(true);
+        noActiveMigrations();
+        readStagedCatalog();
+      },
+      normalizePodSpec:io.normalizePodSpec,wait:waitMigrationMaintenance,clock:io.clock,
+      readJobPods:uid=>readBackupMigrationJobPods(kube,'control-plane-migrate-20261121000100',uid),
+      readOwnerSQL:sql=>ownerDatabase.read(sql,plan.postgres,plan.postgresBackend),
+      successReceipt:'Artifact retention grant catalog migration completed at version 20261121000100',
+      checkMigration:()=>{
+        ensure(journal.events.some(row=>row.type==='PAIR_HANDOFF_ACK'&&row.publicationSHA256===plan.componentHandoff.publicationSHA256),
+          'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+        readJob(true);
+        const result=readJob();
+        ensure(result.status==='PASS'&&result.schemaPostcondition==='PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
+        if(stagedCatalog)pair.requireStagedArtifactCatalog(true);
+      },approvedSHA256:options['--artifact-grant-catalog-plan-sha']}));
+    if(grantRepair)return output(await repairPersonalArtifactGrant({migration:plan,journal,kube,readAPI:personalReaders,
+      authority:()=>readPersonalAuthority('terminal',{plan,events:journal.events}),
+      bindExecutor:()=>bindPersonalArtifactSocketExecutor(journal,personalExecutor,{grantRepair:true}),
+      loadCandidate:()=>readArtifactGrantRepairCandidate(options['--personal-artifact-grant-inputs'],plan),
+      readPods:uid=>activeDeploymentPods(readComponentServingInventory(kube,'artifact-retention',uid),uid),
+      wait:waitMigrationMaintenance,clock:io.clock,
+      checkMigration:()=>{
+        ensure(journal.events.some(row=>row.type==='PAIR_HANDOFF_ACK'&&row.publicationSHA256===plan.componentHandoff.publicationSHA256),
+          'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+        readJob(true);
+        const result=readJob();
+        ensure(result.status==='PASS'&&result.schemaPostcondition==='PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
+      },approvedSHA256:options['--personal-artifact-grant-repair-sha']}));
+    if(socketRepair)return output(await repairPersonalArtifactSocket({migration:plan,journal,kube,
+      readAPI:personalReaders,
+      authority:()=>readPersonalAuthority('delivered',{plan,events:journal.events}),
+      bindExecutor:()=>bindPersonalArtifactSocketExecutor(journal,personalExecutor,{repair:true}),
+      readPods:uid=>activeDeploymentPods(readComponentServingInventory(kube,'artifact-retention',uid),uid),
+      checkMigration:()=>{
+        ensure(journal.events.some(row=>row.type==='PAIR_HANDOFF_ACK'&&row.publicationSHA256===plan.componentHandoff.publicationSHA256),
+          'COMPONENT_MIGRATION_HANDOFF_REQUIRED');
+        readJob(true);
+        const result=readJob();
+        ensure(result.status==='PASS'&&result.schemaPostcondition==='PASS','COMPONENT_MIGRATION_POSTCONDITION_REQUIRED');
+      },approvedSHA256:options['--personal-artifact-socket-repair-sha']}));
     if(phase==='plan-egress-revision-repair'){
       await pair.prepareEgressRevisionRepair();
       const candidate=await readTelegramEgressRevisionCandidate(options['--telegram-egress-revision-candidate'],plan);
@@ -1025,6 +1252,30 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
       journal.append({type:'RESUME_ACK',resourceVersion:state.actual.metadata.resourceVersion});
       return output({status:'RESUMED',cpStage:state.stage,cpReady:true});
     }
+    if(phase==='retry')return output(runPersonalMigrationRetry({plan,journal,
+      requireStopped:()=>{
+        const state=observeCP();ensure(state.stage==='STOPPED'&&state.joined&&journal.events.some(e=>e.type==='STOP_ACK'),'MIGRATION_STOP_JOIN_REQUIRED');
+        ensure(pair,'PERSONAL_MIGRATION_RETRY_COHORT_REQUIRED');pair.requireStopped();
+        verifyInputs(state.actual);noActiveMigrations();
+        return {stage:state.stage,joined:state.joined};
+      },readParent:()=>{
+        const result=readJob(),actual=optionalJob(plan.job.metadata.name);
+        terminalJob(actual,plan.job,planSHA256,result.jobUID);
+        // Общий namespace owner join также замечает Pod со снятой job-name label.
+        const pods=readBackupMigrationJobPods(kube,plan.job.metadata.name,result.jobUID);
+        ensure(pods.every(isProvenStoppedPod),'MIGRATION_PREDECESSOR_NOT_JOINED');
+        ensure(result.status==='FAIL'&&immutableMigrationExecution(actual,plan,pods,plan.job,'failed'),
+          'PERSONAL_MIGRATION_RETRY_FAILED_PARENT_REQUIRED');
+        return {...result,podUID:pods[0].metadata.uid};
+      },readOwnerProof:()=>{
+        const file=profile.endsWith('-backup')?'personal-integrations-backup-migration-recovery.sql':'personal-integrations-migration-recovery.sql';
+        verifyPersonalIntegrationsMigrationSources(plan.source);
+        ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres),'MIGRATION_POSTGRES_IDENTITY_CHANGED');
+        const proof=ownerDatabase.read(readFileSync(`${plan.source.path}/tools/release/${file}`),plan.postgres,plan.postgresBackend);
+        ensure(fingerprint(postgresIdentity())===fingerprint(plan.postgres)&&validPersonalIntegrationsRecoveryProof(proof,profile.endsWith('-backup')),
+          'PERSONAL_MIGRATION_RETRY_OWNER_PROOF_INVALID');return proof;
+      },jobExists:name=>!!optionalJob(name),create:job=>{job.metadata.annotations={[annotation]:planSHA256};return JSON.parse(kube(['create','-f','-','-o','json'],JSON.stringify(job)));},
+      readCurrent:()=>readJob()}));
     if (!attempts.length) {
       ensure(!journal.events.some(e => e.type === 'RESUME_INTENT'), 'MIGRATION_LIFECYCLE_CLOSED');
       const state = observeCP();
@@ -1067,7 +1318,7 @@ export async function runImmutableControlPlaneMigration(phase, options, io) {
     }
     const result = readJob();output(result);
     if (['FAIL','READBACK_UNCONFIRMED'].includes(result.status)) process.exitCode = 1;
-  } finally { journal.close();backupBoundaryJournal?.close(); }
+  } finally { journal.close();backupBoundaryJournal?.close();apiIsolationJournal?.close(); }
 }
 
 // Проверяет только metadata точной новой schema; Goose log сам не доказывает безопасный owner/retention/purge профиль.
@@ -1378,6 +1629,9 @@ export function validWorkspaceBackupACLReadback(proof) {
 // Каждый закрытый профиль выбирает свой verifier; неизвестный профиль не получает fallback.
 export function validImmutableMigrationPostcondition(profile, proof) {
   switch (profile) {
+    case workflowFileProvenanceMigration.profile: return validWorkflowFileProvenanceComposedPostcondition(proof);
+    case 'personal-integrations': return validPersonalIntegrationsMigrationPostcondition(proof);
+    case 'personal-integrations-backup': return validPersonalIntegrationsBackupMigrationPostcondition(proof);
     case 'telegram-notifications': return validTelegramNotificationsMigrationPostcondition(proof);
     case 'telegram-notifications-backup': return validTelegramNotificationsBackupMigrationPostcondition(proof);
     case 'sentry-observability': return validSentryObservabilityMigrationPostcondition(proof);
@@ -1714,6 +1968,27 @@ function qualifiedSentrySchemaCatalog(proof,backup,phase){
 }
 
 export function validSentryObservabilityBackupMigrationPrecondition(proof){return validSentryObservabilityMigrationPrecondition(proof,true);}
+
+// Для 046→049 каждый этап проверяет CLI. Release сверяет исходную и конечную
+// схемы, чтобы остановленные компоненты оставались выключенными между этапами.
+
+export function validPersonalIntegrationsMigrationPrecondition(proof){return validPersonalIntegrationsMigrationProof(proof,false,true);}
+export function validPersonalIntegrationsMigrationPostcondition(proof){return validPersonalIntegrationsMigrationProof(proof,false,false);}
+
+// Принимает только точный normal catalog051 после штатной миграции синтетического профиля.
+export function validWorkflowFileProvenanceMigrationPostcondition(proof) {
+  return proof?.profile === 'WORKFLOW_FILE_PROVENANCE_051' && proof.database === 'control_plane' &&
+    proof.readOnly === 'on' && proof.gooseVersion === 20261121000200 && proof.serverVersionNum === 180003 &&
+    proof.backupQualification === 'NONE' && proof.publicSequenceSafe === true && proof.historyMatches === true &&
+    proof.schemaMatches === true &&
+    [
+      '3c48ce88c95741d0d44bee2d7d784a3fe2a0ba4ccff6808aedd57577a0e16e6d',
+      '5a6d9504b18ac40806e6c84660b0b646f1088bdb585f4176ebaf450a8eda91c9',
+    ].includes(proof.schemaCatalog?.catalogDigest);
+}
+
+export function validPersonalIntegrationsBackupMigrationPrecondition(proof){return validPersonalIntegrationsMigrationProof(proof,true,true);}
+export function validPersonalIntegrationsBackupMigrationPostcondition(proof){return validPersonalIntegrationsMigrationProof(proof,true,false);}
 
 // Schema046 имеет собственный полный catalog и только известные qualification modes.
 // Декларация Telegram либо caller schema number не заменяют closed predecessor045.

@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+// TestPersonalBrokerIdentityProbeClaimHasNoSecret preserves explicit kind/purpose and owner digest.
+// A missing kind remains unspecified rather than becoming a generic TOKEN descriptor.
+// TestPersonalBrokerIdentityProbeClaimHasNoSecret сохраняет явные kind/purpose и owner digest.
+// Missing kind остаётся unspecified, не превращаясь в generic TOKEN descriptor.
+func TestPersonalBrokerIdentityProbeClaimHasNoSecret(t *testing.T) {
+	claim := CastIntegrationConnectionTestClaim(map[string]any{"credentialDeliveryKind": "BROKER_IDENTITY", "brokerIdentityPurpose": "KUBERNETES_TARGET",
+		"brokerIdentityRef": "bki_fixture_identity", "brokerIdentityRevision": int64(3), "inputDigest": "synthetic_digest"})
+	if claim.GetCredentialDeliveryKind() != cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY ||
+		claim.GetBrokerIdentityPurpose() != cp.IntegrationBrokerIdentityPurpose_INTEGRATION_BROKER_IDENTITY_PURPOSE_KUBERNETES_TARGET ||
+		claim.GetBrokerIdentityRef() != "bki_fixture_identity" || claim.GetBrokerIdentityRevision() != 3 || claim.GetInputDigest() != "synthetic_digest" || claim.GetCredentialRevision() != nil || claim.GetCredentialMaterializationRef() != "" {
+		t.Fatal("broker test claim lost its explicit source or exposed a generic Secret")
+	}
+	if CastIntegrationConnectionTestClaim(map[string]any{}).GetCredentialDeliveryKind() != cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_UNSPECIFIED {
+		t.Fatal("absent test source acquired inferred TOKEN authority")
+	}
+}
+
 // TestPersonalCredentialProbeClaimPins copies owner-selected keys into the generated envelope,
 // retaining absence for ordinary or legacy health claims and no alias into mutable owner data.
 // TestPersonalCredentialProbeClaimPins копирует owner-selected keys в generated envelope,
@@ -40,5 +57,20 @@ func TestPersonalCredentialMetadataClaimPins(t *testing.T) {
 	legacy := CastIntegrationConnectionTestClaim(map[string]any{})
 	if len(legacy.PersonalObservationProfiles) != 0 || len(legacy.PersonalDeniedWriteCapabilityKeys) != 0 {
 		t.Fatal("legacy health claim acquired metadata requests")
+	}
+}
+
+// TestPersonalBrokerIdentityClaimMetadata retains owner-selected purpose and immutable digest without inventing a generic TOKEN descriptor; explicit unknown purpose stays invalid.
+// TestPersonalBrokerIdentityClaimMetadata сохраняет owner-selected purpose и immutable digest без выдуманного generic TOKEN descriptor; explicit unknown purpose остаётся invalid.
+func TestPersonalBrokerIdentityClaimMetadata(t *testing.T) {
+	for _, purpose := range []string{"SSH_TARGET", "KUBERNETES_TARGET"} {
+		claim := CastIntegrationConnectionTestClaim(map[string]any{"credentialDeliveryKind": "BROKER_IDENTITY", "brokerIdentityPurpose": purpose, "brokerIdentityRef": "biri_synthetic", "brokerIdentityRevision": int64(3), "inputDigest": "synthetic-owner-input-digest"})
+		if claim.CredentialDeliveryKind != cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_BROKER_IDENTITY || claim.BrokerIdentityPurpose.String() != "INTEGRATION_BROKER_IDENTITY_PURPOSE_"+purpose || claim.BrokerIdentityRef != "biri_synthetic" || claim.BrokerIdentityRevision != 3 || claim.InputDigest != "synthetic-owner-input-digest" || claim.CredentialRevision != nil || claim.CredentialMaterializationRef != "" {
+			t.Fatal("broker identity claim changed representation or lost owner pins")
+		}
+	}
+	unknown := CastIntegrationConnectionTestClaim(map[string]any{"credentialDeliveryKind": "UNKNOWN", "brokerIdentityPurpose": "UNKNOWN"})
+	if unknown.CredentialDeliveryKind != cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_UNSPECIFIED || unknown.BrokerIdentityPurpose != cp.IntegrationBrokerIdentityPurpose(-1) || unknown.CredentialRevision != nil {
+		t.Fatal("unknown claim metadata acquired a valid credential kind")
 	}
 }

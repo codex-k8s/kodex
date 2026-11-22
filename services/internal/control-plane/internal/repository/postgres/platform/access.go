@@ -603,19 +603,44 @@ func (repository *Repository) resolveAccessSubject(ctx context.Context, tx pgx.T
 	err := tx.QueryRow(ctx, queryAccessResolveSubject, pgx.NamedArgs{"organization_id": organizationID, "subject_ref": subjectRef}).Scan(
 		&result.id, &result.Ref, &result.Kind, &result.DisplayName, &result.Active, &result.OIDCGroupRefs,
 	)
+	if err != nil && (!errors.Is(err, pgx.ErrNoRows) || accessInfrastructureFailure(err)) {
+		return resolvedAccessSubject{}, errs.ErrUnavailable
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = tx.QueryRow(ctx, queryAccessResolveGroup, pgx.NamedArgs{"organization_id": organizationID, "subject_ref": subjectRef}).Scan(
 			&result.id, &result.Ref, &result.DisplayName, &result.Active,
 		)
 		result.Kind = "OIDC_GROUP"
 	}
+	if err != nil && (!errors.Is(err, pgx.ErrNoRows) || accessInfrastructureFailure(err)) {
+		return resolvedAccessSubject{}, errs.ErrUnavailable
+	}
 	if errors.Is(err, pgx.ErrNoRows) || !result.Active {
 		return resolvedAccessSubject{}, errs.ErrNotFound
 	}
-	if err != nil {
-		return resolvedAccessSubject{}, errs.ErrUnavailable
-	}
 	return result, nil
+}
+
+// concealAccessDenial preserves infrastructure failures while hiding only proven authorization denials.
+// It never treats an unknown query/scan failure as evidence of lost ownership or permission.
+// concealAccessDenial сохраняет инфраструктурные ошибки, скрывая только доказанный отказ авторизации.
+// Неизвестный query/scan failure не доказывает потерю владения либо разрешения.
+func concealAccessDenial(err, denial error) error {
+	if accessInfrastructureFailure(err) {
+		return err
+	}
+	if errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrNotFound) {
+		return denial
+	}
+	return err
+}
+
+// accessInfrastructureFailure gives unavailable/cancellation causes priority over joined denial sentinels.
+// Callers must roll back owner transitions instead of interpreting incomplete evidence as revocation.
+// accessInfrastructureFailure отдаёт приоритет unavailable/cancellation над joined denial sentinels.
+// Caller откатывает owner transition, не трактуя неполное evidence как отзыв полномочий.
+func accessInfrastructureFailure(err error) bool {
+	return errors.Is(err, errs.ErrUnavailable) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // loadAccessBindings loads typed bindings for an already resolved tenant subject, selecting the

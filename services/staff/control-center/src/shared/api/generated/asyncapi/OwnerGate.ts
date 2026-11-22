@@ -5,6 +5,7 @@ import type { UserSummary } from "./UserSummary";
 import type { OwnerGateState } from "./OwnerGateState";
 import type { OwnerGateDecision } from "./OwnerGateDecision";
 import type { OwnerGateDecisionConsequence } from "./OwnerGateDecisionConsequence";
+import type { KubernetesOwnerGateChild } from "./KubernetesOwnerGateChild";
 import type { IntegrationIntent } from "./IntegrationIntent";
 import type { NextAction } from "./NextAction";
 
@@ -33,6 +34,7 @@ export interface OwnerGate {
   resolutionAttachmentSetRef?: string;
   sourceAttachmentSetRef?: string;
   decisionConsequences: OwnerGateDecisionConsequence[];
+  kubernetesChild?: KubernetesOwnerGateChild;
   integrationIntent?: IntegrationIntent;
   nextActions: NextAction[];
 }

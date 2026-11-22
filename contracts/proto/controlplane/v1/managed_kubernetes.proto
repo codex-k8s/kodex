@@ -1,0 +1,965 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+import "controlplane/v1/managed_kubernetes_runtime.proto";
+import "controlplane/v1/managed_kubernetes_capture.proto";
+import "controlplane/v1/managed_kubernetes_file.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Broker и gateway используют разные exact зарегистрированные methods владельца.
+// Поля request не назначают actor, tenant либо target identity.
+service ManagedKubernetesOwnerService {
+  // Чтение результата конкретным выполняющимся сотрудником, без права на новый effect.
+  rpc ReadManagedKubernetesInvocation(ReadManagedKubernetesInvocationRequest) returns (ReadManagedKubernetesInvocationResponse);
+  // Точный consumer artifact-retention: task scope и publication принадлежат owner.
+  rpc FinalizeManagedKubernetesCapture(FinalizeManagedKubernetesCaptureRequest) returns (FinalizeManagedKubernetesCaptureResponse);
+  rpc GetManagedKubernetesCapture(GetManagedKubernetesCaptureRequest) returns (GetManagedKubernetesCaptureResponse);
+  rpc RenewManagedKubernetesCapture(RenewManagedKubernetesCaptureRequest) returns (RenewManagedKubernetesCaptureResponse);
+  rpc CheckManagedKubernetesCaptureReadiness(CheckManagedKubernetesCaptureReadinessRequest) returns (CheckManagedKubernetesCaptureReadinessResponse);
+  // Первичная проверка identity не имеет subject pin и не входит в write/stream effect path.
+  rpc BeginManagedKubernetesHealthProbe(BeginManagedKubernetesHealthProbeRequest) returns (BeginManagedKubernetesHealthProbeResponse);
+  rpc CompleteManagedKubernetesHealthProbe(CompleteManagedKubernetesHealthProbeRequest) returns (CompleteManagedKubernetesHealthProbeResponse);
+  // Отдельная bounded worker lane; ordinary short adapter loop не захватывает эти intents.
+  rpc ClaimManagedKubernetesInvocations(ClaimManagedKubernetesInvocationsRequest) returns (ClaimManagedKubernetesInvocationsResponse);
+  rpc RenewManagedKubernetesInvocation(RenewManagedKubernetesInvocationRequest) returns (RenewManagedKubernetesInvocationResponse);
+  // Gateway завершает existing graph по owner receipts, без caller outcome/data.
+  rpc CompleteManagedKubernetesInvocation(CompleteManagedKubernetesInvocationRequest) returns (CompleteManagedKubernetesInvocationResponse);
+  // Exact original binding readback не выдаёт payload либо execution/output credit.
+  rpc GetManagedKubernetesInvocation(GetManagedKubernetesInvocationRequest) returns (GetManagedKubernetesInvocationResponse);
+  // Закрывает только исходный owner execution; ни outcome, ни bytes caller не назначает.
+  rpc CancelManagedKubernetesInvocation(CancelManagedKubernetesInvocationRequest) returns (CancelManagedKubernetesInvocationResponse);
+  // Принимает bytes только для существующего OUTPUT frame и текущего broker-witnessed ordinal.
+  rpc AcceptManagedKubernetesOutputFrame(AcceptManagedKubernetesOutputFrameRequest) returns (AcceptManagedKubernetesOutputFrameResponse);
+  // Только original metadata после lost ACK; не продлевает delivery credit и не выдаёт bytes.
+  rpc GetManagedKubernetesOutputFrame(GetManagedKubernetesOutputFrameRequest) returns (GetManagedKubernetesOutputFrameResponse);
+  // One-attempt private INPUT delivery; потерянный ответ не даёт повторные bytes.
+  rpc ClaimManagedKubernetesInputFrame(ClaimManagedKubernetesInputFrameRequest) returns (ClaimManagedKubernetesInputFrameResponse);
+  rpc ResolveManagedKubernetesOperation(ResolveManagedKubernetesOperationRequest) returns (ResolveManagedKubernetesOperationResponse);
+  rpc PrepareManagedKubernetesChildren(PrepareManagedKubernetesChildrenRequest) returns (PrepareManagedKubernetesChildrenResponse);
+  // Source берётся только из exact original RuntimeRevision/catalog и immutable child до native Begin.
+  rpc PrepareManagedKubernetesFileInput(PrepareManagedKubernetesFileInputRequest) returns (PrepareManagedKubernetesFileInputResponse);
+  rpc BeginManagedKubernetesEffect(BeginManagedKubernetesEffectRequest) returns (BeginManagedKubernetesEffectResponse);
+  rpc OpenManagedKubernetesStream(OpenManagedKubernetesStreamRequest) returns (OpenManagedKubernetesStreamResponse);
+  rpc CompleteManagedKubernetesEffect(CompleteManagedKubernetesEffectRequest) returns (CompleteManagedKubernetesEffectResponse);
+  rpc BeginManagedKubernetesFrame(BeginManagedKubernetesFrameRequest) returns (BeginManagedKubernetesFrameResponse);
+  rpc CompleteManagedKubernetesFrame(CompleteManagedKubernetesFrameRequest) returns (CompleteManagedKubernetesFrameResponse);
+  rpc CloseManagedKubernetesStream(CloseManagedKubernetesStreamRequest) returns (CloseManagedKubernetesStreamResponse);
+  rpc CheckManagedKubernetesOwnerReadiness(CheckManagedKubernetesOwnerReadinessRequest) returns (CheckManagedKubernetesOwnerReadinessResponse);
+}
+
+message BeginManagedKubernetesHealthProbeRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+}
+
+// Только private broker projection. Прежний health test не выдаёт повторный READ credit.
+message BeginManagedKubernetesHealthProbeResponse {
+  string attempt_ref = 1;
+  string snapshot_digest = 2;
+  ManagedKubernetesTargetSnapshot target = 3;
+  ManagedKubernetesIdentityLocator identity_locator = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+enum ManagedKubernetesHealthOutcome {
+  MANAGED_KUBERNETES_HEALTH_OUTCOME_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_HEALTH_OUTCOME_AUTHENTICATED = 1;
+  MANAGED_KUBERNETES_HEALTH_OUTCOME_AUTHENTICATION_REJECTED = 2;
+  MANAGED_KUBERNETES_HEALTH_OUTCOME_UNAVAILABLE = 3;
+}
+
+// Subject digest — фактически наблюдённая identity, не подтверждение resource permissions.
+message CompleteManagedKubernetesHealthProbeRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string attempt_ref = 2;
+  string snapshot_digest = 3;
+  ManagedKubernetesHealthOutcome outcome = 4;
+  string observed_subject_digest = 5;
+}
+
+message CompleteManagedKubernetesHealthProbeResponse {
+  string test_ref = 1;
+  string state = 2;
+  bool applied = 3;
+}
+
+// Это продление существующего integration invocation, не новый runtime/session engine.
+// Owner заново проверяет полный root/grant/identity graph; generation и fence неизменны.
+message ClaimManagedKubernetesInvocationsRequest {
+  string workload_instance = 1;
+  int32 limit = 2;
+}
+message ClaimManagedKubernetesInvocationsResponse {
+  repeated IntegrationInvocationClaim claims = 1;
+}
+
+message RenewManagedKubernetesInvocationRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+}
+message RenewManagedKubernetesInvocationResponse {
+  string lease_ref = 1;
+  int64 generation = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+// Owner-local CLI получает только одноразовый setup permit через authenticated
+// gateway. Material передаётся прямо broker TLS listener, без frontend/gateway.
+// Первые три метода доступны только проверенному control-api-gateway; остальные
+// три — только secret-broker с отдельными exact permissions и текущим owner graph.
+service ManagedKubernetesIdentitySetupService {
+  rpc BeginManagedKubernetesIdentitySetup(BeginManagedKubernetesIdentitySetupRequest) returns (BeginManagedKubernetesIdentitySetupResponse);
+  rpc GetManagedKubernetesIdentitySetup(GetManagedKubernetesIdentitySetupRequest) returns (GetManagedKubernetesIdentitySetupResponse);
+  rpc CancelManagedKubernetesIdentitySetup(CancelManagedKubernetesIdentitySetupRequest) returns (CancelManagedKubernetesIdentitySetupResponse);
+  rpc ResolveManagedKubernetesIdentityUpload(ResolveManagedKubernetesIdentityUploadRequest) returns (ResolveManagedKubernetesIdentityUploadResponse);
+  rpc ClaimManagedKubernetesIdentityUpload(ClaimManagedKubernetesIdentityUploadRequest) returns (ClaimManagedKubernetesIdentityUploadResponse);
+  rpc CompleteManagedKubernetesIdentityUpload(CompleteManagedKubernetesIdentityUploadRequest) returns (CompleteManagedKubernetesIdentityUploadResponse);
+}
+
+enum ManagedKubernetesIdentitySetupState {
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_PREPARED = 1;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_ATTEMPTING = 2;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_COMPLETED = 3;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_CANCELLED = 4;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_EXPIRED = 5;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_UNKNOWN = 6;
+  MANAGED_KUBERNETES_IDENTITY_SETUP_STATE_ACK_REJECTED = 7;
+}
+
+// Без credential hash, Secret locator, permit либо material. COMPLETED означает
+// binding metadata commit; это не успешная проверка target identity/RBAC.
+message ManagedKubernetesIdentitySetupView {
+  string setup_ref = 1;
+  string connection_ref = 2;
+  int64 connection_version = 3;
+  int64 binding_generation = 4;
+  string identity_ref = 5;
+  int64 identity_revision = 6;
+  string target_ref = 7;
+  ManagedKubernetesIdentitySetupState state = 8;
+  google.protobuf.Timestamp expires_at = 9;
+  string reason_code = 10;
+  int64 version = 11;
+  IntegrationCredentialPolicy credential_policy = 12;
+  int64 binding_version = 13;
+  // Имя из immutable operator target revision, не caller selector.
+  string canonical_context = 14;
+}
+
+// Только operator-owned endpoint. CLI проверяет exact origin/address/SNI/CA;
+// caller URL, proxy environment, redirect и plaintext fallback недопустимы.
+message ManagedKubernetesIdentityUploadEndpoint {
+  string server_origin = 1;
+  string tls_server_name = 2;
+  bytes certificate_authority_pem = 3;
+  string certificate_authority_sha256 = 4;
+  repeated string address_ips = 5;
+}
+
+// Subject, policy, target, revision и private namespace назначает CP по текущему
+// Connection и actor. Ни одно поле request не выбирает чужого owner либо backend.
+message BeginManagedKubernetesIdentitySetupRequest {
+  string connection_ref = 1;
+  // Для INITIATOR_REQUIRED expected_version — текущая self binding version;
+  // явный ноль означает только отсутствие binding. Для PROJECT_SHARED —
+  // текущая Connection version. Scope и policy всё равно разрешает сервер.
+  MutationContext mutation = 2;
+  int64 expected_connection_version = 3;
+  string content_sha256 = 4;
+  uint32 content_bytes = 5;
+}
+
+// Только первый admission возвращает permit. После потерянного ответа replay
+// даёт metadata/reconcile_only, не ещё одно разрешение на material write.
+// Permit не сохраняется в обычном idempotency result и не выводится в diagnostics.
+message BeginManagedKubernetesIdentitySetupResponse {
+  ManagedKubernetesIdentitySetupView setup = 1;
+  bytes upload_permit = 2;
+  ManagedKubernetesIdentityUploadEndpoint endpoint = 3;
+  bool reconcile_only = 4;
+}
+
+message GetManagedKubernetesIdentitySetupRequest {
+  string connection_ref = 1;
+  // Точный actor/Connection scope назначает сервер. Idempotency selector нужен
+  // после потери первого Begin ACK, когда caller ещё не знает setup_ref.
+  oneof selector {
+    string setup_ref = 2;
+    string begin_idempotency_key = 3;
+  }
+}
+
+message CancelManagedKubernetesIdentitySetupRequest {
+  string connection_ref = 1;
+  string setup_ref = 2;
+  // expected_version относится к setup view, не к Connection или binding.
+  MutationContext mutation = 3;
+}
+
+// Broker передаёт только hash проверенного permit. Материал и его parser errors
+// никогда не отправляются в CP. Resolve сам по себе не выдаёт write credit.
+message ResolveManagedKubernetesIdentityUploadRequest {
+  string setup_ref = 1;
+  string permit_sha256 = 2;
+}
+
+message ManagedKubernetesIdentityProvision {
+  string identity_ref = 1;
+  string target_ref = 2;
+  int64 revision = 3;
+  string namespace = 4;
+  string content_sha256 = 5;
+}
+
+// Только broker-private snapshot из текущих owner rows/operator registry.
+message ManagedKubernetesIdentityUploadSnapshot {
+  string setup_ref = 1;
+  string snapshot_digest = 2;
+  ManagedKubernetesIdentityProvision provision = 3;
+  ManagedKubernetesTargetSnapshot target = 4;
+  uint32 content_bytes = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  bool reconcile_only = 7;
+  ManagedKubernetesIdentitySetupView completed = 8;
+  // После первого known UID допускается только exact read, не принятие replacement.
+  ManagedKubernetesIdentityLocator known_identity = 9;
+}
+
+message ClaimManagedKubernetesIdentityUploadRequest {
+  string setup_ref = 1;
+  string permit_sha256 = 2;
+  string snapshot_digest = 3;
+  string content_sha256 = 4;
+  string workload_instance = 5;
+}
+
+// ATTEMPTING фиксируется до write credit. Повтор, замена Pod либо неизвестный
+// ACK допускают только Observe exact immutable purpose object, без нового Create.
+message ManagedKubernetesIdentityUploadAdmission {
+  string setup_ref = 1;
+  string attempt_ref = 2;
+  int64 generation = 3;
+  string fence = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  bool reconcile_only = 6;
+  ManagedKubernetesIdentityProvision provision = 7;
+  ManagedKubernetesIdentityLocator known_identity = 8;
+}
+
+// Owner заново проверяет authority и current generation перед binding commit;
+// позднее evidence может сохранить orphan locator, но не восстановить grant.
+// UNKNOWN не содержит фиктивных pins и не разрешает второй Create.
+message CompleteManagedKubernetesIdentityUploadRequest {
+  string setup_ref = 1;
+  string attempt_ref = 2;
+  int64 generation = 3;
+  string fence = 4;
+  string workload_instance = 5;
+  oneof outcome {
+    ManagedKubernetesIdentityLocator identity_locator = 6;
+    ManagedKubernetesIdentityUploadUnknown unknown = 7;
+    ManagedKubernetesIdentityAcknowledgementRejection rejected_acknowledgement = 8;
+  }
+}
+
+// Неопределённый внешний эффект сохраняется отдельно от закрытия setup grant.
+// Поле не переносит provider error/body/credential material.
+message ManagedKubernetesIdentityUploadUnknown {}
+
+// Private terminal witness: raw response и usable Secret locator отсутствуют.
+// Наличие UID здесь не разрешает Observe, read, bind либо cleanup.
+message ManagedKubernetesIdentityAcknowledgementRejection {
+  string response_sha256 = 1;
+  bool truncated = 2;
+  string observed_uid = 3;
+}
+
+// Locators одного существующего owner claim. Ровно один invocation/test ref;
+// текущие workload/fence/generation/input digest проверяются по owner rows.
+message ManagedKubernetesOwnerBinding {
+  string workload_instance = 1;
+  string invocation_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string input_digest = 6;
+  string connection_test_ref = 7;
+}
+
+// Только точный GVR и явный namespace scope; URI/raw path не передаются.
+// UID/RV являются preconditions ресурса, но не источником полномочий.
+message ManagedKubernetesResourceAddress {
+  string group = 1;
+  string version = 2;
+  string resource = 3;
+  bool namespaced = 4;
+  string namespace = 5;
+  string name = 6;
+  string subresource = 7;
+  string uid = 8;
+  string resource_version = 9;
+  // Допускается только отдельной list/watch.all-namespaces операцией и exact grant scope.
+  bool all_namespaces = 10;
+}
+
+// Отдельные non-resource paths. Поля не содержат URI либо serverRelativeURL.
+enum ManagedKubernetesDiscoveryKind {
+  MANAGED_KUBERNETES_DISCOVERY_KIND_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_VERSION = 1;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_CORE_VERSIONS = 2;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_GROUPS = 3;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_GROUP = 4;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_RESOURCES = 5;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_OPENAPI_V3_INDEX = 6;
+  MANAGED_KUBERNETES_DISCOVERY_KIND_OPENAPI_V3_SCHEMA = 7;
+}
+
+message ManagedKubernetesDiscoveryAddress {
+  ManagedKubernetesDiscoveryKind kind = 1;
+  string group = 2;
+  string version = 3;
+  string immutable_schema_hash = 4;
+}
+
+// Параметры приходят только из текущего operator-owned target registry.
+// Kubeconfig, bearer token и private key в snapshot не входят.
+message ManagedKubernetesTargetSnapshot {
+  string target_ref = 1;
+  int64 revision = 2;
+  string server_origin = 3;
+  string tls_server_name = 4;
+  string certificate_authority_sha256 = 5;
+  repeated string address_ips = 6;
+  string embedded_context = 7;
+  string cluster_uid = 8;
+  // Точные origins исходного kubeconfig задаёт оператор; transport не обращается к alias.
+  // ClusterUID и revision закрепляются owner; caller не расширяет mapping.
+  repeated string kubeconfig_source_origins = 9;
+  // Канонический operator-only профиль до128KiB; checksum не является authority.
+  // Профиль закреплён existing target/source revisions, caller его не выбирает.
+  bytes resource_policy_json = 10;
+  string resource_policy_sha256 = 11;
+}
+
+// Exact operator-attested NodeUID/serving-key binding. Это не atomic NodeUID
+// precondition API server. Retired key/generation хранит persistent owner registry;
+// переиспользование key для другого NodeUID и скрытая protocol substitution запрещены.
+message ManagedKubernetesNodeTransportSnapshot {
+  string pin_ref = 1;
+  int64 generation = 2;
+  string target_ref = 3;
+  int64 target_revision = 4;
+  string node_name = 5;
+  string node_uid = 6;
+  string server_origin = 7;
+  string tls_server_name = 8;
+  string certificate_authority_sha256 = 9;
+  bytes certificate_authority_pem = 10;
+  string server_public_key_sha256 = 11;
+  repeated string address_ips = 12;
+  google.protobuf.Timestamp not_before = 13;
+  google.protobuf.Timestamp expires_at = 14;
+  string protocol = 15;
+}
+
+message ResolveManagedKubernetesOperationRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  // Для idle watchdog: exact ACTIVE stream внутри того же original claim.
+  // Поле не создаёт frame, effect либо новое read credit.
+  string stream_ref = 2;
+  // Только exact закрытый execution: metadata cleanup proof, без snapshot/credit.
+  bool cleanup_only = 3;
+}
+
+// Только broker получает exact purpose Secret locator. Это не runtime Secret
+// descriptor; отсутствует generic credential projection либо fallback.
+message ManagedKubernetesIdentityLocator {
+  string identity_ref = 1;
+  string target_ref = 2;
+  int64 revision = 3;
+  string namespace = 4;
+  string secret_name = 5;
+  string secret_uid = 6;
+  string secret_resource_version = 7;
+  string content_sha256 = 8;
+}
+
+// Подтверждает закрытие original stream либо lease; не execution/output authority.
+message ManagedKubernetesCleanupReceipt {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  int64 generation = 3;
+  string binding_digest = 4;
+  string snapshot_digest = 5;
+  ManagedKubernetesOwnerStreamState stream_state = 6;
+  bool execution_closed = 7;
+}
+
+// Ответ доступен только broker; purpose locator отсутствует в browser/gateway DTO.
+message ResolveManagedKubernetesOperationResponse {
+  string snapshot_digest = 1;
+  string operation = 2;
+  string risk = 3;
+  string approval_policy = 4;
+  string identity_ref = 5;
+  int64 identity_generation = 6;
+  string subject_digest = 7;
+  ManagedKubernetesTargetSnapshot target = 8;
+  // Старый неопубликованный draft использовал generic descriptor. Его номера
+  // не переиспользуются, чтобы исключить неявную смену смысла wire полей.
+  reserved 9, 10;
+  reserved "credential_revision", "broker_secret_purpose_ref";
+  // Без credential values; Secret write использует broker-only draft locator.
+  bytes normalized_input_json = 11;
+  ManagedKubernetesResourceAddress resource = 12;
+  ManagedKubernetesNodeTransportSnapshot node_transport = 13;
+  google.protobuf.Timestamp expires_at = 14;
+  bool reconcile_only = 15;
+  string plan_ref = 16;
+  int64 plan_revision = 17;
+  string plan_digest = 18;
+  // Resource/discovery соответствуют exact registered execution class.
+  // Plan/Offline могут не иметь адреса; mixed address запрещён.
+  ManagedKubernetesDiscoveryAddress discovery = 19;
+  ManagedKubernetesIdentityLocator identity_locator = 20;
+  // Монотонно защищённые имена source registry, не caller namespace grant.
+  repeated string protected_namespaces = 21;
+  // Вариант cleanup взаимоисключающий с normal snapshot и не несёт authority.
+  ManagedKubernetesCleanupReceipt cleanup_receipt = 22;
+}
+
+// Metadata из scoped broker discovery не выбирает child operation либо actor.
+// Owner проверяет каждую строку против исходного конечного selector/resource
+// profile и сам назначает operation, immutable input и child ref.
+// Неизвестное значение не превращается в PRESENT. ABSENT не имеет UID/RV,
+// COLLECTION не притворяется именованным объектом; конкретную operation выбирает owner.
+enum ManagedKubernetesObservationState {
+  MANAGED_KUBERNETES_OBSERVATION_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_OBSERVATION_STATE_PRESENT = 1;
+  MANAGED_KUBERNETES_OBSERVATION_STATE_ABSENT = 2;
+  MANAGED_KUBERNETES_OBSERVATION_STATE_COLLECTION = 3;
+  // Computed named READ без UID/RV; owner требует pinned READ/NONE.
+  MANAGED_KUBERNETES_OBSERVATION_STATE_UNVERSIONED_READ = 4;
+}
+
+// Только broker-observed placement; owner выбирает exact registered Node transport.
+// URL, protocol и serving-key pin не принимаются от caller.
+message ManagedKubernetesPodNodeWitness {
+  string node_name = 1;
+  string node_uid = 2;
+  string container = 3;
+}
+
+message ManagedKubernetesChildCandidate {
+  ManagedKubernetesResourceAddress resource = 1;
+  string observed_resource_digest = 2;
+  string registered_schema_digest = 3;
+  ManagedKubernetesObservationState observation_state = 4;
+  // Optional observed witness, не atomic CREATE fence и не caller scope.
+  string namespace_uid = 5;
+  ManagedKubernetesPodNodeWitness pod_witness = 6;
+}
+
+message PrepareManagedKubernetesChildrenRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string snapshot_digest = 2;
+  string proposal_digest = 3;
+  repeated ManagedKubernetesChildCandidate candidates = 4;
+}
+
+message ManagedKubernetesChildEffect {
+  string child_ref = 1;
+  string operation = 2;
+  string input_digest = 3;
+  ManagedKubernetesResourceAddress resource = 4;
+  // Только owner-normalized safe body; никаких Secret values из broker.
+  bytes normalized_input_json = 5;
+  string state = 6;
+  // Exact owner mapping исходного Pod witness; отсутствует для ordinary resource.
+  ManagedKubernetesNodeTransportSnapshot node_transport = 7;
+  // Исходное owner-pinned наблюдение; повторная подготовка не меняет schema/body/namespace witness.
+  // Отсутствует только у известных команд без resource address, не заменяется новым discovery.
+  ManagedKubernetesChildCandidate observation = 8;
+}
+
+// Повтор exact proposal возвращает прежний план; иной digest не меняет snapshot.
+message PrepareManagedKubernetesChildrenResponse {
+  string plan_ref = 1;
+  int64 plan_revision = 2;
+  string plan_digest = 3;
+  repeated ManagedKubernetesChildEffect children = 4;
+}
+
+message BeginManagedKubernetesEffectRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string plan_ref = 2;
+  int64 plan_revision = 3;
+  string plan_digest = 4;
+  string child_ref = 5;
+  string child_input_digest = 6;
+  string file_source_ref = 7;
+  int64 file_source_version = 8;
+}
+
+// Только исторические owner facts. Не fresh grant и не native dispatch credit.
+message ManagedKubernetesStreamHistory {
+  string stream_ref = 1;
+  int64 generation = 2;
+  ManagedKubernetesOwnerStreamState state = 3;
+  google.protobuf.Timestamp hard_deadline = 4;
+  ManagedKubernetesHandshakeReceipt handshake_receipt = 5;
+  ManagedKubernetesTerminalReceipt terminal_receipt = 6;
+}
+
+// ATTEMPTING фиксируется до ответа. Повтор неизвестного Begin не выдаёт новый
+// credit; owner возвращает readback/reconcile_only, не повтор external effect.
+message BeginManagedKubernetesEffectResponse {
+  string effect_ref = 1;
+  int64 effect_generation = 2;
+  string child_input_digest = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  bool reconcile_only = 5;
+  // Owner назначает stream ref и limits до handshake; PREPARED ещё не выдаёт
+  // frame credit и не доказывает, что remote process запущен.
+  ManagedKubernetesOwnerStreamGrant stream = 6;
+  // Только сохранённый applied result и свежий output admission; не новый effect credit.
+  ManagedKubernetesAcceptedEffectResult accepted_result = 7;
+  // Только ReconcileOnly: исходная metadata без transport/frame/output credit.
+  ManagedKubernetesStreamHistory stream_history = 8;
+}
+
+message ManagedKubernetesAcceptedEffectResult {
+  ManagedKubernetesEffectOutcome outcome = 1;
+  bytes result_json = 2;
+  string result_digest = 3;
+  string reason_code = 4;
+}
+
+message ManagedKubernetesOwnerStreamGrant {
+  string stream_ref = 1;
+  int64 generation = 2;
+  google.protobuf.Timestamp expires_at = 3;
+  uint32 maximum_frame_bytes = 4;
+  uint64 maximum_total_bytes = 5;
+  repeated string input_channels = 6;
+  repeated string output_channels = 7;
+}
+
+// Только после первой admitted handshake attempt. Повтор exact receipt возвращает
+// прежний ACTIVE status, но не создаёт connection/process. Потерянный handshake
+// ACK не разрешает открыть второе remote execution.
+// Типизированное происхождение receipt; owner пересчитывает binding digest и
+// сверяет snapshot/child/stream/effect/target с исходным immutable планом.
+message ManagedKubernetesStreamReceiptOrigin {
+  string snapshot_digest = 1;
+  string binding_digest = 2;
+  string child_input_digest = 3;
+  string effect_ref = 4;
+  int64 effect_generation = 5;
+  string stream_ref = 6;
+  int64 stream_generation = 7;
+  string operation = 8;
+  string target_ref = 9;
+  int64 target_revision = 10;
+}
+
+// Фактически наблюдённые параметры handshake, без URL, response body и credentials.
+message ManagedKubernetesHandshakeReceipt {
+  ManagedKubernetesStreamReceiptOrigin origin = 1;
+  string transport_ref = 2;
+  int64 transport_generation = 3;
+  string protocol = 4;
+  uint32 http_status = 5;
+  string negotiated_protocol = 6;
+  string peer_spki_sha256 = 7;
+}
+
+message ManagedKubernetesTerminalReceipt {
+  ManagedKubernetesStreamReceiptOrigin origin = 1;
+  string handshake_digest = 2;
+  string protocol = 3;
+  bool transport_joined = 4;
+  ManagedKubernetesOwnerStreamState local_state = 5;
+  ManagedKubernetesEffectOutcome remote_outcome = 6;
+  optional int32 exit_code = 7;
+  bool clean_eof = 8;
+  uint32 remote_status_code = 9;
+  string reason_code = 10;
+}
+
+message OpenManagedKubernetesStreamRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string effect_ref = 2;
+  int64 effect_generation = 3;
+  string stream_ref = 4;
+  string handshake_receipt_digest = 5;
+  ManagedKubernetesHandshakeReceipt handshake_receipt = 6;
+}
+
+message OpenManagedKubernetesStreamResponse {
+  ManagedKubernetesOwnerStreamGrant stream = 1;
+}
+
+enum ManagedKubernetesEffectOutcome {
+  MANAGED_KUBERNETES_EFFECT_OUTCOME_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_EFFECT_OUTCOME_SUCCEEDED = 1;
+  MANAGED_KUBERNETES_EFFECT_OUTCOME_FAILED = 2;
+  MANAGED_KUBERNETES_EFFECT_OUTCOME_UNKNOWN = 3;
+}
+
+message CompleteManagedKubernetesEffectRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string effect_ref = 2;
+  int64 effect_generation = 3;
+  string child_input_digest = 4;
+  ManagedKubernetesEffectOutcome outcome = 5;
+  // Только broker safe projection, в том числе metadata/key names для Secret.
+  bytes result_json = 6;
+  string result_digest = 7;
+  string reason_code = 8;
+  string stream_ref = 9;
+}
+
+// Поздний receipt сохраняет partial evidence, но не возобновляет terminal graph.
+message CompleteManagedKubernetesEffectResponse {
+  string state = 1;
+  // Hash принятых сохранённых bytes; при discarded late READ это hash '{}'.
+  string result_digest = 2;
+  google.protobuf.Timestamp authorized_until = 3;
+  // Отдельный ACK исходного request.result_json, даже когда payload не принят.
+  string submission_digest = 4;
+  bool applied = 5;
+}
+
+enum ManagedKubernetesFrameDirection {
+  MANAGED_KUBERNETES_FRAME_DIRECTION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_FRAME_DIRECTION_INPUT = 1;
+  MANAGED_KUBERNETES_FRAME_DIRECTION_OUTPUT = 2;
+}
+
+// CP хранит только frame metadata/digest; plaintext frame payload не записывается
+// в owner rows, event, prompt либо credential projection. Channel — registered
+// значение из immutable stream spec, не произвольное имя потока.
+// Только private broker: metadata фактически прочитанного canonical PF OUTPUT.
+// Body отсутствует; owner связывает witness с целым payload_digest и исходным stream.
+message ManagedKubernetesPortForwardFrameBinding {
+  string connection_ref = 1;
+  int64 generation = 2;
+  uint32 slot = 3;
+  ManagedKubernetesPortForwardFrameAction action = 4;
+  uint64 native_ordinal = 5;
+}
+
+enum ManagedKubernetesPortForwardFrameAction {
+  MANAGED_KUBERNETES_PORT_FORWARD_FRAME_ACTION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_PORT_FORWARD_FRAME_ACTION_OPEN = 1;
+  MANAGED_KUBERNETES_PORT_FORWARD_FRAME_ACTION_DATA = 2;
+  MANAGED_KUBERNETES_PORT_FORWARD_FRAME_ACTION_HALF_CLOSE = 3;
+  MANAGED_KUBERNETES_PORT_FORWARD_FRAME_ACTION_CLOSE = 4;
+}
+
+message BeginManagedKubernetesFrameRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+  ManagedKubernetesFrameDirection direction = 3;
+  uint64 sequence = 4;
+  string channel = 5;
+  uint32 byte_count = 6;
+  string payload_digest = 7;
+  bool end_of_input = 8;
+  // Только broker: deadline фактической native identity/RBAC проверки для OUTPUT.
+  // Owner связывает с текущим ordinal и сужает собственными DB time/lease/hard limits.
+  google.protobuf.Timestamp native_authorized_until = 9;
+  // Только OUTPUT/PORT_FORWARD; INPUT разрешается из exact existing staged tuple.
+  ManagedKubernetesPortForwardFrameBinding port_forward_connection = 10;
+}
+
+enum ManagedKubernetesFrameDisposition {
+  MANAGED_KUBERNETES_FRAME_DISPOSITION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_FRAME_DISPOSITION_SEND = 1;
+  MANAGED_KUBERNETES_FRAME_DISPOSITION_ACKNOWLEDGED = 2;
+  MANAGED_KUBERNETES_FRAME_DISPOSITION_UNKNOWN = 3;
+  // Connection закрыта до нового admission: capture PARTIAL записан, credit/sequence/ACK отсутствуют.
+  MANAGED_KUBERNETES_FRAME_DISPOSITION_CLOSED = 4;
+}
+
+// SEND выдаётся только первой durable attempt; повтор ATTEMPTING не повторяет
+// stdin/write. Потерянный broker/output buffer означает LOST, не replay exec.
+message BeginManagedKubernetesFrameResponse {
+  ManagedKubernetesFrameDisposition disposition = 1;
+  google.protobuf.Timestamp expires_at = 2;
+  // Durable delivery_credits: только OUTPUT SEND1..4; INPUT и nonSEND всегда0.
+  uint32 delivery_ordinal = 3;
+  // Только INPUT OPEN SEND: exact owner retention snapshot; не caller authority и не новый credit.
+  repeated ManagedKubernetesPortForwardRetainedConnection port_forward_retention = 4;
+}
+
+message ManagedKubernetesPortForwardRetainedConnection {
+  string connection_ref = 1;
+  int64 generation = 2;
+  uint32 slot = 3;
+}
+
+message CompleteManagedKubernetesFrameRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+  ManagedKubernetesFrameDirection direction = 3;
+  uint64 sequence = 4;
+  string payload_digest = 5;
+}
+
+message CompleteManagedKubernetesFrameResponse {
+  uint64 acknowledged_sequence = 1;
+}
+
+enum ManagedKubernetesOwnerStreamState {
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_PREPARED = 1;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_ACTIVE = 2;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_COMPLETED = 3;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_CANCELED = 4;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_REVOKED = 5;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_EXPIRED = 6;
+  MANAGED_KUBERNETES_OWNER_STREAM_STATE_LOST = 7;
+}
+
+message CloseManagedKubernetesStreamRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+  ManagedKubernetesOwnerStreamState expected_state = 3;
+  ManagedKubernetesOwnerStreamState terminal_state = 4;
+  ManagedKubernetesEffectOutcome remote_outcome = 5;
+  bool transport_joined = 6;
+  optional int32 observed_exit_code = 7;
+  string terminal_receipt_digest = 8;
+  ManagedKubernetesTerminalReceipt terminal_receipt = 9;
+  // Только позднее подтверждение уже наблюдённого handshake при потере Open ACK.
+  // Не создаёт ACTIVE state, frame credit либо повторный native handshake.
+  ManagedKubernetesHandshakeReceipt observed_handshake = 10;
+}
+
+// Terminal/cancel/revoke/expiry закрывают owner leases/grants; local transport
+// join не доказывает remote process stop. Отдельного domain event нет: exact
+// owner readback и прежний invocation result являются authoritative consumers.
+message CloseManagedKubernetesStreamResponse {
+  ManagedKubernetesOwnerStreamState state = 1;
+  ManagedKubernetesEffectOutcome remote_outcome = 2;
+}
+
+// Проверяет schema/config/authority рабочего пути, но не делает чужой account
+// доступным и не открывает экспериментальный privileged transport автоматически.
+message CheckManagedKubernetesOwnerReadinessRequest {
+  // Общий typed delivery contract без требования configured Kubernetes target.
+  bool delivery_contract_only = 1;
+  // Только secret-broker: прежние core schema/registry/source checks для setup/health, без OUTPUT contract.
+  // Не совместим с delivery_contract_only и не объявляет execution либо stream readiness.
+  bool identity_health_only = 2;
+}
+message CheckManagedKubernetesOwnerReadinessResponse {
+  bool ready = 1;
+  // Exact1 только после materialization capacity/finalization/readback producer+schema.
+  // Default0 не подтверждает typed mixed delivery; поле не является authority.
+  uint32 delivery_contract_revision = 2;
+  // Initial exact1 подтверждает OUTPUT storage/ACK/publication contract; default0 закрыт.
+  // Не смешивается с capacity delivery_contract_revision и не назначает authority.
+  uint32 output_contract_revision = 3;
+  // Exact1 подтверждает actual private INPUT stage/claim/admit/ACK/schema и registered owner port.
+  // Default0 не заменяется DTO reservation либо готовностью OUTPUT.
+  uint32 input_contract_revision = 4;
+  // Exact1 подтверждает original-catalog FILE preparation, policy/AV, source lifecycle и bounded range IO.
+  // Source metadata либо неподключённый optional adapter не подтверждают этот контракт.
+  uint32 file_input_contract_revision = 5;
+}
+
+message GetManagedKubernetesIdentitySetupResponse {
+  ManagedKubernetesIdentitySetupView setup = 1;
+}
+
+message CancelManagedKubernetesIdentitySetupResponse {
+  ManagedKubernetesIdentitySetupView setup = 1;
+}
+
+message ResolveManagedKubernetesIdentityUploadResponse {
+  ManagedKubernetesIdentityUploadSnapshot snapshot = 1;
+}
+
+message ClaimManagedKubernetesIdentityUploadResponse {
+  ManagedKubernetesIdentityUploadAdmission admission = 1;
+}
+
+message CompleteManagedKubernetesIdentityUploadResponse {
+  ManagedKubernetesIdentitySetupView setup = 1;
+}
+
+// Состояние existing invocation, не источник нового lease либо native outcome.
+enum ManagedKubernetesInvocationState {
+  MANAGED_KUBERNETES_INVOCATION_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_INVOCATION_STATE_RUNNING = 1;
+  MANAGED_KUBERNETES_INVOCATION_STATE_SUCCEEDED = 2;
+  MANAGED_KUBERNETES_INVOCATION_STATE_FAILED = 3;
+  MANAGED_KUBERNETES_INVOCATION_STATE_UNKNOWN_OUTCOME = 4;
+  MANAGED_KUBERNETES_INVOCATION_STATE_CANCELLED = 5;
+}
+
+// Только metadata original claim. Actual accepted results остаются в owner receipt;
+// этот readback не создаёт cached READ delivery либо frame credit.
+enum ManagedKubernetesCompletionPendingReason {
+  MANAGED_KUBERNETES_COMPLETION_PENDING_REASON_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_COMPLETION_PENDING_REASON_NONE = 1;
+  MANAGED_KUBERNETES_COMPLETION_PENDING_REASON_CAPTURE_PENDING = 2;
+}
+message ManagedKubernetesInvocationReceipt {
+  string invocation_ref = 1;
+  int64 generation = 2;
+  string input_digest = 3;
+  string binding_digest = 4;
+  ManagedKubernetesInvocationState state = 5;
+  string plan_ref = 6;
+  int64 plan_revision = 7;
+  string plan_digest = 8;
+  string snapshot_digest = 9;
+  string receipt_ref = 10;
+  string result_digest = 11;
+  // false для expiry/cancel без accepted finalization; это не business success.
+  bool completion_recorded = 12;
+  // CAPTURE_PENDING разрешает только bounded Get/Complete, никогда Execute либо следующий child.
+  ManagedKubernetesCompletionPendingReason completion_pending_reason = 13;
+}
+
+// Закрытый сигнал preflight не задаёт outcome: owner независимо сверяет исходный
+// planned Node protocol и отсутствие любых effect/stream перед canonical FAILED.
+enum ManagedKubernetesPreflightRejection {
+  MANAGED_KUBERNETES_PREFLIGHT_REJECTION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_PREFLIGHT_REJECTION_PORT_FORWARD_PROFILE_UNSUPPORTED = 1;
+}
+
+message CompleteManagedKubernetesInvocationRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  // План сначала читается Get; empty pins разрешены лишь при доказанном noPlan.
+  string plan_ref = 2;
+  int64 plan_revision = 3;
+  string plan_digest = 4;
+  ManagedKubernetesPreflightRejection preflight_rejection = 5;
+}
+message CompleteManagedKubernetesInvocationResponse {
+  ManagedKubernetesInvocationReceipt receipt = 1;
+}
+message GetManagedKubernetesInvocationRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+}
+message GetManagedKubernetesInvocationResponse {
+  ManagedKubernetesInvocationReceipt receipt = 1;
+}
+
+message CancelManagedKubernetesInvocationRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+}
+message CancelManagedKubernetesInvocationResponse {
+  ManagedKubernetesInvocationReceipt receipt = 1;
+}
+
+// Private stage receipt не является публикацией artifact либо разрешением следующего эффекта.
+enum ManagedKubernetesOutputFrameState {
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_ATTEMPTING = 1;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_STAGED = 2;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_ACCEPTED = 3;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_UNKNOWN = 4;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_REJECTED = 5;
+  MANAGED_KUBERNETES_OUTPUT_FRAME_STATE_CANCELLED = 6;
+}
+message ManagedKubernetesOutputFrameReceipt {
+  string ref = 1;
+  string invocation_ref = 2;
+  string stream_ref = 3;
+  int64 generation = 4;
+  uint64 sequence = 5;
+  string channel = 6;
+  string payload_digest = 7;
+  uint32 byte_count = 8;
+  uint32 delivery_ordinal = 9;
+  ManagedKubernetesOutputFrameState state = 10;
+  // Только ACCEPTED: exact stored ordinal deadline, никогда не обновляется Get.
+  google.protobuf.Timestamp authorized_until = 11;
+  string binding_digest = 12;
+}
+message AcceptManagedKubernetesOutputFrameRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+  uint64 sequence = 3;
+  string channel = 4;
+  uint32 byte_count = 5;
+  string payload_digest = 6;
+  uint32 delivery_ordinal = 7;
+  // Приватные bytes не попадают в invocation JSON, event, prompt либо owner row.
+  bytes payload = 8;
+}
+message AcceptManagedKubernetesOutputFrameResponse {
+  ManagedKubernetesOutputFrameReceipt receipt = 1;
+}
+message GetManagedKubernetesOutputFrameRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+  uint64 sequence = 3;
+  uint32 delivery_ordinal = 4;
+}
+message GetManagedKubernetesOutputFrameResponse {
+  ManagedKubernetesOutputFrameReceipt receipt = 1;
+}
+
+// Приватный gateway не назначает actor, sequence, payload либо срок source delivery.
+message ClaimManagedKubernetesInputFrameRequest {
+  ManagedKubernetesOwnerBinding binding = 1;
+  string stream_ref = 2;
+}
+
+enum ManagedKubernetesInputFrameDisposition {
+  MANAGED_KUBERNETES_INPUT_FRAME_DISPOSITION_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_INPUT_FRAME_DISPOSITION_NONE = 1;
+  MANAGED_KUBERNETES_INPUT_FRAME_DISPOSITION_DELIVER = 2;
+  MANAGED_KUBERNETES_INPUT_FRAME_DISPOSITION_UNKNOWN = 3;
+  MANAGED_KUBERNETES_INPUT_FRAME_DISPOSITION_CLOSED = 4;
+}
+
+// Frame/payload присутствует только для первого DELIVER после durable claim intent.
+// NONE/UNKNOWN/CLOSED не возвращают bytes, tuple или execution credit.
+message ClaimManagedKubernetesInputFrameResponse {
+  ManagedKubernetesInputFrameDisposition disposition = 1;
+  ManagedKubernetesInputFrame frame = 2;
+}
+
+// Не public projection: bytes не допускаются в prompt, audit, invocation JSON либо events.
+// Broker всё равно обязан BeginINPUT exact staged tuple перед единственным native write.
+message ManagedKubernetesInputFrame {
+  string ref = 1;
+  string invocation_ref = 2;
+  string stream_ref = 3;
+  int64 generation = 4;
+  uint64 sequence = 5;
+  string channel = 6;
+  string payload_digest = 7;
+  uint32 byte_count = 8;
+  bool end_of_input = 9;
+  bytes payload = 10;
+  google.protobuf.Timestamp delivery_expires_at = 11;
+  string binding_digest = 12;
+}
+
+// Private broker не выбирает artifact, revision, format, path либо bytes; они принадлежат original child.
+message PrepareManagedKubernetesFileInputRequest {
+  // Exact original invocation claim/fence, не новый grant.
+  ManagedKubernetesOwnerBinding binding = 1;
+  // Server-assigned immutable child, принадлежащий этому binding/plan.
+  string child_ref = 2;
+}
+
+// Повтор читает existing intent; UNKNOWN не разрешает новый PUT либо native replay.
+message PrepareManagedKubernetesFileInputResponse {
+  // Safe descriptor полностью принятого owner source.
+  ManagedKubernetesFileInputView view = 1;
+  // Fresh конечный artifact/source allowance; broker не начинает effect после его истечения.
+  google.protobuf.Timestamp authorized_until = 2;
+}

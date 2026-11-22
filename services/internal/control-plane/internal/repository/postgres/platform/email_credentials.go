@@ -101,6 +101,7 @@ func emailCredentialDigests(ctx context.Context, querier emailCredentialQuerier,
 	// локальные comparison data из доверенной configuration, а не caller identity или secret value.
 	type owner struct{ tenant, connection, kind string }
 	expected := map[string]owner{}
+	ownerGenerations := map[string]int64{}
 	for _, mailbox := range configuration.Mailboxes {
 		if !mailbox.Enabled {
 			continue
@@ -116,6 +117,10 @@ func emailCredentialDigests(ctx context.Context, querier emailCredentialQuerier,
 					return nil, errs.ErrConflict
 				}
 				expected[key] = binding
+				if previous, found := ownerGenerations[key]; found && previous != mailbox.CredentialOwnerGeneration {
+					return nil, errs.ErrConflict
+				}
+				ownerGenerations[key] = mailbox.CredentialOwnerGeneration
 			}
 		}
 	}
@@ -135,12 +140,19 @@ func emailCredentialDigests(ctx context.Context, querier emailCredentialQuerier,
 	for rows.Next() {
 		var name, digest string
 		var generation int64
+		var descriptorOwnerGeneration int64
 		var binding owner
-		if err := rows.Scan(&name, &generation, &binding.kind, &digest, &binding.connection, &binding.tenant); err != nil {
+		if err := rows.Scan(&name, &generation, &binding.kind, &digest, &binding.connection, &binding.tenant,
+			&descriptorOwnerGeneration); err != nil {
 			return nil, errs.ErrUnavailable
 		}
 		key := name + "." + strconv.FormatInt(generation, 10)
 		if expected[key] != binding {
+			return nil, errs.ErrConflict
+		}
+		// Historical accepted snapshots may still be projected during startup, but they carry no mailbox owner epoch and cannot authorize a new effect.
+		// Исторические принятые snapshots могут проецироваться при startup, но не имеют mailbox owner epoch и не разрешают новый effect.
+		if expectedGeneration := ownerGenerations[key]; expectedGeneration > 0 && descriptorOwnerGeneration != expectedGeneration {
 			return nil, errs.ErrConflict
 		}
 		result[key] = digest
@@ -199,10 +211,17 @@ func (repository *Repository) configureEmailCredential(ctx context.Context, tx p
 	if version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	owner, err := requireEmailMailboxManagerTx(ctx, tx, current, payload.ConnectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if owner.state != "ACTIVE" || !owner.owner.SubjectActive || payload.OwnerGeneration != owner.owner.Generation {
+		return commandOutcome{}, errs.ErrForbidden
+	}
 	_, err = tx.Exec(ctx, queryEmailCredentialInsert, pgx.StrictNamedArgs{
 		"name": credential.Name, "generation": credential.Generation, "organization_id": current.organizationID, "connection_id": connectionID,
 		"kind": credential.Kind, "content_sha256": credential.ContentSHA256, "secret_ref": credential.SecretRef, "secret_uid": credential.SecretUID,
-		"secret_resource_version": credential.SecretResourceVersion, "actor_id": current.actorID,
+		"secret_resource_version": credential.SecretResourceVersion, "actor_id": current.actorID, "owner_generation": owner.owner.Generation,
 	})
 	if err != nil {
 		return commandOutcome{}, mapWriteError(err)

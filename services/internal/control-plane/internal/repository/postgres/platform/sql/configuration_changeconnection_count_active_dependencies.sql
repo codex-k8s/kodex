@@ -6,6 +6,12 @@ SELECT
        AND test.state IN ('DUE', 'CLAIMED'))
   + (SELECT count(*) FROM control_plane.integration_personal_credential_tests personal_test
      WHERE personal_test.connection_id=@connection_id::uuid AND personal_test.state IN ('DUE','CLAIMED','PROBING'))
+  + (SELECT count(*) FROM control_plane.kubernetes_identity_setups setup
+     WHERE setup.connection_id=@connection_id::uuid AND setup.state IN('PREPARED','ATTEMPTING','UNKNOWN'))
+  + (SELECT count(*) FROM control_plane.kubernetes_identity_upload_attempts attempt
+     JOIN control_plane.kubernetes_identity_setups setup ON setup.id=attempt.setup_id
+      AND setup.organization_id=attempt.organization_id
+     WHERE setup.connection_id=@connection_id::uuid AND attempt.state='ACTIVE')
   + (SELECT count(*)
      FROM control_plane.integration_invocations invocation
      WHERE invocation.connection_id = @connection_id::uuid

@@ -44,7 +44,7 @@ func TestLokiPersonalCredentialPreflight(t *testing.T) {
 			case "missing-profile":
 				requirement.ResourcePermissionProfile = ""
 			}
-			selected, err := ResolveIntegrationCredential(requirement, initiator, &shared, personal, now)
+			selected, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(&shared), personal, now)
 			if scenario == "foreign-user" {
 				if !errors.Is(err, errs.ErrForbidden) {
 					t.Fatal("foreign Loki user admitted", err)

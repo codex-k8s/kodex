@@ -82,7 +82,7 @@ func (repository *Repository) setIntegrationCredentialPolicy(ctx context.Context
 			return commandOutcome{}, definitionErr
 		}
 		if githubScopedDefinition(definition) {
-			connection, readErr := readConnection(ctx, tx, current, payload.ConnectionRef)
+			connection, readErr := repository.readConnection(ctx, tx, current, payload.ConnectionRef)
 			if readErr != nil {
 				return commandOutcome{}, readErr
 			}
@@ -101,6 +101,9 @@ func (repository *Repository) setIntegrationCredentialPolicy(ctx context.Context
 			definition.Spec.AdapterOwner != string(integrationpackage.OwnerIntegrationGateway) || definition.Spec.ExecutionRoute != string(integrationpackage.RouteManagedMCP)) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		if err := repository.cancelSSHIdentityDependenciesTx(ctx, tx, current, payload.ConnectionRef, ""); err != nil {
+			return commandOutcome{}, err
+		}
 		var ref string
 		if err := tx.QueryRow(ctx, queryIntegrationCredentialPolicySet, pgx.StrictNamedArgs{
 			"connection_id": locked.id, "expected_version": locked.version, "policy": string(payload.Policy),
@@ -110,7 +113,7 @@ func (repository *Repository) setIntegrationCredentialPolicy(ctx context.Context
 			return commandOutcome{}, mapWriteError(err)
 		}
 	}
-	item, err := readConnection(ctx, tx, current, payload.ConnectionRef)
+	item, err := repository.readConnection(ctx, tx, current, payload.ConnectionRef)
 	if err != nil {
 		return commandOutcome{}, err
 	}

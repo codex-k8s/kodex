@@ -4,8 +4,8 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.5.0
-updated: 2026-10-24
+version: 1.5.2
+updated: 2026-11-15
 ---
 
 # `httpserver`
@@ -36,8 +36,8 @@ fallback для caller нет; проверка функций/параметр�
 запускает goroutine при создании сервера. Владелец процесса передаёт handler
 метрик, предикат готовности и отдельно вызывает ограниченный `Shutdown`.
 
-Публичный API состоит из `New`, `StandardProcessConfig`, `ExactGETRoute`,
-`Listen`, блокирующего `Serve`, адаптеров `Worker`/`ShutdownWorker` и `Shutdown`.
+Основной API включает `New`, `StandardProcessConfig`, `ExactGETRoute`,
+`Listen`, блокирующего `Serve`, адаптеры `Worker`/`ShutdownWorker`, `Shutdown` и `NewRequestGate`/`RequestGate`.
 `StandardProcessConfig` возвращает одинаковые лимиты для небольших gateway/job:
 2 с на заголовки, 5 с на чтение
 и запись, 30 с простоя, 32 КиБ заголовков и 128 соединений. Он не открывает
@@ -79,6 +79,25 @@ read-header/read/write/idle timeouts и размер headers; маршруты �
 metric registry или logging. Совместимое расширение может усиливать safe
 defaults без добавления бизнесовых endpoints; переименование маршрутов либо
 изменение lifecycle требует миграции всех потребителей.
+
+## Admission и положительный join HTTP handlers
+
+`NewRequestGate(handler, maximum)` принимает1..128 синхронных handlers
+одновременно. Перегрузка возвращает429, закрытая admission —503 до вызова
+handler. `Close` идемпотентно запрещает новые requests; `Wait(ctx)` разрешён
+только после Close и подтверждает выход всех ранее допущенных handlers,
+включая panic unwinding. Истёкший context возвращает ошибку и не доказывает
+join. Уже подтверждённый join остаётся фактом даже при отменённом context.
+`Closed` сообщает только admission closure, `Joined` — именно actual join.
+
+Счётчик и join предоставлены общим `serviceruntime.ActivityGate`; HTTP
+wrapper сохраняет свои status/body и error semantics.
+Gate не отменяет requests и не владеет listener, goroutine, TLS, auth,
+бизнесовыми grants либо runtime budgets. Caller задаёт BaseContext, закрывает
+admission до Shutdown и отдельно ожидает handlers до закрытия их dependencies.
+Hijacked connections и дочерняя detached work в этот контракт не входят:
+потребитель обязан исключить их либо предоставить отдельный positive join.
+Timeout никогда не является подтверждением quiescence remote operations.
 
 ## Подпакет `streamproxy`
 

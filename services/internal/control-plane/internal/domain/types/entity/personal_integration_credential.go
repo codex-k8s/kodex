@@ -77,8 +77,12 @@ type PersonalIntegrationCredential struct {
 	ConnectionVersion                        int64
 	Version, Generation                      int64
 	State                                    string
+	Kind                                     IntegrationCredentialKind
+	BrokerPurpose                            IntegrationBrokerIdentityPurpose
 	Credential                               *IntegrationCredentialRevision
+	BrokerIdentity                           *IntegrationBrokerIdentityRevision
 	VerifiedCredentialRef                    string
+	VerifiedBrokerIdentityRef                string
 	VerifiedDefinitionDigest                 string
 	VerifiedConfigurationDigest              string
 	VerifiedCapabilities, DeniedCapabilities []string
@@ -94,12 +98,14 @@ type PersonalIntegrationCredential struct {
 // Отсутствие привязки не означает пустой credential либо право выбрать общий ключ. Внутренние
 // metadata привязки исключены из случайной JSON-сериализации и требуют безопасной transport-проекции.
 type PersonalIntegrationConnection struct {
-	Available                bool
-	Ref, Name, DefinitionKey string
-	Version                  int64
-	Enabled                  bool
-	Policy                   IntegrationCredentialPolicy
-	Credential               *PersonalIntegrationCredential `json:"-"`
+	KubernetesSetupRequirements *KubernetesIdentitySetupRequirements
+	CredentialDelivery          integrationpackage.CredentialDelivery
+	Available                   bool
+	Ref, Name, DefinitionKey    string
+	Version                     int64
+	Enabled                     bool
+	Policy                      IntegrationCredentialPolicy
+	Credential                  *PersonalIntegrationCredential `json:"-"`
 }
 
 // IntegrationCredentialRequirement is resolved from published grants and current Connection state;
@@ -111,6 +117,9 @@ type IntegrationCredentialRequirement struct {
 	DefinitionKey, ResourcePermissionProfile                            string
 	Policy                                                              IntegrationCredentialPolicy
 	CredentialRequired                                                  bool
+	Kind                                                                IntegrationCredentialKind
+	BrokerPurpose                                                       IntegrationBrokerIdentityPurpose
+	BrokerTargetRef                                                     string
 }
 
 // IntegrationCredentialSelection is internal owner-to-gateway material, excluded from JSON views.
@@ -118,11 +127,13 @@ type IntegrationCredentialRequirement struct {
 // IntegrationCredentialSelection — внутренние данные owner→gateway, исключённые из JSON views.
 // Personal generation и revision повторно проверяются при расходовании допуска начала вызова.
 type IntegrationCredentialSelection struct {
-	ResourcePermissionProfile string                         `json:"-"`
-	Credential                *IntegrationCredentialRevision `json:"-"`
-	PersonalBindingRef        string                         `json:"-"`
-	BindingGeneration         int64                          `json:"-"`
-	Problem                   IntegrationCredentialProblem   `json:"-"`
+	Kind                      IntegrationCredentialKind          `json:"-"`
+	ResourcePermissionProfile string                             `json:"-"`
+	Credential                *IntegrationCredentialRevision     `json:"-"`
+	BrokerIdentity            *IntegrationBrokerIdentityRevision `json:"-"`
+	PersonalBindingRef        string                             `json:"-"`
+	BindingGeneration         int64                              `json:"-"`
+	Problem                   IntegrationCredentialProblem       `json:"-"`
 }
 
 // IntegrationCredentialPreflightIssue exposes only the addressed requirement and a safe code.

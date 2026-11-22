@@ -16,7 +16,7 @@ import (
 // TestIntegrationContinuationTask сохраняет точное замечание владельца отдельно от текста
 // провайдера для всех допустимых исходов, включая пустое замечание и Unicode.
 func TestIntegrationContinuationTask(t *testing.T) {
-	for _, test := range []struct{ decision, state string }{{"APPROVE", "SUCCEEDED"}, {"APPROVE", "FAILED"}, {"REJECT", "REJECTED"}, {"CANCEL", "CANCELLED"}} {
+	for _, test := range []struct{ decision, state string }{{"APPROVE", "SUCCEEDED"}, {"APPROVE", "FAILED"}, {"APPROVE", "CANCELLED"}, {"REJECT", "REJECTED"}, {"CANCEL", "CANCELLED"}} {
 		for index, comment := range []string{"", strings.Repeat("я", 2000), "Сохранить полный паспорт 624B\nи canonical input. Не повторять WRITE. 🧪 <>& {\"x\":1}"} {
 			t.Run(test.decision+test.state+strconv.Itoa(index), func(t *testing.T) {
 				snapshot := integrationContinuationSnapshot{InvocationRef: "inv_fixture123", State: test.state,

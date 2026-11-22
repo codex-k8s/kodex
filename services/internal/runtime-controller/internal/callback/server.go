@@ -2751,7 +2751,7 @@ func (server *Server) invoke(ctx context.Context, input runtimecontract.RunnerIn
 	defer ticker.Stop()
 	for {
 		readContext, readCancel := context.WithTimeout(ctx, server.config.RequestTimeout)
-		state, readErr := server.control.Runtime.GetIntegrationInvocation(readContext, &controlplanev1.GetIntegrationInvocationRequest{InvocationRef: resolved.GetInvocationRef()})
+		state, readErr := server.readInvocationResult(readContext, input, grant, resolved.GetInvocationRef())
 		readCancel()
 		if readErr != nil {
 			return nil, status.Error(status.Code(readErr), "read integration invocation")

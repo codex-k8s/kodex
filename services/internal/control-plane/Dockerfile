@@ -38,6 +38,8 @@ COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/sshcompose/ libs/go/sshcompose/
 COPY libs/go/sttapi/ libs/go/sttapi/
+COPY libs/go/managedkubernetes/ libs/go/managedkubernetes/
+COPY libs/go/managedssh/ libs/go/managedssh/
 COPY services/internal/control-plane/ services/internal/control-plane/
 
 WORKDIR /workspace/services/internal/control-plane

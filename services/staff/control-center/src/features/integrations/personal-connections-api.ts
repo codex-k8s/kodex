@@ -1,4 +1,11 @@
+import { isSSHBrokerDefinition } from "./ssh-identity-setup-context";
+import { kubernetesSetupRequirements } from "./kubernetes-identity-setup-api";
 import { githubDiscoveryView } from "./github-repository-scope";
+import {
+  personalCredentialDelivery,
+  personalCredentialMetadataRefreshRequired,
+  readCredentialDelivery,
+} from "./credential-delivery";
 import { isRecord } from "@/shared/lib/exact-object";
 import {
   configurePersonalIntegrationCredential,
@@ -54,6 +61,28 @@ export function personalCredentialView(
       !Number.isFinite(Date.parse(value.expiresAt)))
   )
     throw new Error("Personal credential response is invalid");
+  const delivery = readCredentialDelivery(value.credentialDelivery);
+  const identity = value.brokerIdentity;
+  if (
+    (value.credentialDelivery !== undefined && !delivery) ||
+    (delivery &&
+      (!Number.isSafeInteger(value.bindingGeneration) ||
+        !value.bindingGeneration ||
+        value.bindingGeneration < 1)) ||
+    (!delivery && value.bindingGeneration !== undefined) ||
+    (identity !== undefined &&
+      (!isRecord(identity) ||
+        Object.keys(identity).length !== 2 ||
+        typeof identity.ref !== "string" ||
+        !/^[A-Za-z0-9_-]{8,96}$/.test(identity.ref) ||
+        !Number.isSafeInteger(identity.revision) ||
+        identity.revision < 1 ||
+        delivery?.kind !== "BROKER_IDENTITY")) ||
+    (delivery?.kind === "BROKER_IDENTITY" &&
+      value.credentialConfigured &&
+      !identity)
+  )
+    throw new Error("Personal credential metadata is invalid");
   return {
     connectionRef: value.connectionRef,
     connectionVersion: value.connectionVersion,
@@ -64,6 +93,15 @@ export function personalCredentialView(
     credentialConfigured: value.credentialConfigured,
     verifiedCapabilityKeys: [...value.verifiedCapabilityKeys],
     deniedCapabilityKeys: [...value.deniedCapabilityKeys],
+    ...(delivery
+      ? {
+          credentialDelivery: delivery,
+          bindingGeneration: value.bindingGeneration,
+        }
+      : {}),
+    ...(identity
+      ? { brokerIdentity: { ref: identity.ref, revision: identity.revision } }
+      : {}),
     ...(value.expiresAt ? { expiresAt: value.expiresAt } : {}),
     ...(value.githubDiscovery
       ? { githubDiscovery: githubDiscoveryView(value.githubDiscovery) }
@@ -83,8 +121,10 @@ function personalMutationView(
     !Number.isSafeInteger(expectedVersion) ||
     result.version !== expectedVersion ||
     result.state !== expectedState ||
-    result.credentialConfigured !==
-      (expectedState !== "NOT_CONFIGURED" && expectedState !== "REVOKED")
+    (expectedState === "NOT_CONFIGURED" && result.credentialConfigured) ||
+    (expectedState !== "NOT_CONFIGURED" &&
+      expectedState !== "REVOKED" &&
+      !result.credentialConfigured)
   )
     throw new Error("Personal credential mutation receipt is invalid");
   return result;
@@ -128,7 +168,25 @@ export async function loadPersonalConnections(
         typeof item.definitionKey !== "string"
       )
         throw new Error("Personal connection response is invalid");
+      const delivery = readCredentialDelivery(item.credentialDelivery);
+      if (item.credentialDelivery !== undefined && !delivery)
+        throw new Error("Personal connection credential metadata is invalid");
+      const requirements = kubernetesSetupRequirements({
+        requirements: item.kubernetesSetupRequirements,
+        connectionVersion: item.connectionVersion,
+        policy: item.policy,
+      });
+      if (
+        item.kubernetesSetupRequirements !== undefined &&
+        (!requirements ||
+          delivery?.kind !== "BROKER_IDENTITY" ||
+          delivery.brokerPurpose !== "KUBERNETES_TARGET")
+      )
+        throw new Error("Personal Kubernetes export requirements are invalid");
       return {
+        ...(requirements
+          ? { kubernetesSetupRequirements: { ...requirements } }
+          : {}),
         connectionRef: item.connectionRef,
         connectionVersion: item.connectionVersion,
         name: item.name,
@@ -136,6 +194,7 @@ export async function loadPersonalConnections(
         policy: item.policy,
         enabled: item.enabled,
         available: item.available,
+        ...(delivery ? { credentialDelivery: delivery } : {}),
         ...(item.credential
           ? { credential: personalCredentialView(item.credential, item) }
           : {}),
@@ -149,6 +208,9 @@ export async function createPersonalConnection(
   connection: PersonalIntegrationConnection,
   signal: AbortSignal,
 ) {
+  const delivery = readCredentialDelivery(connection.credentialDelivery);
+  if (!delivery || delivery.kind === "NONE")
+    throw new Error(personalCredentialMetadataRefreshRequired);
   return personalMutationView(
     (
       await mutate((headers) =>
@@ -172,6 +234,11 @@ export async function savePersonalConnection(
   value: string,
   signal: AbortSignal,
 ) {
+  if (
+    isSSHBrokerDefinition(connection.definitionKey) ||
+    personalCredentialDelivery({ ...connection, credential })?.kind !== "TOKEN"
+  )
+    throw new Error(personalCredentialMetadataRefreshRequired);
   return personalMutationView(
     (
       await mutate(
@@ -199,6 +266,15 @@ export async function testPersonalConnection(
   credential: PersonalIntegrationCredential,
   signal: AbortSignal,
 ) {
+  const delivery = personalCredentialDelivery({ ...connection, credential });
+  if (
+    isSSHBrokerDefinition(connection.definitionKey) &&
+    (delivery?.kind !== "BROKER_IDENTITY" ||
+      delivery.brokerPurpose !== "SSH_TARGET")
+  )
+    throw new Error(personalCredentialMetadataRefreshRequired);
+  if (!delivery || delivery.kind === "NONE")
+    throw new Error(personalCredentialMetadataRefreshRequired);
   return personalMutationView(
     (
       await mutate(

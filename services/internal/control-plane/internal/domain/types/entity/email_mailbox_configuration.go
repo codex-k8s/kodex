@@ -9,6 +9,7 @@ import api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 // точек, папок, лимитов и политик операций ящика без происхождения владельца. Настройки проверяются до
 // публикации и сами не разрешают отправку и не передают исходные секреты аутентификации.
 type EmailMailboxSpecification struct {
+	ProviderProfile string                     `json:"provider_profile,omitempty"`
 	Enabled         bool                       `json:"enabled"`
 	ReceiveProtocol api.MailboxReceiveProtocol `json:"receive_protocol"`
 	AllowedFolders  []string                   `json:"allowed_folders"`

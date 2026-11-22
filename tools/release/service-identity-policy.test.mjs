@@ -59,10 +59,45 @@ test("workflow catalog preserves leased source binding in local service registry
   changed.policy.operation_bindings.find(binding=>binding.operation_id===operation).request_profile.version="REQUIRED";
   assert.throws(()=>buildServicePolicy(changed,classification),/service operation classification drift/);
 });
+test("Работа с Kubernetes FILE сохраняет разные полномочия чтения и подготовки",() => {
+  const policy = buildServicePolicy(source,classification);
+  const file = [
+    ["platform.integrations.kubernetes.file.list", "/controlplane.v1.ManagedKubernetesFileService/ListManagedKubernetesFileInputs", "control-api-gateway", "USER_CREDENTIAL_REQUIRED"],
+    ["platform.integrations.kubernetes.file.get", "/controlplane.v1.ManagedKubernetesFileService/GetManagedKubernetesFileInput", "control-api-gateway", "USER_CREDENTIAL_REQUIRED"],
+    ["platform.runtime.kubernetes.file.prepare", "/controlplane.v1.ManagedKubernetesOwnerService/PrepareManagedKubernetesFileInput", "secret-broker", "SERVICE_OWNER_RESOLVED"],
+  ];
+  for(const [operation, method, caller, actor] of file) {
+    assert.deepEqual(policy.bindings.filter(binding=>binding.operation_id===operation), [{
+      operation_id:operation,permission:operation,full_method:method,
+      caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/"+caller,
+      actor_mode:actor,project_required:false,
+    }]);
+  }
+});
+test("Допуск к настройке личной почты требует пользовательскую авторизацию",() => {
+  const policy=buildServicePolicy(source,classification);
+  const methods=[
+    ["mine.create","CreatePersonalEmailMailboxConnection"],
+    ["mine.list","ListMyEmailMailboxes"],
+    ["ownership.configure","ConfigureEmailMailboxOwnership"],
+    ["ownership.read","GetEmailMailboxOwnership"],
+    ["ownership.revoke","RevokeEmailMailboxOwnership"],
+    ["receipts.read","GetPersonalEmailMailboxMutationReceipt"],
+  ];
+  for (const [suffix, method] of methods) {
+    const operation="platform.email-mailboxes."+suffix;
+    assert.deepEqual(policy.bindings.filter(binding=>binding.operation_id===operation), [{
+      operation_id:operation,permission:operation,
+      full_method:"/controlplane.v1.PersonalEmailMailboxService/"+method,
+      caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+      actor_mode:"USER_CREDENTIAL_REQUIRED",project_required:false,
+    }]);
+  }
+});
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(source.policy_revision,106);
-  assert.equal(policy.bindings.length,451);
+  assert.equal(source.policy_revision,110);
+  assert.equal(policy.bindings.length,525);
   for (const [operation, method, caller] of [
     ["platform.runtime.ssh-compose.claim", "/controlplane.v1.RuntimeWorkService/ClaimSSHComposeInvocations", "integration-gateway"],
     ["platform.runtime.ssh-compose.renew", "/controlplane.v1.RuntimeWorkService/RenewSSHComposeInvocation", "integration-gateway"],
@@ -85,8 +120,13 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,335);
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,116);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,371);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="SERVICE_OWNER_RESOLVED").length,154);
+  for (const binding of policy.bindings.filter(b=>b.full_method.includes(".ManagedSSH"))) {
+    assert.match(binding.operation_id,/^platform\.(integrations|runtime)\.ssh\./);
+    assert.equal(binding.actor_mode,binding.operation_id.startsWith("platform.integrations.")?"USER_CREDENTIAL_REQUIRED":"SERVICE_OWNER_RESOLVED");
+  }
+  assert.equal(policy.bindings.filter(b=>b.full_method.includes(".ManagedSSH")).length,12);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",

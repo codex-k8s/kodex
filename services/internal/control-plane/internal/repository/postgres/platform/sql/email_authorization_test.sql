@@ -10,5 +10,6 @@ WHERE t.organization_id=$1::uuid AND t.ref=$2 AND t.state='CLAIMED'
   AND t.lease_ref=$3 AND t.fence_digest=$4 AND t.generation=$5
   AND t.lease_expires_at=$6 AND t.lease_expires_at>clock_timestamp()
   AND c.enabled AND c.state='TESTING' AND c.definition_key='email'
+  AND control_plane.email_connection_test_mailbox_current(t.id)
   AND d.enabled AND d.adapter_owner='integration-gateway' AND d.execution_route='MANAGED_MCP' AND d.adapter_readiness='READY'
 FOR SHARE OF t,c,d,actor;

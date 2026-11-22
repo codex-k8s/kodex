@@ -27,6 +27,10 @@ heads остаются прежними. Это отдельный опцион�
 
 Допускаются только schema heads, для которых установщик содержит точный
 native catalog verifier. Unknown schema и дополнительные поля отклоняются.
+Для schema051 (`20261121000200`) доступен профиль `backup`. Он выполняет
+штатную проверку каталога PostgreSQL в транзакции READ ONLY и требует, чтобы
+в истории Goose были подтверждены ART050 и schema051, а права backup-reader
+соответствовали каноническому профилю.
 Предыдущий render и completion receipt хранятся как защищённые operator files,
 вне Git, с явными SHA256. Их нельзя восстанавливать из предположения об успехе.
 
@@ -52,7 +56,7 @@ native catalog verifier. Unknown schema и дополнительные поля
    Job и скрипт. SHA источника совпадает с областью promotion tags.
 3. До rollout выполнить `bootstrap_upgrade.py capture --render ...
    --previous-render ... --target-render ... --previous-receipt ...
-   --previous-receipt-sha256 ... --context ... --output ...`. Capture проверяет
+   --previous-receipt-sha256 ... --kubeconfig ... --context ... --output ...`. Capture проверяет
    точные байты выхода prepare, заново материализует его из тех же двух
    исходных render и записывает SHA256 подготовленного render. Затем сверяет
    прежний receipt, cluster/namespace UID, Job identities/spec, schema heads,
@@ -108,9 +112,102 @@ render, а также native schema proof. Исходные Job UID сохран
 
 ## Проверка и возврат
 
+Для сверки уже завершённой schema051 используется операторский read-only
+вход. Передайте приватные планы и журналы migration и API restore. После
+каждого файла укажите SHA256 из сохранённой записи операции.
+
+```sh
+node tools/release/component-migration-archive.mjs CONTEXT /path/to/kubeconfig \
+  /path/to/migration.json MIGRATION_PLAN_SHA256 \
+  /path/to/migration.jsonl MIGRATION_JOURNAL_SHA256 \
+  /path/to/api-restore.json RESTORE_PLAN_SHA256 \
+  /path/to/api-restore.jsonl RESTORE_JOURNAL_SHA256
+```
+
+Сверка связывает исторический Job/Pod через ранее принятый terminal API
+restore, текущие UID и spec Job/Service/Deployment, а также живой каталог
+PostgreSQL. Замена PostgreSQL Pod допускается при прежних StatefulSet и
+backend identity. Новый Pod фиксируется на всё чтение. Текущий Job должен
+ещё присутствовать в Kubernetes. Выход сохраняется в приватный файл и служит
+исходным доказательством для отдельного допуска мигрированной установки.
+Штатные apply и resume по-прежнему проверяют собственные квитанции и гейты.
+
+Сводное наблюдение для установки, обновлявшейся отдельными миграциями,
+выполняет `tools/release/component-migration-adoption.mjs CONTEXT KUBECONFIG
+DOSSIER_PATH DOSSIER_SHA256`. В dossier с типом
+`kodex.component-migration-adoption-inputs/v1` входят пары `path/sha256`
+для `migrationPlan`, `migrationJournal`, `restorePlan`, `restoreJournal`,
+`rotationPlan`, `rotationJournal` и `storageContext`. Все входы читаются
+как приватные operator files. Сверка заново наблюдает три schema heads,
+authority110, привязку к PVC/PV до инцидента и право artifact-retention.
+Выход хранит отдельно декларацию текущего installation ConfigMap и живые
+schema heads, а также точные исторические Job/Pod, источник миграции и
+terminal hashes. Storage proof относится к data-томам PostgreSQL control-plane.
+Приём bootstrap-квитанций сохраняет исходные пять строк отдельно от этой
+сверки. Разрешение rollout выдаётся штатными гейтами установки.
+
+```sh
+python3 -B tools/install/bootstrap_migration_custody.py \
+  --context CONTEXT --kubeconfig /path/to/kubeconfig \
+  --previous-render /path/to/original.yaml --previous-render-sha256 ORIGINAL_RENDER_SHA256 \
+  --previous-receipt /path/to/original.json --previous-receipt-sha256 ORIGINAL_RECEIPT_SHA256 \
+  --dossier /path/to/dossier.json --dossier-sha256 DOSSIER_SHA256 \
+  --output /private/custody.json
+```
+
+Команда создаёт новый файл в приватном каталоге. Сохраняются прежние Job UID,
+архивная декларация, текущая декларация и наблюдённые schema heads. Формат
+`kodex.bootstrap-migration-custody/v2` предназначен для проверяемого
+предобраза. В нём записаны отдельные дайджесты каталога БД и устойчивой
+идентичности authority. Последний сохраняет связи с owner, registry, publisher
+и backend БД и позволяет сравнивать повторно наблюдённое состояние при изменении
+времени наблюдения и числа уже ответивших optional readers. Для повторной
+сверки укажите `--expected-custody` и `--expected-custody-sha256` прежнего
+снимка, а в `--output` новый файл.
+Перед подачей rollout установщик запрашивает собственный допуск.
+
+Для read-only проверки конкретного нового релиза запустите
+`tools/install/bootstrap_migration_adoption.py` с точными `--context` и
+`--kubeconfig`. Передайте файлы `--archive-render`, `--archive-receipt`,
+`--expected-custody`, `--target-render` и `--dossier` вместе с их SHA256.
+Укажите в `--release-lock` полный lock нового OpenCode-релиза. Команда
+проверяет его хеш из манифеста, schema heads и digest образа materializer
+штатным валидатором поставки.
+Команда сверит три фактические схемы, пять исторических Job, действующую
+authority и materializer нового релиза. В приватном `--output` будут хеш
+подготовленного манифеста и хеши декларации установки до и после перехода.
+План имеет `apply_granted=false` и предназначен для проверки перед rollout.
+
+Для подготовки к обновлению повторите команду с теми же закреплёнными входами
+и укажите `--verified-plan`, `--verified-plan-sha256` и новый приватный
+`--capsule-directory`. Записываются `render.yaml` и `receipt.json`. Квитанция
+содержит пять исходных Job, хеш полного render и привязку к архиву миграции.
+Команда повторно читает фактическую схему и текущий стенд до выдачи файлов.
+
+Передайте файлы и объявленные SHA256 в штатный запуск
+`portable-release.sh --mode upgrade`. Укажите `--bootstrap-completion-receipt`,
+`--bootstrap-completion-sha256`, `--allow-reconciled-bootstrap-completion` и
+`--migration-adoption-dossier`. Для этого перехода обязательны явные
+`--context` и `--kubeconfig`.
+
+| Переход | Live preconditions | Результат |
+| --- | --- | --- |
+| Begin | Исходные UID установки, API Service и Deployment, прежний либо точный целевой spec каждого объекта, прежние schema/authority/storage и все пять bootstrap-квитанций | Допуск штатных этапов rollout. Неизвестное состояние закрывает допуск |
+| Commit | После чтения БД и архива подтверждены готовность всех controllers, завершение materializer, UID и resourceVersion прежней установки | Один JSON CAS обновляет декларацию установки |
+| После потерянного ответа | Повторно проверены новая декларация, весь render, API readiness и источники сохранности | Фиксируется подтверждённый результат либо закрытый отказ для сверки |
+| Повтор завершённого обновления | Фактическая декларация и обслуживающий API соответствуют целевому релизу | Выполняется readback без повторной подачи Job |
+
+Сверка PostgreSQL закрепляет базу, StatefulSet и том. Замена Pod того же
+StatefulSet допустима при том же backend и неизменном каталоге. Отдельный
+readback сравнивает текущие Service и Deployment с закреплёнными состояниями и
+проверяет происхождение миграционного Job. Перед продолжением после дрейфа
+объекта за пределы двух состояний нужен авторитетный readback.
+
 `python3 -B tools/install/test_bootstrap_image_upgrade.py` проверяет сохранение
 всех пяти identities, TTL, два последовательных обновления, native proof,
-подмену render/spec/receipt/UID/schema/source и late replacement. Контур включён в
+подмену render/spec/receipt/UID/schema/source и late replacement. Проверка schema051
+вызывает штатный JS-валидатор и отклоняет неподтверждённый ART050 и дрейф
+каталога или прав backup-reader. Контур включён в
 `make test-web-only-release`; прежние forward/fresh suites сохраняются.
 
 Локальный synthetic контракт не доказывает успешного установленного обновления.

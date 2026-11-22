@@ -142,7 +142,7 @@ func (s *Server) GetEmailMailboxCredentialReceipt(w http.ResponseWriter, r *http
 // создаёт revision и не настраивает живые mailbox credentials.
 func (s *Server) PreviewEmailMailboxConfiguration(w http.ResponseWriter, r *http.Request, ref generated.ConnectionRef, p generated.PreviewEmailMailboxConfigurationParams) {
 	setRuntimeSecretHeaders(w)
-	body, ok := decodeJSON[generated.EmailMailboxDraftContent](w, r)
+	body, ok := decodeMailboxJSON[generated.EmailMailboxDraftContent](w, r)
 	if !ok {
 		return
 	}

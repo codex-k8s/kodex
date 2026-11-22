@@ -25,10 +25,16 @@ var errPublicIntegrationShape = errors.New("public integration response is inval
 func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor) (any, error) {
 	prefix := ""
 	switch descriptor.FullName() {
+	case "controlplane.v1.KubernetesArtifactCaptureKind":
+		prefix = "KUBERNETES_ARTIFACT_CAPTURE_KIND_"
 	case "controlplane.v1.IntegrationApprovalConsentState":
 		prefix = "INTEGRATION_APPROVAL_CONSENT_STATE_"
 	case "controlplane.v1.IntegrationCredentialPolicy":
 		prefix = "INTEGRATION_CREDENTIAL_POLICY_"
+	case "controlplane.v1.IntegrationCredentialDeliveryKind":
+		prefix = "INTEGRATION_CREDENTIAL_DELIVERY_KIND_"
+	case "controlplane.v1.IntegrationBrokerIdentityPurpose":
+		prefix = "INTEGRATION_BROKER_IDENTITY_PURPOSE_"
 	case "controlplane.v1.PersonalIntegrationCredentialState":
 		prefix = "PERSONAL_INTEGRATION_CREDENTIAL_STATE_"
 	case "controlplane.v1.RepositoryBundlePublicationState":
@@ -72,7 +78,21 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 // сохраняет наличие числовых границ. Проверка OwnerGate делегируется; этот путь проекции не выдаёт
 // capabilities.
 func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+	if err := normalizeKubernetesGateShape(value, descriptor); err != nil {
+		return err
+	}
+	if err := normalizeCredentialDeliveryShape(value, descriptor); err != nil {
+		return err
+	}
 	switch descriptor.FullName() {
+	case "controlplane.v1.KubernetesIdentitySetupRequirements":
+		target, targetOK := value["targetRef"].(string)
+		context, contextOK := value["canonicalContext"].(string)
+		if !targetOK || !opaqueHTTPReference.MatchString(target) || !contextOK || !validKubernetesCanonicalContext(context) ||
+			!positiveCredentialMetadataInteger(value["targetRevision"]) || !positiveCredentialMetadataInteger(value["connectionVersion"]) ||
+			value["credentialPolicy"] != "INITIATOR_REQUIRED" && value["credentialPolicy"] != "PROJECT_SHARED" {
+			return errPublicIntegrationShape
+		}
 	case "controlplane.v1.IntegrationApprovalConsent":
 		raw, ok := value["scopeValuesJson"].(string)
 		if !ok || len(raw) > 65536 || !json.Valid([]byte(raw)) {

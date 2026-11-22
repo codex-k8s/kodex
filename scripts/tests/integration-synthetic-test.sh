@@ -11,13 +11,6 @@ for command_name in go jq kubectl yq; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
-(
-  cd -- "$repository_root/services/external/integration-gateway"
-  env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -race \
-    ./internal/integrationfixture ./internal/integration
-)
-"$repository_root/scripts/tests/integration-synthetic-fixture-e2e.sh"
-
 temporary_directory=$(mktemp -d)
 trap 'rm -rf "$temporary_directory"' EXIT
 local_render="$temporary_directory/integration-synthetic.yaml"
@@ -28,7 +21,7 @@ yq -o=json -I=0 '.' "$local_render" | jq -s 'map(select(.kind != null))' >"$loca
 definition_json="$temporary_directory/synthetic-definition.json"
 yq -o=json -I=0 '.' "$repository_root/contracts/integrations/v1/definitions/synthetic.yaml" >"$definition_json"
 jq -e '
-  .metadata.version == "3.1.0" and
+  .metadata.version == "3.1.1" and
   (.spec.healthCheck.operation == "synthetic.journal.read") and
   any(.spec.capabilities[];
     .key == "synthetic.journal.write" and
@@ -86,5 +79,15 @@ for profile in web-only web-with-mattermost; do
     fail "integration-synthetic leaked into $profile"
   fi
 done
+
+printf 'Integration synthetic fixture render passed\n'
+
+(
+  cd -- "$repository_root/services/external/integration-gateway"
+  # Полный каталог провайдеров под race требует отдельного ограниченного бюджета прогона.
+  env -u GOFLAGS GOENV=off GOWORK=off go test -count=1 -race -timeout=20m \
+    ./internal/integrationfixture ./internal/integration
+)
+"$repository_root/scripts/tests/integration-synthetic-fixture-e2e.sh"
 
 printf 'Integration synthetic fixture tests passed\n'

@@ -63,22 +63,15 @@ func AuthorizeCommand(mailbox MailboxProjection, operation, effectKey string, bo
 		input.ConfigurationRevision != mailbox.Revision || !mailbox.Enabled {
 		return entity.EmailAuthorizationScope{}, "", errs.ErrForbidden
 	}
-	folder := command.Folder
-	if folder == "" {
-		folder = mailbox.Folder
+	folder, destination, err := ScopedCommandFolders(mailbox, operation, boundedInput)
+	if err != nil {
+		return entity.EmailAuthorizationScope{}, "", err
 	}
 	switch command.Operation {
 	case api.OperationDraftCreate, api.OperationDraftUpdate, api.OperationDraftDelete:
-		if command.Folder == "" {
-			folder = mailbox.DraftsFolder
-		}
 		if mailbox.DraftsFolder == "" || folder != mailbox.DraftsFolder {
 			return entity.EmailAuthorizationScope{}, "", errs.ErrForbidden
 		}
-	}
-	destination := command.DestinationFolder
-	if command.Operation == api.OperationArchive {
-		destination = mailbox.ArchiveFolder
 	}
 	if input.Folder != folder || input.DestinationFolder != destination || !slices.Contains(mailbox.AllowedFolders, folder) ||
 		(destination != "" && !slices.Contains(mailbox.AllowedFolders, destination)) {

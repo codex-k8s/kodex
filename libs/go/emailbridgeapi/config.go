@@ -235,6 +235,9 @@ func ValidateConfiguration(c Configuration) error {
 	}
 	seen := map[string]bool{}
 	for _, m := range c.Mailboxes {
+		if m.CredentialOwnerGeneration < 0 || m.CredentialOwnerGeneration > 1<<53-1 {
+			return bad
+		}
 		if !namePattern.MatchString(m.Id) || seen[m.Id] || m.TenantId == "" || m.ConnectionId == "" || m.Revision < 1 || m.CredentialGeneration < 1 || !Folder(m.Folder) || !Address(m.Sender) || !Address(m.ReplyTo) || m.EnvelopeFrom != m.Sender || !Host(m.HelloName) {
 			return bad
 		}

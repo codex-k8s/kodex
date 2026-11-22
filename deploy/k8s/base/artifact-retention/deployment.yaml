@@ -87,12 +87,18 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           volumeMounts:
+            - {name: workload-tls, mountPath: /var/run/secrets/kodex/artifact-retention/workload-tls, readOnly: true}
+            - {name: control-plane-ca, mountPath: /var/run/config/kodex/artifact-retention/control-plane, readOnly: true}
+            - {name: application-grant, mountPath: /var/run/secrets/kodex/artifact-retention/application-grant, readOnly: true}
             - {name: postgres-runtime, mountPath: /var/run/secrets/kodex/artifact-retention/postgres-runtime, readOnly: true}
             - {name: postgres-ca, mountPath: /var/run/config/kodex/artifact-retention/postgres, readOnly: true}
             - {name: object-storage, mountPath: /var/run/secrets/kodex/artifact-retention/object-storage, readOnly: true}
             - {name: otel-ca, mountPath: /var/run/config/kodex/artifact-retention/observability, readOnly: true}
             - {name: sentry-dsn, mountPath: /var/run/secrets/kodex/artifact-retention/observability, readOnly: true}
       volumes:
+        - {name: workload-tls, secret: {secretName: internal-rpc-authority-artifact-retention-workload-tls, defaultMode: 288}}
+        - {name: control-plane-ca, configMap: {name: kodex-internal-ca, defaultMode: 288}}
+        - {name: application-grant, emptyDir: {sizeLimit: 1Mi}}
         - name: postgres-runtime
           secret: {secretName: artifact-retention-postgres-runtime, defaultMode: 0440}
         - name: postgres-ca

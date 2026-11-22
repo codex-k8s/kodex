@@ -9,6 +9,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -159,6 +160,12 @@ func decodeProjectPurgeRecovery(raw []byte) (entity.ProjectPurgeRecovery, error)
 	switch item.State {
 	case "WAITING_OWNER", "QUEUED", "OBSERVING", "DELETED_CONFIRMED", "NONE", "BLOCKED":
 	default:
+		return entity.ProjectPurgeRecovery{}, errs.ErrConflict
+	}
+	if item.ReasonCode == "" {
+		item.ReasonCode = "NONE"
+	}
+	if item.ReasonCode != "NONE" && ((item.ReasonCode != managedkubernetes.ProjectStagingReconciliationReason && item.ReasonCode != errs.ArtifactPurgeReconciliationReason) || item.State != "BLOCKED" || item.CanResolve || !item.ProjectPresent || item.UnknownContentCount < 1) {
 		return entity.ProjectPurgeRecovery{}, errs.ErrConflict
 	}
 	if item.CanResolve && item.State != "WAITING_OWNER" {

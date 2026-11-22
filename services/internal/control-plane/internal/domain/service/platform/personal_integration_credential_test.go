@@ -19,12 +19,12 @@ func personalCredentialFixture() (entity.IntegrationCredentialRequirement, entit
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	requirement := entity.IntegrationCredentialRequirement{
 		ConnectionRef: "int_fixture", CapabilityKey: "fixture.read", Policy: entity.IntegrationCredentialInitiatorRequired,
-		CredentialRequired: true, DefinitionDigest: strings.Repeat("a", 64), ConfigurationDigest: strings.Repeat("b", 64),
+		Kind: entity.IntegrationCredentialToken, CredentialRequired: true, DefinitionDigest: strings.Repeat("a", 64), ConfigurationDigest: strings.Repeat("b", 64),
 	}
 	initiator := entity.IntegrationCredentialInitiator{OrganizationID: "org_fixture", SubjectID: "usr_first", SubjectKind: "USER"}
 	binding := entity.PersonalIntegrationCredential{
 		Ref: "icb_fixture", OrganizationID: initiator.OrganizationID, SubjectID: initiator.SubjectID,
-		ConnectionRef: requirement.ConnectionRef, Version: 3, Generation: 2, State: "READY",
+		Kind: entity.IntegrationCredentialToken, ConnectionRef: requirement.ConnectionRef, Version: 3, Generation: 2, State: "READY",
 		Credential: &entity.IntegrationCredentialRevision{
 			Ref: "icr_fixture", Revision: 2, CreatedAt: now.Add(-time.Minute),
 			SecretRef: "kodex-system/kodex-integration-credentials#integration-fixture",
@@ -71,7 +71,7 @@ func TestPersonalIntegrationCredentialSelection(t *testing.T) {
 			requirement, initiator, binding, now := personalCredentialFixture()
 			shared := *binding.Credential
 			test.change(&binding, now)
-			selection, err := ResolveIntegrationCredential(requirement, initiator, &shared, &binding, now)
+			selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(&shared), &binding, now)
 			if err != nil || selection.Problem != test.problem {
 				t.Fatalf("selection classification mismatch: %v", err)
 			}
@@ -84,7 +84,7 @@ func TestPersonalIntegrationCredentialSelection(t *testing.T) {
 		})
 	}
 	requirement, initiator, binding, now := personalCredentialFixture()
-	selection, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, nil, now)
+	selection, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), nil, now)
 	if err != nil || selection.Problem != entity.IntegrationCredentialMissing || selection.Credential != nil {
 		t.Fatal("missing personal binding fell back to shared credential")
 	}
@@ -109,7 +109,7 @@ func TestPersonalIntegrationCredentialOwnerAndLifecycle(t *testing.T) {
 	} {
 		requirement, initiator, binding, now := personalCredentialFixture()
 		change(&initiator, &binding)
-		if _, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now); !errors.Is(err, errs.ErrForbidden) {
+		if _, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now); !errors.Is(err, errs.ErrForbidden) {
 			t.Fatal("foreign personal binding was accepted")
 		}
 	}
@@ -117,7 +117,7 @@ func TestPersonalIntegrationCredentialOwnerAndLifecycle(t *testing.T) {
 	for _, kind := range []string{"SERVICE", "", "UNKNOWN"} {
 		service := initiator
 		service.SubjectKind = kind
-		selection, err := ResolveIntegrationCredential(requirement, service, binding.Credential, &binding, now)
+		selection, err := ResolveIntegrationCredential(requirement, service, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now)
 		if err != nil || selection.Problem != entity.IntegrationCredentialInitiatorMissing || selection.Credential != nil {
 			t.Fatal("noninteractive personal policy was accepted")
 		}
@@ -161,7 +161,7 @@ func TestIntegrationCredentialPreflightCollectsAllAndRejectsPartialAuthority(t *
 	}
 	sharedRequirement := requirement
 	sharedRequirement.Policy = entity.IntegrationCredentialProjectShared
-	selection, err := ResolveIntegrationCredential(sharedRequirement, initiator, binding.Credential, nil, now)
+	selection, err := ResolveIntegrationCredential(sharedRequirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), nil, now)
 	if err != nil || selection.Credential == nil || selection.PersonalBindingRef != "" {
 		t.Fatal("explicit shared mode changed existing credential selection")
 	}
@@ -177,7 +177,7 @@ func TestIntegrationCredentialPreflightCollectsAllAndRejectsPartialAuthority(t *
 	}
 	for _, invalid := range []string{"", "UNKNOWN", "initiator_required"} {
 		requirement.Policy = entity.IntegrationCredentialPolicy(invalid)
-		if _, err := ResolveIntegrationCredential(requirement, initiator, binding.Credential, &binding, now); !errors.Is(err, errs.ErrInvalid) {
+		if _, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(binding.Credential), &binding, now); !errors.Is(err, errs.ErrInvalid) {
 			t.Fatal("unknown policy fell back to another credential")
 		}
 	}

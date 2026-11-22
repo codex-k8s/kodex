@@ -1,4 +1,14 @@
+import { kubernetesFileMessages } from "@/features/runs/kubernetes-file-input-messages";
+import { kubernetesCaptureMessages } from "@/features/runs/kubernetes-capture-messages";
+import { kubernetesToolMessages } from "@/features/runs/kubernetes-tool-messages";
+import { kubernetesPortForwardMessages } from "@/features/runs/kubernetes-port-forward-messages";
+import { kubernetesStreamInputMessages } from "@/features/runs/kubernetes-stream-input-messages";
+import { kubernetesChildGateMessages } from "@/features/workboard/kubernetes-child-gate-messages";
+import { kubernetesResourceMaterialMessages } from "@/features/integrations/kubernetes-resource-material-messages";
 import { modelDiscoveryMessages } from "@/features/providers/model-discovery-messages";
+import { kubernetesIdentitySetupMessages } from "@/features/integrations/kubernetes-identity-setup-messages";
+import { kubernetesGrantMessages } from "@/features/integrations/kubernetes-grant-messages";
+import { personalEmailMessages } from "@/features/integrations/personal-email-messages";
 import { telegramNotificationsMessages } from "@/features/telegram-notifications/messages";
 import { modelMeasurementMessages } from "@/features/runs/model-measurement-messages";
 import { approvalConsentMessages } from "@/features/integrations/approval-consent-messages";
@@ -22,6 +32,16 @@ import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  kubernetesStreamInput: kubernetesStreamInputMessages.ru,
+  kubernetesTool: kubernetesToolMessages.ru,
+  kubernetesFile: kubernetesFileMessages.ru,
+  kubernetesCapture: kubernetesCaptureMessages.ru,
+  kubernetesPortForward: kubernetesPortForwardMessages.ru,
+  kubernetesGrants: kubernetesGrantMessages.ru,
+  kubernetesIdentitySetup: kubernetesIdentitySetupMessages.ru,
+  kubernetesChildGate: kubernetesChildGateMessages.ru,
+  kubernetesResourceMaterial: kubernetesResourceMaterialMessages.ru,
+  personalEmail: personalEmailMessages.ru,
   telegramNotifications: telegramNotificationsMessages.ru,
   modelDiscovery: modelDiscoveryMessages.ru,
   modelMeasurements: modelMeasurementMessages.ru,
@@ -51,6 +71,10 @@ const ru = {
     myConnections: "Открыть «Мои подключения»",
   },
   personalConnections: {
+    metadataUnknown:
+      "Тип личных реквизитов не подтверждён. Обновите данные перед настройкой или проверкой подключения.",
+    brokerManaged:
+      "Для этих реквизитов используется отдельная защищённая настройка подключения.",
     githubScope: {
       title: "Репозитории GitHub",
       description:
@@ -80,14 +104,14 @@ const ru = {
         "Процесс не создан. Исправьте все перечисленные подключения, затем повторите запуск.",
       settings: "Открыть «Мои подключения» в новой вкладке",
       reasons: {
-        CREDENTIAL_MISSING: "Добавьте личный ключ",
-        CREDENTIAL_CHECK_REQUIRED: "Проверьте сохранённый ключ",
-        CREDENTIAL_INVALID: "Внешняя система отклонила ключ",
+        CREDENTIAL_MISSING: "Настройте личное подключение",
+        CREDENTIAL_CHECK_REQUIRED: "Проверьте подключение",
+        CREDENTIAL_INVALID: "Внешняя система отклонила доступ",
         CREDENTIAL_INSUFFICIENT: "Для операции недостаточно прав",
         CREDENTIAL_PERMISSION_UNCONFIRMED:
           "Права этой операции ещё не подтверждены",
-        CREDENTIAL_EXPIRED: "Замените истёкший ключ",
-        CREDENTIAL_REVOKED: "Ключ отозван; добавьте новый",
+        CREDENTIAL_EXPIRED: "Обновите истёкшие данные подключения",
+        CREDENTIAL_REVOKED: "Доступ отозван; настройте подключение заново",
         CREDENTIAL_INITIATOR_REQUIRED:
           "Для автоматического запуска настройте разрешённое сервисное подключение",
         CREDENTIAL_CONNECTION_UNAVAILABLE:
@@ -778,6 +802,7 @@ const ru = {
     selectField: "Выбрать",
     packageFields: {
       label: "Подпись поля",
+      brokerPurpose: "Назначение защищённого подключения",
       help: "Пояснение поля",
       apiVersion: "Версия API",
       approvalScope: "Объект временного разрешения",
@@ -1444,6 +1469,10 @@ const ru = {
         "Состояние изменилось. Показаны свежие данные — прочитайте их и подтвердите решение заново.",
       uncertain:
         "Ответ на предыдущее решение не получен. Сначала обновите состояние. Повтор после нового подтверждения использует тот же запрос и не создаёт второго решения.",
+      artifactPurge:
+        "Проект сохранён: ручное удаление файлов ещё сверяется ({count}). Исходный владелец может открыть состояние удаления файла; повторный Delete не выполняется.",
+      kubernetesStaging:
+        "Удаление проекта не выполнено: для {count} загрузок Kubernetes ещё неизвестна точная версия объекта. Проект сохраняет прежнее состояние. Исходный пользователь может открыть историю своего запуска и восстановить сверку/очистку; повторное выполнение команды не требуется.",
       cleanupPending:
         "Решение принято. Незавершённых проверок очистки: {count}. Это ещё не подтверждение полного удаления данных.",
       state: {
@@ -2758,6 +2787,39 @@ const ru = {
     credentialValue: "Секретное значение",
     credentialValueHelp:
       "Значение передаётся один раз по защищённому API, не сохраняется в браузере и после настройки отображается только как маска.",
+    sshPrivateKeyHelp:
+      "Вставьте закрытый SSH-ключ целиком, сохранив переводы строк. Он передаётся один раз защищённому Secret Broker, не сохраняется приложением в браузере и после отправки не выдаётся повторно. Зашифрованные ключи с парольной защитой этим профилем не поддерживаются.",
+    sshPrivateKeyValue: "Закрытый SSH-ключ",
+    sshSetupTitle: "SSH-ключ",
+    sshSetupBoundary:
+      "Ключ отправляется напрямую защищённому broker. Приложение не сохраняет его и не выдаёт повторно.",
+    sshSetupPersonal:
+      "Ключ используется только от вашего имени в выбранном подключении.",
+    sshSetupShared:
+      "Ключ привязывается к явно выбранной служебной identity подключения.",
+    sshSetupNeedsReadback:
+      "Нужна проверка исходной настройки. Повторная запись автоматически не выполняется.",
+    sshSetupOwnerChanged:
+      "Сеанс владельца изменился. Откройте настройку заново.",
+    sshSetupUpload: "Передать ключ",
+    sshSetupRead: "Проверить состояние",
+    sshSetupObserve: "Уточнить исход записи",
+    sshSetupCancel: "Закрыть настройку",
+    sshSetupStates: {
+      PREPARED: "Настройка создана; ожидается передача ключа.",
+      ATTEMPTING: "Загрузка начата; исход ещё не подтверждён.",
+      UNKNOWN: "Исход записи неизвестен. Исходная запись не повторяется.",
+      UNREPORTED:
+        "Подтверждение владельца не получено. Исходная попытка закрыта.",
+      ACK_REJECTED:
+        "Подтверждение хранилища отклонено. Исходная попытка закрыта.",
+      COMPLETED: "Ключ привязан. Теперь проверьте SSH-доступ в подключении.",
+      CANCELLED:
+        "Настройка закрыта; это не подтверждает отсутствие ранее отправленного ключа.",
+      EXPIRED:
+        "Срок настройки истёк. Материал с неизвестным исходом может сохраняться.",
+      QUARANTINED: "Ключ изолирован из-за противоречивых подтверждений.",
+    },
     credentialRequired: "Введите учётные данные для продолжения.",
     credentialsNotRequired:
       "Для этого подключения защищённые учётные данные не требуются.",
@@ -2839,6 +2901,7 @@ const ru = {
       EMAIL_SENDER: "Почтовый ящик",
       HTTPS_RESOURCE: "HTTPS-ресурс",
       SSH_TARGET: "Назначение SSH/Compose",
+      KUBERNETES_TARGET: "Выбранный Kubernetes target",
     },
     approvalScopeTitle: "Какие параметры связывает одно согласование",
     approvalScopeHelp:
@@ -4922,6 +4985,8 @@ const ru = {
     STALE_VERSION: "Данные изменились. Показано актуальное состояние.",
     IDEMPOTENCY_CONFLICT: "Такой запрос уже был отправлен с другими данными.",
     RATE_LIMITED: "Слишком много запросов. Подождите немного.",
+    KUBERNETES_STAGING_QUOTA_EXCEEDED:
+      "Исчерпана квота временного хранилища Kubernetes. Дождитесь подтверждённой очистки или устраните её ошибку; повторная отправка данных не выполнена.",
     PROMPT_TEMPLATE_INVALID: "Исправьте ошибку шаблона.",
     UNAVAILABLE: "Сервис временно недоступен. Core-состояние не потеряно.",
     CSRF_REJECTED: "Защитный контекст сессии устарел. Войдите снова.",
@@ -4940,6 +5005,16 @@ const ru = {
 
 const en = {
   ...ru,
+  kubernetesStreamInput: kubernetesStreamInputMessages.en,
+  kubernetesTool: kubernetesToolMessages.en,
+  kubernetesFile: kubernetesFileMessages.en,
+  kubernetesCapture: kubernetesCaptureMessages.en,
+  kubernetesPortForward: kubernetesPortForwardMessages.en,
+  kubernetesGrants: kubernetesGrantMessages.en,
+  kubernetesIdentitySetup: kubernetesIdentitySetupMessages.en,
+  kubernetesChildGate: kubernetesChildGateMessages.en,
+  kubernetesResourceMaterial: kubernetesResourceMaterialMessages.en,
+  personalEmail: personalEmailMessages.en,
   modelDiscovery: modelDiscoveryMessages.en,
   telegramNotifications: telegramNotificationsMessages.en,
   modelMeasurements: modelMeasurementMessages.en,
@@ -4969,6 +5044,9 @@ const en = {
     myConnections: "Open My connections",
   },
   personalConnections: {
+    metadataUnknown:
+      "The personal credential type is unconfirmed. Refresh before configuring or testing the connection.",
+    brokerManaged: "These credentials use separate protected connection setup.",
     githubScope: {
       title: "GitHub repositories",
       description:
@@ -4998,15 +5076,16 @@ const en = {
         "No process was created. Resolve every listed connection, then launch again.",
       settings: "Open My connections in a new tab",
       reasons: {
-        CREDENTIAL_MISSING: "Add your personal key",
-        CREDENTIAL_CHECK_REQUIRED: "Verify your saved key",
-        CREDENTIAL_INVALID: "The external system rejected the key",
+        CREDENTIAL_MISSING: "Configure your personal connection",
+        CREDENTIAL_CHECK_REQUIRED: "Verify the connection",
+        CREDENTIAL_INVALID: "The external system rejected access",
         CREDENTIAL_INSUFFICIENT:
           "This operation requires additional permissions",
         CREDENTIAL_PERMISSION_UNCONFIRMED:
           "Permissions for this operation have not been confirmed",
-        CREDENTIAL_EXPIRED: "Replace the expired key",
-        CREDENTIAL_REVOKED: "The key was revoked; add a new one",
+        CREDENTIAL_EXPIRED: "Update the expired connection credentials",
+        CREDENTIAL_REVOKED:
+          "Access was revoked; configure the connection again",
         CREDENTIAL_INITIATOR_REQUIRED:
           "Configure an authorized service connection for an automated launch",
         CREDENTIAL_CONNECTION_UNAVAILABLE:
@@ -5634,6 +5713,7 @@ const en = {
     selectField: "Select",
     packageFields: {
       label: "Field label",
+      brokerPurpose: "Protected connection purpose",
       help: "Field help",
       apiVersion: "API version",
       approvalScope: "Temporary approval object",
@@ -6488,6 +6568,10 @@ const en = {
         "The state changed. Review the refreshed details and confirm again.",
       uncertain:
         "The previous decision response was not received. Refresh status first. An explicitly confirmed retry reuses the same request and cannot create a second decision.",
+      artifactPurge:
+        "The project is preserved while manual artifact deletion is reconciled ({count}). The original owner can read the artifact purge state; Delete is not repeated.",
+      kubernetesStaging:
+        "Project deletion was not performed: the exact object version is still unknown for {count} Kubernetes uploads. The project keeps its previous state. The original user can open their run history and resume reconciliation/cleanup; executing the command again is unnecessary.",
       cleanupPending:
         "Decision recorded. Cleanup checks pending: {count}. Complete data deletion is not yet confirmed.",
       state: {
@@ -7682,6 +7766,39 @@ const en = {
     credentialValue: "Secret value",
     credentialValueHelp:
       "The value is sent once through the protected API, is not stored in the browser, and is only shown as masked after setup.",
+    sshPrivateKeyHelp:
+      "Paste the complete SSH private key with its line breaks. It is sent once to the protected Secret Broker, is not persisted in the browser by this application, and is not revealed again after submission. This profile does not support encrypted passphrase-protected keys.",
+    sshPrivateKeyValue: "SSH private key",
+    sshSetupTitle: "SSH key",
+    sshSetupBoundary:
+      "The key goes directly to the protected broker. The application does not persist or reveal it again.",
+    sshSetupPersonal:
+      "This key is used only on your behalf in the selected connection.",
+    sshSetupShared:
+      "This key is bound to the explicitly selected service identity of the connection.",
+    sshSetupNeedsReadback:
+      "The original setup needs an owner readback. The material write is never retried automatically.",
+    sshSetupOwnerChanged: "The owner session changed. Reopen the setup.",
+    sshSetupUpload: "Upload key",
+    sshSetupRead: "Read setup status",
+    sshSetupObserve: "Observe write outcome",
+    sshSetupCancel: "Close setup",
+    sshSetupStates: {
+      PREPARED: "Setup created; waiting for key upload.",
+      ATTEMPTING: "Upload started; its outcome is not confirmed yet.",
+      UNKNOWN:
+        "The write outcome is unknown. The original write is never repeated.",
+      UNREPORTED:
+        "The owner completion is missing. The original attempt is closed.",
+      ACK_REJECTED:
+        "The storage acknowledgement was rejected. The original attempt is closed.",
+      COMPLETED: "The key is bound. Check SSH access in the connection next.",
+      CANCELLED:
+        "Setup closed; this does not prove that an earlier key write is absent.",
+      EXPIRED: "Setup expired. Material with an unknown outcome may remain.",
+      QUARANTINED:
+        "The key is quarantined because of contradictory acknowledgements.",
+    },
     credentialRequired: "Enter credentials to continue.",
     credentialsNotRequired:
       "This connection does not require protected credentials.",
@@ -7763,6 +7880,7 @@ const en = {
       EMAIL_SENDER: "Email mailbox",
       HTTPS_RESOURCE: "HTTPS resource",
       SSH_TARGET: "SSH/Compose target",
+      KUBERNETES_TARGET: "Selected Kubernetes target",
     },
     approvalScopeTitle: "Parameters covered by one approval",
     approvalScopeHelp:
@@ -9830,6 +9948,8 @@ const en = {
     IDEMPOTENCY_CONFLICT:
       "This request key was already used for different data.",
     RATE_LIMITED: "Too many requests. Wait a moment.",
+    KUBERNETES_STAGING_QUOTA_EXCEEDED:
+      "Kubernetes staging storage quota is exhausted. Wait for confirmed cleanup or resolve its failure; no payload was resent.",
     PROMPT_TEMPLATE_INVALID: "Fix the template error.",
     UNAVAILABLE: "The service is temporarily unavailable. Core state is safe.",
     CSRF_REJECTED: "Session protection context expired. Sign in again.",

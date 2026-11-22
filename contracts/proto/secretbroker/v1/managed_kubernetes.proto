@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package secretbroker.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/secretbrokerapi/gen/secretbroker/v1;secretbrokerv1";
+
+// Kubeconfig не возвращается ни одним методом. Gateway передаёт только owner
+// locators; broker перед каждым внешним действием заново разрешает CP permit.
+service ManagedKubernetesService {
+  rpc ExecuteManagedKubernetesOperation(ExecuteManagedKubernetesOperationRequest) returns (ExecuteManagedKubernetesOperationResponse);
+  rpc ExchangeManagedKubernetesStream(ExchangeManagedKubernetesStreamRequest) returns (ExchangeManagedKubernetesStreamResponse);
+  rpc CancelManagedKubernetesOperation(CancelManagedKubernetesOperationRequest) returns (CancelManagedKubernetesOperationResponse);
+  rpc CheckManagedKubernetesReadiness(CheckManagedKubernetesReadinessRequest) returns (CheckManagedKubernetesReadinessResponse);
+}
+
+// Поля — locators существующего owner claim, не источник actor или authority.
+// Worker instance проверяется по transport identity и текущему owner lease.
+message ManagedKubernetesInvocationBinding {
+  string workload_instance = 1;
+  string invocation_ref = 2;
+  string lease_ref = 3;
+  string fence = 4;
+  int64 generation = 5;
+  string input_digest = 6;
+  // Ровно один invocation_ref/connection_test_ref; test проверяется по owner
+  // health claim и не получает write/stream effect authority.
+  string connection_test_ref = 7;
+}
+
+message ExecuteManagedKubernetesOperationRequest {
+  ManagedKubernetesInvocationBinding binding = 1;
+}
+
+message ExecuteManagedKubernetesOperationResponse {
+  oneof result {
+    ManagedKubernetesSafeResult completed = 1;
+    ManagedKubernetesStreamDescriptor stream = 2;
+  }
+}
+
+// Только безопасная проекция; raw upstream body/headers и Secret material
+// не являются допустимым result_json. Большой вывод идёт bounded frame path.
+message ManagedKubernetesSafeResult {
+  string effect_ref = 1;
+  string result_digest = 2;
+  bytes result_json = 3;
+  ManagedKubernetesRemoteOutcome remote_outcome = 4;
+  string reason_code = 5;
+  // Для invocation result: fresh owner output admission, не credential TTL либо renew grant.
+  google.protobuf.Timestamp authorized_until = 6;
+  int64 effect_generation = 7;
+  int64 invocation_generation = 8;
+}
+
+enum ManagedKubernetesRemoteOutcome {
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_NOT_STARTED = 1;
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_RUNNING = 2;
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_SUCCEEDED = 3;
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_FAILED = 4;
+  MANAGED_KUBERNETES_REMOTE_OUTCOME_UNKNOWN = 5;
+}
+
+// Источник limits — immutable owner spec, а не поля запросившего gateway.
+// Stream ref всегда связан с исходными invocation/actor/target/Pod UID/fence.
+message ManagedKubernetesStreamDescriptor {
+  string stream_ref = 1;
+  string invocation_ref = 2;
+  int64 generation = 3;
+  google.protobuf.Timestamp expires_at = 4;
+  uint32 maximum_frame_bytes = 5;
+  uint64 maximum_total_bytes = 6;
+  repeated ManagedKubernetesChannel input_channels = 7;
+  repeated ManagedKubernetesChannel output_channels = 8;
+}
+
+enum ManagedKubernetesChannel {
+  MANAGED_KUBERNETES_CHANNEL_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_CHANNEL_CONTROL = 1;
+  MANAGED_KUBERNETES_CHANNEL_STDIN = 2;
+  MANAGED_KUBERNETES_CHANNEL_STDOUT = 3;
+  MANAGED_KUBERNETES_CHANNEL_STDERR = 4;
+  MANAGED_KUBERNETES_CHANNEL_TERMINAL_RESIZE = 5;
+  MANAGED_KUBERNETES_CHANNEL_PORT_FORWARD = 6;
+  MANAGED_KUBERNETES_CHANNEL_FILE_CONTENT = 7;
+}
+
+// Последовательность и digest связываются owner с immutable stream attempt.
+// Повтор той же sequence/digest не повторяет stdin/write effect.
+message ManagedKubernetesFrame {
+  uint64 sequence = 1;
+  ManagedKubernetesChannel channel = 2;
+  bytes payload = 3;
+  string payload_digest = 4;
+  bool end_of_input = 5;
+  // Durable ordinal текущего owner OUTPUT допуска: 1..4; у INPUT всегда 0.
+  uint32 delivery_ordinal = 6;
+}
+
+message ExchangeManagedKubernetesStreamRequest {
+  ManagedKubernetesInvocationBinding binding = 1;
+  string stream_ref = 2;
+  uint64 acknowledged_output_sequence = 3;
+  ManagedKubernetesFrame input = 4;
+}
+
+message ExchangeManagedKubernetesStreamResponse {
+  uint64 acknowledged_input_sequence = 1;
+  repeated ManagedKubernetesFrame output = 2;
+  ManagedKubernetesStreamState state = 3;
+  ManagedKubernetesRemoteOutcome remote_outcome = 4;
+  string reason_code = 5;
+  // Свежий owner/native output credit: отсутствует при пустом output, не продлевает lease.
+  google.protobuf.Timestamp authorized_until = 6;
+}
+
+enum ManagedKubernetesStreamState {
+  MANAGED_KUBERNETES_STREAM_STATE_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_STREAM_STATE_ACTIVE = 1;
+  MANAGED_KUBERNETES_STREAM_STATE_COMPLETED = 2;
+  MANAGED_KUBERNETES_STREAM_STATE_CANCELED = 3;
+  MANAGED_KUBERNETES_STREAM_STATE_REVOKED = 4;
+  MANAGED_KUBERNETES_STREAM_STATE_EXPIRED = 5;
+  MANAGED_KUBERNETES_STREAM_STATE_LOST = 6;
+}
+
+// Cancel не выдаёт права завершить чужой stream: broker требует уже закрытый
+// owner stream либо lease и exact binding. Transport join не доказывает remote process exit.
+message CancelManagedKubernetesOperationRequest {
+  ManagedKubernetesInvocationBinding binding = 1;
+  string stream_ref = 2;
+}
+
+message CancelManagedKubernetesOperationResponse {
+  ManagedKubernetesStreamState state = 1;
+  bool transport_joined = 2;
+  ManagedKubernetesRemoteOutcome remote_outcome = 3;
+}
+
+// Platform readiness проверяет registration/config/owner RPC путь. Она не
+// заменяет отдельный test личной identity и прав конкретного target/container.
+message CheckManagedKubernetesReadinessRequest {}
+message CheckManagedKubernetesReadinessResponse {
+  bool ready = 1;
+}

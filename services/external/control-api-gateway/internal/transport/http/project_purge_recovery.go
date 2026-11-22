@@ -1,6 +1,7 @@
 package httptransport
 
 import (
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"net/http"
 	"strconv"
 
@@ -71,6 +72,10 @@ func writeProjectPurgeRecovery(w http.ResponseWriter, status int, ref string, v 
 	writeJSON(w, status, view)
 }
 
+// artifactPurgeReconciliationReason is the closed project blocker for an unresolved manual Delete.
+// artifactPurgeReconciliationReason — closed project blocker для незавершённого manual Delete.
+const artifactPurgeReconciliationReason = "ARTIFACT_PURGE_RECONCILIATION_REQUIRED"
+
 // projectPurgeRecoveryView binds recovery identity/digest/version to the requested project and
 // checks nonnegative pending/unknown counts, project-presence/version consistency and resolvable
 // WAITING_OWNER state. It preserves unknown content rather than interpreting it as successful
@@ -90,8 +95,16 @@ func projectPurgeRecoveryView(ref string, v *cp.ProjectPurgeRecovery) (generated
 		v.GetResolutionRef() != "" && (!opaqueHTTPReference.MatchString(v.GetResolutionRef()) || len(v.GetResolutionRef()) > 96) {
 		return result, false
 	}
+	reason := v.GetReasonCode()
+	if reason == "" {
+		reason = "NONE"
+	}
+	if reason != "NONE" && ((reason != managedkubernetes.ProjectStagingReconciliationReason && reason != artifactPurgeReconciliationReason) || state != "BLOCKED" || v.GetCanResolve() || !v.GetProjectPresent() || v.GetUnknownContentCount() < 1) {
+		return result, false
+	}
+	closedReason := generated.ProjectPurgeRecoveryReasonCode(reason)
 	return generated.ProjectPurgeRecovery{
-		ProjectRef: ref, Version: v.GetVersion(), SnapshotDigest: v.GetSnapshotDigest(), State: state,
+		ReasonCode: &closedReason, ProjectRef: ref, Version: v.GetVersion(), SnapshotDigest: v.GetSnapshotDigest(), State: state,
 		UnknownContentCount: v.GetUnknownContentCount(), CleanupPendingCount: v.GetCleanupPendingCount(),
 		ProjectPresent: v.GetProjectPresent(), CanResolve: v.GetCanResolve(), ResolutionRef: v.GetResolutionRef(), ProjectVersion: v.GetProjectVersion(),
 	}, true

@@ -120,6 +120,11 @@ func (repository *Repository) changeProjectLifecycle(ctx context.Context, tx pgx
 	if item.Version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
 	}
+	if input.Kind == command.TrashProject || input.Kind == command.PurgeProject {
+		if err := requireKubernetesProjectReconciledTx(ctx, tx, current, projectID); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	query := queryProjectTrashMark
 	arguments := pgx.StrictNamedArgs{
 		"organization_id":  current.organizationID,
@@ -155,6 +160,9 @@ func (repository *Repository) changeProjectLifecycle(ctx context.Context, tx pgx
 				return commandOutcome{}, err
 			}
 		}
+		if err := closeKubernetesProjectCapturesTx(ctx, tx, current, projectID); err != nil {
+			return commandOutcome{}, err
+		}
 		arguments["actor_id"] = current.actorID
 	} else if input.Kind == command.RestoreProject {
 		if item.Lifecycle != "TRASHED" {
@@ -166,6 +174,9 @@ func (repository *Repository) changeProjectLifecycle(ctx context.Context, tx pgx
 	} else if input.Kind == command.PurgeProject {
 		if item.Lifecycle != "TRASHED" {
 			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := closeKubernetesProjectCapturesTx(ctx, tx, current, projectID); err != nil {
+			return commandOutcome{}, err
 		}
 		query = queryProjectTrashPurge
 		summary = "i18n:PROJECT_PURGE_REQUESTED"

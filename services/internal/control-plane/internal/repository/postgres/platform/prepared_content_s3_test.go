@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -17,23 +18,27 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 // TestPreparedContentSignedS3Reader uses the real S3 SDK against a local HTTP server to verify
 // exact signed payload hash, rewindable bounded body and version-pinned Put/Head receipts.
+// TLS uses the synthetic server's exact CA and the SDK's documented UNSIGNED-PAYLOAD signing
+// profile, with the exact checksum in signed headers. SDK must not close its owner's spool.
 // TestPreparedContentSignedS3Reader использует настоящий S3 SDK с локальным HTTP-сервером для
 // проверки точного хеша подписанного тела, перематываемого ограниченного reader и квитанций
-// Put/Head с привязкой к версии.
+// Put/Head с привязкой к версии. TLS доверяет точной CA synthetic server и использует штатный
+// SDK UNSIGNED-PAYLOAD profile с exact checksum в signed headers. SDK не закрывает owner spool.
 func TestPreparedContentSignedS3Reader(t *testing.T) {
 	const body = "new immutable note"
 	sum := sha256.Sum256([]byte(body))
 	digest := fmt.Sprintf("sha256:%x", sum[:])
 	var puts, heads atomic.Int64
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	endpoint := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPut {
 			puts.Add(1)
 			got, err := io.ReadAll(io.LimitReader(r.Body, 1024))
-			if err != nil || string(got) != body || r.Header.Get("X-Amz-Content-Sha256") != fmt.Sprintf("%x", sum[:]) {
+			if err != nil || string(got) != body || r.TLS == nil || r.Header.Get("X-Amz-Content-Sha256") != "UNSIGNED-PAYLOAD" || r.Header.Get("X-Amz-Checksum-Sha256") != base64.StdEncoding.EncodeToString(sum[:]) || !strings.Contains(r.Header.Get("Authorization"), "x-amz-checksum-sha256") {
 				t.Error("signed exact body was not preserved")
 				w.WriteHeader(http.StatusBadRequest)
 				return
@@ -56,11 +61,11 @@ func TestPreparedContentSignedS3Reader(t *testing.T) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}))
 	defer endpoint.Close()
-	store, err := s3store.New(t.Context(), s3store.Config{Endpoint: endpoint.URL, Region: "us-east-1", Bucket: "synthetic", AccessKeyID: "synthetic-key", SecretKey: "synthetic-secret", UsePathStyle: true})
+	store, err := s3store.New(t.Context(), s3store.Config{Endpoint: endpoint.URL, Region: "us-east-1", Bucket: "synthetic", AccessKeyID: "synthetic-key", SecretKey: "synthetic-secret", UsePathStyle: true, HTTPClient: endpoint.Client()})
 	if err != nil {
 		t.Fatal("synthetic S3 setup failed")
 	}
-	for _, name := range []string{"old-seekable-control", "prepared-bounded"} {
+	for _, name := range []string{"old-seekable-control", "prepared-bounded", "capture-anonymous-spool"} {
 		t.Run(name, func(t *testing.T) {
 			puts.Store(0)
 			heads.Store(0)
@@ -71,6 +76,26 @@ func TestPreparedContentSignedS3Reader(t *testing.T) {
 					t.Fatal("valid bounded body rejected")
 				}
 			}
+			if name == "capture-anonymous-spool" {
+				repository := &Repository{}
+				directory, err := repository.ConfigureKubernetesCaptureSpool(t.Context(), t.TempDir())
+				if err != nil {
+					t.Fatal("private capture directory rejected", err)
+				}
+				defer directory.Close()
+				spool, err := repository.kubernetesCaptureSpool.open(t.Context(), "STDOUT")
+				if err != nil {
+					t.Fatal("anonymous capture file rejected", err)
+				}
+				defer spool.Close()
+				if _, err := spool.Write([]byte(body)); err != nil {
+					t.Fatal("capture body write failed", err)
+				}
+				reader, err = preparedContentSeekableBody(preparedContentRequest{Body: &kubernetesCaptureSpoolReader{spool: spool}, Digest: digest, SizeBytes: int64(len(body)), CaptureTask: &value.ManagedKubernetesCaptureTaskBinding{}})
+				if err != nil {
+					t.Fatal("capture spool rejected before signed PUT", err)
+				}
+			}
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			receipt, err := store.Put(ctx, objectstorage.PutInput{Key: "synthetic/exact-note", MediaType: "text/plain", Digest: digest, SizeBytes: int64(len(body)), Body: reader})
@@ -79,6 +104,16 @@ func TestPreparedContentSignedS3Reader(t *testing.T) {
 			}
 			if head, err := store.Head(t.Context(), receipt.Key, receipt.VersionID); err != nil || head != receipt {
 				t.Fatal("second exact head did not match put receipt")
+			}
+			if name == "capture-anonymous-spool" {
+				seekable := reader.(io.ReadSeeker)
+				if _, err := seekable.Seek(0, io.SeekStart); err != nil {
+					t.Fatal("SDK closed the still-owned anonymous capture", err)
+				}
+				got, err := io.ReadAll(io.LimitReader(seekable, int64(len(body))+1))
+				if err != nil || string(got) != body {
+					t.Fatal("signed PUT changed the still-owned capture body", err)
+				}
 			}
 		})
 	}

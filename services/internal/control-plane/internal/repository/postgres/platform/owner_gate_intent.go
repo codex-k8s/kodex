@@ -41,7 +41,7 @@ var queryOwnerGateIntent string
 // scoped values. Сверяет canonical input digest и exact package pins, разрешая только terminal
 // history при Forbidden package остаться скрытой. Число consequences должно совпасть с decisions.
 // Ошибка допускает частичные изменения view; проекция не решает gate и не выдаёт полномочия.
-func (repository *Repository) projectGateIntent(ctx context.Context, runner queryRunner, current scope, gate *entity.OwnerGate, actorScoped bool) error {
+func (repository *Repository) projectGateIntent(ctx context.Context, runner queryRunner, current scope, gate *entity.OwnerGate, actorScoped bool, modes ...kubernetesGatePreviewMode) error {
 	if gate == nil {
 		return nil
 	}
@@ -87,6 +87,9 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 			}
 			gate.SourceAttachmentSetRef = ""
 		}
+	}
+	if handled, err := repository.projectKubernetesChildGate(ctx, runner, current, gate, actorScoped, modes...); handled || err != nil {
+		return err
 	}
 	gate.IntegrationIntent = nil
 	if integration {
@@ -143,7 +146,9 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 			}
 		}
 		if intent.Operation == "ssh.compose.deploy" {
-			if err := projectSSHComposeGatePreview(ctx, runner, current, gate.Ref, intent); err != nil { return err }
+			if err := projectSSHComposeGatePreview(ctx, runner, current, gate.Ref, intent); err != nil {
+				return err
+			}
 		}
 		gate.IntegrationIntent = intent
 	}

@@ -7,6 +7,7 @@ fail() {
 }
 
 usage() {
+  printf '%s\n' '  [--kubeconfig <absolute-file> --migration-adoption-dossier <absolute-private-json>; migrated-schema adoption]' >&2
   printf '%s\n' '  [--assistant-readback-transport api-proxy|port-forward; default api-proxy]' >&2
   printf '%s\n' \
     "Usage: $0 --context <exact-context> --mode defer-public-tls|prepare-preflight|preflight|apply|upgrade|resume-authority-bootstrap|resume-authority-published|resume-workloads|readback" \
@@ -23,6 +24,14 @@ usage() {
 }
 
 context=""
+kubeconfig=""
+migration_adoption_dossier=""
+migration_adoption=false
+kubeconfig_arguments=()
+adoption_arguments=()
+completion_receipt=""
+completion_sha=""
+allow_reconciled_completion=false
 mode=""
 render_file=""
 public_tls_mode=enabled
@@ -47,9 +56,12 @@ email_projection_arguments=()
 
 while (($# > 0)); do
   case "$1" in
+    --kubeconfig) [[ -n "${2:-}" ]] || fail 'explicit kubeconfig is required'; kubeconfig="${2:-}"; shift 2 ;;
+    --migration-adoption-dossier) [[ -n "${2:-}" ]] || fail 'migration adoption dossier is required'; migration_adoption_dossier="${2:-}"; shift 2 ;;
     --assistant-readback-transport) assistant_readback_transport="${2:-}"; shift 2 ;;
-    --bootstrap-completion-receipt|--bootstrap-completion-sha256) completion_arguments+=("$1" "${2:-}"); shift 2 ;;
-    --allow-reconciled-bootstrap-completion) completion_arguments+=("$1"); shift ;;
+    --bootstrap-completion-receipt) completion_receipt="${2:-}"; completion_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --bootstrap-completion-sha256) completion_sha="${2:-}"; completion_arguments+=("$1" "${2:-}"); shift 2 ;;
+    --allow-reconciled-bootstrap-completion) allow_reconciled_completion=true; completion_arguments+=("$1"); shift ;;
     --bootstrap-completion-output) completion_output="${2:-}"; shift 2 ;;
     --existing-email-projection-only) email_projection_arguments=(--existing-only); shift ;;
     --portable-inventory) portable_inventory="${2:-}"; shift 2 ;;
@@ -107,6 +119,12 @@ fi
 for command_name in jq kubectl rg sha256sum sort yq python3; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
+if [[ -n "$kubeconfig" ]]; then
+  [[ "$kubeconfig" == /* && -f "$kubeconfig" && ! -L "$kubeconfig" ]] || fail 'explicit kubeconfig must be an absolute regular file'
+  export KUBECONFIG="$kubeconfig"
+  kubeconfig_arguments=(--kubeconfig "$kubeconfig")
+fi
+[[ -z "$migration_adoption_dossier" || "$migration_adoption_dossier" == /* ]] || fail 'migration adoption dossier must be absolute'
 [[ "$(kubectl config current-context)" == "$context" ]] || fail 'current Kubernetes context mismatch'
 
 namespace=kodex-system
@@ -134,29 +152,67 @@ except (OSError, Rejected):
     raise SystemExit('Upgrade render snapshot rejected') from None
 PY
 elif [[ "$mode" == apply ]] || ((${#completion_arguments[@]})); then
-  # Режим apply, подготовка admission, resume и readback потребляют один снимок.
+  # Подготовка admission, resume и readback потребляют байты из того же снимка.
   (umask 077; cp -- "$render_file" "$temporary_directory/verified-render.yaml")
 fi
 if [[ "$mode" == apply ]]; then
   render_file="$temporary_directory/verified-render.yaml"
-  # Подготовленный render обновления не разрешает повторять bootstrap в режиме apply.
+fi
+# Prepared upgrade render не является fresh-install input: bootstrap effects не повторяются.
+if [[ "$mode" == apply ]]; then
   yq -N -o=json -I=0 'select(.apiVersion == "batch/v1" and .kind == "Job" and
     .metadata.namespace == "kodex-system" and
     (.metadata.name | test("^release-materializer-[a-f0-9]{40}$")))' "$render_file" |
     jq -se 'length == 0' >/dev/null || fail 'prepared upgrade render requires verified completion receipt and upgrade mode'
 fi
+# Только проверенная квитанция определяет adoption; переданный dossier сам допуска не даёт.
+if ((${#completion_arguments[@]})); then
+  completion_origin=$(python3 -B - "$repository_root/tools/install" "$completion_receipt" "$completion_sha" "$allow_reconciled_completion" <<'PYORIGIN'
+import sys
+sys.path.insert(0, sys.argv[1])
+import bootstrap_completion
+receipt = bootstrap_completion.load(sys.argv[2], sys.argv[3], sys.argv[4] == 'true')
+print('adoption' if receipt['origin'] == bootstrap_completion.ADOPTION_ORIGIN else 'legacy')
+PYORIGIN
+  )
+  [[ "$completion_origin" != adoption ]] || migration_adoption=true
+fi
+if [[ "$migration_adoption" == true ]]; then
+  case "$mode" in upgrade|prepare-preflight|preflight|readback) ;; *) fail 'migration adoption requires upgrade or its preflight/readback' ;; esac
+fi
+[[ -z "$migration_adoption_dossier" ]] || adoption_arguments=(--migration-adoption-dossier "$migration_adoption_dossier")
+verify_migration_adoption() {
+  local phase=$1
+  python3 "$repository_root/tools/install/bootstrap_upgrade.py" verify-apply \
+    --render "$render_file" --context "$context" "${completion_arguments[@]}" \
+    "${kubeconfig_arguments[@]}" "${adoption_arguments[@]}" --migration-adoption-phase "$phase"
+}
 if ((${#completion_arguments[@]})); then
   render_file="$temporary_directory/verified-render.yaml"
   python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
     --render "$render_file" --context "$context" "${completion_arguments[@]}"
 fi
-if [[ "$mode" == upgrade ]]; then
-  python3 "$repository_root/tools/install/bootstrap_upgrade.py" verify-apply --render "$render_file" --context "$context" "${completion_arguments[@]}"
+if [[ "$migration_adoption" == true || -n "$migration_adoption_dossier" ]]; then
+  adoption_phase=begin
+  [[ "$mode" != readback ]] || adoption_phase=readback
+  adoption_result=$(verify_migration_adoption "$adoption_phase")
+  if [[ "$adoption_phase" == begin ]]; then
+    adoption_status=$(jq -er '.status | select(. == "MIGRATED_ROLLOUT_VERIFIED" or . == "MIGRATED_ROLLOUT_COMMITTED")' <<<"$adoption_result") || fail 'migration adoption begin status rejected'
+    if [[ "$adoption_status" == MIGRATED_ROLLOUT_COMMITTED ]]; then
+      # Повтор exact committed release — только проверка, даже при исходном upgrade.
+      mode=readback
+      verify_migration_adoption readback
+    fi
+  fi
+elif [[ "$mode" == upgrade ]]; then
+  python3 "$repository_root/tools/install/bootstrap_upgrade.py" verify-apply --render "$render_file" --context "$context" "${completion_arguments[@]}" "${kubeconfig_arguments[@]}"
 fi
 if [[ "$component_image_requested" == true ]]; then
   python3 "$repository_root/tools/install/component_image_profile.py" --check --render "$render_file" "${component_arguments[@]}"
 fi
 python3 "$repository_root/tools/install/provider_sandbox_profile.py" --check --render "$render_file" "${provider_profile_arguments[@]}"
+python3 -B "$repository_root/tools/install/ssh_identity_profile.py" --check --render "$render_file" || fail 'SSH identity upload profile check rejected'
+python3 -B "$repository_root/tools/install/ssh_qualification_profile.py" --check --render "$render_file" || fail 'SSH qualification profile check rejected'
 python3 "$repository_root/tools/install/clamav_profile.py" --check --mode "$clamav_mode" --artifact-antivirus-mode "$artifact_antivirus_mode" --storage-profile "$clamav_storage_profile" --render "$render_file"
 python3 "$repository_root/tools/install/native_integration_egress.py" --check --render "$render_file"
 python3 "$repository_root/tools/install/observability_qualification.py" --check --render "$render_file"
@@ -254,6 +310,11 @@ apply_render() {
     expression="($expression) | select(.metadata.namespace != \"kodex-system\" or
       ((.kind != \"ConfigMap\" or .metadata.name != \"internal-rpc-authority-publisher-target-registry\") and
        (.kind != \"Deployment\" or .metadata.name != \"internal-rpc-authority-publisher\")))"
+  fi
+  if [[ "${migration_adoption:-false}" == true ]]; then
+    # Только этот exact CM принадлежит финальному adoption CAS, не generic apply.
+    expression="($expression) | select(.apiVersion != \"v1\" or .kind != \"ConfigMap\" or
+      .metadata.namespace != \"kodex-system\" or .metadata.name != \"kodex-installation-profile\")"
   fi
   output=$(render_filter "$name" "$expression")
   if [[ -n "${profile_mode:-}" ]]; then
@@ -377,6 +438,7 @@ reconcile_immutable_configmaps() {
   local name current expected current_content expected_content
   while IFS= read -r name; do
     [[ -n "$name" ]] || continue
+    [[ "${migration_adoption:-false}" != true || "$name" != kodex-installation-profile ]] || continue
     [[ "$mode" != upgrade || "$name" != internal-rpc-authority-publisher-target-registry ]] || continue
     # Версия рецепта является новой immutable identity; прежнюю историю не удаляем.
     [[ "$mode" != upgrade || ! "$name" =~ ^kodex-materializer-script-[a-f0-9]{24}$ ]] || continue
@@ -1124,6 +1186,13 @@ failing_runtime_pods=$(kubectl --context "$context" -n "$runtime_namespace" get 
     .metadata.name] | join(",")
 ')
 [[ -z "$failing_runtime_pods" ]] || fail "failing runtime Pods remain: $failing_runtime_pods"
+# Единственная запись profile выполняется после всех существующих Job/workload gates.
+if [[ "$migration_adoption" == true && "$mode" == upgrade ]]; then
+  verify_migration_adoption commit
+fi
+if [[ "$migration_adoption" == true ]]; then
+  verify_migration_adoption readback
+fi
 if [[ -n "${profile_mode:-}" ]]; then
   timeout 180s python3 "$repository_root/tools/install/portable_state.py" readback \
     --context "$context" --render "$render_file" "${completion_arguments[@]}"

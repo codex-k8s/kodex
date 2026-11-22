@@ -122,17 +122,21 @@ type personalCredentialRow struct {
 	revision        entity.IntegrationCredentialRevision
 	createdAt       *time.Time
 	githubDiscovery []byte
+	brokerRevision  entity.IntegrationBrokerIdentityRevision
+	brokerCreatedAt *time.Time
 }
 
-// targets returns stable scan addresses in the same order as the two named SQL projections.
-// targets возвращает устойчивые scan-адреса в порядке двух именованных SQL-проекций.
+// targets keeps addressed, catalog and launch queries on one ordered stored-source projection.
+// targets сохраняет единый порядок stored-source проекции для addressed, catalog и launch запросов.
 func (row *personalCredentialRow) targets() []any {
 	binding, credential := &row.value, &row.revision
 	return []any{&binding.Ref, &binding.OrganizationID, &binding.SubjectID, &binding.ConnectionRef, &binding.CredentialPolicy, &binding.ConnectionVersion,
 		&binding.Version, &binding.Generation, &binding.State, &credential.Ref, &credential.Revision,
 		&credential.SecretRef, &credential.SecretUID, &credential.SecretResourceVersion, &credential.ContentSHA256, &row.createdAt,
 		&binding.VerifiedCredentialRef, &binding.VerifiedDefinitionDigest, &binding.VerifiedConfigurationDigest,
-		&binding.VerifiedCapabilities, &binding.DeniedCapabilities, &binding.ObservedPermissionProfiles, &binding.ExpiresAt, &row.githubDiscovery}
+		&binding.VerifiedCapabilities, &binding.DeniedCapabilities, &binding.ObservedPermissionProfiles, &binding.ExpiresAt, &row.githubDiscovery,
+		&binding.Kind, &binding.BrokerPurpose, &row.brokerRevision.Ref, &row.brokerRevision.Revision,
+		&row.brokerRevision.Purpose, &row.brokerRevision.TargetRef, &row.brokerCreatedAt, &binding.VerifiedBrokerIdentityRef}
 }
 
 // decode rejects partial or malformed immutable descriptors before attaching metadata to the
@@ -156,7 +160,54 @@ func (row *personalCredentialRow) decode() (entity.PersonalIntegrationCredential
 		credential.SecretResourceVersion != "" || credential.ContentSHA256 != "" {
 		return entity.PersonalIntegrationCredential{}, errs.ErrUnavailable
 	}
+	if err := row.attachStoredBrokerIdentity(&binding); err != nil {
+		return entity.PersonalIntegrationCredential{}, err
+	}
 	return binding, nil
+}
+
+// attachStoredBrokerIdentity validates the stored discriminator before exposing either metadata
+// branch. It never infers TOKEN from a missing kind or rewrites a historical receipt.
+// attachStoredBrokerIdentity проверяет stored discriminator до выдачи любой metadata ветки.
+// Не выводит TOKEN из отсутствующего kind и не переписывает сохранённый receipt.
+func (row *personalCredentialRow) attachStoredBrokerIdentity(binding *entity.PersonalIntegrationCredential) error {
+	absent := row.brokerRevision == (entity.IntegrationBrokerIdentityRevision{}) && row.brokerCreatedAt == nil
+	if binding.Ref == "" {
+		if binding.Kind != "" || binding.BrokerPurpose != "" || !absent || binding.VerifiedBrokerIdentityRef != "" {
+			return errs.ErrUnavailable
+		}
+		return nil
+	}
+	switch binding.Kind {
+	case entity.IntegrationCredentialToken:
+		if binding.BrokerPurpose != "" || !absent || binding.VerifiedBrokerIdentityRef != "" {
+			return errs.ErrUnavailable
+		}
+	case entity.IntegrationCredentialBrokerIdentity:
+		if !binding.BrokerPurpose.Valid() || binding.Credential != nil || binding.VerifiedCredentialRef != "" || binding.GitHubDiscovery != nil {
+			return errs.ErrUnavailable
+		}
+		if row.brokerRevision.Ref == "" {
+			if !absent || binding.VerifiedBrokerIdentityRef != "" || binding.State != "NOT_CONFIGURED" && binding.State != "REVOKED" {
+				return errs.ErrUnavailable
+			}
+			return nil
+		}
+		identity := row.brokerRevision
+		if row.brokerCreatedAt == nil {
+			return errs.ErrUnavailable
+		}
+		identity.CreatedAt = *row.brokerCreatedAt
+		if !identity.ValidMetadata() || identity.Purpose != binding.BrokerPurpose ||
+			(binding.State == "READY" && binding.VerifiedBrokerIdentityRef != identity.Ref) ||
+			(binding.State != "READY" && binding.VerifiedBrokerIdentityRef != "") {
+			return errs.ErrUnavailable
+		}
+		binding.BrokerIdentity = &identity
+	default:
+		return errs.ErrUnavailable
+	}
+	return nil
 }
 
 // personalCredentialCommand identifies only the three dedicated self-binding commands.
@@ -219,6 +270,29 @@ func personalCredentialCommandOperation(kind command.Kind) string {
 	}
 }
 
+// personalCredentialDeliveryTx derives setup representation from the locked exact package.
+// Missing sources, NONE/mailbox credentials and mixed purposes cannot create a TOKEN binding.
+// The caller has already authorized current self visibility and retains the Connection lock.
+// personalCredentialDeliveryTx выводит setup representation из заблокированного exact package.
+// Missing source, NONE/mailbox и mixed purpose не создают TOKEN binding.
+// Caller заранее проверяет текущую self visibility и удерживает Connection lock.
+func (repository *Repository) personalCredentialDeliveryTx(ctx context.Context, tx pgx.Tx, current scope, ref string) (integrationpackage.CredentialDelivery, error) {
+	connection, err := repository.lockIntegrationConnection(ctx, tx, current.organizationID, ref)
+	if err != nil {
+		return integrationpackage.CredentialDelivery{}, err
+	}
+	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, ref,
+		connection.definitionKey, connection.definitionVersion, connection.definitionDigest)
+	if err != nil {
+		return integrationpackage.CredentialDelivery{}, err
+	}
+	delivery, valid := definition.ConnectionCredentialDelivery()
+	if !valid || delivery.Kind != integrationpackage.CredentialDeliveryToken && delivery.Kind != integrationpackage.CredentialDeliveryBrokerIdentity {
+		return integrationpackage.CredentialDelivery{}, errs.ErrConflict
+	}
+	return delivery, nil
+}
+
 // changePersonalCredential runs only inside Execute's owner/idempotency transaction. All reads,
 // revision insertion, fence advance, immutable command result and audit share that transaction.
 // changePersonalCredential работает только внутри owner/idempotency transaction Execute. Чтения,
@@ -237,10 +311,15 @@ func (repository *Repository) changePersonalCredential(ctx context.Context, tx p
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		delivery, err := repository.personalCredentialDeliveryTx(ctx, tx, current, payload.ConnectionRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 		var createdRef string
 		err = tx.QueryRow(ctx, queryPersonalCredentialCreate, pgx.StrictNamedArgs{
 			"ref": ref, "organization_id": current.organizationID, "subject_id": current.actorID,
 			"connection_ref": payload.ConnectionRef, "connection_version": payload.ExpectedConnectionVersion,
+			"credential_kind": string(delivery.Kind), "broker_purpose": delivery.BrokerPurpose,
 		}).Scan(&createdRef)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrVersionMismatch
@@ -283,6 +362,16 @@ func (repository *Repository) changePersonalCredential(ctx context.Context, tx p
 		if err != nil {
 			return commandOutcome{}, err
 		}
+		if binding.Kind == entity.IntegrationCredentialBrokerIdentity && binding.BrokerPurpose == entity.IntegrationBrokerIdentityKubernetes {
+			if err := cancelKubernetesIdentitySetupsTx(ctx, tx, current.organizationID, payload.ConnectionRef, bindingID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
+		if binding.Kind == entity.IntegrationCredentialBrokerIdentity && binding.BrokerPurpose == entity.IntegrationBrokerIdentitySSH {
+			if err := repository.cancelSSHIdentityDependenciesTx(ctx, tx, current, payload.ConnectionRef, bindingID); err != nil {
+				return commandOutcome{}, err
+			}
+		}
 		if revoked.Version != binding.Version {
 			if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "PERSONAL_CREDENTIAL", binding.Ref); err != nil {
 				return commandOutcome{}, err
@@ -303,6 +392,13 @@ func (repository *Repository) changePersonalCredential(ctx context.Context, tx p
 	if input.Kind != command.ConfigurePersonalIntegrationCredential || policy != entity.IntegrationCredentialInitiatorRequired ||
 		connectionVersion != payload.ExpectedConnectionVersion || binding.Version != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
+	}
+	delivery, err := repository.personalCredentialDeliveryTx(ctx, tx, current, payload.ConnectionRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if delivery.Kind != integrationpackage.CredentialDeliveryToken || delivery.BrokerPurpose != "" {
+		return commandOutcome{}, errs.ErrForbidden
 	}
 	if err := repository.cancelRepositoryBundleDependency(ctx, tx, current, "PERSONAL_CREDENTIAL", binding.Ref); err != nil {
 		return commandOutcome{}, err

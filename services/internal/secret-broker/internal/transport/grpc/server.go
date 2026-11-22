@@ -109,11 +109,18 @@ type Store interface {
 // authoritative owner lifecycle и точные effect checks приватных adapters.
 type Server struct {
 	catalogLogger *slog.Logger
+	sshHealth     sshIdentityHealthProtocol
+	sshExecution  sshIdentityExecutionProtocol
 	secretbrokerv1.UnimplementedSecretBrokerServiceServer
+	secretbrokerv1.UnimplementedManagedSSHServiceServer
 	secretbrokerv1.UnimplementedRuntimeCredentialProjectionServiceServer
+	secretbrokerv1.UnimplementedManagedKubernetesServiceServer
 	sttv1.UnimplementedTranscriptionCredentialProjectionServiceServer
 	controlplanev1.UnimplementedProviderCredentialMaterializerServiceServer
 	owner                Owner
+	kubernetesHealth     KubernetesHealth
+	kubernetesOperations KubernetesOperations
+	kubernetesStreams    KubernetesStreams
 	store                Store
 	recovery             Recovery
 	providerCredentials  ProviderCredentialMaterializer

@@ -14,6 +14,7 @@ const connection: PersonalIntegrationConnection = {
   definitionKey: "gitlab",
   policy: "INITIATOR_REQUIRED",
   available: true,
+  credentialDelivery: { kind: "TOKEN" },
   enabled: true,
 };
 const credential: PersonalIntegrationCredential = {
@@ -23,6 +24,8 @@ const credential: PersonalIntegrationCredential = {
   version: 1,
   policy: "INITIATOR_REQUIRED",
   state: "NOT_CONFIGURED",
+  credentialDelivery: { kind: "TOKEN" },
+  bindingGeneration: 1,
   credentialConfigured: false,
   verifiedCapabilityKeys: [],
   deniedCapabilityKeys: [],
@@ -147,7 +150,7 @@ async function setup(
   await page.goto("/e2e/fixtures/personal-connections.html");
   if (!empty) {
     await expect(
-      page.getByRole("heading", { name: connection.name }),
+      page.getByRole("heading", { name: initial.name }),
     ).toBeVisible();
   }
   return {
@@ -170,6 +173,36 @@ async function setup(
       };
     },
   };
+}
+
+for (const definitionKey of ["ssh-managed", "ssh-execute"]) {
+  test(`противоречивые TOKEN metadata SSH не открывают generic сохранение: ${definitionKey}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({
+      width: definitionKey === "ssh-managed" ? 1440 : 390,
+      height: 900,
+    });
+    const fixture = await setup(page, {
+      ...connection,
+      name: "SSH для проверки",
+      definitionKey,
+    });
+    await expect(
+      page.getByRole("button", { name: "Добавить ключ", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Передать ключ", exact: true }),
+    ).toHaveCount(0);
+    expect(fixture.saved).toEqual([]);
+    expect(fixture.writes).toBe(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    expect(fixture.failures).toEqual([]);
+  });
 }
 
 for (const width of [1440, 390]) {
@@ -423,5 +456,58 @@ test("сохранённый личный ключ можно отозвать �
     page.getByText("Ключ отозван для новых вызовов", { exact: true }),
   ).toBeVisible();
   expect(fixture.writes).toBe(1);
+  expect(fixture.failures).toEqual([]);
+});
+
+test("неизвестный вид реквизитов требует обновления и не открывает token setup", async ({
+  page,
+}) => {
+  const initial = structuredClone(connection);
+  delete initial.credentialDelivery;
+  const fixture = await setup(page, initial);
+  await expect(
+    page.getByText(
+      "Тип личных реквизитов не подтверждён. Обновите данные перед настройкой или проверкой подключения.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Добавить ключ", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Личный ключ API", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Обновить", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Добавить ключ", exact: true }),
+  ).toHaveCount(0);
+  expect(fixture.writes).toBe(0);
+  expect(fixture.failures).toEqual([]);
+});
+
+test("broker identity не раскрывает редактор обычного token", async ({
+  page,
+}) => {
+  const fixture = await setup(page, {
+    ...connection,
+    definitionKey: "kubernetes-managed",
+    credentialDelivery: {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "KUBERNETES_TARGET",
+    },
+  });
+  await expect(
+    page.getByText(
+      "Для этих реквизитов используется отдельная защищённая настройка подключения.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Добавить ключ", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Личный ключ API", { exact: true })).toHaveCount(
+    0,
+  );
+  expect(fixture.writes).toBe(0);
   expect(fixture.failures).toEqual([]);
 });

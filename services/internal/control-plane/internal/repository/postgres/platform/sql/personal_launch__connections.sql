@@ -6,7 +6,7 @@ SELECT connection.ref,connection.name,connection.version,connection.credential_p
        control_plane.catalog_resource_visible(connection.organization_id,@subject_id::uuid,
          'integration.view','INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,statement_timestamp()),
        control_plane.catalog_resource_visible(connection.organization_id,@subject_id::uuid,
-         'integration.manage','INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,statement_timestamp()),
+         CASE WHEN connection.definition_key IN('kubernetes-managed','ssh-managed','ssh-execute') THEN 'integration.view' ELSE 'integration.manage' END,'INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,statement_timestamp()),
        COALESCE(subject.kind,'')
 FROM control_plane.integration_connections connection
 LEFT JOIN control_plane.subjects subject ON subject.organization_id=connection.organization_id

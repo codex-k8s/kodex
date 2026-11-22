@@ -42,37 +42,58 @@ func trustedHistoricalPolicyPackages(current Package) []Package {
 	return packages
 }
 
-// trustedHistoricalPolicyPackage parses only the explicitly requested closed predecessor; resolving one pin never scans or validates unrelated release snapshots.
-// trustedHistoricalPolicyPackage разбирает только явно запрошенный closed predecessor; разрешение одного pin не сканирует unrelated release snapshots.
-func trustedHistoricalPolicyPackage(current Package, version string) (Package, bool) {
+// historicalPolicySnapshotFor selects the immutable source snapshot under its closed successor identity and predecessor pin.
+// historicalPolicySnapshotFor выбирает неизменяемый снимок по закрытой идентичности преемника и закреплённой версии предшественника.
+func historicalPolicySnapshotFor(current Package, version string) (historicalPolicySnapshot, bool) {
 	entry, ok := historicalPolicyRevisions[current.Metadata.Key]
 	if !ok || current.Metadata.Version != entry.current || current.Metadata.Origin != Origin || current.Spec.Adapter != entry.adapter {
-		return Package{}, false
+		return historicalPolicySnapshot{}, false
 	}
-	found := false
-	for _, known := range entry.versions {
-		found = found || known == version
+	read, exists := historicalPolicyCanonicalSnapshots[historicalPolicySnapshotPin{key: current.Metadata.Key, version: version}]
+	if !exists {
+		return historicalPolicySnapshot{}, false
 	}
-	if !found {
-		return Package{}, false
-	}
-	raw, err := policyCompatibilitySnapshots.ReadFile("compatibility/" + current.Metadata.Key + "-" + version + ".yaml")
-	if err != nil {
-		return Package{}, false
-	}
-	previous, err := Parse(raw)
-	if err != nil || previous.Metadata.Key != current.Metadata.Key || previous.Metadata.Version != version || previous.Metadata.Origin != Origin || previous.Spec.Adapter != current.Spec.Adapter {
+	return read()
+}
+
+// parseHistoricalPolicySnapshot reparses only a selected immutable snapshot so exported packages own all nested fields.
+// parseHistoricalPolicySnapshot заново разбирает только выбранный неизменяемый снимок, чтобы выдаваемый пакет владел всеми вложенными полями.
+func parseHistoricalPolicySnapshot(snapshot historicalPolicySnapshot, current Package, version string) (Package, bool) {
+	previous, err := Parse([]byte(snapshot.canonical))
+	if err != nil || previous.Digest != snapshot.digest || previous.Metadata.Key != current.Metadata.Key || previous.Metadata.Version != version || previous.Metadata.Origin != Origin || previous.Spec.Adapter != current.Spec.Adapter {
 		return Package{}, false
 	}
 	return previous, true
 }
 
-// resolveHistoricalPolicyRevision matches both frozen version and canonical digest; unknown or mixed old/new pins remain unusable.
-// resolveHistoricalPolicyRevision сопоставляет frozen version и canonical digest; неизвестные и смешанные old/new pins остаются недопустимыми.
-func resolveHistoricalPolicyRevision(current Package, version, digest string) (Package, bool) {
-	previous, ok := trustedHistoricalPolicyPackage(current, version)
-	if !ok || previous.Digest != digest {
+// trustedHistoricalPolicyPackage returns owned fields for one explicitly selected predecessor without scanning unrelated snapshots.
+// trustedHistoricalPolicyPackage возвращает независимые поля выбранного предшественника без чтения остальных снимков.
+func trustedHistoricalPolicyPackage(current Package, version string) (Package, bool) {
+	snapshot, ok := historicalPolicySnapshotFor(current, version)
+	if !ok {
 		return Package{}, false
 	}
-	return previous, true
+	return parseHistoricalPolicySnapshot(snapshot, current, version)
+}
+
+// resolveHistoricalPolicyRevision requires the frozen version and digest before parsing owned fields.
+// resolveHistoricalPolicyRevision сверяет закреплённые версию и дайджест до разбора независимых полей.
+func resolveHistoricalPolicyRevision(current Package, version, digest string) (Package, bool) {
+	snapshot, ok := historicalPolicySnapshotFor(current, version)
+	if !ok || snapshot.digest != digest {
+		return Package{}, false
+	}
+	return parseHistoricalPolicySnapshot(snapshot, current, version)
+}
+
+// matchesShippedRevision verifies an already canonicalized candidate against the exact current or embedded predecessor pin.
+// This metadata comparison returns no Package and cannot replace parsing or validating the candidate before execution.
+// matchesShippedRevision сверяет уже канонизированный пакет с точной версией текущего либо встроенного выпуска.
+// Сверка метаданных не возвращает Package и не заменяет разбор или проверку пакета перед исполнением.
+func matchesShippedRevision(current Package, version, digest string) bool {
+	if current.Metadata.Version == version && current.Digest == digest {
+		return true
+	}
+	snapshot, ok := historicalPolicySnapshotFor(current, version)
+	return ok && snapshot.digest == digest
 }

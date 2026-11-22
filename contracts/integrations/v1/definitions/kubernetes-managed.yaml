@@ -1,0 +1,952 @@
+apiVersion: integrations.kodex.io/v1
+kind: IntegrationPackage
+metadata:
+  key: kubernetes-managed
+  version: 1.0.0
+  origin: SHIPPED
+spec:
+  name: Управляемый Kubernetes
+  description: Типизированные Kubernetes operations через private broker с отдельными identity, namespace grants, current permissions и effect gates.
+  category: infrastructure
+  adapter: KUBERNETES
+  adapterOwner: integration-gateway
+  executionRoute: MANAGED_MCP
+  readiness: READY
+  credential: {kind: BROKER_IDENTITY, brokerPurpose: KUBERNETES_TARGET}
+  configurationFields:
+    - {key: target_ref, label: Выбранный Kubernetes target, help: Ссылка на настроенный оператором target без kubeconfig или URL., type: STRING, format: IDENTIFIER, required: true, maximumLength: 96}
+    - {key: service_subject_ref, label: Служебная identity, help: Только для явно выбранного PROJECT_SHARED. Владелец проверяет активный SERVICE и права управления., type: STRING, format: IDENTIFIER, required: false, maximumLength: 96}
+  networkDestinations:
+    - {key: kubernetes_broker, source: STATIC, hostname: secret-broker.kodex-system.svc, port: 8443, tls: REQUIRED}
+  healthCheck: {operation: kubernetes.identity, timeoutSeconds: 20, maxAttempts: 1}
+  capabilities:
+    - key: kubernetes.access
+      name: "Проверить конкретное право"
+      description: "Проверить конкретное право по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.access
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.annotate
+      name: "Изменить annotations"
+      description: "Изменить annotations по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.annotate
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.apply
+      name: "Применить объект"
+      description: "Применить объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.apply
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.attach
+      name: "Подключиться к контейнеру"
+      description: "Подключиться к контейнеру по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.attach
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.auth.reconcile
+      name: "Согласовать RBAC"
+      description: "Согласовать RBAC по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.auth.reconcile
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.autoscale
+      name: "Создать autoscaler"
+      description: "Создать autoscaler по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.autoscale
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.certificate.approve
+      name: "Одобрить certificate request"
+      description: "Одобрить certificate request по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.certificate.approve
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.certificate.deny
+      name: "Отклонить certificate request"
+      description: "Отклонить certificate request по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.certificate.deny
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.cluster-info
+      name: "Прочитать сведения о кластере"
+      description: "Прочитать сведения о кластере по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.cluster-info
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.config.metadata
+      name: "Прочитать безопасные target metadata"
+      description: "Прочитать безопасные target metadata по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.config.metadata
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.cordon
+      name: "Закрыть Node для scheduling"
+      description: "Закрыть Node для scheduling по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.cordon
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.cp.download
+      name: "Получить artifact из контейнера"
+      description: "Получить artifact из контейнера по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.cp.download
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.cp.upload
+      name: "Передать artifact в контейнер"
+      description: "Передать artifact в контейнер по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.cp.upload
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.create
+      name: "Создать объект"
+      description: "Создать объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.create
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/body/metadata"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.debug
+      name: "Запустить диагностический контейнер"
+      description: "Запустить диагностический контейнер по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.debug
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.delete
+      name: "Удалить объект"
+      description: "Удалить объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.delete
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.describe
+      name: "Описать объект"
+      description: "Описать объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.describe
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.diff
+      name: "Сравнить proposed объект"
+      description: "Сравнить proposed объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.diff
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.discovery
+      name: "Открыть API resources"
+      description: "Открыть API resources по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.discovery
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.drain
+      name: "Освободить Node"
+      description: "Освободить Node по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.drain
+      risk: DESTRUCTIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.edit
+      name: "Сохранить отредактированный объект"
+      description: "Сохранить отредактированный объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.edit
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.events
+      name: "Прочитать события"
+      description: "Прочитать события по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.events
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.exec
+      name: "Исполнить команду в контейнере"
+      description: "Исполнить команду в контейнере по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.exec
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.explain
+      name: "Прочитать схему поля"
+      description: "Прочитать схему поля по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.explain
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.expose
+      name: "Создать Service"
+      description: "Создать Service по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.expose
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.get
+      name: "Прочитать объект"
+      description: "Прочитать объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.get
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.help
+      name: "Прочитать справку команды"
+      description: "Прочитать справку команды по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.help
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.identity
+      name: "Проверить выбранную identity"
+      description: "Проверить выбранную identity по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.identity
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.kustomize
+      name: "Собрать manifest из artifact"
+      description: "Собрать manifest из artifact по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.kustomize
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.label
+      name: "Изменить labels"
+      description: "Изменить labels по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.label
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.list
+      name: "Получить список"
+      description: "Получить список по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.list
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.list.all-namespaces
+      name: "Получить список во всех namespaces"
+      description: "Получить список во всех namespaces по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.list.all-namespaces
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.logs
+      name: "Прочитать логи"
+      description: "Прочитать логи по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.logs
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.patch
+      name: "Изменить объект"
+      description: "Изменить объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.patch
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.port-forward
+      name: "Открыть ограниченный port-forward"
+      description: "Открыть ограниченный port-forward по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.port-forward
+      risk: SENSITIVE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.replace
+      name: "Заменить объект"
+      description: "Заменить объект по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.replace
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.history
+      name: "Прочитать историю rollout"
+      description: "Прочитать историю rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.history
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.pause
+      name: "Приостановить rollout"
+      description: "Приостановить rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.pause
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.restart
+      name: "Перезапустить rollout"
+      description: "Перезапустить rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.restart
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.resume
+      name: "Продолжить rollout"
+      description: "Продолжить rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.resume
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.status
+      name: "Ожидать rollout"
+      description: "Ожидать rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.status
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.rollout.undo
+      name: "Откатить rollout"
+      description: "Откатить rollout по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.rollout.undo
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.run
+      name: "Создать Pod"
+      description: "Создать Pod по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.run
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/options/podName"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.scale
+      name: "Изменить число replicas"
+      description: "Изменить число replicas по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.scale
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.env
+      name: "Изменить environment"
+      description: "Изменить environment по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.env
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.image
+      name: "Изменить image"
+      description: "Изменить image по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.image
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.resources
+      name: "Изменить resource limits"
+      description: "Изменить resource limits по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.resources
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.selector
+      name: "Изменить selector"
+      description: "Изменить selector по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.selector
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.serviceaccount
+      name: "Изменить ServiceAccount"
+      description: "Изменить ServiceAccount по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.serviceaccount
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.set.subject
+      name: "Изменить RBAC subjects"
+      description: "Изменить RBAC subjects по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.set.subject
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.status.get
+      name: "Прочитать состояние"
+      description: "Прочитать состояние по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.status.get
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.status.patch
+      name: "Изменить состояние"
+      description: "Изменить состояние по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.status.patch
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.status.update
+      name: "Заменить состояние"
+      description: "Заменить состояние по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.status.update
+      risk: WRITE
+      approvalPolicy: HUMAN_SCOPED
+      allowedApprovalPolicies: ["HUMAN_SCOPED", "HUMAN_EACH_EFFECT"]
+      approvalScope:
+        name: Точный Kubernetes resource
+        requiredInputPaths: ["/group", "/version", "/resource", "/namespace", "/name", "/uid"]
+        limits: {durationSeconds: 604800, maxEffects: 10000}
+        allowedLifetimes: [ROOT_RUN, INITIATOR_RESOURCE]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.taint
+      name: "Изменить Node taints"
+      description: "Изменить Node taints по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.taint
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.top
+      name: "Прочитать метрики"
+      description: "Прочитать метрики по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.top
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.uncordon
+      name: "Открыть Node для scheduling"
+      description: "Открыть Node для scheduling по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.uncordon
+      risk: WRITE
+      approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: ONE_ATTEMPT, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.version
+      name: "Прочитать версию"
+      description: "Прочитать версию по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.version
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.wait
+      name: "Ожидать условие"
+      description: "Ожидать условие по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.wait
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.watch
+      name: "Наблюдать изменения"
+      description: "Наблюдать изменения по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.watch
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}
+    - key: kubernetes.watch.all-namespaces
+      name: "Наблюдать во всех namespaces"
+      description: "Наблюдать во всех namespaces по exact target и namespace scope; broker заново проверяет identity, discovery и необходимые права."
+      operation: kubernetes.watch.all-namespaces
+      risk: READ
+      approvalPolicy: NONE
+      allowedApprovalPolicies: ["NONE"]
+      resourceScope: {kind: KUBERNETES_TARGET, connectionFields: [target_ref]}
+      inputFields: []
+      outputFields:
+        - {key: result, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
+        - {key: outcome, type: STRING, format: PLAIN, required: true, maximumLength: 9, allowedValues: [SUCCEEDED, FAILED, UNKNOWN]}
+        - {key: effect_ref, type: STRING, format: PLAIN, required: false, maximumLength: 256}
+      execution: {leaseProfile: MANAGED_KUBERNETES_V1, idempotency: READ_ONLY, timeoutSeconds: 600, maxAttempts: 1, retryBackoffMilliseconds: 250}

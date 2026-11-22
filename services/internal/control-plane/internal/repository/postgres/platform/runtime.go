@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
+	"github.com/codex-k8s/kodex/libs/go/managedkubernetes"
 	"github.com/codex-k8s/kodex/libs/go/repositorybundle"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -2902,7 +2903,18 @@ func (repository *Repository) scheduleCallbackContinuationTaskForMode(ctx contex
 // scheduleIntegrationContinuation создаёт не более одного продолжения той же сессии для допустимого
 // terminal invocation, передавая точное решение владельца в новую неизменяемую задачу без разрешения
 // нового внешнего эффекта и без открытия terminal root.
-func (repository *Repository) scheduleIntegrationContinuation(ctx context.Context, tx pgx.Tx, current scope, invocationID, projectID string) (bool, error) {
+func (repository *Repository) scheduleIntegrationContinuation(ctx context.Context, tx pgx.Tx, current scope, invocationID, projectID string, decisionGateRefs ...string) (bool, error) {
+	if len(decisionGateRefs) > 1 {
+		return false, errs.ErrInvalid
+	}
+	decisionGateRef := ""
+	if len(decisionGateRefs) == 1 {
+		decisionGateRef = decisionGateRefs[0]
+		if !managedkubernetes.ValidLocator(decisionGateRef) {
+			return false, errs.ErrInvalid
+		}
+	}
+
 	var callbackNodeID string
 	joinErr := tx.QueryRow(ctx, queryRepositoryBundleCallbackJoin, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "invocation_id": invocationID,
@@ -2920,7 +2932,7 @@ func (repository *Repository) scheduleIntegrationContinuation(ctx context.Contex
 	var legacyReadSnapshot, workflowEvidenceSnapshot []byte
 	var evidenceAuthority, evidenceBudget, ordinaryResultReader bool
 	err := tx.QueryRow(ctx, queryRuntimeIntegrationResolveContinuation, pgx.StrictNamedArgs{
-		"invocation_id": invocationID, "organization_id": current.organizationID,
+		"invocation_id": invocationID, "organization_id": current.organizationID, "decision_gate_ref": decisionGateRef,
 	}).Scan(&parentNodeID, &runID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID,
 		&agentRef, &workflowVersionID, &invocationRef, &invocationState, &resultSummary, &safeErrorCode,
 		&decision.GateRef, &decision.GateVersion, &decision.Decision, &decision.Comment, &receiptRef, &ordinaryResultReader)

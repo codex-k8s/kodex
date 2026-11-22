@@ -82,8 +82,16 @@ func (service *Service) ConfigureEmailMailboxCredential(ctx context.Context, pri
 	if err != nil {
 		return entity.EmailMailboxCredential{}, err
 	}
-	if connection.DefinitionKey != "email" || !containsString(connection.NextActions, "CONFIGURE_CREDENTIAL") {
+	if connection.DefinitionKey != "email" || !connection.Enabled || connection.State == "TESTING" {
 		return entity.EmailMailboxCredential{}, errs.ErrForbidden
+	}
+	owner, err := service.repository.GetEmailMailboxOwnership(ctx, principal, connectionRef)
+	if err != nil {
+		return entity.EmailMailboxCredential{}, err
+	}
+	if owner.ConnectionRef != connectionRef || owner.DeliveryKind != "MAILBOX_CONFIGURATION" || owner.Policy != connection.CredentialPolicy ||
+		owner.State != "ACTIVE" || !owner.OwnerEligible || owner.Generation < 1 || owner.ConnectionVersion != connection.Version {
+		return entity.EmailMailboxCredential{}, errs.ErrConflict
 	}
 	// Exact retry может иметь прежнюю OCC version; receipt проверяется владельцем.
 	if connection.Version < *mutation.ExpectedVersion {
@@ -94,7 +102,7 @@ func (service *Service) ConfigureEmailMailboxCredential(ctx context.Context, pri
 	generation := *mutation.ExpectedVersion + 1
 	key := name + "." + strconv.FormatInt(generation, 10)
 	digest := sha256.Sum256(raw)
-	payload := command.EmailCredentialInput{ConnectionRef: connectionRef, Credential: entity.EmailMailboxCredential{
+	payload := command.EmailCredentialInput{ConnectionRef: connectionRef, OwnerGeneration: owner.Generation, Credential: entity.EmailMailboxCredential{
 		Name: name, Generation: generation, Kind: kind, ConnectionRef: connectionRef, ContentSHA256: hex.EncodeToString(digest[:]),
 	}}
 	if connection.Version != *mutation.ExpectedVersion {

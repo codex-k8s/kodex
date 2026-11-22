@@ -90,7 +90,17 @@ onBeforeUnmount(() => {
             aria-hidden="true"
           />
           <AlertTriangle v-else :size="18" aria-hidden="true" />
-          {{ $t(statusKey, { count: recovery.preview.cleanupPendingCount }) }}
+          {{
+            $t(statusKey, {
+              count:
+                recovery.preview.reasonCode ===
+                  "KUBERNETES_STAGING_RECONCILIATION_REQUIRED" ||
+                recovery.preview.reasonCode ===
+                  "ARTIFACT_PURGE_RECONCILIATION_REQUIRED"
+                  ? recovery.preview.unknownContentCount
+                  : recovery.preview.cleanupPendingCount,
+            })
+          }}
         </p>
         <p v-if="recovery.preview.canResolve">
           {{

@@ -59,7 +59,7 @@ func TestGrafanaPersonalCredentialPreflight(t *testing.T) {
 						requirement.ResourcePermissionProfile = ""
 						invalid = true
 					}
-					selected, err := ResolveIntegrationCredential(requirement, initiator, &shared, personal, now)
+					selected, err := ResolveIntegrationCredential(requirement, initiator, entity.TokenIntegrationCredentialSource(&shared), personal, now)
 					if forbidden {
 						if !errors.Is(err, errs.ErrForbidden) {
 							t.Fatal("foreign owner admitted", err)

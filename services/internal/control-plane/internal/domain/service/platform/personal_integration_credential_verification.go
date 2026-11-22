@@ -18,14 +18,24 @@ import (
 // owner snapshot после self/OCC проверок. Вызывающий разрешает опубликованные READ/NONE probes,
 // атомарно сохраняет binding/job/receipt и не передаёт сюда plaintext.
 func BeginPersonalIntegrationCredentialVerification(binding entity.PersonalIntegrationCredential, initiator entity.IntegrationCredentialInitiator, expectedVersion int64, spec entity.PersonalIntegrationCredentialTestSpec) (entity.PersonalIntegrationCredential, entity.PersonalIntegrationCredentialTestSnapshot, error) {
+	return beginPersonalIntegrationCredentialVerification(binding, initiator, expectedVersion, spec, entity.IntegrationCredentialToken)
+}
+
+// beginPersonalIntegrationCredentialVerification owns the shared personal verification transition
+// after a specialized caller selects its exact representation. It never converts between kinds.
+// beginPersonalIntegrationCredentialVerification владеет общим переходом personal verification
+// после выбора exact representation специализированным caller; kind никогда не преобразуется.
+func beginPersonalIntegrationCredentialVerification(binding entity.PersonalIntegrationCredential, initiator entity.IntegrationCredentialInitiator, expectedVersion int64, spec entity.PersonalIntegrationCredentialTestSpec, kind entity.IntegrationCredentialKind) (entity.PersonalIntegrationCredential, entity.PersonalIntegrationCredentialTestSnapshot, error) {
 	if err := personalIntegrationCredentialMutationAuthority(binding, initiator, expectedVersion); err != nil {
 		return entity.PersonalIntegrationCredential{}, entity.PersonalIntegrationCredentialTestSnapshot{}, err
 	}
 	if spec.GitHubDiscoveryPage < 0 || spec.GitHubDiscoveryPage > 10000 || spec.GitHubDiscoveryPage != 0 && spec.HealthCapabilityKey != "github.identity.read" {
 		return entity.PersonalIntegrationCredential{}, entity.PersonalIntegrationCredentialTestSnapshot{}, errs.ErrInvalid
 	}
-	if binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired || binding.State == "REVOKED" || binding.State == "CHECKING" || binding.State == "NOT_CONFIGURED" ||
-		binding.Credential == nil || !validStoredIntegrationCredential(binding.Credential) {
+	sourceRef, sourceValid := personalVerificationSource(binding, spec)
+	if binding.Kind != kind || !sourceValid ||
+		binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired || binding.State == "REVOKED" || binding.State == "CHECKING" || binding.State == "NOT_CONFIGURED" ||
+		sourceRef == "" {
 		return entity.PersonalIntegrationCredential{}, entity.PersonalIntegrationCredentialTestSnapshot{}, errs.ErrConflict
 	}
 	if !personalIntegrationCredentialCoordinate(spec.Ref) || spec.ConnectionVersion < 1 || binding.ConnectionVersion != spec.ConnectionVersion ||
@@ -44,7 +54,12 @@ func BeginPersonalIntegrationCredentialVerification(binding entity.PersonalInteg
 	spec.AllowedDeniedWriteCapabilityKeys = append([]string(nil), spec.AllowedDeniedWriteCapabilityKeys...)
 	snapshot := entity.PersonalIntegrationCredentialTestSnapshot{PersonalIntegrationCredentialTestSpec: spec,
 		OrganizationID: binding.OrganizationID, SubjectID: binding.SubjectID, ConnectionRef: binding.ConnectionRef,
-		BindingRef: binding.Ref, BindingVersion: binding.Version, BindingGeneration: binding.Generation, CredentialRef: binding.Credential.Ref}
+		BindingRef: binding.Ref, BindingVersion: binding.Version, BindingGeneration: binding.Generation, Kind: binding.Kind}
+	if kind == entity.IntegrationCredentialToken {
+		snapshot.CredentialRef = sourceRef
+	} else {
+		snapshot.BrokerIdentityRef = sourceRef
+	}
 	return binding, snapshot, nil
 }
 
@@ -57,15 +72,19 @@ func ValidatePersonalIntegrationCredentialVerificationSnapshot(binding entity.Pe
 		snapshot.OrganizationID == "" || snapshot.SubjectID == "" || snapshot.BindingRef == "" {
 		return errs.ErrForbidden
 	}
-	if binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired || binding.State != "CHECKING" || binding.Version != snapshot.BindingVersion ||
-		binding.Generation != snapshot.BindingGeneration || binding.Credential == nil || binding.Credential.Ref != snapshot.CredentialRef ||
+	sourceRef, sourceValid := personalVerificationSource(binding, snapshot.PersonalIntegrationCredentialTestSpec)
+	matchingSource := snapshot.Kind == entity.IntegrationCredentialToken && snapshot.BrokerIdentityRef == "" && snapshot.CredentialRef == sourceRef ||
+		snapshot.Kind == entity.IntegrationCredentialBrokerIdentity && snapshot.CredentialRef == "" && snapshot.BrokerIdentityRef == sourceRef
+	if !sourceValid || !matchingSource || snapshot.Kind != binding.Kind ||
+		binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired || binding.State != "CHECKING" || binding.Version != snapshot.BindingVersion ||
+		binding.Generation != snapshot.BindingGeneration ||
 		binding.ConnectionVersion != snapshot.ConnectionVersion || currentDefinitionDigest != snapshot.DefinitionDigest || currentConfigurationDigest != snapshot.ConfigurationDigest {
 		return errs.ErrConflict
 	}
 	if binding.Version == math.MaxInt64 {
 		return errs.ErrConflict
 	}
-	if binding.Version < 1 || binding.Generation < 1 || !validStoredIntegrationCredential(binding.Credential) ||
+	if binding.Version < 1 || binding.Generation < 1 ||
 		!personalIntegrationCredentialCoordinate(snapshot.Ref) || !validIntegrationCredentialDigest(currentDefinitionDigest) || !validIntegrationCredentialDigest(currentConfigurationDigest) ||
 		!validPersonalCredentialTestCapabilities(snapshot.AllowedReadCapabilityKeys) || !containsString(snapshot.AllowedReadCapabilityKeys, snapshot.HealthCapabilityKey) || !validPersonalCredentialObservationSpec(snapshot.PersonalIntegrationCredentialTestSpec) {
 		return errs.ErrInvalid
@@ -115,7 +134,8 @@ func CompletePersonalIntegrationCredentialVerification(binding entity.PersonalIn
 			return entity.PersonalIntegrationCredential{}, errs.ErrInvalid
 		}
 		binding.State = "READY"
-		binding.VerifiedCredentialRef, binding.VerifiedDefinitionDigest, binding.VerifiedConfigurationDigest = snapshot.CredentialRef, snapshot.DefinitionDigest, snapshot.ConfigurationDigest
+		binding.VerifiedCredentialRef, binding.VerifiedBrokerIdentityRef = snapshot.CredentialRef, snapshot.BrokerIdentityRef
+		binding.VerifiedDefinitionDigest, binding.VerifiedConfigurationDigest = snapshot.DefinitionDigest, snapshot.ConfigurationDigest
 		binding.VerifiedCapabilities = append([]string(nil), observation.ConfirmedCapabilityKeys...)
 		binding.DeniedCapabilities = append([]string(nil), observation.DeniedCapabilityKeys...)
 		binding.ObservedPermissionProfiles = append([]string(nil), observation.ObservedPermissionProfiles...)

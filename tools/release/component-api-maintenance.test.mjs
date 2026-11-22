@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {fingerprint} from './scoped-release.mjs';
-import {planComponentAPIMaintenance,componentAPIMaintenanceStep,requireClosedAPIMaintenance} from './component-api-maintenance.mjs';
+import {planComponentAPITraffic} from './component-api-traffic.mjs';
+import {workflowFileCancelledCloseAnnotation} from './workflow-file-provenance-migration-contract.mjs';
+import {planComponentAPIMaintenance,componentAPIMaintenanceStep,requireClosedAPIMaintenance,fenceCancelledAPIClose} from './component-api-maintenance.mjs';
 
 const uid='11111111-1111-4111-8111-111111111111',source='a'.repeat(40),key='kodex.dev/component-maintenance';
 function fixture(){
@@ -84,4 +86,54 @@ test('нельзя присвоить чужой maintenance и открыть A
   const changed=structuredClone(f.state.deployment);delete changed.metadata.annotations[key];
   assert.throws(()=>planComponentAPIMaintenance(changed,f.target,f.observed,source,'open',previous));
   writer(f);assert.throws(()=>planComponentAPIMaintenance(f.state.deployment,f.target,{...f.observed,resources:f.state.resources},source,'open',previous));
+});
+
+
+function cancellationFixture(){
+  const f=fixture(),name='control-api-gateway',serviceUID='22222222-2222-4222-8222-222222222222';
+  const service={apiVersion:'v1',kind:'Service',metadata:{uid:serviceUID,name,namespace:'kodex-system',resourceVersion:'55',
+    labels:f.state.deployment.metadata.labels,annotations:{existing:'preserved'}},
+    spec:{type:'ClusterIP',clusterIP:'192.0.2.42',selector:{'app.kubernetes.io/name':name},ports:[{port:8443,targetPort:'https'}]}};
+  f.target.resources.push({apiVersion:'v1',kind:'Service',name,uid:serviceUID});
+  const close=planComponentAPIMaintenance(f.state.deployment,f.target,f.observed,source,'close',undefined,undefined,service);
+  const journal=plan=>({events:[{type:'HEADER',schema:'kodex.component-api-maintenance-evidence/v1',planSHA256:fingerprint(plan),maintenanceID:plan.maintenanceID}],
+    append(event){this.events.push(event);}});
+  const closeJournal=journal(close);
+  assert.equal(f.step('apply',close,closeJournal).state,'CLOSED');
+  const previous={plan:close,events:closeJournal.events};
+  const cancel=planComponentAPIMaintenance(f.state.deployment,f.target,f.observed,source,'cancel',previous,undefined,service);
+  const cancelJournal=journal(cancel),state={patches:0,lostACK:false,ownerChanged:false};
+  const gate=()=>fenceCancelledAPIClose({plan:cancel,previous,getService:()=>service,closeJournal,journal:cancelJournal,
+    verifyOwner:()=>{if(state.ownerChanged)throw Error('SYNTHETIC_WRITER_FOUND');},
+    patchService:(ops,dryRun)=>{
+      assert.equal(ops[0].value,serviceUID);assert.equal(ops[1].value,service.metadata.resourceVersion);assert.deepEqual(ops[2].value,service.spec);
+      if(dryRun)return;
+      assert.equal(closeJournal.events.at(-1).type,'CLOSE_CANCEL_INTENT');assert.equal(cancelJournal.events.at(-1).type,'SERVICE_FENCE_INTENT');
+      service.metadata.annotations=structuredClone(ops[3].value);service.metadata.resourceVersion='56';state.patches++;
+      if(state.lostACK)throw Error('SYNTHETIC_RESPONSE_LOST');
+    }});
+  return {f,service,close,cancel,previous,state,gate,closeJournal,cancelJournal};
+}
+
+test('051 cancel fences exact original Service once before restoring the old gateway',()=>{
+  const x=cancellationFixture(),oldSpec=structuredClone(x.service.spec);
+  x.state.lostACK=true;
+  assert.throws(x.gate,/RESPONSE_LOST/);
+  assert.equal(x.service.metadata.annotations[workflowFileCancelledCloseAnnotation],x.close.maintenanceID);
+  assert.deepEqual(x.service.spec,oldSpec);
+  assert.equal(x.gate().serviceUID,x.service.metadata.uid);
+  assert.equal(x.state.patches,1);
+  assert.deepEqual(x.cancel.afterSpec,x.close.beforeSpec);
+  assert.throws(()=>planComponentAPITraffic({service:x.service,deployment:x.f.state.deployment,resources:x.f.state.resources,
+    target:x.f.target,observed:x.f.observed,sourceSHA:source,action:'isolate',closed:x.previous}),/CLOSE_CANCELLED/);
+});
+
+test('051 cancel leaves isolation or a changed owner untouched',()=>{
+  const x=cancellationFixture();
+  x.service.spec.selector['kodex.dev/component-traffic-isolation']=x.close.maintenanceID;
+  assert.throws(x.gate,/RECOVERY_SERVICE_CHANGED/);
+  assert.equal(x.state.patches,0);
+  const y=cancellationFixture();y.state.ownerChanged=true;
+  assert.throws(y.gate,/WRITER_FOUND/);assert.equal(y.state.patches,0);
+  assert.equal(y.closeJournal.events.some(event=>event.type==='CLOSE_CANCEL_INTENT'),false);
 });

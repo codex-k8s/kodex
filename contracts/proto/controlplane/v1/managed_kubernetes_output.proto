@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Чтение уже сохранённых и подтверждённых кадров исходным пользователем.
+// Не выпускает native credit, не подтверждает local TCP delivery и не заменяет artifact history.
+service ManagedKubernetesStreamOutputService {
+  rpc ReadManagedKubernetesStreamOutput(ReadManagedKubernetesStreamOutputRequest) returns (ReadManagedKubernetesStreamOutputResponse);
+}
+
+enum ManagedKubernetesStreamOutputStatus {
+  MANAGED_KUBERNETES_STREAM_OUTPUT_STATUS_UNSPECIFIED = 0;
+  MANAGED_KUBERNETES_STREAM_OUTPUT_STATUS_WAITING = 1;
+  MANAGED_KUBERNETES_STREAM_OUTPUT_STATUS_FRAME = 2;
+  MANAGED_KUBERNETES_STREAM_OUTPUT_STATUS_ENDED = 3;
+  MANAGED_KUBERNETES_STREAM_OUTPUT_STATUS_INCOMPLETE = 4;
+}
+
+message ReadManagedKubernetesStreamOutputRequest {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  int64 generation = 3;
+  uint64 after_sequence = 4;
+}
+
+// Exact owner receipt текущего read; private object locator/ETag/version наружу не выходят.
+// Payload — недоверенные данные. Рендерер не исполняет их как HTML либо инструкции.
+message ManagedKubernetesStreamOutputFrame {
+  string stage_ref = 1;
+  uint64 sequence = 2;
+  string channel = 3;
+  string payload_sha256 = 4;
+  bytes payload = 5;
+}
+
+message ReadManagedKubernetesStreamOutputResponse {
+  string invocation_ref = 1;
+  string stream_ref = 2;
+  int64 generation = 3;
+  uint64 after_sequence = 4;
+  uint64 output_watermark = 5;
+  ManagedKubernetesStreamOutputStatus status = 6;
+  ManagedKubernetesStreamOutputFrame frame = 7;
+  // Срок отдельной disclosure boundary; не переносится в native frame admission.
+  google.protobuf.Timestamp authorized_until = 8;
+  bool native_terminal_known = 9;
+  bool transport_joined = 10;
+  uint64 dropped_bytes = 11;
+}

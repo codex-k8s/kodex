@@ -23,7 +23,7 @@ func (server *Server) ConfigureEmailMailboxCredential(w http.ResponseWriter, r *
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
-	body, m, ok := decodeMutationBody[generated.EmailMailboxCredentialInput](w, r, p.IdempotencyKey, p.IfMatch)
+	body, m, ok := decodeMailboxMutation[generated.EmailMailboxCredentialInput](w, r, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}

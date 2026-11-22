@@ -69,6 +69,12 @@ func (repository *Repository) pinPersonalInvocationCredentialTx(ctx context.Cont
 		return err
 	}
 	current := choice.context
+	if current.definitionKey == integrationpackage.SSHManagedDefinitionKey || current.definitionKey == integrationpackage.SSHExecuteDefinitionKey {
+		return repository.pinSSHInvocationIdentityTx(ctx, tx, organizationID, choice)
+	}
+	if current.definitionKey == integrationpackage.KubernetesDefinitionKey {
+		return repository.pinKubernetesInvocationIdentityTx(ctx, tx, organizationID, choice)
+	}
 	if current.policy == entity.IntegrationCredentialProjectShared {
 		return nil
 	}
@@ -118,10 +124,6 @@ func (repository *Repository) selectPersonalInvocationCredentialTx(ctx context.C
 	if current.subjectKind != "USER" || current.source == "SCHEDULE" || current.source == "INTEGRATION" {
 		return nil, personalInvocationCredentialProblem(current, entity.IntegrationCredentialInitiatorMissing)
 	}
-	current.accessUntil, err = repository.requireAccessUntil(ctx, tx, scope{organizationID: organizationID, actorID: current.subjectID, actorRef: current.subjectRef}, "integration.manage", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: current.connectionRef})
-	if err != nil {
-		return nil, err
-	}
 	definition, err := repository.integrationPackage(ctx, tx, organizationID, current.connectionRef,
 		current.definitionKey, current.definitionVersion, current.definitionDigest)
 	if err != nil {
@@ -163,10 +165,38 @@ func (repository *Repository) selectPersonalInvocationCredentialTx(ctx context.C
 	if err != nil {
 		return nil, err
 	}
+	delivery, deliveryKnown := definition.ConnectionCredentialDelivery()
+	kind, purpose, targetRef := entity.IntegrationCredentialToken, entity.IntegrationBrokerIdentityPurpose(""), ""
+	if !deliveryKnown {
+		return nil, errs.ErrUnavailable
+	}
+	if delivery.Kind == integrationpackage.CredentialDeliveryToken {
+		current.accessUntil, err = repository.requireAccessUntil(ctx, tx, scope{organizationID: organizationID, actorID: current.subjectID, actorRef: current.subjectRef}, integrationInvocationActorPermission(definition), entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: current.connectionRef})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if delivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity {
+		switch delivery.BrokerPurpose {
+		case string(entity.IntegrationBrokerIdentityKubernetes):
+			if definition.Metadata.Key != integrationpackage.KubernetesDefinitionKey {
+				return nil, errs.ErrUnavailable
+			}
+		case string(entity.IntegrationBrokerIdentitySSH):
+			if definition.Spec.Adapter != string(integrationpackage.AdapterSSHTarget) || (definition.Metadata.Key != integrationpackage.SSHManagedDefinitionKey && definition.Metadata.Key != integrationpackage.SSHExecuteDefinitionKey) || strings["service_subject_ref"] != "" {
+				return nil, errs.ErrUnavailable
+			}
+		default:
+			return nil, errs.ErrUnavailable
+		}
+		kind, purpose, targetRef = entity.IntegrationCredentialBrokerIdentity, entity.IntegrationBrokerIdentityPurpose(delivery.BrokerPurpose), strings["target_ref"]
+	} else if delivery.Kind != integrationpackage.CredentialDeliveryToken {
+		return nil, errs.ErrForbidden
+	}
 	selection, err := platformservice.ResolveIntegrationCredential(entity.IntegrationCredentialRequirement{
 		ConnectionRef: current.connectionRef, CapabilityKey: current.capabilityKey,
 		DefinitionDigest: current.definitionDigest, ConfigurationDigest: configurationDigest,
-		Policy: current.policy, CredentialRequired: true,
+		Policy: current.policy, CredentialRequired: true, Kind: kind, BrokerPurpose: purpose, BrokerTargetRef: targetRef,
 		DefinitionKey: definition.Metadata.Key, ResourcePermissionProfile: integrationpackage.CredentialResourcePermissionProfile(definition, capability),
 	}, entity.IntegrationCredentialInitiator{OrganizationID: organizationID, SubjectID: current.subjectID, SubjectKind: current.subjectKind}, nil, &binding, time.Now().UTC())
 	if err != nil {
@@ -175,7 +205,8 @@ func (repository *Repository) selectPersonalInvocationCredentialTx(ctx context.C
 	if selection.Problem != "" {
 		return nil, personalInvocationCredentialProblem(current, selection.Problem)
 	}
-	if selection.Credential == nil || selection.PersonalBindingRef == "" || selection.BindingGeneration < 1 {
+	if (kind == entity.IntegrationCredentialToken && selection.Credential == nil) ||
+		(kind == entity.IntegrationCredentialBrokerIdentity && selection.BrokerIdentity == nil) || selection.PersonalBindingRef == "" || selection.BindingGeneration < 1 {
 		return nil, errs.ErrUnavailable
 	}
 	return &personalInvocationCredentialChoice{context: current, bindingID: bindingID, configurationDigest: configurationDigest, selection: selection}, nil

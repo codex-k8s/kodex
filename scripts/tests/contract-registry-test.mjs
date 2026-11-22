@@ -57,9 +57,9 @@ const riskOperations = [
 ];
 
 function checkRiskContract(api, policy) {
-  // Ревизия107 добавляет закрытый Telegram lifecycle поверх106;
-  // четыре human-only risk bindings остаются прежними и проверяются полностью.
-  assert.equal(policy.policy_revision, 107, 'RISK_POLICY_REVISION');
+  // Ревизия 110 добавляет операции личной почты и служебный допуск ART.
+  // Все четыре операции оценки риска требуют OIDC-сессию и доменное полномочие.
+  assert.equal(policy.policy_revision, 110, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');
@@ -130,7 +130,7 @@ test('image risk contract rejects delegated caller, project authority, missing p
 
 const controllerSPIFFE = 'spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller';
 const trustedPolicy = JSON.parse(readFileSync(`${root}services/internal/control-plane/internal/app/service-identity-policy.json`, 'utf8'));
-const protectedWorkloads = ['automation-scheduler', 'control-plane', 'email-bridge', 'image-admission',
+const protectedWorkloads = ['artifact-retention', 'automation-scheduler', 'control-plane', 'email-bridge', 'image-admission',
   'image-promotion', 'integration-gateway', 'interaction-gateway', 'role-image-builder',
   'runtime-controller', 'secret-broker', 'session-archive'];
 

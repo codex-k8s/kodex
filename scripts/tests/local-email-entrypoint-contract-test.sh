@@ -16,6 +16,8 @@ export command_log
 fail() { printf 'Local EMAIL entrypoint contract failed: %s\n' "$*" >&2; exit 1; }
 printf '%s\n' '{"kind":"Job","metadata":{"name":"email-bridge-migration"}}' >"$render"
 # Проверяется настоящая функция entrypoint, kubectl намеренно недоступен.
+# Функция вызывается из извлечённого apply_job, который ShellCheck не видит.
+# shellcheck disable=SC2329
 kubectl() { printf '%s\n' "$*" >>"$command_log"; }
 wait_job() { printf 'wait %s\n' "$*" >>"$command_log"; return "${wait_result:-0}"; }
 # shellcheck disable=SC1090
@@ -74,8 +76,14 @@ kubectl() {
   if [[ "$*" == *' create '* ]]; then
     printf 'create\n' >>"$create_log"
     [[ "${deny_create:-false}" != true ]] || return 1
-    jq -n '{kind:"Secret",type:"Opaque",metadata:{name:"email-bridge-mailbox-projection",namespace:"kodex-system",uid:"fixture-uid",labels:{"app.kubernetes.io/managed-by":"control-plane"}},data:{"mailboxes.json":"fixture-published-generation"}}' >"$state_file"
+    yq -o=json -I=0 '.' "$temporary_directory/email-projection-bootstrap.yaml" |
+      jq '.data = (.stringData | with_entries(.value |= @base64)) | del(.stringData) | .metadata.uid = "fixture-uid"' >"$state_file"
     [[ "${create_race:-false}" != true ]] || return 1
+    if [[ "${empty_ack:-false}" != true ]]; then cat "$state_file"; fi
+    if [[ "${replace_after_ack:-false}" == true ]]; then
+      jq '.metadata.uid = "replacement-uid"' "$state_file" >"$temporary_directory/replacement.json"
+      mv "$temporary_directory/replacement.json" "$state_file"
+    fi
   elif [[ "$*" == *' get secret/email-bridge-mailbox-projection '* ]]; then
     if [[ -f "$state_file" ]]; then cat "$state_file"; elif [[ "$*" != *'--ignore-not-found'* ]]; then return 1; fi
   else
@@ -83,6 +91,8 @@ kubectl() {
   fi
 }
 ensure_email_projection_secret
+jq '.data."mailboxes.json" = "cHVibGlzaGVkLWdlbmVyYXRpb24="' "$state_file" >"$temporary_directory/published.json"
+mv "$temporary_directory/published.json" "$state_file"
 before=$(sha256sum "$state_file")
 ensure_email_projection_secret
 [[ $(wc -l <"$create_log") == 1 && "$(sha256sum "$state_file")" == "$before" ]] || fail 'repeat bootstrap overwrote CP generation'
@@ -93,6 +103,17 @@ rm "$state_file"
 create_race=true
 ensure_email_projection_secret
 rm "$state_file"
+create_race=false
+replace_after_ack=true
+if (ensure_email_projection_secret) >"$temporary_directory/replacement.log" 2>&1; then fail 'known create ACK adopted a replacement UID'; fi
+rg -Fq 'email projection Secret UID changed after create ACK' "$temporary_directory/replacement.log" || fail 'replacement refusal did not check the ACK UID'
+rm "$state_file"
+replace_after_ack=false
+empty_ack=true
+if (ensure_email_projection_secret) >"$temporary_directory/empty-ack.log" 2>&1; then fail 'empty successful ACK adopted its following GET'; fi
+rg -Fq 'email projection Secret create ACK is invalid' "$temporary_directory/empty-ack.log" || fail 'empty ACK did not fail at the successful response boundary'
+rm "$state_file"
+empty_ack=false
 deny_create=true
 if (ensure_email_projection_secret) >/dev/null 2>&1; then fail 'failed bootstrap accepted'; fi
 printf 'Local EMAIL Secret bootstrap contract passed: create once, preserve generation, race readback and closed denial\n'

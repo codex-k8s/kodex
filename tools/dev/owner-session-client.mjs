@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { boundedResponseBody } from "./runtime-workspace-acceptance.mjs";
 import {
   exactOrigin,
+  ownerLocalRuntimeOriginProfile,
   readAuthenticatedState,
   requireSession,
   sessionCookieNames,
@@ -81,7 +82,14 @@ function metadata(value) {
 
 // BFF принимает только полную пару, proxy — полное новое поколение chunks.
 // Оба слоя проверяются до изменения state. Значения не попадают в ошибки.
-function adoptCookies(response, state, origin, now, required = false) {
+function adoptCookies(
+  response,
+  state,
+  origin,
+  now,
+  required = false,
+  originProfile = "ACCEPTANCE",
+) {
   const lines = response.headers.getSetCookie();
   if (!lines.length && !required) return false;
   requireSession(
@@ -178,7 +186,7 @@ function adoptCookies(response, state, origin, now, required = false) {
       ...activeProxy,
     ],
   };
-  sessionHeaders(next, origin, now);
+  sessionHeaders(next, origin, now, originProfile);
   state.cookies = next.cookies;
   return true;
 }
@@ -191,14 +199,15 @@ export function createOwnerSessionClient({
   storagePath,
   fetchAPI = fetch,
   now = Date.now,
+  originProfile = "ACCEPTANCE",
 }) {
-  origin = exactOrigin(origin);
+  origin = exactOrigin(origin, originProfile);
   const state = structuredClone(storage ?? readAuthenticatedState(storagePath));
-  sessionHeaders(state, origin, now());
+  sessionHeaders(state, origin, now(), originProfile);
   const cachePath = storagePath ? `${storagePath}.session.json` : undefined;
   const binding = () =>
     createHash("sha256")
-      .update(sessionHeaders(state, origin, now()).Cookie)
+      .update(sessionHeaders(state, origin, now(), originProfile).Cookie)
       .digest("hex");
   let writtenBinding = binding();
   let observation;
@@ -248,6 +257,7 @@ export function createOwnerSessionClient({
       readAuthenticatedState(storagePath),
       origin,
       now(),
+      originProfile,
     );
     requireSession(
       createHash("sha256").update(current.Cookie).digest("hex") ===
@@ -270,7 +280,7 @@ export function createOwnerSessionClient({
   async function readMetadata(method, signal) {
     const response = await fetchAPI(new URL(sessionPath, origin), {
       method,
-      headers: sessionHeaders(state, origin, now()),
+      headers: sessionHeaders(state, origin, now(), originProfile),
       redirect: "error",
       signal,
     });
@@ -307,7 +317,14 @@ export function createOwnerSessionClient({
           value.version >= observation.value.version,
         "metadata version regressed",
       );
-      adoptCookies(response, state, origin, now(), method === "PUT");
+      adoptCookies(
+        response,
+        state,
+        origin,
+        now(),
+        method === "PUT",
+        originProfile,
+      );
       observation = { value, observedAt: now() };
       save();
       return 200;
@@ -368,8 +385,11 @@ export function createOwnerSessionClient({
           !url.password &&
           !url.hash &&
           (observation
-            ? ["/", sessionPath].includes(url.pathname) && !url.search && (options.method ?? "GET") === "GET"
-            : url.pathname.startsWith("/api/v1/") && url.pathname !== sessionPath),
+            ? ["/", sessionPath].includes(url.pathname) &&
+              !url.search &&
+              (options.method ?? "GET") === "GET"
+            : url.pathname.startsWith("/api/v1/") &&
+              url.pathname !== sessionPath),
         "request path is invalid",
       );
       const supplied = new Headers(options.headers);
@@ -382,7 +402,7 @@ export function createOwnerSessionClient({
       await prepare(signal);
       const headers = Object.fromEntries(supplied);
       for (const [key, value] of Object.entries(
-        sessionHeaders(state, origin, now()),
+        sessionHeaders(state, origin, now(), originProfile),
       )) {
         if (key === "Accept" && supplied.has("accept")) continue;
         headers[key] = value;
@@ -401,10 +421,11 @@ export function createOwnerSessionClient({
         );
       }
       try {
-        if (adoptCookies(response, state, origin, now())) {
+        if (
+          adoptCookies(response, state, origin, now(), false, originProfile)
+        ) {
           requireSession(
-            (await readMetadata("GET", metadataSignal(options.signal))) ===
-              200,
+            (await readMetadata("GET", metadataSignal(options.signal))) === 200,
             "rotated session read failed",
           );
         }
@@ -426,13 +447,130 @@ export function createOwnerSessionClient({
     // вызывающей стороне менять внутреннее состояние клиента.
     authenticatedCookies() {
       requireSession(ready && !failed, "session snapshot is unavailable");
-      sessionHeaders(state, origin, now());
-      return structuredClone(selectedSessionCookies(state, origin, now()));
+      sessionHeaders(state, origin, now(), originProfile);
+      return structuredClone(
+        selectedSessionCookies(state, origin, now(), originProfile),
+      );
     },
     // Сериализация включает refresh и adoption; бизнес-запрос никогда не
     // повторяется здесь, даже после 401 либо неизвестного результата mutation.
     request,
     // Ограниченный GET monitor использует то же принятие cookies и очередь refresh.
-    observe(path, options = {}) { return request(path, options, true); },
+    observe(path, options = {}) {
+      return request(path, options, true);
+    },
   };
+}
+
+// Owner-local runtime использует тот же cookie/renew/CSRF consumer; acceptance profile по умолчанию остаётся прежним.
+export function createOwnerRuntimeSessionClient(options) {
+  requireSession(
+    typeof options?.fetchAPI === "function",
+    "runtime HTTPS transport is required",
+  );
+  return createOwnerSessionClient({
+    ...options,
+    originProfile: ownerLocalRuntimeOriginProfile,
+  });
+}
+
+// Bootstrap выполняет один существующий Bearer session POST из owned private JSON, затем сохраняет только host-bound BFF state.
+// Lost ACK не повторяет POST; caller получает closed error без token, cookies либо raw diagnostics.
+export async function bootstrapOwnerRuntimeSession({
+  origin,
+  tokenFile,
+  storagePath,
+  fetchAPI,
+  signal,
+}) {
+  requireSession(
+    typeof fetchAPI === "function",
+    "runtime HTTPS transport is required",
+  );
+  origin = exactOrigin(origin, ownerLocalRuntimeOriginProfile);
+  // readAuthenticatedState проверяет owned0700 parent даже для ещё отсутствующей цели.
+  try {
+    readAuthenticatedState(storagePath);
+    throw new Error("Owner runtime session destination already exists");
+  } catch (error) {
+    if (error.code !== "ENOENT")
+      throw new Error("Owner runtime session destination is unavailable");
+  }
+  let source,
+    postAttempted = false;
+  try {
+    source = readAuthenticatedState(tokenFile);
+    requireSession(
+      source &&
+        Object.keys(source).length === 2 &&
+        source.origin === origin &&
+        typeof source.accessToken === "string" &&
+        source.accessToken.length >= 43 &&
+        source.accessToken.length <= 16384 &&
+        /^[A-Za-z0-9._~+\/-]+={0,2}$/.test(source.accessToken),
+      "runtime bearer file is invalid",
+    );
+    postAttempted = true;
+    const response = await fetchAPI(new URL(sessionPath, origin), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${source.accessToken}`,
+        Origin: origin,
+        Accept: "application/json",
+        "Idempotency-Key": randomUUID(),
+      },
+      redirect: "error",
+      signal: metadataSignal(signal),
+    });
+    await response.body?.cancel().catch(() => {});
+    requireSession(response.status === 204, "runtime session bootstrap failed");
+    const state = { cookies: [], origins: [], runtimeOrigin: origin };
+    adoptCookies(
+      response,
+      state,
+      origin,
+      Date.now(),
+      true,
+      ownerLocalRuntimeOriginProfile,
+    );
+    const verifier = createOwnerRuntimeSessionClient({
+      origin,
+      storage: state,
+      fetchAPI,
+    });
+    const observed = await verifier.observe(sessionPath, {
+      signal: metadataSignal(signal),
+    });
+    requireSession(
+      observed.status === 200 &&
+        observed.headers
+          .get("cache-control")
+          ?.split(",")
+          .some((item) => item.trim() === "no-store"),
+      "runtime session readback failed",
+    );
+    const metadataBytes = await boundedResponseBody(observed, 16384);
+    try {
+      metadata(
+        JSON.parse(
+          new TextDecoder("utf-8", { fatal: true }).decode(metadataBytes),
+        ),
+      );
+    } finally {
+      metadataBytes.fill(0);
+    }
+    state.cookies = verifier.authenticatedCookies();
+    writeAuthenticatedState(storagePath, state, { createOnly: true });
+    // Возвращается только filename-neutral факт создания; материал не является результатом CLI.
+    return { created: true };
+  } catch {
+    throw new Error(
+      postAttempted
+        ? "Owner runtime session bootstrap outcome is unknown; no automatic retry was performed"
+        : "Owner runtime session bootstrap source is invalid",
+    );
+  } finally {
+    if (source) source.accessToken = undefined;
+    source = undefined;
+  }
 }

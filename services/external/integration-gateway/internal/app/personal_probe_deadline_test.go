@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func finitePersonalProbeFixture(t *testing.T, original, fresh time.Time) *person
 	return &personalProbeFixture{t: t,
 		admission: &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true, AuthorizedUntil: timestamppb.New(fresh)},
 		claims: &cp.ClaimPersonalIntegrationCredentialTestsResponse{Claims: []*cp.IntegrationConnectionTestClaim{{
-			TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"},
+			CredentialDeliveryKind: cp.IntegrationCredentialDeliveryKind_INTEGRATION_CREDENTIAL_DELIVERY_KIND_TOKEN, InputDigest: strings.Repeat("a", 64), TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"},
 			Lease: &cp.WorkLease{Ref: "lea_fixture01", Fence: "fnc_fixture01", Generation: 1, ExpiresAt: timestamppb.New(original)},
 		}}},
 	}

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import {isWorkflowFileProvenanceMigrationProfile} from './workflow-file-provenance-migration-contract.mjs';
+import {isPersonalIntegrationsMigrationProfile,validPersonalIntegrationsAuthoritySchemaHeads} from './personal-integrations-migration-contract.mjs';
 import {validateTelegramIntroducedReceiverProof} from './telegram-introduction-contract.mjs';
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -9,7 +11,7 @@ import {resolve} from 'node:path';
 import {promisify} from 'node:util';
 import {fingerprint} from './stable-inventory.mjs';
 import {validatedStablePublication,sourceArchiveHash} from './stable-image-publication.mjs';
-import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockMaxBytes,componentPublicationMaxBytes} from './portable-component-migration.mjs';
+import {componentMigrationConfiguration,componentMigrationPublication,componentImageLockBudget,componentPublicationMaxBytes} from './portable-component-migration.mjs';
 import {qualifyComponentNodeImages} from './component-node-qualification.mjs';
 import {createPrivatePrettyJSONSync} from './private-json-write.mjs';
 
@@ -58,10 +60,10 @@ export function validateComponentPublicationConfiguration(config){
   const heads=['control-plane','internal-rpc-authority','email-bridge'];
   requireValue([config.baseSchemaHeads,config.schemaHeadsBefore,config.schemaHeadsAfter].every(h=>exact(h,heads)&&
     heads.every(k=>Number.isSafeInteger(h[k])&&h[k]>0))&&config.schemaHeadsBefore['control-plane']===profile.before&&
-    config.schemaHeadsAfter['control-plane']===profile.after&&[20261112000100,20261113000100].includes(config.baseSchemaHeads['control-plane'])&&
+    config.schemaHeadsAfter['control-plane']===profile.after&&(isPersonalIntegrationsMigrationProfile(config.profile)?[20261112000100,20261113000100,20261114140000]:[20261112000100,20261113000100]).includes(config.baseSchemaHeads['control-plane'])&&
     (profile.schema.endsWith('/v2')||same(config.baseSchemaHeads,config.schemaHeadsBefore))&&
-    heads.filter(k=>k!=='control-plane').every(k=>config.baseSchemaHeads[k]===config.schemaHeadsBefore[k]&&
-      config.schemaHeadsBefore[k]===config.schemaHeadsAfter[k]),'COMPONENT_PUBLICATION_SCHEMA_INVALID');
+    ((isPersonalIntegrationsMigrationProfile(config.profile)||isWorkflowFileProvenanceMigrationProfile(config.profile))?validPersonalIntegrationsAuthoritySchemaHeads(config.baseSchemaHeads,config.schemaHeadsBefore,config.schemaHeadsAfter):heads.filter(k=>k!=='control-plane').every(k=>config.baseSchemaHeads[k]===config.schemaHeadsBefore[k]&&
+      config.schemaHeadsBefore[k]===config.schemaHeadsAfter[k])),'COMPONENT_PUBLICATION_SCHEMA_INVALID');
   const privatePath=v=>typeof v==='string'&&v.startsWith('/')&&!/[\r\n\0]/.test(v);
   requireValue(privatePath(config.sourceCheckout)&&privatePath(config.baseReleaseLock)&&Array.isArray(config.components)&&same(config.components.map(c=>c.name),profile.components)&&
     config.components.every(c=>exact(c,['name','expectedImageRef','anchor','buildReceipt','publicationPlan','publicationEvidence'])&&
@@ -127,7 +129,7 @@ async function prepare(config){
       {receipt:receipt.value,receiptSHA256:hash(receipt.raw),contextSHA256,changedFiles,dockerfileSHA256,productionSHA256});
     // Полный manifest сохраняется; компактная запись не расходует лимит на отступы.
     const raw=Buffer.from(JSON.stringify(lock)+'\n');
-    requireValue(raw.length<=componentImageLockMaxBytes,'COMPONENT_PUBLICATION_LOCK_TOO_LARGE');
+    requireValue(raw.length<=componentImageLockBudget(config.profile).bytes,'COMPONENT_PUBLICATION_LOCK_TOO_LARGE');
     components.push({component:component.name,expectedImageRef:component.expectedImageRef,componentLockRawBase64:raw.toString('base64'),
       componentLockSHA256:hash(raw)});
   }

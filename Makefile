@@ -69,6 +69,8 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_profile.py
 	@timeout 30s python3 -B tools/install/test_provider_sandbox_transition.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_completion.py
+	@timeout 30s python3 -B tools/install/test_bootstrap_migration_custody.py
+	@timeout 30s python3 -B tools/install/test_bootstrap_migration_rollout.py
 	@timeout 30s python3 -B tools/install/test_bootstrap_upgrade.py
 	@timeout 60s python3 -B tools/install/test_bootstrap_image_upgrade.py
 	@timeout 30s python3 -B tools/install/test_upgrade_delivery.py
@@ -83,7 +85,8 @@ test-web-only-release:
 	@timeout 30s python3 -B tools/install/test_authority_registry.py
 	@timeout 30s python3 -B tools/install/test_observability_profile.py
 	timeout 60 python3 -B tools/release/build-recipe-test.py
-	timeout 180 python3 -B tools/install/test_registry_source.py
+	# Контур выполняет два рендера с отдельным лимитом 150 секунд на каждый.
+	timeout 330 python3 -B tools/install/test_registry_source.py
 	@timeout 600s python3 -B tools/install/test_model_provider.py
 	@timeout 30s node --test tools/release/build-release-inventory.test.mjs tools/release/build-release-pool.test.mjs
 	@timeout 120s python3 -B tools/install/test_deployment_profile.py
@@ -388,6 +391,58 @@ test-email-bridge-unit: check-go-toolchain
 test-email-bridge:
 	@bash scripts/tests/email-bridge-test.sh
 
+.PHONY: test-email-projection-bootstrap
+test-email-projection-bootstrap:
+	@timeout 30s python3 -B tools/install/test_email_projection.py
+	@timeout 60s bash scripts/tests/local-email-entrypoint-contract-test.sh
+
+.PHONY: test-artifact-retention-grant-postgres
+test-artifact-retention-grant-postgres: check-go-toolchain
+	@timeout 480s bash scripts/tests/control-plane-postgres-test.sh --artifact-retention-grant-upgrade
+
+.PHONY: test-artifact-retention-claim-postgres
+test-artifact-retention-claim-postgres: check-go-toolchain
+	@timeout 480s bash scripts/tests/control-plane-postgres-test.sh --artifact-retention-claim-types
+
+.PHONY: test-personal-email-owner-development
+test-personal-email-owner-development: check-go-toolchain
+	@timeout 900s bash scripts/tests/personal-email-owner-test.sh
+
+.PHONY: test-personal-integrations-admission-local
+test-personal-integrations-admission-local:
+	@timeout --kill-after=10s 240s node --test --test-concurrency=1 tools/release/personal-integrations-authority-owner.test.mjs tools/release/personal-integrations-authority-predecessor.test.mjs tools/release/personal-integrations-material-source.test.mjs tools/release/personal-integrations-authority-image.test.mjs tools/release/personal-integrations-stopped-admission.test.mjs tools/release/personal-integrations-staged-policy.test.mjs tools/release/personal-integrations-staged-inputs.test.mjs tools/release/personal-integrations-staged-admission.test.mjs tools/release/personal-integrations-deployment-inputs.test.mjs tools/release/personal-integrations-cp-policy.test.mjs tools/release/artifact-retention-issuer-inputs.test.mjs tools/release/artifact-retention-issuer-migration.test.mjs tools/release/artifact-retention-issuer-assets.test.mjs tools/release/component-publication.test.mjs
+
+.PHONY: test-personal-integrations-authority-local
+test-personal-integrations-authority-local:
+	@timeout --kill-after=10s 240s node --test --test-concurrency=1 --test-timeout=180000 tools/release/personal-integrations-authority-api.test.mjs tools/release/personal-integrations-authority-binding.test.mjs tools/release/personal-integrations-owner-state.test.mjs tools/release/personal-integrations-installed-custody.test.mjs tools/release/personal-integrations-migration-witness.test.mjs tools/release/personal-integrations-rotation-admission.test.mjs tools/release/personal-integrations-authority-late.test.mjs tools/release/personal-integrations-rotation-cli.test.mjs tools/release/authority-rotation-transition.test.mjs tools/release/authority-api-scope.test.mjs tools/release/authority-telegram-transition.test.mjs
+
+.PHONY: test-personal-integrations-migration-recovery
+test-personal-integrations-migration-recovery:
+	@timeout --kill-after=5s 60s node --test --test-timeout=30000 --test-concurrency=1 tools/release/personal-integrations-migration-recovery.test.mjs tools/release/personal-integrations-migration.test.mjs tools/release/personal-integrations-staged-policy.test.mjs tools/release/artifact-retention-grant-catalog.test.mjs tools/release/personal-integrations-artifact-spec.test.mjs
+
+.PHONY: test-artifact-retention-grant-catalog-cli-local
+test-artifact-retention-grant-catalog-cli-local:
+	@timeout --kill-after=10s 360s node --test --test-concurrency=1 tools/release/artifact-retention-grant-catalog-cli.test.mjs
+
+.PHONY: test-personal-integrations-migration-release
+test-personal-integrations-migration-release:
+	@timeout --kill-after=15s 1500s node --test --test-concurrency=2 tools/release/personal-integrations-migration.test.mjs tools/release/personal-integrations-migration-recovery.test.mjs tools/release/control-plane-immutable-migration.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs tools/release/component-api-traffic.test.mjs tools/release/component-publication.test.mjs tools/release/workflow-file-provenance-isolation-witness.test.mjs
+
+.PHONY: capture-integration-cohort-schema test-integration-cohort-capture-contract
+capture-integration-cohort-schema: check-go-toolchain
+	@timeout --kill-after=15s 3000s bash scripts/tests/integration-cohort-schema-capture.sh
+
+test-integration-cohort-capture-contract: check-go-toolchain
+	@cd services/internal/control-plane && timeout 240s go test -p 1 -count=1 -timeout=60s ./cmd/cli -run '^TestIntegrationCohortCapture(OutputCustody|HistorySeal)$$'
+
+.PHONY: test-personal-email-protocol-native
+test-personal-email-protocol-native: check-go-toolchain
+	@cd services/internal/email-bridge && timeout 600s go test -race -p 1 -count=1 -timeout=120s ./internal/component -run '^(TestPersonalPasswordProfilesNativeTLS|TestPersonalMailboxReadHandoffDeadline)$$'
+
+.PHONY: test-personal-email-operations
+test-personal-email-operations: check-go-toolchain
+	@cd libs/go/controlplaneclient && timeout 180s go test -race -p 1 -count=1 -timeout=120s ./cmd/policygen -run '^TestPersonalEmailProfilesPinOnlyOwnerSetup$$'
+
 test-email-bridge-render:
 	@bash scripts/tests/email-bridge-render-test.sh
 
@@ -447,6 +502,94 @@ gen-openapi-ts:
 	cd services/staff/control-center && npm run generate:openapi
 
 .PHONY: test-contract-registry
+.PHONY: test-broker-identity-gateway
+test-broker-identity-gateway: check-go-toolchain
+	@cd services/external/integration-gateway && timeout 300s go test -race -count=1 -p=1 -timeout=120s -run '^Test(BrokerIdentity|PersonalCredentialWorker|PersonalProbe|KubernetesDelivery|KubernetesHealthOnly)' ./internal/app
+	@cd services/external/integration-gateway && timeout 120s go test -race -count=1 -p=1 -timeout=60s -run '^TestMainFailsOnCancelledLifecycleFailure$$' ./cmd/integration-gateway
+	@timeout 120s python3 -B scripts/tests/integration-gateway-lifecycle-render-test.py
+
+.PHONY: test-managed-kubernetes-input
+test-managed-kubernetes-input: check-go-toolchain
+	cd libs/go/managedkubernetes && timeout 180s go test -race -p 1 -timeout 120s ./...
+
+.PHONY: test-managed-kubernetes-capture
+test-managed-kubernetes-capture: check-go-toolchain
+	cd libs/go/serviceruntime && timeout 240s go test -race -p 1 -timeout 90s ./...
+	cd libs/go/managedkubernetes && timeout 240s go test -race -p 1 -timeout 90s -run 'Test(Capture|NormalizeCopy)' ./...
+	cd libs/go/objectstorage && timeout 240s go test -race -p 1 -timeout 90s ./...
+	cd services/jobs/artifact-retention && timeout 240s go test -race -p 1 -timeout 90s ./...
+	cd services/internal/control-plane && timeout 240s go test -race -p 1 -timeout 90s -run 'Test(CapturePreparedBody|PreparedContentSignedS3Reader|KubernetesCapture|KubernetesStagingCleanup|KubernetesInvocationReceipt|KubernetesStreamInputPublic)' ./internal/repository/postgres/platform ./internal/transport/grpc ./internal/domain/service/artifactpolicy
+	cd services/internal/control-plane && timeout 240s go test -race -p 1 -timeout 90s ./internal/app
+	cd services/external/control-api-gateway && timeout 240s go test -race -p 1 -timeout 90s -run 'TestKubernetes(CapturePublicProjection|StagingCleanup|StagingQuotaProblem|StreamInput)' ./internal/transport/http
+	cd services/external/integration-gateway && timeout 240s go test -race -p 1 -timeout 90s -run 'TestKubernetes(OwnerCapturePending|ExecutionWaitsOnlyForTypedCapture|Completion)' ./internal/app ./internal/integration
+
+.PHONY: test-managed-kubernetes-resource
+test-managed-kubernetes-resource: check-go-toolchain
+	cd services/internal/secret-broker && timeout 180s go test -race -p 1 -timeout 120s ./internal/integration/kubernetestarget ./internal/kubernetes
+
+.PHONY: test-managed-kubernetes-consumer
+test-managed-kubernetes-consumer: test-managed-kubernetes-input
+	cd libs/go/integrationpackage && timeout 1800s go test -race -p 1 -timeout 1500s ./...
+	cd services/external/integration-gateway && timeout 1800s go test -race -p 1 -timeout 120s ./internal/integration -run '^TestKubernetes|^TestNewUsesOnlyExactProviderEndpoints|^TestScopeDeniedBeforeCredentialRead'
+
+.PHONY: test-kubernetes-grant-contract
+test-kubernetes-grant-contract: check-go-toolchain
+	cd libs/go/internalrpcauth && timeout 180s go test -race -p 1 -timeout 120s ./... -run '^TestDecodeExactJSON'
+	cd services/external/control-api-gateway && timeout 600s go test -race -p 1 -timeout 120s ./internal/transport/http -run 'TestIntegrationGrantJSON|TestKubernetesGrantCandidateProjection|TestSystemAssistantGrantCandidateProjection|TestProjectAssistant|TestKubernetesConfigurationPlan'
+	cd services/internal/control-plane && timeout 600s go test -race -p 1 -timeout 120s ./internal/transport/grpc -run 'TestProjectAssistant.*Scope|TestProjectAssistant.*GitHub|TestProjectAssistantKubernetesCandidate|TestPersonal.*Permission|TestKubernetesConfigurationPlan'
+
+.PHONY: test-managed-kubernetes-identity-setup
+.PHONY: test-managed-kubernetes-port-forward-local
+test-managed-kubernetes-port-forward-local:
+	@node -e 'const [major,minor]=process.versions.node.split(".").map(Number);if(major<24||(major===24&&minor<17))throw new Error("Node24.17 or newer is required")'
+	@timeout 30s node --test tools/dev/owner-session-client.test.mjs tools/dev/owner-runtime-session.test.mjs tools/dev/owner-runtime-https.test.mjs tools/dev/managed-kubernetes-port-forward-codec.test.mjs tools/dev/managed-kubernetes-port-forward-client.test.mjs tools/dev/managed-kubernetes-port-forward-bridge.test.mjs tools/dev/managed-kubernetes-port-forward-cli.test.mjs
+
+.PHONY: test-managed-kubernetes-file-postgres
+# Current-source049 owner development; отдельный047 seed не заменяет Bootstrap shipped packages.
+test-managed-kubernetes-file-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 900s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-file
+
+.PHONY: test-managed-kubernetes-port-forward-postgres
+test-managed-kubernetes-port-forward-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 900s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-port-forward
+
+.PHONY: test-managed-kubernetes-file-local
+test-managed-kubernetes-file-local:
+	@node -e 'const [major,minor]=process.versions.node.split(".").map(Number);if(major<24||(major===24&&minor<17))throw new Error("Node24.17 or newer is required")'
+	@timeout 60s node --test --test-concurrency=1 tools/dev/owner-session-client.test.mjs tools/dev/owner-runtime-session.test.mjs tools/dev/owner-runtime-https.test.mjs tools/dev/managed-kubernetes-file.test.mjs
+
+.PHONY: test-managed-kubernetes-invocation-postgres
+test-managed-kubernetes-invocation-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 900s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-invocation
+
+.PHONY: test-managed-kubernetes-capture-postgres
+# Ограниченный capture owner current-source049; не полный invocation либо portable upgrade proof.
+test-managed-kubernetes-capture-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 900s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-capture
+
+.PHONY: test-managed-kubernetes-output-postgres
+test-managed-kubernetes-output-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 900s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-output
+
+.PHONY: test-managed-kubernetes-gateway
+test-managed-kubernetes-gateway: check-go-toolchain
+	@cd services/external/integration-gateway && timeout 240s go test -race -count=1 -p=1 -timeout=180s -run '^TestKubernetes' ./internal/app ./internal/integration
+
+.PHONY: test-managed-kubernetes-health-postgres
+test-managed-kubernetes-health-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-health
+
+test-managed-kubernetes-identity-setup: check-go-toolchain
+	@cd libs/go/serviceruntime && timeout 120s go test -race -p 1 ./... -count=1
+	@cd libs/go/httpserver && timeout 120s go test -race -p 1 ./... -count=1
+	@cd libs/go/managedkubernetes && timeout 120s go test -race -p 1 ./... -count=1
+	@cd services/internal/control-plane && timeout 120s go test -race -p 1 ./internal/domain/service/platform -run '^(TestKubernetes(Setup|Health)|TestManagedKubernetes)' -count=1
+	@cd services/internal/control-plane && timeout 120s go test -race -p 1 ./internal/transport/grpc -run '^(TestKubernetesIdentity|TestManagedKubernetesChild)' -count=1
+	@cd services/external/control-api-gateway && timeout 120s go test -race -p 1 ./internal/transport/http -run '^TestKubernetesSetupHTTP' -count=1
+	@cd services/internal/secret-broker && timeout 180s go test -race -p 1 ./internal/domain/service/kubernetesidentity ./internal/domain/service/kubernetesoperation ./internal/controlplane ./internal/integration/kubernetestarget ./internal/kubernetes ./internal/transport/identityupload ./internal/transport/grpc ./internal/app -count=1
+	@cd services/internal/secret-broker && timeout 120s go test -race -p 1 ./cmd/secret-broker -count=1
+	@timeout 45s python3 -I -m unittest discover -s tools/dev -p test_managed_kubernetes_identity.py -v
+
 test-contract-registry:
 	@timeout 30s node --test scripts/tests/contract-registry-test.mjs
 
@@ -454,6 +597,9 @@ lint-proto: check-proto-toolchain test-contract-registry
 	buf lint
 
 .PHONY: test-secret-broker-drafts
+.PHONY: test-managed-ssh
+test-managed-ssh:
+	timeout 240s bash scripts/tests/managed-ssh-test.sh
 .PHONY: test-egress-broker-network-policy
 .PHONY: test-discovery-provider-fixtures
 .PHONY: test-workspace-parent-container
@@ -659,6 +805,7 @@ test-component-api-maintenance:
 
 .PHONY: test-component-migration-api-restore
 test-component-migration-api-restore:
+	@timeout 30s node --test tools/release/component-migration-archive.test.mjs tools/release/component-migration-adoption.test.mjs
 	@timeout 420s node --test --test-concurrency=2 tools/release/catalog-authority-baseline.test.mjs tools/release/catalog-authority-baseline.native.test.mjs tools/release/component-migration-api-executor.test.mjs tools/release/component-api-source-equivalence.test.mjs tools/release/component-migration-api-terminal.cli.test.mjs tools/release/migration-owner-database.test.mjs tools/release/component-api-maintenance.test.mjs tools/release/component-api-traffic.test.mjs
 
 .PHONY: test-evicted-pod-metadata-recovery
@@ -713,6 +860,77 @@ test-telegram-port-repair:
 test-telegram-native-egress: check-go-toolchain
 	@timeout 360s bash scripts/tests/telegram-native-egress-test.sh
 
+.PHONY: test-ssh-identity-setup
+test-ssh-identity-setup: check-go-toolchain
+	@cd libs/go/managedssh && timeout 60s go test -race -count=1 -p=1 -timeout=45s ./...
+	@cd services/internal/control-plane && timeout 90s go test -race -count=1 -p=1 -timeout=60s -run '^TestSSH(Setup|Identity)' ./internal/domain/service/platform ./internal/transport/grpc
+	@cd services/internal/secret-broker && timeout 90s go test -race -count=1 -p=1 -timeout=60s ./internal/domain/service/sshidentity ./internal/kubernetes ./internal/integration/sshtarget ./internal/controlplane ./internal/transport/http
+
+.PHONY: test-ssh-upload-app
+test-ssh-upload-app: check-go-toolchain
+	@cd libs/go/serviceruntime && timeout 120s go test -race -count=1 -p=1 -timeout=90s ./...
+	@cd libs/go/httpserver && timeout 90s go test -race -count=1 -p=1 -timeout=60s ./...
+	@cd services/internal/secret-broker && timeout 240s go test -race -count=1 -p=1 -timeout=90s -run '^Test(BrokerRPC|SSHUpload|SSHIdentityStorage|SSHOwnerReadiness|MainFails)' ./internal/app ./internal/kubernetes ./internal/controlplane ./cmd/secret-broker
+
+.PHONY: test-ssh-setup-owner-unit
+test-ssh-setup-owner-unit: check-go-toolchain
+	@cd services/internal/control-plane && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^Test(SSH(OwnerInfrastructure|UploadRecovery|CompletionOutcome|PrivateOwner)|AccessInfrastructureClassification)' ./internal/repository/postgres/platform
+
+.PHONY: test-ssh-health-owner-unit
+test-ssh-health-owner-unit: check-go-toolchain
+	@cd libs/go/integrationpackage && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^TestSSHPermission' ./...
+	@cd services/internal/control-plane && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^Test(SSH(IdentityHealth|Health)|PersonalBroker|PersonalCredential.*Claim)' ./internal/repository/postgres/platform ./internal/domain/service/platform ./internal/transport/grpc
+	@cd services/internal/secret-broker && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^TestSSHHealth' ./internal/domain/service/sshidentity ./internal/integration/sshtarget ./internal/controlplane ./internal/transport/grpc ./internal/app
+
+.PHONY: test-shared-integration-health-unit
+test-shared-integration-health-unit: check-go-toolchain
+	@cd services/internal/control-plane && timeout 300s go test -race -count=1 -p=1 -timeout=60s -run '^Test(SharedHealth|PersonalBrokerIdentityClaimMetadata)' ./internal/repository/postgres/platform ./internal/transport/grpc
+
+.PHONY: test-broker-identity-claim-metadata
+test-broker-identity-claim-metadata: check-go-toolchain
+	@cd services/internal/control-plane && timeout 300s go test -race -count=1 -p=1 -timeout=60s -run '^Test(InvocationClaimCredentialDelivery|ClaimUnknownPurpose|PersonalBrokerIdentityClaimMetadata)' ./internal/transport/grpc
+
+.PHONY: test-ssh-operation-input
+test-ssh-operation-input: check-go-toolchain
+	@cd libs/go/managedssh && timeout 120s go test -race -count=1 -p=1 -timeout=60s ./...
+	@cd libs/go/integrationpackage && timeout 120s go test -race -count=1 -p=1 -timeout=60s -run '^TestSSH(Input|Definition|Null)' ./...
+	@cd services/internal/secret-broker && timeout 120s go test -race -count=1 -p=1 -timeout=60s -run '^Test(Target|Run|Host|Failure|Managed|Operator|Execute|Start|Output|Cancel)' ./internal/integration/sshtarget
+
+.PHONY: test-ssh-purpose-execution
+test-ssh-purpose-execution: check-go-toolchain
+	@cd libs/go/managedssh && timeout 150s go test -race -count=1 -p=1 -timeout=60s ./...
+	@cd services/internal/secret-broker && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^Test(SSHExecution|SSHHealth|Managed|Execute|Operator)' ./internal/integration/sshtarget
+
+.PHONY: test-ssh-setup-api-unit
+test-ssh-setup-api-unit: check-go-toolchain
+	@cd services/external/control-api-gateway && timeout 180s go test -race -count=1 -p=1 -timeout=60s -run '^TestSSHSetupHTTP' ./internal/transport/http
+
+.PHONY: test-ssh-setup-ui-unit
+test-ssh-setup-ui-unit:
+	@cd services/staff/control-center && timeout 90s npm run test:unit -- src/features/integrations/ssh-identity-setup.test.ts
+
+.PHONY: test-ssh-identity-browser
+test-ssh-identity-browser:
+	@cd services/staff/control-center && timeout 180s npm run build:synthetic
+	@cd services/staff/control-center && timeout 180s npx playwright test --config playwright.synthetic.config.ts e2e/ssh-identity-setup.synthetic.spec.ts e2e/personal-connections.synthetic.spec.ts --grep SSH --global-timeout 120000
+
+.PHONY: test-ssh-identity-render
+test-ssh-identity-render:
+	@timeout 150s python3 -B scripts/tests/ssh-identities-render-test.py
+	@cd tools/install && timeout 30s python3 -B -m unittest test_ensure_namespace
+	@cd tools/dev && timeout 30s python3 -B -m unittest test_installation_inventory test_installation_cleanup
+
+.PHONY: test-ssh-operator-render
+test-ssh-operator-render: check-go-toolchain
+	@cd tools/managed-ssh-helper && KODEX_SSH_OPERATOR_KUSTOMIZE=1 timeout 120s go test -race -count=1 -p=1 ./internal/operator ./cmd/ssh-qualification
+	@timeout 180s python3 -B tools/install/test_ssh_qualification_profile.py
+
+.PHONY: test-personal-integrations-upgrade
+test-personal-integrations-upgrade: check-go-toolchain
+	@python3 -B tools/release/generate-personal-integrations-proof.py --check
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 420s bash scripts/tests/control-plane-postgres-test.sh --personal-integrations-upgrade
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 420s bash scripts/tests/control-plane-postgres-test.sh --personal-integrations-backup-upgrade
+
 .PHONY: test-telegram-authority-owner-native
 test-telegram-authority-owner-native:
 	@timeout 360s node tools/release/telegram-authority-owner.native.mjs
@@ -728,6 +946,14 @@ test-telegram-reader-bootstrap:
 .PHONY: test-authority-distribute-status-native
 test-authority-distribute-status-native:
 	@timeout 360s node tools/release/telegram-authority-owner.native.mjs --distribute-status
+
+.PHONY: test-artifact-retention-issuer-migration-local
+test-artifact-retention-issuer-migration-local:
+	@timeout 60s node --test tools/release/artifact-retention-issuer-migration.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-artifact-retention-issuer-assets-local
+test-artifact-retention-issuer-assets-local:
+	@timeout 90s node --test tools/release/artifact-retention-issuer-assets.test.mjs tools/release/artifact-retention-issuer-inputs.test.mjs
 
 .PHONY: test-authority-distribute-status-migration
 test-authority-distribute-status-migration:
@@ -745,3 +971,129 @@ test-telegram-runtime-inputs:
 .PHONY: test-telegram-egress-revision-repair
 test-telegram-egress-revision-repair:
 	@timeout 300s node --test tools/release/telegram-egress-revision-repair.test.mjs tools/release/component-node-qualification.test.mjs tools/release/portable-component-cohort.test.mjs tools/release/backup-controller-maintenance-cli.test.mjs
+
+.PHONY: test-ssh-setup-revoke-development
+test-ssh-setup-revoke-development: check-go-toolchain
+	@timeout 300s bash scripts/tests/ssh-identity-owner-development.sh --revoke
+
+.PHONY: test-ssh-execution-current-entrypoint
+test-ssh-execution-current-entrypoint:
+	@timeout 30s python3 -B scripts/tests/ssh-current-owner-entrypoint-test.py
+
+.PHONY: test-ssh-execution-current-postgres
+test-ssh-execution-current-postgres: check-go-toolchain
+	@timeout --kill-after=10s 300s env KODEX_TEST_POSTGRES_STORAGE=ram bash scripts/tests/control-plane-postgres-test.sh --ssh-identity-owner-current
+
+.PHONY: test-ssh-setup-owner-development
+test-ssh-setup-owner-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/ssh-identity-owner-development.sh
+
+.PHONY: test-integration-pending-root-postgres
+test-integration-pending-root-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --integration-pending-root-owner-regression
+
+.PHONY: test-ssh-pending-root-development
+test-ssh-pending-root-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --ssh-integration-pending-root-owner-development
+
+.PHONY: test-ssh-receipt-scope-development
+test-ssh-receipt-scope-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --ssh-receipt-scope-owner-development
+
+.PHONY: test-ssh-execution-deadline-development
+test-ssh-execution-deadline-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --ssh-execution-deadline-owner-development
+
+.PHONY: test-shared-integration-health-development
+test-shared-integration-health-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/ssh-identity-owner-development.sh --shared-health
+
+.PHONY: test-ssh-shared-credential-sdk
+test-ssh-shared-credential-sdk: check-go-toolchain
+	@cd libs/go/internalrpcauth && timeout 120s go test -race -count=1 -p=1 -timeout=60s -run ExactJSON .
+	@cd libs/go/managedkubernetes && timeout 240s go test -race -count=1 -p=1 -timeout=120s ./...
+	@cd libs/go/integrationpackage && timeout 360s go test -race -count=1 -p=1 -timeout=240s ./...
+	@timeout 180s $(MAKE) check-integration-package-codegen
+
+.PHONY: test-ssh-invocation-use-policy
+test-ssh-invocation-use-policy: check-go-toolchain
+	@cd services/internal/control-plane && timeout 240s go test -race -count=1 -p=1 -timeout=90s -run '^Test(PurposeInvocationUsePolicy|IntegrationCapabilityAuthority|EffectiveCapability|SSH)' ./internal/repository/postgres/platform
+
+# Source/transport профиль не подтверждает canonical048/109 или installed SSH.
+.PHONY: test-ssh-execution-owner-source
+test-ssh-execution-owner-source: check-go-toolchain
+	@cd libs/go/managedssh && timeout 180s go test -race -count=1 -p=1 -timeout=120s ./...
+	@cd services/internal/control-plane && timeout 300s go test -race -count=1 -p=1 -timeout=120s -run '^TestSSH(Execution|HealthBinding|HealthCompletion)' ./internal/repository/postgres/platform ./internal/domain/service/platform ./internal/transport/grpc
+	@cd services/internal/secret-broker && timeout 300s go test -race -count=1 -p=1 -timeout=120s -run '^TestSSH(Execution|IdentityExecution|HealthComposition)' ./internal/domain/service/sshidentity ./internal/controlplane ./internal/integration/sshtarget ./internal/transport/grpc ./internal/app
+	@cd services/external/integration-gateway && timeout 300s go test -race -count=1 -p=1 -timeout=120s -run '^TestSSH(Invocation|Health|ConsumerFactory|BrokerProfile)|^TestBrokerIdentity|^TestKubernetesHealthOnly' ./internal/integration ./internal/app
+
+# Настоящий helper filesystem/receipt process через encrypted SSH; не owner048/109 proof.
+.PHONY: test-ssh-native-helper-process
+.PHONY: test-ssh-identity-upload-profile
+test-ssh-identity-upload-profile:
+	@timeout 90s python3 -B tools/install/test_ssh_identity_profile.py
+
+test-ssh-native-helper-process: check-go-toolchain
+	@timeout 240s bash scripts/tests/ssh-native-helper-process.sh
+.PHONY: test-managed-kubernetes-material-public
+test-managed-kubernetes-material-public: check-go-toolchain
+	@cd services/internal/control-plane && timeout 180s go test -race -p 1 -timeout 120s ./internal/domain/service/platform ./internal/transport/grpc -run '^TestKubernetesResourceMaterial' -count=1
+	@cd services/external/control-api-gateway && timeout 180s go test -race -p 1 -timeout 120s ./internal/transport/http -run '^TestMaterialHTTP|^TestKubernetesSetupHTTP' -count=1
+	@timeout 60s python3 -I -B -m unittest discover -s tools/dev -p 'test_managed_kubernetes*identity.py' -v
+	@timeout 60s python3 -I -B -m unittest discover -s tools/dev -p test_managed_kubernetes_resource_material.py -v
+
+.PHONY: test-managed-kubernetes-identity-export
+test-managed-kubernetes-identity-export: check-go-toolchain
+	@test -n "$${KODEX_TEST_KUBECTL_BINARY:-}" || { echo "KODEX_TEST_KUBECTL_BINARY is required" >&2; exit 1; }
+	@timeout 90s python3 -I -B -m unittest discover -s tools/dev -p test_managed_kubernetes_identity_export.py -v
+	@cd services/internal/secret-broker && timeout 180s go test -race -p 1 -timeout 120s ./internal/integration/kubernetestarget -run '^TestKubernetesIdentityExportProcess' -count=1
+
+.PHONY: test-managed-kubernetes-health-readiness
+test-managed-kubernetes-health-readiness: check-go-toolchain
+	@cd services/internal/control-plane && timeout 240s go test -race -count=1 -p=1 -timeout=90s -run '^Test(KubernetesIdentityHealthReadiness|ManagedKubernetesIdentityHealthProfile|KubernetesDeliveryContract|ManagedKubernetesOutputContract)' ./internal/domain/service/platform ./internal/transport/grpc
+	@cd services/internal/secret-broker && timeout 240s go test -race -count=1 -p=1 -timeout=90s -run '^TestKubernetesIdentityStartupUsesCoreHealthReadiness$$' ./internal/app
+
+.PHONY: test-managed-kubernetes-effect-acl-postgres
+test-managed-kubernetes-effect-acl-postgres: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --managed-kubernetes-effect-acl
+
+.PHONY: test-managed-kubernetes-effect-acl-development
+test-managed-kubernetes-effect-acl-development: check-go-toolchain
+	@KODEX_TEST_POSTGRES_STORAGE=ram KODEX_CONTROL_PLANE_TEST_GO_PARALLELISM=1 timeout 300s bash scripts/tests/control-plane-postgres-test.sh --kubernetes-effect-acl-owner-development
+
+.PHONY: test-personal-integrations-build-inputs-local
+test-personal-integrations-build-inputs-local:
+	@timeout 15s node --test tools/release/personal-integrations-build-inputs.test.mjs tools/release/frontend-build-context.test.mjs
+
+.PHONY: test-artifact-retention-issuer-historical-readiness
+test-artifact-retention-issuer-historical-readiness:
+	@timeout --kill-after=5s 60s node --test --test-concurrency=1 --test-timeout=45000 tools/release/artifact-retention-issuer-historical-readiness.test.mjs tools/release/artifact-retention-issuer-migration.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-personal-integrations-reader-scope
+test-personal-integrations-reader-scope:
+	@timeout --kill-after=5s 180s node --test --test-concurrency=1 tools/release/personal-integrations-executor-source.test.mjs tools/release/personal-integrations-artifact-spec.test.mjs tools/release/personal-integrations-reader-scope.test.mjs
+	@timeout --kill-after=5s 70s node --test --test-name-pattern="^049:" tools/release/portable-component-cohort.test.mjs
+
+.PHONY: test-paired-token-release-plan-local
+test-paired-token-release-plan-local:
+	@timeout --kill-after=5s 60s node --test --test-concurrency=1 tools/release/paired-token-release-plan.test.mjs tools/release/paired-token-release-cli.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-paired-token-release-receiver-local
+test-paired-token-release-receiver-local:
+	@timeout --kill-after=5s 60s node --test --test-concurrency=1 tools/release/paired-token-release-receiver.test.mjs tools/release/paired-token-release-plan.test.mjs tools/release/paired-token-release-cli.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-paired-token-native-join-local
+test-paired-token-native-join-local:
+	@timeout --kill-after=5s 90s node --test --test-concurrency=1 tools/release/paired-token-native-join.test.mjs tools/release/paired-token-release-receiver.test.mjs tools/release/paired-token-release-plan.test.mjs tools/release/paired-token-release-cli.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-paired-token-terminal-local
+test-paired-token-terminal-local:
+	@timeout --kill-after=5s 120s node --test --test-concurrency=1 tools/release/paired-token-release-terminal.test.mjs tools/release/paired-token-native-join.test.mjs tools/release/paired-token-release-receiver.test.mjs tools/release/paired-token-release-plan.test.mjs tools/release/paired-token-release-cli.test.mjs tools/release/migration-owner-database.test.mjs
+
+.PHONY: test-multi-component-serving-inventory-local
+test-multi-component-serving-inventory-local:
+	@timeout --kill-after=5s 60s node --test --test-concurrency=1 --test-name-pattern='multi-component:|metadata-first serving read|metadata/full-object races|serving inventory исключает|canonical backup terminal command|registered044/045/046 terminal commands' tools/release/multi-component-serving-inventory.test.mjs tools/release/control-plane-immutable-migration.test.mjs
+
+.PHONY: test-paired-token-owner-batch-local
+test-paired-token-owner-batch-local:
+	@timeout --kill-after=5s 120s node --test --test-concurrency=1 tools/release/paired-authority-publisher-read.test.mjs tools/release/paired-token-owner-database.test.mjs tools/release/paired-token-release-owner.test.mjs tools/release/catalog-authority-baseline.test.mjs tools/release/migration-owner-database.test.mjs tools/release/paired-token-release-plan.test.mjs tools/release/paired-token-release-cli.test.mjs

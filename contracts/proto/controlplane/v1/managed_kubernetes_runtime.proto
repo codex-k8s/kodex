@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/managed_kubernetes_tool.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Только runtime-controller; исходный actor и invocation разрешает владелец по живой lease.
+message ReadManagedKubernetesInvocationRequest {
+  string invocation_ref = 1;
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  // Digest неизменяемого runtime input, не аргументов инструмента.
+  string runtime_input_digest = 5;
+}
+
+// Ограниченный результат для точного выполняющегося узла, без credentials/native locators.
+message ReadManagedKubernetesInvocationResponse {
+  string invocation_ref = 1;
+  ManagedKubernetesToolState state = 2;
+  string result_summary = 3;
+  string safe_error_code = 4;
+  // Receipt выдаётся только для SUCCEEDED и проверяется вместе с digest результата.
+  string effect_receipt_ref = 5;
+  string result_digest = 6;
+  // Дочерний OPEN Gate не превращает RUNNING invocation в terminal.
+  bool waiting_for_gate = 7;
+}

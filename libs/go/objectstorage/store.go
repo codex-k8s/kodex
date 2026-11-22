@@ -68,3 +68,13 @@ type Store interface {
 	// Delete запрашивает удаление выбранного ключа или версии; допустимость удаления определяется жизненным циклом владельца.
 	Delete(context.Context, string, string) error
 }
+
+// VersionedChecker proves that new objects receive retained immutable provider versions.
+// A successful bucket reachability check alone does not establish this capture prerequisite.
+// VersionedChecker подтверждает retained immutable provider versions для новых объектов.
+// Успешный bucket reachability check сам по себе не доказывает capture prerequisite.
+type VersionedChecker interface {
+	// CheckVersioning refuses suspended, absent or unknown versioning without writing probe objects.
+	// CheckVersioning отклоняет suspended, absent либо unknown versioning без записи probe objects.
+	CheckVersioning(context.Context) error
+}

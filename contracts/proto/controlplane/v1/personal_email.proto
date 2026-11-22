@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package controlplane.v1;
+
+import "controlplane/v1/control_plane.proto";
+
+option go_package = "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1";
+
+// Отдельный mailbox owner; EMAIL_HTTPS не получает generic TOKEN или BROKER_IDENTITY.
+// Actor/tenant и личный subject всегда выводятся из проверенного transport context.
+service PersonalEmailMailboxService {
+  // Только квитанция собственной закрытой setup operation; отсутствие не разрешает новый intent.
+  rpc GetPersonalEmailMailboxMutationReceipt(GetPersonalEmailMailboxMutationReceiptRequest) returns (GetPersonalEmailMailboxMutationReceiptResponse);
+  // Создаёт только собственный fixed EMAIL_HTTPS Connection и exact metadata ACL; project/agent/grant права не назначаются.
+  rpc CreatePersonalEmailMailboxConnection(CreatePersonalEmailMailboxConnectionRequest) returns (CreatePersonalEmailMailboxConnectionResponse);
+  // Возвращает только текущие mailbox connections настроившего пользователя.
+  rpc ListMyEmailMailboxes(ListMyEmailMailboxesRequest) returns (ListMyEmailMailboxesResponse);
+  // Выдаёт safe metadata текущему владельцу настройки; unconfigured не означает доступ к прежним credentials.
+  rpc GetEmailMailboxOwnership(GetEmailMailboxOwnershipRequest) returns (GetEmailMailboxOwnershipResponse);
+  // Явно выбирает self либо активную SERVICE после disable/drain, не усыновляя старые секреты.
+  rpc ConfigureEmailMailboxOwnership(ConfigureEmailMailboxOwnershipRequest) returns (ConfigureEmailMailboxOwnershipResponse);
+  // Ограждает новые Begin; начатый внешний эффект не объявляется отменённым.
+  rpc RevokeEmailMailboxOwnership(RevokeEmailMailboxOwnershipRequest) returns (RevokeEmailMailboxOwnershipResponse);
+}
+
+enum PersonalEmailMailboxMutationOperation {
+  PERSONAL_EMAIL_MAILBOX_MUTATION_OPERATION_UNSPECIFIED = 0;
+  PERSONAL_EMAIL_MAILBOX_MUTATION_OPERATION_CREATE = 1;
+  PERSONAL_EMAIL_MAILBOX_MUTATION_OPERATION_CONFIGURE = 2;
+  PERSONAL_EMAIL_MAILBOX_MUTATION_OPERATION_REVOKE = 3;
+}
+message GetPersonalEmailMailboxMutationReceiptRequest {
+  PersonalEmailMailboxMutationOperation operation = 1;
+  string idempotency_key = 2;
+}
+message PersonalEmailMailboxMutationReceipt {
+  PersonalEmailMailboxMutationOperation operation = 1;
+  oneof result {
+    MyEmailMailbox mailbox = 2;
+    EmailMailboxOwnership ownership = 3;
+  }
+}
+message GetPersonalEmailMailboxMutationReceiptResponse {
+  PersonalEmailMailboxMutationReceipt receipt = 1;
+}
+
+message CreatePersonalEmailMailboxConnectionRequest {
+  MutationContext mutation = 1;
+  string name = 2;
+  string sender = 3;
+}
+message CreatePersonalEmailMailboxConnectionResponse {
+  MyEmailMailbox mailbox = 1;
+}
+
+enum EmailMailboxOwnershipState {
+  EMAIL_MAILBOX_OWNERSHIP_STATE_UNSPECIFIED = 0;
+  EMAIL_MAILBOX_OWNERSHIP_STATE_UNCONFIGURED = 1;
+  EMAIL_MAILBOX_OWNERSHIP_STATE_ACTIVE = 2;
+  EMAIL_MAILBOX_OWNERSHIP_STATE_REVOKED = 3;
+}
+
+message EmailMailboxOwnership {
+  string connection_ref = 1;
+  int64 connection_version = 2;
+  IntegrationCredentialPolicy policy = 3;
+  EmailMailboxOwnershipState state = 4;
+  int64 generation = 5;
+  // Только SERVICE locator; личный USER selector не принимается и не выдаётся.
+  string service_subject_ref = 6;
+  // Текущие subject/configurer eligibility, не разрешение на внешнюю операцию.
+  bool owner_eligible = 7;
+}
+
+message MyEmailMailbox {
+  EmailMailboxOwnership ownership = 1;
+  string name = 2;
+  bool enabled = 3;
+  // Наблюдение текущей конфигурации, не grant и не обещание будущей доступности провайдера.
+  bool available = 4;
+}
+
+message ListMyEmailMailboxesRequest {
+  string query = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+message ListMyEmailMailboxesResponse {
+  repeated MyEmailMailbox items = 1;
+  string next_page_token = 2;
+}
+message GetEmailMailboxOwnershipRequest {
+  string connection_ref = 1;
+}
+message GetEmailMailboxOwnershipResponse {
+  EmailMailboxOwnership ownership = 1;
+}
+message ConfigureEmailMailboxOwnershipRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  IntegrationCredentialPolicy policy = 3;
+  string service_subject_ref = 4;
+}
+message ConfigureEmailMailboxOwnershipResponse {
+  EmailMailboxOwnership ownership = 1;
+}
+message RevokeEmailMailboxOwnershipRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+}
+message RevokeEmailMailboxOwnershipResponse {
+  EmailMailboxOwnership ownership = 1;
+}

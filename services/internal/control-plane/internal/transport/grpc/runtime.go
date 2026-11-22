@@ -930,7 +930,16 @@ func (server *Server) ClaimIntegrationInvocations(ctx context.Context, request *
 	if err != nil {
 		return nil, err
 	}
-	items, err := server.service.ClaimIntegrationInvocations(ctx, p, request.GetWorkloadInstance(), request.GetLimit())
+	var items []map[string]any
+	if request.GetCapacity() != nil {
+		if !managedKubernetesWireValid(request) {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		capacity := request.GetCapacity()
+		items, err = server.service.ClaimIntegrationInvocationsWithCapacity(ctx, p, request.GetWorkloadInstance(), request.GetLimit(), value.IntegrationInvocationDeliveryCapacity{Ordinary: capacity.GetOrdinary(), Kubernetes: capacity.GetKubernetes(), SSH: capacity.GetSsh()})
+	} else {
+		items, err = server.service.ClaimIntegrationInvocations(ctx, p, request.GetWorkloadInstance(), request.GetLimit())
+	}
 	if err != nil {
 		return nil, transportError(err)
 	}
@@ -988,6 +997,12 @@ func CastIntegrationConnectionTestClaim(item map[string]any) *controlplanev1.Int
 		claim.GithubDiscoveryPage = int32(page)
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	if kind, exists := controlplanev1.IntegrationCredentialDeliveryKind_value["INTEGRATION_CREDENTIAL_DELIVERY_KIND_"+mapString(item, "credentialDeliveryKind")]; exists {
+		claim.CredentialDeliveryKind = controlplanev1.IntegrationCredentialDeliveryKind(kind)
+	}
+	claim.BrokerIdentityPurpose = castIntegrationClaimBrokerPurpose(item)
+	claim.BrokerIdentityRef, claim.BrokerIdentityRevision = mapString(item, "brokerIdentityRef"), mapInt64(item, "brokerIdentityRevision")
+	claim.InputDigest = mapString(item, "inputDigest")
 	keys, _ := item["personalReadProbeCapabilityKeys"].([]string)
 	claim.PersonalReadProbeCapabilityKeys = append([]string(nil), keys...)
 	profiles, _ := item["personalObservationProfiles"].([]string)
@@ -1036,6 +1051,11 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 		WorkMode: controlplanev1.IntegrationInvocationWorkMode(controlplanev1.IntegrationInvocationWorkMode_value["INTEGRATION_INVOCATION_WORK_MODE_"+mapString(item, "workMode")]),
 	}
 	claim.DefinitionPackage, _ = item["definitionPackage"].([]byte)
+	if kind, exists := controlplanev1.IntegrationCredentialDeliveryKind_value["INTEGRATION_CREDENTIAL_DELIVERY_KIND_"+mapString(item, "credentialDeliveryKind")]; exists {
+		claim.CredentialDeliveryKind = controlplanev1.IntegrationCredentialDeliveryKind(kind)
+	}
+	claim.BrokerIdentityPurpose = castIntegrationClaimBrokerPurpose(item)
+	claim.BrokerIdentityRef, claim.BrokerIdentityRevision = mapString(item, "brokerIdentityRef"), mapInt64(item, "brokerIdentityRevision")
 	claim.SshComposeSnapshot, _ = item["sshSnapshot"].([]byte)
 	claim.CredentialAdmissionRequired, _ = item["credentialAdmissionRequired"].(bool)
 	claim.ResourcePermissionProfile = castIntegrationResourcePermissionProfile(mapString(item, "resourcePermissionProfile"))
@@ -1044,6 +1064,29 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 		claim.CredentialRevision = castIntegrationCredential(credential)
 	}
 	return claim
+}
+
+// castIntegrationClaimBrokerPurpose preserves absent metadata as unspecified while refusing explicit malformed or future purpose values.
+// An unknown purpose must not disappear into TOKEN/NONE when the gateway checks the closed union.
+// castIntegrationClaimBrokerPurpose сохраняет absent metadata как unspecified, отклоняя explicit malformed либо future purpose.
+// Unknown purpose не исчезает внутри TOKEN/NONE при проверке closed union в gateway.
+func castIntegrationClaimBrokerPurpose(item map[string]any) controlplanev1.IntegrationBrokerIdentityPurpose {
+	raw, present := item["brokerIdentityPurpose"]
+	if !present {
+		return 0
+	}
+	purpose, valid := raw.(string)
+	if !valid {
+		return controlplanev1.IntegrationBrokerIdentityPurpose(-1)
+	}
+	if purpose == "" {
+		return 0
+	}
+	value, known := controlplanev1.IntegrationBrokerIdentityPurpose_value["INTEGRATION_BROKER_IDENTITY_PURPOSE_"+purpose]
+	if !known || value == 0 {
+		return controlplanev1.IntegrationBrokerIdentityPurpose(-1)
+	}
+	return controlplanev1.IntegrationBrokerIdentityPurpose(value)
 }
 
 // castIntegrationResourcePermissionProfile preserves unknown owner metadata as an invalid enum,

@@ -9,6 +9,7 @@ package entity
 // CanResolve описывают наблюдаемое состояние, а не доказывают удаление байтов и не разрешают завершить
 // восстановление.
 type ProjectPurgeRecovery struct {
+	ReasonCode          string `json:"reasonCode"`
 	ProjectRef          string `json:"projectRef"`
 	Version             int64  `json:"version"`
 	SnapshotDigest      string `json:"snapshotDigest"`

@@ -30,7 +30,7 @@ import (
 // TestWorkflowExceptionContextComponent передаёт менеджеру настоящее решение и два exact файла,
 // не создавая Gate, episode, grant, capture либо journal через SQL.
 func TestWorkflowExceptionContextComponent(t *testing.T) {
-	for _, mode := range []string{"owner-cancel", "invalid-manager-complete", "owner-revoke", "owner-expired-lease"} {
+	for _, mode := range []string{"owner-cancel", "history-before-manager-claim", "invalid-manager-complete", "owner-revoke", "owner-expired-lease"} {
 		t.Run(mode, func(t *testing.T) { testWorkflowExceptionContext(t, mode) })
 	}
 }
@@ -105,6 +105,17 @@ func testWorkflowExceptionContext(t *testing.T, mode string) {
 		if !reflect.DeepEqual(before, f.read()) {
 			t.Fatal("completion replay duplicated context lineage")
 		}
+	}
+	if mode == "history-before-manager-claim" {
+		// Advance an accepted dependency through the owner before the manager can freeze its catalog.
+		// Владелец создаёт новую версию уже принятой зависимости до фиксации каталога менеджера.
+		files, total, next, err := service.ListArtifacts(ctx, owner, query.Filter{
+			ProjectRef: project.Ref, Query: "a.md", Page: query.Page{Size: 10},
+		})
+		if err != nil || total != 1 || len(files) != 1 || next != "" || files[0].FileName != "a.md" || files[0].Revision != 1 {
+			t.Fatal("exact accepted dependency was not found before manager claim", completionOutcomeClass(err))
+		}
+		workflowExceptionAdvanceRevision(t, f, entity.ExecutionFileDescriptor{ArtifactRef: files[0].Ref, Revision: files[0].Revision})
 	}
 	var sourceGate entity.OwnerGate
 	const comment = "Исправить AR01 и SEC01.\nСохранить смысл: «точные данные», без повторного UNKNOWN."

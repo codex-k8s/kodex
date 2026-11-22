@@ -748,6 +748,10 @@ export const serverTokenTranslations = {
     "Источник почтовой конфигурации записан",
     "Mailbox configuration source recorded",
   ],
+  EMAIL_MAILBOX_OWNERSHIP_CHANGED: [
+    "Правила владения почтовым подключением изменены",
+    "Mailbox connection ownership rules changed",
+  ],
   EMAIL_MAILBOX_PUBLICATION_FAILED: [
     "Не удалось применить почтовую конфигурацию",
     "Mailbox configuration application failed",
@@ -771,6 +775,10 @@ export const serverTokenTranslations = {
   INTEGRATION_ACTION_STARTED: [
     "Действие интеграции началось",
     "Integration action started",
+  ],
+  PERSONAL_EMAIL_MAILBOX_METADATA_ACCESS_ASSIGNED: [
+    "Назначен доступ к метаданным личного почтового подключения",
+    "Metadata access to the personal mailbox connection granted",
   ],
   PROTECTED_INPUT: ["Защищённые входные данные", "Protected input"],
   INTEGRATION_ACTION_SUCCEEDED: [
@@ -802,6 +810,10 @@ export const serverTokenTranslations = {
   INTEGRATION_CONNECTION_TEST_COMPLETED: [
     "Проверка подключения завершена",
     "Connection test completed",
+  ],
+  INTEGRATION_CONNECTION_TEST_PROBE_ADMITTED: [
+    "Разрешена попытка проверки подключения",
+    "Connection test attempt authorized",
   ],
   INTEGRATION_CONNECTION_TEST_RETRY_SCHEDULED: [
     "Повторная проверка подключения назначена",
@@ -838,6 +850,42 @@ export const serverTokenTranslations = {
   PERSONAL_INTEGRATION_CREDENTIAL_REVOKED: [
     "Личный ключ отозван для новых вызовов",
     "Personal key revoked for new calls",
+  ],
+  KUBERNETES_STAGING_CLEANUP_REPAIR_QUEUED: [
+    "Возобновлена очистка временных данных Kubernetes; место освободится после подтверждённого удаления.",
+    "Kubernetes staging cleanup resumed; storage is released after confirmed deletion.",
+  ],
+  KUBERNETES_CAPTURE_REPAIR_QUEUED: [
+    "Возобновлено сохранение принятой истории Kubernetes без повторного исполнения.",
+    "Kubernetes accepted-history capture resumed without executing the command again.",
+  ],
+  KUBERNETES_TOOL_STOPPED: [
+    "Запрос на остановку действия в Kubernetes записан. Неопределённый результат сохраняется для сверки.",
+    "Stop request for the Kubernetes action recorded. An uncertain outcome is retained for reconciliation.",
+  ],
+  KUBERNETES_IDENTITY_SETUP_CANCELLED: [
+    "Настройка доступа к Kubernetes отменена; возможный результат записи сохранён для сверки",
+    "Kubernetes access setup cancelled; a possible write outcome is retained for reconciliation",
+  ],
+  KUBERNETES_IDENTITY_SETUP_PREPARED: [
+    "Настройка доступа к Kubernetes подготовлена; передайте файл через локальную команду",
+    "Kubernetes access setup prepared; upload the file using the local command",
+  ],
+  KUBERNETES_IDENTITY_UPLOAD_CLAIMED: [
+    "Исполнитель получил ограниченный допуск для настройки доступа к Kubernetes",
+    "A worker received bounded admission for Kubernetes access setup",
+  ],
+  SSH_IDENTITY_SETUP_CANCELLED: [
+    "Запрос на отмену настройки доступа по SSH записан. Возможный результат записи сохранён для сверки.",
+    "SSH access setup cancellation request recorded. A possible write outcome is retained for reconciliation.",
+  ],
+  SSH_IDENTITY_SETUP_PREPARED: [
+    "Подготовлена загрузка ключа SSH через локальную команду",
+    "SSH key upload prepared for the local command",
+  ],
+  SSH_IDENTITY_SETUP_EVIDENCE_RECORDED: [
+    "Результат настройки доступа по SSH записан для сверки",
+    "SSH access setup outcome recorded for reconciliation",
   ],
   PERSONAL_INTEGRATION_CREDENTIAL_TEST_QUEUED: [
     "Проверка личного ключа поставлена в очередь",
@@ -890,6 +938,18 @@ export const serverTokenTranslations = {
   INTEGRATION_EFFECT_GATE_TITLE: [
     "Решение по внешнему действию",
     "External action decision",
+  ],
+  KUBERNETES_CHILD_GATE_APPROVE: [
+    "Разрешить одно действие исходного плана после повторной проверки допуска",
+    "Allow one original-plan action after a fresh authorization check",
+  ],
+  KUBERNETES_CHILD_GATE_REJECT: [
+    "Отклонить оставшиеся действия этого вызова и вернуть результат сотруднику",
+    "Reject this invocation's remaining actions and return its outcome to the agent",
+  ],
+  KUBERNETES_CHILD_GATE_CANCEL: [
+    "Отменить оставшиеся действия этого вызова и вернуть результат сотруднику",
+    "Cancel this invocation's remaining actions and return its outcome to the agent",
   ],
   INTEGRATION_EFFECT_OWNER_DECISION_REQUIRED: [
     "Внешнее действие требует решения владельца",

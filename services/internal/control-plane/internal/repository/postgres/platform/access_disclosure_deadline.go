@@ -33,6 +33,15 @@ func (repository *Repository) requireAccessUntil(ctx context.Context, tx pgx.Tx,
 	default:
 		return time.Time{}, errs.ErrInvalid
 	}
+	if resolved.scope.ResourceKind == "ARTIFACT" && resolved.resourceID != "" {
+		allowed, err := kubernetesCaptureArtifactAccess(ctx, tx, current, permission, resolved.resourceID)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if !allowed {
+			return time.Time{}, errs.ErrNotFound
+		}
+	}
 	if current.authorityProjectID != "" && resolved.projectID != "" && current.authorityProjectID != resolved.projectID {
 		return time.Time{}, errs.ErrNotFound
 	}
@@ -101,4 +110,30 @@ func accessDisclosureDecisionUntil(decision entity.EffectiveAccessDecision, bind
 		return time.Time{}, errs.ErrUnavailable
 	}
 	return latest, nil
+}
+
+// earlierAccessDeadline preserves an earlier finite allowance across fresh alternatives;
+// a restored unbounded binding never renews a command that already waited past its first bound.
+// earlierAccessDeadline сохраняет ранний finite allowance при fresh alternatives;
+// восстановленный unbounded binding не продлевает command после истечения первого bound.
+func earlierAccessDeadline(first, next time.Time) time.Time {
+	if first.IsZero() || !next.IsZero() && next.Before(first) {
+		return next
+	}
+	return first
+}
+
+// accessDeadlineExpired uses the evaluator's monotonic deadline; zero is unbounded.
+// accessDeadlineExpired использует monotonic deadline evaluator; zero означает unbounded.
+func accessDeadlineExpired(until time.Time) bool {
+	return !until.IsZero() && !time.Now().Before(until)
+}
+
+// nullableAccessDeadline retains an unbounded permission as SQL NULL without inventing a finite lease.
+// nullableAccessDeadline хранит unbounded permission как SQL NULL, не выдумывая finite lease.
+func nullableAccessDeadline(until time.Time) any {
+	if until.IsZero() {
+		return nil
+	}
+	return until
 }

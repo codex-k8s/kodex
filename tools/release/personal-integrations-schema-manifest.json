@@ -1,0 +1,1336 @@
+{
+  "backupInitializerSHA256": "ce3fd7b740ee2bbd4481d160d6d743f49a7bd7168cd580e2c9026e2b8d49176b",
+  "captureIndexSHA256": "82ce3de8e368d5cecce96e71569cbb86d1eaeb6786fd93d34ab33597a49b948b",
+  "catalogReaderSHA256": "3e5399456be9f9b80011ae0cd0a292ba863463eff123cacdbfe6b1577852a22d",
+  "migrationPins": [
+    {
+      "file": "20260822000100_web_first_baseline.sql",
+      "sha256": "0ef8fc1cefc391481db8ceae8b3d7c0b024828afc846207bf488381eed684805",
+      "version": 20260822000100
+    },
+    {
+      "file": "20260828000100_s3_artifact_content.sql",
+      "sha256": "60a06d1f995c89778a4c7ad9b1aeeccf7707a6628108e9037a5d5d6a4531501f",
+      "version": 20260828000100
+    },
+    {
+      "file": "20260828000110_schedule_archive_lifecycle.sql",
+      "sha256": "94cd41d922b1ab8234e3b8b27930602b10fe0556fcf1f5dad14d95d318bed590",
+      "version": 20260828000110
+    },
+    {
+      "file": "20260828000200_session_archive.sql",
+      "sha256": "9e394ede2ac6e4a15e9832aa034b167c52af8594c8239da66ab089ec7c0ee5d9",
+      "version": 20260828000200
+    },
+    {
+      "file": "20260828099500_runtime_environments.sql",
+      "sha256": "e84c24cc6059a7d6d81d1be27b0ebac94ffbca072a57ea9e9007813a112f76f3",
+      "version": 20260828099500
+    },
+    {
+      "file": "20260828099600_integration_backend_unit.sql",
+      "sha256": "96ced4e2deb70e3cbb3e4c2fb849c8b7ddaacf3b2ab057afd4ee42e52a4f2297",
+      "version": 20260828099600
+    },
+    {
+      "file": "20260828099700_contextual_plans_and_run_activity.sql",
+      "sha256": "3007285fd042ed5c99808a9c086b386d7f111de1641cceb2d5bc6605c2197f67",
+      "version": 20260828099700
+    },
+    {
+      "file": "20260828099800_platform_worker_grant_workloads.sql",
+      "sha256": "32afc33e766da9e98fe3e2a72f10abaef693230f4a74f799aeb91c0476c0fef7",
+      "version": 20260828099800
+    },
+    {
+      "file": "20260829000100_authority_proof_sequence.sql",
+      "sha256": "ea2fcaadc8e24e051b9bbe8a721750e2af9005b4bf177232257db1fe6f81177d",
+      "version": 20260829000100
+    },
+    {
+      "file": "20260829000200_codex_archive_filename.sql",
+      "sha256": "5c52265ef51d8900d9bbfbe949687284701bc7f8997d0c1459044c8dfbd28b74",
+      "version": 20260829000200
+    },
+    {
+      "file": "20260829000300_artifact_trash.sql",
+      "sha256": "0741057e6ac47a5487268ad8c12f6019040ad060828678ee7b7666ffac85ba9d",
+      "version": 20260829000300
+    },
+    {
+      "file": "20260829000400_attachment_sets.sql",
+      "sha256": "0301e3419109c9df49cfaae58524ddd1a9d2252025417adc2c0601d3bc03c69b",
+      "version": 20260829000400
+    },
+    {
+      "file": "20260829000500_artifact_streaming_limit.sql",
+      "sha256": "74976eff8edf7ab3bf931c6777e4b73cd8867d56380ef157fb4e2af59a6f91f3",
+      "version": 20260829000500
+    },
+    {
+      "file": "20260829000600_organization_artifacts.sql",
+      "sha256": "6925a7d026b9e3b06aa94836954dc3f9e92780d955346d0cfb9f37e3d3072c6d",
+      "version": 20260829000600
+    },
+    {
+      "file": "20260829000700_artifact_retention_claims.sql",
+      "sha256": "aa41eee1cbddbe8b700140ba47d5d29de59a1c88a154335a3141f636830b8aed",
+      "version": 20260829000700
+    },
+    {
+      "file": "20260829000800_runtime_environment_image_pin.sql",
+      "sha256": "69b89217b83e9f76200c7850b299047d7fee5cb2eda4ebdfbf1e699749034c3b",
+      "version": 20260829000800
+    },
+    {
+      "file": "20260829000900_runtime_secrets.sql",
+      "sha256": "df8d5ab30cb5298c9997408050a3a6836ef3c85e213a974d17ff12691eb170ab",
+      "version": 20260829000900
+    },
+    {
+      "file": "20260829001000_runtime_environment_policy.sql",
+      "sha256": "90dc7655d82d901120218a0ff53256efe45d0e6f56cbcf20f56e27953229d875",
+      "version": 20260829001000
+    },
+    {
+      "file": "20260829001100_exact_sensitive_access.sql",
+      "sha256": "1b9fe7f3f784d2431b3e280c4b712c325c79e37f04ac2831d681dafd7534da9b",
+      "version": 20260829001100
+    },
+    {
+      "file": "20260829001200_role_image_application_access.sql",
+      "sha256": "df99a34d42a4a1a7a42445e294e0e1dd3775b90fec7fb655b4a5658943994127",
+      "version": 20260829001200
+    },
+    {
+      "file": "20260829001300_attachment_set_revisions.sql",
+      "sha256": "1227dcfb431431943b106d369443a80919d1e0cbaa973c6b22ceab4a523975e5",
+      "version": 20260829001300
+    },
+    {
+      "file": "20260830000100_mvp_backend_lifecycles.sql",
+      "sha256": "699bd93ad6fe5e50bcac6395eade3605b20fd905199da27f8338210b131d3ccd",
+      "version": 20260830000100
+    },
+    {
+      "file": "20260830000200_artifact_retention_delete_predicates.sql",
+      "sha256": "89e4492024d9b038d1c1b53c065d1bfdebb85a18adac095dc19d499940b2feb4",
+      "version": 20260830000200
+    },
+    {
+      "file": "20260830000300_provider_execution_capacity.sql",
+      "sha256": "c7b4a3e29be8aae340b6c5a4d3385667c64b5af31c28adea4e4afb3fd0a5509c",
+      "version": 20260830000300
+    },
+    {
+      "file": "20260831000100_issue_992_materialized_lifecycles.sql",
+      "sha256": "b03b2712065f13bd0ed70389e180f85c64db4867ff518d8d703a7c2fad591d55",
+      "version": 20260831000100
+    },
+    {
+      "file": "20260831000200_control_plane_platform_worker_grant.sql",
+      "sha256": "2b0d570c7df9f3e008046968cc1f9c2b32c02600b768a1aa4f124d704ab786fb",
+      "version": 20260831000200
+    },
+    {
+      "file": "20260831000300_attachment_snapshot_retention_guard.sql",
+      "sha256": "a483a061f5de14838b0ab79933f91f989776f4b1d0f769f815eeba289b34e2dd",
+      "version": 20260831000300
+    },
+    {
+      "file": "20260831000400_provider_credential_cleanup.sql",
+      "sha256": "2d3df5e1c971eaeae7ee03ac1b45fd0895758294f1361b8b71a634450e8b3ddb",
+      "version": 20260831000400
+    },
+    {
+      "file": "20260904000100_issue_1019_control_plane.sql",
+      "sha256": "692d174fa50c415c330ad546868a06aa0f92ef572d0ad57eba3ed31f8f7dbcde",
+      "version": 20260904000100
+    },
+    {
+      "file": "20260904000200_issue_1019_remediation.sql",
+      "sha256": "76e5dd55cba82f722b9949e116a68e735827bceeee4403933cc5ad57535b9995",
+      "version": 20260904000200
+    },
+    {
+      "file": "20260904000300_issue_1023_worker_grant_generation.sql",
+      "sha256": "dd66aefbd1a8234ae17a33f35e262ce2a574f75996739e5aed41cdcf23303017",
+      "version": 20260904000300
+    },
+    {
+      "file": "20260904000400_issue_1027_automation_scheduler.sql",
+      "sha256": "ca30cd1091d73a82b0e864cf0de72a5ad3325fcd31318bceff7e0912211f142a",
+      "version": 20260904000400
+    },
+    {
+      "file": "20260904000500_issue_1028_integration_routing.sql",
+      "sha256": "12984db43fe1b8d6f7de1b9621ec3c000761a37633f5780a9a0d7b54a237b12f",
+      "version": 20260904000500
+    },
+    {
+      "file": "20260904000600_issue_1046_stt_permission.sql",
+      "sha256": "8b2431d2b7675eb4ab0ea1cc17efac3d60f055b84f10161e3bc4698ce5f70212",
+      "version": 20260904000600
+    },
+    {
+      "file": "20260904000601_issue_1046_catalog_eligibility.sql",
+      "sha256": "ab87834965531d5cab271122ea24bc7eae68f074bc7c3928eb19928173415d31",
+      "version": 20260904000601
+    },
+    {
+      "file": "20260904000602_issue_1046_environment_drafts.sql",
+      "sha256": "c64561ca9d285b22732e09006055247e43c73112774ca5eeef7f9de51795bfb3",
+      "version": 20260904000602
+    },
+    {
+      "file": "20260904000603_issue_1046_environment_binding_pins.sql",
+      "sha256": "ec3ee62ef5bac1e8ca02f4d71b1fd1619c45296c1604ba75e4729478cdfccb59",
+      "version": 20260904000603
+    },
+    {
+      "file": "20260904000604_issue_1046_interaction_unknown_outcome.sql",
+      "sha256": "e23d38b3bbf7c68c25bc331d34013b7fc76569502536bee5e8c516e2bdd059e2",
+      "version": 20260904000604
+    },
+    {
+      "file": "20260904000605_issue_1046_interaction_identity.sql",
+      "sha256": "09dab3d0e390e70cd68fe716569b3c301526bef29a00a7a3b4e82e11424a680e",
+      "version": 20260904000605
+    },
+    {
+      "file": "20260904000606_issue_1046_invocation_workload.sql",
+      "sha256": "3af4df8cae17951251cf4ae78f58ecadefd14862d1d0a1f24bf75eccae368731",
+      "version": 20260904000606
+    },
+    {
+      "file": "20260904000607_issue_1046_interaction_ack.sql",
+      "sha256": "298d25782875a110e2054ababd8f1803353d77ae241e985b49836777c455b3db",
+      "version": 20260904000607
+    },
+    {
+      "file": "20260904000608_issue_1046_connection_test_workload.sql",
+      "sha256": "e4759544c68db97ab6ee610e7cd6ee071132e5df33e42cd1b33b400b471aaf6e",
+      "version": 20260904000608
+    },
+    {
+      "file": "20260904000609_issue_1046_secret_revision_retention.sql",
+      "sha256": "45bb50418b9774f18775805a5a5267dbaea605f9b2cd55593bbcc76048411ee9",
+      "version": 20260904000609
+    },
+    {
+      "file": "20260904000610_issue_1046_stt_system_roles.sql",
+      "sha256": "02f2f8e86cbf1f3ea938340c9ccb24019273859db6f3a14b19834877523b88a8",
+      "version": 20260904000610
+    },
+    {
+      "file": "20260904000611_issue_1046_typed_context.sql",
+      "sha256": "b2e1840e82bef6222b51cff4d6e5bffe22b64f675db54dbf36b85e7e315f763d",
+      "version": 20260904000611
+    },
+    {
+      "file": "20260904000612_issue_1046_skill_projection.sql",
+      "sha256": "8878c6ddf7930fdcbac66b94d22d6990c98294208c0eba27e8b32ec725b0a7cb",
+      "version": 20260904000612
+    },
+    {
+      "file": "20260904000613_issue_1046_skill_artifact_retention.sql",
+      "sha256": "ed7ed9f09c92d1743e5fa12e0d15c9b2938673537a718a05e78b43cee2a02a12",
+      "version": 20260904000613
+    },
+    {
+      "file": "20260904000614_issue_1046_managed_draft_lifecycle.sql",
+      "sha256": "9d2d98d43de93acac68dd5d04bc1f990e9a95e46a5475b2247a9848886d63771",
+      "version": 20260904000614
+    },
+    {
+      "file": "20260904000615_issue_1046_email_receipts.sql",
+      "sha256": "659bae435b3c57e46651c70bdc095771a639c196c510e42305a2f3907867a56d",
+      "version": 20260904000615
+    },
+    {
+      "file": "20260904000616_issue_1046_runtime_context_retention.sql",
+      "sha256": "98916c2214b52a1f91d39f17f427ecb84779c5a06edbb5c4bb5c639dba751b0c",
+      "version": 20260904000616
+    },
+    {
+      "file": "20260904000617_issue_1046_email_worker_watermark.sql",
+      "sha256": "778f6c197ca3c544e998ba20b57a357778fcfab6d7c6b589d27850f154911c0b",
+      "version": 20260904000617
+    },
+    {
+      "file": "20260904000618_issue_1046_email_configuration.sql",
+      "sha256": "6a17113900616af8aedc3e7437a6ade4cd4cc3df55cb5aa57489696935d6e38a",
+      "version": 20260904000618
+    },
+    {
+      "file": "20260904000619_issue_1046_email_authorizations.sql",
+      "sha256": "67fbcd3cd1007a6ab4453cb657d35a17691f45a5fa3e31bcc881cdda3969b1d9",
+      "version": 20260904000619
+    },
+    {
+      "file": "20260904000620_issue_1046_email_mailbox_approval.sql",
+      "sha256": "afd10b1443be5083caaaf887ca8171707e0429e50fee885658de085458bd57cd",
+      "version": 20260904000620
+    },
+    {
+      "file": "20260904000621_issue_1046_email_closed_source_reconciliation.sql",
+      "sha256": "bd933dd0b040c57163f40d59a2eb38354d1115b266bf106c291e2e33e0bd0dcc",
+      "version": 20260904000621
+    },
+    {
+      "file": "20260904000622_issue_1046_assistant_archive.sql",
+      "sha256": "17772455782599ecfdb7ea25a297031f73aa6a34de25391dba05dd997e36207c",
+      "version": 20260904000622
+    },
+    {
+      "file": "20260904000623_issue_1046_email_projection_documents.sql",
+      "sha256": "e91fbbb9d4c381b4d1248b7c541e340f09bc5851f3bb7ec915d57e8072396127",
+      "version": 20260904000623
+    },
+    {
+      "file": "20260904000624_issue_1046_email_credential_descriptors.sql",
+      "sha256": "f951095360becf28a277497f7e948e892cf61bed1647e7892617c39718c0bd0d",
+      "version": 20260904000624
+    },
+    {
+      "file": "20260904000625_issue_1046_mailbox_configuration_owner.sql",
+      "sha256": "87955a9283a1beab547d429a097cb1807c3e50139c3318b175cc87481d3ba2aa",
+      "version": 20260904000625
+    },
+    {
+      "file": "20260904000626_issue_1046_mailbox_publications.sql",
+      "sha256": "e8099a13e7a31afc64dbfe0e0d894e6963dd3db12005ae5fbb0cd563dbb3efda",
+      "version": 20260904000626
+    },
+    {
+      "file": "20260904000627_issue_1046_mailbox_git_lineage.sql",
+      "sha256": "51fce861154e3052732cf8e7a06e1d94bfb46cf7ee02a9a867962636b74165cd",
+      "version": 20260904000627
+    },
+    {
+      "file": "20260904000630_issue_1046_secret_drafts.sql",
+      "sha256": "0a7a2b55473a89bdbf1cda23ba7c3294938a4faf1b2207dbf5b54419595ae9d3",
+      "version": 20260904000630
+    },
+    {
+      "file": "20260904000631_issue_1046_secret_draft_impact.sql",
+      "sha256": "b8730fbd8bd617cf9a2efee22f7e0dea72d37aa7284b211003d29491378e0f0d",
+      "version": 20260904000631
+    },
+    {
+      "file": "20260904000632_issue_1046_overlay_schema.sql",
+      "sha256": "d689162d0d017591d076c30995e2268d1329ccc354bb9c4778065aee66460b2e",
+      "version": 20260904000632
+    },
+    {
+      "file": "20260904000633_issue_1046_account_model_catalog.sql",
+      "sha256": "8dbdf0b6afb6d81262f9f327881c4e5904eb7d8b181876c3a4ce76d46cf8aa5a",
+      "version": 20260904000633
+    },
+    {
+      "file": "20260904000634_issue_1046_configuration_sources.sql",
+      "sha256": "415b6b101bf26c0b2c745ddcd242a3c9d14e675e15cff50a2a098bb46bf9646b",
+      "version": 20260904000634
+    },
+    {
+      "file": "20260904000635_issue_1046_managed_role_images.sql",
+      "sha256": "4afcc9764a7a8771fde2a877db5a7bb0363b1cd5558467196ff6d4eed5e12862",
+      "version": 20260904000635
+    },
+    {
+      "file": "20260904000636_issue_1046_session_catalog_affinity.sql",
+      "sha256": "d52b70009db0753dad412e6eec2f0f9bb1dc716dfa3b7eaace71001d879e4e57",
+      "version": 20260904000636
+    },
+    {
+      "file": "20260904000637_issue_1046_interaction_approval.sql",
+      "sha256": "2267c4cbacf086e5ab3566dbd3dcf1ce22376949202fce22b2f1a5632201be8c",
+      "version": 20260904000637
+    },
+    {
+      "file": "20260904000638_issue_1046_environment_draft_metadata.sql",
+      "sha256": "825e14db81d4cad3dc342c75a2ffefa9949d063e1920da3ad01ee9ae4daed0be",
+      "version": 20260904000638
+    },
+    {
+      "file": "20260904000639_issue_1046_prompt_continuation.sql",
+      "sha256": "19c1765aad83a2737d8b85a0301971819b214938be9b8205cbb9f5c9c27dd7c9",
+      "version": 20260904000639
+    },
+    {
+      "file": "20260904000640_issue_1046_configuration_writeback.sql",
+      "sha256": "5749961bf031793680dae91bc9c3c79bf4ad63214fdfac8fc2621384c49cb5e9",
+      "version": 20260904000640
+    },
+    {
+      "file": "20260904000641_issue_1046_prompt_scope.sql",
+      "sha256": "d67cc4357d420cb97875810e7b3de966de4e53c6287aa731953e54f19f531361",
+      "version": 20260904000641
+    },
+    {
+      "file": "20260904000643_issue_1046_role_image_impact.sql",
+      "sha256": "469835f5c4bfd46d9d2ff4b14a6989bb57c1a399197428828cb3f227f011b65a",
+      "version": 20260904000643
+    },
+    {
+      "file": "20260904000644_issue_1046_revision_impact.sql",
+      "sha256": "edb6bb54b8d914b159c84472209563ed08384aea42b82e2024d331c42131998d",
+      "version": 20260904000644
+    },
+    {
+      "file": "20260904000646_issue_1046_integration_grant_admission.sql",
+      "sha256": "c4ab8f30c4970f426d5f0706a7cebf97facb6306366dcf53daefe284e0751644",
+      "version": 20260904000646
+    },
+    {
+      "file": "20260904000647_issue_1078_workflow_launch_readiness.sql",
+      "sha256": "026c886c544be25db44223eb77871244cba605440944a0ffb9f9f5e907cb97ad",
+      "version": 20260904000647
+    },
+    {
+      "file": "20260905000642_issue_1046_runtime_file_catalog.sql",
+      "sha256": "5742c8e14c128d912167d97ab7ab9ac588c4ecf389623bb3753089458eb09006",
+      "version": 20260905000642
+    },
+    {
+      "file": "20260905000645_issue_1046_instruction_binding.sql",
+      "sha256": "2de50c79884fbb167f4ff8f10b1f463050fcd3c668c3086aae6f423dc9375fcb",
+      "version": 20260905000645
+    },
+    {
+      "file": "20260906000648_issue_1046_provider_usage.sql",
+      "sha256": "856feb3ff3c4b2297db4f1492601b431c49f26d9330bcd1dd8935b2dd737d4b2",
+      "version": 20260906000648
+    },
+    {
+      "file": "20260906000649_issue_1083_role_image_source_permissions.sql",
+      "sha256": "64f308b3ccf99e9018f8e402b1f2ecd94f68a512da3dff67c0355c639844dd32",
+      "version": 20260906000649
+    },
+    {
+      "file": "20260906000650_issue_1089_provider_account_deletion.sql",
+      "sha256": "f3640d0c2d60e5dd5f27930b96ced99e738de443967851eca3110952773ed876",
+      "version": 20260906000650
+    },
+    {
+      "file": "20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "sha256": "8aeb05b8434cb2a131dee4e0b6135d85bd289e30d92805d5bee4b362df1bea10",
+      "version": 20260906000651
+    },
+    {
+      "file": "20260907000400_warm_specification_identity.sql",
+      "sha256": "f7ddf57fdfb772ae8898b065161c8146227e6ae89b9a2ed81dc23bc6164248fe",
+      "version": 20260907000400
+    },
+    {
+      "file": "20260907000500_managed_cfg_copy_archive.sql",
+      "sha256": "4e2e40162407dc58d26c9bfed57a1246732625bac59af7527011d35d4463626e",
+      "version": 20260907000500
+    },
+    {
+      "file": "20260907000600_runtime_materialization_proof.sql",
+      "sha256": "d6cf300f4e839f81a9f74744917d28088c7d7484d840d96a422249b04272049c",
+      "version": 20260907000600
+    },
+    {
+      "file": "20260907000700_worker_grant_instances.sql",
+      "sha256": "a785496143915ab1da0551a2b3772538f291c28a5cfb97cf0903324ab31b246e",
+      "version": 20260907000700
+    },
+    {
+      "file": "20260908000300_email_legacy_package_admission.sql",
+      "sha256": "f8285cc9cb57be1627a6d7ea95530355aca38076bd22eb1fa5a7bf2abf114f76",
+      "version": 20260908000300
+    },
+    {
+      "file": "20260908000500_email_mailbox_observation_receipts.sql",
+      "sha256": "aaba6d9ea810d0d26aa6782646a186e84a0d81467683051e0fac000c5bc2f21d",
+      "version": 20260908000500
+    },
+    {
+      "file": "20260913000100_runtime_materialization_global_identity.sql",
+      "sha256": "58db5e537baec5b7fcfbce3e22bfd2802e64a2e3ab468559569778826aca1424",
+      "version": 20260913000100
+    },
+    {
+      "file": "20260913000200_issue_1548_default_runner_readiness.sql",
+      "sha256": "be130929813ffee2d4378b3150929368165d0bf4690a4959b75ee6feaecf32e6",
+      "version": 20260913000200
+    },
+    {
+      "file": "20260913000300_issue_1556_artifact_retention_trigger.sql",
+      "sha256": "ac5c0ea6bab7b1b9e25dcfd518294427aabb3396d1b869eec5fd7affb0d24fc5",
+      "version": 20260913000300
+    },
+    {
+      "file": "20260914000100_issue_1625_runtime_profile_default.sql",
+      "sha256": "53393e75be4fa80c82038a780b6753df63760253295ff821d6dada7c94b0d547",
+      "version": 20260914000100
+    },
+    {
+      "file": "20260916102000_control_plane_trusted_workload_generations.sql",
+      "sha256": "1eed8d6364070a0ab11a30afdbe99821157e738db26c7978f828077682314d3d",
+      "version": 20260916102000
+    },
+    {
+      "file": "20260917000100_provider_optional_bootstrap.sql",
+      "sha256": "e7f1112b583cb1429d4e1c470301691888a8e1754f03e39f12d9e9d98899defd",
+      "version": 20260917000100
+    },
+    {
+      "file": "20260917000200_image_admission_controller_trusted_workload.sql",
+      "sha256": "3c449b6c623064e3288dece5c01874648434482406af65a052a2ff7bba8dc747",
+      "version": 20260917000200
+    },
+    {
+      "file": "20260923000100_default_runtime_gpt_6_sol.sql",
+      "sha256": "3c0dcfd13cd679b580fefe9ed9c079e157edf79f5673fe2561da261f45758c47",
+      "version": 20260923000100
+    },
+    {
+      "file": "20260923000200_project_trash_lifecycle.sql",
+      "sha256": "78d1820f3690ffd9e928e76517c11a66faf2cc79bb70c870d7f5b5d846779307",
+      "version": 20260923000200
+    },
+    {
+      "file": "20260923000300_project_purge_database.sql",
+      "sha256": "7876e310b67d73d5bc05cd46e0b42849fb641f90be941e03bbbb9452c7d60c9d",
+      "version": 20260923000300
+    },
+    {
+      "file": "20260923000400_assistant_agent_update_context.sql",
+      "sha256": "91a60d79985b358ef027e4777dc4a4f4cda13d311e87ef8e5e650e83cdef7367",
+      "version": 20260923000400
+    },
+    {
+      "file": "20260923000500_assistant_environment_draft_context.sql",
+      "sha256": "278da2f8b536774a56c819faeff2bf914e0269c8f5aeecfd6af23c17de46c707",
+      "version": 20260923000500
+    },
+    {
+      "file": "20260923000600_assistant_role_image_context.sql",
+      "sha256": "6fb814dfefdea34d13ee7553e7b25d544d26572513b3bbb517d09cfcaedf18dc",
+      "version": 20260923000600
+    },
+    {
+      "file": "20260924000100_https_json_integration.sql",
+      "sha256": "7729777ee847f57b1e662f0189dbe51a56ac2427b7cad7bd8fe9b533772c2c30",
+      "version": 20260924000100
+    },
+    {
+      "file": "20260924000200_assistant_connection_update.sql",
+      "sha256": "34501d4144762dafb49ed55a480d81fb1ffe3215328c9410e95f1b2eb38e86af",
+      "version": 20260924000200
+    },
+    {
+      "file": "20260924000300_assistant_schedule_update.sql",
+      "sha256": "7729aa8f59dc0353be68f377529141658bf8272ab5622b72a3e8abc6023cd3ed",
+      "version": 20260924000300
+    },
+    {
+      "file": "20260924000400_assistant_workflow_update.sql",
+      "sha256": "aed30a76db8ff6c42d003aea9bf2401edb84587c04ed7091aa3f3016ac3d9189",
+      "version": 20260924000400
+    },
+    {
+      "file": "20260924000500_assistant_environment_revision.sql",
+      "sha256": "59e1087364e95a1661559dfdf5ea2e683b05179a1edf4ba7dd97222bfe0ae470",
+      "version": 20260924000500
+    },
+    {
+      "file": "20260924000600_assistant_agent_environment_binding.sql",
+      "sha256": "7dedc7acb2d06d7b01c05439b8ceedb3abeb23da7343258f660e7ed8655a5e25",
+      "version": 20260924000600
+    },
+    {
+      "file": "20260924000700_assistant_role_image_update.sql",
+      "sha256": "b59e44b2f3c4c4b068fc69eba71f91608d4eb3dba98410aa0342356b6b1571e7",
+      "version": 20260924000700
+    },
+    {
+      "file": "20260924000800_openapi_mcp_adapter.sql",
+      "sha256": "4987740f8e27e074bcff12d574c20e05b0fab11dff8b8f98f4e663786d1d881c",
+      "version": 20260924000800
+    },
+    {
+      "file": "20260924000900_integration_approval_scope_paths.sql",
+      "sha256": "205e07eb2ca8f7cc743b6f9ae98dec65404e2db724a67c3112c2456259667991",
+      "version": 20260924000900
+    },
+    {
+      "file": "20260924001000_integration_approval_scopes.sql",
+      "sha256": "4e4e1ed9d952cffb6c959a1bec97f8c21aaad114391dca03a1a82d1e7f9bd902",
+      "version": 20260924001000
+    },
+    {
+      "file": "20260924001100_integration_invocation_scoped_policy.sql",
+      "sha256": "218c38a9a9e1413fdc68bd460e5cc737b20ddbf64e7653046f5f71317ac4ef14",
+      "version": 20260924001100
+    },
+    {
+      "file": "20260924001200_integration_invocation_approval_pins.sql",
+      "sha256": "1bb54c743745786379319fcd8ccc3c8c246f6cbce4b6da01e8a2affdd555a1be",
+      "version": 20260924001200
+    },
+    {
+      "file": "20260924001300_integration_egress_projection.sql",
+      "sha256": "ddf23e258db2e99d01786f76c1c56352355f4e62a51a0cb214814f80be322fbd",
+      "version": 20260924001300
+    },
+    {
+      "file": "20260924001400_project_purge_graph_refresh.sql",
+      "sha256": "402ef0819c5432f8cc65be2460a5c05577bfd8d57bf7422e2e99eca5b74ad480",
+      "version": 20260924001400
+    },
+    {
+      "file": "20260925000100_assistant_integration_definition_publish.sql",
+      "sha256": "f27712647b18afed88793f5130bd3bcc3eddb647f3aa73f4a52014c5cb267779",
+      "version": 20260925000100
+    },
+    {
+      "file": "20260925000200_assistant_instruction_draft_context.sql",
+      "sha256": "0ebd72cf0821c34a1ffcddfd9a72061ede31a1cf9164e7d5b045f4c4893cf782",
+      "version": 20260925000200
+    },
+    {
+      "file": "20260926000100_assistant_turn_context_snapshot.sql",
+      "sha256": "9ecf89016b9fc463e1848f19e4ba7c121e307c8d0223d7f8062fefd93849ca45",
+      "version": 20260926000100
+    },
+    {
+      "file": "20260926000200_assistant_recipient_integration_grant.sql",
+      "sha256": "7eb10faf488df29e334dcee3a5522c41483382f6a491aa10ce1ae553c9741b29",
+      "version": 20260926000200
+    },
+    {
+      "file": "20260927000100_assistant_role_image_detail_context.sql",
+      "sha256": "1fcb284778a44544d106da6c5b1562e32ffe3ec366ad2548433cf6d082abf4fa",
+      "version": 20260927000100
+    },
+    {
+      "file": "20260927000200_assistant_role_image_launch_context.sql",
+      "sha256": "dd965ecd0d7996e998d504e22fcaf0fe4dc7569163b657a749b8f35901f0b62b",
+      "version": 20260927000200
+    },
+    {
+      "file": "20260927000300_workflow_republish_same_content.sql",
+      "sha256": "f7ae0da61b4d346f18859f67fec97ba6c407cc8e12b30bcb7a278ad844b02e1d",
+      "version": 20260927000300
+    },
+    {
+      "file": "20260927000400_control_plane_runs_recent_cursor.sql",
+      "sha256": "c7ec6ccd132a4fdd720913c26a059e9614eaad0b72e462658cdc54c51517c24a",
+      "version": 20260927000400
+    },
+    {
+      "file": "20260928000100_assistant_project_file_context.sql",
+      "sha256": "38521dcd40e569d52197c2aa1c951dbc15943db56d097a0f30048a16ab16518b",
+      "version": 20260928000100
+    },
+    {
+      "file": "20260928000200_project_purge_stable_row_keys.sql",
+      "sha256": "a23347dd9d84782fc384654ae06fc384540df062f9fc18c44a59dd618019f990",
+      "version": 20260928000200
+    },
+    {
+      "file": "20260928000300_assistant_session_project_lineage.sql",
+      "sha256": "54997fd481df0bd3a105870e49cfc024a32e0ee2e1808df9018463456a9f6328",
+      "version": 20260928000300
+    },
+    {
+      "file": "20260928000400_assistant_plan_binary_file_limit.sql",
+      "sha256": "341b84e9fe9c2c80b58ce1d4409837b664d44043da0026db3a2abaa9ddfe8f48",
+      "version": 20260928000400
+    },
+    {
+      "file": "20260930000100_assistant_conversation_trash.sql",
+      "sha256": "6f314a34b7f001b729c93e643b0c789b9553e9a8948c8bd8ecf8750f4dfe97d8",
+      "version": 20260930000100
+    },
+    {
+      "file": "20261001000100_assistant_interactive_control.sql",
+      "sha256": "f1357bb9d8e9fc594ae0b5cbd35639d942d5280e72795547bc10f3c3291f4f30",
+      "version": 20261001000100
+    },
+    {
+      "file": "20261001000200_runtime_web_access_policy.sql",
+      "sha256": "434de12403dfd945486415b24d9b8b422aaf203fb61c01953e093e963ba77d81",
+      "version": 20261001000200
+    },
+    {
+      "file": "20261001000300_canonical_reasoning_overlay.sql",
+      "sha256": "7d4f058198e9114de6d90a225fbc735a49f3da8ed622f7f7a31986527f1f2af1",
+      "version": 20261001000300
+    },
+    {
+      "file": "20261003000100_runtime_default_gpt_6_1_sol.sql",
+      "sha256": "5ee9fd4dff7e0d2107a1c37fa51f1ff5596dc43e41992b3ada1c8375f8673f9b",
+      "version": 20261003000100
+    },
+    {
+      "file": "20261003000300_provider_account_concurrency_default.sql",
+      "sha256": "8359fd18bc5bef5feba40a9fb28d538ec61136d5ca4c74b8ecf189308d605138",
+      "version": 20261003000300
+    },
+    {
+      "file": "20261003000400_provider_catalog_authority_floor.sql",
+      "sha256": "27b81b3b29251676f31d9bc0e4f4f5ba6727e68d1591a61b321876b043382096",
+      "version": 20261003000400
+    },
+    {
+      "file": "20261003000500_organization_runtime_resources.sql",
+      "sha256": "353201a0c1b4a08a8d4632afd646a8fc2774167545110bdea76cd49915dfc61b",
+      "version": 20261003000500
+    },
+    {
+      "file": "20261003000600_project_assistant_profiles.sql",
+      "sha256": "aa6d9c5ab0c54f8fd70bd18001ed34551cfc367534835b7a5c4d1799593ff818",
+      "version": 20261003000600
+    },
+    {
+      "file": "20261003000700_organization_role_image_ownership.sql",
+      "sha256": "1da009ac7c9dc5b1443050f7910068003c6a1b508b7cdc3b94464a7d496b593e",
+      "version": 20261003000700
+    },
+    {
+      "file": "20261003000800_organization_runtime_secret_ownership.sql",
+      "sha256": "46d9f4d3b9fd1486492487a6b7a5d486768fc61c67a1986165dedd5c825ac800",
+      "version": 20261003000800
+    },
+    {
+      "file": "20261003000900_organization_runtime_environment_ownership.sql",
+      "sha256": "a8a97a65a5da4b7d95c8cda9ad9cd2e99313ac2659c7902f4377100719b6bf9f",
+      "version": 20261003000900
+    },
+    {
+      "file": "20261004000100_impact_owner_snapshot_protocol.sql",
+      "sha256": "9f207aec668695049d23c16c11d6c6b9d52096dc16cd457138bd4fee6031cce8",
+      "version": 20261004000100
+    },
+    {
+      "file": "20261004000200_organization_image_build_permission.sql",
+      "sha256": "76efbd1361486d32cf1c46b41c64089849ce344bcd418e1c00a895d8c2f2ce5f",
+      "version": 20261004000200
+    },
+    {
+      "file": "20261004000300_provider_account_instance_binding.sql",
+      "sha256": "b484decb4f446246793a4d5ad9cfad161745b98200c49e061aa7a0970a133430",
+      "version": 20261004000300
+    },
+    {
+      "file": "20261004000400_integration_grant_approval_policy.sql",
+      "sha256": "47e7224bf3be54a65eca70ae955f7c89fadba52a42218e60b30df5f256e03512",
+      "version": 20261004000400
+    },
+    {
+      "file": "20261004000500_system_assistant_integration_grants.sql",
+      "sha256": "57089b70707a1072203cb5724e1dc95639b3de4d6a5d541e977b9f7c79a20001",
+      "version": 20261004000500
+    },
+    {
+      "file": "20261004000600_integration_health_snapshot.sql",
+      "sha256": "4418fdb35a2b64c103ff18f3e113d7b944e05b7164f3a0ec2fb7147a69d8db34",
+      "version": 20261004000600
+    },
+    {
+      "file": "20261004000700_system_assistant_grant_operation_projection.sql",
+      "sha256": "bb26931f2cca7f2b7bbd3cf761b468de98c358da83d780f14ca037d3ad38f4dc",
+      "version": 20261004000700
+    },
+    {
+      "file": "20261004000800_session_archive_pending_execution.sql",
+      "sha256": "bcd81d07b7e499210a7597c338c7ca718e844cb7ef17cbba7a046203de2039ca",
+      "version": 20261004000800
+    },
+    {
+      "file": "20261004001400_issue_1797_verified_image_tool_inventory.sql",
+      "sha256": "b557afcc26df8663ecb630c6d459aa370c379e4bda870ae23845e1bb312592ab",
+      "version": 20261004001400
+    },
+    {
+      "file": "20261004001500_project_assistant_connection_purpose.sql",
+      "sha256": "ed3133492e5a0aeec72a3a97b2dcfbde529bbc4dd3c6eceb570cff44338d8d43",
+      "version": 20261004001500
+    },
+    {
+      "file": "20261004001600_managed_mcp_health_refresh.sql",
+      "sha256": "7645772a290ed0a8bd7f5322ae829f7351796d1884ea375d0aa1bc8ecf244e48",
+      "version": 20261004001600
+    },
+    {
+      "file": "20261004001700_session_archive_publications.sql",
+      "sha256": "a8b4f6c28112536467e55fb9d7774baaef27745819a3c7d8955dc76596775a17",
+      "version": 20261004001700
+    },
+    {
+      "file": "20261005000100_image_admission_technical_failure.sql",
+      "sha256": "444bcc7f61f3e9a1ebdb85393c404c19f0a0ffe1caf8bdaf828012faa3429977",
+      "version": 20261005000100
+    },
+    {
+      "file": "20261005000200_image_admission_risk_decisions.sql",
+      "sha256": "2268ea201a511f57f3b0347acda7c45b425decff399cadb87172df17f8fb29e2",
+      "version": 20261005000200
+    },
+    {
+      "file": "20261006000100_assistant_turn_input_bound.sql",
+      "sha256": "4b7b4b96556483f23fea88457b5c055248389c197a095df276b3a33fb756f4d0",
+      "version": 20261006000100
+    },
+    {
+      "file": "20261006000300_required_workflow_launch.sql",
+      "sha256": "c176904fcb674c1b61c0b1aa948e1a6ae019b032d4e714cd485f79451e47eaf5",
+      "version": 20261006000300
+    },
+    {
+      "file": "20261006000400_project_assistant_integration_grants.sql",
+      "sha256": "0f362528f46c99e9ac5406e5f87670571028176268c97ebcad3139f8b2337905",
+      "version": 20261006000400
+    },
+    {
+      "file": "20261007135000_workflow_coordinator_result_catalog.sql",
+      "sha256": "557f17ddf388bb0f5b8290e4aca9f97bca332f8b40ed840a1f0254876914b682",
+      "version": 20261007135000
+    },
+    {
+      "file": "20261008000100_workflow_execution_deadlines.sql",
+      "sha256": "2d050bebb6287104bbca3661d02684bd7fa172f9d24eda454daf61b18791d78a",
+      "version": 20261008000100
+    },
+    {
+      "file": "20261010120000_artifact_immutable_revisions.sql",
+      "sha256": "abfd06fd35f9645e09768cfae41649736ccb19c28a2d152fd7742f8bbaa78e6a",
+      "version": 20261010120000
+    },
+    {
+      "file": "20261010130000_prepared_content_ledger.sql",
+      "sha256": "59924659c5080c56d46a01280f79febc285984e01b5fdd490960631ca172ce28",
+      "version": 20261010130000
+    },
+    {
+      "file": "20261010140000_artifact_revision_assistant_authority.sql",
+      "sha256": "fdcb1e370693a195184e5e15ace0d7623601ddbb2e641ca8f2f65f7506a73849",
+      "version": 20261010140000
+    },
+    {
+      "file": "20261010150000_prompt_service_v3_continuation.sql",
+      "sha256": "f50cfbc13e3a0491fe05ad1707edc21d8083745de83d081e5c519b7466752b7a",
+      "version": 20261010150000
+    },
+    {
+      "file": "20261014000100_provider_credential_renewal.sql",
+      "sha256": "8398b4b81ceea90f005fa440ea343b51ace5690dac5cab307882bb98bade5105",
+      "version": 20261014000100
+    },
+    {
+      "file": "20261016000100_artifact_antivirus_receipts.sql",
+      "sha256": "cbcd704ca17dcf3d1e0bbba5f38fe833438b17dfc614b9fc491bdc125a84b8d5",
+      "version": 20261016000100
+    },
+    {
+      "file": "20261019000100_project_purge_recovery.sql",
+      "sha256": "bcba7778124961aab43b65e7bc1551c02039602bda39a85a74d9d1f544a3b74a",
+      "version": 20261019000100
+    },
+    {
+      "file": "20261019000200_project_purge_indexed_graph.sql",
+      "sha256": "13b1ff6a8969147264e090eec46ec90e886c1701c677b7ab61818785b7c7f005",
+      "version": 20261019000200
+    },
+    {
+      "file": "20261019000300_project_purge_audit_references.sql",
+      "sha256": "6d3b2d23ae07bfb33c08b0467e51bae3082c4c5c2a8b2b0b1eeea941178b8ff6",
+      "version": 20261019000300
+    },
+    {
+      "file": "20261019000400_project_purge_deferred_graph.sql",
+      "sha256": "20024f156b572367a1bae33c855dbcb3f22f91da099cd6fe9481a4d4862f74a1",
+      "version": 20261019000400
+    },
+    {
+      "file": "20261020000100_provider_financial_projection.sql",
+      "sha256": "a3a047fa8a8f7750136eb3418b4f3bbf3519ead9a24fb7805abef94b8ea0a8be",
+      "version": 20261020000100
+    },
+    {
+      "file": "20261020000200_provider_financial_catalog_floor.sql",
+      "sha256": "89c77859b9c5563144adc4ffc27f94f45d82472185ce7ab671df597ed989eeae",
+      "version": 20261020000200
+    },
+    {
+      "file": "20261025000100_outbox_unpublished_predecessor_index.sql",
+      "sha256": "2416db8e86a1f710ee122f11462b22bfc4860fd1081c0f98c3e109dad719338f",
+      "version": 20261025000100
+    },
+    {
+      "file": "20261025000200_repository_bundle_publications.sql",
+      "sha256": "2d348844a6021d5e4674ac5511921caa3cb963f1daf8c2e6e22011aeca8c251e",
+      "version": 20261025000200
+    },
+    {
+      "file": "20261026000100_owner_gate_expiry.sql",
+      "sha256": "6a937c105fa803293180a2c6c388f4104c2ccf8b516abf8a40ca1fbef3810df3",
+      "version": 20261026000100
+    },
+    {
+      "file": "20261026000200_project_purge_authority_acl.sql",
+      "sha256": "9d7b0029afc95329a1626a71956dfcf2c50c72d50299f53a3243b6b2b2475bd7",
+      "version": 20261026000200
+    },
+    {
+      "file": "20261026000300_server_driven_workflow.sql",
+      "sha256": "f2be95c39c0540ef93084ea1aa4fd0484bb53b55e66d72b74b4407dcff0c27f3",
+      "version": 20261026000300
+    },
+    {
+      "file": "20261026000400_workflow_attempt_journal.sql",
+      "sha256": "de4eb0eb1bcc0f45c5ddd19e31fcae6722053be7306b9dd3d59250d9ffb17619",
+      "version": 20261026000400
+    },
+    {
+      "file": "20261026000500_workflow_artifact_visibility_retention.sql",
+      "sha256": "0b6727e299a4bda1b9b1465c1b1de8835e562182474317fe43900d8ae2b497a4",
+      "version": 20261026000500
+    },
+    {
+      "file": "20261026000600_workflow_exception_episodes.sql",
+      "sha256": "8364920f18cc8a245e1a4b395e9337864c490e0d2fedbd8bd9b7a5857f2a6236",
+      "version": 20261026000600
+    },
+    {
+      "file": "20261026000700_workflow_input_guard_binding.sql",
+      "sha256": "02972cacd7130282801d688179343d6a04d9cd7e735d51f45c30f31ba6219229",
+      "version": 20261026000700
+    },
+    {
+      "file": "20261026000800_workflow_exception_terminal_decision.sql",
+      "sha256": "1c57166c774fa3f8c2d51753174a2f5e2e511b0bad89bcf330ca64f78ee019e2",
+      "version": 20261026000800
+    },
+    {
+      "file": "20261026000900_workflow_effect_rejoin.sql",
+      "sha256": "8e81a859391b43699fb15542c2404461f403ca0d4ef2064d3e906e3fedef31fa",
+      "version": 20261026000900
+    },
+    {
+      "file": "20261026001000_workflow_effect_execution_rejoin.sql",
+      "sha256": "662fd7edf811cb0369831002dbf5c419357572673f8b6abd9cc965315effaf77",
+      "version": 20261026001000
+    },
+    {
+      "file": "20261026001100_legacy_workflow_rework.sql",
+      "sha256": "a84a5d73bc12a200713ff67589d06562043dea9367dc8e3a5f89eb40079a7621",
+      "version": 20261026001100
+    },
+    {
+      "file": "20261026001200_workflow_exception_context.sql",
+      "sha256": "b2969017c32c5ed2e37806a90feb986e49f4607467679825bfe15add0d683650",
+      "version": 20261026001200
+    },
+    {
+      "file": "20261026001300_workflow_upstream_rework.sql",
+      "sha256": "9524f63ced25b54d64044d365b65de394aed5ef0ee285193dea183a13c085f2f",
+      "version": 20261026001300
+    },
+    {
+      "file": "20261026001400_workflow_review_qa_evidence.sql",
+      "sha256": "c8d776c3b42eeab9d2594f2b0ed7adbc6f0b2eab99ba274d5e9ef696dd01560a",
+      "version": 20261026001400
+    },
+    {
+      "file": "20261026001500_session_workspace_storage.sql",
+      "sha256": "b0aaf58aaf19cb58195143efb9245c534f163ac65f747459af316d9afdc4aafe",
+      "version": 20261026001500
+    },
+    {
+      "file": "20261026001600_workspace_checkpoint_tasks.sql",
+      "sha256": "a3d934e4ed73460f91022cf0793c99508546294dece8331e818c4d73fa0f2aee",
+      "version": 20261026001600
+    },
+    {
+      "file": "20261026001700_workspace_volume_custody.sql",
+      "sha256": "e44e81ef8b67e974942fe8dc5076579fafb1d2046a1d0d2f0e7723dda302f9f4",
+      "version": 20261026001700
+    },
+    {
+      "file": "20261027000100_ssh_compose_runtime.sql",
+      "sha256": "85015ed3de9723e1b8ec111dac527095f42161dcff67a42adf088d51d6348094",
+      "version": 20261027000100
+    },
+    {
+      "file": "20261028000100_workspace_restore_owner.sql",
+      "sha256": "2cae661d780956b978937c467f931617492ba745e11fc8047d70dffbc584103c",
+      "version": 20261028000100
+    },
+    {
+      "file": "20261029000100_github_historical_grant_admission.sql",
+      "sha256": "3a48cc038c3e9dc455dede2ab3b53309cc2c0d185f941f7449b90e0240c493b8",
+      "version": 20261029000100
+    },
+    {
+      "file": "20261029000200_github_pr_collaboration_admission.sql",
+      "sha256": "2990235ca29bf89345b54fe6e4ccea254f852145cea1f3f78732f6dcef822760",
+      "version": 20261029000200
+    },
+    {
+      "file": "20261029000300_workflow_pdlc_evidence.sql",
+      "sha256": "eb4b055c3f7e1350dc3311531214ca1f10453bfec412eb0f9783e49393d0220e",
+      "version": 20261029000300
+    },
+    {
+      "file": "20261030000100_workflow_content_page.sql",
+      "sha256": "a2c9777aa795bcd71f78dc84bbe4078b421cb068c79f147070ecd9309e06b305",
+      "version": 20261030000100
+    },
+    {
+      "file": "20261105000100_platform_oidc_identity.sql",
+      "sha256": "82f0f3084640845e5d2cd4502db303216a27d5a2ce502d7689a37dd9d121b11d",
+      "version": 20261105000100
+    },
+    {
+      "file": "20261106000100_personal_integration_credentials.sql",
+      "sha256": "c27a00c083612a49614216b2360ff2cc96ea9b9844ade7d42832559d607f6c21",
+      "version": 20261106000100
+    },
+    {
+      "file": "20261107000100_jira_create_fields_compatibility.sql",
+      "sha256": "f15351bb3f366bb2ab064811e445dbbde9cf8485f429db0f2aff2b02f03af200",
+      "version": 20261107000100
+    },
+    {
+      "file": "20261108000100_authority_proof_counter.sql",
+      "sha256": "f202a0cb17bc05a9fb49c29143f8a6543ff9e9d89f48e0e2e3b3a4b549462f92",
+      "version": 20261108000100
+    },
+    {
+      "file": "20261109000100_integration_resource_policies.sql",
+      "sha256": "0d496dbcabd3e35b463d1d3810452d41398f779a793bd27c4f2903102d88d4ad",
+      "version": 20261109000100
+    },
+    {
+      "file": "20261110000100_artifact_optional_antivirus.sql",
+      "sha256": "78e9db3308f9975ef77417dfe19a0ee8a528dce78b93761ba338d97de4a20df9",
+      "version": 20261110000100
+    },
+    {
+      "file": "20261110000200_managed_workspace.sql",
+      "sha256": "2a73ebf9244860f386976e0a21ee56c35f72f90fddc1f220f69e092a747ea463",
+      "version": 20261110000200
+    },
+    {
+      "file": "20261111000100_workflow_workspace_scope.sql",
+      "sha256": "0bced62a1dd3e6b3e132dc03dfaef8846a2e5cea2f525046c0c3bbe67d4efbe3",
+      "version": 20261111000100
+    },
+    {
+      "file": "20261111000200_opencode_native_sessions.sql",
+      "sha256": "ea43818862a8ab0768e9e0ba9b9a6a1a07fd31c9ee733e323717bbd744c6a3cf",
+      "version": 20261111000200
+    },
+    {
+      "file": "20261112000100_workspace_archive_runtime_abi.sql",
+      "sha256": "495b254b8be1c34a33529873154aced0fa9cfa646e04aafdbfac9f8dcccd810d",
+      "version": 20261112000100
+    },
+    {
+      "file": "20261113000100_workspace_unbound_stop.sql",
+      "sha256": "d279852d9fcc2f5eed0abc8413140723567f110746fb0f818a35da28b2f915d2",
+      "version": 20261113000100
+    },
+    {
+      "file": "20261114120000_github_repository_scope.sql",
+      "sha256": "2c1f61aa1e2d08f61f1879eaaa55d45094d4d13ba5844ae1e067070aff162365",
+      "version": 20261114120000
+    },
+    {
+      "file": "20261114130000_sentry_personal_credentials.sql",
+      "sha256": "1faa8a03406574ac114993643cdc8c7d99cb6f65370703eb6187626ed9411032",
+      "version": 20261114130000
+    },
+    {
+      "file": "20261114140000_telegram_project_subscriptions.sql",
+      "sha256": "ca82eb431bab3eb12df03d1eaf14c30f19afce49aae1b286ae6cf428a52be0a5",
+      "version": 20261114140000
+    },
+    {
+      "file": "20261114150000_managed_kubernetes.sql",
+      "sha256": "f36ec90e3114cd5c2be2c7b8a9d99cb2d9d0351b594d751e474a8190716fff75",
+      "version": 20261114150000
+    },
+    {
+      "file": "20261114160000_managed_ssh.sql",
+      "sha256": "abc9eca9c15cbbe3c5b366cdda97859ee7b33070c269fdd5a0c0365fa6c19672",
+      "version": 20261114160000
+    },
+    {
+      "file": "20261114170000_personal_email_mailboxes.sql",
+      "sha256": "544693d3bb5fbebbf8ea0fa99bc6c925343fd96e2ed04ed6966d285d6a397791",
+      "version": 20261114170000
+    }
+  ],
+  "predecessorManifestSHA256": "5c56881a98c42b501a67c7af99dbcc1bed3b0b7085bdef23614dcf08aacf2f2d",
+  "serverVersionNum": 180003,
+  "snapshots": {
+    "backup": {
+      "20261114140000": {
+        "catalog": {
+          "authorityDigest": "1525715fe116df16749772105ed3f8ee7ab51ccfa0f9e23dc4b7fa6fbe8b7891",
+          "catalogDigest": "4e1adaf05bdc5cd8e80d311212a21a4faad709e10c1115a6bfaad44722979213",
+          "functionCount": 233,
+          "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
+          "purgeEdgeCount": 320,
+          "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
+          "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
+          "purgeNodeCount": 114,
+          "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
+          "tableCount": 169,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "afc986b79a2271b7abdc5b6462e06e3cfaaae1fc72cf56c83d4bfc7a71defa80",
+          "triggerCount": 187,
+          "triggersDigest": "68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"
+        },
+        "restoreCatalogDigest": "345bae3f900a1e7ccf37f792844b8031349f0157086a5cda5ae2a12b1fcc0131"
+      },
+      "20261114150000": {
+        "catalog": {
+          "authorityDigest": "4b23a287d327bd14c0c8a6ad009cb419a2ded65a162601ae78d9e679752d8d6c",
+          "catalogDigest": "a3cf4172ef092a820fe1cd083a816ac7ba660734cbb15976f82010747d093e76",
+          "functionCount": 317,
+          "functionsDigest": "36acd9f668dfbfe8637bd1b6dcf7ab64448549be31938fde7d531ada5e4ec65b",
+          "purgeEdgeCount": 369,
+          "purgeEdgeFingerprint": "c9a212a3f1bda48841abdc05eb573365",
+          "purgeGraphDigest": "0822064e92bda30987815d5fdf825884543535ff8d8fc1f9d28bd1fc0bfdbb14",
+          "purgeNodeCount": 134,
+          "purgeNodeFingerprint": "ac4d979eccde3cb554e3818eb6e7445f",
+          "tableCount": 206,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "c0d620efacc807f2293d685b893ce80d1720397a873572d577d906774567f682",
+          "triggerCount": 263,
+          "triggersDigest": "720a60ef1a6f91ca36780ee7965a7ba8a3fa397224557d10e2bef98f15317c96"
+        },
+        "restoreCatalogDigest": "621e5114c717986f5ba97c3b4c6f87e31070b3d99c1224298f7e713504065f26"
+      },
+      "20261114160000": {
+        "catalog": {
+          "authorityDigest": "fc154660b0d426f0f3857faf1a7330cbe8e684ca945f17dafb8ccd9413abaa90",
+          "catalogDigest": "213d6a70fc9d0391840b7cb8db088cd6b43f340204fa2fb40f81bfddb26adb8a",
+          "functionCount": 322,
+          "functionsDigest": "2f000ab20c28332e78ee74716ab5ab7dc5a13dca8fbc5a055883488ba0ae7db6",
+          "purgeEdgeCount": 373,
+          "purgeEdgeFingerprint": "ee978bed4c1cb4b555b9985c52ebca76",
+          "purgeGraphDigest": "8691313478e6e6b238e57159d5194dc85bec088a3ddb6c64c58390d61fd91c5d",
+          "purgeNodeCount": 137,
+          "purgeNodeFingerprint": "324b4e7d2f5dec55cbac7c767fd93dee",
+          "tableCount": 217,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "c76cd0640859e48b50ccee7fbe0f5748c0e2140eb9143511fda6676e3cf61588",
+          "triggerCount": 276,
+          "triggersDigest": "a5a43be4140f5c143e0da07dbad5dd7d3dc87a7b78d8c46d7b449ca7a24b9897"
+        },
+        "restoreCatalogDigest": "f321061c3c8a026f81cb1690e2c111dadb8f08005578e69db8b84597b3f6c324"
+      },
+      "20261114170000": {
+        "catalog": {
+          "authorityDigest": "16832868ccc8e1d5b9c57f34088a32f9ef39afb6ece2679856198119555b88d3",
+          "catalogDigest": "cec49c6edc276a09877e5b18ea3f4e196cb7fb069afbc8c53d4e1db685a1b4c7",
+          "functionCount": 328,
+          "functionsDigest": "2ef8dc26ea9a8b51fba0cfaa2b403a0f81e5042cd3d2075f9b219e37c550d23a",
+          "purgeEdgeCount": 376,
+          "purgeEdgeFingerprint": "512cddddde0e7b818ebcfe40f4719f3d",
+          "purgeGraphDigest": "3174dbb544ed14ce65c681c9486be01b626e81ccff448fce97e4d8730726395f",
+          "purgeNodeCount": 139,
+          "purgeNodeFingerprint": "fa3830df53c1264f778a60a4f269c5b8",
+          "tableCount": 219,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "510795f1f04234b9c86fc84b6d1a855e32d1891b11f7f452b55f2ce787bf2dfd",
+          "triggerCount": 282,
+          "triggersDigest": "809e0f0703aa3ad0866d1d776756dff85a23421f9d6c70d543530c4c795c4927"
+        },
+        "restoreCatalogDigest": "1774c0d017f388ed869953f548b26fdfbab6fd611fa532b01bddf1184718b7a2"
+      }
+    },
+    "normal": {
+      "20261114140000": {
+        "catalog": {
+          "authorityDigest": "48e658fe0cec5baa0c09f63d38f3b6d1057104cc1726a0f9c8b74be6497957a7",
+          "catalogDigest": "ad3495f152515b4d7d4dbdad522143c28bc25aa2d72ca83fbcaa820929611bfb",
+          "functionCount": 233,
+          "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
+          "purgeEdgeCount": 320,
+          "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
+          "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
+          "purgeNodeCount": 114,
+          "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
+          "tableCount": 169,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner}"
+          ],
+          "tablesDigest": "f5f2e9b961fd2cd40188cd6928b021ddfaf40972b47c72812c601c9607f8c3eb",
+          "triggerCount": 187,
+          "triggersDigest": "68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"
+        },
+        "restoreCatalogDigest": "fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2"
+      },
+      "20261114150000": {
+        "catalog": {
+          "authorityDigest": "846000b51ab5f4181e7a2fcc543d5982892029547ea1dd50fe1b652cb85ed68a",
+          "catalogDigest": "adf1908563c24c7d30ecd95c94725a2fcb5458037cd806ea25d3e2090f9a5741",
+          "functionCount": 317,
+          "functionsDigest": "36acd9f668dfbfe8637bd1b6dcf7ab64448549be31938fde7d531ada5e4ec65b",
+          "purgeEdgeCount": 369,
+          "purgeEdgeFingerprint": "c9a212a3f1bda48841abdc05eb573365",
+          "purgeGraphDigest": "0822064e92bda30987815d5fdf825884543535ff8d8fc1f9d28bd1fc0bfdbb14",
+          "purgeNodeCount": 134,
+          "purgeNodeFingerprint": "ac4d979eccde3cb554e3818eb6e7445f",
+          "tableCount": 206,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner}"
+          ],
+          "tablesDigest": "b325035914612e6d0276aab924dce8e04e013f539fe8a70580b87593851fc91d",
+          "triggerCount": 263,
+          "triggersDigest": "720a60ef1a6f91ca36780ee7965a7ba8a3fa397224557d10e2bef98f15317c96"
+        },
+        "restoreCatalogDigest": "6b22dff30c572ce2af9f28abc4f0b75b42ba9cbda013bf8d57e0222e9d3497e4"
+      },
+      "20261114160000": {
+        "catalog": {
+          "authorityDigest": "79329c45572bd3b175badddfb3065d0b70429009c014be5f257ba3898b03cc7a",
+          "catalogDigest": "ae347fe296ceb126c932f2eb7a319bb6e1a3bd69ce483acc15390be76fed1194",
+          "functionCount": 322,
+          "functionsDigest": "2f000ab20c28332e78ee74716ab5ab7dc5a13dca8fbc5a055883488ba0ae7db6",
+          "purgeEdgeCount": 373,
+          "purgeEdgeFingerprint": "ee978bed4c1cb4b555b9985c52ebca76",
+          "purgeGraphDigest": "8691313478e6e6b238e57159d5194dc85bec088a3ddb6c64c58390d61fd91c5d",
+          "purgeNodeCount": 137,
+          "purgeNodeFingerprint": "324b4e7d2f5dec55cbac7c767fd93dee",
+          "tableCount": 217,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner}"
+          ],
+          "tablesDigest": "c8fc8c67917d2265c43ac57a156645801a5e4c3558a5ee2b484a666ea5996905",
+          "triggerCount": 276,
+          "triggersDigest": "a5a43be4140f5c143e0da07dbad5dd7d3dc87a7b78d8c46d7b449ca7a24b9897"
+        },
+        "restoreCatalogDigest": "e36fa50c6155ccbfc37ef842988313afc3bc795df989a69f70e53f60654650d7"
+      },
+      "20261114170000": {
+        "catalog": {
+          "authorityDigest": "9636fcf2552427a53243caae29d86122ca43e399cf9255369cf016e46636b20d",
+          "catalogDigest": "47041fb320cd92726a8995bd288427096cac676085feeb9933f93a6e95e52a37",
+          "functionCount": 328,
+          "functionsDigest": "2ef8dc26ea9a8b51fba0cfaa2b403a0f81e5042cd3d2075f9b219e37c550d23a",
+          "purgeEdgeCount": 376,
+          "purgeEdgeFingerprint": "512cddddde0e7b818ebcfe40f4719f3d",
+          "purgeGraphDigest": "3174dbb544ed14ce65c681c9486be01b626e81ccff448fce97e4d8730726395f",
+          "purgeNodeCount": 139,
+          "purgeNodeFingerprint": "fa3830df53c1264f778a60a4f269c5b8",
+          "tableCount": 219,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner}"
+          ],
+          "tablesDigest": "544112d715e2dba9b81398e94ff9f16dac42373a73d4000edb81bbab029489bb",
+          "triggerCount": 282,
+          "triggersDigest": "809e0f0703aa3ad0866d1d776756dff85a23421f9d6c70d543530c4c795c4927"
+        },
+        "restoreCatalogDigest": "3a46ea078badbf77a87177c2fb69f7e6bd20db769f9c543614542650098c77ab"
+      }
+    },
+    "table-only-backup": {
+      "20261114140000": {
+        "catalog": {
+          "authorityDigest": "ddd91304bc9957a61c373ef08b3f6ba9b09987256cb54b4ad130c23b1120f3b8",
+          "catalogDigest": "2732ad259f62c377994a155a6cfe57dc978a2194df58e012fb9a395b92d0bcbb",
+          "functionCount": 233,
+          "functionsDigest": "199acd1fa205096b3360b2bb3d7f05229e9fec4dad091d0cec2a9e6282bb47d2",
+          "purgeEdgeCount": 320,
+          "purgeEdgeFingerprint": "1cb01973881ffe170e65ca49f48a6289",
+          "purgeGraphDigest": "eee13fa1e944b17b75d63171e6c54fb8c5e375f2b7f56dd8b776241f554c18cb",
+          "purgeNodeCount": 114,
+          "purgeNodeFingerprint": "7e9c4f53e840517ede4723bab15cbbd5",
+          "tableCount": 169,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "afc986b79a2271b7abdc5b6462e06e3cfaaae1fc72cf56c83d4bfc7a71defa80",
+          "triggerCount": 187,
+          "triggersDigest": "68027710f8f3dd534f7a1d7615e423dd069505d21c9528873e0538d4d830b345"
+        },
+        "restoreCatalogDigest": "fdca90bf1047fb06bfe92c8cec482758b9f14dc7ab57bd2cde6452304d1739e2"
+      },
+      "20261114150000": {
+        "catalog": {
+          "authorityDigest": "586b8e59eaa2a036b742eb041f7539e8086ec349f3de2b4f8e575d9dabb5db6a",
+          "catalogDigest": "551f545e6dd0d67771dc3312a7e3e28af088704c2f02fc2c33ff1d912b82c0e1",
+          "functionCount": 317,
+          "functionsDigest": "36acd9f668dfbfe8637bd1b6dcf7ab64448549be31938fde7d531ada5e4ec65b",
+          "purgeEdgeCount": 369,
+          "purgeEdgeFingerprint": "c9a212a3f1bda48841abdc05eb573365",
+          "purgeGraphDigest": "0822064e92bda30987815d5fdf825884543535ff8d8fc1f9d28bd1fc0bfdbb14",
+          "purgeNodeCount": 134,
+          "purgeNodeFingerprint": "ac4d979eccde3cb554e3818eb6e7445f",
+          "tableCount": 206,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "c0d620efacc807f2293d685b893ce80d1720397a873572d577d906774567f682",
+          "triggerCount": 263,
+          "triggersDigest": "720a60ef1a6f91ca36780ee7965a7ba8a3fa397224557d10e2bef98f15317c96"
+        },
+        "restoreCatalogDigest": "6b22dff30c572ce2af9f28abc4f0b75b42ba9cbda013bf8d57e0222e9d3497e4"
+      },
+      "20261114160000": {
+        "catalog": {
+          "authorityDigest": "c7d19c84dc9f2e4da527c1708e7bb4bc30d4c331de640306b3c73f261414dbce",
+          "catalogDigest": "815ec6fce6b3462c80c3e770386a870644e26d444b02ed7701ecf0799c66a774",
+          "functionCount": 322,
+          "functionsDigest": "2f000ab20c28332e78ee74716ab5ab7dc5a13dca8fbc5a055883488ba0ae7db6",
+          "purgeEdgeCount": 373,
+          "purgeEdgeFingerprint": "ee978bed4c1cb4b555b9985c52ebca76",
+          "purgeGraphDigest": "8691313478e6e6b238e57159d5194dc85bec088a3ddb6c64c58390d61fd91c5d",
+          "purgeNodeCount": 137,
+          "purgeNodeFingerprint": "324b4e7d2f5dec55cbac7c767fd93dee",
+          "tableCount": 217,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "c76cd0640859e48b50ccee7fbe0f5748c0e2140eb9143511fda6676e3cf61588",
+          "triggerCount": 276,
+          "triggersDigest": "a5a43be4140f5c143e0da07dbad5dd7d3dc87a7b78d8c46d7b449ca7a24b9897"
+        },
+        "restoreCatalogDigest": "e36fa50c6155ccbfc37ef842988313afc3bc795df989a69f70e53f60654650d7"
+      },
+      "20261114170000": {
+        "catalog": {
+          "authorityDigest": "8ab6ce98f287f0132785a56f2b1b24c25d69cf83dac850bf36f541ecfff10311",
+          "catalogDigest": "d88588eba2532f4e3bd02db58f95a2fec61786d185fd25d1989c6485c1dcea09",
+          "functionCount": 328,
+          "functionsDigest": "2ef8dc26ea9a8b51fba0cfaa2b403a0f81e5042cd3d2075f9b219e37c550d23a",
+          "purgeEdgeCount": 376,
+          "purgeEdgeFingerprint": "512cddddde0e7b818ebcfe40f4719f3d",
+          "purgeGraphDigest": "3174dbb544ed14ce65c681c9486be01b626e81ccff448fce97e4d8730726395f",
+          "purgeNodeCount": 139,
+          "purgeNodeFingerprint": "fa3830df53c1264f778a60a4f269c5b8",
+          "tableCount": 219,
+          "tableDefaultACL": [
+            "{control_plane_runtime=arwd/control_plane_owner,kodex_backup_reader=r/control_plane_owner}"
+          ],
+          "tablesDigest": "510795f1f04234b9c86fc84b6d1a855e32d1891b11f7f452b55f2ce787bf2dfd",
+          "triggerCount": 282,
+          "triggersDigest": "809e0f0703aa3ad0866d1d776756dff85a23421f9d6c70d543530c4c795c4927"
+        },
+        "restoreCatalogDigest": "3a46ea078badbf77a87177c2fb69f7e6bd20db769f9c543614542650098c77ab"
+      }
+    }
+  },
+  "sourceSHA": "8d7f1adfeddd88858b101e3f207d0cb6668ddb13",
+  "version": 1
+}

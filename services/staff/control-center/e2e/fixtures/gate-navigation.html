@@ -23,6 +23,16 @@
       import HomeGateCatalog from "../../src/features/home/components/HomeGateCatalog.vue";
       await loadRuntimeConfig();
       configureApiClient();
+      const projectRef = new URLSearchParams(window.location.search).get(
+        "projectRef",
+      );
+      // Явный project filter запускает HTTP catalog; отсутствие сохраняет realtime snapshot mode.
+      function decisionRoute(gateRef) {
+        return {
+          path: "/decisions",
+          query: { gateRef, ...(projectRef ? { projectRef } : {}) },
+        };
+      }
       const router = createRouter({
         history: createMemoryHistory(),
         routes: [
@@ -51,14 +61,14 @@
               h(
                 "button",
                 {
-                  onClick: () => router.push("/decisions?gateRef=gate_history"),
+                  onClick: () => router.push(decisionRoute("gate_history")),
                 },
                 "Открыть адресованную историю",
               ),
               h(
                 "button",
                 {
-                  onClick: () => router.push("/decisions?gateRef=gate_hidden"),
+                  onClick: () => router.push(decisionRoute("gate_hidden")),
                 },
                 "Открыть скрытое решение",
               ),
@@ -67,7 +77,7 @@
           ]),
       });
       app.use(createPinia()).use(i18n).use(router);
-      await router.push("/decisions?gateRef=gate_addressed");
+      await router.push(decisionRoute("gate_addressed"));
       await router.isReady();
       app.mount("#app");
     </script>

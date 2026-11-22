@@ -1,10 +1,14 @@
 package httptransport
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
 )
 
@@ -73,6 +77,27 @@ func systemAssistantGrantCandidatePage(v *cp.GetSystemAssistantIntegrationGrantC
 		paths := append([]string{}, item.CurrentApprovalScopePaths...)
 		entry := map[string]any{"capability": capability, "grantable": item.Grantable, "reason": reason,
 			"currentGrantVersion": item.CurrentGrantVersion, "currentGrantEnabled": item.CurrentGrantEnabled, "currentApprovalScopePaths": paths}
+		kubernetes := item.Capability.ResourceKind == cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET ||
+			strings.HasPrefix(item.Capability.Key, "kubernetes.") || strings.HasPrefix(item.Capability.Operation, "kubernetes.") ||
+			item.ResourceScope != nil && item.ResourceScope.Kind == cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET
+		if kubernetes {
+			scope := item.ResourceScope
+			if scope == nil || len(scope.ProtoReflect().GetUnknown()) != 0 || item.Capability.Key != item.Capability.Operation ||
+				item.Capability.ResourceKind != cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET ||
+				scope.Kind != cp.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_KUBERNETES_TARGET || integrationpackage.ValidateKubernetesCandidateScope(item.Capability.Key, scope.Values) != nil {
+				return nil, false
+			}
+			encoded, err := json.Marshal(scope.Values)
+			digest := sha256.Sum256(encoded)
+			if err != nil || hex.EncodeToString(digest[:]) != scope.Digest {
+				return nil, false
+			}
+			publicScope, err := messageMap(scope)
+			if err != nil {
+				return nil, false
+			}
+			entry["resourceScope"] = publicScope
+		}
 		if item.CurrentGrantRef != "" {
 			entry["currentGrantRef"], entry["currentApprovalPolicy"] = item.CurrentGrantRef, policy
 		}
@@ -94,7 +119,11 @@ func systemAssistantGrantCandidatePage(v *cp.GetSystemAssistantIntegrationGrantC
 // paths с mutation заголовками отдельной команде владельца. Payload connection/capability
 // selectors не дают caller полномочий и не исполняют эффекты провайдера.
 func (s *Server) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request, p generated.ChangeSystemAssistantIntegrationGrantParams) {
-	body, mutation, ok := decodeMutationBody[generated.SystemAssistantIntegrationGrantInput](w, r, p.IdempotencyKey, p.IfMatch)
+	body, ok := decodeIntegrationGrantJSON[generated.SystemAssistantIntegrationGrantInput](w, r)
+	if !ok {
+		return
+	}
+	mutation, ok := requireMutation(w, p.IdempotencyKey, p.IfMatch)
 	if !ok {
 		return
 	}
@@ -104,6 +133,7 @@ func (s *Server) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r 
 	}
 	response, err := s.control.Command.ChangeSystemAssistantIntegrationGrant(r.Context(), &cp.ChangeSystemAssistantIntegrationGrantRequest{
 		Mutation: mutation, ConnectionRef: body.ConnectionRef, CapabilityKey: body.CapabilityKey, Enabled: body.Enabled,
+		KubernetesNamespace: stringValue(body.KubernetesNamespace), KubernetesGrantRef: stringValue(body.KubernetesGrantRef),
 		ApprovalPolicy: cp.IntegrationApprovalPolicy(cp.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+string(body.ApprovalPolicy)]), ApprovalScopePaths: paths,
 	})
 	writeRPCResult(w, http.StatusOK, response, err, "connection", "")

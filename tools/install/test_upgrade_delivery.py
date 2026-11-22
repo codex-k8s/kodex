@@ -306,7 +306,14 @@ kubectl(){
             python = root / 'python3'
             python.write_text(r'''#!/bin/sh
 case "$1" in
-  -B) exec "$test_python" "$@" ;;
+  -B)
+    if [ "$2" = - ] && [ "$4" = synthetic.json ]; then
+      # Квитанцию здесь уже моделирует authority stub; новый origin-read не открывает сеть.
+      cat >/dev/null
+      printf 'legacy\n'
+    else
+      exec "$test_python" "$@"
+    fi ;;
   */authority_registry.py)
     [ "$2" = verify-bootstrap ] && [ "$3" = --render ] && [ "$4" != "$test_render" ] || exit 92
     [ "$(cat "$4")" = "approved render" ] || exit 93
@@ -380,6 +387,174 @@ kubectl() { printf 'unexpected-kubectl\n' >>"$temporary_directory/calls"; return
     def test_fresh_apply_retains_previous_job_lifecycle(self):
         result,calls=self.run_job('apply','control-plane-migrate')
         self.assertEqual(result.returncode,0,result.stderr);self.assertEqual(calls,['delete','apply','wait'])
+
+
+class MigrationAdoptionShellTests(unittest.TestCase):
+    def test_entrypoints_forward_explicit_scope_and_stop_before_mutation_on_rejected_adoption(self):
+        for entry, modes in (('deploy-platform.sh', ('prepare-preflight', 'preflight', 'upgrade', 'readback')),
+                             ('portable-release.sh', ('preflight', 'upgrade', 'readback'))):
+            for mode in modes:
+                with self.subTest(entry=entry, mode=mode), tempfile.TemporaryDirectory() as directory:
+                    base = Path(directory)
+                    render = base / 'render.yaml'
+                    render.write_text('kind: ConfigMap\n')
+                    receipt = base / 'receipt.json'
+                    receipt.write_text('{}')
+                    kubeconfig = base / 'explicit-config'
+                    kubeconfig.write_text('synthetic fixture, never consumed by kubectl')
+                    dossier = base / 'dossier.json'
+                    dossier.write_text('{}')
+                    binary = base / 'bin'
+                    binary.mkdir()
+                    # Перехватываем каждый subprocess; никакого настоящего Kubernetes IO.
+                    stub = '#!' + sys.executable + '\n' + r'''
+import json, os, pathlib, sys
+args = sys.argv[1:]
+with open(os.environ['CALLS'], 'a') as stream:
+    stream.write(json.dumps({'command': pathlib.Path(sys.argv[0]).name,
+                             'args': args, 'kubeconfig': os.environ.get('KUBECONFIG')}) + '\n')
+if pathlib.Path(sys.argv[0]).name == 'kubectl':
+    assert args == ['config', 'current-context'], args
+    print('synthetic')
+elif '-' in args:
+    body = sys.stdin.read()
+    if 'write_new(' in body:
+        pathlib.Path(args[-1]).write_bytes(pathlib.Path(args[-2]).read_bytes())
+    elif 'bootstrap_completion.load' in body:
+        print('adoption')
+elif 'verify-apply' in args:
+    sys.exit(73)
+'''
+                    for name in ('python3', 'kubectl'):
+                        path = binary / name
+                        path.write_text(stub)
+                        path.chmod(0o700)
+                    digest = hashlib.sha256(render.read_bytes()).hexdigest()
+                    arguments = ['bash', str(ROOT / 'tools/install' / entry), '--mode', mode,
+                                 '--context', 'synthetic', '--render', str(render),
+                                 '--kubeconfig', str(kubeconfig), '--migration-adoption-dossier', str(dossier),
+                                 '--bootstrap-completion-receipt', str(receipt),
+                                 '--bootstrap-completion-sha256', 'a' * 64, '--allow-reconciled-bootstrap-completion']
+                    if entry == 'portable-release.sh':
+                        arguments += ['--render-sha256', digest]
+                    calls_path = base / 'calls'
+                    result = subprocess.run(arguments, capture_output=True, text=True, timeout=5,
+                        env={**os.environ, 'PATH': str(binary) + ':' + os.environ['PATH'],
+                             'CALLS': str(calls_path), 'KUBECONFIG': '/ambient-must-not-win'})
+                    self.assertEqual(result.returncode, 73, result.stderr)
+                    calls = [json.loads(line) for line in calls_path.read_text().splitlines()]
+                    self.assertTrue(all(call['kubeconfig'] == str(kubeconfig) for call in calls))
+                    verify = calls[-1]['args']
+                    self.assertIn('verify-apply', verify)
+                    for flag, value in (('--kubeconfig', str(kubeconfig)),
+                                        ('--migration-adoption-dossier', str(dossier)),
+                                        ('--migration-adoption-phase', 'readback' if mode == 'readback' else 'begin')):
+                        self.assertEqual(verify[verify.index(flag) + 1], value)
+                    self.assertFalse(any(call['command'] == 'kubectl' and call['args'] !=
+                                         ['config', 'current-context'] for call in calls))
+
+    def test_committed_begin_redirects_every_mutating_phase_to_readback_and_unknown_status_stops(self):
+        for entry in ('deploy-platform.sh', 'portable-release.sh'):
+            source = (ROOT / 'tools/install' / entry).read_text()
+            gate = 'if [[ "$migration_adoption" == true || -n "$migration_adoption_dossier" ]]; then' + source.split(
+                'if [[ "$migration_adoption" == true || -n "$migration_adoption_dossier" ]]; then', 1)[1].split('\nfi', 1)[0] + '\nfi\n'
+            for mode in ('prepare-preflight', 'preflight', 'upgrade'):
+                for status in ('MIGRATED_ROLLOUT_COMMITTED', 'MIGRATED_ROLLOUT_VERIFIED', 'UNKNOWN'):
+                    script = r'''
+set -euo pipefail
+migration_adoption=true
+migration_adoption_dossier=/synthetic/dossier
+fail(){ exit 42; }
+verify_migration_adoption(){ printf 'phase:%s\n' "$1" >&2; printf '{"status":"%s"}\n' "$synthetic_status"; }
+''' + gate + '\nprintf "mode:%s\\n" "$mode"\n'
+                    result = subprocess.run(['bash'], input=script, capture_output=True, text=True, timeout=5,
+                        env={**os.environ, 'mode': mode, 'synthetic_status': status})
+                    self.assertEqual(result.returncode, 42 if status == 'UNKNOWN' else 0, result.stderr)
+                    if status != 'UNKNOWN':
+                        expected_mode = 'readback' if status.endswith('_COMMITTED') else mode
+                        self.assertIn('mode:' + expected_mode, result.stdout)
+                        self.assertEqual(result.stderr.splitlines(), ['phase:begin'] +
+                                         (['phase:readback'] if expected_mode == 'readback' else []))
+            self.assertLess(source.index(gate.rstrip()), source.index('if [[ "$mode" == prepare-preflight ]]'
+                if entry == 'deploy-platform.sh' else 'phases=(prepare-preflight preflight apply)'))
+
+    def test_only_exact_installation_configmap_is_excluded_from_generic_adoption_apply(self):
+        function = 'apply_render() {' + TEXT.split('apply_render() {', 1)[1].split('\nwait_statefulset()', 1)[0]
+        resources = [
+            {'apiVersion': api, 'kind': kind, 'metadata': {'name': name, 'namespace': namespace}}
+            for api, kind, name, namespace in (
+                ('v1', 'ConfigMap', 'kodex-installation-profile', 'kodex-system'),
+                ('v1', 'ConfigMap', 'other', 'kodex-system'),
+                ('v1', 'ConfigMap', 'kodex-installation-profile', 'other'),
+                ('v1', 'Secret', 'kodex-installation-profile', 'kodex-system'),
+                ('other/v1', 'ConfigMap', 'kodex-installation-profile', 'kodex-system'))]
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            source = base / 'source.yaml'
+            source.write_text(yaml.safe_dump_all(resources))
+            setup = r'''
+set -euo pipefail
+mode=upgrade
+profile_mode=portable
+render_filter(){ yq "$2" "$test_render" >"$test_output"; printf '%s\n' "$test_output"; }
+portable_apply_file(){ cat "$1"; }
+'''
+            for adoption in ('true', 'false'):
+                result = subprocess.run(['bash'], input=setup + function + '\napply_render synthetic "."\n',
+                    capture_output=True, text=True, timeout=5, env={**os.environ,
+                        'migration_adoption': adoption, 'test_render': str(source),
+                        'test_output': str(base / 'out.yaml')})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(list(yaml.safe_load_all(result.stdout)), resources[1:] if adoption == 'true' else resources)
+
+    def test_profile_reconciliation_and_final_commit_order_cannot_bypass_adoption(self):
+        function = 'reconcile_immutable_configmaps() {' + TEXT.split('reconcile_immutable_configmaps() {', 1)[1].split(
+            '\nprune_role_environment_configmaps()', 1)[0]
+        result = subprocess.run(['bash'], input=r'''
+set -euo pipefail
+mode=upgrade
+migration_adoption=true
+namespace=kodex-system
+render_file=/synthetic/not-opened
+yq(){ printf 'kodex-installation-profile\n'; }
+kubectl(){ printf 'unexpected query/delete' >&2; exit 91; }
+''' + function + '\nreconcile_immutable_configmaps\n', capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commit = TEXT.index('  verify_migration_adoption commit')
+        self.assertGreater(commit, TEXT.index('[[ -z "$failing_runtime_pods" ]]'))
+        self.assertLess(commit, TEXT.index('portable_state.py" readback', commit))
+        self.assertIn('if [[ "$migration_adoption" == true && "$mode" == upgrade ]]; then', TEXT[:commit])
+        portable = (ROOT / 'tools/install/portable-release.sh').read_text()
+        for line in portable.splitlines():
+            if '"${assistant_readback_arguments[@]}"' in line:
+                self.assertIn('"${kubeconfig_arguments[@]}" "${adoption_arguments[@]}"', line)
+        self.assertLess(portable.rindex('  verify_migration_adoption readback'), portable.index('portable_state.py" readback'))
+
+    def test_final_commit_failure_stops_full_readback_and_readback_never_commits(self):
+        tail = '# Единственная запись profile выполняется' + TEXT.split(
+            '# Единственная запись profile выполняется', 1)[1].split("\nprintf 'Kodex platform deployment completed:", 1)[0]
+        for mode, rejected, expected in (
+                ('upgrade', '', ['commit', 'readback', 'full-readback']),
+                ('upgrade', 'commit', ['commit']),
+                ('upgrade', 'readback', ['commit', 'readback']),
+                ('readback', '', ['readback', 'full-readback'])):
+            with self.subTest(mode=mode, rejected=rejected):
+                script = r'''
+set -euo pipefail
+migration_adoption=true
+profile_mode=portable
+repository_root=/synthetic
+context=synthetic
+render_file=/synthetic/render.yaml
+completion_arguments=()
+verify_migration_adoption(){ printf '%s\n' "$1"; [[ "$1" != "$reject_phase" ]]; }
+python3(){ printf 'full-readback\n'; }
+timeout(){ shift; "$@"; }
+''' + tail
+                result = subprocess.run(['bash'], input=script, capture_output=True, text=True, timeout=5,
+                    env={**os.environ, 'mode': mode, 'reject_phase': rejected})
+                self.assertEqual(result.returncode, 1 if rejected else 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines(), expected)
 
 
 class PreparedRenderFreshGuardTests(unittest.TestCase):

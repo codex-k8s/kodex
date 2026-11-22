@@ -4,7 +4,7 @@ kind: Component
 patches:
   - target:
       kind: Deployment
-      name: (secret-broker|email-bridge|integration-gateway|interaction-gateway|automation-scheduler|session-archive|role-image-builder)
+      name: (artifact-retention|secret-broker|email-bridge|integration-gateway|interaction-gateway|automation-scheduler|session-archive|role-image-builder)
     patch: |-
       apiVersion: apps/v1
       kind: Deployment

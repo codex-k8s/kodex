@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
@@ -359,6 +360,12 @@ func (repository *Repository) resourceVisible(
 			return false, nil
 		}
 		if err != nil {
+			return false, err
+		}
+	}
+	if resourceKind == "ARTIFACT" {
+		allowed, err := kubernetesCaptureArtifactAccess(ctx, tx, current, permission, target.resourceID)
+		if err != nil || !allowed {
 			return false, err
 		}
 	}
@@ -2096,7 +2103,7 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 			return entity.OwnerGate{}, err
 		}
 	}
-	if err := repository.projectGateIntent(ctx, tx, scope, &gate, true); err != nil {
+	if err := repository.projectGateIntent(ctx, tx, scope, &gate, true, kubernetesGatePreviewDetail); err != nil {
 		return entity.OwnerGate{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -2526,6 +2533,10 @@ func (repository *Repository) ListIntegrationDefinitions(ctx context.Context, pr
 		if json.Unmarshal(capabilities, &item.Capabilities) != nil || json.Unmarshal(schema, &item.ConfigurationFields) != nil {
 			return nil, "", nil, errs.ErrUnavailable
 		}
+		item.CredentialDelivery, err = repository.credentialDeliveryForExactPackageSnapshot(item.Key, item.DefinitionVersion, item.Digest, "", "")
+		if err != nil {
+			return nil, "", nil, err
+		}
 		if canCopy && item.Enabled && item.Origin == "SHIPPED" {
 			item.NextActions = []string{"COPY"}
 		}
@@ -2598,6 +2609,7 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 		filter.Category = filter.DefinitionKey
 		filter.DefinitionKey = ""
 	}
+	requirements := map[string]entity.KubernetesIdentitySetupRequirements{}
 	return authorizedCatalog(ctx, repository, current, "INTEGRATION", filter,
 		func(ctx context.Context, tx pgx.Tx, after string, limit int32) ([]entity.IntegrationConnection, error) {
 			rows, err := tx.Query(ctx, queryQueriesListintegrationconnectionsSelectIntegrationConnectionsOrganizationIdDefinitionKey,
@@ -2614,16 +2626,39 @@ func (repository *Repository) ListIntegrationConnections(ctx context.Context, pr
 				}
 				items = append(items, item)
 			}
-			return items, rows.Err()
+			if rows.Err() != nil {
+				return nil, errs.ErrUnavailable
+			}
+			rows.Close()
+			refs := make([]string, 0, len(items))
+			for _, item := range items {
+				if item.DefinitionKey == "kubernetes-managed" {
+					refs = append(refs, item.Ref)
+				}
+			}
+			requirements, err = readKubernetesSetupRequirements(ctx, tx, current, refs)
+			if err != nil {
+				return nil, err
+			}
+			return items, nil
 		},
 		func(item entity.IntegrationConnection) entity.AccessScope {
 			return entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: item.Ref}
 		},
 		func(tx pgx.Tx, item *entity.IntegrationConnection, allowed func(string) bool) error {
-			if err := attachConnection(ctx, tx, current, item); err != nil {
+			if err := repository.attachConnection(ctx, tx, current, item); err != nil {
 				return err
 			}
-			item.NextActions = connectionActions(*item, allowed("integration.manage"), allowed("integration.manage"))
+			manage := allowed("integration.manage")
+			if item.CredentialDelivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity && item.CredentialDelivery.BrokerPurpose == string(entity.IntegrationBrokerIdentityKubernetes) && (manage || item.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired) {
+				if selected, ok := requirements[item.Ref]; ok {
+					if selected.ConnectionVersion != item.Version || selected.Policy != item.CredentialPolicy {
+						return errs.ErrUnavailable
+					}
+					item.KubernetesSetupRequirements = &selected
+				}
+			}
+			item.NextActions = connectionActions(*item, manage, manage)
 			return nil
 		})
 }
@@ -2745,8 +2780,8 @@ func connectionAuthority(ctx context.Context, querier connectionQuerier, scope s
 // субъекту/authority-project grants с декодированными resource scopes и текущей версией
 // connection. Ошибки query/scan/итерации остаются исходными; некорректный scope JSON даёт
 // фиксированную ошибку, до отказа возможны частичные изменения объекта.
-func attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
-	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
+func (repository *Repository) attachConnection(ctx context.Context, querier connectionQuerier, scope scope, item *entity.IntegrationConnection) error {
+	if err := repository.projectConnectionPackage(ctx, querier, scope, item); err != nil {
 		return err
 	}
 	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.actorID, scope.authorityProjectID, scope.role)
@@ -2779,17 +2814,29 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 // readConnection читает connection организации через переданный runner, добавляет package/grants и
 // вычисляет действия по management predicate. Отказ добавления данных даёт Unavailable; точный
 // доступ и согласованность транзакции устанавливает вызывающий.
-func readConnection(ctx context.Context, querier connectionQuerier, scope scope, ref string) (entity.IntegrationConnection, error) {
+func (repository *Repository) readConnection(ctx context.Context, querier connectionQuerier, scope scope, ref string) (entity.IntegrationConnection, error) {
 	item, err := scanConnection(querier.QueryRow(ctx, queryQueriesGetintegrationconnectionSelectIntegrationConnectionsOrganizationIdRef, scope.organizationID, ref))
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}
-	if err := attachConnection(ctx, querier, scope, &item); err != nil {
+	if err := repository.attachConnection(ctx, querier, scope, &item); err != nil {
 		return entity.IntegrationConnection{}, errs.ErrUnavailable
 	}
 	manageConnection, manageGrants, err := connectionAuthority(ctx, querier, scope, ref)
 	if err != nil {
 		return entity.IntegrationConnection{}, err
+	}
+	if item.CredentialDelivery.Kind == integrationpackage.CredentialDeliveryBrokerIdentity && item.CredentialDelivery.BrokerPurpose == string(entity.IntegrationBrokerIdentityKubernetes) && (manageConnection || item.CredentialPolicy == entity.IntegrationCredentialInitiatorRequired) {
+		requirements, err := readKubernetesSetupRequirements(ctx, querier, scope, []string{ref})
+		if err != nil {
+			return entity.IntegrationConnection{}, err
+		}
+		if selected, ok := requirements[ref]; ok {
+			if selected.ConnectionVersion != item.Version || selected.Policy != item.CredentialPolicy {
+				return entity.IntegrationConnection{}, errs.ErrUnavailable
+			}
+			item.KubernetesSetupRequirements = &selected
+		}
 	}
 	item.NextActions = connectionActions(item, manageConnection, manageGrants)
 	return item, nil
@@ -2812,7 +2859,7 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 	if _, err := repository.resolveAssistantContext(ctx, tx, scope, entity.AssistantContextDescriptor{EntityKind: "INTEGRATION_CONNECTION", EntityRef: ref}, ""); err != nil {
 		return entity.IntegrationConnection{}, err
 	}
-	item, err := readConnection(ctx, tx, scope, ref)
+	item, err := repository.readConnection(ctx, tx, scope, ref)
 	if err != nil {
 		return entity.IntegrationConnection{}, err
 	}

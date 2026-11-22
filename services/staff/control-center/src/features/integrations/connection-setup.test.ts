@@ -42,6 +42,7 @@ function connection(
 ): IntegrationConnection {
   return {
     ref: "connection_github",
+    credentialDelivery: { kind: "TOKEN" },
     version,
     definitionKey: "github",
     name: "Основная организация",
@@ -61,6 +62,34 @@ function connection(
 }
 
 describe("двухфазная настройка подключения", () => {
+  it("не выбирает TOKEN endpoint при missing либо broker metadata", () => {
+    const missing = connection(3);
+    delete missing.credentialDelivery;
+    expect(canConfigureCredential(definition("token"), missing)).toBe(false);
+    const broker = connection(3);
+    broker.credentialDelivery = {
+      kind: "BROKER_IDENTITY",
+      brokerPurpose: "SSH_TARGET",
+    };
+    expect(canConfigureCredential(definition("token"), broker)).toBe(false);
+  });
+
+  it("не открывает generic TOKEN dialog для mailbox NONE даже с устаревшими hints", () => {
+    const email = { ...connection(3), definitionKey: "email" };
+    expect(
+      canConfigureCredential(
+        { ...definition(), key: "email", adapter: "EMAIL_HTTPS" },
+        email,
+      ),
+    ).toBe(false);
+    expect(
+      canConfigureCredential(
+        { ...definition("token"), key: "email", adapter: "EMAIL_HTTPS" },
+        email,
+      ),
+    ).toBe(false);
+    expect(canConfigureCredential(definition("token"), email)).toBe(false);
+  });
   it("не предлагает общий ключ для персональной политики при устаревшем action hint", () => {
     const personal = connection(3);
     personal.credentialPolicy = "INITIATOR_REQUIRED";
@@ -220,7 +249,7 @@ describe("двухфазная настройка подключения", () =>
       true,
     );
     // OpenAPI-пакет может требовать ключ, хотя поставленный шаблон его не требует.
-    expect(canConfigureCredential(definition(), pending)).toBe(true);
+    expect(canConfigureCredential(definition(), pending)).toBe(false);
     expect(
       canConfigureCredential(definition("github-token"), {
         ...pending,

@@ -67,8 +67,13 @@ func mailboxSpecification(input *cp.EmailMailboxSpecification) (entity.EmailMail
 	if err != nil {
 		return entity.EmailMailboxSpecification{}, err
 	}
+	profile, err := mailboxEnum(int32(input.GetProviderProfile()), cp.EmailMailboxProviderProfile_name, "EMAIL_MAILBOX_PROVIDER_PROFILE_")
+	if err != nil {
+		return entity.EmailMailboxSpecification{}, err
+	}
 	result := entity.EmailMailboxSpecification{Enabled: input.GetEnabled(), ReceiveProtocol: api.MailboxReceiveProtocol(protocol),
-		AllowedFolders: input.GetAllowedFolders(), ArchiveFolder: input.GetArchiveFolder(), DraftsFolder: input.GetDraftsFolder(),
+		ProviderProfile: strings.ToUpper(profile),
+		AllowedFolders:  input.GetAllowedFolders(), ArchiveFolder: input.GetArchiveFolder(), DraftsFolder: input.GetDraftsFolder(),
 		Folder: input.GetFolder(), Sender: input.GetSender(), ReplyTo: input.GetReplyTo(), Recipients: input.GetRecipients(), HelloName: input.GetHelloName()}
 	for _, pair := range []struct {
 		input  *cp.EmailMailboxEndpoint
@@ -160,6 +165,7 @@ func castMailboxEndpoint(input *api.Endpoint) *cp.EmailMailboxEndpoint {
 // receive endpoints и порядок политик без повторной проверки доменной семантики.
 func castMailboxSpecification(input entity.EmailMailboxSpecification) *cp.EmailMailboxSpecification {
 	result := &cp.EmailMailboxSpecification{Enabled: input.Enabled,
+		ProviderProfile: cp.EmailMailboxProviderProfile(cp.EmailMailboxProviderProfile_value["EMAIL_MAILBOX_PROVIDER_PROFILE_"+input.ProviderProfile]),
 		ReceiveProtocol: cp.EmailMailboxReceiveProtocol(cp.EmailMailboxReceiveProtocol_value["EMAIL_MAILBOX_RECEIVE_PROTOCOL_"+strings.ToUpper(string(input.ReceiveProtocol))]),
 		AllowedFolders:  input.AllowedFolders, ArchiveFolder: input.ArchiveFolder, DraftsFolder: input.DraftsFolder,
 		Folder: input.Folder, Sender: input.Sender, ReplyTo: input.ReplyTo, Recipients: input.Recipients, HelloName: input.HelloName,

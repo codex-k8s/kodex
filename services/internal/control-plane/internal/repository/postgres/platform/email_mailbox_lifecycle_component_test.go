@@ -121,7 +121,7 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("mailbox-observation-grant-%d", index), ExpectedVersion: &current.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connectionRef, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: enabled}})
+			result, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("mailbox-observation-grant-%d", index), ExpectedVersion: &current.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connectionRef, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: enabled}})
 			if err != nil || result.Connection == nil {
 				t.Fatalf("grant lifecycle: %v", err)
 			}
@@ -228,6 +228,10 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 		if err != nil {
 			t.Fatal(err)
 		}
+		var testsBefore int
+		if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.integration_connection_tests WHERE connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$1)`, connectionRef).Scan(&testsBefore); err != nil {
+			t.Fatal(err)
+		}
 		tx, err := repository.pool.Begin(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -263,11 +267,21 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 		}
 		select {
 		case err = <-done:
-			if !errors.Is(err, errs.ErrVersionMismatch) && !errors.Is(err, errs.ErrForbidden) {
-				t.Fatalf("racing health bypassed revoke: %v", err)
+			// The current health snapshot rejects the disabled connection before the version update.
+			// Текущий health snapshot отклоняет выключенное подключение до обновления версии.
+			if !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("racing health did not reject disabled connection: %v", err)
 			}
 		case <-time.After(5 * time.Second):
 			t.Fatal("racing health did not finish")
+		}
+		var testsAfter int
+		if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.integration_connection_tests WHERE connection_id=(SELECT id FROM control_plane.integration_connections WHERE ref=$1)`, connectionRef).Scan(&testsAfter); err != nil || testsAfter != testsBefore {
+			t.Fatalf("racing health queued work after disable: before=%d after=%d err=%v", testsBefore, testsAfter, err)
+		}
+		disabled, err := service.GetIntegrationConnection(ctx, owner, connectionRef)
+		if err != nil || disabled.Enabled || disabled.Version != current.Version+1 {
+			t.Fatalf("racing health changed the disabled connection: %v", err)
 		}
 	})
 }

@@ -275,6 +275,13 @@ func applyWorkloadProfile(config *Config) error {
 				restoreRoleCredentialSecret: "internal-rpc-authority-session-archive-issuer-restore-credential",
 				restoreACKSecret:            "internal-rpc-authority-session-archive-issuer-restore-ack",
 			},
+			"artifact-retention": {
+				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/artifact-retention",
+				readbackCredentialSecret:    "internal-rpc-authority-artifact-retention-issuer-readback-credential",
+				readbackPossessionSecret:    "internal-rpc-authority-artifact-retention-issuer-readback-possession",
+				restoreRoleCredentialSecret: "internal-rpc-authority-artifact-retention-issuer-restore-credential",
+				restoreACKSecret:            "internal-rpc-authority-artifact-retention-issuer-restore-ack",
+			},
 			"control-api-gateway": {
 				spiffeID:                    "spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
 				readbackCredentialSecret:    "internal-rpc-authority-control-api-gateway-issuer-readback-credential",

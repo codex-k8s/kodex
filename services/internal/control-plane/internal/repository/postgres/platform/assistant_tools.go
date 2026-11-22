@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
@@ -866,6 +867,9 @@ func (repository *Repository) readAssistantIntegrationGrantSnapshot(
 	if err != nil {
 		return result, errs.ErrUnavailable
 	}
+	if result.definitionKey == integrationpackage.KubernetesDefinitionKey {
+		return result, errs.ErrKubernetesConfigurationPlanUnsupported
+	}
 	if result.connectionName == "" || result.recipientName == "" || result.connectionVersion < 1 || result.recipientVersion < 1 {
 		return result, errs.ErrUnavailable
 	}
@@ -950,7 +954,7 @@ func (repository *Repository) hydrateAssistantConnectionOperation(
 		entity.AssistantContextDescriptor{EntityKind: "INTEGRATION_CONNECTION", EntityRef: ref}, ""); err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}
-	connection, err := readConnection(ctx, tx, actorScope, ref)
+	connection, err := repository.readConnection(ctx, tx, actorScope, ref)
 	if err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}

@@ -186,7 +186,7 @@ class UpgradeTests(unittest.TestCase):
 
     def test_schema_proof_selects_exact_version_and_profile_before_cluster_access(self):
         directory = Path(upgrade.__file__).resolve().parent.parent / 'release'
-        state = SimpleNamespace(context='synthetic-context')
+        state = SimpleNamespace(context='synthetic-context', kubeconfig=None)
         for version, prefix, validator in ((20261105000100, 'platform-oidc-identity-', 'validPlatformOIDCIdentity'),
                                            (20261106000100, 'personal-credentials-', 'validPersonalCredentials'),
                                            (20261107000100, 'jira-create-fields-', 'validJiraCreateFields'),
@@ -205,7 +205,8 @@ class UpgradeTests(unittest.TestCase):
                                       [SimpleNamespace(returncode=0, stdout=b'{}'), SimpleNamespace(returncode=1)]):
                         with patch.object(upgrade.subprocess, 'run', side_effect=responses), self.assertRaises(Rejected):
                             upgrade.schema_proof(state, mode, version)
-        for mode, version in (('automatic', 20261106000100), ('plain', 20261110000100), ('backup', '20261106000100')):
+        for mode, version in (('automatic', 20261106000100), ('plain', 20261110000100),
+                              ('backup', '20261106000100'), ('plain', upgrade.WORKFLOW_FILE_PROVENANCE_SCHEMA)):
             with patch.object(upgrade.subprocess, 'run') as run, self.assertRaises(Rejected):
                 upgrade.schema_proof(state, mode, version)
             run.assert_not_called()

@@ -51,7 +51,7 @@ describe("preflight launch→настройки", () => {
     const html = await renderToString(app);
     expect(html).toContain("GitLab для проверки");
     expect(html).toContain("Jira для проверки");
-    expect(html).toContain("Ключ отозван; добавьте новый");
+    expect(html).toContain("Доступ отозван; настройте подключение заново");
     expect(html).toContain('href="/integrations?section=personal"');
     expect(html).toContain('target="_blank"');
     expect(html).not.toContain("button--secondary");
@@ -86,6 +86,12 @@ describe("preflight launch→настройки", () => {
               capabilityKey: "jira.issue.read",
               problem: "CREDENTIAL_MISSING",
             },
+            {
+              connectionRef: "int_mailbox_fixture",
+              connectionName: "Личная почта без generic ключа",
+              capabilityKey: "email.message.list",
+              problem: "CREDENTIAL_MISSING",
+            },
           ],
         }),
     });
@@ -95,8 +101,10 @@ describe("preflight launch→настройки", () => {
     expect(html).toContain("Процесс не создан");
     expect(html).toContain("GitLab для проверки");
     expect(html).toContain("Jira для проверки");
-    expect(html).toContain("Ключ отозван; добавьте новый");
-    expect(html).toContain("Добавьте личный ключ");
+    expect(html).toContain("Доступ отозван; настройте подключение заново");
+    expect(html).toContain("Настройте личное подключение");
+    expect(html).toContain("Личная почта без generic ключа");
+    expect(html).not.toContain("Добавьте личный ключ");
     expect(html).toContain('href="/integrations?section=personal"');
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noopener"');

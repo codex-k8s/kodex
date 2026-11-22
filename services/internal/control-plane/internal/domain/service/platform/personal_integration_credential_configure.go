@@ -83,7 +83,7 @@ func (service *Service) ConfigurePersonalIntegrationCredential(ctx context.Conte
 	if err != nil {
 		return entity.PersonalIntegrationCredential{}, err
 	}
-	if binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
+	if binding.Kind != entity.IntegrationCredentialToken || binding.BrokerIdentity != nil || binding.BrokerPurpose != "" || binding.CredentialPolicy != entity.IntegrationCredentialInitiatorRequired {
 		return entity.PersonalIntegrationCredential{}, errs.ErrConflict
 	}
 	identity := entity.IntegrationCredentialInitiator{OrganizationID: binding.OrganizationID, SubjectID: binding.SubjectID, SubjectKind: "USER"}
@@ -120,7 +120,8 @@ func (service *Service) ConfigurePersonalIntegrationCredential(ctx context.Conte
 	}
 	definition, exists := definitions[connection.DefinitionKey]
 	managedOpenAPI := exists && connection.DefinitionKey == "openapi-mcp" && connection.DefinitionDigest != definition.Digest && len(connection.Capabilities) > 0
-	if !exists || connection.CredentialSecretKey == "" || !managedOpenAPI &&
+	if !exists || connection.CredentialDelivery.Kind != integrationpackage.CredentialDeliveryToken || connection.CredentialDelivery.BrokerPurpose != "" ||
+		connection.CredentialSecretKey == "" || !managedOpenAPI &&
 		!definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return entity.PersonalIntegrationCredential{}, errs.ErrForbidden
 	}

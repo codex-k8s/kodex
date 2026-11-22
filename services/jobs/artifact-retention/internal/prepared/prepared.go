@@ -5,6 +5,7 @@ package prepared
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
@@ -17,6 +18,7 @@ var ErrLostClaim = errors.New("prepared content cleanup claim is lost")
 // RU: Claim привязывает попытку очистки к записи ledger, receipt объекта и поколению fencing.
 type Claim struct {
 	LedgerID, ObjectKey, ObjectVersion, ObjectETag, Digest string
+	SourceKind                                             string
 	SizeBytes, Generation                                  int64
 	Uncertain                                              bool
 }
@@ -64,6 +66,7 @@ func NewProcessor(repository Repository, objects ObjectStore) *Processor {
 // RU: Process обрабатывает ограниченную пачку claim: неизвестная запись требует положительного
 // точного receipt, а удаление засчитывается лишь после его фиксации и подтверждения отсутствия версии.
 func (processor *Processor) Process(ctx context.Context, owner string, batch int, lease int64) (int, error) {
+	claimStarted := time.Now()
 	claims, err := processor.repository.ClaimPrepared(ctx, owner, batch, lease)
 	if err != nil {
 		return 0, err
@@ -71,10 +74,34 @@ func (processor *Processor) Process(ctx context.Context, owner string, batch int
 	processed := 0
 	var resultErr error
 	for _, claim := range claims {
+		maximumBytes := int64(1 << 20)
+		switch claim.SourceKind {
+		case "":
+		case kubernetesFileSource:
+			maximumBytes = 16 << 20
+		case "KUBERNETES_PREPARED":
+			maximumBytes = 512 << 20
+		case "KUBERNETES_INPUT", "KUBERNETES_OUTPUT":
+			maximumBytes = 32 << 10
+		default:
+			resultErr = errors.Join(resultErr, errors.New("prepared cleanup source kind is invalid"))
+			continue
+		}
 		if claim.LedgerID == "" || claim.Generation < 1 || !objectstorage.ValidKey(claim.ObjectKey) ||
-			!objectstorage.ValidDigest(claim.Digest) || claim.SizeBytes < 0 || claim.SizeBytes > 1<<20 ||
-			(!claim.Uncertain && (claim.ObjectVersion == "" || claim.ObjectETag == "")) {
+			!objectstorage.ValidDigest(claim.Digest) || claim.SizeBytes < 0 || claim.SizeBytes > maximumBytes ||
+			(!claim.Uncertain && (claim.ObjectVersion == "" || claim.ObjectETag == "")) ||
+			(claim.SourceKind == kubernetesFileSource && (lease < 1 || lease > 600 || (claim.ObjectVersion == "") != (claim.ObjectETag == ""))) {
 			resultErr = errors.Join(resultErr, errors.New("prepared cleanup claim is invalid"))
+			continue
+		}
+		if claim.SourceKind == kubernetesFileSource {
+			fileContext, cancel := context.WithDeadline(ctx, claimStarted.Add(time.Duration(lease)*time.Second))
+			success, fileErr := processor.processFile(fileContext, claim, owner)
+			cancel()
+			if success {
+				processed++
+			}
+			resultErr = errors.Join(resultErr, fileErr)
 			continue
 		}
 		receipt := objectstorage.Receipt{Key: claim.ObjectKey, VersionID: claim.ObjectVersion, ETag: claim.ObjectETag, Digest: claim.Digest, SizeBytes: claim.SizeBytes}

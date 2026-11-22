@@ -18,6 +18,8 @@ JOIN control_plane.integration_grants g
  AND g.target_kind='AGENT'
  AND g.target_ref=(SELECT a.ref FROM control_plane.agents a WHERE a.id=n.agent_id)
  AND g.enabled
+ AND (c.definition_key<>'kubernetes-managed' OR (g.resource_kind='KUBERNETES_TARGET'
+  AND g.resource_scope->>'namespace'=$6 AND g.resource_scope->>'target_ref'=c.public_configuration->>'target_ref'))
  AND g.definition_version=c.definition_version
  AND g.definition_digest=c.definition_digest
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key

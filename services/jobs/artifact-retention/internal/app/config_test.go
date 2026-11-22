@@ -15,6 +15,10 @@ func validConfig() Config {
 		ObjectStorageAccessKeyFile: "/secrets/access", ObjectStorageSecretKeyFile: "/secrets/secret",
 		StartupTimeout: 30 * time.Second, ShutdownTimeout: 20 * time.Second, OperationTimeout: 20 * time.Second,
 		PollInterval: 30 * time.Second, ReadinessInterval: 10 * time.Second, ClaimLease: 2 * time.Minute, BatchSize: 32,
+		ControlPlaneTarget: "control-plane.example:8443", ControlPlaneTLSServerName: "control-plane.example",
+		ControlPlaneCAFile: "/config/owner-ca.pem", ControlPlaneCertificateFile: "/secrets/tls.crt",
+		ControlPlanePrivateKeyFile: "/secrets/tls.key", ApplicationGrantFile: "/secrets/grant.jws",
+		CaptureTimeout: 90 * time.Second, CapturePollInterval: 2 * time.Second, CaptureLease: 3 * time.Minute,
 	}
 }
 
