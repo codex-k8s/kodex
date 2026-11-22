@@ -14,6 +14,7 @@ import DismissiblePopover from "../../src/shared/ui/DismissiblePopover.vue";
 import IntegrationsPage from "../../src/pages/IntegrationsPage.vue";
 import { usePlatformStore } from "../../src/features/platform/store";
 import { client } from "../../src/shared/api/generated/openapi/client.gen";
+import { selectProjectRef } from "../../src/shared/project-context";
 const lifecycleFixture =
   new URLSearchParams(location.search).get("fixture") === "popover-lifecycle";
 const lifecycleOpen = ref(false);
@@ -50,6 +51,10 @@ const context = {
   allowedOperations: [],
 };
 const assistant = useAssistantStore();
+if (assistantImportFixture) {
+  selectProjectRef(context.entityRef);
+  assistant.setContext(context, context.entityRef);
+}
 const historyRequests = ref(0);
 const pickerRequests = ref(0);
 const selected = ref<string | null>(null);
@@ -106,6 +111,19 @@ assistant.conversations = Array.from({ length: 30 }, (_, index) =>
 assistant.selectedRef = "conversation_0";
 assistant.nextPageToken = "second";
 assistant.load = () => Promise.resolve();
+if (assistantImportFixture) {
+  usePlatformStore().applyPlatformSnapshot(
+    "SYSTEM_ASSISTANT",
+    context.entityRef,
+    {
+      assistant: { assistant: assistant.assistant },
+      conversations: {
+        conversations: assistant.conversations,
+        page: { nextPageToken: assistant.nextPageToken },
+      },
+    },
+  );
+}
 if (projectAssistantFixture) {
   const profile: ProjectAssistantProfile = {
     ref: "asstp_fixture",

@@ -348,7 +348,6 @@ for (const width of [1440, 390])
                   : "Сохранить новую ревизию",
               exact: true,
             });
-            await expect(save).toBeVisible();
             if (kind === "ENV") {
               await expect(
                 page.locator(".assistant-environment-tools"),
@@ -373,6 +372,16 @@ for (const width of [1440, 390])
                 page.locator(".assistant-agent-environment-binding-form"),
               ).toContainText(agent.name);
             }
+            if (width === 390) {
+              await page
+                .locator(".assistant-plan-editor__mobile-actions")
+                .getByRole("button", {
+                  name: locale === "en" ? "Actions" : "Действия",
+                  exact: true,
+                })
+                .click();
+            }
+            await expect(save).toBeVisible();
             await save.click();
             const raw = await page.getByTestId("helper-saved").textContent();
             const saved = JSON.parse(
@@ -399,7 +408,7 @@ for (const width of [1440, 390])
           } else {
             const card = page.locator(
               kind === "ENV"
-                ? ".assistant-environment-card"
+                ? ".assistant-plan-editor .assistant-environment-card"
                 : kind === "INSTR"
                   ? ".instruction-draft-card"
                   : ".assistant-agent-environment-binding-card",
