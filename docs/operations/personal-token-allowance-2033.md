@@ -75,9 +75,14 @@ verification READ всё ещё возможен; claim также уже сод
 после lost ACK, но не сохраняют finite ACL deadline. Общая готовность personal
 credentials этим исправлением не утверждается.
 
-Отдельный полный `TestPersonalIntegrationCredentialsComponent` сохраняет все
-прежние assertions, включая assistant и OS-process resume. В локальном прогоне
-canonical046 он дошёл после четырёх finite случаев до прежнего process resume
-и завершился FAIL: native session не присоединилась, managed MCP compatibility
-input отсутствовал у обоих сравниваемых snapshots. Это не PASS полного unit;
-причинная проверка этого отдельного baseline gap данным срезом не заявляется.
+Полный `TestPersonalIntegrationCredentialsComponent` сохраняет прежние проверки
+assistant и OS-process resume. Его текущая fixture читает typed `nativeSession`,
+проверяет точный `ses_` ID, следующее поколение checkpoint и единственный исходный
+USER turn в канонических строках владельца с прежними actor/session/run pins.
+Удалённое поле `nativeSessionID` и требование повторного JSON replay истории не
+заменяют этот контракт. Production runtime и его проверки не меняются.
+Полный локальный contour запускается через существующую публичную оснастку:
+
+```sh
+KODEX_TEST_POSTGRES_STORAGE=ram ./scripts/tests/control-plane-postgres-test.sh '^TestPersonalIntegrationCredentialsComponent$'
+```
