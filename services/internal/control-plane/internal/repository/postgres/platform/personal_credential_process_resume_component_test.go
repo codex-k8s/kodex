@@ -16,6 +16,7 @@ import (
 	"time"
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -94,22 +95,31 @@ func personalProcessReceiptHash(t *testing.T, ctx context.Context, repository *R
 	return hex.EncodeToString(sum[:])
 }
 
-// completePersonalProcessTurn publishes a synthetic Codex storage tuple through ordinary owner
-// completion. It proves transaction/identity behavior, not actual native rollout or object bytes.
-// completePersonalProcessTurn публикует synthetic Codex storage tuple штатным owner completion.
-// Проверяются transaction/identity, а не реальные байты native rollout либо объекта.
+// completePersonalProcessTurn publishes a synthetic OpenCode tuple matching the claimed native
+// identity and advances its export generation on resume. It proves owner transaction/identity
+// behavior, not actual native rollout or object bytes.
+// completePersonalProcessTurn публикует synthetic OpenCode tuple с claimed native identity
+// и увеличивает export generation при resume. Проверяются owner transaction/identity,
+// а не реальные байты native rollout либо объекта.
 func completePersonalProcessTurn(t *testing.T, ctx context.Context, service *platformservice.Service, worker value.Principal, lease map[string]any, state personalProcessResumeState) {
 	t.Helper()
-	result, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "personal-process-turn-" + state.Attempt}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic personal process result", Usage: turnUsageFixture(), NativeSession: nativeCheckpointFixture(state.NativeSessionID, 1, strings.Repeat("a", 64), 128)}})
+	checkpoint := nativeCheckpointFixture(state.NativeSessionID, 1, strings.Repeat("a", 64), 128)
+	if lease["nativeSession"] != nil {
+		checkpoint = nativeCheckpointForClaimFixture(lease)
+	}
+	if checkpoint.SessionID != state.NativeSessionID {
+		t.Fatal("synthetic process completion changed the claimed native identity")
+	}
+	result, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "personal-process-turn-" + state.Attempt}, Payload: command.CompleteExecutionInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Success: true, ResultSummary: "Synthetic personal process result", Usage: turnUsageFixture(), NativeSession: checkpoint}})
 	if err != nil || result.Run == nil || result.Run.State != "SUCCEEDED" {
 		t.Fatal("complete process-resume turn", err)
 	}
 }
 
-// runPersonalResumeChild launches this exact race-enabled test binary with an explicit
+// runPersonalResumeChild launches this exact test binary with an explicit
 // environment and no inherited host credentials. The only DSN targets the caller's disposable
 // loopback application database; state is a private regular file under a private directory.
-// runPersonalResumeChild запускает тот же race-enabled test binary с явным окружением без
+// runPersonalResumeChild запускает тот же exact test binary с явным окружением без
 // host credentials. Единственный DSN указывает на disposable loopback application DB caller;
 // state хранится в private regular file внутри private directory.
 func runPersonalResumeChild(t *testing.T, ctx context.Context, repository *Repository, state personalProcessResumeState) {
@@ -195,36 +205,33 @@ func TestPersonalCredentialProcessResumeChild(t *testing.T) {
 		t.Fatal("process reconstruction changed original identity or successful receipt")
 	}
 	lease := claimComponentExecution(t, ctx, service, worker, state.RunRef, "personal-process-child-"+state.Attempt)
-	if stringMap(lease, "sessionRef") != state.SessionRef || (stringMap(lease, "nativeSessionID") == state.NativeSessionID) != state.ExpectNative || !state.ExpectNative && stringMap(lease, "nativeSessionID") != "" {
-		var previousJSON, currentJSON []byte
-		if err := pool.QueryRow(ctx, `SELECT revision.safe_snapshot FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id JOIN control_plane.runtime_revisions revision ON revision.id=storage.runtime_revision_id WHERE session.ref=$1`, state.SessionRef).Scan(&previousJSON); err != nil {
-			t.Fatal("read prior synthetic compatibility snapshot", err)
+	nativeID := ""
+	if native, present := lease["nativeSession"]; present {
+		raw, marshalErr := json.Marshal(native)
+		if marshalErr != nil {
+			t.Fatal("encode synthetic claimed native checkpoint")
 		}
-		if err := pool.QueryRow(ctx, "SELECT safe_snapshot FROM control_plane.runtime_revisions WHERE ref=$1", stringMap(lease, "runtimeRevisionRef")).Scan(&currentJSON); err != nil {
-			t.Fatal("read current synthetic compatibility snapshot", err)
+		checkpoint, decodeErr := runtimecontract.DecodeNativeSessionCheckpoint(raw)
+		if decodeErr != nil {
+			t.Fatal("decode synthetic claimed native checkpoint")
 		}
-		var previous, current map[string]any
-		if json.Unmarshal(previousJSON, &previous) != nil || json.Unmarshal(currentJSON, &current) != nil {
-			t.Fatal("decode synthetic compatibility snapshots")
-		}
-		_, previousMCPError := managedMCPInputFromOwnerSnapshot(previousJSON)
-		_, currentMCPError := managedMCPInputFromOwnerSnapshot(currentJSON)
-		t.Log("synthetic compatibility", nativeSessionResumeCompatible(previous, current), "MCP validity", previousMCPError == nil, currentMCPError == nil, "session match", stringMap(lease, "sessionRef") == state.SessionRef, "native match", stringMap(lease, "nativeSessionID") == state.NativeSessionID)
-		for key, value := range previous {
-			before, _ := json.Marshal(value)
-			after, _ := json.Marshal(current[key])
-			if !bytes.Equal(before, after) {
-				t.Log("changed synthetic snapshot field", key)
-			}
-		}
+		nativeID = checkpoint.SessionID
+	}
+	if stringMap(lease, "sessionRef") != state.SessionRef || state.ExpectNative && nativeID != state.NativeSessionID || !state.ExpectNative && nativeID != "" {
 		t.Fatal("process reconstruction reused a foreign session or changed native compatibility")
 	}
-	found := false
-	for _, message := range runtimeRevisionSessionContext(lease["sessionContext"]) {
-		found = found || message.Role == "USER" && message.Content == state.FirstMessage
-	}
-	if !found {
-		t.Fatal("process reconstruction lost canonical original user history")
+	// Native OpenCode resumes its own checkpoint; owner history is verified through
+	// its canonical rows, without requiring history replay in the runner payload.
+	// Native OpenCode возобновляет свой checkpoint; owner history проверяется по
+	// каноническим строкам без требования replay истории в runner payload.
+	var originalTurns int64
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.session_turns turn
+JOIN control_plane.sessions session ON session.id=turn.session_id AND session.organization_id=turn.organization_id
+JOIN control_plane.subjects subject ON subject.organization_id=turn.organization_id AND subject.ref=turn.actor_ref
+JOIN control_plane.runs run ON run.id=turn.run_id AND run.organization_id=turn.organization_id
+WHERE session.ref=$1 AND subject.id=$2::uuid AND turn.actor_kind='USER'
+  AND turn.turn_number=1 AND turn.content=$3 AND turn.state='COMPLETED' AND run.state='SUCCEEDED'`, state.SessionRef, state.ActorID, state.FirstMessage).Scan(&originalTurns); err != nil || originalTurns != 1 {
+		t.Fatal("process reconstruction lost canonical original user history", err)
 	}
 	personalProcessRead(t, ctx, repository, service, worker, lease, state)
 	completePersonalProcessTurn(t, ctx, service, worker, lease, state)
@@ -263,7 +270,7 @@ func assertPersonalArchiveProcessResume(t *testing.T, ctx context.Context, repos
 	}
 	binding := replace("initial")
 	conversation := execute(command.CreateAssistantConversation, owner, "conversation", nil, command.AssistantConversationInput{AssistantScope: "SYSTEM"}).Conversation
-	state := personalProcessResumeState{ParentPID: os.Getpid(), ConversationRef: conversation.Ref, SessionRef: conversation.SessionRef, ConnectionRef: connectionRef, CredentialRef: binding.Credential.Ref, ActorID: owner.ActorID, NativeSessionID: "00000000-0000-4000-8000-000000000073", FirstMessage: "Synthetic personal archive context retained across owner processes", Attempt: "initial"}
+	state := personalProcessResumeState{ParentPID: os.Getpid(), ConversationRef: conversation.Ref, SessionRef: conversation.SessionRef, ConnectionRef: connectionRef, CredentialRef: binding.Credential.Ref, ActorID: owner.ActorID, NativeSessionID: "ses_00000000000040008000000000000073", FirstMessage: "Synthetic personal archive context retained across owner processes", Attempt: "initial"}
 	queued := execute(command.AddAssistantTurn, owner, "first-turn", nil, command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: state.FirstMessage, DeliveryMode: "QUEUE"}).Conversation
 	lease := claimComponentExecution(t, ctx, workers, worker, queued.Turns[0].RunRef, "personal-process-first")
 	state.OriginalReadRef = personalProcessRead(t, ctx, repository, workers, worker, lease, state)
