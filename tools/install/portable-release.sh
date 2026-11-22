@@ -102,6 +102,13 @@ temporary=$(mktemp -d)
 trap 'rm -rf -- "$temporary"' EXIT
 cp -- "$render" "$temporary/render.yaml"
 [[ "$(sha256sum "$temporary/render.yaml" | awk '{print $1}')" == "$expected_sha" ]] || fail 'render digest mismatch'
+if [[ "$mode" == apply ]]; then
+  # Проверяем тот же private snapshot до inventory и любых установочных effects.
+  yq -N -o=json -I=0 'select(.apiVersion == "batch/v1" and .kind == "Job" and
+    .metadata.namespace == "kodex-system" and
+    (.metadata.name | test("^release-materializer-[a-f0-9]{40}$")))' "$temporary/render.yaml" |
+    jq -se 'length == 0' >/dev/null || fail 'prepared upgrade render requires verified completion receipt and upgrade mode'
+fi
 if [[ "$mode" == resume-workloads ]]; then
   [[ -f "$previous_render" && ! -L "$previous_render" && "$previous_sha" =~ ^[a-f0-9]{64}$ ]] || fail 'exact previous render is required'
   cp -- "$previous_render" "$temporary/previous.yaml"

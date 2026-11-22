@@ -133,9 +133,17 @@ try:
 except (OSError, Rejected):
     raise SystemExit('Upgrade render snapshot rejected') from None
 PY
-elif ((${#completion_arguments[@]})); then
-  # Подготовка admission, resume и readback потребляют байты из того же снимка.
+elif [[ "$mode" == apply ]] || ((${#completion_arguments[@]})); then
+  # Режим apply, подготовка admission, resume и readback потребляют один снимок.
   (umask 077; cp -- "$render_file" "$temporary_directory/verified-render.yaml")
+fi
+if [[ "$mode" == apply ]]; then
+  render_file="$temporary_directory/verified-render.yaml"
+  # Подготовленный render обновления не разрешает повторять bootstrap в режиме apply.
+  yq -N -o=json -I=0 'select(.apiVersion == "batch/v1" and .kind == "Job" and
+    .metadata.namespace == "kodex-system" and
+    (.metadata.name | test("^release-materializer-[a-f0-9]{40}$")))' "$render_file" |
+    jq -se 'length == 0' >/dev/null || fail 'prepared upgrade render requires verified completion receipt and upgrade mode'
 fi
 if ((${#completion_arguments[@]})); then
   render_file="$temporary_directory/verified-render.yaml"
