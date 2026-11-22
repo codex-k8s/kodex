@@ -23,6 +23,10 @@ type personalCredentialProbeAdapter interface {
 	VerifyPersonalCredential(context.Context, integration.Request) (integration.CredentialProbeResult, error)
 }
 
+// personalCredentialProbeContractVersion declares the finite allowance capability that old gateway requests omit; unsupported versions never receive owner admission.
+// personalCredentialProbeContractVersion объявляет finite allowance capability, отсутствующую у старых gateways; неизвестная версия не получает owner admission.
+const personalCredentialProbeContractVersion uint32 = 1
+
 // processPersonalCredentialTests takes one job at a time so its finite lease is not spent in a
 // local batch. Owner admission is consumed before its pinned READ batch, never retried after lost
 // ACK; metrics count an attempted verification even when subsequent owner completion fails.
@@ -45,12 +49,18 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 	}
 	claim := claims.Claims[0]
 	lease := claim.GetLease()
+	observed := time.Now()
 	if lease == nil || lease.GetExpiresAt() == nil || lease.GetExpiresAt().CheckValid() != nil || lease.GetGeneration() != 1 || lease.GetRef() == "" || lease.GetFence() == "" || claim.GetTestRef() == "" || claim.GetCredentialRevision() == nil ||
-		lease.GetExpiresAt().AsTime().Before(time.Now().Add(config.OperationTimeout+config.RequestTimeout)) {
+		lease.GetExpiresAt().AsTime().Before(observed.Add(config.OperationTimeout+config.RequestTimeout)) {
 		return 0, errors.New("personal credential claim lease is invalid or insufficient")
 	}
-	admission, err := client.BeginPersonalIntegrationCredentialProbe(ctx, &cp.BeginPersonalIntegrationCredentialProbeRequest{
-		TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration()})
+	// Retain one pre-RPC monotonic anchor; fresh permission and transport latency cannot renew the original claim.
+	// Сохраняем один pre-RPC monotonic anchor: fresh permission и transport latency не продлевают original claim.
+	originalUntil := personalInvocationDeadline(observed, lease.GetExpiresAt().AsTime())
+	admissionContext, cancelAdmission := context.WithDeadline(ctx, originalUntil)
+	defer cancelAdmission()
+	admission, err := client.BeginPersonalIntegrationCredentialProbe(admissionContext, &cp.BeginPersonalIntegrationCredentialProbeRequest{
+		TestRef: claim.GetTestRef(), LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration(), AdmissionContractVersion: personalCredentialProbeContractVersion})
 	if err != nil {
 		return 0, err
 	}
@@ -60,7 +70,20 @@ func processPersonalCredentialTests(ctx context.Context, client cp.PersonalInteg
 	if !admission.Admitted {
 		return 1, nil
 	}
-	operation, cancel := context.WithTimeout(ctx, config.OperationTimeout)
+	if admission.GetAuthorizedUntil() == nil || admission.GetAuthorizedUntil().CheckValid() != nil {
+		return 0, errors.New("personal credential admission allowance is invalid")
+	}
+	freshUntil := personalInvocationDeadline(observed, admission.GetAuthorizedUntil().AsTime())
+	if !freshUntil.After(observed) || !time.Now().Before(freshUntil) || admissionContext.Err() != nil {
+		return 0, errors.New("personal credential admission allowance expired")
+	}
+	allowanceContext, cancelAllowance := context.WithDeadline(admissionContext, freshUntil)
+	defer cancelAllowance()
+	operation, cancel := context.WithTimeout(allowanceContext, config.OperationTimeout)
+	if err := operation.Err(); err != nil {
+		cancel()
+		return 0, err
+	}
 	observation, operationErr := adapter.VerifyPersonalCredential(operation, integration.RequestFromTest(claim))
 	cancel()
 	record(operationErr == nil)

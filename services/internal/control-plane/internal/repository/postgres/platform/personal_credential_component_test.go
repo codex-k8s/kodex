@@ -98,7 +98,7 @@ func TestPersonalIntegrationCredentialsComponent(t *testing.T) {
 
 // testPersonalCredentialComponent retains the complete existing setup and assertions; the explicit invocation scope ends after the original owner invocation lifecycle, before unrelated assistant/process fixtures.
 // testPersonalCredentialComponent сохраняет полный прежний setup и assertions; явный invocation scope завершается после исходного owner invocation lifecycle до отдельных assistant/process fixtures.
-func testPersonalCredentialComponent(t *testing.T, invocationOnly bool) {
+func testPersonalCredentialComponent(t *testing.T, invocationOnly bool, probeOnly ...bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -275,6 +275,12 @@ func testPersonalCredentialComponent(t *testing.T, invocationOnly bool) {
 	}
 	assertPersonalVerificationRetryTransition(t, ctx, pool, rotated)
 	connection, rotated = assertPersonalCredentialWork(t, ctx, r, service, owner, second, connection, rotated)
+	if !invocationOnly || len(probeOnly) == 1 && probeOnly[0] {
+		rotated = assertPersonalProbeFiniteAllowance(t, ctx, r, service, second, connection, *viewBinding.AccessBinding)
+		if len(probeOnly) == 1 && probeOnly[0] {
+			return
+		}
+	}
 	assertPersonalCredentialCatalog(t, ctx, pool, service, owner, second, connection, current, rotated, *viewBinding.AccessBinding)
 	assertPersonalGrantConfiguration(t, ctx, r, service, owner, second, connection)
 	assertPersonalIntegrationRuntime(t, ctx, r, service, owner, second, connection)

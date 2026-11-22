@@ -4,7 +4,7 @@ title: Конечный допуск персонального TOKEN вызов
 type: operations
 status: approved
 owner: developer
-version: 1.0.0
+version: 1.1.0
 updated: 2026-11-22
 ---
 
@@ -62,18 +62,40 @@ helper и synthetic owner/adapter, включая старый wire descriptor. 
 Генерация: `buf generate --template buf.gen.local.yaml` с закреплёнными
 `protoc-gen-go v1.36.11` и `protoc-gen-go-grpc 1.6.2`.
 
-## Отдельный открытый аналог
+## Конечный допуск verification probe
 
-Verification probe остаётся отдельным gap #2033: `currentPersonalCredentialTestInput`
-использует `personal_credential__read_owned.sql` с boolean `integration.view`;
-`BeginPersonalIntegrationCredentialProbe` не передаёт Until и не проверяет expiry
-после успешного COMMIT ACK. Gateway `personal_credentials.go` после ACK запускает
-bounded provider READ. Поэтому при истечении view allowance во время ACK новый
-verification READ всё ещё возможен; claim также уже содержит descriptor metadata.
-Это статический source finding, не отдельный native regression в этом срезе.
-Существующие exact lease, pin, revoke и одноразовый PROBING предотвращают повтор
-после lost ACK, но не сохраняют finite ACL deadline. Общая готовность personal
-credentials этим исправлением не утверждается.
+Probe использует прежнюю job `integration_personal_credential_tests`, исходного
+`job.subject_id` и permission `integration.view`. Claim содержит только metadata;
+credential bytes читаются gateway из прежней projected-key границы лишь внутри
+adapter после успешного Begin. Отдельного broker resolver с проверкой PROBING
+в этом пути нет. Новый selector пользователя либо ключа не вводится.
+
+| Переход | Authority, состояние и read path |
+| --- | --- |
+| Claim | Текущие Connection/binding/package pins и view исходного subject; исходящий срок ограничен ACL, DB lease остаётся прежней для completion. Поздний ACK не выдаёт expired descriptor. |
+| Begin | Exact lease/fence/generation и `admission_contract_version` (поле5) со значением1. Нулевая/неизвестная версия не переводит job в PROBING. |
+| Допуск | Fresh view Until и DB-clock lease образуют конечный минимум. SQL, pre/post-COMMIT и transport проверяют его до положительного `authorized_until=2`. |
+| Gateway | Сохраняет original claim monotonic ceiling до RPC и сужает context fresh Until. Отсутствующий/неверный/expired ответ, lost ACK и поздний successful ACK не вызывают projected read, provider READ либо повтор Begin. |
+| Восстановленный grant | Может допустить лишь ещё не начатую job; original dispatch ceiling не продлевается. PROBING повторно не расходуется. |
+| Complete / revoke / expiry | Прежние exact receipt/cancel/reset и owner DB lease; неизменяемые bytes completion intent не включают новые admission поля. Наблюдение после потери visibility остаётся CANCELLED, не READY. |
+
+Старый gateway / новый owner закрывается по request version до admission;
+новый gateway / старый owner — по отсутствию Until до adapter. Внешние probes
+и generic projected-key resolver не получают новый retry либо authority.
+Дополнительного domain event нет: сохраняется прежний admission audit, terminal
+job/binding и completion receipt читаются существующими protected API.
+
+Публичный bounded native контур:
+
+```sh
+make test-personal-integration-probe-allowance-postgres
+```
+
+Он использует прежний disposable owner setup и настоящий protobuf/gRPC handler,
+finite view второго пользователя, native COMMIT с задержкой только ACK,
+смешанные версии, одноразовый PROBING, restore/shorten и completion replay.
+Gateway tests проверяют actual worker/adapter boundary с synthetic ответами.
+Это не доказательство установленного профиля, TLS/JWT либо внешних прав аккаунта.
 
 Полный `TestPersonalIntegrationCredentialsComponent` сохраняет прежние проверки
 assistant и OS-process resume. Его текущая fixture читает typed `nativeSession`,

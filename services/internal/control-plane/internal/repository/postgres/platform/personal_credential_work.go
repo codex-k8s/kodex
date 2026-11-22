@@ -121,9 +121,9 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 			return nil, errs.ErrUnavailable
 		}
 		sum := sha256.Sum256([]byte(fence))
-		expires := time.Now().UTC().Add(30 * time.Second)
+		expires := time.Now().Add(30 * time.Second)
 		tag, err := tx.Exec(ctx, queryPersonalCredentialTestClaim, pgx.StrictNamedArgs{"organization_id": current.organizationID, "id": job.id, "version": job.version,
-			"lease_ref": lease, "fence_digest": hex.EncodeToString(sum[:]), "instance": instance, "expires_at": expires})
+			"lease_ref": lease, "fence_digest": hex.EncodeToString(sum[:]), "instance": instance, "expires_at": expires.UTC()})
 		if err != nil {
 			return nil, errs.ErrUnavailable
 		}
@@ -133,9 +133,13 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 		if err := auditPersonalCredentialWork(ctx, tx, current, job.ref, "platform.personal-integration-tests.claim", "i18n:PERSONAL_INTEGRATION_CREDENTIAL_TEST_CLAIMED"); err != nil {
 			return nil, err
 		}
+		dispatchUntil := expires
+		if !input.accessUntil.IsZero() && input.accessUntil.Before(dispatchUntil) {
+			dispatchUntil = input.accessUntil
+		}
 		claim := map[string]any{"testRef": job.ref, "connectionRef": job.connectionRef, "definitionKey": input.definition.Metadata.Key,
 			"definitionVersion": input.definition.Metadata.Version, "definitionDigest": input.definition.Digest, "definitionPackage": asJSON(input.definition),
-			"configuration": input.configuration, "leaseRef": lease, "fence": fence, "generation": int64(1), "expiresAt": expires}
+			"configuration": input.configuration, "leaseRef": lease, "fence": fence, "generation": int64(1), "expiresAt": dispatchUntil}
 		claim["githubDiscoveryPage"] = job.snapshot.GitHubDiscoveryPage
 		claim["personalReadProbeCapabilityKeys"] = append([]string(nil), job.snapshot.AllowedReadCapabilityKeys...)
 		claim["personalObservationProfiles"] = append([]string(nil), job.snapshot.AllowedObservationProfiles...)
@@ -149,7 +153,16 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrUnavailable
 	}
-	return result, nil
+	// A late claim ACK never discloses an expired allowance; the durable lease remains available for ordinary owner expiry.
+	// Поздний claim ACK не выдаёт expired allowance; durable lease остаётся для обычного owner expiry.
+	currentClaims := result[:0]
+	for _, claim := range result {
+		until, ok := claim["expiresAt"].(time.Time)
+		if ok && time.Now().Before(until) {
+			currentClaims = append(currentClaims, claim)
+		}
+	}
+	return currentClaims, nil
 }
 
 // BeginPersonalIntegrationCredentialProbe consumes a claim exactly once immediately before the
@@ -158,63 +171,82 @@ func (repository *Repository) ClaimPersonalIntegrationCredentialTests(ctx contex
 // BeginPersonalIntegrationCredentialProbe одноразово расходует claim непосредственно перед
 // bounded READ шлюза. Revoke/configuration/ACL changes закрывают допуск. Потерянный ACK не разрешает
 // повтор PROBING, поэтому неопределённость не превращается во второй внешний запрос.
-func (repository *Repository) BeginPersonalIntegrationCredentialProbe(ctx context.Context, principal value.Principal, payload command.PersonalIntegrationCredentialTestCompletion) error {
+func (repository *Repository) BeginPersonalIntegrationCredentialProbe(ctx context.Context, principal value.Principal, input command.PersonalIntegrationCredentialProbeAdmission) (entity.PersonalIntegrationCredentialProbeAdmissionResult, error) {
+	var empty entity.PersonalIntegrationCredentialProbeAdmissionResult
+	if input.ContractVersion != command.PersonalIntegrationCredentialProbeContractVersion {
+		return empty, errs.ErrForbidden
+	}
+	payload := command.PersonalIntegrationCredentialTestCompletion{TestRef: input.TestRef, LeaseRef: input.LeaseRef, Fence: input.Fence, Generation: input.Generation}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if payload.Outcome != "" || !validPersonalCredentialTestLeaseInput(payload) {
-		return errs.ErrInvalid
+		return empty, errs.ErrInvalid
 	}
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
-		return err
+		return empty, err
 	}
 	if err := personalCredentialWorkAuthority(principal, current, "platform.personal-integration-tests.begin"); err != nil {
-		return err
+		return empty, err
 	}
 	tx, err := repository.pool.Begin(ctx)
 	if err != nil {
-		return errs.ErrUnavailable
+		return empty, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	job, err := repository.lockPersonalCredentialTest(ctx, tx, current.organizationID, payload.TestRef)
 	if err != nil {
-		return err
+		return empty, err
 	}
 	if job.state != "CLAIMED" || !personalCredentialTestLease(job, payload, time.Now().UTC()) {
-		return errs.ErrForbidden
+		return empty, errs.ErrForbidden
 	}
-	if _, err := repository.currentPersonalCredentialTestInput(ctx, tx, current.organizationID, job); err != nil {
+	selected, err := repository.currentPersonalCredentialTestInput(ctx, tx, current.organizationID, job)
+	if err != nil {
 		if errors.Is(err, errs.ErrUnavailable) {
-			return err
+			return empty, err
 		}
 		if err := finishPersonalCredentialTest(ctx, tx, current.organizationID, job, "CANCELLED", "CANCELLED"); err != nil {
-			return err
+			return empty, err
 		}
 		if err := resetPersonalCredentialTestBinding(ctx, tx, current.organizationID, job); err != nil {
-			return err
+			return empty, err
 		}
 		if err := auditPersonalCredentialWork(ctx, tx, current, job.ref, "platform.personal-integration-tests.cancel", "i18n:PERSONAL_INTEGRATION_CREDENTIAL_TEST_CANCELLED"); err != nil {
-			return err
+			return empty, err
 		}
 		if err := tx.Commit(ctx); err != nil {
-			return errs.ErrUnavailable
+			return empty, errs.ErrUnavailable
 		}
-		return errs.ErrForbidden
+		return empty, errs.ErrForbidden
 	}
-	tag, err := tx.Exec(ctx, queryPersonalCredentialTestBegin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "id": job.id, "version": job.version})
+	until := job.leaseUntil
+	if !selected.accessUntil.IsZero() && selected.accessUntil.Before(until) {
+		until = selected.accessUntil
+	}
+	if until.IsZero() || !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
+	}
+	tag, err := tx.Exec(ctx, queryPersonalCredentialTestBegin, pgx.StrictNamedArgs{"organization_id": current.organizationID, "id": job.id, "version": job.version, "authorized_until": until})
 	if err != nil {
-		return errs.ErrUnavailable
+		return empty, errs.ErrUnavailable
 	}
 	if tag.RowsAffected() != 1 {
-		return errs.ErrConflict
+		return empty, errs.ErrConflict
 	}
 	if err := auditPersonalCredentialWork(ctx, tx, current, job.ref, "platform.personal-integration-tests.begin", "i18n:PERSONAL_INTEGRATION_CREDENTIAL_PROBE_ADMITTED"); err != nil {
-		return err
+		return empty, err
+	}
+	if !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return errs.ErrUnavailable
+		return empty, errs.ErrUnavailable
 	}
-	return nil
+	if !time.Now().Before(until) {
+		return empty, errs.ErrForbidden
+	}
+	return entity.PersonalIntegrationCredentialProbeAdmissionResult{AuthorizedUntil: until}, nil
 }
 
 // authorizePersonalCredentialTestCompletion checks exact worker authority and tenant-owned target

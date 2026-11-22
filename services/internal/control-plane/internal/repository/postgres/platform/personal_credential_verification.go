@@ -27,6 +27,7 @@ type personalCredentialWorkJob struct {
 	id, ref, connectionRef, subjectID, bindingID, state, leaseRef, fenceDigest string
 	version, generation                                                        int64
 	expiresAt                                                                  *time.Time
+	leaseUntil                                                                 time.Time
 	snapshot                                                                   entity.PersonalIntegrationCredentialTestSnapshot
 	githubDiscovery                                                            *integrationpackage.GitHubDiscoveryPage
 }
@@ -39,6 +40,7 @@ type personalCredentialTestInput struct {
 	binding       entity.PersonalIntegrationCredential
 	definition    integrationpackage.Package
 	configuration map[string]any
+	accessUntil   time.Time
 }
 
 // cancelPersonalCredentialTests fences queued/claimed/probing work in the same transaction as
@@ -171,8 +173,13 @@ func (repository *Repository) lockPersonalCredentialTest(ctx context.Context, tx
 		return job, errs.ErrUnavailable
 	}
 	var raw []byte
-	if err := tx.QueryRow(ctx, queryPersonalCredentialTestLock, args).Scan(&job.id, &raw, &job.state, &job.version, &job.generation, &job.leaseRef, &job.fenceDigest, &job.expiresAt); err != nil {
+	beforeLeaseRead := time.Now()
+	var observed time.Time
+	if err := tx.QueryRow(ctx, queryPersonalCredentialTestLock, args).Scan(&job.id, &raw, &job.state, &job.version, &job.generation, &job.leaseRef, &job.fenceDigest, &job.expiresAt, &observed); err != nil {
 		return job, errs.ErrUnavailable
+	}
+	if job.expiresAt != nil {
+		job.leaseUntil = beforeLeaseRead.Add(job.expiresAt.Sub(observed))
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -232,7 +239,11 @@ func (repository *Repository) currentPersonalCredentialTestInput(ctx context.Con
 	if err := platformservice.ValidatePersonalIntegrationCredentialVerificationSnapshot(binding, job.snapshot, definition.Digest, hex.EncodeToString(sum[:])); err != nil {
 		return result, err
 	}
-	return personalCredentialTestInput{binding: binding, definition: definition, configuration: connection.PublicConfiguration}, nil
+	until, err := repository.personalCredentialProbeAccessUntil(ctx, tx, organizationID, job)
+	if err != nil {
+		return result, err
+	}
+	return personalCredentialTestInput{binding: binding, definition: definition, configuration: connection.PublicConfiguration, accessUntil: until}, nil
 }
 
 // personalCredentialReadProbeKeys binds the same closed probe registry used by the gateway to the

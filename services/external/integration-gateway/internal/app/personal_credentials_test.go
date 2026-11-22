@@ -31,6 +31,8 @@ type personalProbeFixture struct {
 	receiptMismatch                               bool
 	completion                                    *cp.CompletePersonalIntegrationCredentialTestRequest
 	probeResult                                   integration.CredentialProbeResult
+	beforeACK                                     func()
+	verifyContext                                 func(context.Context)
 }
 
 // ClaimPersonalIntegrationCredentialTests captures a single bounded poll without materializing
@@ -51,8 +53,11 @@ func (fixture *personalProbeFixture) ClaimPersonalIntegrationCredentialTests(_ c
 // рабочий цикл после этого не должен повторять допуск либо обращаться к provider.
 func (fixture *personalProbeFixture) BeginPersonalIntegrationCredentialProbe(_ context.Context, input *cp.BeginPersonalIntegrationCredentialProbeRequest, _ ...grpc.CallOption) (*cp.BeginPersonalIntegrationCredentialProbeResponse, error) {
 	fixture.steps = append(fixture.steps, "begin")
-	if input.TestRef != "pct_fixture01" || input.LeaseRef != "lea_fixture01" || input.Fence != "fnc_fixture01" || input.Generation != 1 {
+	if input.TestRef != "pct_fixture01" || input.LeaseRef != "lea_fixture01" || input.Fence != "fnc_fixture01" || input.Generation != 1 || input.AdmissionContractVersion != personalCredentialProbeContractVersion {
 		fixture.t.Fatal("worker changed owner lease coordinates")
+	}
+	if fixture.beforeACK != nil {
+		fixture.beforeACK()
 	}
 	return fixture.admission, fixture.beginErr
 }
@@ -63,6 +68,9 @@ func (fixture *personalProbeFixture) BeginPersonalIntegrationCredentialProbe(_ c
 // управляемые observation metadata без provider payload либо credential.
 func (fixture *personalProbeFixture) VerifyPersonalCredential(ctx context.Context, input integration.Request) (integration.CredentialProbeResult, error) {
 	fixture.steps = append(fixture.steps, "probe")
+	if fixture.verifyContext != nil {
+		fixture.verifyContext(ctx)
+	}
 	deadline, ok := ctx.Deadline()
 	if !ok || time.Until(deadline) > time.Second || ctx.Err() != nil || input.Credential == nil || input.Credential.Ref != "icr_personalfixture" || input.ConnectionRef != "int_fixture01" || input.CapabilityKey != "" || input.Operation != "" {
 		fixture.t.Fatal("probe lost its bounded context or owner-selected personal descriptor")
@@ -141,7 +149,7 @@ func TestPersonalCredentialWorkerFencesAndAccounting(t *testing.T) {
 		{"missing credential", func(f *personalProbeFixture) { f.claims.Claims[0].CredentialRevision = nil }, []string{"claim"}, 0, true, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			fixture := &personalProbeFixture{t: t, admission: &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true}, claims: &cp.ClaimPersonalIntegrationCredentialTestsResponse{Claims: []*cp.IntegrationConnectionTestClaim{{TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"}, Lease: &cp.WorkLease{Ref: "lea_fixture01", Fence: "fnc_fixture01", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second))}}}}}
+			fixture := &personalProbeFixture{t: t, admission: &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true, AuthorizedUntil: timestamppb.New(time.Now().Add(30 * time.Second))}, claims: &cp.ClaimPersonalIntegrationCredentialTestsResponse{Claims: []*cp.IntegrationConnectionTestClaim{{TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"}, Lease: &cp.WorkLease{Ref: "lea_fixture01", Fence: "fnc_fixture01", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second))}}}}}
 			if test.mutate != nil {
 				test.mutate(fixture)
 			}
@@ -172,7 +180,7 @@ func TestPersonalCredentialWorkerFencesAndAccounting(t *testing.T) {
 func TestPersonalProbeMetadataCompletion(t *testing.T) {
 	for _, rejected := range []bool{false, true} {
 		expiry := time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)
-		fixture := &personalProbeFixture{t: t, admission: &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true}, claims: &cp.ClaimPersonalIntegrationCredentialTestsResponse{Claims: []*cp.IntegrationConnectionTestClaim{{TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"}, Lease: &cp.WorkLease{Ref: "lea_fixture01", Fence: "fnc_fixture01", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second))}}}}}
+		fixture := &personalProbeFixture{t: t, admission: &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true, AuthorizedUntil: timestamppb.New(time.Now().Add(30 * time.Second))}, claims: &cp.ClaimPersonalIntegrationCredentialTestsResponse{Claims: []*cp.IntegrationConnectionTestClaim{{TestRef: "pct_fixture01", ConnectionRef: "int_fixture01", CredentialRevision: &cp.IntegrationCredentialRevision{Ref: "icr_personalfixture"}, Lease: &cp.WorkLease{Ref: "lea_fixture01", Fence: "fnc_fixture01", Generation: 1, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second))}}}}}
 		fixture.probeResult = integration.CredentialProbeResult{ConfirmedCapabilityKeys: []string{"gitlab.project.metadata.read"}, DeniedCapabilityKeys: []string{"gitlab.issue.create"}, ObservedPermissionProfiles: []string{integrationpackage.CredentialObservationGitLabProjectWriteScopeV1}, ExpiresAt: &expiry}
 		if rejected {
 			fixture.operationErr = &integration.SafeError{Code: "INTEGRATION_AUTH_REJECTED", AuthenticationHTTPStatus: 401}

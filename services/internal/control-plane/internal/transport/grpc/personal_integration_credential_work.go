@@ -13,6 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // TestPersonalIntegrationCredential queues only the authenticated user's versioned binding test;
@@ -68,14 +69,19 @@ func (server *Server) BeginPersonalIntegrationCredentialProbe(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	err = server.service.BeginPersonalIntegrationCredentialProbe(ctx, p, command.PersonalIntegrationCredentialTestCompletion{TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()})
+	admission, err := server.service.AdmitPersonalIntegrationCredentialProbe(ctx, p, command.PersonalIntegrationCredentialProbeAdmission{
+		TestRef: request.GetTestRef(), LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), ContractVersion: request.GetAdmissionContractVersion(),
+	})
 	if errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
 		return &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: false}, nil
 	}
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true}, nil
+	if admission.AuthorizedUntil.IsZero() || !time.Now().Before(admission.AuthorizedUntil) {
+		return &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: false}, nil
+	}
+	return &cp.BeginPersonalIntegrationCredentialProbeResponse{Admitted: true, AuthorizedUntil: timestamppb.New(admission.AuthorizedUntil)}, nil
 }
 
 // CompletePersonalIntegrationCredentialTest maps bounded probe observations from the registered

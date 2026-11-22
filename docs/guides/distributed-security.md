@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.80
+version: 1.7.81
 updated: 2026-11-22
 ---
 
@@ -19,6 +19,13 @@ updated: 2026-11-22
 admission не создаёт новый dispatch. Durable receipt/reconciliation сохраняет
 прежний owner lease/fence/generation и не выдаёт новые credentials.
 Карта и ограничения: [персональный TOKEN allowance](../operations/personal-token-allowance-2033.md).
+
+Если старый consumer игнорирует новые поля ответа допуска, presence deadline
+в новом ответе недостаточно. Запрос явно объявляет закрытую поддерживаемую
+версию контракта; отсутствие либо неизвестная версия отклоняются до расхода
+одноразового admission. Новый consumer отдельно отклоняет ответ старого owner
+без deadline. Проверка обеих смешанных версий предшествует projected-key read
+и внешнему dispatch; это gate приложения, а не неподтверждённое правило broker.
 
 Предел архива проверяется до обработки расширений контейнерного формата.
 Высокоуровневый tar decoder может прочитать весь PAX/GNU payload до выдачи
