@@ -283,6 +283,7 @@ def main():
     require((args.clamav_mode == 'enabled' and args.artifact_antivirus_mode == 'required' and args.clamav_storage_profile == 'shared-rwx') or args.mode == 'preflight-workloads', 'CLAMAV_MODE_OPERATION_REJECTED')
     require(args.render.is_file() and not args.render.is_symlink(), 'REGULAR_RENDER_REQUIRED')
     raw = args.render.read_bytes();require(len(raw) <= 16 << 20, 'RENDER_SIZE_REJECTED')
+    bootstrap_completion.verify_render_pin(completion, bootstrap_completion.digest(raw))
     resources = list(filter(None, yaml.safe_load_all(raw)));require(len(resources) <= 10000, 'RESOURCE_COUNT_REJECTED')
     if args.mode == 'projection-plan':
         require(args.projection_registry is not None and args.projection_registry.is_file() and not args.projection_registry.is_symlink() and args.output is not None, 'PROJECTION_PLAN_PATHS_REQUIRED')

@@ -119,7 +119,8 @@ def load(path, expected_sha256, allow_reconciled=False):
                 next(r['job_uid'] for r in rows if r['name'] == 'control-plane-migrate') == evidence['migration_job_uid'],
                 'UPGRADE_COMPLETION_EVIDENCE_REJECTED')
     else:
-        fields = {'previous_receipt_sha256', 'previous_render_sha256', 'upgrade_profile_sha256', 'schema_proof_sha256'}
+        fields = {'previous_receipt_sha256', 'previous_render_sha256', 'upgrade_profile_sha256', 'schema_proof_sha256',
+                  'prepared_render_sha256'}
         require(isinstance(evidence, dict) and set(evidence) == fields and all(hex_value(v) for v in evidence.values()),
                 'IMAGE_UPGRADE_COMPLETION_EVIDENCE_REJECTED')
     return receipt
@@ -129,6 +130,12 @@ def successful(job):
     status = job.get('status', {})
     return status.get('succeeded') == 1 and not status.get('active') and not any(
         c.get('type') == 'Failed' and c.get('status') == 'True' for c in status.get('conditions', []))
+
+
+def verify_render_pin(receipt, render_sha256):
+    """Квитанция смены образов разрешает только полный подготовленный render."""
+    if receipt is not None and receipt['origin'] == ORIGINS[3]:
+        require(receipt['evidence'].get('prepared_render_sha256') == render_sha256, 'UPGRADE_PREPARED_RENDER_DRIFT')
 
 
 def verify(state, resources, receipt=None):

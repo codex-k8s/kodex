@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -60,10 +61,10 @@ class ImageUpgradeTests(unittest.TestCase):
             receipt = completion.capture(state, old)
         return old, target, before, after, profile, state, receipt
 
-    def capture(self, state, prepared, old, receipt):
+    def capture(self, state, prepared, old, receipt, before, after):
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'verify_schemas'), \
                 patch.object(upgrade, 'schema_proof', return_value='f' * 64) as proof:
-            result = upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+            result = upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
         proof.assert_called_once_with(state, 'backup', 20261108000100)
         return result
 
@@ -72,9 +73,10 @@ class ImageUpgradeTests(unittest.TestCase):
         prepared = upgrade.prepare(before, after, profile)
         self.assertEqual(completion.desired_jobs(prepared), completion.desired_jobs(old))
         preimage = copy.deepcopy(state.current)
-        result = self.capture(state, prepared, old, receipt)
+        result = self.capture(state, prepared, old, receipt, before, after)
         self.assertEqual(result['origin'], upgrade.IMAGE_ORIGIN)
         self.assertEqual(result['jobs'], receipt['jobs'])
+        self.assertEqual(result['evidence']['prepared_render_sha256'], upgrade.sha(upgrade.render_bytes(prepared)))
         self.assertNotIn('migration_job_uid', result['evidence'])
         self.assertEqual(state.current, preimage)
         self.assertTrue(all(call[0] == 'get' for call in state.calls))
@@ -82,10 +84,80 @@ class ImageUpgradeTests(unittest.TestCase):
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='1' * 64):
             self.assertEqual(upgrade.verify_apply(state, prepared, result)['status'], 'SAME_SCHEMA_UPGRADE_APPLY_VERIFIED')
 
+    def test_changed_non_job_resource_is_rejected_at_capture_and_apply(self):
+        old, target, before, _, profile, state, receipt = self.prepared()
+        target.append({'apiVersion': 'v1', 'kind': 'ConfigMap', 'metadata': {
+            'name': 'synthetic-workload', 'namespace': 'kodex-system'}, 'data': {'setting': 'approved'}})
+        after = yaml.safe_dump_all(target).encode()
+        profile['target_render_sha256'] = upgrade.sha(after)
+        prepared = upgrade.prepare(before, after, profile)
+        result = self.capture(state, prepared, old, receipt, before, after)
+        changed = copy.deepcopy(prepared)
+        next(r for r in changed if r['metadata']['name'] == 'synthetic-workload')['data']['setting'] = 'unapproved'
+        for stage in ('capture', 'apply'):
+            state.calls.clear()
+            with self.subTest(stage=stage), patch.object(completion, 'verify_schemas'), \
+                    patch.object(upgrade, 'verify_schemas'), patch.object(upgrade, 'schema_proof') as proof, \
+                    self.assertRaisesRegex(Rejected, 'UPGRADE_PREPARED_RENDER_DRIFT'):
+                if stage == 'capture':
+                    upgrade.capture(state, changed, old, receipt, 'e' * 64, image_render_inputs=(before, after))
+                else:
+                    upgrade.verify_apply(state, changed, result)
+            self.assertEqual(state.calls, [])
+            proof.assert_not_called()
+
+    def test_verify_apply_rejects_changed_file_bytes_before_discovery(self):
+        old, _, before, after, profile, state, receipt = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        result = self.capture(state, prepared, old, receipt, before, after)
+        with tempfile.TemporaryDirectory() as directory:
+            receipt_path = Path(directory) / 'receipt'
+            digest = write(receipt_path, result)
+            render = Path(directory) / 'upgrade.yaml'
+            upgrade.write_new(render, upgrade.render_bytes(prepared) + b'# changed bytes\n')
+            args = [upgrade.__file__, 'verify-apply', '--context', 'synthetic', '--render', str(render),
+                    '--bootstrap-completion-receipt', str(receipt_path), '--bootstrap-completion-sha256', digest,
+                    '--allow-reconciled-bootstrap-completion']
+            with patch.object(sys, 'argv', args), patch.object(upgrade, 'State') as kube, self.assertRaises(SystemExit):
+                upgrade.main()
+            kube.assert_not_called()
+
+    def test_capture_cli_uses_original_target_and_records_exact_output_bytes(self):
+        _, _, before, after, profile, state, receipt = self.prepared()
+        raw = upgrade.render_bytes(upgrade.prepare(before, after, profile))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in (('before.yaml', before), ('target.yaml', after), ('prepared.yaml', raw)):
+                upgrade.write_new(root / name, value)
+            previous = root / 'previous.json'
+            previous_digest = write(previous, receipt)
+            out = root / 'receipt.json'
+            args = [upgrade.__file__, 'capture', '--context', 'synthetic',
+                    '--render', str(root / 'prepared.yaml'), '--previous-render', str(root / 'before.yaml'),
+                    '--target-render', str(root / 'target.yaml'), '--previous-receipt', str(previous),
+                    '--previous-receipt-sha256', previous_digest, '--output', str(out)]
+            with patch.object(sys, 'argv', args), patch.object(state, 'discover', create=True), \
+                    patch.object(upgrade, 'State', return_value=state), patch.object(completion, 'verify_schemas'), \
+                    patch.object(upgrade, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64):
+                upgrade.main()
+            result = completion.load(out, upgrade.sha(out.read_bytes()), True)
+            self.assertEqual(result['jobs'], receipt['jobs'])
+            self.assertEqual(result['evidence']['prepared_render_sha256'], upgrade.sha(raw))
+
+    def test_capture_requires_original_target_and_rejects_changed_target_pin(self):
+        old, _, before, after, profile, state, receipt = self.prepared()
+        prepared = upgrade.prepare(before, after, profile)
+        state.calls.clear()
+        with self.assertRaisesRegex(Rejected, 'UPGRADE_IMAGE_RENDER_INPUTS_REQUIRED'):
+            upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+        with self.assertRaisesRegex(Rejected, 'UPGRADE_RENDER_PIN_MISMATCH'):
+            upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after + b'\n'))
+        self.assertEqual(state.calls, [])
+
     def test_ttl_absence_uses_exact_previous_receipt_without_synthesizing_completion(self):
         old, _, before, after, profile, state, receipt = self.prepared()
         state.current = {}
-        result = self.capture(state, upgrade.prepare(before, after, profile), old, receipt)
+        result = self.capture(state, upgrade.prepare(before, after, profile), old, receipt, before, after)
         self.assertEqual(result['jobs'], receipt['jobs'])
         self.assertEqual(state.current, {})
         with tempfile.TemporaryDirectory() as directory:
@@ -105,7 +177,7 @@ class ImageUpgradeTests(unittest.TestCase):
             path = Path(directory) / 'previous'
             receipt = completion.load(path, write(path, receipt), True)
         state.current = {}
-        result = self.capture(state, upgrade.prepare(before, after, profile), old, receipt)
+        result = self.capture(state, upgrade.prepare(before, after, profile), old, receipt, before, after)
         self.assertTrue(all(row['completion_time'] is None for row in result['jobs']))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'receipt'
@@ -152,7 +224,7 @@ class ImageUpgradeTests(unittest.TestCase):
             else: completion.desired_jobs(prepared)[upgrade.MIGRATION]['spec']['backoffLimit'] = 1
             with self.subTest(change=change), patch.object(completion, 'verify_schemas'), \
                     patch.object(upgrade, 'schema_proof') as proof, self.assertRaises(Rejected):
-                upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+                upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
             proof.assert_not_called()
 
     def test_native_schema_failure_and_late_job_replacement_fail_closed(self):
@@ -160,19 +232,19 @@ class ImageUpgradeTests(unittest.TestCase):
         prepared = upgrade.prepare(before, after, profile)
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'verify_schemas'), \
                 patch.object(upgrade, 'schema_proof', side_effect=Rejected('NATIVE_SCHEMA_FAILED')), self.assertRaises(Rejected):
-            upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+            upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
         def replaced(*args):
             state.current[upgrade.MIGRATION]['metadata']['uid'] = uuid(903)
             return 'f' * 64
         with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'verify_schemas'), \
                 patch.object(upgrade, 'schema_proof', side_effect=replaced) as proof, self.assertRaises(Rejected):
-            upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+            upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
         proof.assert_called_once()
 
     def test_apply_rechecks_job_identity_after_native_proof_before_returning_success(self):
         old, _, before, after, profile, state, receipt = self.prepared()
         prepared = upgrade.prepare(before, after, profile)
-        result = self.capture(state, prepared, old, receipt)
+        result = self.capture(state, prepared, old, receipt, before, after)
         def replaced(*args):
             state.current[upgrade.MIGRATION]['metadata']['uid'] = uuid(905)
             return 'f' * 64
@@ -189,18 +261,21 @@ class ImageUpgradeTests(unittest.TestCase):
         profile_resource = next(r for r in prepared if r['metadata']['name'].startswith('kodex-bootstrap-upgrade-'))
         profile_resource['immutable'] = False
         state.calls.clear()
-        with self.assertRaises(Rejected): upgrade.capture(state, prepared, old, receipt, 'e' * 64)
+        with self.assertRaises(Rejected): upgrade.capture(state, prepared, old, receipt, 'e' * 64, image_render_inputs=(before, after))
         self.assertEqual(state.calls, [])
 
     def test_new_origin_does_not_accept_forward_receipt_or_fabricated_migration_evidence(self):
         old, _, before, after, profile, state, receipt = self.prepared()
         prepared = upgrade.prepare(before, after, profile)
-        result = self.capture(state, prepared, old, receipt)
+        result = self.capture(state, prepared, old, receipt, before, after)
         with patch.object(completion, 'verify_schemas'), self.assertRaises(Rejected):
             upgrade.verify_apply(state, prepared, {**result, 'origin': upgrade.ORIGIN})
-        for changes in ({'migration_job_uid': uuid(904)}, {'schema_proof_sha256': 'invalid'}, {'unknown': 'synthetic'}):
+        for changes in ({'migration_job_uid': uuid(904)}, {'schema_proof_sha256': 'invalid'}, {'unknown': 'synthetic'},
+                        {'prepared_render_sha256': ''}, {'prepared_render_sha256': None}):
             altered = copy.deepcopy(result)
             altered['evidence'].update(changes)
+            if changes == {'prepared_render_sha256': None}:
+                del altered['evidence']['prepared_render_sha256']
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / 'receipt'
                 with self.assertRaises(Rejected): completion.load(path, write(path, altered), True)
@@ -208,16 +283,16 @@ class ImageUpgradeTests(unittest.TestCase):
     def test_second_image_upgrade_preserves_original_uids_and_can_be_verified_again(self):
         old, _, before, after, profile, state, receipt = self.prepared()
         first = upgrade.prepare(before, after, profile)
-        first_receipt = self.capture(state, first, old, receipt)
+        first_receipt = self.capture(state, first, old, receipt, before, after)
         target = copy.deepcopy([r for r in first if not r['metadata']['name'].startswith('kodex-bootstrap-upgrade-')])
         upgrade.installation(target)['source.sha'] = 'c' * 40
         for job in completion.desired_jobs(target).values():
             job['spec']['template']['spec']['containers'][0]['image'] = 'registry.example.invalid/kodex/cli@sha256:' + 'c' * 64
-        before2, after2 = yaml.safe_dump_all(first).encode(), yaml.safe_dump_all(target).encode()
+        before2, after2 = upgrade.render_bytes(first), yaml.safe_dump_all(target).encode()
         profile2 = {**profile, 'previous_source_sha': 'b' * 40, 'target_source_sha': 'c' * 40,
                     'previous_render_sha256': upgrade.sha(before2), 'target_render_sha256': upgrade.sha(after2)}
         second = upgrade.prepare(before2, after2, profile2)
-        final = self.capture(state, second, first, first_receipt)
+        final = self.capture(state, second, first, first_receipt, before2, after2)
         self.assertEqual(final['jobs'], receipt['jobs'])
         for _ in range(2):
             with patch.object(completion, 'verify_schemas'), patch.object(upgrade, 'schema_proof', return_value='f' * 64):

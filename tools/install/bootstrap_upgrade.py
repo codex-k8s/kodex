@@ -119,6 +119,11 @@ def decode_render(raw):
     return [r for r in resources if r.get('kind') != 'Secret']
 
 
+def render_bytes(resources):
+    """Материализует подготовленный render в том же порядке, который проверяется перед apply."""
+    return yaml.safe_dump_all(resources, sort_keys=False).encode()
+
+
 def prepare(previous_raw, target_raw, profile):
     """Сохраняет четыре effects для forward или все пять для same-schema; режимы не смешиваются."""
     profile = validate(profile)
@@ -201,6 +206,8 @@ def verify_apply(state, resources, receipt):
     profile, _ = render_profile(resources)
     require(receipt['origin'] == (IMAGE_ORIGIN if profile['schema'] == IMAGE_SCHEMA else ORIGIN),
             'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
+    if receipt['origin'] == IMAGE_ORIGIN:
+        completion.verify_render_pin(receipt, sha(render_bytes(resources)))
     completion.verify(state, resources, receipt)
     proof = schema_proof(state, profile['schema_profile'], profile['to_schema_heads']['control-plane'])
     if receipt['origin'] == IMAGE_ORIGIN:
@@ -243,9 +250,17 @@ def migration_execution(state, expected, actual):
     return pod['metadata']['uid'], containers[0]['image'].split('@')[-1]
 
 
-def capture(state, resources, previous_resources, previous_receipt, previous_receipt_sha256):
+def capture(state, resources, previous_resources, previous_receipt, previous_receipt_sha256, *, image_render_inputs=None):
     """Сохраняет прежние effects; только forward требует отдельно наблюдённую новую миграцию."""
     profile, profile_digest = render_profile(resources)
+    image_only = profile['schema'] == IMAGE_SCHEMA
+    require(image_only == (image_render_inputs is not None), 'UPGRADE_IMAGE_RENDER_INPUTS_REQUIRED')
+    if image_only:
+        previous_raw, target_raw = image_render_inputs
+        completion.verify_render_pin(previous_receipt, sha(previous_raw))
+        expected = render_bytes(prepare(previous_raw, target_raw, profile))
+        require(expected == render_bytes(resources) and decode_render(previous_raw) == previous_resources,
+                'UPGRADE_PREPARED_RENDER_DRIFT')
     require(completion.hex_value(previous_receipt_sha256) and
             installation(previous_resources).get('source.sha') == profile['previous_source_sha'] and
             json.loads(installation(previous_resources)['schema-heads.json']) == profile['from_schema_heads'],
@@ -255,9 +270,9 @@ def capture(state, resources, previous_resources, previous_receipt, previous_rec
     old, new = completion.desired_jobs(previous_resources), completion.desired_jobs(resources)
     rows = {r['name']: r for r in previous_receipt['jobs']}
     require(set(rows) == set(completion.JOBS), 'UPGRADE_PREVIOUS_COMPLETION_REQUIRED')
-    if profile['schema'] == IMAGE_SCHEMA:
+    if image_only:
         return capture_images(state, resources, previous_resources, previous_receipt, previous_receipt_sha256,
-                              profile, profile_digest, old, new, rows)
+                              profile, profile_digest, old, new, rows, sha(expected))
     result = []
     for name in PRESERVED:
         require(completion.fingerprint(old[name]) == completion.fingerprint(new[name]) == rows[name]['desired_sha256'],
@@ -296,7 +311,7 @@ def capture(state, resources, previous_resources, previous_receipt, previous_rec
 
 
 def capture_images(state, resources, previous_resources, previous_receipt, previous_digest,
-                   profile, profile_digest, old, new, rows):
+                   profile, profile_digest, old, new, rows, prepared_render_sha256):
     """Переносит настоящий receipt всех пяти effects: только чтение, без нового Job/Pod или migration UID."""
     completion.verify(state, previous_resources, previous_receipt)
     require(all(completion.fingerprint(old[name]) == completion.fingerprint(new[name]) == rows[name]['desired_sha256']
@@ -307,7 +322,8 @@ def capture_images(state, resources, previous_resources, previous_receipt, previ
     completion.verify(state, previous_resources, previous_receipt)
     result = completion.envelope(state, [copy.deepcopy(rows[name]) for name in completion.JOBS], IMAGE_ORIGIN,
         {'previous_receipt_sha256': previous_digest, 'previous_render_sha256': profile['previous_render_sha256'],
-         'upgrade_profile_sha256': profile_digest, 'schema_proof_sha256': proof})
+         'upgrade_profile_sha256': profile_digest, 'schema_proof_sha256': proof,
+         'prepared_render_sha256': prepared_render_sha256})
     require(all(result[name] == previous_receipt[name] for name in ('cluster_uid', 'namespace_uid')),
             'UPGRADE_CLUSTER_IDENTITY_MISMATCH')
     return result
@@ -338,7 +354,9 @@ def main():
                                            args.previous_receipt_sha256, args.output)), 'UPGRADE_APPLY_ARGUMENTS_REQUIRED')
             receipt = completion.from_arguments(args)
             require(isinstance(receipt, dict) and receipt.get('origin') in (ORIGIN, IMAGE_ORIGIN), 'UPGRADE_COMPLETION_ORIGIN_REQUIRED')
-            resources = decode_render(completion.private_bytes(args.render, 8 << 20))
+            raw = completion.private_bytes(args.render, 8 << 20)
+            completion.verify_render_pin(receipt, sha(raw))
+            resources = decode_render(raw)
             state = State(args.context);state.discover(resources)
             print(json.dumps(verify_apply(state, resources, receipt)))
             return
@@ -352,16 +370,25 @@ def main():
                     'UPGRADE_PREPARE_ARGUMENTS_REQUIRED')
             profile = json.loads(completion.private_bytes(args.profile, 16384), object_pairs_hook=completion.unique_object)
             resources = prepare(previous_raw, completion.private_bytes(args.target_render, 8 << 20), profile)
-            write_new(args.output, yaml.safe_dump_all(resources, sort_keys=False).encode())
+            write_new(args.output, render_bytes(resources))
         else:
             require(args.render is not None and args.previous_receipt is not None and args.previous_receipt_sha256 and
-                    args.context and args.profile is None and args.target_render is None, 'UPGRADE_CAPTURE_ARGUMENTS_REQUIRED')
-            resources = decode_render(completion.private_bytes(args.render, 8 << 20))
+                    args.context and args.profile is None, 'UPGRADE_CAPTURE_ARGUMENTS_REQUIRED')
+            raw = completion.private_bytes(args.render, 8 << 20)
+            resources = decode_render(raw)
             profile, _ = render_profile(resources)
+            image_only = profile['schema'] == IMAGE_SCHEMA
+            require(image_only == (args.target_render is not None), 'UPGRADE_IMAGE_RENDER_INPUTS_REQUIRED')
+            image_render_inputs = None
+            if image_only:
+                require(raw == render_bytes(resources), 'UPGRADE_PREPARED_RENDER_DRIFT')
+                image_render_inputs = (previous_raw, completion.private_bytes(args.target_render, 8 << 20))
             require(sha(previous_raw) == profile['previous_render_sha256'], 'UPGRADE_PREVIOUS_RENDER_DRIFT')
             previous = completion.load(args.previous_receipt, args.previous_receipt_sha256, True)
+            completion.verify_render_pin(previous, sha(previous_raw))
             state = State(args.context); state.discover(resources)
-            receipt = capture(state, resources, decode_render(previous_raw), previous, args.previous_receipt_sha256)
+            receipt = capture(state, resources, decode_render(previous_raw), previous, args.previous_receipt_sha256,
+                              image_render_inputs=image_render_inputs)
             write_new(args.output, (json.dumps(receipt, sort_keys=True) + '\n').encode())
     except (Rejected, ValueError, TypeError, KeyError, OSError, subprocess.SubprocessError, yaml.YAMLError):
         raise SystemExit('Bootstrap upgrade rejected') from None

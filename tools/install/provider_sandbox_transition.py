@@ -504,6 +504,7 @@ def main():
     require(re.fullmatch('[A-Za-z0-9._:-]{1,128}',args.context),'EXACT_CONTEXT_REQUIRED')
     previous=read_render(args.previous_render,args.previous_render_sha256);desired=read_render(args.render,args.render_sha256)
     completion=bootstrap_completion.from_arguments(args)
+    bootstrap_completion.verify_render_pin(completion,args.previous_render_sha256)
     require(bool(args.schema_heads_file) == bool(args.schema_heads_sha256), 'PINNED_SCHEMA_HEADS_REQUIRED')
     schema_heads=bootstrap_completion.pinned_json(args.schema_heads_file,args.schema_heads_sha256,4096) if args.schema_heads_file else None
     identity={'context':args.context,'kubeconfig':str(args.kubeconfig),'previous_render_sha256':args.previous_render_sha256,'render_sha256':args.render_sha256,

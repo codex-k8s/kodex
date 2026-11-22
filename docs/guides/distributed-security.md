@@ -130,6 +130,12 @@ Discovery, в том числе пустые search/manifest, проверяет
 журнал отказавшей попытки не является разрешением на чтение.
 Матрица: [OpenCode file catalog](../operations/opencode-native-sessions-2108.md).
 
+При смене образов на той же схеме completion receipt связывает весь
+подготовленный Kubernetes render, включая RBAC и workloads. Capture
+воспроизводит render из закреплённых входов. Проверка и apply читают один
+private snapshot, а readback сверяет SHA256 фактически прочитанных байтов.
+Квитанции старых bootstrap Jobs служат доказательством прежних эффектов.
+
 При смене image policy runtime AppArmor-проекция и admission binding обновляются
 вместе: точный immutable source, `nodeReadbackImage`, ABI, профиль и digest marker
 должны совпадать у producer и admission. Отдельный перенос binding на image policy

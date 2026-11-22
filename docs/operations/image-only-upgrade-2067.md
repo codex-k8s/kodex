@@ -4,8 +4,8 @@ title: Обновление immutable images без повторного bootstr
 type: runbook
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-11-09
+version: 1.1.0
+updated: 2026-11-22
 ---
 
 # Обновление immutable images без повторного bootstrap
@@ -42,8 +42,10 @@ native catalog verifier. Unknown schema и дополнительные поля
    нормализация — уже поддержанные значения migration backoff0/2 при сравнении;
    в выходе остаётся исходный spec, а не изменённый Job.
 3. До rollout выполнить `bootstrap_upgrade.py capture --render ...
-   --previous-render ... --previous-receipt ...
+   --previous-render ... --target-render ... --previous-receipt ...
    --previous-receipt-sha256 ... --context ... --output ...`. Capture проверяет
+   точные байты выхода prepare, заново материализует его из тех же двух
+   исходных render и записывает SHA256 подготовленного render. Затем сверяет
    прежний receipt, cluster/namespace UID, Job identities/spec, schema heads,
    native catalog proof и повторное чтение. Он не создаёт Job/Pod и не исполняет
    `up`. Job, удалённый по TTL, допускается только по подлинному pinned receipt.
@@ -51,7 +53,10 @@ native catalog verifier. Unknown schema и дополнительные поля
    render и новым `--bootstrap-completion-receipt`, точным
    `--bootstrap-completion-sha256`, явным
    `--allow-reconciled-bootstrap-completion` и остальными параметрами установки.
-   `verify-apply` заново проверяет receipt и native schema до первой mutation.
+   `verify-apply` заново проверяет receipt, SHA256 всего подготовленного render
+   и native schema до первой mutation. Если передана квитанция, подготовка
+   admission, apply, resume и readback используют тот же приватный снимок
+   render, который проверила их точка входа.
    Все пять bootstrap Jobs пропускаются; штатный materializer и остальные
    rollout/readback gates остаются обязательными.
 5. Проверить actual CRI digests, readiness, данные и функции. Сохранить новый
@@ -63,21 +68,22 @@ native catalog verifier. Unknown schema и дополнительные поля
 | Переход | Полномочия и authoritative source | Результат / отказ |
 | --- | --- | --- |
 | prepare | Operator + Git-managed exact profile и два render | Новый render сохраняет пять прежних effects; mismatch закрыто отклоняется, API вызовов нет |
-| capture | Прежний pinned completion + текущие Kubernetes UID/spec и native SQL catalog | Новый `SAME_SCHEMA_IMAGE_UPGRADE` receipt сохраняет исходные Job UID/timestamps; только чтение |
+| capture | Оба исходных render + прежний pinned completion + текущие Kubernetes UID/spec и native SQL catalog | Новый `SAME_SCHEMA_IMAGE_UPGRADE` receipt сохраняет исходные Job UID/timestamps и закрепляет подготовленный render; только чтение |
 | verify/apply | Stock operator lifecycle + новый receipt/profile и свежий native proof | Bootstrap не повторяется; штатные rollout/resource fences сохраняются |
 | TTL / повтор / второе обновление | Прежняя цепочка receipt, original cluster/namespace и fingerprints | Сохраняются те же effects; отсутствие доказательств не заменяется успехом |
 | Drift / crash / неизвестный исход apply | Actual readback и сохранённый operation journal | Нет автоматического повторного apply либо новых bootstrap effects |
 
-Новый origin содержит только прежний receipt/render digest, текущий profile
-digest и native schema proof digest. Он не утверждает выполнения новой
-миграции и не содержит нового migration Job/Pod UID. Forward receipt нельзя
-использовать вместо same-schema receipt или наоборот.
+Квитанция закрепляет предыдущие receipt/render, текущие profile и подготовленный
+render, а также native schema proof. Исходные Job UID сохраняются. Для квитанции
+смены образов без `prepared_render_sha256` повторите capture из сохранённых
+исходных render и предшествующей квитанции. Эта операция выполняется только
+чтением. Forward migration сохраняет собственный формат квитанции.
 
 ## Проверка и возврат
 
 `python3 -B tools/install/test_bootstrap_image_upgrade.py` проверяет сохранение
 всех пяти identities, TTL, два последовательных обновления, native proof,
-подмену spec/receipt/UID/schema/source и late replacement. Контур включён в
+подмену render/spec/receipt/UID/schema/source и late replacement. Контур включён в
 `make test-web-only-release`; прежние forward/fresh suites сохраняются.
 
 Локальный synthetic контракт не доказывает успешного установленного обновления.
