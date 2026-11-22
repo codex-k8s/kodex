@@ -582,8 +582,9 @@ def main():
         completion = bootstrap_completion.from_arguments(args)
         require(completion is None or args.mode == 'readback', 'BOOTSTRAP_COMPLETION_READBACK_ONLY')
         raw = Path(args.render).read_bytes()
-        resources = list(filter(None, yaml.safe_load_all(raw)))
         render_digest = hashlib.sha256(raw).hexdigest()
+        bootstrap_completion.verify_render_pin(completion, render_digest)
+        resources = list(filter(None, yaml.safe_load_all(raw)))
         if args.mode == 'prepare-api-write':
             require(args.manifest and args.output, 'MANIFEST_AND_OUTPUT_REQUIRED')
             selected = list(filter(None, yaml.safe_load_all(Path(args.manifest).read_bytes())))

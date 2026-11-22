@@ -115,7 +115,30 @@ public_certificate_name=staff-control-center-public
 export KODEX_DEPLOY_PUBLIC_TLS_MODE=$public_tls_mode
 export KODEX_DEPLOY_PUBLIC_CERTIFICATE_NAME=$public_certificate_name
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+temporary_directory=$(mktemp -d)
+trap 'rm -rf -- "$temporary_directory"' EXIT
+if [[ "$mode" == upgrade ]]; then
+  # Сохраняем требования upgrade к приватности исходного файла.
+  python3 -B - "$repository_root/tools/install" "$render_file" "$temporary_directory/verified-render.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[1])
+from bootstrap_completion import private_bytes
+from bootstrap_upgrade import write_new
+from deployment_profile import Rejected
+
+try:
+    write_new(Path(sys.argv[3]), private_bytes(Path(sys.argv[2]), 8 << 20))
+except (OSError, Rejected):
+    raise SystemExit('Upgrade render snapshot rejected') from None
+PY
+elif ((${#completion_arguments[@]})); then
+  # Подготовка admission, resume и readback потребляют байты из того же снимка.
+  (umask 077; cp -- "$render_file" "$temporary_directory/verified-render.yaml")
+fi
 if ((${#completion_arguments[@]})); then
+  render_file="$temporary_directory/verified-render.yaml"
   python3 "$repository_root/tools/install/authority_registry.py" verify-bootstrap \
     --render "$render_file" --context "$context" "${completion_arguments[@]}"
 fi
@@ -151,9 +174,6 @@ jq -e '
     ([.items[].key] | length == (unique | length)) and
     all(.items[]; ((.required // true) | type == "boolean")))
 ' "$projection_registry" >/dev/null || fail 'secret projection registry is invalid'
-temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
-
 rg -n '__KODEX_[A-Z0-9_]+__|\.invalid|sha256:0{64}|kind: (Vault|SecretProviderClass)' \
   "$render_file" >/dev/null && fail 'release render contains unresolved or retired resources'
 yq -e 'select(.kind == "Namespace" and .metadata.name == "kodex-system")' \

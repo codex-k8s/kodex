@@ -306,7 +306,11 @@ class RegistrySource(unittest.TestCase):
                 self.assertIn({'to':[{'ipBlock':{'cidr':'192.0.2.11/32'}}],'ports':[{'protocol':'TCP','port':6443}]},policy['spec']['egress'])
             control=registry.one(resources,'Deployment','control-plane')['spec']['template']['spec']['containers'][0]
             self.assertIn({'name':'OTEL_SDK_DISABLED','value':'true'},control['env'])
-            self.assertEqual(registry.yaml.safe_load(registry.one(resources,'ConfigMap','internal-rpc-authority-publisher-target-registry')['data']['key-delivery-targets.yaml'])['source_revision'],7)
+            registry_name = 'internal-rpc-authority-publisher-target-registry'
+            registry_file = 'key-delivery-targets.yaml'
+            registry_source = (root / 'deploy/k8s/base/internal-rpc-authority-publisher' / registry_file).read_text()
+            registry_rendered = registry.one(resources, 'ConfigMap', registry_name)['data'][registry_file]
+            self.assertEqual(registry.yaml.safe_load(registry_rendered), registry.yaml.safe_load(registry_source))
             publisher=registry.one(resources,'NetworkPolicy','internal-rpc-authority-publisher-exact-paths')
             self.assertIn({'to':[{'ipBlock':{'cidr':'192.0.2.10/32'}}],'ports':[{'protocol':'TCP','port':443}]},publisher['spec']['egress'])
             self.assertTrue(any(c['name']=='skill-scanner'for c in registry.one(resources,'Deployment','control-plane')['spec']['template']['spec']['containers']))
@@ -325,6 +329,7 @@ class RegistrySource(unittest.TestCase):
             self.assertFalse(any(item['kind']=='PersistentVolumeClaim'and item['metadata']['name']=='clamav-database'for item in disabled_resources))
             projected = registry.transform(resources, config, lock)
             self.assertEqual(registry.transform(projected, config, lock), projected)
+            self.assertEqual(registry.one(projected, 'ConfigMap', registry_name)['data'][registry_file], registry_rendered)
             self.assertTrue(any((item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane' for item in projected)))
             data = registry.one(projected, 'ConfigMap', 'kodex-image-admission-policy')['data']
             self.assertEqual(data['promotedPullRepository'], 'kodex-image-registry-pull.kodex-system.svc.cluster.local/kodex/roles')

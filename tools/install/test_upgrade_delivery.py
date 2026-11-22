@@ -3,6 +3,7 @@ import os
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 import yaml
@@ -123,6 +124,59 @@ kubectl(){
                 env={'PATH':os.environ['PATH'],'HOME':'/synthetic','LANG':'C'},timeout=10)
             self.assertNotEqual(value.returncode,0)
             self.assertIn('upgrade requires',value.stderr)
+
+    def test_upgrade_keeps_the_same_render_when_the_input_path_is_replaced(self):
+        for mode in ('upgrade', 'prepare-preflight', 'preflight', 'resume-authority-bootstrap',
+                     'resume-authority-published', 'resume-workloads', 'readback'):
+            with self.subTest(mode=mode):
+                self.check_verified_render_snapshot(mode)
+
+    def check_verified_render_snapshot(self, mode):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            render = root / 'original.yaml'
+            render.write_text('approved render\n')
+            render.chmod(0o600)
+            kubectl = root / 'kubectl'
+            kubectl.write_text('#!/bin/sh\n[ "$*" = "config current-context" ] || exit 91\nprintf "synthetic\\n"\n')
+            kubectl.chmod(0o700)
+            python = root / 'python3'
+            python.write_text(r'''#!/bin/sh
+case "$1" in
+  -B) exec "$test_python" "$@" ;;
+  */authority_registry.py)
+    [ "$2" = verify-bootstrap ] && [ "$3" = --render ] && [ "$4" != "$test_render" ] || exit 92
+    [ "$(cat "$4")" = "approved render" ] || exit 93
+    printf '%s\n' "$4" >"$test_directory/snapshot-path"
+    printf 'replaced input\n' >"$test_render"
+    ;;
+  */bootstrap_upgrade.py)
+    [ "$2" = verify-apply ] && [ "$3" = --render ] || exit 94
+    [ "$4" = "$(cat "$test_directory/snapshot-path")" ] || exit 95
+    [ "$(cat "$4")" = "approved render" ] || exit 96
+    exit 76
+    ;;
+  */provider_sandbox_profile.py)
+    [ "$test_mode" != upgrade ] && [ "$2" = --check ] && [ "$3" = --render ] || exit 98
+    [ "$4" = "$(cat "$test_directory/snapshot-path")" ] || exit 95
+    [ "$(cat "$4")" = "approved render" ] || exit 96
+    exit 76
+    ;;
+  *) exit 97 ;;
+esac
+''')
+            python.chmod(0o700)
+            environment = {'PATH':str(root)+':'+os.environ['PATH'], 'HOME':directory, 'LANG':'C',
+                           'test_python':sys.executable, 'test_render':str(render), 'test_directory':directory,
+                           'test_mode':mode}
+            value = subprocess.run(['bash', str(ROOT/'tools/install/deploy-platform.sh'), '--mode', mode,
+                '--context', 'synthetic', '--render', str(render), '--public-tls-mode', 'external',
+                '--bootstrap-completion-receipt', 'synthetic.json', '--bootstrap-completion-sha256', 'a'*64],
+                env=environment, capture_output=True, text=True, timeout=10)
+            self.assertEqual(value.returncode, 76, value.stderr)
+            self.assertEqual(render.read_text(), 'replaced input\n')
+            snapshot = Path((root/'snapshot-path').read_text().strip())
+            self.assertFalse(snapshot.exists())
 
     def run_job(self,mode,name,presence='PRESENT'):
         with tempfile.TemporaryDirectory()as directory:
