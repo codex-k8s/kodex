@@ -44,6 +44,43 @@ class ModelProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.zai_coding_plan('a' * 40, ['192.0.2.4/32'], 'unknown-fallback')
 
+    def test_zai_preset_extends_active_routes_and_preserves_default_unless_selected(self):
+        base = fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / 'provider.json'
+            original = json.dumps(base)
+            config.write_text(original)
+            output = Path(directory) / 'extended.json'
+            command = ['python3', str(ROOT / 'tools/install/model-provider.py'), 'preset-zai-coding-plan',
+                       '--configuration', str(config), '--source-revision', 'b' * 40,
+                       '--address-cidr', '192.0.2.6/32']
+            subprocess.run([*command, '--output', str(output)], check=True, capture_output=True, timeout=15)
+            result = MODULE.configuration(output)
+            self.assertEqual(result['source_revision'], 'b' * 40)
+            self.assertEqual(result['default_provider'], base['default_provider'])
+            self.assertEqual(result['default_model'], base['default_model'])
+            self.assertEqual(result['providers'][:2], [{**provider, 'source_revision': 'b' * 40}
+                                                      for provider in base['providers']])
+            self.assertEqual(result['providers'][2]['provider_id'], 'zai-coding-plan')
+            self.assertEqual(config.read_text(), original)
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+            new_default = Path(directory) / 'new-default.json'
+            subprocess.run([*command, '--default-model', 'glm-5.3-flash', '--output', str(new_default)],
+                           check=True, capture_output=True, timeout=15)
+            result = MODULE.configuration(new_default)
+            self.assertEqual(result['default_provider'], 'opencode-zai-coding-plan')
+            self.assertEqual(result['default_model'], 'glm-5.3-flash')
+
+    def test_zai_preset_never_replaces_an_existing_route(self):
+        base = fixture()
+        preset = MODULE.zai_coding_plan('b' * 40, ['192.0.2.6/32'], 'glm-5.3')
+        extended = MODULE.extend_with_zai_coding_plan(base, preset, False)
+        self.assertEqual(MODULE.extend_with_zai_coding_plan(extended, preset, False), extended)
+        changed_egress = MODULE.zai_coding_plan('c' * 40, ['192.0.2.7/32'], 'glm-5.3')
+        with self.assertRaises(ValueError):
+            MODULE.extend_with_zai_coding_plan(extended, changed_egress, False)
+
     def assert_role_catalog_authority(self, resources, expected_component):
         deployment = next(item for item in resources if item['kind'] == 'Deployment' and item['metadata']['name'] == 'control-plane')
         pod = deployment['spec']['template']
@@ -181,7 +218,9 @@ class ModelProviderTests(unittest.TestCase):
                                          'pull_ref': 'pull.example.invalid/kodex/role-image-inputs@sha256:' + 'e' * 64}}
             lock_path, output, config = directory / 'lock.json', directory / 'render.yaml', directory / 'provider.json'
             lock_path.write_text(json.dumps(lock))
-            config.write_text(json.dumps(fixture()))
+            preset = MODULE.zai_coding_plan('b' * 40, ['192.0.2.6/32'], 'glm-5.3')
+            catalog = MODULE.extend_with_zai_coding_plan(fixture(), preset, False)
+            config.write_text(json.dumps(catalog))
             authority=directory/'authority.json';authority.write_text(json.dumps({'schema':'kodex.authority-registry/v1','source_revision':1}))
             args = [str(ROOT / 'tools/release/render-web-only.sh'), '--lock', str(lock_path), '--lock-sha256', hashlib.sha256(lock_path.read_bytes()).hexdigest(),
                     '--output', str(output), '--public-host', 'console.example.invalid', '--public-origin', 'https://console.example.invalid',
@@ -205,7 +244,7 @@ class ModelProviderTests(unittest.TestCase):
                         self.assertIn(dict(name='OTEL_SDK_DISABLED', value='true'), container['env'])
             projections = [item for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-model-provider-')]
             self.assertEqual(len(projections), 1)
-            self.assertEqual(json.loads(projections[0]['data']['provider.json']), fixture())
+            self.assertEqual(json.loads(projections[0]['data']['provider.json']), catalog)
             self.assertTrue(projections[0]['immutable'])
             self.assertTrue(all(item['metadata'].get('labels',{}).get('app.kubernetes.io/part-of')=='kodex' for item in resources if item['kind']!='Secret'))
             for identity in ('control-plane', 'secret-broker'):
@@ -216,7 +255,9 @@ class ModelProviderTests(unittest.TestCase):
                 self.assertIn(identity.upper().replace('-', '_') + '_MODEL_PROVIDER_CONFIGURATION_FILE', env)
                 self.assertTrue(any(item.get('configMap', {}).get('name') == projections[0]['metadata']['name'] for item in pod['volumes']))
             policy = next(json.loads(item['data']['policy.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('egress-gateway-policy-'))
-            self.assertEqual(policy['spec']['modelProviderCatalog'], fixture())
+            self.assertEqual(policy['spec']['modelProviderCatalog'], catalog)
+            for host in ('gateway.example.invalid', 'second.example.invalid', 'api.z.ai'):
+                self.assertIn({'hostname': host, 'port': 443}, policy['spec']['destinations'])
             from referencing import Registry, Resource
             import jsonschema
             schemas = [json.loads((ROOT / path).read_text()) for path in (
@@ -272,10 +313,10 @@ class ModelProviderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'empty bootstrap'):
                 egress_bootstrap_projection.bind(nonempty)
             first_render = output.read_bytes()
-            MODULE.render(fixture(), output, 'vendor/model-v1')
+            MODULE.render(catalog, output, 'vendor/model-v1')
             self.assertEqual(first_render, output.read_bytes())
-            catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
-            standard = next(item for item in catalog['environments'] if item['key'] == 'standard')
+            role_catalog = next(json.loads(item['data']['catalog.json']) for item in resources if item['kind'] == 'ConfigMap' and item['metadata']['name'].startswith('kodex-role-environments-'))
+            standard = next(item for item in role_catalog['environments'] if item['key'] == 'standard')
             self.assertTrue(standard['baseImageReference'].endswith('/agent-runner'))
             self.assert_role_catalog_authority(resources, 'agent-runner')
             import provider_sandbox_profile
