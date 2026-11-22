@@ -14,6 +14,7 @@ const output = new URL(
   "../src/shared/api/generated/integration-package/",
   import.meta.url,
 );
+const frontendRoot = fileURLToPath(new URL("../", import.meta.url));
 const schema = JSON.parse(await readFile(schemaUrl, "utf8"));
 const ajv = new Ajv2020({
   allErrors: true,
@@ -31,9 +32,12 @@ const ajv = new Ajv2020({
 addFormats(ajv);
 const validate = ajv.compile(schema);
 const result = await build({
+  // Имена модулей в bundle зависят только от расположения внутри PWA.
+  absWorkingDir: frontendRoot,
+  preserveSymlinks: true,
   stdin: {
     contents: standaloneCode(ajv, validate),
-    resolveDir: fileURLToPath(new URL("../", import.meta.url)),
+    resolveDir: frontendRoot,
     sourcefile: "integration-package.js",
   },
   bundle: true,
