@@ -1,4 +1,7 @@
-import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
+import {
+  forwardSyntheticStaticRequest,
+  syntheticRuntimeConfig,
+} from "./synthetic-runtime-route";
 import { expect, test, type Page } from "@playwright/test";
 
 async function openSyntheticImportFixture(
@@ -15,11 +18,7 @@ async function openSyntheticImportFixture(
       await route.abort();
       return;
     }
-    await route.fulfill({
-      response: await route.fetch({
-        url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-      }),
-    });
+    await forwardSyntheticStaticRequest(route);
   });
   await page.goto(
     "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-import",
@@ -206,11 +205,7 @@ test("после защищённого импорта помощник пока
       await route.abort();
       return;
     }
-    await route.fulfill({
-      response: await route.fetch({
-        url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-      }),
-    });
+    await forwardSyntheticStaticRequest(route);
   });
   await page.goto(
     "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-create",

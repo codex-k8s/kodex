@@ -1,4 +1,5 @@
 import { installSyntheticCsrf, trackSyntheticSocket } from "./browser-session";
+import { forwardSyntheticStaticRequest } from "../synthetic-runtime-route";
 import { expect, type Page, type WebSocketRoute } from "@playwright/test";
 import type {
   AssistantConversation,
@@ -390,15 +391,7 @@ export class AssistantConcurrencyNetwork {
           json: { title: "Unexpected synthetic request", status: 501 },
         });
       }
-      if (url.origin !== "https://kodex.test")
-        throw new Error("External synthetic request is forbidden");
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-          maxRetries: request.method() === "GET" ? 2 : 0,
-          timeout: 15_000,
-        }),
-      });
+      await forwardSyntheticStaticRequest(route);
     });
   }
 }

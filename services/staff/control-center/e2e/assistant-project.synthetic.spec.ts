@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
+import { forwardSyntheticStaticRequest } from "./synthetic-runtime-route";
 
 for (const width of [1440, 390]) {
   for (const locale of ["ru", "en"]) {
@@ -142,13 +143,7 @@ async function installFixture(
       url.origin === "https://kodex.test" &&
       !url.pathname.startsWith("/api/")
     ) {
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-          maxRetries: route.request().method() === "GET" ? 2 : 0,
-          timeout: 15_000,
-        }),
-      });
+      await forwardSyntheticStaticRequest(route);
     } else {
       throw new Error(`Unexpected fixture request ${url.pathname}`);
     }

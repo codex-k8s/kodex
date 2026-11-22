@@ -1,4 +1,5 @@
 import { installSyntheticCsrf, trackSyntheticSocket } from "./browser-session";
+import { forwardSyntheticStaticRequest } from "../synthetic-runtime-route";
 import { expect, type Page, type WebSocketRoute } from "@playwright/test";
 import type {
   Agent,
@@ -586,11 +587,7 @@ export class AssistantRetryNetwork {
           json: { title: "Unexpected synthetic request", status: 501 },
         });
       }
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-        }),
-      });
+      await forwardSyntheticStaticRequest(route);
     });
   }
 }
