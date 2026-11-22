@@ -141,7 +141,7 @@ interface SyntheticDiagnostic {
 interface GitHubRepository {
   readonly id: number;
   readonly full_name: string;
-  readonly private: boolean;
+  readonly private: unknown;
 }
 
 interface GitHubIssue {
@@ -553,11 +553,10 @@ test.describe("deployed local integration path", () => {
             page,
             `/api/v1/runs/${encodeURIComponent(writeRunRef)}`,
           );
-          if (!terminalStates.has(run.state)) {
-            throw new Error(
-              "GitHub fixture cleanup requires a terminal write run",
-            );
-          }
+          expect(
+            terminalStates.has(run.state),
+            "GitHub fixture cleanup requires a terminal write run",
+          ).toBe(true);
           await closeGitHubFixtureIssue(
             token,
             github,
