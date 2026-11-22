@@ -9,7 +9,6 @@ import (
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
-	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -68,10 +67,8 @@ func testInteractionDeliveryApproval(t *testing.T, ctx context.Context, reposito
 	if err != nil {
 		t.Fatal(err)
 	}
-	worker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
-		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
-		CallerWorkload: "interaction-gateway", Operation: "platform.interactions.deliveries.claim",
-	}, "interaction-gateway")
+	claimant := interactionDeliveryFixturePrincipal(t, ctx, repository, "platform.interactions.deliveries.claim")
+	completer := interactionDeliveryFixturePrincipal(t, ctx, repository, "platform.interactions.deliveries.complete")
 	for _, decision := range []string{"APPROVE", "REJECT", "CANCEL", "PIN_STALE", "OWNER_REVOKE"} {
 		t.Run("delivery_gate_"+decision, func(t *testing.T) {
 			key := "approval_" + strings.ToLower(decision)
@@ -116,7 +113,7 @@ func testInteractionDeliveryApproval(t *testing.T, ctx context.Context, reposito
 			}
 			claimForRun := func() map[string]any {
 				t.Helper()
-				claims, err := service.ClaimInteractionDeliveries(ctx, worker, "approval-worker", 32)
+				claims, err := service.ClaimInteractionDeliveries(ctx, claimant, "approval-worker", 32)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -204,7 +201,7 @@ func testInteractionDeliveryApproval(t *testing.T, ctx context.Context, reposito
 			if err != nil || definition.Digest != claim["definitionDigest"] {
 				t.Fatal("delivery claim lost exact package")
 			}
-			_, err = service.Execute(ctx, command.Command{Kind: command.CompleteInteractionDelivery, Principal: worker,
+			_, err = service.Execute(ctx, command.Command{Kind: command.CompleteInteractionDelivery, Principal: completer,
 				Mutation: value.Mutation{IdempotencyKey: key + "-complete"}, Payload: command.InteractionDeliveryInput{
 					DeliveryRef: deliveryRef, LeaseRef: stringMap(claim, "leaseRef"), Fence: stringMap(claim, "fence"), Generation: claim["generation"].(int64),
 					Success: true, ExternalPostRef: "approval-post", ExternalThreadRef: "approval-post", ExternalTeamRef: "team-ref", ExternalChannelRef: "channel-ref",
