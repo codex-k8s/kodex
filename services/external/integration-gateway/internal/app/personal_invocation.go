@@ -64,7 +64,7 @@ func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissi
 	if claim.GetCredentialAdmissionRequired() {
 		// Retain the original monotonic ceiling through Begin; a later clock read or fresh grant cannot extend it.
 		// Сохраняем original monotonic ceiling через Begin: позднее чтение часов или fresh grant не продлевает его.
-		originalUntil := observed.Add(lease.GetExpiresAt().AsTime().Sub(observed))
+		originalUntil := personalInvocationDeadline(observed, lease.GetExpiresAt().AsTime())
 		var cancelOriginal context.CancelFunc
 		ctx, cancelOriginal = context.WithDeadline(ctx, originalUntil)
 		defer cancelOriginal()
@@ -75,7 +75,7 @@ func executeInvocationClaim(ctx context.Context, owner personalInvocationAdmissi
 	}
 	if claim.GetCredentialAdmissionRequired() {
 		var cancelAllowance context.CancelFunc
-		freshUntil := observed.Add(work.GetLease().GetExpiresAt().AsTime().Sub(observed))
+		freshUntil := personalInvocationDeadline(observed, work.GetLease().GetExpiresAt().AsTime())
 		ctx, cancelAllowance = context.WithDeadline(ctx, freshUntil)
 		defer cancelAllowance()
 	}
@@ -201,4 +201,10 @@ func personalContractAllowsClaimPolicy(contract integrationpackage.CredentialRes
 	}
 	raw, err := json.Marshal(claim.GetBoundedInput().AsMap())
 	return err == nil && definition.ValidateInvocationApprovalPolicy(capability, policy, raw) == nil
+}
+
+// personalInvocationDeadline projects a validated owner timestamp onto the single pre-RPC monotonic observation; later wall-clock readings cannot renew either dispatch ceiling.
+// personalInvocationDeadline переносит проверенный owner timestamp на единственный pre-RPC monotonic observation; поздние wall-clock readings не продлевают dispatch ceilings.
+func personalInvocationDeadline(observed, until time.Time) time.Time {
+	return observed.Add(until.Sub(observed))
 }
