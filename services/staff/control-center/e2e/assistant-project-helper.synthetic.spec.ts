@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { syntheticAssistantRuntimeConfig } from "./fixtures/assistant-runtime-config";
+import { forwardSyntheticStaticRequest } from "./synthetic-runtime-route";
 import { overlaySchemaFixture } from "../src/test-utils/runtime-catalog-fixture";
 import {
   helperPins,
@@ -326,11 +327,7 @@ for (const width of [1440, 390])
               errors.push(`Unexpected synthetic API ${url.pathname}`);
               return;
             }
-            return route.fulfill({
-              response: await route.fetch({
-                url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-              }),
-            });
+            return forwardSyntheticStaticRequest(route);
           });
           await page.goto(
             `https://kodex.test/e2e/fixtures/assistant-environment.html?helper=${kind}&state=${state}&source=${source}&locale=${locale}`,
@@ -478,11 +475,7 @@ for (const tamper of ["project", "organization", "locator", "receipt"])
         calls.push(url.pathname);
         return route.abort();
       }
-      return route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-        }),
-      });
+      return forwardSyntheticStaticRequest(route);
     });
     await page.goto(
       `https://kodex.test/e2e/fixtures/assistant-environment.html?helper=INSTR&state=APPLIED&tamper=${tamper}`,

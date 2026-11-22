@@ -1,4 +1,7 @@
-import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
+import {
+  forwardSyntheticStaticRequest,
+  syntheticRuntimeConfig,
+} from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import { providerUsageFixture } from "../src/test-utils/provider-usage-fixture";
 
@@ -126,12 +129,7 @@ for (const width of [1440, 390]) {
             await route.abort();
             throw new Error(`Unexpected synthetic API ${url.pathname}`);
           }
-          const response = await route.fetch({
-            url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-            maxRetries: route.request().method() === "GET" ? 2 : 0,
-            timeout: 15_000,
-          });
-          await route.fulfill({ response });
+          await forwardSyntheticStaticRequest(route);
         });
 
         await page.goto(
@@ -377,12 +375,7 @@ for (const width of [1440, 390]) {
             await route.abort();
             return;
           }
-          const response = await route.fetch({
-            url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-            maxRetries: request.method() === "GET" ? 2 : 0,
-            timeout: 15_000,
-          });
-          await route.fulfill({ response });
+          await forwardSyntheticStaticRequest(route);
         });
         await page.goto(
           `https://kodex.test/e2e/fixtures/assistant-role-image-build.html?scope=${scope}&editor=${editor}`,
