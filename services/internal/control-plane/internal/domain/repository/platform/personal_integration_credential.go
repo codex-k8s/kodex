@@ -42,7 +42,7 @@ type PersonalIntegrationCredentialWork interface {
 	ClaimPersonalIntegrationCredentialTests(context.Context, value.Principal, string, int32) ([]map[string]any, error)
 	// BeginPersonalIntegrationCredentialProbe admits the pinned READ batch once after fresh checks.
 	// BeginPersonalIntegrationCredentialProbe однократно допускает pinned READ batch после fresh checks.
-	BeginPersonalIntegrationCredentialProbe(context.Context, value.Principal, command.PersonalIntegrationCredentialTestCompletion) error
+	BeginPersonalIntegrationCredentialProbe(context.Context, value.Principal, command.PersonalIntegrationCredentialProbeAdmission) (entity.PersonalIntegrationCredentialProbeAdmissionResult, error)
 }
 
 // PersonalIntegrationInvocationWork consumes an exact gateway lease after fresh credential checks.

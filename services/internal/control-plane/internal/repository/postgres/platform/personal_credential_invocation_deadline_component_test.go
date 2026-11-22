@@ -17,9 +17,10 @@ import (
 // personalAdmissionACKTrace delays only a successful native admission COMMIT acknowledgement; neither SQL execution nor its durable outcome is simulated.
 // personalAdmissionACKTrace задерживает только успешный ACK native COMMIT допуска; SQL и его durable outcome не имитируются.
 type personalAdmissionACKTrace struct {
-	until time.Time
-	armed bool
-	hits  int
+	until        time.Time
+	admissionSQL string
+	armed        bool
+	hits         int
 }
 
 // personalAdmissionTraceKey separates the exact admission and commit observations from unrelated pool traffic.
@@ -30,7 +31,11 @@ type personalAdmissionTraceKey struct{}
 // TraceQueryStart отмечает лишь production admission INSERT и native COMMIT.
 func (trace *personalAdmissionACKTrace) TraceQueryStart(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryStartData) context.Context {
 	phase := 0
-	if data.SQL == queryPersonalInvocationAdmit {
+	admission := trace.admissionSQL
+	if admission == "" {
+		admission = queryPersonalInvocationAdmit
+	}
+	if data.SQL == admission {
 		phase = 1
 	} else if strings.EqualFold(data.SQL, "commit") {
 		phase = 2

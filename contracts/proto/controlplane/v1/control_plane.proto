@@ -9724,9 +9724,11 @@ message BeginPersonalIntegrationCredentialProbeRequest {
   string lease_ref = 2;
   string fence = 3;
   int64 generation = 4;
+  uint32 admission_contract_version = 5;
 }
 message BeginPersonalIntegrationCredentialProbeResponse {
   bool admitted = 1;
+  google.protobuf.Timestamp authorized_until = 2;
 }
 enum PersonalIntegrationCredentialTestResult {
   PERSONAL_INTEGRATION_CREDENTIAL_TEST_RESULT_UNSPECIFIED = 0;

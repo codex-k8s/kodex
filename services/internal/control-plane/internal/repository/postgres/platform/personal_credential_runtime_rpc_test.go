@@ -31,7 +31,7 @@ import (
 // personalRuntimeRPCAdmission задаёт один synthetic admitted peer для buffer-only RPC fixture.
 // Настоящие profile/hash/principal interceptor и owner DB работают; fixture не подтверждает
 // проверку сертификата, TLS handshake либо пользовательский JWT.
-type personalRuntimeRPCAdmission struct{}
+type personalRuntimeRPCAdmission struct{ probe bool }
 
 // RPCProfile pins the server-selected synthetic peer profile, never a browser-selected profile.
 // RPCProfile закрепляет выбранный сервером профиль synthetic peer, не browser-selected profile.
@@ -39,14 +39,18 @@ func (personalRuntimeRPCAdmission) RPCProfile() string { return "service-v1" }
 
 // Admit restricts the synthetic peer to exactly the new Begin method and server-owned operation.
 // Admit ограничивает synthetic peer ровно новым Begin method и server-owned operation.
-func (personalRuntimeRPCAdmission) Admit(_ context.Context, method string) (serviceidentity.Admission, error) {
-	if method != cp.PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName {
+func (profile personalRuntimeRPCAdmission) Admit(_ context.Context, method string) (serviceidentity.Admission, error) {
+	expected, operation := cp.PersonalIntegrationCredentialService_BeginPersonalIntegrationInvocation_FullMethodName, "platform.personal-integration-calls.begin"
+	if profile.probe {
+		expected, operation = cp.PersonalIntegrationCredentialService_BeginPersonalIntegrationCredentialProbe_FullMethodName, "platform.personal-integration-tests.begin"
+	}
+	if method != expected {
 		return serviceidentity.Admission{}, status.Error(codes.PermissionDenied, "synthetic peer method denied")
 	}
 	return serviceidentity.Admission{RPCProfile: "service-v1", FullMethod: method,
 		TargetSPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/control-plane",
 		Peer:           serviceidentity.PeerIdentity{SPIFFEID: "spiffe://kodex.local/ns/kodex-system/sa/integration-gateway", CertificateSHA256: sha256.Sum256([]byte("synthetic personal RPC peer")), NotAfter: time.Now().Add(time.Minute)},
-		OperationID:    "platform.personal-integration-calls.begin", Permission: "platform.personal-integration-calls.begin", ActorMode: serviceidentity.ServiceActor}, nil
+		OperationID:    operation, Permission: operation, ActorMode: serviceidentity.ServiceActor}, nil
 }
 
 // personalRuntimeRPCNoUserCredential refuses every user-token path in this worker-only fixture.
@@ -67,7 +71,7 @@ func (personalRuntimeRPCNoUserCredential) VerifyToken(context.Context, string) (
 // Синтетичен лишь transport-peer admission; request-profile hashing, principal resolution, RPC
 // caster и owner transaction используют production code. Plaintext ограничен bufconn без TCP
 // listener и настоящей credential. Неиспользуемые role-image методы здесь не регистрируются.
-func personalRuntimeRPCClient(t *testing.T, service *platformservice.Service) cp.PersonalIntegrationCredentialServiceClient {
+func personalRuntimeRPCClient(t *testing.T, service *platformservice.Service, probe ...bool) cp.PersonalIntegrationCredentialServiceClient {
 	t.Helper()
 	resolver, err := rpcprincipal.New(service, personalRuntimeRPCNoUserCredential{})
 	if err != nil {
@@ -78,7 +82,8 @@ func personalRuntimeRPCClient(t *testing.T, service *platformservice.Service) cp
 		t.Fatal(err)
 	}
 	listener := bufconn.Listen(1 << 20)
-	server := grpc.NewServer(grpc.UnaryInterceptor(authorization.ServiceIdentityUnary(personalRuntimeRPCAdmission{}, resolver)))
+	profile := personalRuntimeRPCAdmission{probe: len(probe) == 1 && probe[0]}
+	server := grpc.NewServer(grpc.UnaryInterceptor(authorization.ServiceIdentityUnary(profile, resolver)))
 	cp.RegisterPersonalIntegrationCredentialServiceServer(server, owner)
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
